@@ -17,80 +17,502 @@ propagated up the plan tree; those statuses are flagged ``derived``.
 
 from __future__ import annotations
 
-import logging
 import threading
 import time
 import urllib.parse
-from dataclasses import dataclass, field
+import math
+from dataclasses import asdict, dataclass, field
+from enum import Enum
+from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from typing_extensions import Any, Dict, List, Optional, TYPE_CHECKING
+from typing_extensions import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    runtime_checkable,
+    Set,
+    Tuple,
+    TYPE_CHECKING,
+)
 
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Point3,
+    Quaternion,
+    RotationMatrix,
+)
+from cram_viz import get_logger
+from cram_viz.body_geometry import BodyExtent
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
     Connection6DoF,
 )
 
+from cram_viz.palette import ObjectPalette
+
 if TYPE_CHECKING:
     from coraplex.plans.executables import GiskardExecutable
     from coraplex.plans.plan import Plan
+    from coraplex.plans.plan_node import PlanNode
+    from giskardpy.motion_statechart.graph_node import Task
     from giskardpy.motion_statechart.motion_statechart import MotionStatechart
     from semantic_digital_twin.world import World
     from semantic_digital_twin.world_description.world_entity import Body
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
-#: same palette the onboarder / viewer use, so a live object keeps its colour
-PALETTE = [
-    "#f3f0ea",
-    "#cf5b3a",
-    "#b8bcc4",
-    "#e7c26a",
-    "#7fb069",
-    "#5b8cff",
-    "#c98bdb",
-    "#ff9d6b",
-    "#6bd0c0",
-    "#d0c86b",
-]
 
-#: giskardpy ``LifeCycleValues`` ordinal → its name, for the statechart view
-LIFE_CYCLE_NAME = {0: "NOT_STARTED", 1: "RUNNING", 2: "PAUSED", 3: "DONE", 4: "FAILED"}
+class TaskStatusName(str, Enum):
+    """
+    The status vocabulary the viewer styles plan and statechart nodes with.
 
-#: giskardpy ``LifeCycleValues`` ordinal → coraplex ``TaskStatus`` vocabulary,
-#: so the viewer styles plan nodes and statechart nodes with one status palette
-LIFE_CYCLE_TO_STATUS = {
-    0: "CREATED",
-    1: "RUNNING",
-    2: "PAUSE",
-    3: "SUCCEEDED",
-    4: "FAILED",
-}
+    Mirrors coraplex's ``TaskStatus`` names. A plain ``str`` enum, because the values
+    travel to the frontend as JSON and are compared against the names coraplex itself
+    reports.
+    """
+
+    CREATED = "CREATED"
+    RUNNING = "RUNNING"
+    SUCCEEDED = "SUCCEEDED"
+    FAILED = "FAILED"
+    INTERRUPTED = "INTERRUPTED"
+    PAUSE = "PAUSE"
+
+
+class LiveHook(Enum):
+    """
+    The CRAM classes the live bridge patches to observe a running demo.
+    """
+
+    TICK = "tick"
+    """
+    ``Executor.tick`` — binds the world and snapshots it every simulation step.
+    """
+
+    PLAN = "plan"
+    """
+    ``Plan.perform`` and ``GiskardExecutable.execute`` — follow the plan tree.
+    """
+
+    MESH = "mesh"
+    """
+    ``MeshParser.parse`` — remember which file each object's geometry came from.
+    """
+
 
 #: for bottom-up aggregation in the plan tree: the higher rank wins
-STATUS_RANK = {
-    "CREATED": 0,
-    "SUCCEEDED": 1,
-    "PAUSE": 2,
-    "RUNNING": 3,
-    "INTERRUPTED": 4,
-    "FAILED": 5,
+STATUS_RANK: Dict[TaskStatusName, int] = {
+    TaskStatusName.CREATED: 0,
+    TaskStatusName.SUCCEEDED: 1,
+    TaskStatusName.PAUSE: 2,
+    TaskStatusName.RUNNING: 3,
+    TaskStatusName.INTERRUPTED: 4,
+    TaskStatusName.FAILED: 5,
 }
 
 #: how long a world binding stays fresh before the bridge re-discovers bodies
 REBIND_INTERVAL_SECONDS = 3.0
+
+#: key under which the robot's root body is published, instead of as a loose object
+ROBOT_BASE_KEY = "__base__"
+
+#: a body whose name ends in one of these is a loose object, not part of a model
+MESH_SUFFIXES = (".stl", ".obj", ".dae")
+
+#: fallback size for an object whose shapes carry no scale, in metres
+DEFAULT_OBJECT_SIZE = (0.06, 0.06, 0.12)
+
+#: decimal places poses and joint positions are rounded to before publishing
+POSE_PRECISION = 5
+
+#: decimal places object sizes are rounded to before publishing
+SIZE_PRECISION = 4
 
 
 def _pose_as_position_quaternion(body: Body) -> List[float]:
     """
     Return a body's world pose as ``[x, y, z, qx, qy, qz, qw]``.
     """
-    pose = body.global_pose
-    translation = pose.to_position().to_np().flatten()
-    quaternion = pose.to_quaternion().to_np().flatten()
-    return [round(float(value), 5) for value in (*translation[:3], *quaternion[:4])]
+    return [
+        round(value, POSE_PRECISION)
+        for value in body.global_pose.to_position_quaternion_list()
+    ]
+
+
+@runtime_checkable
+class DescribesAnAction(Protocol):
+    """
+    A plan node carrying the designator that describes what it does.
+
+    Structural, because only some coraplex node types have a designator at all.
+    """
+
+    designator: Any
+
+
+@runtime_checkable
+class NamesAWorldEntity(Protocol):
+    """
+    Anything carrying a world-entity name, such as a body a designator refers to.
+    """
+
+    name: Any
+
+
+class MalformedMoveRequest(Exception):
+    """
+    Raised when the viewer's move payload cannot be read as a pose.
+    """
+
+
+@dataclass(frozen=True)
+class MoveRequest:
+    """
+    A drag the viewer performed on one object, to be written into the world.
+    """
+
+    object_key: str
+    """
+    Mesh key of the dragged object, as published in the geometry catalog.
+    """
+
+    position: List[float]
+    """
+    Target position ``[x, y, z]`` in world coordinates.
+    """
+
+    quaternion: Optional[List[float]] = None
+    """
+    Target orientation ``[qx, qy, qz, qw]``, or None to keep the current one.
+    """
+
+    is_final: bool = False
+    """
+    Whether this is the drag's last update, as opposed to an intermediate one.
+    """
+
+    @classmethod
+    def from_payload(cls, payload: Dict[str, Any]) -> MoveRequest:
+        """
+        Build a request from a decoded ``POST /move`` body.
+
+        :raises MalformedMoveRequest: If the object key or the position is unusable.
+            Validating here keeps bad input from raising inside the simulation tick,
+            where the only recovery is to drop the whole snapshot.
+        """
+        object_key = payload.get("object")
+        if not isinstance(object_key, str) or not object_key:
+            raise MalformedMoveRequest("'object' must be a non-empty string")
+        position = cls._coordinates(payload.get("pos"), "pos", 3)
+        quaternion = (
+            cls._coordinates(payload.get("quat"), "quat", 4)
+            if payload.get("quat")
+            else None
+        )
+        return cls(
+            object_key=object_key,
+            position=position,
+            quaternion=quaternion,
+            is_final=bool(payload.get("final")),
+        )
+
+    @staticmethod
+    def _coordinates(value: Any, name: str, length: int) -> List[float]:
+        """
+        Read a fixed-length list of finite coordinates out of a payload field.
+        """
+        if not isinstance(value, (list, tuple)) or len(value) != length:
+            raise MalformedMoveRequest(
+                "'%s' must be a list of %d numbers" % (name, length)
+            )
+        coordinates = []
+        for entry in value:
+            if isinstance(entry, bool) or not isinstance(entry, (int, float)):
+                raise MalformedMoveRequest("'%s' must contain only numbers" % name)
+            if not math.isfinite(entry):
+                raise MalformedMoveRequest("'%s' must be finite" % name)
+            coordinates.append(float(entry))
+        return coordinates
+
+
+@dataclass
+class MotionNodeProgress:
+    """
+    What the bridge knows about one plan node's execution.
+
+    Holds the node itself so the identity key derived from it stays unique for as long
+    as the entry lives.
+    """
+
+    node: PlanNode
+    """
+    The plan node this progress belongs to.
+    """
+
+    task: Optional[Task] = None
+    """
+    The giskard task while the node's motion group runs, else None.
+    """
+
+    status: Optional[TaskStatusName] = None
+    """
+    The status pinned when the node's motion group finished, else None.
+    """
+
+
+# %% viewer payload shapes
+class ObjectKind(str, Enum):
+    """
+    How a loose object's geometry is served to the viewer.
+    """
+
+    MESH = "mesh"
+    BOX = "box"
+
+
+@dataclass(frozen=True)
+class ObjectCatalogEntry:
+    """
+    One loose object's geometry-catalog entry, as the viewer spawns it.
+    """
+
+    key: str
+    """
+    Mesh basename this object is published under.
+    """
+
+    id: str
+    """
+    Stem of :attr:`key`, used as the object's display id.
+    """
+
+    kind: ObjectKind
+    """
+    Whether the viewer renders a served mesh or a placeholder box.
+    """
+
+    color: str
+    """
+    Colour assigned to this object from the shared palette.
+    """
+
+    mesh: Optional[str] = None
+    """
+    URL the mesh is served from, set only when :attr:`kind` is ``MESH``.
+    """
+
+    format: Optional[str] = None
+    """
+    Mesh file extension, set only when :attr:`kind` is ``MESH``.
+    """
+
+    size: Optional[List[float]] = None
+    """
+    Box extent in metres, set only when :attr:`kind` is ``BOX``.
+    """
+
+
+@dataclass
+class PlanNodeEntry:
+    """
+    One plan node's serialized state, mutated in place as its status resolves.
+    """
+
+    id: str
+    """
+    Identity-based id of this node (``p`` + ``id(node)``).
+    """
+
+    parent: Optional[str]
+    """
+    Id of this node's parent entry, or None for the root.
+    """
+
+    kind: str
+    """
+    The plan node's own class name.
+    """
+
+    label: str
+    """
+    Designator class name if this node describes an action, else :attr:`kind`.
+    """
+
+    status: str
+    """
+    This node's status: its own if it reports one, else a derived one.
+
+    Not typed as :class:`TaskStatusName`, because it mirrors whatever coraplex's own
+    ``TaskStatus`` reports, which this bridge does not validate.
+    """
+
+    derived: bool
+    """
+    Whether :attr:`status` was derived (from the statechart or children) rather than
+    the node's own reported status.
+    """
+
+    arm: Optional[str] = None
+    """
+    Arm the node's designator names, if any.
+    """
+
+    target: Optional[str] = None
+    """
+    Published object the node's designator refers to, if any.
+    """
+
+
+@dataclass(frozen=True)
+class PlanSnapshot:
+    """
+    The plan tree in the shape the viewer walks.
+    """
+
+    sig: str = ""
+    """
+    Node-id signature of the tree's shape, stable across status-only changes.
+    """
+
+    nodes: List[PlanNodeEntry] = field(default_factory=list)
+    """
+    Every node in the tree, flattened with parent references.
+    """
+
+
+@dataclass(frozen=True)
+class ChartNodeStructure:
+    """
+    The structural part of one statechart node: what does not change per tick.
+    """
+
+    id: str
+    name: str
+    cls: str
+    parent: Optional[str]
+
+
+@dataclass(frozen=True)
+class ChartEdgeEntry:
+    """
+    One transition edge between two statechart nodes.
+    """
+
+    source: str
+    target: str
+    kind: str
+
+
+@dataclass(frozen=True)
+class _ChartStructure:
+    """
+    A statechart's cached structure, rebuilt only when the executor compiles a new one.
+    """
+
+    nodes: List[ChartNodeStructure] = field(default_factory=list)
+    edges: List[ChartEdgeEntry] = field(default_factory=list)
+    indices: List[int] = field(default_factory=list)
+    """
+    Each node's index into the chart's life-cycle/observation state vectors.
+    """
+
+    sig: str = ""
+    """
+    Node-id signature of the structure, stable while it does not change.
+    """
+
+
+class ObservationName(str, Enum):
+    """
+    A statechart node's trinary observation value, by name.
+    """
+
+    TRUE = "TRUE"
+    FALSE = "FALSE"
+    UNKNOWN = "UNKNOWN"
+
+
+@dataclass(frozen=True)
+class ChartNodeEntry:
+    """
+    One statechart node's structure plus its current life cycle and observation.
+    """
+
+    id: str
+    name: str
+    cls: str
+    parent: Optional[str]
+    life: str
+    """
+    The node's ``LifeCycleValues`` name (e.g. ``RUNNING``).
+    """
+
+    obs: ObservationName
+    """
+    The node's trinary observation name.
+    """
+
+
+@dataclass(frozen=True)
+class ChartSnapshot:
+    """
+    The motion statechart in the shape the viewer renders.
+    """
+
+    sig: str = ""
+    title: str = ""
+    """
+    Name of the action whose motion group this statechart belongs to.
+    """
+
+    nodes: List[ChartNodeEntry] = field(default_factory=list)
+    edges: List[ChartEdgeEntry] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class WorldStateSnapshot:
+    """
+    The world's joints, base pose and object poses at one simulation tick.
+    """
+
+    seq: int = 0
+    """
+    Monotonic snapshot counter so the viewer can skip unchanged states.
+    """
+
+    frames: Dict[str, float] = field(default_factory=dict)
+    """
+    Movable connection position by prefixed name.
+    """
+
+    base: Optional[List[float]] = None
+    """
+    Robot base pose as ``[x, y, z, qx, qy, qz, qw]``, or None without a robot.
+    """
+
+    objects: Dict[str, List[float]] = field(default_factory=dict)
+    """
+    Loose-object pose by mesh key, in the same 7-element form as :attr:`base`.
+    """
+
+
+@dataclass(frozen=True)
+class BridgeStatus:
+    """
+    What the viewer polls to decide whether a live demo is reachable.
+    """
+
+    running: bool
+    robot: Optional[str]
+    objects: List[str]
+    movable: bool
+    plan: bool
+    chart: bool
+    seq: int
 
 
 @dataclass
@@ -117,38 +539,34 @@ class Bridge:
     Monotonic snapshot counter so the viewer can skip unchanged states.
     """
 
-    state: Dict[str, Any] = field(
-        default_factory=lambda: {"seq": 0, "frames": {}, "base": None, "objects": {}}
-    )
+    state: WorldStateSnapshot = field(default_factory=WorldStateSnapshot)
     """
     The newest world snapshot in the trajectory-frame format.
     """
 
-    object_meta: List[Dict[str, Any]] = field(default_factory=list)
+    object_metadata: List[ObjectCatalogEntry] = field(default_factory=list)
     """
     Geometry catalog for the viewer: one entry per loose object.
     """
 
-    plan_state: Dict[str, Any] = field(default_factory=lambda: {"sig": "", "nodes": []})
+    plan_state: PlanSnapshot = field(default_factory=PlanSnapshot)
     """
     The newest plan-tree snapshot (see :meth:`snapshot_plan`).
     """
 
-    chart_state: Dict[str, Any] = field(
-        default_factory=lambda: {"sig": "", "title": "", "nodes": [], "edges": []}
-    )
+    chart_state: ChartSnapshot = field(default_factory=ChartSnapshot)
     """
     The newest motion-statechart snapshot (see :meth:`observe_chart`).
     """
 
-    _connections: List[Any] = field(default_factory=list)
+    _connections: List[ActiveConnection1DOF] = field(default_factory=list)
     """
     Actuated world connections whose positions are published as frames.
     """
 
     _bodies: Dict[str, Body] = field(default_factory=dict)
     """
-    Published bodies by mesh key; ``__base__`` is the robot root.
+    Published bodies by mesh key; :data:`ROBOT_BASE_KEY` is the robot root.
     """
 
     _last_bind: float = 0.0
@@ -161,7 +579,7 @@ class Bridge:
     Guards every snapshot dict that the HTTP layer reads.
     """
 
-    _moves: List[Dict[str, Any]] = field(default_factory=list)
+    _moves: List[MoveRequest] = field(default_factory=list)
     """
     Object moves queued by the viewer, applied on the simulation thread.
     """
@@ -191,7 +609,7 @@ class Bridge:
     The motion statechart the executor is currently ticking.
     """
 
-    _chart_structure: Optional[Dict[str, Any]] = None
+    _chart_structure: Optional[_ChartStructure] = None
     """
     Serialized structure of :attr:`_chart`, rebuilt when it changes.
     """
@@ -201,14 +619,11 @@ class Bridge:
     Name of the action whose motion group is executing.
     """
 
-    _motion_tasks: Dict[int, Any] = field(default_factory=dict)
+    _motion_nodes: Dict[int, MotionNodeProgress] = field(default_factory=dict)
     """
-    ``id(MotionNode)`` → giskard task of the live motion group.
-    """
+    Execution progress per plan node, keyed by :meth:`Bridge._node_key`.
 
-    _frozen: Dict[int, str] = field(default_factory=dict)
-    """
-    ``id(PlanNode)`` → final status pinned when its motion group ended.
+    Reset whenever a new plan starts performing, which bounds it to one plan's nodes.
     """
 
     _ticks: int = 0
@@ -216,13 +631,139 @@ class Bridge:
     Tick counter used to throttle the plan snapshot.
     """
 
-    _last_life_cycle: Optional[List[int]] = None
+    plan_snapshot_tick_interval: int = 5
     """
-    Life-cycle vector of the last published chart snapshot.
+    How many simulation ticks pass between plan-tree snapshots.
+
+    Walking the plan tree is the expensive part of a tick, and the tree changes far
+    more slowly than the world pose does.
     """
 
-    # %% viewer -> world -------------------------------------------------------
-    def queue_move(self, request: Dict[str, Any]) -> None:
+    _last_node_states: Optional[Tuple[List[int], List[float]]] = None
+    """
+    Life-cycle and observation vectors of the last published chart snapshot.
+    """
+
+    _installed_hooks: Set[LiveHook] = field(default_factory=set)
+    """
+    Hooks already patched into the CRAM classes (see :meth:`claim_hook`).
+    """
+
+    live_server: Optional[ThreadingHTTPServer] = None
+    """
+    The bridge's HTTP server once it is listening, so a second start reuses it.
+    """
+
+    # %% one-time installation
+    def claim_hook(self, hook: LiveHook) -> bool:
+        """
+        Claim a hook for installation, reporting whether the caller should install it.
+
+        Patching the same method twice wraps the original a second time, so every
+        snapshot would run once per wrapper.
+
+        :return: True on the first claim, False once the hook is installed.
+        """
+        if hook in self._installed_hooks:
+            return False
+        self._installed_hooks.add(hook)
+        return True
+
+    # %% what the hooks drive
+    def attach(self, world: World) -> None:
+        """
+        Bind to the world a demo is executing and publish its geometry catalog.
+        """
+        self.world = world
+        self.bind()
+        logger.info(
+            "attached to world (robot=%s, %d joints)",
+            type(self.robot).__name__ if self.robot else "?",
+            len(self._connections),
+        )
+
+    def observe_tick(self, chart: Optional[MotionStatechart]) -> None:
+        """
+        Publish everything one simulation tick makes available.
+
+        Applies queued viewer moves first, because the tick hook runs on the only
+        thread allowed to write to the world.
+        """
+        self.apply_moves()
+        self.snapshot()
+        self.observe_chart(chart)
+        self._ticks += 1
+        if self._ticks % self.plan_snapshot_tick_interval == 0:
+            self.snapshot_plan()
+
+    def begin_plan(self, plan: Plan) -> None:
+        """
+        Record the plan that started performing and publish its tree.
+
+        Drops the previous plan's per-node progress, so a long-running process does not
+        accumulate entries for nodes that no longer exist.
+        """
+        self._plan = plan
+        self._motion_nodes.clear()
+        self.snapshot_plan()
+
+    def remember_mesh_file(self, file_path: str) -> None:
+        """
+        Remember which file an object's geometry was parsed from.
+
+        The viewer is served the mesh from here, keyed by the file's basename, which
+        is also how the world names the resulting body.
+        """
+        self._mesh_files[Path(file_path).name.lower()] = file_path
+
+    def publish_bodies(self, bodies: Dict[str, Body]) -> None:
+        """
+        Replace the published bodies and rebuild the viewer's geometry catalog.
+        """
+        self._bodies = bodies
+        self._build_object_metadata(bodies)
+
+    # %% what the HTTP layer reads
+    def object_catalog(self) -> List[Dict[str, Any]]:
+        """
+        The geometry catalog the viewer spawns live objects from.
+        """
+        with self._lock:
+            return [asdict(entry) for entry in self.object_metadata]
+
+    def object_keys(self) -> List[str]:
+        """
+        Mesh keys of the published loose objects, excluding the robot root.
+        """
+        with self._lock:
+            return [key for key in self._bodies if key != ROBOT_BASE_KEY]
+
+    def mesh_path(self, key: str) -> Optional[str]:
+        """
+        Absolute path of an object's mesh file, or None if it is not served.
+        """
+        with self._lock:
+            return self._mesh_serve.get(key)
+
+    def status(self) -> Dict[str, Any]:
+        """
+        What the viewer polls to decide whether a live demo is reachable.
+        """
+        with self._lock:
+            return asdict(
+                BridgeStatus(
+                    running=self.world is not None,
+                    robot=type(self.robot).__name__ if self.robot else None,
+                    objects=[key for key in self._bodies if key != ROBOT_BASE_KEY],
+                    movable=True,
+                    plan=bool(self.plan_state.nodes),
+                    chart=bool(self.chart_state.nodes),
+                    seq=self.seq,
+                )
+            )
+
+    # %% viewer -> world
+    def queue_move(self, request: MoveRequest) -> None:
         """
         Queue an object move from the viewer (called on an HTTP thread).
         """
@@ -241,12 +782,13 @@ class Bridge:
         if not moves or self.world is None:
             return
         for move in moves:
-            body = self._bodies.get(move.get("object"))
+            body = self._bodies.get(move.object_key)
             if body is None:
+                logger.debug("no published body for %s — move skipped", move.object_key)
                 continue
             self._apply_move(move, body)
 
-    def _apply_move(self, move: Dict[str, Any], body: Body) -> None:
+    def _apply_move(self, move: MoveRequest, body: Body) -> None:
         """
         Write one viewer move into the world.
 
@@ -255,52 +797,54 @@ class Bridge:
         must ride along when the drawer opens — keep their ``FixedConnection``
         and are left untouched (a fixed connection has no settable origin).
 
-        .. note:: The object is deliberately *not* re-parented here. That is a
-           structural change of the kinematic tree (``modify_world`` + forward
-           kinematics recompile) and running it inside the tick hook while a
-           giskard goal is live hangs the executor. Re-parenting must happen
-           as its own plan step between motions; the plain pose write already
-           makes ``body.global_pose`` correct, which is all the plan's
-           navigate/pick reachability needs.
+        .. note:: The object is not re-parented. That is a structural change of the
+           kinematic tree (``modify_world`` + forward kinematics recompile), and
+           running it inside the tick hook while a giskard goal is live hangs the
+           executor. The plain pose write already makes ``body.global_pose`` correct,
+           which is what the plan's navigate/pick reachability reads.
         """
         connection = body.parent_connection
         if not isinstance(connection, Connection6DoF):
             logger.info(
                 "%s is fixed (%s) — not draggable, skipping",
-                move["object"],
+                move.object_key,
                 type(connection).__name__,
             )
             return
-        position = move["pos"]
-        quaternion = move.get("quat")
-        if not quaternion:
-            current = _pose_as_position_quaternion(body)
-            quaternion = current[3:7]
-        world_T_object = HomogeneousTransformationMatrix.from_xyz_quaternion(
-            position[0],
-            position[1],
-            position[2],
-            quaternion[0],
-            quaternion[1],
-            quaternion[2],
-            quaternion[3],
+        position = move.position
+        rotation_matrix = (
+            RotationMatrix.from_quaternion(
+                Quaternion(
+                    x=move.quaternion[0],
+                    y=move.quaternion[1],
+                    z=move.quaternion[2],
+                    w=move.quaternion[3],
+                )
+            )
+            if move.quaternion is not None
+            else body.global_pose.to_rotation_matrix()
+        )
+        world_T_object = HomogeneousTransformationMatrix.from_point_rotation_matrix(
+            Point3(x=position[0], y=position[1], z=position[2]),
+            rotation_matrix,
             reference_frame=self.world.root,
         )
         # ``origin`` is parent-relative; express the target in the parent
         # frame (a no-op while the parent is the world root)
-        parent_T_object = connection.parent.global_pose.inverse() @ world_T_object
+        parent_T_world = connection.parent.global_pose.to_homogeneous_matrix().inverse()
+        parent_T_object = parent_T_world @ world_T_object
         connection.origin = parent_T_object
         logger.info(
             "moved %s -> world (%.3f, %.3f, %.3f) [final=%s]",
-            move["object"],
+            move.object_key,
             position[0],
             position[1],
             position[2],
-            bool(move.get("final")),
+            move.is_final,
         )
 
-    # %% world discovery -------------------------------------------------------
-    def _bind(self) -> None:
+    # %% world discovery
+    def bind(self) -> None:
         """
         Discover the robot, joints and loose objects of the current world.
 
@@ -316,23 +860,22 @@ class Bridge:
         self._connections = self._actuated_connections(world)
         bodies: Dict[str, Body] = {}
         if self.robot is not None:
-            bodies["__base__"] = self.robot.root
+            bodies[ROBOT_BASE_KEY] = self.robot.root
         try:
             # loose objects by convention: bodies named like mesh files
             for body in world.bodies:
                 basename = str(body.name).split("/")[-1]
-                if basename.lower().endswith((".stl", ".obj", ".dae")):
+                if basename.lower().endswith(MESH_SUFFIXES):
                     bodies[basename] = body
         except Exception as error:
-            # the world is mid-modification (a body is being spawned or
-            # removed): keep the previous catalog instead of publishing an
-            # empty one — the viewer would otherwise hide every object it
-            # already shows
+            # boundary guard: the world is mid-modification (a body is being spawned
+            # or removed) and iterating it is not safe. Keep the previous catalog
+            # rather than publishing an empty one, which would make the viewer hide
+            # every object it already shows.
             logger.debug("body scan skipped this bind: %s", error)
             for key, body in self._bodies.items():
                 bodies.setdefault(key, body)
-        self._bodies = bodies
-        self._build_object_meta(bodies)
+        self.publish_bodies(bodies)
 
     @staticmethod
     def _actuated_connections(world: World) -> List[ActiveConnection1DOF]:
@@ -345,68 +888,57 @@ class Bridge:
             if isinstance(connection, ActiveConnection1DOF)
         ]
 
-    def _build_object_meta(self, bodies: Dict[str, Body]) -> None:
+    def _build_object_metadata(self, bodies: Dict[str, Body]) -> None:
         """
         Rebuild the geometry catalog the viewer spawns live objects from.
 
         Each object gets either a mesh URL (served by the bridge) or a box size, so
         objects the viewer does not know yet can appear mid-run.
         """
-        catalog: List[Dict[str, Any]] = []
+        catalog: List[ObjectCatalogEntry] = []
         serve: Dict[str, str] = {}
+        palette = ObjectPalette()
         for index, (key, body) in enumerate(
-            item for item in bodies.items() if item[0] != "__base__"
+            item for item in bodies.items() if item[0] != ROBOT_BASE_KEY
         ):
-            color = PALETTE[index % len(PALETTE)]
+            color = palette.color_for(index)
             object_id = Path(key).stem
             mesh_path = self._mesh_files.get(key.lower())
             if mesh_path and Path(mesh_path).is_file():
                 serve[key] = mesh_path
                 catalog.append(
-                    {
-                        "key": key,
-                        "id": object_id,
-                        "kind": "mesh",
-                        "mesh": "/mesh?key=" + urllib.parse.quote(key),
-                        "format": Path(key).suffix.lstrip(".").lower(),
-                        "color": color,
-                    }
+                    ObjectCatalogEntry(
+                        key=key,
+                        id=object_id,
+                        kind=ObjectKind.MESH,
+                        color=color,
+                        mesh="/mesh?key=" + urllib.parse.quote(key),
+                        format=Path(key).suffix.lstrip(".").lower(),
+                    )
                 )
             else:
                 catalog.append(
-                    {
-                        "key": key,
-                        "id": object_id,
-                        "kind": "box",
-                        "size": self._box_size(body) or [0.06, 0.06, 0.12],
-                        "color": color,
-                    }
+                    ObjectCatalogEntry(
+                        key=key,
+                        id=object_id,
+                        kind=ObjectKind.BOX,
+                        color=color,
+                        size=self._box_size(body) or list(DEFAULT_OBJECT_SIZE),
+                    )
                 )
         self._mesh_serve = serve
         with self._lock:
-            self.object_meta = catalog
+            self.object_metadata = catalog
 
     @staticmethod
     def _box_size(body: Body) -> Optional[List[float]]:
         """
-        Best-effort bounding-box size of a body's visual shape in metres.
+        Size of a body's geometry in metres, or None when no shape reports one.
         """
-        for attribute in ("visual", "collision"):
-            shape_container = getattr(body, attribute, None)
-            shapes = getattr(shape_container, "shapes", None)
-            if shapes is None and isinstance(shape_container, (list, tuple)):
-                shapes = shape_container
-            for shape in shapes or []:
-                scale = getattr(shape, "scale", None)
-                if scale is not None:
-                    return [
-                        round(float(scale.x), 4),
-                        round(float(scale.y), 4),
-                        round(float(scale.z), 4),
-                    ]
-        return None
+        extent = BodyExtent.of(body)
+        return extent.rounded(SIZE_PRECISION) if extent else None
 
-    # %% world snapshot ---------------------------------------------------------
+    # %% world snapshot
     def snapshot(self) -> None:
         """
         Publish the world's joints, base pose and object poses.
@@ -417,35 +949,47 @@ class Bridge:
         if self.world is None:
             return
         if time.time() - self._last_bind > REBIND_INTERVAL_SECONDS:
-            self._bind()
+            self.bind()
         frames = {
-            str(connection.name): round(float(connection.position), 5)
+            str(connection.name): round(float(connection.position), POSE_PRECISION)
             for connection in self._connections
         }
         base_pose: Optional[List[float]] = None
         object_poses: Dict[str, List[float]] = {}
         for name, body in self._bodies.items():
-            if name == "__base__":
+            if name == ROBOT_BASE_KEY:
                 base_pose = _pose_as_position_quaternion(body)
             else:
                 object_poses[name] = _pose_as_position_quaternion(body)
         with self._lock:
             self.seq += 1
-            self.state = {
-                "seq": self.seq,
-                "frames": frames,
-                "base": base_pose,
-                "objects": object_poses,
-            }
+            self.state = WorldStateSnapshot(
+                seq=self.seq,
+                frames=frames,
+                base=base_pose,
+                objects=object_poses,
+            )
 
     def get_state(self) -> Dict[str, Any]:
         """
         The newest world snapshot (safe to call from HTTP threads).
         """
         with self._lock:
-            return dict(self.state)
+            return asdict(self.state)
 
-    # %% plan tree ----------------------------------------------------------------
+    # %% plan tree
+    @staticmethod
+    def _node_key(node: PlanNode) -> int:
+        """
+        Identity key of a plan node.
+
+        Identity, not equality: coraplex's ``DesignatorNode`` compares by field value,
+        so two structurally identical steps of one plan would otherwise share a status.
+        The :class:`MotionNodeProgress` entry pins the node itself, which keeps CPython
+        from handing its ``id`` to a later object.
+        """
+        return id(node)
+
     def bind_motion_group(self, executable: GiskardExecutable) -> None:
         """
         Remember which plan motion node maps to which statechart task.
@@ -454,7 +998,9 @@ class Bridge:
         live per-step progress.
         """
         for node, task in (executable.motion_mappings or {}).items():
-            self._motion_tasks[id(node)] = task
+            self._motion_nodes[self._node_key(node)] = MotionNodeProgress(
+                node=node, task=task
+            )
         self._chart_title = self._motion_group_title(executable)
 
     @staticmethod
@@ -468,31 +1014,53 @@ class Bridge:
                 return type(action_node.designator).__name__
         return ""
 
-    def freeze_motion_group(self, executable: GiskardExecutable, status: str) -> None:
+    def freeze_motion_group(
+        self, executable: GiskardExecutable, status: TaskStatusName
+    ) -> None:
         """
-        Pin the final status of a finished motion group.
+        Pin the final status of a finished motion group and republish the plan.
 
         Reading the tasks' life cycle afterwards is not reliable — the executor cleans
         its nodes up.
         """
-        for node in executable.motion_mappings or {}:
-            self._frozen[id(node)] = status
-            self._motion_tasks.pop(id(node), None)
-        for condition in (
-            executable.pre_condition_node,
-            executable.post_condition_node,
-        ):
-            if condition is not None:
-                self._frozen[id(condition)] = status
+        frozen_nodes = list(executable.motion_mappings or {})
+        frozen_nodes += [
+            condition
+            for condition in (
+                executable.pre_condition_node,
+                executable.post_condition_node,
+            )
+            if condition is not None
+        ]
+        for node in frozen_nodes:
+            self._motion_nodes[self._node_key(node)] = MotionNodeProgress(
+                node=node, status=status
+            )
+        self.snapshot_plan()
 
-    def _live_motion_status(self, node: Any) -> Optional[str]:
+    def _live_motion_status(self, node: PlanNode) -> Optional[str]:
         """
         Status of one plan node from the statechart, or None.
+
+        A live task wins over a pinned status, so a node that is running again after a
+        previous attempt reports the current life cycle.
         """
-        task = self._motion_tasks.get(id(node))
-        if task is not None:
-            return LIFE_CYCLE_TO_STATUS.get(int(task.life_cycle_state))
-        return self._frozen.get(id(node))
+        progress = self._motion_nodes.get(self._node_key(node))
+        if progress is None:
+            return None
+        if progress.task is None:
+            return progress.status
+        from giskardpy.motion_statechart.data_types import LifeCycleValues
+
+        life_cycle_to_status = {
+            LifeCycleValues.NOT_STARTED: TaskStatusName.CREATED,
+            LifeCycleValues.RUNNING: TaskStatusName.RUNNING,
+            LifeCycleValues.PAUSED: TaskStatusName.PAUSE,
+            LifeCycleValues.DONE: TaskStatusName.SUCCEEDED,
+            LifeCycleValues.FAILED: TaskStatusName.FAILED,
+        }
+        life_cycle = LifeCycleValues(int(progress.task.life_cycle_state))
+        return life_cycle_to_status.get(life_cycle)
 
     def snapshot_plan(self) -> None:
         """
@@ -510,37 +1078,37 @@ class Bridge:
         except Exception:
             # the plan is mid-mutation and not a tree right now — next tick
             return
-        nodes: List[Dict[str, Any]] = []
+        nodes: List[PlanNodeEntry] = []
         order: List[str] = []
         self._serialize_plan_node(root, None, nodes, order)
         with self._lock:
-            self.plan_state = {"sig": "|".join(order), "nodes": nodes}
+            self.plan_state = PlanSnapshot(sig="|".join(order), nodes=nodes)
 
     def _serialize_plan_node(
         self,
-        node: Any,
+        node: PlanNode,
         parent_id: Optional[str],
-        nodes: List[Dict[str, Any]],
+        nodes: List[PlanNodeEntry],
         order: List[str],
     ) -> str:
         """
         Serialize one plan node and its subtree; returns the node's status.
         """
         node_id = "p%d" % id(node)
-        designator = node.designator if hasattr(node, "designator") else None
+        designator = node.designator if isinstance(node, DescribesAnAction) else None
         own_status = node.status.name
-        entry: Dict[str, Any] = {
-            "id": node_id,
-            "parent": parent_id,
-            "kind": type(node).__name__,
-            "label": (
+        entry = PlanNodeEntry(
+            id=node_id,
+            parent=parent_id,
+            kind=type(node).__name__,
+            label=(
                 type(designator).__name__
                 if designator is not None
                 else type(node).__name__
             ),
-            "status": own_status,
-            "derived": False,
-        }
+            status=own_status,
+            derived=False,
+        )
         self._add_designator_metadata(entry, designator)
         nodes.append(entry)
         order.append(node_id)
@@ -559,24 +1127,25 @@ class Bridge:
                 child_best if child_best != "CREATED" else None
             )
             if derived:
-                entry["status"] = derived
-                entry["derived"] = True
-        return entry["status"]
+                entry.status = derived
+                entry.derived = True
+        return entry.status
 
     def _add_designator_metadata(
-        self, entry: Dict[str, Any], designator: Optional[Any]
+        self, entry: PlanNodeEntry, designator: Optional[Any]
     ) -> None:
         """
         Add arm and target-object info from a node's designator, if any.
         """
         if designator is None:
             return
-        arm = getattr(designator, "arm", None) or getattr(designator, "arms", None)
+        fields = vars(designator)
+        arm = fields.get("arm") or fields.get("arms")
         if arm is not None:
-            entry["arm"] = str(arm)
+            entry.arm = str(arm)
         target = self._designator_target(designator)
         if target:
-            entry["target"] = target
+            entry.target = target
 
     @staticmethod
     def _max_status(first: str, second: str) -> str:
@@ -593,10 +1162,9 @@ class Bridge:
         """
         known = set(self._bodies)
         for value in vars(designator).values():
-            name = getattr(value, "name", None)
-            if name is None:
+            if not isinstance(value, NamesAWorldEntity):
                 continue
-            basename = str(name).split("/")[-1]
+            basename = str(value.name).split("/")[-1]
             if basename in known:
                 return basename
         return None
@@ -606,100 +1174,111 @@ class Bridge:
         The newest plan snapshot (safe to call from HTTP threads).
         """
         with self._lock:
-            return dict(self.plan_state)
+            return asdict(self.plan_state)
 
-    # %% motion statechart -----------------------------------------------------------
+    # %% motion statechart
     def observe_chart(self, chart: Optional[MotionStatechart]) -> None:
         """
         Publish the executing statechart's structure and node states.
 
         Called from the tick hook. The structure is re-serialized only when the executor
-        compiled a new chart; the life-cycle / observation vectors are cheap and
-        refreshed whenever they change.
+        compiled a new chart; the life-cycle and observation vectors are cheap and
+        republished whenever either of them changes.
         """
         if chart is None:
             return
         if chart is not self._chart or self._chart_structure is None:
             self._chart = chart
             self._chart_structure = self._serialize_chart_structure(chart)
-            self._last_life_cycle = None
+            self._last_node_states = None
         structure = self._chart_structure
-        if not structure:
+        if structure is None:
             return
+        from giskardpy.motion_statechart.data_types import LifeCycleValues
+
         life_cycle = [
-            int(chart.life_cycle_state.data[index]) for index in structure["indices"]
+            int(chart.life_cycle_state.data[index]) for index in structure.indices
         ]
         observations = [
-            float(chart.observation_state.data[index]) for index in structure["indices"]
+            float(chart.observation_state.data[index]) for index in structure.indices
         ]
-        if life_cycle == self._last_life_cycle:
+        if (life_cycle, observations) == self._last_node_states:
             return
-        self._last_life_cycle = life_cycle
-        nodes = []
-        for position, node in enumerate(structure["nodes"]):
-            entry = dict(node)
-            entry["life"] = LIFE_CYCLE_NAME.get(
-                life_cycle[position], str(life_cycle[position])
+        self._last_node_states = (life_cycle, observations)
+        nodes = [
+            ChartNodeEntry(
+                id=node.id,
+                name=node.name,
+                cls=node.cls,
+                parent=node.parent,
+                life=LifeCycleValues(life_cycle[position]).name,
+                obs=self._observation_name(observations[position]),
             )
-            entry["obs"] = self._observation_name(observations[position])
-            nodes.append(entry)
+            for position, node in enumerate(structure.nodes)
+        ]
         with self._lock:
-            self.chart_state = {
-                "sig": structure["sig"],
-                "title": self._chart_title,
-                "nodes": nodes,
-                "edges": structure["edges"],
-            }
+            self.chart_state = ChartSnapshot(
+                sig=structure.sig,
+                title=self._chart_title,
+                nodes=nodes,
+                edges=structure.edges,
+            )
 
     @staticmethod
-    def _observation_name(observation: float) -> str:
+    def _observation_name(observation: float) -> ObservationName:
         """
         Trinary observation value → name (0 false, 0.5 unknown, 1 true).
         """
         if observation >= 0.75:
-            return "TRUE"
+            return ObservationName.TRUE
         if observation <= 0.25:
-            return "FALSE"
-        return "UNKNOWN"
+            return ObservationName.FALSE
+        return ObservationName.UNKNOWN
 
     @staticmethod
-    def _serialize_chart_structure(chart: MotionStatechart) -> Optional[Dict[str, Any]]:
+    def _serialize_chart_structure(chart: MotionStatechart) -> _ChartStructure:
         """
-        Nodes and transition edges of a statechart, as plain dicts.
+        Nodes and transition edges of a statechart.
         """
-        nodes: List[Dict[str, Any]] = []
+        nodes: List[ChartNodeStructure] = []
         indices: List[int] = []
         for node in chart.nodes:
             parent_index = node.parent_node_index
             nodes.append(
-                {
-                    "id": "s%d" % node.index,
-                    "name": node.name,
-                    "cls": type(node).__name__,
-                    "parent": (
+                ChartNodeStructure(
+                    id="s%d" % node.index,
+                    name=node.name,
+                    cls=type(node).__name__,
+                    parent=(
                         ("s%d" % parent_index) if parent_index is not None else None
                     ),
-                }
+                )
             )
             indices.append(node.index)
         edges = []
         for source, target, transition in chart.rx_graph.edge_index_map().values():
             edges.append(
-                {
-                    "from": "s%d" % chart.rx_graph.get_node_data(source).index,
-                    "to": "s%d" % chart.rx_graph.get_node_data(target).index,
-                    "kind": transition.kind.name,
-                }
+                ChartEdgeEntry(
+                    source="s%d" % chart.rx_graph.get_node_data(source).index,
+                    target="s%d" % chart.rx_graph.get_node_data(target).index,
+                    kind=transition.kind.name,
+                )
             )
-        signature = "|".join(node["id"] + ":" + node["name"] for node in nodes)
-        return {"nodes": nodes, "edges": edges, "indices": indices, "sig": signature}
+        signature = "|".join(node.id + ":" + node.name for node in nodes)
+        return _ChartStructure(nodes=nodes, edges=edges, indices=indices, sig=signature)
 
     def get_chart(self) -> Dict[str, Any]:
         """
         The newest statechart snapshot (safe to call from HTTP threads).
         """
         with self._lock:
-            return dict(self.chart_state)
+            chart = self.chart_state
+        payload = asdict(chart)
+        payload["edges"] = [
+            {"from": edge.source, "to": edge.target, "kind": edge.kind}
+            for edge in chart.edges
+        ]
+        return payload
 
 
 #: the process-wide bridge instance shared by hooks and HTTP handlers

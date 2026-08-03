@@ -35,9 +35,9 @@ from pathlib import Path
 from typing_extensions import Any, Callable, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
-from cram_viz import paths
+from cram_viz import get_logger, paths
 
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 DEFAULT_PORT = 8711
 
@@ -85,7 +85,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         """
         logger.info("  " + format, *args)
 
-    # %% helpers -----------------------------------------------------------------
+    # %% helpers
     def _json(self, payload: Any, code: int = 200) -> None:
         """
         Send a payload as JSON with the given status code.
@@ -116,7 +116,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 {"ok": False, "error": "%s: %s" % (type(ex).__name__, ex)}
             )
 
-    # %% scene bundles (generated data, lives outside the package) ----------------
+    # %% scene bundles (generated data, lives outside the package)
     def _serve_scene_file(self, url_path: str) -> None:
         """
         Serve one file of a scene bundle, with path-traversal protection.
@@ -140,7 +140,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    # %% routes --------------------------------------------------------------------
+    # %% routes
     def do_GET(self) -> None:
         """
         Route static files, scene bundles and the read-only API.
@@ -200,7 +200,9 @@ def main(argv: Optional[List[str]] = None) -> None:
     """
     ``cram-viz`` — serve the viewer, the scenes and the JSON API.
     """
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    # force: an imported CRAM package may already have configured the root logger,
+    # which would otherwise make this call a no-op and swallow the startup output
+    logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
     argv = sys.argv[1:] if argv is None else argv
     port = int(argv[0]) if argv else DEFAULT_PORT
     if kb_module is not None:  # build the KB once, before the first query

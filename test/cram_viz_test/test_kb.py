@@ -45,9 +45,64 @@ class TestQueries:
         assert result["rows"][0]["__entity__"] == "milk"
         assert "milk" in result["highlight"]
 
-    def test_error_is_reported_not_raised(self, fixture_scene):
-        with pytest.raises(Exception):
+    def test_an_unknown_name_raises(self, fixture_scene):
+        """
+        A query naming something the namespace does not define must raise.
+
+        The server turns this into a JSON error payload; the knowledge base itself
+        does not swallow it.
+        """
+        with pytest.raises(NameError):
             kb.run_query("this is not python")
+
+    def test_a_syntactically_invalid_query_raises(self, fixture_scene):
+        with pytest.raises(SyntaxError):
+            kb.run_query("definitely not python (((")
+
+
+class TestRecordedMeasurements:
+    def test_an_unrecorded_height_stays_unknown(self, fresh_kb):
+        """
+        The fixture bundle records no object height, so none may be invented.
+        """
+        milk = next(entry for entry in fresh_kb.objects if entry.name == "milk")
+        assert milk.height_m is None
+
+    def test_an_unrecorded_gripper_opening_stays_unknown(self, fresh_kb):
+        assert fresh_kb.arms[0].gripper.opening_m is None
+
+    def test_a_recorded_height_is_used(self, fixture_scene, monkeypatch):
+        """
+        A bundle that reports a height must be taken at its word.
+        """
+        scene, trajectory = kb.load_scene()
+        scene["objects"][0]["height"] = 0.23
+        monkeypatch.setattr(kb, "load_scene", lambda: (scene, trajectory))
+        kb.reset_kb()
+        milk = next(entry for entry in kb.get_kb().objects if entry.name == "milk")
+        assert milk.height_m == 0.23
+
+    def test_unknown_measurements_are_left_out_of_the_graph(self, fixture_scene):
+        """
+        A tooltip must not show a height the bundle never recorded.
+        """
+        payload = kb.view_payload("knowledge")
+        milk = payload["details"]["milk"]
+        assert not any(line.startswith("height:") for line in milk["lines"])
+
+
+class TestActionLabelShortening:
+    def test_action_suffix_is_dropped(self):
+        assert kb.shorten_action_label("TransportAction") == "Transport"
+
+    def test_the_word_action_inside_a_label_is_kept(self):
+        assert kb.shorten_action_label("ActionNode") == "ActionNode"
+
+    def test_only_the_trailing_occurrence_is_dropped(self):
+        assert kb.shorten_action_label("ActionSequenceAction") == "ActionSequence"
+
+    def test_a_label_that_is_only_the_suffix_is_kept(self):
+        assert kb.shorten_action_label("Action") == "Action"
 
 
 class TestViewPayloads:
@@ -67,6 +122,18 @@ class TestViewPayloads:
         kinds = {e["label"].split(" ")[0]: e["kind"] for e in payload["edges"]}
         assert kinds["torso_lift_joint"] == "prop"
         assert kinds["l_gripper_joint"] == "type"
+
+    def test_kinematics_counts_every_movable_joint(self, fixture_scene):
+        """
+        The movable-joint tally must match the joints drawn as movable.
+
+        The fixture's ``torso_lift_joint`` is prismatic: movable, but not revolute.
+        """
+        payload = kb.view_payload("kinematics")
+        movable_edges = [edge for edge in payload["edges"] if edge["kind"] == "prop"]
+        root_lines = payload["details"]["urdf:base_link"]["lines"]
+        summary = next(line for line in root_lines if "movable" in line)
+        assert summary.endswith("(%d movable)" % len(movable_edges))
 
     def test_plan_view_carries_status(self, fixture_scene):
         payload = kb.view_payload("plan")

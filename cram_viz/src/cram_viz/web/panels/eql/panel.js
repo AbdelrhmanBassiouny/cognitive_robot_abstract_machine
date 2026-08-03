@@ -35,7 +35,7 @@ Panels.define('eql', function (root, bus) {
 
   let kb = null;   // /api/kb overview (presets + entity details)
 
-  // ---- boot -----------------------------------------------------------------
+  // %% boot
   fetch('/api/kb').then(function (r) { return r.json(); }).then(boot).catch(function (err) {
     kbStatus.textContent = 'KB error';
     answerEl.innerHTML = '<div class="qerr">Failed to reach the EQL server:\n' + esc(String(err)) + '</div>';
@@ -69,7 +69,7 @@ Panels.define('eql', function (root, bus) {
       'or click a preset below, or a node in the graph.</p>';
   }
 
-  // ---- describe an entity in the answer panel --------------------------------
+  // %% describe an entity in the answer panel
   // Two sources: our own kb.details (scene clicks) and graph panels, which send
   // the full detail payload of the node the user clicked (entity:select).
   function describe(id, detail, relations) {
@@ -101,7 +101,7 @@ Panels.define('eql', function (root, bus) {
     if (p.step !== '__done__' && kb && kb.details && kb.details[p.step]) describe(p.step);
   });
 
-  // ---- presets ----------------------------------------------------------------
+  // %% presets
   function buildPresets(presets) {
     presetsEl.innerHTML = '';
     presets.forEach(function (p) {
@@ -116,7 +116,7 @@ Panels.define('eql', function (root, bus) {
     });
   }
 
-  // ---- run an EQL query --------------------------------------------------------
+  // %% run an EQL query
   let running = false;
   async function runQuery(code) {
     code = (code || '').trim(); if (!code || running) return;
@@ -181,7 +181,7 @@ Panels.define('eql', function (root, bus) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runQuery(input.value); }
   });
 
-  // ---- helpers ----------------------------------------------------------------
+  // %% helpers
   const TYPE_GROUP = {
     BenchObject: 'object', ActionEpisode: 'event', Arm: 'robot', Gripper: 'robot',
     Robot: 'robot', JointMotion: 'robot', Position: 'concept',

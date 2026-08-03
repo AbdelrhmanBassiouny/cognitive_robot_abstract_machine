@@ -1,10 +1,10 @@
 """
 Filesystem locations for cram_viz, all overridable via environment.
 
-The frontend (``web/``) ships inside the package. Scene bundles are GENERATED
+The frontend (``web/``) ships inside the package. Scene bundles are *generated*
 artifacts (tens to hundreds of MB per scene, produced by ``cram-viz-onboard``)
 and are deliberately not part of this repository — they are versioned in
-https://github.com/sunava/cram-scenes, wired here as the OPTIONAL submodule
+https://github.com/sunava/cram-scenes, wired here as the *optional* submodule
 ``cram_viz/scenes`` (live visualization and freshly onboarded scenes work
 without it). :func:`scenes_dir` looks in this order:
 

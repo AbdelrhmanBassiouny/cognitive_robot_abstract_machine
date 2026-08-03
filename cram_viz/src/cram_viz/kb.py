@@ -24,12 +24,57 @@ import os
 import re
 from collections import Counter, defaultdict
 from dataclasses import dataclass, fields, is_dataclass
+from enum import Enum
+from pathlib import Path
 
-from typing_extensions import Any, Dict, List, Optional, Tuple
+from typing_extensions import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    runtime_checkable,
+    Tuple,
+)
 
 from krrood.entity_query_language import factories as eql_factories
 
-from cram_viz import paths
+from cram_viz import get_logger, paths
+
+logger = get_logger(__name__)
+
+
+@runtime_checkable
+class NamesAnEntity(Protocol):
+    """
+    A query result that carries an entity name the viewer can highlight.
+    """
+
+    name: Any
+
+
+@runtime_checkable
+class IsEvaluable(Protocol):
+    """
+    An EQL expression that still has to be evaluated to yield its solutions.
+    """
+
+    def evaluate(self) -> Any:
+        """
+        Run the query and return its result.
+        """
+
+
+@runtime_checkable
+class MapsNamesToValues(Protocol):
+    """
+    A result row that binds names to values, such as EQL's unification dictionary.
+    """
+
+    def items(self) -> Any:
+        """
+        The name/value pairs of this row.
+        """
 
 
 def scene_name() -> Optional[str]:
@@ -39,19 +84,33 @@ def scene_name() -> Optional[str]:
     environment_override = os.environ.get("CRAM_VIZ_SCENE")
     if environment_override:
         return environment_override
+    index_path = paths.scenes_dir() / "index.json"
+    if not index_path.is_file():
+        return None
+    index = _read_json(index_path)
+    return index.get("default") if isinstance(index, dict) else None
+
+
+def _read_json(path: Path) -> Any:
+    """
+    Read a JSON file, treating unreadable or corrupt content as absent.
+
+    Scene bundles and the scan cache are generated artifacts that a failed run can
+    leave half-written; the viewer degrades instead of refusing to start.
+    """
     try:
-        index = json.load(open(os.path.join(str(paths.scenes_dir()), "index.json")))
-        return index["default"]
-    except (OSError, ValueError, KeyError):
+        return json.loads(path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, ValueError) as error:
+        logger.warning("ignoring unreadable %s: %s", path, error)
         return None
 
 
-def scene_dir() -> Optional[str]:
+def scene_dir() -> Optional[Path]:
     """
     Directory of the active scene bundle, or None without one.
     """
     name = scene_name()
-    return os.path.join(str(paths.scenes_dir()), name) if name else None
+    return paths.scenes_dir() / name if name else None
 
 
 def load_scene() -> Tuple[Dict[str, Any], Dict[str, Any]]:
@@ -61,17 +120,11 @@ def load_scene() -> Tuple[Dict[str, Any], Dict[str, Any]]:
     directory = scene_dir()
     if not directory:
         return {}, {}
-    try:
-        scene = json.load(open(os.path.join(directory, "scene.json")))
-    except (OSError, ValueError):
+    scene = _read_json(directory / "scene.json")
+    if not isinstance(scene, dict):
         return {}, {}
-    try:
-        trajectory = json.load(
-            open(os.path.join(directory, scene.get("trajectory", "trajectory.json")))
-        )
-    except (OSError, ValueError):
-        trajectory = {}
-    return scene, trajectory
+    trajectory = _read_json(directory / scene.get("trajectory", "trajectory.json"))
+    return scene, trajectory if isinstance(trajectory, dict) else {}
 
 
 def load_urdf() -> Tuple[List[str], List[Dict[str, str]]]:
@@ -88,14 +141,10 @@ def load_urdf() -> Tuple[List[str], List[Dict[str, str]]]:
     directory = scene_dir()
     if not robot_model or not directory:
         return [], []
-    try:
-        text = open(
-            os.path.join(directory, robot_model["urdf"]),
-            encoding="utf-8",
-            errors="replace",
-        ).read()
-    except OSError:
+    urdf_path = directory / robot_model["urdf"]
+    if not urdf_path.is_file():
         return [], []
+    text = urdf_path.read_text(encoding="utf-8", errors="replace")
     links = re.findall(r'<link\s+name="([^"]+)"', text)
     joints = []
     for joint in re.finditer(
@@ -116,7 +165,7 @@ def load_urdf() -> Tuple[List[str], List[Dict[str, str]]]:
     return links, joints
 
 
-# %% the entity model ---------------------------------------------------------
+# %% the entity model
 @dataclass(unsafe_hash=True)
 class Position:
     """
@@ -142,6 +191,17 @@ class Position:
         return "(%.2f, %.2f, %.2f)" % (self.x, self.y, self.z)
 
 
+class ArmSide(str, Enum):
+    """
+    Which body side a joint/part belongs to, as inferred from its name.
+    """
+
+    LEFT = "left"
+    RIGHT = "right"
+    BODY = "body"
+    ENVIRONMENT = "environment"
+
+
 @dataclass(unsafe_hash=True)
 class Gripper:
     """
@@ -158,10 +218,12 @@ class Gripper:
     Body side the gripper belongs to ('left' / 'right').
     """
 
-    opening_m: float = 0.085
+    opening_m: Optional[float] = None
     """
-    Maximum opening width in metres (Robotiq 2F-85 default).
+    Maximum opening width in metres as recorded by the onboarder, or None when the
+    bundle does not report one.
     """
+
 
 @dataclass(unsafe_hash=True)
 class Arm:
@@ -228,9 +290,10 @@ class BenchObject:
     Human-readable display name.
     """
 
-    height_m: float
+    height_m: Optional[float]
     """
-    Approximate object height in metres.
+    Object height in metres as recorded by the onboarder, or None when the bundle does
+    not report one (the object's shapes carry no measurable size).
     """
 
     position: Position
@@ -297,9 +360,9 @@ class JointMotion:
     Joint name (without the model prefix).
     """
 
-    arm_side: str
+    arm_side: ArmSide
     """
-    Body side the joint belongs to ('left' / 'right' / 'body' / …).
+    Body side the joint belongs to.
     """
 
     min_rad: float
@@ -316,7 +379,7 @@ class JointMotion:
     """Travelled range, ``max_rad - min_rad``."""
 
 
-# %% the CRAM architecture entities --------------------------------------------
+# %% the CRAM architecture entities
 @dataclass(unsafe_hash=True)
 class Package:
     """
@@ -413,7 +476,7 @@ class PythonClass:
     """
 
 
-# %% scan the CRAM architecture --------------------------------------------------
+# %% scan the CRAM architecture
 def _cram_root() -> str:
     """
     The CRAM repository the architecture graph is scanned from.
@@ -428,6 +491,12 @@ def _architecture_cache() -> str:
     """
     return os.path.join(str(paths.data_dir()), "arch_cache.json")
 
+
+#: how much of a README's first line is kept as a package description
+DESCRIPTION_LENGTH_LIMIT = 120
+
+#: bumped whenever the cached scan's shape changes, so old caches are discarded
+ARCHITECTURE_CACHE_VERSION = 2
 
 #: directories never descended into during the architecture scan
 SKIP_DIRS = {
@@ -465,12 +534,14 @@ def _first_readme_line(directory: str) -> str:
     The first non-empty line of a directory's README, or ``''``.
     """
     for name in ("README.md", "readme.md"):
-        readme_path = os.path.join(directory, name)
-        if os.path.exists(readme_path):
-            for line in open(readme_path, encoding="utf-8", errors="replace"):
-                line = line.strip().lstrip("#").strip()
-                if line:
-                    return line[:120]
+        readme_path = Path(directory) / name
+        if not readme_path.is_file():
+            continue
+        text = readme_path.read_text(encoding="utf-8", errors="replace")
+        for line in text.splitlines():
+            stripped = line.strip().lstrip("#").strip()
+            if stripped:
+                return stripped[:DESCRIPTION_LENGTH_LIMIT]
     return ""
 
 
@@ -517,11 +588,12 @@ def scan_architecture() -> (
                 if not filename.endswith(".py"):
                     continue
                 path = os.path.join(dirpath, filename)
+                source = Path(path).read_text(encoding="utf-8", errors="replace")
                 try:
-                    tree = ast.parse(
-                        open(path, encoding="utf-8", errors="replace").read()
-                    )
+                    tree = ast.parse(source)
                 except SyntaxError:
+                    # a module the running interpreter cannot parse (a newer syntax,
+                    # or a template) contributes nothing to the architecture graph
                     continue
                 module_count += 1
                 module = os.path.relpath(path, cram_root)[:-3].replace(os.sep, ".")
@@ -605,11 +677,13 @@ def _load_architecture_cache(cram_root: str, require_classes: bool) -> Optional[
     A cache written for another repository root is not trusted (unless no repository
     exists at all, in which case any cache beats nothing).
     """
-    try:
-        cached = json.load(open(_architecture_cache()))
-    except (OSError, ValueError):
+    cache_path = Path(_architecture_cache())
+    if not cache_path.is_file():
         return None
-    if cached.get("version") != 2:
+    cached = _read_json(cache_path)
+    if not isinstance(cached, dict):
+        return None
+    if cached.get("version") != ARCHITECTURE_CACHE_VERSION:
         return None
     if os.path.isdir(cram_root) and cached.get("cram_root") != cram_root:
         return None
@@ -646,30 +720,50 @@ def load_architecture() -> (
             classes,
             dependency_edges,
         )
-    os.makedirs(os.path.dirname(_architecture_cache()), exist_ok=True)
-    json.dump(
-        {
-            "version": 2,
-            "cram_root": cram_root,
-            "packages": packages,
-            "classes": classes,
-            "deps": dependency_edges,
-        },
-        open(_architecture_cache(), "w"),
+    cache_path = Path(_architecture_cache())
+    cache_path.parent.mkdir(parents=True, exist_ok=True)
+    # written via a temporary file: a half-written cache would be read back as a
+    # complete one on the next start
+    temporary = cache_path.with_suffix(".part")
+    temporary.write_text(
+        json.dumps(
+            {
+                "version": ARCHITECTURE_CACHE_VERSION,
+                "cram_root": cram_root,
+                "packages": packages,
+                "classes": classes,
+                "deps": dependency_edges,
+            }
+        ),
+        encoding="utf-8",
     )
+    temporary.replace(cache_path)
     return packages, classes, dependency_edges
 
 
-def _side_of_name(name: str) -> str:
+def _measurement_line(
+    label: str, value: Optional[float], number_format: str
+) -> List[str]:
     """
-    Body side encoded in a part/link name: 'left', 'right' or ``''``.
+    A detail line for a measurement in metres, or nothing when it was not recorded.
+
+    Showing a fabricated number would read as a fact about the scene.
+    """
+    if value is None:
+        return []
+    return ["%s: %s m" % (label, number_format % value)]
+
+
+def _side_of_name(name: str) -> Optional[ArmSide]:
+    """
+    Body side encoded in a part/link name, or None when it names neither.
     """
     lowered = name.lower()
     if "left" in lowered or lowered.startswith("l_"):
-        return "left"
+        return ArmSide.LEFT
     if "right" in lowered or lowered.startswith("r_"):
-        return "right"
-    return ""
+        return ArmSide.RIGHT
+    return None
 
 
 class KB:
@@ -732,7 +826,7 @@ class KB:
                     name=entry["id"],
                     kind="object",
                     label=entry["id"].replace("_", " ").title(),
-                    height_m=0.1,
+                    height_m=entry.get("height"),
                     position=Position(
                         *[round(value, 3) for value in entry["spawn"][:3]]
                     ),
@@ -745,7 +839,7 @@ class KB:
                     name="place_area",
                     kind="location",
                     label="Place area",
-                    height_m=0.0,
+                    height_m=0.0,  # a target area on a surface, not a solid
                     position=Position(
                         round(target["pos"][0], 3),
                         round(target["pos"][1], 3),
@@ -848,20 +942,20 @@ class KB:
 
         link_to_part = {link: part for part, links in parts.items() for link in links}
 
-        def side_of(key: str) -> str:
+        def side_of(key: str) -> ArmSide:
             """
-            Which arm side a prefixed joint key belongs to, or "environment"/
-            "body" when it isn't part of an arm.
+            Which arm side a prefixed joint key belongs to, or ``ENVIRONMENT``/``BODY``
+            when it isn't part of an arm.
             """
             prefix, _, joint_name = key.partition("/")
             if "/" not in key:
                 prefix, joint_name = "", key
             if robot_prefix and prefix != robot_prefix:
-                return "environment"
+                return ArmSide.ENVIRONMENT
             part = link_to_part.get(joint_name.replace("_joint", "_link"))
             if part and _side_of_name(part):
                 return _side_of_name(part)
-            return _side_of_name(joint_name) or "body"
+            return _side_of_name(joint_name) or ArmSide.BODY
 
         return [
             JointMotion(
@@ -932,33 +1026,35 @@ def reset_kb() -> None:
     _kb = None
 
 
-# %% EQL session -----------------------------------------------------------------
-#: EQL factories re-exported into every query namespace
-_FACTORY_NAMES = [
-    "entity",
-    "set_of",
-    "variable",
-    "an",
-    "a",
-    "the",
-    "and_",
-    "or_",
-    "not_",
-    "contains",
-    "in_",
-    "exists",
-    "for_all",
-    "count",
-    "count_all",
-    "average",
-    "sum",
-    "min",
-    "max",
-    "mode",
-    "distinct",
-    "flat_variable",
-    "variable_from",
-]
+# %% EQL session
+#: EQL factories re-exported into every query namespace.
+#: Imported by name rather than looked up, so a factory that krrood renames or drops
+#: breaks the import instead of silently vanishing from the query console.
+EQL_FACTORIES = {
+    "entity": eql_factories.entity,
+    "set_of": eql_factories.set_of,
+    "variable": eql_factories.variable,
+    "an": eql_factories.an,
+    "a": eql_factories.a,
+    "the": eql_factories.the,
+    "and_": eql_factories.and_,
+    "or_": eql_factories.or_,
+    "not_": eql_factories.not_,
+    "contains": eql_factories.contains,
+    "in_": eql_factories.in_,
+    "exists": eql_factories.exists,
+    "for_all": eql_factories.for_all,
+    "count": eql_factories.count,
+    "count_all": eql_factories.count_all,
+    "average": eql_factories.average,
+    "sum": eql_factories.sum,
+    "max": eql_factories.max,
+    "min": eql_factories.min,
+    "mode": eql_factories.mode,
+    "distinct": eql_factories.distinct,
+    "flat_variable": eql_factories.flat_variable,
+    "variable_from": eql_factories.variable_from,
+}
 
 
 def fresh_namespace() -> Dict[str, Any]:
@@ -966,11 +1062,7 @@ def fresh_namespace() -> Dict[str, Any]:
     A namespace for evaluating one EQL query (fresh variables each time).
     """
     kb = get_kb()
-    namespace = {
-        name: getattr(eql_factories, name)
-        for name in _FACTORY_NAMES
-        if hasattr(eql_factories, name)
-    }
+    namespace: Dict[str, Any] = dict(EQL_FACTORIES)
     namespace.update(
         Position=Position,
         Gripper=Gripper,
@@ -1008,7 +1100,7 @@ def _entity_name(value: Any) -> Optional[str]:
     """
     The entity's name attribute, or None for non-entities.
     """
-    return getattr(value, "name", None)
+    return str(value.name) if isinstance(value, NamesAnEntity) else None
 
 
 def _jsonable(value: Any) -> Any:
@@ -1048,7 +1140,7 @@ def run_query(code: str, limit: int = 200) -> Dict[str, Any]:
         exec(compile(tree, "<eql>", "exec"), namespace)
         result = namespace.get("result")
 
-    if hasattr(result, "evaluate"):
+    if isinstance(result, IsEvaluable):
         result = result.evaluate()
     rows, highlight, more = _result_rows(result, limit)
     kind = "rows" if rows and "__entity__" not in rows[0] else "entities"
@@ -1104,7 +1196,7 @@ def _entity_row(item: Any, highlight: List[str]) -> Dict[str, Any]:
     row = {"__entity__": name or repr(item), "__type__": type(item).__name__}
     for entity_field in fields(item):
         if entity_field.name != "name":
-            row[entity_field.name] = _jsonable(getattr(item, entity_field.name))
+            row[entity_field.name] = _jsonable(vars(item)[entity_field.name])
     return row
 
 
@@ -1114,7 +1206,7 @@ def _item_row(item: Any, highlight: List[str]) -> Dict[str, Any]:
     """
     if is_dataclass(item) and not isinstance(item, type):
         return _entity_row(item, highlight)
-    if hasattr(item, "items"):  # UnificationDict from set_of()
+    if isinstance(item, MapsNamesToValues):  # a unification row from set_of()
         row = {}
         for key, value in item.items():
             if (
@@ -1128,7 +1220,7 @@ def _item_row(item: Any, highlight: List[str]) -> Dict[str, Any]:
     return {"value": _jsonable(item)}
 
 
-# %% the UI graph -----------------------------------------------------------------
+# %% the UI graph
 def graph_payload() -> Dict[str, Any]:
     """
     The knowledge-graph overview: nodes, edges, details and presets.
@@ -1173,11 +1265,8 @@ def graph_payload() -> Dict[str, Any]:
             arm.gripper.name,
             arm.gripper.name.replace("_", " "),
             "robot",
-            [
-                "a Gripper",
-                "side: " + arm.gripper.side,
-                "opening: %.3f m" % arm.gripper.opening_m,
-            ],
+            ["a Gripper", "side: " + arm.gripper.side]
+            + _measurement_line("opening", arm.gripper.opening_m, "%.3f"),
         )
         edges.append(
             {
@@ -1197,8 +1286,8 @@ def graph_payload() -> Dict[str, Any]:
                 "a BenchObject",
                 "kind: " + bench_object.kind,
                 "position: " + repr(bench_object.position),
-                "height: %.2f m" % bench_object.height_m,
-            ],
+            ]
+            + _measurement_line("height", bench_object.height_m, "%.2f"),
         )
 
     previous = None
@@ -1369,7 +1458,7 @@ def graph_payload() -> Dict[str, Any]:
     }
 
 
-# %% drill-down subgraphs -----------------------------------------------------
+# %% drill-down subgraphs
 # Double-clicking a node in the UI asks for its inside view: package → its
 # subpackages + top-level classes, subpackage → its classes (with inheritance
 # edges), class → its base classes and every subclass in the repo.
@@ -1403,7 +1492,7 @@ def _view() -> tuple:
     return nodes, edges, details, add
 
 
-# %% the graph-panel tabs ---------------------------------------------------------
+# %% the graph-panel tabs
 def view_payload(name: str) -> Dict[str, Any]:
     """
     One tab of the graph panel.
@@ -1418,13 +1507,13 @@ def view_payload(name: str) -> Dict[str, Any]:
     if name == "kinematics":
         return _urdf_view(kb)
     if name == "plan":
-        return _plan_view(kb)
+        return _plan_view()
     if name == "chart":
-        return _chart_view(kb)
+        return _chart_view()
     return {"ok": False, "error": "unknown view: %s" % name}
 
 
-def _chart_view(kb: KB) -> Dict[str, Any]:
+def _chart_view() -> Dict[str, Any]:
     """
     The (live-only) statechart tab.
 
@@ -1528,7 +1617,7 @@ def expand_node(node_id: str) -> Optional[Dict[str, Any]]:
     if node_id == kb.robot.name:  # robot → full URDF kinematic tree
         return _urdf_view(kb)
     if node_id == "plan":  # → the executed plan tree
-        return _plan_view(kb)
+        return _plan_view()
     package = next((entry for entry in kb.packages if entry.name == node_id), None)
     if package:
         return _package_view(kb, package)
@@ -1564,7 +1653,17 @@ PLAN_LEGEND = [
 ]
 
 
-def _plan_view(kb: KB) -> Dict[str, Any]:
+def shorten_action_label(label: str) -> str:
+    """
+    Drop the redundant ``Action`` suffix from a plan-node label.
+
+    Only the suffix goes: a label that merely *contains* the word, such as
+    ``ActionNode``, is left alone.
+    """
+    return label.removesuffix("Action") or label
+
+
+def _plan_view() -> Dict[str, Any]:
     """
     The executed plan as a tree, one node per plan node the demo ran.
 
@@ -1592,7 +1691,7 @@ def _plan_view(kb: KB) -> Dict[str, Any]:
             lines.append("arm: " + tree["arm"])
         if tree.get("target"):
             lines.append("target: " + tree["target"])
-        label = tree.get("label", "?").replace("Action", "")
+        label = shorten_action_label(tree.get("label", "?"))
         add(
             node_id,
             label,
@@ -1621,6 +1720,17 @@ def _plan_view(kb: KB) -> Dict[str, Any]:
         "statusLegend": True,
         "empty": "No plan tree in this bundle — re-run cram-viz-onboard.",
     }
+
+
+#: the one URDF joint type that cannot move
+FIXED_JOINT_TYPE = "fixed"
+
+
+def _is_movable(joint: Dict[str, str]) -> bool:
+    """
+    Whether a URDF joint can move (every type except ``fixed``).
+    """
+    return joint["type"] != FIXED_JOINT_TYPE
 
 
 def _urdf_view(kb: KB) -> Dict[str, Any]:
@@ -1682,18 +1792,17 @@ def _urdf_view(kb: KB) -> Dict[str, Any]:
         if ("urdf:" + joint["parent"]) in details and (
             "urdf:" + joint["child"]
         ) in details:
-            movable = joint["type"] not in ("fixed",)
             edges.append(
                 {
                     "from": "urdf:" + joint["parent"],
                     "to": "urdf:" + joint["child"],
-                    "kind": "prop" if movable else "type",
+                    "kind": "prop" if _is_movable(joint) else "type",
                     "label": "%s (%s)" % (joint["name"], joint["type"]),
                 }
             )
-    revolute_count = sum(1 for joint in joints if joint["type"] == "revolute")
+    movable_count = sum(1 for joint in joints if _is_movable(joint))
     details["urdf:" + links[0]]["lines"].append(
-        "%d links · %d joints (%d movable)" % (len(links), len(joints), revolute_count)
+        "%d links · %d joints (%d movable)" % (len(links), len(joints), movable_count)
     )
     legend = [
         {"group": "concept", "label": "Base / torso"},

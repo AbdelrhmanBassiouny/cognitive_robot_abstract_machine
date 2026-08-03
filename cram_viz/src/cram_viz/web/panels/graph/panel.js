@@ -45,8 +45,9 @@ Panels.define('graph', function (root, bus) {
   const navPath = root.querySelector('#gnav-path');
   const tabsEl = root.querySelector('#graph-tabs');
   const liveBadge = root.querySelector('#gt-live');
+  Graph.attach(root.querySelector('#graph'), root.querySelector('#legend'));
 
-  // ---- tabs -------------------------------------------------------------------
+  // %% tabs
   const TABS = {
     knowledge:  { url: '/api/kb' },
     kinematics: { url: '/api/kb/view?name=kinematics' },
@@ -137,7 +138,7 @@ Panels.define('graph', function (root, bus) {
     b.addEventListener('click', function () { showTab(b.dataset.view); });
   });
 
-  // ---- node click → describe in whatever panel listens -------------------------
+  // %% node click → describe in whatever panel listens
   function select(id) {
     const d = view && view.details && view.details[id];
     if (!d) return;
@@ -153,7 +154,7 @@ Panels.define('graph', function (root, bus) {
   Graph.onSelect(select);
   Graph.onDoubleSelect(drill);
 
-  // ---- highlights (from EQL results or our own selection) ----------------------
+  // %% highlights (from EQL results or our own selection)
   function spotlight(p) {
     const ids = (p && p.ids) || [];
     let hi = ids.filter(function (id) { return inGraphSet[id]; });
@@ -171,7 +172,7 @@ Panels.define('graph', function (root, bus) {
     if (tab === 'knowledge' && !stacks[tab].length && inGraphSet[p.step]) select(p.step);
   });
 
-  // ---- live status overlay (Plan / Statechart tabs) -----------------------------
+  // %% live status overlay (Plan / Statechart tabs)
   // The bridge publishes the plan tree and the executing motion statechart with
   // per-node status. Structure changes (the plan grows as actions expand, a new
   // statechart is compiled per motion group) rebuild the graph; a pure status
@@ -200,10 +201,17 @@ Panels.define('graph', function (root, bus) {
     return (p && p.live) || null;               // 'plan' | 'chart' | null
   }
 
+  // drop the redundant 'Action' suffix only — a label that merely contains the
+  // word, such as 'ActionNode', must survive intact (mirrors kb.shorten_action_label)
+  function shortenActionLabel(label) {
+    const shortened = label.replace(/Action$/, '');
+    return shortened || label;
+  }
+
   function planPayload(live) {
     const nodes = [], edges = [], details = {};
     (live.nodes || []).forEach(function (n) {
-      const label = (n.label || '?').replace('Action', '');
+      const label = shortenActionLabel(n.label || '?');
       const lines = ['a ' + n.kind,
                      'status: ' + n.status + (n.derived ? ' (derived from the motion statechart)' : '')];
       if (n.arm) lines.push('arm: ' + n.arm);
@@ -283,6 +291,12 @@ Panels.define('graph', function (root, bus) {
     }
   });
 
-  // ---- boot ---------------------------------------------------------------------
+  // %% boot
   showTab('knowledge');
+
+  return {
+    destroy: function () {
+      if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+    },
+  };
 });
