@@ -63,7 +63,13 @@ items:
       evaluation-time tracking (see roadmap addendum); the real refactor is
       Phase B consolidation. Warning: PR #92
       merges this branch and touches query_graph.py - it must re-merge tip
-      58671190 (construct_graph parent-param revert may conflict).
+      58671190 (construct_graph parent-param revert may conflict). 2026-08-03
+      review round handled (commit d63dce6b, via /plan-item-resolve): the
+      TruthValueOperatorChildren docstring's unexplained "DAG" reference was
+      spelled out and named explicitly as SymbolicExpression's own directed
+      acyclic graph of parents, disambiguating it from QueryGraph; thread
+      resolved, test_eql (1143 passed, 3 skipped) and test_ormatic (132
+      passed) rerun clean.
 
   - id: pr-89-drop-dead-parent-recovery
     title: "Drop the dead _last_parent_of_type_ conditions-root recovery"
