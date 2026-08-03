@@ -2,7 +2,7 @@ from __future__ import annotations, absolute_import
 
 from dataclasses import dataclass, field, Field
 from pathlib import Path
-from typing import Dict, Set, Any
+from typing import Dict, Set
 from uuid import UUID
 
 import mujoco

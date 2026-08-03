@@ -449,6 +449,47 @@ def test_satisfied_conditions_no_where():
         assert result.satisfied_condition_ids is None
 
 
+def test_satisfied_conditions_for_bare_condition_shared_with_an_unrelated_query():
+    """
+    A bare (non-Comparator/Predicate/LogicalOperator) condition value that was first
+    attached as a Comparator operand in one query, then reused as the direct where-
+    condition of a second, unrelated query, must still be recorded as satisfied by the
+    second query's own evaluation.
+
+    ``is_condition_participant`` must not rely on the shared node's structural, first-
+    attachment-wins ``_parent_``: that pointer keeps referencing the first (Comparator)
+    parent even after the node gains a second, unrelated parent, so a check based on it
+    answers a question about construction history instead of about the evaluation that
+    is currently running.
+    """
+    flag = variable_from([True])
+    sink = variable_from([1])
+
+    # Attaches `flag` as a Comparator operand first, so its structural primary parent is
+    # the Comparator, not a TruthValueOperator.
+    unrelated_query = entity(sink).where(flag == True)
+    unrelated_query.build()
+
+    # Reuses the same `flag` node as the direct where-condition of a second, independent
+    # query. Structurally `flag` now has two parents, but only the Comparator is primary.
+    target = variable_from([1])
+    query = entity(target).where(flag)
+    query.build()
+    assert (
+        len(flag._parents_) == 2
+    ), "flag must be a genuinely shared DAG node for this test to exercise the bug"
+
+    true_results = _get_true_results(query)
+    assert len(true_results) == 1
+    result = true_results[0]
+
+    assert result.satisfied_condition_ids is not None
+    assert flag._id_ in result.satisfied_condition_ids, (
+        "flag is this query's own where-condition and evaluated true, so it must be "
+        "recorded as satisfied regardless of which query attached it to the DAG first"
+    )
+
+
 # ============================================================
 # Tests for condition_graph via explain_inference pipeline
 # ============================================================
@@ -640,6 +681,45 @@ def test_condition_graph_pipeline_non_symbol():
 # ============================================================
 # Tests for QueryGraph satisfaction color overlay
 # ============================================================
+
+
+def test_query_graph_marks_a_shared_bare_condition_satisfied_from_its_own_query():
+    """
+    A bare condition value reused across two unrelated queries must be classified as a
+    condition participant by whichever query's own ``QueryGraph`` is being built, not by
+    whichever query happened to attach it to the DAG first.
+
+    Mirrors ``test_satisfied_conditions_for_bare_condition_shared_with_an_unrelated_query``
+    for the post-hoc ``QueryGraph`` visualization path: ``construct_graph`` already knows
+    the edge it is visiting (it recurses via each expression's own ``_children_``), so it
+    must not re-derive a possibly-unrelated parent from the shared node's structural
+    ``_parent_``.
+    """
+    flag = variable_from([True])
+    sink = variable_from([1])
+
+    unrelated_query = entity(sink).where(flag == True)
+    unrelated_query.build()
+
+    target = variable_from([1])
+    query = entity(target).where(flag)
+    query.build()
+    assert (
+        len(flag._parents_) == 2
+    ), "flag must be a genuinely shared DAG node for this test to exercise the bug"
+
+    true_results = _get_true_results(query)
+    result = true_results[0]
+
+    query_graph = QueryGraph(
+        query, satisfied_condition_ids=result.satisfied_condition_ids
+    )
+    flag_node = query_graph.expression_node_map[flag]
+    assert flag_node.is_satisfied, (
+        "flag is this query's own where-condition and evaluated true, so its QueryNode "
+        "must be marked satisfied regardless of which query attached it to the DAG first"
+    )
+    assert not flag_node.faded
 
 
 def test_query_graph_satisfaction_colors():
