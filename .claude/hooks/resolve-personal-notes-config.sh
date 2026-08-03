@@ -41,6 +41,41 @@ NOTES_PATH="${NOTES_PATH:-${CLAUDE_PERSONAL_NOTES_PATH:-.claude/personal/cram-no
 # fork something else) - the URL form works without depending on that
 # session-specific remote name/alias existing at all.
 
+# PERSONAL_SETTINGS_PATH / LOCAL_SETTINGS_RELATIVE_PATH / LOCAL_SETTINGS_JSON /
+# PERSONAL_SETTINGS_SYNC_STAMP: the personal Claude Code settings round trip -
+# `.claude/personal/settings.local.json` on the personal-notes branch, synced into
+# this clone's `.claude/settings.local.json` (the file Claude Code itself reads as
+# local settings, and which is gitignored). Fixed convention, never overridden: the
+# destination is dictated by Claude Code, and the source is per-contributor already
+# by virtue of living on that contributor's own notes branch - same reasoning as
+# PLANS_DIR and the pr-progress directory below.
+PERSONAL_SETTINGS_PATH=".claude/personal/settings.local.json"
+LOCAL_SETTINGS_RELATIVE_PATH=".claude/settings.local.json"
+LOCAL_SETTINGS_JSON="${PROJECT_ROOT}/${LOCAL_SETTINGS_RELATIVE_PATH}"
+# The stamp records the hash of the settings content last synced into - or saved
+# out of - LOCAL_SETTINGS_JSON, which is what makes "has this been edited since?"
+# answerable at all: without it, a session start cannot tell a file it wrote itself
+# last time from one Claude Code (or a human) has since added rules to.
+PERSONAL_SETTINGS_SYNC_STAMP="${PROJECT_ROOT}/.claude/.personal-settings-sync-hash"
+
+# personal_settings_are_locally_modified: returns 0 if this clone's local settings
+# exist and differ from what was last synced or saved (so overwriting them would
+# lose an edit - typically permission rules Claude Code itself appended after an
+# "always allow"), 1 otherwise. Settings that exist but were never synced count as
+# modified: nothing recorded them, so nothing may claim them.
+personal_settings_are_locally_modified() {
+  [ -f "${LOCAL_SETTINGS_JSON}" ] || return 1
+  [ -f "${PERSONAL_SETTINGS_SYNC_STAMP}" ] || return 0
+  [ "$(git hash-object "${LOCAL_SETTINGS_JSON}")" \
+    != "$(cat "${PERSONAL_SETTINGS_SYNC_STAMP}")" ]
+}
+
+# record_personal_settings_sync: stamps the local settings' current content as the
+# synced baseline, so the next session start may update them in place.
+record_personal_settings_sync() {
+  git hash-object "${LOCAL_SETTINGS_JSON}" > "${PERSONAL_SETTINGS_SYNC_STAMP}"
+}
+
 # current_branch_upstream_remote: prints the remote name the current branch
 # tracks (e.g. "abdel-direct" for a branch whose upstream is
 # "abdel-direct/some-branch"), or nothing if it has no upstream (detached
