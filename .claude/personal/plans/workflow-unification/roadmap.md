@@ -3048,3 +3048,70 @@ vacuous pass, where it previously raised). Full `test_claude_dev_tooling` scope 
 (91), `.claude/hooks/tests` (36), `.claude/skills/plan-dashboard/tests` (194) - all green, 321 total,
 no regressions. Pushed to `claude/stack-tooling-on-main` (`b3e240e6`); PR #106 re-drafted per the
 standing re-draft-after-push rule and commented with the fix's rationale.
+
+## Update 2026-08-04 (kickoff): plan-item-bootstrap opens as #143, bootstrapped by hand
+
+`/plan-item-kickoff workflow-unification plan-item-bootstrap`, session
+https://claude.ai/code/session_01VoH56TLkH5rA5EFu2xhML9, as draft pull request **#143** on
+`claude/plan-item-kickoff-workflow-vocs6b`, based on fork `main`.
+
+The bootstrap ran **before** the implementation, in the order the item itself prescribes -
+branch, draft pull request, manifest, roadmap, dashboard, then code. By hand, since the tool
+that automates it is what this pull request builds. That is the item's own argument taken at
+face value rather than deferred: the window it exists to close is exactly the one a session
+opens by starting with the code.
+
+### The basing decision, re-run rather than inherited
+
+The 2026-08-01 lesson from `git-identity-from-personal-notes` - *"independent PR off main"
+recorded at planning time is a claim about the code, and it expires when a sibling PR moves the
+test infrastructure* - says to re-check at kickoff. Re-checked and it holds: `depends_on: []`,
+`check_dependency_readiness.py --item plan-item-bootstrap` returns `[]`, no branch existed yet,
+and every file the work builds on is on `main` already. Because the tests go into
+`.claude/hooks/tests/`, which `ci.yml` already runs, there is no new pytest directory constant
+and therefore no touch of the single `ci.yml` line #135, #106 and #107 all conflict on.
+
+### The one instruction that could not be honoured, and what replaced it
+
+The item's notes say pull request creation *"goes through the one shared backend
+`dev-tooling-github-api-unification` builds - never a third copy of the gh-CLI-else-token rule
+that `github-api.sh` (#107) and `pr_state` (#111) already carry between them."* That is
+unsatisfiable from `main` today: the unification item is `not_started`, `github-api.sh` exists
+only on #107, and `main` carries **no GitHub-calling Python at all** - checked rather than
+assumed, `render_common.py` imports `urlsplit` and nothing else.
+
+So the instruction describes the target, not something reachable from this item's own base. The
+resolution is `plan-updates-since-helper`'s recorded precedent from 2026-07-31, where the same
+collision produced the same answer: implement the call inline, deliberately *without*
+reproducing the gh-CLI-else-token discovery (`gh` is not installed here and `GH_TOKEN` is a
+14-character proxy placeholder, both already on record), and let the unification item absorb it.
+Stacking on #107 or #111 to get the backend would reverse the basing decision this item took
+after running `check_scope_overlap.py`, for a dependency that only exists to avoid ten lines.
+
+Worth stating generally, because this plan keeps producing it: **an item's notes can name a
+dependency the item's own base cannot reach.** The notes are written when the shape is decided;
+the base is chosen later, from live branches. When the two disagree the base wins, and the
+inline copy gets recorded as something a named later item absorbs - not silently left as a
+fourth copy nobody is tracking.
+
+### The promise in `plan-item-kickoff` has to be rewritten, not extended
+
+Forced by the item rather than spelled out in it, and worth recording because it is the same
+objection that shaped the item in the first place. `plan-item-kickoff/SKILL.md` opens with *"This
+skill never writes code, creates a branch, or pushes anything"* - the identical contract that
+ruled out hanging this behaviour off `/add-plan-item`. Adding a branch-and-pull-request step
+while leaving that sentence standing would break the promise through a reference, which the
+2026-08-04 revision already called *worse than breaking it openly*.
+
+It becomes "never writes code, and creates the branch and draft pull request only once the plan
+is approved", with the new work in a **step 6 after approval**. Step 5's planning half is
+untouched, so the skill still writes nothing before the user has seen and approved a plan -
+which is the part of the promise that was actually load-bearing.
+
+### The one line on #135's branch
+
+`/add-plan-item` step 6's reference to **record** goes on `claude/add-plan-item-skill-e89irj`
+while #135 is still an open draft, per `scope-decision.md`'s prefer-the-change test. Pushing to
+another session's branch needs explicit permission; the user granted it at kickoff, the same
+override made on sight for #133, with a comment on #135 so its owning session receives it as an
+event.

@@ -1545,11 +1545,13 @@ items:
       track touches.
 
   - id: plan-item-bootstrap
-    branch: null
+    branch: claude/plan-item-kickoff-workflow-vocs6b
     title: "Bootstrap an item's branch, draft pull request and manifest state before implementing"
+    pull_request_number: 143
     track: personal-data
     depends_on: []
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01VoH56TLkH5rA5EFu2xhML9
     notes: >
       Raised 2026-08-04. Today a session that has just had an implementation plan approved
       goes straight to writing code, and the branch, the draft pull request, the manifest's
@@ -1623,3 +1625,20 @@ items:
       Textual overlap is the usual whichever-lands-second pattern: resolve-personal-notes-config.sh
       gains new constants (shared with #106, #107, #115, #121, #126, #135) and
       .claude/hooks/tests/ gains a new file beside the ones #107, #115, #121 and #126 touch.
+
+      Kicked off 2026-08-04 (session_01VoH56TLkH5rA5EFu2xhML9) as draft #143 on
+      claude/plan-item-kickoff-workflow-vocs6b, bootstrapped by hand in the order this item
+      itself prescribes - branch, draft pull request, manifest, roadmap, dashboard, and only
+      then the implementation. Two calls settled at kickoff. The notes' instruction that pull
+      request creation "goes through the one shared backend dev-tooling-github-api-unification
+      builds" cannot be honoured from main: that item is not_started, github-api.sh is on #107
+      only, and main carries no GitHub-calling Python at all (render_common.py imports urlsplit
+      and nothing else). #115's recorded precedent applies instead - implement the call inline,
+      deliberately without reproducing the gh-CLI-else-token discovery, and let the unification
+      item absorb it; stacking on #107/#111 would reverse this item's own basing decision. And
+      plan-item-kickoff/SKILL.md's opening promise has to be rewritten rather than merely
+      extended: it currently reads "never writes code, creates a branch, or pushes anything",
+      which is the same contradiction that ruled out hanging this off /add-plan-item. It becomes
+      "never writes code, and creates the branch and draft pull request only once the plan is
+      approved", with the branch and pull request work in a new step 6 after approval, leaving
+      step 5's planning half untouched.
