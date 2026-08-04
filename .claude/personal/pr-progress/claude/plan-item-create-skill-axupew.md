@@ -65,6 +65,25 @@ artifacts. Repointed at the live ones (`3ddb6161`), verified two ways: exact
 plan-title match, and the live index's own links. Index republished at
 `094b785f`.
 
+## Done (round 3): the shape corrected — two operations, not one procedure
+
+User: `/add-plan-item` should only create the item, update plan data and
+publish the dashboard. Correct, and it fixes a defect rather than narrowing
+scope: referencing a whole branch-and-push procedure would have broken that
+skill's "never creates a branch or pushes" promise *through a reference*.
+
+- **Record** (plan.yaml + roadmap.md + status + `save-plan.sh`) →
+  `/add-plan-item`'s entire business, and all it gets.
+- **Open** (branch, push, draft PR, then write back branch/session/PR number
+  and flip to `in_progress`) → `/plan-item-kickoff` only.
+- Kickoff calls **open** then **record** — the PR number does not exist
+  until the PR does. Both end at `/plan-dashboard`.
+
+Basing unchanged: add-plan-item still takes a one-line reference (to
+**record**), so that line still belongs on #135's branch, and the item stays
+off `main` with `depends_on: []`. Saved `8dc4f426`, issue #102 commented,
+dashboard republished.
+
 ## Next
 
 - `/plan-item-kickoff workflow-unification plan-item-bootstrap`.
