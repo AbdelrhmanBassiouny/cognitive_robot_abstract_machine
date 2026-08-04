@@ -1565,15 +1565,26 @@ items:
       Two parts cannot be pure script, and the item's job is to hand them back explicitly
       rather than pretend. Only a live session can call the Artifact tool, so the dashboard
       republish stays a /plan-dashboard step exactly as save-plan.sh already documents.
-      And creating the pull request is unmeasured from a script: the 2026-08-04 live findings
-      settle that a token cannot help - gh is not installed, GH_TOKEN is a placeholder, and
-      the agent proxy substitutes its own identity - while showing ordinary writes (comments,
-      labels, body-only PATCH) do succeed and only the base field is refused by request shape.
-      POST /repos/{o}/{r}/pulls has never been in any probe table, and #135 was opened through
-      the MCP tool. So the script emits the title, body and base for the caller to create, and
-      gains a direct creation path only from a probe, not from inference - and must not grow a
-      third copy of the gh-CLI-else-token rule that github-api.sh and pr_state already carry
-      and dev-tooling-github-api-unification exists to collapse.
+      Creating the pull request was the open question, and it was probed rather than left to
+      inference. POST /repos/{o}/{r}/pulls with a deliberately unresolvable head returns 422
+      Validation Failed on the head field, with documentation_url on docs.github.com - so the
+      request reaches GitHub and is authorised, and the endpoint is not refused by request
+      shape the way the base-branch PATCH is (whose refusal carries docs.anthropic.com). The
+      script can therefore create the pull request itself, which is the answer this item
+      needed. The user's framing - that it works given an exported token - is right about the
+      outcome and worth correcting on the mechanism: the identical 422 comes back with the
+      exported GH_TOKEN, with a junk token and with no Authorization header at all, so within
+      a session the credential is irrelevant and the proxy supplies the identity. Nothing is
+      gained by exporting a token here and nothing is lost by having none. What the probe does
+      not cover, because a 422 on head stops evaluation before anything is created: that a
+      creation actually succeeds, that draft: true is honoured, and which identity the result
+      is attributed to. Those need one throwaway creation against the fork, in the shape #139
+      used for its own live run.
+      Portability is the reason the credential still matters even though it is inert here: the
+      same script run from a terminal or from routine-cutover's Action has no proxy and the
+      token is the credential. So creation goes through the one shared backend
+      dev-tooling-github-api-unification builds, never a third copy of the gh-CLI-else-token
+      rule that github-api.sh and pr_state already carry.
       Basing was decided by running add-plan-item's own check_scope_overlap.py against main
       rather than by feel. Everything the work builds on is already on main -
       plan-item-kickoff/SKILL.md, plan-create/SKILL.md, save-plan.sh, plan_manifest_tools.py,

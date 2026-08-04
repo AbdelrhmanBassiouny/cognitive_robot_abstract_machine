@@ -2829,18 +2829,8 @@ be moved again.
 - **The dashboard republish** stays a `/plan-dashboard <plan-id>` step. Only a live session can
   call the Artifact tool; `save-plan.sh`'s own header already records this and prints the
   reminder. The script's result object carries the reminder rather than silently omitting it.
-- **Creating the pull request is unmeasured from a script.** The 2026-08-04 live findings settle
-  the credential half in the negative and the write half in the positive: `gh` is not installed,
-  `GH_TOKEN` is a placeholder, and the agent proxy substitutes its own identity — so a personal
-  access token changes nothing — while ordinary writes (comments, labels, body-only `PATCH`) do
-  succeed and only the base field is refused, by request *shape*. What no probe has ever covered
-  is `POST /repos/{o}/{r}/pulls`, and #135 was opened through the MCP tool rather than any of
-  this. So the script emits the title, body and base and leaves creation to the caller. A direct
-  creation path is a follow-up resting on a probe, not on inference from the neighbouring
-  measurements — the same discipline #139 applied to its own probe rather than widening scope on
-  a fresh reading. It must also *not* grow a third copy of the gh-CLI-else-token rule:
-  `github-api.sh` (#107) and `pr_state` (#111) already carry two, and
-  `dev-tooling-github-api-unification` exists precisely to collapse them.
+- **Creating the pull request can be done by the script** — probed the same day rather than
+  left to inference; see the probe entry below for the measurement and its limits.
 
 ### Where it is based, and why the one shared file with #135 is not a dependency
 
@@ -2905,3 +2895,63 @@ mapping an integer back to a meaning is a decoding step it should not have to do
 Worth generalising alongside the exit-status lesson above: **an interface meant for something with
 no model in it should say what it means, not encode it.** The number is for the shell; the name is
 for whoever has to act on it.
+
+## Update 2026-08-04 (probe): `POST /pulls` is available to a script, and the token is irrelevant
+
+`plan-item-bootstrap` was written with pull request creation listed as its one unmeasured step.
+The user's response — *"I think PRs can be created from the script given an exported token"* — is
+right about the outcome, and the mechanism is worth stating exactly, because it is not the one
+the framing implies.
+
+### The probe
+
+`POST /repos/{owner}/{repo}/pulls` with a deliberately unresolvable `head`, so nothing could be
+created whatever the answer. Run three ways against the fork:
+
+| Credential sent | Status | Body |
+| --- | --- | --- |
+| exported `GH_TOKEN` | **422** | `Validation Failed`, `field: head`, `docs.github.com` |
+| junk `Bearer ghp_junk…` | **422** | identical |
+| no `Authorization` header | **422** | identical |
+
+**422 is the informative answer, not a failure.** Reaching field-level validation means the
+request was authorised and evaluated by GitHub. The contrast that makes it conclusive is the
+base-branch `PATCH` recorded on 2026-08-03/04: that one returns `403` with a
+`documentation_url` on **docs.anthropic.com**, the agent proxy's own refusal signature. `POST
+/pulls` carries **docs.github.com**. So the two refusals are different in kind — one is the proxy
+rejecting a request *shape*, and `POST /pulls` is not in that category.
+
+### The correction to the premise
+
+The three rows are identical, which settles the credential half in the opposite direction to the
+framing: **within a session the token is irrelevant.** Exporting `GH_TOKEN` gains nothing, and
+having none loses nothing — `GH_TOKEN` is a 14-character `proxy…` placeholder, and the proxy
+substitutes its own identity regardless of what the process sends. This is the same finding the
+2026-08-04 live entry reached from the `PATCH` side, now confirmed from the creation side.
+
+That matters for the design rather than being a pedantic distinction. A script written to
+*require* an exported token would be requiring the one thing that demonstrably does not
+participate.
+
+### What the probe does not cover, stated rather than implied
+
+A `422` on `head` stops evaluation before anything is built, so three things remain untested:
+that a creation actually **succeeds**, that **`draft: true`** is honoured, and which **identity**
+the resulting pull request is attributed to. Settling them needs one throwaway creation against
+the fork, in the shape #139 used for its own live run. Recording the boundary is the point — the
+same discipline #139 applied when it declined to widen scope on the strength of a fresh reading.
+
+### Why the credential still matters anyway
+
+Inert here is not inert everywhere. The same script run from a terminal, or from
+`routine-cutover`'s scheduled Action, sits behind no proxy, and there the token *is* the
+credential. So creation goes through the one shared backend `dev-tooling-github-api-unification`
+builds — never a third copy of the gh-CLI-else-token rule that `github-api.sh` (#107) and
+`pr_state` (#111) already carry between them.
+
+### Consequence for the item
+
+`plan-item-bootstrap` shrinks by one hand-off. Of the two steps it was going to return to the
+caller, only the dashboard republish genuinely stays — the Artifact tool needs a live session, as
+`save-plan.sh` already documents. Branch, pull request, manifest, roadmap and status all become
+script work, which is what the item was asked for in the first place.
