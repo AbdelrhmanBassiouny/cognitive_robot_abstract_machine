@@ -2,10 +2,10 @@
 # plan's published Artifact URL (keyed by plan id) plus the master index's
 # own URL (key: _index), so a later run of /plan-dashboard updates the
 # existing page in place instead of minting a new one.
-dag-facade-hardening: https://claude.ai/code/artifact/4652ca71-1a82-42b0-bdb4-e4453e772c53
-eql-existential-semantics: https://claude.ai/code/artifact/74c7c460-4cf5-4940-9588-f525632ffdaf
-eql-performatives: https://claude.ai/code/artifact/8365c06c-41b5-4470-b5d5-9498751f2288
-eql-verbalization: https://claude.ai/code/artifact/2eab4354-08c4-4ea9-948a-bd05a37e0c6d
-rdr-refactor: https://claude.ai/code/artifact/7f2eee54-c2f6-4cd3-b63a-62e652231491
+dag-facade-hardening: https://claude.ai/code/artifact/572b350a-c601-4122-8c12-b80700d22514
+eql-existential-semantics: https://claude.ai/code/artifact/b2971b63-c5b5-466d-8542-6f5008f303cf
+eql-performatives: https://claude.ai/code/artifact/81c0f6c6-9f54-4c0d-afe2-01178ab57322
+eql-verbalization: https://claude.ai/code/artifact/44efa6b1-3a07-4423-a3eb-9809b9c5d6cd
+rdr-refactor: https://claude.ai/code/artifact/60a2f66a-e770-4043-9e31-b3ff3ac43847
 workflow-unification: https://claude.ai/code/artifact/07123af6-6f6d-47e4-9817-43900f5339fa
-_index: https://claude.ai/code/artifact/b5f15a8f-a0f4-4c9b-af08-bf11e80dfe05
+_index: https://claude.ai/code/artifact/094b785f-fe16-45d6-9ecf-5555d1aae487
