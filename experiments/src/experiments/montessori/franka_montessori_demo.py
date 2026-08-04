@@ -70,18 +70,18 @@ back into the world model.
 
 MAX_INSERTION_ATTEMPTS = 3
 """
-Number of times :func:`_insert_all_shapes` tries inserting a single shape before giving
-up and logging a warning.
+Number of times a single shape's insertion is repeated while the attempt never gets as
+far as releasing the shape, before giving up on it and logging a warning.
 """
 
 RETRY_HORIZONTAL_JITTER = 0.003
 """
-Maximum magnitude, along either axis, of the random horizontal offset a retried
-insertion's drop point is jittered by.
+Maximum magnitude, along either axis, of the random horizontal offset an insertion's drop
+point is jittered by.
 
-A retry that releases a shape at the exact same offset over its hole gives the physics
-engine no new information about how it first contacts the hole's edge, so it is prone to
-failing the same way again.
+Releasing every shape at the exact same offset over its hole gives the physics engine no
+new information about how it first contacts the hole's edge, so a repeated insertion is
+prone to failing the same way again.
 """
 
 SHAPE_SETTLE_DURATION = 2.0
@@ -117,8 +117,7 @@ def _mount_position(montessori: MontessoriWorld) -> Point3:
 def _random_horizontal_jitter() -> Point3:
     """
     A random ``(x, y, 0)`` offset within :data:`RETRY_HORIZONTAL_JITTER` of the origin,
-    for :func:`_insert_all_shapes` to retry a failed insertion with an actually
-    different drop point.
+    so an insertion releases its shape at an actually different drop point.
     """
     return Point3(
         random.uniform(-RETRY_HORIZONTAL_JITTER, RETRY_HORIZONTAL_JITTER),
@@ -235,14 +234,14 @@ def _insert_shape_or_none(
 def _insert_all_shapes(montessori: MontessoriWorld, context) -> None:
     """
     Have the Panda pick up and insert every loose shape that has a matching hole into
-    the shape-sorting board, skipping any that don't (e.g. the sphere), retrying a
-    shape that does not actually fall through its hole up to
-    :data:`MAX_INSERTION_ATTEMPTS` times with a jittered drop point before giving up on
-    it.
+    the shape-sorting board, skipping any that don't (e.g. the sphere).
 
-    A retry picks the shape up from wherever it physically ended up, which is not
-    necessarily where it started: a shape that bounced off the board or slipped out of
-    the gripper has genuinely moved.
+    Each shape gets one insertion, whether or not it actually drops through: a shape left
+    resting on the board is reported and left there. Only an attempt that never ran --
+    the grasp or the motion failed before the shape was released -- is repeated, up to
+    :data:`MAX_INSERTION_ATTEMPTS` times, since it says nothing about the shape either
+    way. Such a retry picks the shape up from wherever it physically ended up, which is
+    not necessarily where it started.
 
     :param montessori: The Montessori scene, with the Panda already mounted and
         equipped, inside a running simulation.
@@ -255,6 +254,7 @@ def _insert_all_shapes(montessori: MontessoriWorld, context) -> None:
             logger.info("Skipping %s: no matching hole.", shape.name)
             continue
 
+        fell_through = None
         for attempt in range(1, MAX_INSERTION_ATTEMPTS + 1):
             logger.info(
                 "Inserting %s into its matching hole (attempt %d/%d).",
@@ -263,14 +263,20 @@ def _insert_all_shapes(montessori: MontessoriWorld, context) -> None:
                 MAX_INSERTION_ATTEMPTS,
             )
             fell_through = _insert_shape_or_none(shape, montessori, context, attempt)
-            if fell_through:
+            if fell_through is not None:
                 break
-        else:
+
+        if fell_through is None:
             logger.warning(
-                "%s did not fall through its hole after %d attempts; it may be "
-                "resting on the board or wedged in the opening.",
+                "%s could not be inserted in %d attempts; moving on to the next shape.",
                 shape.name,
                 MAX_INSERTION_ATTEMPTS,
+            )
+        elif not fell_through:
+            logger.warning(
+                "%s did not fall through its hole; it may be resting on the board or "
+                "wedged in the opening. Moving on to the next shape.",
+                shape.name,
             )
 
 
