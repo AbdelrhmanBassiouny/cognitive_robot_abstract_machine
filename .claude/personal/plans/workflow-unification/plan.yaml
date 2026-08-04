@@ -284,6 +284,19 @@ items:
       lands on main the skill cannot be invoked by name from a fresh clone, so the prompt
       must read the file from a ref until then.
 
+      Resolved 2026-08-04 (session_01F6tM5mDZr5pTB37UgBV6N5): CI in upstream cram2 failed
+      test_the_skill_names_no_fork_of_its_own with ForkRemoteNotFoundError - the checkout
+      topology of a cross-fork PR's base-repo CI run (only origin, pointing at cram2
+      itself) has zero fork candidates, which load_configuration() treats as an error.
+      Not new - #110 already hit and fixed the identical bug when it removed the remote
+      inference; its fixed test computes candidate forks directly from the checkout's
+      remotes and tolerates zero of them, using only symbols already in #106's stack.py.
+      Ported that fix back to this branch verbatim (b3e240e6) rather than waiting on
+      #110's rebase, since #106 is the parent and runs in this topology once promoted.
+      Verified against a scratch clone whose only remote is cram2 (reproduces the exact
+      reported traceback pre-fix, passes post-fix) plus the full test_claude_dev_tooling
+      scope (321 tests, no regressions). See roadmap.md for the full writeup.
+
   - id: setup-stacked-prs-skill
     branch: claude/setup-stacked-prs-skill
     title: "PR 2: /setup-stacked-prs guided one-command setup skill"

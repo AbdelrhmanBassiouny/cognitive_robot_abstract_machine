@@ -3006,3 +3006,45 @@ The basing decision stands unaltered. `/add-plan-item` still takes a one-line re
 **record** rather than to the whole procedure — so `.claude/skills/add-plan-item/` is still needed
 for exactly one line, that line still belongs on #135's branch by the prefer-the-change test, and
 the item stays based on fork `main` with `depends_on: []`.
+
+## Update 2026-08-04 (resolved): #106's fork-resolution test fixed for the cram2 checkout topology
+
+`/plan-item-resolve workflow-unification stack-tooling-on-main`, this session
+(https://claude.ai/code/session_01F6tM5mDZr5pTB37UgBV6N5), on the user's report that CI on the
+upstream `cram2` repo fails `test_the_skill_names_no_fork_of_its_own` with `ForkRemoteNotFoundError:
+... every remote is cram2/cognitive_robot_abstract_machine`.
+
+**Not a new bug — the same one #110 already found and fixed, one item over, not yet ported back.**
+PR #106's own fork-side CI was (and is) entirely green: head repo and base repo are both the fork,
+so that checkout's only remote (`origin`) is never the upstream, and a fork candidate is always
+found. The failure only shows up in the checkout topology of a workflow run in the *base* repo of a
+cross-fork pull request - `origin` pointing at `cram2` itself, no separate fork remote at all - which
+is what a real cram2-side CI run for this code looks like. `stack.toml` deliberately leaves
+`fork_repository` unset (derived from `fork_remote`'s URL instead), so there is nothing to fall back
+to. Reproduced exactly: cloned this checkout into a scratch directory, pointed its only remote at
+`cram2/cognitive_robot_abstract_machine`, and got the identical traceback the user reported.
+
+The 2026-08-03 entry above already named this exact mechanism from the other side, when #110 deleted
+the ~120-line remote-inference subsystem and discovered `test_the_skill_names_no_fork_of_its_own`
+"resolved its fork through the inference - which is the only reason it worked on CI." Fetching
+`.claude/stack/tests/test_maintenance_skill.py` from `claude/setup-stacked-prs-skill` (#110) showed
+the fix already exists there, verbatim: stop calling `load_configuration()` (which raises when no
+fork can be resolved) and instead compute the checkout's candidate forks directly from its remotes,
+asserting the skill names none of them - vacuously true, not an error, when there are zero
+candidates. It depends only on symbols (`Repository`, `_configuration_values`,
+`CONFIGURATION_PATH`, `Repository.from_remote_url`, `Repository.names_a_repository`) already present
+in #106's own `stack.py`, so #110's ~120-line deletion is not a prerequisite - the fix was ported
+back to `claude/stack-tooling-on-main` directly rather than waiting on #110's rebase, since #106 is
+the parent and needs to be correct in the topology it will actually run in once promoted.
+
+Confirmed (research agent reading `test_stack.py`/`conftest.py` on #106's branch) that no other test
+shares this ambient-remote defect - every other `load_configuration`/`resolve_remotes` call in that
+suite runs against the `ScratchRepository` fixture with explicitly-added remotes, never the real
+checkout. This is the one isolated instance.
+
+**Verified**: `pytest .claude/stack/tests/test_maintenance_skill.py` passes under both topologies -
+the fork's own (one candidate found) and the reproduced cram2-only-remote one (zero candidates,
+vacuous pass, where it previously raised). Full `test_claude_dev_tooling` scope - `.claude/stack/tests`
+(91), `.claude/hooks/tests` (36), `.claude/skills/plan-dashboard/tests` (194) - all green, 321 total,
+no regressions. Pushed to `claude/stack-tooling-on-main` (`b3e240e6`); PR #106 re-drafted per the
+standing re-draft-after-push rule and commented with the fix's rationale.
