@@ -1,2 +1,2 @@
 shared line 1
-child says something else
+resolved by the owner
