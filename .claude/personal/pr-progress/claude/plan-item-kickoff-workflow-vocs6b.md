@@ -19,19 +19,25 @@ Files: `.claude/hooks/plan_item_bootstrap.py`, its test module under
 `plan-item-kickoff/SKILL.md` (whose opening promise is rewritten), one line in
 `.claude/hooks/README.md`, and one line on #135's branch (permission granted).
 
-## Done
+## Done — implementation complete
 
-- Bootstrapped by hand in the order the item prescribes: branch pushed, draft
-  PR #143 opened, manifest updated (branch/session/PR/`in_progress`), roadmap
-  section added, `save-plan.sh` run, dashboard republished. Subscribed to #143
-  and to tracking issue #102.
+- Bootstrapped by hand in the order the item prescribes: branch, draft PR #143,
+  manifest, roadmap, dashboard, then code. Subscribed to #143 and to #102.
+- `plan_item_bootstrap.py` + 21 tests (57 under `.claude/hooks/tests`, was 36;
+  194 plan-dashboard, unaffected). Each test mutation-checked.
+- Constant, `plan-item-kickoff` step 6 + rewritten opening promise, README line.
+- Live probe (#144, closed): creation succeeds, `draft: true` honoured, but the
+  script's PR is attributed to `claude[bot]` while the session's tool attributes
+  it to the user. Design changed for it — `open` takes `--pull-request-number`
+  for a PR the caller already made; the creating path stays for unattended runs.
+- One line pushed to #135's branch (`4186b3f7`) with a comment explaining it.
+- Plan manifest + roadmap updated with the probe findings; dashboard republished;
+  #143's description rewritten to match what it now does.
 
 ## Next
 
-1. Failing tests first, then `plan_item_bootstrap.py`.
-2. Skill/README/constant wiring.
-3. `pytest .claude/hooks/tests` + the plan-dashboard suite.
-4. One throwaway live PR creation against the fork — settles whether creation
-   succeeds, `draft: true` is honoured, and which identity it is attributed to
-   (the 2026-08-04 probe stopped at a 422 on `head`).
-5. The one line on #135's branch, with a comment on #135.
+- Nothing outstanding. CI on #143 was red at the empty bootstrap commit for an
+  apt breakage in container setup (`xvfb` deps), unrelated and noted on the PR;
+  watch whether it clears on the implementation commits.
+- Residue needing out-of-harness deletion: the remote branch
+  `claude/plan-item-bootstrap-probe-vocs6b` (sessions cannot delete branches).
