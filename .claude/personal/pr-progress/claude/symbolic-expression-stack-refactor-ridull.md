@@ -38,8 +38,10 @@ is unavoidable; what the change removes is the *process-global mutable list*.
 
 ## Next
 
-- No PR opened - not asked for. Branch `claude/symbolic-expression-stack-refactor-ridull`
-  is pushed at commit d795e183, based off #118's tip 2379f6fd.
+- PR #142 open as a **draft**, base `claude/dag-facade-hardening-emrhza` (#118's branch),
+  head d795e183. No `bug` label. Subscribed to its activity; CI was still running at
+  hand-off - watch and drive to green. No promote link: it cannot go upstream until
+  #118 lands.
 - Ask the developer whether removing `Conclusion.__post_init__`'s dead
   `_conditions_root_` fallback is right, or whether it encoded an intent that never
   worked.
