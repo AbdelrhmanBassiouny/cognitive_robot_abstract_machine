@@ -2768,3 +2768,118 @@ the request path.
 It says nothing against `routine-cutover`'s Action, which runs outside this proxy and is a
 genuinely different actor. That still needs verifying there, but for a different reason than the
 one on record.
+
+## Update 2026-08-04 (new item): bootstrap an item before implementing it, not after
+
+Raised by the user: *"I want the first step after the plan to be create a branch and a draft
+PR and update the plan yaml and roadmap with the plan and branch and session and mark it in
+progress and publish the dashboard, then only then start implementing, because I don't want to
+wait for implementation to do these."*
+
+Tracked as `plan-item-bootstrap` on track `personal-data`, wave `immediate`, `depends_on: []`.
+
+### What is actually wrong today
+
+The ordering is not a style preference. Every one of the five things above is derivable the
+moment a plan is approved, and not one of them depends on a line of the implementation — yet
+all five currently happen at the end. The window between the two is the entire length of the
+implementation, and for that whole window `plan.yaml` says the item is `not_started` with
+`branch: null`, while a branch exists and is being worked.
+
+That is exactly the state this plan's own conventions call worse than no plan at all: *"a plan
+whose manifest lags behind reality is worse than no plan: every dashboard, kickoff and resolve
+run downstream reads it as truth."* The dashboard shows the item as available to start. A
+second session running `/plan-item-kickoff` on it is told nothing exists. The failure is not
+hypothetical — `session-start-plan-and-setup-guards` was itself raised from a session that
+implemented and pushed before its item existed, and #121 answered that by *reporting* the gap
+better. This answers the other half: give the session something to run at the moment the gap
+opens, instead of a convention to remember at the end.
+
+### One shared procedure, two callers
+
+Settled with the user before the item was written. `plan-item-kickoff` step 5 is the primary
+caller — it is the skill whose approved plan leads straight into implementing. `add-plan-item`'s
+"new item in an existing plan" outcome is the second, and takes a one-line reference, the same
+shape `scope-decision.md` and `prerequisite-check.md` already established. Duplicating the step
+into each skill would have recreated, in this very system, the triplicated-rule failure that
+`add-plan-item` was built to end.
+
+The `/add-plan-item`-only reading was considered and rejected on its own terms: that skill's
+stated design is that it *"never writes code, creates a branch, or pushes anything"*, so hanging
+branch and pull request creation off it would contradict the contract in its own opening
+paragraph.
+
+### Scripts and models, not prose steps
+
+The user's second point — *"all that can be based on python scripts and models, and the skill
+only instructed to use the script at the right moment"* — is the same call decision 12 already
+made for the bash→Python track, applied to a new surface. The skills keep the judgement (when
+to run it, what the branch is called, what the approved plan says); the mechanics are a Python
+module with real dataclasses for the request and the result, not a checklist a session
+re-improvises and half-completes.
+
+It lives at `.claude/hooks/plan_item_bootstrap.py`, beside `plan_manifest_tools.py`, rather than
+inside either skill's directory: two skills call it, and `dev-tooling-save-plan-python` already
+absorbs `plan_manifest_tools.py` into `development_tooling`. Putting it there means it rides the
+migration that is already planned instead of inventing a second destination that would have to
+be moved again.
+
+### The two parts that are not scriptable, named rather than glossed
+
+- **The dashboard republish** stays a `/plan-dashboard <plan-id>` step. Only a live session can
+  call the Artifact tool; `save-plan.sh`'s own header already records this and prints the
+  reminder. The script's result object carries the reminder rather than silently omitting it.
+- **Creating the pull request is unmeasured from a script.** The 2026-08-04 live findings settle
+  the credential half in the negative and the write half in the positive: `gh` is not installed,
+  `GH_TOKEN` is a placeholder, and the agent proxy substitutes its own identity — so a personal
+  access token changes nothing — while ordinary writes (comments, labels, body-only `PATCH`) do
+  succeed and only the base field is refused, by request *shape*. What no probe has ever covered
+  is `POST /repos/{o}/{r}/pulls`, and #135 was opened through the MCP tool rather than any of
+  this. So the script emits the title, body and base and leaves creation to the caller. A direct
+  creation path is a follow-up resting on a probe, not on inference from the neighbouring
+  measurements — the same discipline #139 applied to its own probe rather than widening scope on
+  a fresh reading. It must also *not* grow a third copy of the gh-CLI-else-token rule:
+  `github-api.sh` (#107) and `pr_state` (#111) already carry two, and
+  `dev-tooling-github-api-unification` exists precisely to collapse them.
+
+### Where it is based, and why the one shared file with #135 is not a dependency
+
+Run rather than eyeballed, using `add-plan-item`'s own `check_scope_overlap.py` against `origin/main`:
+
+```
+paths_absent_from_base : .claude/skills/add-plan-item/SKILL.md
+                         .claude/skills/add-plan-item/scope-decision.md
+                         (nothing else)
+already on main        : plan-item-kickoff/SKILL.md, plan-create/SKILL.md, save-plan.sh,
+                         plan_manifest_tools.py, resolve-personal-notes-config.sh,
+                         .claude/hooks/tests/
+```
+
+**Based on fork `main`, `depends_on: []`.** Everything the work builds on is on `main` already.
+Because the tests go into `.claude/hooks/tests/`, which `ci.yml` already runs, no new pytest
+directory constant is needed — which sidesteps outright the single `ci.yml` line that #135, #106
+and #107 all conflict on.
+
+The only thing `main` lacks is #135's own two files, and they are needed for exactly **one line**:
+the reference from `add-plan-item`'s step 6. By the prefer-the-change test in `scope-decision.md`,
+one line that modifies what an unlanded item introduces *is that item's work* — so it goes on
+`claude/add-plan-item-skill-e89irj` while #135 is still an open draft, and this item stays off
+`main`. If #135 lands first, the line simply moves into this item's own pull request; the ordering
+does not matter either way. Stacking the whole item — script, tests, kickoff wiring — behind a
+draft in review, for one line of prose, is the trade `add-plan-item`'s own basing note already
+refused when the same question was asked about #106.
+
+Remaining overlap is the established whichever-lands-second-merges pattern:
+`resolve-personal-notes-config.sh` gains new constants (shared with #106, #107, #115, #121, #126
+and #135, and the reason that file auto-merges every time is that each branch appends its own
+block), and `.claude/hooks/tests/` gains a new file beside the ones #107, #115, #121 and #126
+touch.
+
+### Relationship to the two neighbouring items, neither of which this duplicates
+
+- `session-start-plan-and-setup-guards` (#121) and `plan-item-edit-guard` detect and refuse work
+  on a branch with no plan item. They are the *detector*. This is the *remedy* — the thing a
+  session runs so the item exists before the first edit. `plan-item-edit-guard` becomes markedly
+  less obstructive once this exists, because the answer to its refusal becomes a single command
+  rather than a manual sequence.
+- `add-plan-item` decides **where** work goes and stops there. This is what happens **next**.
