@@ -2667,3 +2667,46 @@ back through `stack.py status`. `fast-forward` ran as far as its guard, exiting 
 `cram2` remote before attempting any push. `restack` and `run-report` were **not** run live - they
 push to real branches, and the upstream remote is outside a session's repo scope - so their
 coverage is real git in the test harness, not the live fork. 342 tests pass, was 321.
+
+### Scope widened the same day: the probe's answer was acted on
+
+The user's response to the probe table was *"do it as well and anything you found doable in code
+related to this"*, and it is the right call: three steps were prose only because nobody had checked
+whether they had to be. All three moved into the executor.
+
+**The conflict loop is closed, which it never was.** The label was invented so a pass would not
+re-report the same conflict every run, and the doctrine said to clear it once the branch merges
+cleanly again - but nothing cleared it, so a resolved branch stayed withheld until a human noticed.
+`restack` now reads each labelled branch's `mergeable_state` at the top of the pass: still `dirty`
+means `withheld` and untouched, anything else means the owner has resolved it, so the label comes
+off and the branch rejoins. The label write goes through `LabelWrite.replacing`, which is the whole
+point of that class - the production incident behind it was a write computed from the addition
+alone, stripping `in-review` off already-promoted branches.
+
+**`promote` is the fifth command.** It writes the compare-and-create link into the fork pull
+request's own description under a `## Promote` heading, *replacing* any link already there, because
+the description is rewritten on every run that rebuilds one and two headings would leave a reader
+guessing which link is current. It adds `cram2-link-sent`, skips anything already carrying it, and
+drops the label from anything since promoted or landed. `in-review` stays the developer's to add,
+since the upstream pull request does not exist until they click Create.
+
+What is left for the caller is now exactly one thing - retargeting a base - and the report says so
+rather than implying the rest is also unavailable.
+
+### The same ambient-state bug, twice in one pull request
+
+CI failed on `test_a_missing_board_is_its_own_exit_status`, and it was a real defect rather than a
+flaky test: introducing the fork client had moved credential resolution ahead of deriving the
+board, so `restack` on a checkout with neither told its caller to set a token - when the thing they
+actually need is the board the previous command produces. **Only CI could see it.** A Claude Code
+session exports `GH_TOKEN`, so the wrong branch was never taken here.
+
+That is the second instance in this one pull request of a test whose result depended on ambient
+state: the first was the `board.json` snapshot sitting beside `stack.py`, which `board --write` had
+just made routine. The fix is the same shape both times - the subprocess helper now strips the
+credential for every command-line test, exactly as the autouse fixture sets the board aside.
+
+Worth stating generally, because it will recur: **a test that reads ambient state cannot assert
+about the state it is reading.** Both bugs were invisible on a developer's machine and only
+appeared where the ambient state differed - which is the environment that matters, since `routine-
+cutover`'s endgame is this code running in an Action with a third credential again.

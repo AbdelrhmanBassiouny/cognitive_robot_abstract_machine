@@ -437,6 +437,38 @@ items:
       Residue: the throwaway branch claude/credential-probe-koufa6 needs deleting outside the
       harness, per the standing session-cannot-delete-branches constraint.
 
+      Scope widened 2026-08-04 on the user's instruction, once the probe had shown the three
+      writes available: "do it as well and anything you found doable in code related to this".
+      All three moved into the executor rather than staying prose. A conflict is now handled end
+      to end - the branch is labelled needs-resolution with the complete set LabelWrite computes,
+      and its owner gets a comment naming the conflicting files and addressing the session link -
+      and the next pass reads mergeable_state to either withhold the branch while it is still
+      dirty or clear the label and restack it. That closes the loop the label was invented for:
+      previously nothing removed it, so a resolved branch stayed withheld until somebody noticed.
+      A fifth command, promote, builds each ready branch's compare-and-create link, writes it into
+      the fork pull request's description under a Promote heading (replacing any already there,
+      since the description is rewritten on every run that rebuilds one), adds cram2-link-sent,
+      and drops that label from anything since promoted or landed. in-review stays the developer's
+      to add. Reads and writes are one GitHubRepository behind PullRequestReader/PullRequestWriter,
+      so the board export depends only on the reader. Retargeting a base is now the single step
+      still reported rather than performed, and the report says so.
+
+      351 tests pass, was 342. Four more mutations checked, each caught by exactly the test naming
+      it: a label write computed from the addition alone, a still-dirty branch restacked anyway, a
+      promotion link appended rather than replacing, and an already-linked branch promoted twice.
+      The write client was exercised live against closed throwaway PR #138 - read, description
+      write proven idempotent by a second write, label replace, comment - then restored. restack,
+      promote and run-report are still not run against the live fork: they rewrite real
+      descriptions and push real branches.
+
+      CI then caught a real ordering defect the local run could not: resolving the credential had
+      moved ahead of deriving the board, so restack on a checkout with neither reported a missing
+      token instead of the missing board its caller fixes with the previous command. A session
+      environment exports GH_TOKEN, so the wrong branch was never taken locally. Fixed, and the
+      command-line tests now strip the credential for every run - the same ambient-state coupling
+      as the board.json fixture, met a second time in one PR: a test that reads ambient state
+      cannot assert about the state it is reading.
+
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script
     title: "Extract a deterministic setup script from /setup-personal-notes"
