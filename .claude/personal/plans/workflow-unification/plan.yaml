@@ -1642,3 +1642,17 @@ items:
       "never writes code, and creates the branch and draft pull request only once the plan is
       approved", with the branch and pull request work in a new step 6 after approval, leaving
       step 5's planning half untouched.
+
+      Implemented the same session. The live creation probe the item asked for settled all
+      three unmeasured facts and the third one changed the design: creation succeeds and
+      draft: true is honoured, but a pull request the script creates is attributed to
+      claude[bot] - the app its requests are proxied through - while the same creation
+      through the session's GitHub tool is attributed to the user, verified minutes apart on
+      the same repository (throwaway #144, closed). That is the authorship problem AGENTS.md
+      already rules out for commits, and it would have applied to every plan item's pull
+      request. So open takes --pull-request-number for one the caller already created and
+      records it instead, with the creating path kept for an unattended run whose credential
+      is a real one; its title and body are required only on that path. The one line on #135
+      names the script's path rather than a ${PLAN_ITEM_BOOTSTRAP_SCRIPT} constant, since
+      that constant arrives with this item and a variable reference would expand to nothing
+      in the window where #135 has landed and this has not.
