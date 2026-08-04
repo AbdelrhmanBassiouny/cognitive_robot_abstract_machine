@@ -45,12 +45,34 @@ to run them.
 - Dashboard republished to the same URL. 37 items, no drift, no
   auto-corrections; the new item is the only one listed "ready to start".
 
-## Next (for whoever implements it)
+## Done (round 2): the PR-creation question, settled by probe
+
+`POST /pulls` with an unresolvable `head` returns **422** (`docs.github.com`),
+not the proxy's **403** (`docs.anthropic.com`) — so the endpoint is authorised
+and a script *can* create the PR. Identical across exported `GH_TOKEN`, junk
+token and no header: within a session the credential is irrelevant, which
+corrects the user's "given an exported token" framing on mechanism while
+confirming the outcome. Untested: an actual creation, `draft: true`, and
+attributed identity — a 422 on `head` stops evaluation first.
+
+Item notes + roadmap updated (`197169ba`), issue #102 commented, plan
+dashboard republished.
+
+## Done (round 2): master index refreshed, and a stale URL cache fixed
+
+Five of seven `dashboard-urls.yaml` entries plus `_index` pointed at deleted
+artifacts. Repointed at the live ones (`3ddb6161`), verified two ways: exact
+plan-title match, and the live index's own links. Index republished at
+`094b785f`.
+
+## Next
 
 - `/plan-item-kickoff workflow-unification plan-item-bootstrap`.
-- Two things the script cannot do and must hand back explicitly: the
-  dashboard republish (Artifact tool needs a live session) and creating the
-  PR (`POST /repos/{o}/{r}/pulls` has never been in any probe table). Do not
-  add a third copy of the gh-CLI-else-token rule.
-- The master index at `/plan-dashboard` (no argument) was **not** refreshed —
-  it republishes a separate page.
+- Only **one** hand-off remains for the script: the dashboard republish
+  (Artifact tool needs a live session). Creation still goes through the one
+  shared backend `dev-tooling-github-api-unification` builds — not a third
+  copy of the gh-CLI-else-token rule — because the token *is* the credential
+  outside this proxy.
+- **For a human:** two workflow-unification dashboards exist. `07123af6` is
+  current (37 items) and is what the cache uses; `36572776` is stale (36
+  items) and now orphaned. Nothing was deleted.
