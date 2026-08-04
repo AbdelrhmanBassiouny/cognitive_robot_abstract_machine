@@ -34,10 +34,29 @@ Files: `.claude/hooks/plan_item_bootstrap.py`, its test module under
 - Plan manifest + roadmap updated with the probe findings; dashboard republished;
   #143's description rewritten to match what it now does.
 
+## Review round 2026-08-04 — 19 comments, applied in `1b95bee8`
+
+- The manifest's vocabulary now has one home: `PlanField`, `PlanDocument`,
+  `HookScript`, `ItemStatus`, `ItemFieldLine`. Tests import them and assert on
+  rendered lines; `FOLDED_FIELD_PATTERN` is generated from `FOLDED_PLAN_FIELDS`;
+  test paths resolve through the production `PlanLocation`.
+- Test manifest/roadmap moved to `tests/fixtures/` as real `.yaml`/`.md`.
+- Refusals are dataclasses with typed context + `suggest_correction()`, per
+  krrood's `DataclassException` idiom in a stdlib-only base (decision 12).
+- Step 6 now names both places the approved plan is written: `roadmap.md` via
+  `record`, and the PR-progress note via `save-pr-progress.sh`.
+- 60 tests under `.claude/hooks/tests` (was 36 at branch start). 17 of 18
+  threads replied to and resolved.
+
 ## Next
 
-- Nothing outstanding. CI on #143 was red at the empty bootstrap commit for an
-  apt breakage in container setup (`xvfb` deps), unrelated and noted on the PR;
-  watch whether it clears on the implementation commits.
+- **One open thread, waiting on the user**: whether to re-base this item onto
+  the upstream chain to unify `ItemStatus` with `build_dashboard.py`. Replied
+  that basing on #111 would *not* unify it (that file only moves in
+  `dev-tooling-python-package`, `not_started`), and recommended leaving the
+  five-member overlap to that migration. Do not act until they answer.
+- CI on #143 was red at the empty bootstrap commit for an apt breakage in
+  container setup (`xvfb` deps), unrelated and noted on the PR; watch whether it
+  clears on the implementation commits.
 - Residue needing out-of-harness deletion: the remote branch
   `claude/plan-item-bootstrap-probe-vocs6b` (sessions cannot delete branches).
