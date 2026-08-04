@@ -22,7 +22,7 @@ is unavoidable; what the change removes is the *process-global mutable list*.
    `RuleTreeBlock`, `RuleTreeContextStack`, module-private ContextVar. - done
 4. Migrate `base_expressions`, `query.py`, `conclusion.py`,
    `conclusion_selector.py`. - done
-5. Suites + `format_docstrings.py`, commit, push, plan state. - in progress
+5. Suites + `format_docstrings.py`, commit, push, plan state. - done
 
 ## Done
 
@@ -38,14 +38,16 @@ is unavoidable; what the change removes is the *process-global mutable list*.
 
 ## Next
 
-- Full suites, `format_docstrings.py`, revert regenerated artefacts, commit, push.
-- Plan bookkeeping: new item `rule-tree-context-stack-ownership` in
-  `dag-facade-hardening/plan.yaml` (track `facade-rename`,
-  `depends_on: [insert-at-ownership-parentage]`), roadmap addendum, `save-plan.sh`,
-  `/plan-dashboard dag-facade-hardening`, comment on #96.
+- No PR opened - not asked for. Branch `claude/symbolic-expression-stack-refactor-ridull`
+  is pushed at commit d795e183, based off #118's tip 2379f6fd.
 - Ask the developer whether removing `Conclusion.__post_init__`'s dead
   `_conditions_root_` fallback is right, or whether it encoded an intent that never
   worked.
+- Suites: 1415 passed, 6 skipped. The 2 `test_object_diagram` failures are a missing
+  Graphviz `dot` binary in this container, the same environmental failure #118 recorded.
+- Plan bookkeeping done: item + roadmap addendum saved, dashboard republished at
+  https://claude.ai/code/artifact/572b350a-c601-4122-8c12-b80700d22514, structural
+  record on #96 (comment 5178214735).
 - Deliberately out of scope (developer's call): the cross-thread regression test.
   A real defect exists - with two threads in `with` blocks, one thread's blind
   `__exit__` popped the other's frame - and the ContextVar fixes it, but it ships
