@@ -2955,3 +2955,54 @@ builds — never a third copy of the gh-CLI-else-token rule that `github-api.sh`
 caller, only the dashboard republish genuinely stays — the Artifact tool needs a live session, as
 `save-plan.sh` already documents. Branch, pull request, manifest, roadmap and status all become
 script work, which is what the item was asked for in the first place.
+
+## Update 2026-08-04 (revision): two operations, not one shared procedure
+
+The user's correction to the shape recorded this morning: *"I do not think plan-item-create/add
+needs this behaviour, as it should only care about creating the plan item and updating plan data
+and dashboard."*
+
+Taken and agreed. The first shape treated the whole thing as one procedure that both plan skills
+would reference, which was the wrong seam.
+
+### The seam that was wrong
+
+`/add-plan-item`'s own opening paragraph promises it *"never writes code, creates a branch, or
+pushes anything"*. Referencing a procedure whose second half creates a branch and opens a pull
+request would have broken that promise through a reference — the contract would still have read
+as intact while the behaviour behind it no longer was. That is worse than breaking it openly.
+
+Rejecting the `/add-plan-item`-only reading this morning was right; concluding from it that both
+skills therefore want the *same* procedure did not follow.
+
+### The seam that is right
+
+Two operations, one module, each caller taking only what it needs:
+
+- **Record** — write or update the item's `plan.yaml` entry and `roadmap.md` section, set its
+  status, run `save-plan.sh`. This is `/add-plan-item`'s entire business, and all it gets.
+- **Open** — create the branch, push it, open the draft pull request, then write `branch`,
+  `session` and `pull_request_number` back onto the item and flip it to `in_progress`. Only
+  `/plan-item-kickoff` gets this, being the skill whose approved plan leads straight into
+  implementing.
+
+`/plan-item-kickoff` calls **open** and then **record** — in that order, because the pull request
+number does not exist until the pull request does. `/add-plan-item` calls **record** alone.
+
+Both paths end at `/plan-dashboard <plan-id>`, which stays with the caller because only a live
+session can call the Artifact tool.
+
+### Why this is better and not merely different
+
+It is the repository's own `AGENTS.md` applied to this module rather than quoted at it: each
+operation now has one reason to change, and each caller depends only on the surface it uses —
+single responsibility and interface segregation. The practical test is the one that settles it:
+under the first shape, a change to how branches are created would have touched a skill that never
+creates branches. Under this one, it cannot.
+
+### What does not change
+
+The basing decision stands unaltered. `/add-plan-item` still takes a one-line reference — to
+**record** rather than to the whole procedure — so `.claude/skills/add-plan-item/` is still needed
+for exactly one line, that line still belongs on #135's branch by the prefer-the-change test, and
+the item stays based on fork `main` with `depends_on: []`.

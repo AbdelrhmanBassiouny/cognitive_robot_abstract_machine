@@ -1548,23 +1548,31 @@ items:
       and pull request number into plan.yaml and roadmap.md, flips the item to in_progress,
       and republishes the dashboard - and only then does implementation start. None of that
       waits on the code, because none of it depends on the code.
-      Shape settled with the user before the item was written: one shared procedure used by
-      both entry points, not a step duplicated per skill. plan-item-kickoff step 5 leads
-      straight into implementing and is the primary caller; add-plan-item's "new item in an
-      existing plan" outcome is the second, and gets a one-line reference the same way
-      scope-decision.md and prerequisite-check.md are referenced. The /add-plan-item-only
-      reading was rejected on its own terms - that skill's opening paragraph states it never
-      creates a branch or pushes anything. The skills stay prose that says when to run it;
-      everything mechanical is Python with real dataclasses (the request - plan id, item id,
-      branch name, base branch, session URL, approved plan text; and the result - what was
-      created and what still needs a live session), not steps a session re-improvises each
-      time. It belongs beside plan_manifest_tools.py in .claude/hooks/ rather than in a skill
-      directory, since two skills call it and dev-tooling-save-plan-python already absorbs
-      that file into the package - this rides the same migration instead of inventing a
-      second destination that would have to be moved again.
-      Two parts cannot be pure script, and the item's job is to hand them back explicitly
-      rather than pretend. Only a live session can call the Artifact tool, so the dashboard
-      republish stays a /plan-dashboard step exactly as save-plan.sh already documents.
+      Shape revised 2026-08-04 by the user, and the revision is what fixes the design: this
+      is not one procedure two skills share, it is two operations one module offers, and each
+      skill takes only the one it needs. Recording an item - write or update its plan.yaml
+      entry and roadmap.md section, set its status, run save-plan.sh - is add-plan-item's
+      whole business, and it is all add-plan-item gets. Opening the work - create the branch,
+      push it, open the draft pull request, write the branch, session and pull request number
+      back onto the item and flip it to in_progress - belongs only to plan-item-kickoff, the
+      skill whose approved plan leads straight into implementing. Kickoff calls both, in that
+      order, because the pull request number does not exist until the pull request does.
+      The first shape had add-plan-item referencing the whole thing, which would have handed a
+      branch-and-push step to a skill whose own opening paragraph promises it never creates a
+      branch or pushes anything. Splitting on what each caller actually needs keeps that
+      promise intact and gives each operation one reason to change.
+      The skills stay prose that says when to run which operation; everything mechanical is
+      Python with real dataclasses - a record request (plan id, item id, title, track, status,
+      roadmap section) and an open request (branch name, base branch, session URL, pull
+      request title and body), each with its own result - not steps a session re-improvises.
+      It belongs beside plan_manifest_tools.py in .claude/hooks/ rather than in a skill
+      directory, since two skills call into it and dev-tooling-save-plan-python already
+      absorbs that file into the package - this rides the same migration instead of inventing
+      a second destination that would have to be moved again.
+      Exactly one part cannot be pure script, and the item's job is to hand it back explicitly
+      rather than pretend: only a live session can call the Artifact tool, so the dashboard
+      republish stays a /plan-dashboard step exactly as save-plan.sh already documents. Both
+      operations end there, since both change what a published dashboard should show.
       Creating the pull request was the open question, and it was probed rather than left to
       inference. POST /repos/{o}/{r}/pulls with a deliberately unresolvable head returns 422
       Validation Failed on the head field, with documentation_url on docs.github.com - so the
