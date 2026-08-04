@@ -405,17 +405,14 @@ class Query(
         )
         return self
 
-    def __enter__(self):
+    @property
+    def _rule_tree_anchor_(self) -> SymbolicExpression:
         """
-        Make sure the query is built before entering the context manager for
-        rule trees.
+        :return: The conditions root of the compiled product, so rule-tree edits inside a
+            ``with`` block attach to the node that is actually evaluated rather than to
+            this specification.
         """
-        self.build()
-        expression = self._conditions_root_
-        SymbolicExpression._symbolic_expression_stack_.append(
-            expression._rule_tree_context_()
-        )
-        return expression
+        return self._conditions_root_
 
     def build(self) -> Self:
         """
@@ -827,8 +824,9 @@ class Query(
     @property
     def _conditions_root_(self) -> SymbolicExpression:
         """
-        Resolve the conditions root within the compiled product, so rule definition (:meth:`__enter__`)
-        and conclusions attach to the node that is actually evaluated.
+        Resolve the conditions root within the compiled product, so rule definition
+        (:attr:`_rule_tree_anchor_`) and conclusions attach to the node that is actually
+        evaluated.
 
         :return: The conditions root of the compiled product.
         """

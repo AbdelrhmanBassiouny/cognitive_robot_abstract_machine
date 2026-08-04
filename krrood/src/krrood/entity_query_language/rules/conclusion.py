@@ -16,11 +16,11 @@ from typing_extensions import Any, List, Iterable, TypeVar
 from krrood.entity_query_language.core.base_expressions import (
     Bindings,
     OperationResult,
-    SymbolicExpression,
     Selectable,
     BinaryExpression,
 )
 from krrood.entity_query_language.core.helpers import unwrap_if_literal
+from krrood.entity_query_language.rule_tree_context import RuleTreeContextStack
 from krrood.entity_query_language.core.variable import Variable
 
 
@@ -44,10 +44,8 @@ class Conclusion(BinaryExpression, ABC):
 
         super().__post_init__()
 
-        current_parent = SymbolicExpression._current_parent_in_context_stack_()
-        if current_parent is None:
-            current_parent = self._conditions_root_
-        self._parent_ = current_parent
+        enclosing_stack = RuleTreeContextStack.require_active(type(self))
+        self._parent_ = enclosing_stack.innermost.condition
         self._parent_._conclusions_.add(self)
 
     @property

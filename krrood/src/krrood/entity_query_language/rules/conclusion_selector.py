@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from typing_extensions import Iterable, TYPE_CHECKING, Self, Optional
 
 from krrood.entity_query_language.exceptions import SelfReferentialInsertionError
+from krrood.entity_query_language.rule_tree_context import RuleTreeContextStack
 from krrood.entity_query_language.rules.conclusion import Conclusion
 from krrood.entity_query_language.operators.set_operations import Union as EQLUnion
 from krrood.entity_query_language.operators.core_logical_operators import (
@@ -108,7 +109,10 @@ class ConclusionSelector(TruthValueOperator, ABC):
         # keeps whichever parent was attached first as its structural one, which may belong to
         # an unrelated branch entirely, so the enclosing ``with`` context decides instead and
         # the structural parent only stands in when no enclosing context anchors on it.
-        anchor_context = SymbolicExpression._rule_tree_context_anchored_on_(anchor)
+        enclosing_stack = RuleTreeContextStack.active()
+        anchor_context = (
+            None if enclosing_stack is None else enclosing_stack.anchored_on(anchor)
+        )
         previous_parent = (
             anchor._parent_ if anchor_context is None else anchor_context.owning_parent
         )
@@ -131,6 +135,14 @@ class ConclusionSelector(TruthValueOperator, ABC):
             anchor_context.owning_parent = new_context
 
         return new_condition
+
+    @classmethod
+    def _enclosing_condition_(cls) -> SymbolicExpression:
+        """
+        :return: The condition of the innermost open rule-tree ``with`` block.
+        :raises RuleTreeEditWithoutEnclosingBlock: When no ``with`` block is open.
+        """
+        return RuleTreeContextStack.require_active(cls).innermost.condition
 
     @classmethod
     @abstractmethod
@@ -218,7 +230,7 @@ class Refinement(LogicalBinaryOperator, ConclusionSelector):
     def _get_current_context_condition(
         cls,
     ) -> ConditionType:
-        return SymbolicExpression._current_parent_in_context_stack_()
+        return cls._enclosing_condition_()
 
     @classmethod
     def _create_between_two_expressions(
@@ -260,7 +272,7 @@ class Alternative(OR, ConclusionSelector):
     def _get_current_context_condition(
         cls,
     ) -> ConditionType:
-        current_context = SymbolicExpression._current_parent_in_context_stack_()
+        current_context = cls._enclosing_condition_()
         current_context_parent = current_context._parent_
         if (
             isinstance(current_context_parent, Refinement)
@@ -303,7 +315,7 @@ class Next(EQLUnion, ConclusionSelector):
     def _get_current_context_condition(
         cls,
     ) -> ConditionType:
-        current_context = SymbolicExpression._current_parent_in_context_stack_()
+        current_context = cls._enclosing_condition_()
         return current_context._conditions_root_
 
     @classmethod

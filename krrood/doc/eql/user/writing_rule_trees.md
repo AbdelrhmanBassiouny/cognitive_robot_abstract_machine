@@ -43,6 +43,13 @@ with query:
 Rule trees are for **inference** (adding data). For simple filtering, stick to `.where()` and standard queries.
 ```
 
+```{note}
+`add`, `refinement`, `alternative` and `next_rule` all edit the rule tree of the block that
+encloses them, so calling one outside any `with` block raises
+`RuleTreeEditWithoutEnclosingBlock`. To grow a rule tree that is already built, and outside any
+block, use `ConclusionSelector.insert_at()` with an explicit anchor instead.
+```
+
 ## Conclusion Selectors
 
 ### 0. Query
