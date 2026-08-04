@@ -508,6 +508,16 @@ items:
       claude/throwaway-child-koufa6 need out-of-harness deletion; their pull requests are closed and
       their labels cleared.
 
+      Statuses name themselves as of 2026-08-04, from the user's question about strings beside or
+      instead of the numbers. Instead is not available - a process exit status is an integer by
+      definition, and these stay aligned with stack.ExitCode value for value - but beside was a
+      real gap: the meaning was already in the enum member and nothing emitted it. MaintenanceExitCode
+      gains name_for_a_caller, derived from the member so a status can never carry a name belonging
+      to another; main prints it once for any non-zero run ("maintenance.py: branch-needs-attention
+      (10)") and stays silent on success; and run-report --json leads with status and exit_code,
+      which is the case it matters most for, since routine-cutover's Action reads the document
+      rather than the process status. 361 tests pass, was 357; three more mutations checked.
+
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script
     title: "Extract a deterministic setup script from /setup-personal-notes"

@@ -2883,3 +2883,25 @@ touch.
   less obstructive once this exists, because the answer to its refusal becomes a single command
   rather than a manual sequence.
 - `add-plan-item` decides **where** work goes and stops there. This is what happens **next**.
+
+### A status that names itself
+
+Asked whether the exit codes should carry strings beside or instead of the numbers. *Instead* is
+not available and it is worth saying why rather than just declining: a process exit status is an
+integer by definition, and these are deliberately aligned with `stack.ExitCode` value for value so
+a caller acting on both tools never has to remember which produced one.
+
+*Beside* was a real gap, and the tell was that the meaning already existed - `BRANCH_NEEDS_ATTENTION`
+is right there in the enum, and nothing emitted it, so every caller seeing `10` had to go and look
+it up. `name_for_a_caller` derives the name from the member itself rather than a table written
+beside it, so a status cannot end up carrying a name that belongs to a different one. `main` prints
+it once, from one place, for any non-zero run; success stays silent, because announcing it would
+make every run noisy.
+
+The half that matters most is the document: `run-report --json` now leads with `status` and
+`exit_code`. `routine-cutover`'s Action reads that document rather than the process status, and
+mapping an integer back to a meaning is a decoding step it should not have to do at all.
+
+Worth generalising alongside the exit-status lesson above: **an interface meant for something with
+no model in it should say what it means, not encode it.** The number is for the shell; the name is
+for whoever has to act on it.
