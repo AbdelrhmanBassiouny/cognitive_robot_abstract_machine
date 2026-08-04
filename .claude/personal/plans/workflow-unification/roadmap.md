@@ -3185,3 +3185,47 @@ Branch, draft pull request #143, manifest, roadmap and dashboard all came first,
 before a line of the implementation - which is the argument the item makes, applied to itself
 rather than deferred. The one thing that could not be dogfooded is the tool itself, since it
 did not exist yet; the first genuine run belongs to whichever item is kicked off next.
+
+### Review round 2026-08-04: the manifest's vocabulary gets one home
+
+Nineteen comments, almost all one objection seen from many angles: the module knew
+`plan.yaml`'s keys, filenames, statuses and indentation in a dozen scattered places, and the
+tests knew them a second time as literal strings like `"    status: in_progress\n"`. A change
+to how a manifest line is written had to be made twice, in two files, and nothing would have
+caught the second one being missed.
+
+`PlanField` now names every key, `PlanDocument` the two filenames, `HookScript` the scripts
+this module drives, `ItemStatus` the statuses, and `ItemFieldLine` renders a line from them.
+The tests import all of it and assert on rendered lines. Two details are the ones that make it
+real rather than cosmetic: `FOLDED_FIELD_PATTERN` is *generated* from `FOLDED_PLAN_FIELDS`
+instead of repeating `notes|blockers`, and the tests resolve a plan's paths through the
+production `PlanLocation` - which asks the shell configuration - instead of spelling out
+`.claude/personal/plans/<id>/plan.yaml`. Shortening `ITEM_FIELD_INDENT` now fails 12 of 24
+tests, which is the evidence the two sides are actually one.
+
+The test manifest moved into `tests/fixtures/` as a real `.yaml` file, which `AGENTS.md`'s
+no-inline-snippets rule already required and this pull request had simply not followed.
+
+Refusals became dataclasses carrying typed context, composing their message from
+`error_message()` and `suggest_correction()` at construction - `krrood`'s `DataclassException`
+idiom mirrored in a stdlib-only base, which is the boundary decision 12 records. Two things
+fall out of it that were not there before: every refusal now says what to do about it, and the
+tests assert on the field that explains a refusal rather than on its wording.
+
+**One thread deliberately left open**, and it is worth recording because the reviewer's
+instruction rested on a premise that turned out to be false. Asked to remove the `ItemStatus`
+overlap with `build_dashboard.py` by basing this item on the `development_tooling` package if
+that is what it takes - **basing on #111 would not remove it**. `build_dashboard.py` moves into
+the package with `dev-tooling-python-package`, which is `not_started` and itself depends on
+#111 and #101, so the re-base would attach a dependency-free immediate-wave item to the
+unlanded upstream chain and still leave two enums. Importing `build_dashboard` directly is
+worse - it needs jinja2 and markdown, which a hook cannot assume - and extracting a shared
+module on `main` would need the `sys.path` hackery decision 8 exists to end, in a file six open
+branches already edit. So the recommendation put back to the user is to leave the five-member
+overlap for the migration that actually ends it, and the thread stays unresolved until they
+say.
+
+The general shape, since this plan keeps meeting it: **a reviewer's instruction can name a
+remedy the branch cannot reach.** The answer is not to follow it into a worse place or to
+silently ignore it, but to say which part is reachable, do that part, and hand the rest back
+with the reason.
