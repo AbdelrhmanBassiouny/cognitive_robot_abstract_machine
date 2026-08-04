@@ -203,7 +203,7 @@ items:
   - id: rule-tree-context-stack-ownership
     title: "Replace the class-level with-context stack with a root-owned RuleTreeContextStack"
     branch: claude/symbolic-expression-stack-refactor-ridull
-    pull_request_number: null
+    pull_request_number: 142
     track: facade-rename
     depends_on: [insert-at-ownership-parentage]
     status: in_progress
@@ -235,4 +235,6 @@ items:
       _parent_/_conditions_root_ reads for Phase D, none made worse. Deliberately
       excluded on the developer's call: the cross-thread regression test - one
       thread's blind __exit__ popping another's frame is real and the ContextVar
-      fixes it, but it ships uncovered (see roadmap addendum).
+      fixes it, but it ships uncovered (see roadmap addendum). PR #142 opened as
+      a draft 2026-08-04, based off #118's branch rather than main, so it cannot be
+      promoted upstream until #118 lands; subscribed to its activity.

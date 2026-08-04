@@ -342,6 +342,19 @@ fixes it. The developer chose to scope this item to the encapsulation plus the m
 exceptions, so the regression test is **not** written and the item does **not** carry the
 `bug` label. Recorded here so the gap is deliberate rather than forgotten.
 
+### Landed as #142 (draft, 2026-08-04)
+
+Nine failing-first tests, then the move: `rule_tree_context.py`, the two new
+exceptions, and the five call sites. `test_eql` + `test_ormatic` +
+`test_class_diagram` + `test_ripple_down_rules` at 1415 passed, 6 skipped; the two
+`test_object_diagram` failures are the missing Graphviz `dot` binary #118 already
+recorded. #118's two splice regression tests pass unmodified, which is the evidence
+that `anchored_on` still hands back the live `RuleTreeContext` that `insert_at`
+mutates.
+
+Its base is #118's branch, not `main`, so #142 carries no promote link — it cannot
+go upstream until #118 lands.
+
 ### Positioning
 
 Stacked on `insert-at-ownership-parentage` (#118) because it collides textually with that
