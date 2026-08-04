@@ -199,3 +199,40 @@ items:
       (guard half): architectural test asserting semantic modules never
       reference the _structural_* accessors, so the class cannot silently
       reappear.
+
+  - id: rule-tree-context-stack-ownership
+    title: "Replace the class-level with-context stack with a root-owned RuleTreeContextStack"
+    branch: claude/symbolic-expression-stack-refactor-ridull
+    pull_request_number: null
+    track: facade-rename
+    depends_on: [insert-at-ownership-parentage]
+    status: in_progress
+    session: https://claude.ai/code/session_01PoUhMvymUQjsGL1JFpBsez
+    notes: >
+      Not a bug PR - no bug label. Raised 2026-08-04 by the developer looking at
+      #118: _symbolic_expression_stack_ is still a ClassVar mutable list on
+      SymbolicExpression. Verified that the literal proposal (the root with-block
+      owns the stack and inner blocks find it through their root) cannot work:
+      add(), refinement(), alternative() and next_rule() are reached from freshly
+      built, unattached nodes - the three selectors through classmethods with no
+      instance at all - so the only route to an enclosing root is
+      _conditions_root_/_root_, this plan's own facade. Ambient lookup is therefore
+      unavoidable; what goes is the process-global mutable list. The second half of
+      the idea stands and already has a precedent at the other end of the
+      lifecycle: evaluation_context.py's _evaluation_context_var ContextVar, owned
+      by the outermost _evaluate_ (owns_an_evaluation_context). Same shape here - a
+      RuleTreeContextStack created by the outermost with block, held in a
+      ContextVar, discarded when that block closes. Knock-on wins: Query.__enter__
+      deletes entirely (Query overrides only _rule_tree_anchor_, so a query module
+      no longer pushes onto base-class state with no matching __exit__), the three
+      selectors' duplicated stack lookups collapse into one
+      ConclusionSelector._enclosing_condition_, and the four DSL entry points raise
+      RuleTreeEditWithoutEnclosingBlock instead of a raw AttributeError outside a
+      with block - user-facing, since scope.py injects Add/Refinement/Alternative/Next
+      into the expert shell namespace. Removes one future Phase D guard-test
+      violation (Conclusion.__post_init__'s dead _conditions_root_ fallback);
+      leaves insert_at's anchor._parent_ fallback and Alternative's
+      _parent_/_conditions_root_ reads for Phase D, none made worse. Deliberately
+      excluded on the developer's call: the cross-thread regression test - one
+      thread's blind __exit__ popping another's frame is real and the ContextVar
+      fixes it, but it ships uncovered (see roadmap addendum).

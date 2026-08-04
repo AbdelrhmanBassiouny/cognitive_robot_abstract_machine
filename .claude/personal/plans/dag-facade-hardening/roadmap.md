@@ -270,3 +270,83 @@ condition. Its own analysis is in `rdr-refactor`'s roadmap §12; the short versi
 verbalization does not decide the question (the verbalizer already handles both an
 `(expression, polarity)` pair and a native `Not(Comparator)`), so the hazard is the whole
 argument.
+
+## Addendum (2026-08-04) — `rule-tree-context-stack-ownership`, stacked on #118
+
+Looking at #118, the developer asked whether the `with`-context stack still needs to be a
+class variable: *"if we make the root `with`-block expression itself own and create a new
+stack instance, then inner `with` blocks can take that context by checking their root
+`with`-block stack and updating it."*
+
+### The first half of the idea is impossible, and the reason is this plan's own defect class
+
+Every reader of the stack was traced on #118's tip. Four of them are reached from objects
+that have never been related to the enclosing block:
+
+- `Conclusion.__post_init__` (`rules/conclusion.py`) — an `add(...)` written in a block body
+  is a brand-new node whose only links are downward.
+- `Refinement`/`Alternative`/`Next._get_current_context_condition` — reached from
+  `create_and_update_rule_tree`, a **classmethod**. There is no instance at all, only `cls`
+  and freshly built conditions that are by construction not yet in the rule tree.
+
+The only route from any of them to an enclosing root is `_conditions_root_` → `_root_`, the
+single first-attached primary-parent walk that Phase A renames and Phase D's guard test
+forbids. Using it to locate the builder's stack would be unreliable on shared nodes *and*
+be deleted by this plan's own end state. The other escape — changing the DSL so the block
+object is the receiver (`with query as tree: tree.add(...)`) — does make instance ownership
+work, and was rejected: it rewrites every doc example and every rule test for no behavioural
+gain.
+
+So some ambient lookup is unavoidable. What the item removes is the *process-global mutable
+list*, not the ambience.
+
+### The second half of the idea is right, and the repo already does it at the other end
+
+`evaluation_context.py` holds `_evaluation_context_var: ContextVar[Optional[EvaluationContext]]`,
+and `SymbolicExpression._evaluate_` has the *outermost* evaluation create the context, install
+it, and reset the token in `finally` (`owns_an_evaluation_context`). Construction-time context
+now mirrors it exactly: a `RuleTreeContextStack` created by the outermost `with` block, held
+in a `ContextVar`, discarded when that block closes. Evaluation-time and construction-time
+context finally have the same shape, which is the framing this plan has used since its
+2026-07-31 addendum.
+
+Honest about what a `ContextVar` is and is not: it is still module-level state. What changes
+is its *scope* (per-thread, per-task) and its *lifetime* (bounded by the outermost block, not
+the process). It does not isolate a task spawned inside a block, and it does not unwind a
+suspended generator that abandoned one. Both are documented on the class rather than designed
+around.
+
+### What the block record has to carry, and why
+
+The obvious shape — one anchor hook used by both `__enter__` and `__exit__` — is wrong for
+`Query`. Inside `with query:`, a top-level `refinement(...)` splices a `Refinement` above the
+conditions root and rewires the `Filter`'s child, so `query._conditions_root_` afterwards
+returns a *different* node than it did at entry; recomputing the anchor at exit would raise a
+false imbalance. So a `RuleTreeBlock` records the expression whose `__enter__` opened it,
+separately from the `RuleTreeContext` the block contributes — and `RuleTreeContext` keeps
+#118's two fields untouched, both to minimise rebase pain and to keep the value object
+`insert_at` mutates distinct from the frame record.
+
+The knock-on is the cleanest part of the change: `Query.__enter__` disappears entirely.
+`Query` overrides only `_rule_tree_anchor_`, so a query module no longer reaches into
+base-class state, and the enter/exit asymmetry (`Query` pushed but never defined `__exit__`)
+is gone.
+
+### Known defect shipped uncovered, on the developer's call
+
+With two threads inside `with` blocks, one thread's blind `__exit__` pops the *other*
+thread's frame, after which its `add(...)` lands in the wrong rule tree. It is real and
+deterministically expressible with `threading.Event` barriers (in-repo precedent:
+`test_isolated_expert_answers_path_is_safe_under_concurrent_use`), and the `ContextVar`
+fixes it. The developer chose to scope this item to the encapsulation plus the meaningful
+exceptions, so the regression test is **not** written and the item does **not** carry the
+`bug` label. Recorded here so the gap is deliberate rather than forgotten.
+
+### Positioning
+
+Stacked on `insert-at-ownership-parentage` (#118) because it collides textually with that
+PR in `__enter__`/`__exit__`, not because it needs it: the `ClassVar` predates #118, which
+only changed its element type, so the work stands alone once #118 lands. Filed under the
+`facade-rename` track rather than `bugs-and-audit` — it is the construction-time counterpart
+of Phase B's "one reusable accessor", not a bug fix. No dependency was added to
+`facade-rename-and-guard`; that item is sequenced last and rebases over this one.

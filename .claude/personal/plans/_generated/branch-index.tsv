@@ -2,6 +2,7 @@ claude/entity-query-parent-props-w789od	dag-facade-hardening
 conditions-root-drop-dead-parent-recovery	dag-facade-hardening
 claude/dag-parent-root-and-querygraph-followups	dag-facade-hardening
 claude/dag-facade-hardening-emrhza	dag-facade-hardening
+claude/symbolic-expression-stack-refactor-ridull	dag-facade-hardening
 claude/split-performatives-prs-xbluus-agreement	eql-performatives
 claude/split-performatives-prs-xbluus	eql-performatives
 claude/performatives-clean	eql-performatives
