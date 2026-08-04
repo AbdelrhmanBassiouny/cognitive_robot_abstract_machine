@@ -342,11 +342,13 @@ items:
       only through a stub because this environment's token is a fine-grained installation token.
 
   - id: stack-maintenance-executor
-    branch: null
+    branch: claude/plan-item-kickoff-workflow-koufa6
     title: "Deterministic maintenance executor: board, fast-forward, restack, run-report"
+    pull_request_number: 139
     track: stack-tooling
     depends_on: [stack-tooling-on-main]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_014E9nB1MUvm4jwgC2UTN5GT
     notes: >
       User's proposal, 2026-08-03: automate the stacking pass with a deterministic script that
       fetches the relevant pull requests, performs the git commands, and reports everything - less
@@ -381,6 +383,59 @@ items:
       direct enabler of routine-cutover's no-LLM endgame. It does not reverse decision 11 - that
       cut structure derivation in favour of GitHub's stack object; this executes an already-derived
       plan.
+
+      Kicked off and implemented 2026-08-04 via /plan-item-kickoff as draft PR #139, based on
+      #106's head as a sibling of #107/#111 (it needs only #106's files; git ls-tree origin/main
+      -- .claude/stack is empty, so main was never a possible base). The gap was re-verified
+      against #106's head rather than taken from the earlier grep: stack.py contains no push,
+      merge or rebase outside docstrings and enum members.
+
+      Step 0's credential probe came back the opposite way round from the fear it was written
+      against. On throwaway PR #138, four calls minutes apart through the same GH_TOKEN and the
+      same git proxy: PUT /issues/{n}/labels 200, POST /issues/{n}/comments 201, body-only PATCH
+      /pulls/{n} 200, and - as a control on the same pull request - a base-branch PATCH 403. So
+      the recorded 403 is a property of the base field specifically, not of writes generally and
+      not of the credential as a whole. Label writes, conflict-report comments and description
+      writes are all available to deterministic code; only the base change needs the MCP server.
+      That table is what routine-cutover's Action needs for its own credential, and it is
+      recorded here rather than only in the pull request. This PR deliberately did not widen its
+      scope to use those writes - the four commands are what was agreed - so moving the
+      needs-resolution labelling and the conflict comment into code is a concrete follow-up, now
+      known to be possible rather than assumed blocked.
+
+      Delivered: .claude/stack/maintenance.py with its own argparse entry point and zero edits to
+      stack.py - which keeps stack.py's read-only contract and means this branch cannot conflict
+      with #110's inference deletion in that file. Entry-point shape was the one genuinely open
+      question at kickoff ("the dispatch wiring" read two ways) and the user chose the separate
+      CLI over new stack.py subcommands. GitCommandRunner is the one new seam: stack.py's git
+      helper returns "" on failure, which is right for derivation and wrong for a push. Forcing is
+      decided in exactly one place, push_arguments, and only for the rebase strategy - which
+      build_stack sets only from the rebase label - and even then with a lease, so a branch
+      somebody else moved comes back push-rejected and untouched.
+
+      342 tests pass, was 321 on this branch (the 313 in #106's description predates its merges
+      from main). 21 new, written failing first, against real git in a scratch fork with bare
+      repositories addressed as file:// URLs per #110's fixture rule. Each was checked by breaking
+      the implementation and confirming only it failed. One test corrected a wrong premise of its
+      own: the executor starts each integration from the branch's published tip, so a branch that
+      moved under the pass is incorporated rather than raced - pinned rather than left implicit.
+
+      One regression found and fixed rather than shipped: board --write makes a local board.json
+      routine, and two tests - one pre-existing in test_stack.py - assert on a missing board while
+      reading the real board.json beside stack.py. Running a pass then the suite failed both.
+      Proven by writing a board and watching them fail, then fixed with an autouse fixture in
+      .claude/stack/tests/conftest.py that sets an existing snapshot aside and restores it.
+      .gitignore gains board.json; #110 adds the identical line, so whoever lands second drops one
+      copy - a deliberate, named duplication rather than a fourth same-artifact-twice instance.
+
+      Not verified live and deliberately so: restack and run-report push to real branches, and the
+      upstream remote is outside a session's repo scope, so they are covered end to end in the
+      test harness instead. board --write was run live (44 open pull requests, and the export
+      parses straight back through stack.py status); fast-forward was run live as far as its guard
+      (exit 6 naming the missing cram2 remote, before any push).
+
+      Residue: the throwaway branch claude/credential-probe-koufa6 needs deleting outside the
+      harness, per the standing session-cannot-delete-branches constraint.
 
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script

@@ -2579,3 +2579,91 @@ no-LLM endgame. It does **not** reverse decision 11 - that cut structure *deriva
 GitHub's stack object; this executes an already-derived plan. Recording that distinction here so
 nobody re-litigates it from the decision-11 entry alone.
 
+## Update 2026-08-04 (kickoff + implementation): the executor ships as #139, and the 403 turns out to be one field
+
+`/plan-item-kickoff workflow-unification stack-maintenance-executor`, session
+https://claude.ai/code/session_014E9nB1MUvm4jwgC2UTN5GT, which went on to implement it the same
+session as draft pull request **#139** on `claude/plan-item-kickoff-workflow-koufa6`, based on
+#106's head.
+
+### The probe inverted the assumption it was written to test
+
+The item's step 0 existed because three writes were unknown, and the working assumption behind
+"staying with a session/MCP regardless" was that some of them would be blocked like the base
+`PATCH`. On throwaway pull request #138, four calls minutes apart, same `GH_TOKEN`, same git proxy:
+
+| Call | Status |
+| --- | --- |
+| `PUT /repos/{o}/{r}/issues/{n}/labels` | **200** |
+| `POST /repos/{o}/{r}/issues/{n}/comments` | **201** |
+| body-only `PATCH /repos/{o}/{r}/pulls/{n}` | **200** |
+| base-branch `PATCH /repos/{o}/{r}/pulls/{n}` (control, same pull request) | **403** |
+
+The control is what makes this conclusive rather than suggestive: the same credential, against the
+same pull request, succeeds at three writes and is refused exactly one. **The block is on the
+`base` field, not on writes, not on the credential, and not on sessions.** The 2026-08-02 entry
+already narrowed it from "the platform forbids sessions" to "one credential"; this narrows it
+again, to one field of one endpoint.
+
+What follows: `needs-resolution` labelling and the conflict-report comment - the two writes
+`SKILL.md` step 4 hands to a session - are both available to deterministic code, and so is writing
+the promotion link into a description. None of that was taken in #139, because the four commands
+were what was agreed and widening scope on the strength of a fresh probe is how a pull request
+stops being reviewable. It is a named follow-up now, resting on a measurement rather than on a
+fear. `routine-cutover`'s Action inherits the same table for its own credential, which is the
+question that item has been carrying open since 2026-08-02.
+
+### Zero edits to `stack.py`, which was a choice and not an accident
+
+The item said the executor's footprint on #106 would be "the SKILL.md steps and the dispatch
+wiring", and that reads two ways: a separate entry point, or four new `stack.py` subcommands. Put
+to the user at kickoff, who chose the separate `.claude/stack/maintenance.py`. Three things fall
+out of it that the subcommand reading would not have given: `stack.py` keeps the read-only
+contract its own module docstring claims, the ~1,540-line file a reviewer already called too big
+does not grow, and this branch has no textual overlap at all with #110's ~120-line deletion in
+that same file.
+
+`GitCommandRunner` is the one genuinely new thing. `stack.py` reads git through a helper returning
+`""` on failure - correct for derivation, where a missing ref simply means "no answer", and wrong
+the moment a push is involved, where it makes a command that did nothing indistinguishable from one
+that worked.
+
+**Forcing is decided in exactly one place**, `push_arguments`, and only for the rebase strategy,
+which `build_stack` sets only from the `rebase` label. That is what makes the label rather than the
+executor's judgement the thing authorising a rewrite of published history - and it is pinned by a
+test on the arguments themselves, because a test that a push happened cannot tell a fast-forward
+from an overwrite.
+
+### A test that corrected its own premise
+
+The first version of that guarantee was written as an integration test: let somebody else push to
+the branch, then assert the restack is rejected. It failed, and the reason was worth keeping. The
+executor starts each integration from the branch's **published** tip, so a branch that moved under
+the pass is *incorporated*, not raced - a stronger property than the one being tested. The test now
+pins that, and the forcing decision is pinned separately and purely.
+
+### The regression the change introduces, found before it shipped
+
+`board --write` makes a local `board.json` routine where it had been rare. Two tests - one of them
+pre-existing in `test_stack.py` - assert on a *missing* board while reading the real `board.json`
+beside `stack.py` rather than one in their scratch repository. So running a maintenance pass and
+then the suite failed two tests for a reason unrelated to either. Proven by writing a board and
+watching them fail, then fixed with an autouse fixture in `.claude/stack/tests/conftest.py` that
+sets an existing snapshot aside and restores it afterwards.
+
+Worth generalising: a test that reads a path beside the module under test rather than inside its
+own fixture is coupled to whatever the developer's checkout happens to be carrying, and that
+coupling is invisible until some new command starts writing there. The fixture is the fix; noticing
+required actually running the command in this checkout rather than only in the harness.
+
+`.gitignore` gains `.claude/stack/board.json`. #110 adds the identical line, which is a deliberate
+duplication named in both pull requests rather than a fourth instance of the same-artifact-twice
+pattern - whoever lands second drops one copy.
+
+### What was not verified live, and why that is stated rather than glossed
+
+`board --write` ran against the real fork: 44 open pull requests, and the export parses straight
+back through `stack.py status`. `fast-forward` ran as far as its guard, exiting 6 on the missing
+`cram2` remote before attempting any push. `restack` and `run-report` were **not** run live - they
+push to real branches, and the upstream remote is outside a session's repo scope - so their
+coverage is real git in the test harness, not the live fork. 342 tests pass, was 321.
