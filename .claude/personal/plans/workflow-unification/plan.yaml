@@ -297,6 +297,21 @@ items:
       reported traceback pre-fix, passes post-fix) plus the full test_claude_dev_tooling
       scope (321 tests, no regressions). See roadmap.md for the full writeup.
 
+      Merged into fork main 2026-08-05T14:10:36Z (merged_by AbdelrhmanBassiouny, head
+      b3e240e6 - the fork-resolution fix's own commit). Verified by presence on fork
+      main rather than from the merge notification alone: .claude/stack/stack.py,
+      .claude/skills/stacked-pr-maintenance/SKILL.md and
+      .claude/stack/tests/test_maintenance_skill.py all git cat-file -e clean on
+      origin/main. This is the fork-internal merge only - the separate cram2 promotion
+      (the PR's own "Promote" compare-and-create link) is still a manual step, so
+      routine-cutover's gate ("PR 1 on cram2/main and fork main fast-forwards") is not
+      yet met by this alone. Unblocks #107/#110/#111/#139, all based on this branch,
+      to rebase onto main. The only CI red on this PR at merge time was
+      test_each_lib (giskardpy)'s test_pacer.py::test_with_executor - a physics/timing
+      assertion unrelated to this PR's 11-file .claude/-only diff, matching this PR's
+      established pattern of unrelated robotics-stack flakes; test_claude_dev_tooling
+      itself was green.
+
   - id: setup-stacked-prs-skill
     branch: claude/setup-stacked-prs-skill
     title: "PR 2: /setup-stacked-prs guided one-command setup skill"
