@@ -816,6 +816,22 @@ items:
       import-block test. Includes a real two-writer non-fast-forward retry test
       against the bare notes remote.
 
+      Third carrier recorded 2026-08-05, from a review question on #135 asking whether its
+      check_scope_overlap.py duplicates #139's GitCommandRunner. Read against both rather
+      than inferred: #139's is not a duplicate - its attempt/run split and ~14 named methods
+      exist because a push that silently did nothing must not read as one that worked, and
+      #135's script never writes. But #143's plan_item_bootstrap.py run_git and #135's are
+      near-identical, both generic and both raising, differing only in error type and
+      parameter order. So the git_interface.py seam this item already plans has three
+      callers waiting, not one, and the same subprocess.run(["git", ...]) boilerplate is
+      written out three times. Not unified at the time of finding: all three files are
+      unlanded on three branches targeting three different directories, and main has no
+      shared module to hold the seam until dev-tooling-python-package creates one - so
+      extracting early would mean either a cross-dependency between three in-flight pull
+      requests or the sys.path hackery decision 8 exists to end. Note the precedent does
+      not cover this one: #143's own review accepted the stack.py overlap because the
+      contracts were deliberately opposite (_git returns "" where run_git raises), and
+      #135's and #143's contracts are not opposite.
   - id: dev-tooling-save-commands-python
     branch: null
     title: "Bash→Python 2: the four notes writers become python -m subcommands"
@@ -1764,7 +1780,25 @@ items:
       and basing on #106 would attach a dependency-free immediate-wave item to the
       unlanded upstream chain. git merge-tree against #106 reports exactly one conflict,
       ci.yml's single pytest line, which both branches extend with their own tests
-      directory; the config file auto-merges. Textual overlap with #121's and #126's session-start.sh/check-setup.sh
+      directory; the config file auto-merges.
+      Review round 2026-08-05, two comments, both answered in cd6eb839 and the thread. (1)
+      The report's JSON keys become a ReportKey StrEnum, read by both as_dictionary methods
+      and the test instead of being spelled out twice. Applying it removed coverage the
+      literals had been providing by accident - with both sides reading the enum, renaming a
+      key changes them identically and nothing notices, verified by renaming SHARED_PATHS and
+      watching all 8 tests still pass. One test now pins the member names to their wire
+      values, so a rename fails exactly there; 9 tests, was 8. (2) The run_git duplication
+      question is answered and recorded on dev-tooling-notes-core-python as a third carrier
+      for the git_interface.py seam it already plans; not unified here, and that thread is
+      left open for the user rather than resolved.
+
+      Merged main twice as it moved (#106, #115, #119, #402 and others landing): the second
+      integration conflicted in ci.yml, README.md and .claude/hooks/README.md, all
+      additive-vs-additive and all resolved keeping both sides - the pytest line now lists
+      all four test directories. resolve-personal-notes-config.sh auto-merged exactly as the
+      pre-open merge-tree check predicted. 347 tests pass across the four suites, and
+      .claude/stack/tests existing on main means the full four-directory command runs for the
+      first time. Textual overlap with #121's and #126's session-start.sh/check-setup.sh
       work is nil; the shared surface is resolve-personal-notes-config.sh (new constants
       appended) and the three plan-*/SKILL.md files, which no other in-flight item on this
       track touches.

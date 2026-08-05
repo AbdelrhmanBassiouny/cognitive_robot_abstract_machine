@@ -3816,3 +3816,61 @@ independent additive blocks, this branch's `board.json` entry and main's `.plan-
 than falling through to `main`. #139's base was retargeted to `main` accordingly, and merging main
 brought the whole of #106's landed head. 385 tests pass across the three directories CI runs, up from
 366 - main's own tests plus the two added here.
+
+### Review round 2026-08-05: naming the wire format removed the coverage that guarded it
+
+Two comments on #135, and the first is worth recording for the trap it exposed rather than
+for the change itself.
+
+**Asked**: the JSON keys should be `StrEnum`s, not string literals. Correct, and squarely
+`AGENTS.md`'s "instead of passing around strings, use enums instead" — the six keys were
+written out twice, once in the two `as_dictionary` methods and once in the test that
+asserts the command line's output, with nothing holding the copies equal.
+
+**The trap**: making both sides read one `ReportKey` enum *removed* the only thing pinning
+the wire format. Renaming a member's value changes production and test identically, so no
+test fails. Verified rather than assumed — renaming `SHARED_PATHS` to `sharedPaths` left
+all 8 tests green.
+
+That is a general property of single-sourcing an external contract, and it is easy to miss
+because the refactor looks purely like an improvement: **the duplication was doing work.**
+The literals were a second, independent statement of what a reader of the JSON sees. Deleting
+them without replacement trades a real guard for tidiness.
+
+The fix is one test that owns the wire format and nothing else does:
+
+```python
+assert {key.name: str(key) for key in ReportKey} == {
+    "PATHS_ABSENT_FROM_BASE": "paths_absent_from_base", ...
+}
+```
+
+Re-running the same mutation now fails exactly that test and no other — which is the shape
+worth having: a key rename is a contract change, so it should fail once, in the place that
+names the contract, rather than in six assertions that are really about overlap detection.
+The same reasoning `#106` used when it kept a single prose test after deleting eighteen:
+assert the thing that must not drift, in one place, computed from live state.
+
+### The `run_git` duplication question, and the answer that reading gave
+
+The second comment asked whether `check_scope_overlap.py`'s `run_git` duplicates
+`GitCommandRunner` in #139 or #143. Reading all three rather than reasoning from the names
+split the question in two:
+
+- **#139 is not a duplicate.** Its `attempt`/`run` split and ~14 named methods exist because
+  a push that silently did nothing must not be indistinguishable from one that worked — its
+  own docstring says so. #135's script never writes anything.
+- **#143's is nearly identical** — both generic free functions, both raising, differing only
+  in error type and parameter order.
+
+So the real duplication is the ~12 lines of `subprocess.run(["git", …])` boilerplate, in
+three copies, and the plan already names where it converges: `dev-tooling-notes-core-python`
+lists `git_interface.py` as the dependency seam. Recorded there as a third carrier, the same
+treatment #139 got on `dev-tooling-github-api-unification`.
+
+**A precedent that turned out not to cover the case.** #143's own review asked this about
+`stack.py` and the recorded answer was that the boilerplate overlap is acceptable *because
+the contracts are deliberately opposite* — `_git` returns `""` where `run_git` raises. That
+reasoning is sound and does not apply here: #135's and #143's contracts are the same. Worth
+noticing, because citing a precedent by its conclusion rather than its reason is how a real
+duplication gets waved through.
