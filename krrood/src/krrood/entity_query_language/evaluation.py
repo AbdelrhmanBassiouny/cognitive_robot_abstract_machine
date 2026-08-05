@@ -8,7 +8,7 @@ pipeline without polluting the core evaluation methods.
 from __future__ import annotations
 
 from ordered_set import OrderedSet
-from typing_extensions import Any, Dict, Optional
+from typing_extensions import Any, Optional
 
 from krrood.entity_query_language._monitoring import monitored
 from krrood.entity_query_language.core.base_expressions import (
@@ -133,26 +133,21 @@ class SatisfiedConditionTracker(EvaluationObserver):
         :param expression: The pass's active conditions root.
         :param result: The result whose conclusions were just processed.
         """
-        if result.is_false:
-            return
+        # The structural check comes first because reading a result's truth can be expensive
+        # (a bound predicate evaluates itself), and an evaluation with no conditions to track
+        # is dismissed without needing the truth at all.
         evaluation_context = get_evaluation_context()
         if not evaluation_context.active_conditions_root.has_condition:
+            return
+        if result.is_false:
             return
 
         evaluated = evaluation_context.evaluated_expression_ids
 
-        # Build a truth map from the OperationResult chain: operand_id -> is_false.
-        # This reflects the actual truth values from this specific evaluation path,
-        # with no risk of stale state from previous passes.
-        chain_truth_map: Dict = {}
-        node = result
-        seen: set = set()
-        while node is not None and id(node) not in seen:
-            seen.add(id(node))
-            if node.operand is not None:
-                chain_truth_map[node.operand._id_] = node.is_false
-            node = node.previous_operation_result
-
+        # Every truth-bearing expression records its truth in the bindings of the result
+        # it yields, so one uniform lookup covers operators and value-bearing expressions
+        # alike. An expression short-circuited by an operator recorded nothing, and is
+        # therefore not satisfied.
         satisfied = OrderedSet()
         for evaluated_id in evaluated:
             try:
@@ -161,13 +156,8 @@ class SatisfiedConditionTracker(EvaluationObserver):
                 continue
             if not is_condition_participant(evaluated_expression):
                 continue
-            if isinstance(evaluated_expression, LogicalOperator):
-                # An operator not present in the chain was short-circuited: not satisfied.
-                if not chain_truth_map.get(evaluated_id, True):
-                    satisfied.add(evaluated_id)
-            elif evaluated_id in result.bindings:
-                if result.bindings[evaluated_id]:
-                    satisfied.add(evaluated_id)
+            if result.bindings.get(evaluated_id):
+                satisfied.add(evaluated_id)
 
         result.satisfied_condition_ids = satisfied
         evaluation_context.satisfied_condition_ids = satisfied
