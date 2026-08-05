@@ -3696,3 +3696,31 @@ import graph. Matches this PR's own already-documented pattern of unrelated robo
 (`test_world_sim_state_sync`, the `semantic_digital_twin` texture-pair failure); `test_claude_dev_tooling`
 - the job that actually exercises this PR's changes - was green. Noted on the PR rather than chased,
 per the standing instruction for this PR.
+
+## Update 2026-08-05 (landing): three items reach main, and the third stale-save revert
+
+Fork `main` fast-forwarded at `2026-08-05T14:10:36Z`, and GitHub recorded #106, #115 and
+#119 as merged in that one instant - the same auto-detection the 2026-07-31 landing entry
+describes for #101/#103/#105. Verified by ancestry rather than from the merge titles:
+`claude/stack-tooling-on-main`, `claude/plan-item-kickoff-workflow-n814iz` and
+`claude/cram2-main-drift-4owm9a` are all `git merge-base --is-ancestor` of `origin/main`.
+So `stack-tooling-on-main`, `plan-updates-since-helper` and `merge-timestamp-required-fix`
+are `done`, and `.claude/stack/` is on `main` at last - which retires the two deletions
+`routine-cutover` has been carrying, and means `ci.yml` now runs `STACK_TESTS_DIRECTORY`
+as a third suite.
+
+**The anti-stale-save rule earned itself a third recorded instance, minutes apart.** The
+dashboard refresh auto-corrected `merge-timestamp-required-fix` to `done` and pushed it
+(`894a7ce5`); another session then pushed `acccd8be`, adding a legitimate landing note to
+`plan-updates-since-helper` while writing back a manifest loaded *before* that correction,
+which silently reverted the status to `in_progress`. Caught only by re-reading the manifest
+after the write rather than trusting the refresh's own `{"corrected": [...]}` output - which
+is the practical lesson, since that output reports what the run *did*, not what survived.
+Re-applied onto the latest manifest, keeping their note; both are now correct.
+
+The first two instances (2026-07-30, recorded in the tag-push and routine-cutover entries)
+were both a whole section reverted. This one is a single field, which is worse in one
+respect: nothing in the diff looks wrong, and a reader would have to know the item had been
+corrected to notice it had been un-corrected. **Verify after writing, not only before** -
+fetching first is necessary and not sufficient when another writer can land between your
+read and your push.
