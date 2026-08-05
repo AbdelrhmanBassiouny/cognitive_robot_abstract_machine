@@ -59,14 +59,21 @@
   its only red job; main was green on 82501888 (07-31), so the regression came in
   with the #402 merge. Commented on the PR (part 4).
 
+## 2026-08-05: restack onto 7a3639a2; #402 regression fixed on main; notebook flake
+- #402 texture/material regression resolved: main green on 08-03 (b52da84d).
+- Routine restacked: head a1ba9140 merges main 7a3639a2 (#497-#499/#501/#503/#505).
+- Notebooks/demos run 31013925964: single red, coraplex test_notebook_examples.sh,
+  `RuntimeError: Kernel didn't respond in 60 seconds` after 3 notebooks passed —
+  kernel-startup infra flake (job green on both prior runs; PR touches no
+  notebooks). Commented on the PR (part 5).
+- Matrix run 31013925756 on the same head still in progress, 7/13 green, no
+  failures so far.
+
 ## Next
-- Main-side fix needed for the #402 texture/material builder regression; once
-  main recovers, re-merge/re-run — that's the only thing between this PR and a
-  fully green run.
-- Act on base recovery via events or user ping — no timed polling per personal
-  notes.
-- krrood (this PR's own scope) stays green; once the run is green, PR is ready
-  for user review/mark-ready. The restack routine handles #54/#14/#15.
+- When the notebooks run finishes: re-run its failed job (rerun refused while
+  in progress). Act via events or user ping — no timed polling.
+- If the matrix run completes green + notebook rerun green → fully green head;
+  PR ready for user review/mark-ready. The restack routine handles #54/#14/#15.
 - Candidate separate bug-fix PR (needs user approval to open): guard the coraplex
   conftest ORM regen from xdist workers (skip when `config.workerinput` is set),
   matching sdt's guarded pattern. One root cause, off main, `bug` label.
