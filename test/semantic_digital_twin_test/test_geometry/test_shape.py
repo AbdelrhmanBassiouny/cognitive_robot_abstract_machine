@@ -8,7 +8,7 @@ import pytest
 import trimesh
 
 from krrood.adapters.json_serializer import from_json, to_json
-
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Point3
 from semantic_digital_twin.world_description.geometry import (
     Box,
     Cylinder,
@@ -17,6 +17,51 @@ from semantic_digital_twin.world_description.geometry import (
     Sphere,
     Texture,
 )
+
+
+def test_recenter_origin_centers_bounding_box():
+    # A non-planar point cloud whose bounding box is offset from the origin.
+    mesh = Mesh.from_3d_points(
+        points_3d=[
+            Point3(0, 0, 0),
+            Point3(2, 0, 0),
+            Point3(0, 4, 0),
+            Point3(0, 0, 6),
+        ]
+    )
+    bounding_box = mesh.local_frame_bounding_box
+    expected_center = np.array(
+        [
+            (bounding_box.min_x + bounding_box.max_x) / 2,
+            (bounding_box.min_y + bounding_box.max_y) / 2,
+            (bounding_box.min_z + bounding_box.max_z) / 2,
+        ]
+    )
+
+    mesh.recenter_origin()
+
+    np.testing.assert_allclose(mesh.origin.to_position().to_np()[:3], -expected_center)
+
+
+def test_recenter_origin_preserves_existing_rotation():
+    # Recentering only moves the origin's translation; a pre-existing rotation must
+    # survive so the shape is not silently re-oriented.
+    mesh = Mesh.from_3d_points(
+        points_3d=[
+            Point3(0, 0, 0),
+            Point3(2, 0, 0),
+            Point3(0, 4, 0),
+            Point3(0, 0, 6),
+        ]
+    )
+    mesh.origin = HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 0, 0, 0, np.pi / 2)
+    expected_rotation = mesh.origin.to_rotation_matrix().to_np()
+
+    mesh.recenter_origin()
+
+    np.testing.assert_allclose(
+        mesh.origin.to_rotation_matrix().to_np(), expected_rotation, atol=1e-12
+    )
 
 
 def test_shape():
@@ -81,8 +126,8 @@ def test_texture_defaults():
 
 def test_texture_survives_serialization():
     """
-    A texture's fields survive the to_json/from_json round-trip, so a receiver renders the
-    same tiling as the sender without needing the original scene.
+    A texture's fields survive the to_json/from_json round-trip, so a receiver renders
+    the same tiling as the sender without needing the original scene.
     """
     texture = Texture(file_path="/textures/wood.png", repeat=(2.0, 3.0), uniform=True)
 
@@ -93,10 +138,12 @@ def test_texture_survives_serialization():
 
 def test_textured_primitive_survives_serialization():
     """
-    A primitive shape carrying a texture round-trips through serialization with the texture
-    intact, rather than silently collapsing to its flat color.
+    A primitive shape carrying a texture round-trips through serialization with the
+    texture intact, rather than silently collapsing to its flat color.
     """
-    box = Box(scale=Scale(1.0, 1.0, 1.0), texture=Texture(file_path="/textures/marble.png"))
+    box = Box(
+        scale=Scale(1.0, 1.0, 1.0), texture=Texture(file_path="/textures/marble.png")
+    )
 
     restored = Box.from_json(box.to_json())
 
@@ -132,3 +179,69 @@ def test_mesh_volume(tmp_path):
     mesh = Mesh.from_trimesh(mesh=source, dirname=str(tmp_path), file_type="stl")
 
     assert mesh.volume == pytest.approx(8.0)
+
+
+# %% the units a mesh file declares
+
+
+def collada_fixture_path(file_name: str) -> str:
+    """
+    :param file_name: The name of the COLLADA file inside the collada resources.
+    :return: The absolute path of that file.
+    """
+    return os.path.join(
+        Path(files("semantic_digital_twin")).parent.parent,
+        "resources",
+        "collada",
+        file_name,
+    )
+
+
+def test_mesh_declaring_centimeters_loads_in_meters():
+    """
+    A mesh file stating that its coordinates are centimeters loads at its real size.
+
+    The world is in meters throughout, so a file measuring its cube as 100 across in
+    centimeters must arrive as a cube of one meter.
+    """
+    mesh = Mesh(filename=collada_fixture_path("centimeter_cube.dae"))
+
+    assert mesh.mesh.extents == pytest.approx([1.0, 1.0, 1.0])
+
+
+def test_mesh_declaring_no_units_is_taken_as_meters():
+    """
+    A mesh file that states no units is read as it is written.
+
+    Without a declaration there is nothing to convert from, so the coordinates are
+    already the meters the world expects.
+    """
+    mesh = Mesh(filename=collada_fixture_path("unitless_cube.dae"))
+
+    assert mesh.mesh.extents == pytest.approx([100.0, 100.0, 100.0])
+
+
+def test_declared_units_compose_with_the_meshs_own_scale():
+    """
+    A mesh keeps scaling by its own :attr:`~Mesh.scale` on top of the file's units.
+
+    The two are independent: the file says what its numbers mean, the shape says how
+    much to resize the result.
+    """
+    mesh = Mesh(
+        filename=collada_fixture_path("centimeter_cube.dae"), scale=Scale(2, 2, 2)
+    )
+
+    assert mesh.mesh.extents == pytest.approx([2.0, 2.0, 2.0])
+
+
+def test_stl_without_unit_metadata_loads_unchanged(tmp_path):
+    """
+    An STL carries no unit metadata at all, which must not be mistaken for a conversion
+    request.
+    """
+    source = trimesh.creation.box(extents=(1.0, 2.0, 4.0))
+
+    mesh = Mesh.from_trimesh(mesh=source, dirname=str(tmp_path), file_type="stl")
+
+    assert mesh.mesh.extents == pytest.approx([1.0, 2.0, 4.0])
