@@ -46,6 +46,18 @@ is unavoidable; what the change removes is the *process-global mutable list*.
   passes and would have stayed parked.
 - Post-merge suites: 1443 passed, 6 skipped (2 `test_object_diagram` = missing
   Graphviz `dot`, reproduces on `main`). PR description rewritten for the new base.
+- Second false-positive conflict report (2026-08-05, after main moved to 0626bdce):
+  merged main again at 41de0a63, clean, pushed. Diagnosis recorded on the PR
+  (comment 5197102942): `stack.py:1177` decides conflicts with
+  `git merge-tree --write-tree <parent> <ref>`, and that command returns 0/CLEAN on
+  the exact refs the pass used, while GitHub reported `mergeable_state: clean`
+  throughout - so the conflict comes from the agent-driven integration step, not
+  repository state. Both reports left "Conflicting files:" empty. The routine also
+  broke its own SKILL.md step 4.4 (clear the label unless `dirty`) and the
+  label/report pair deadlocks: leaving the label parks the branch forever, clearing
+  it guarantees a repeat report. Needs a fix in the routine, not here.
+- CI green on df0aef5e (all 20 checks). Local suites after the second merge:
+  1443 passed, 6 skipped, 2 graphviz-`dot` failures that reproduce on main.
 - Dashboard tooling bug found, NOT fixed here (would bundle unrelated `.claude/`
   cleanup into a focused PR): `build_dashboard.py:1232` gates "Ready to review" on
   every dependency having an *open* PR, so a *merged* dependency drops the dependent
