@@ -3643,3 +3643,20 @@ The round's last comment asked for docstrings on the enum members at one line of
 `stack.py`. Swept both modules with an AST pass instead: `Command`'s ten members,
 `BranchStatus`, `IntegrationStrategy`, `CommitMoveAction`, and the two undocumented module
 variables. Neither module now has an undocumented enum member or module-level variable.
+
+### Merged, and what the item leaves behind
+
+#115 merged into fork `main` on 2026-08-05, the same day the conflict was cleared.
+Confirmed from `main` rather than from the notification: `99c92c3c` is an ancestor of
+`origin/main`, the three new files are present, and `README.md` is the re-authored
+180-line version rather than the 228-line spliced one. `test_each_lib
+(semantic_digital_twin)` — red on this pull request since 2026-07-31 — passed on the
+post-merge run, so it went in green rather than with a known-ignorable red.
+
+Two things this leaves for later, both already owned by named items rather than loose:
+the inline `gh`-CLI-else-token rule in `plan-updates-since.sh`, which
+`dev-tooling-github-api-unification` absorbs as its third carrier alongside
+`github-api.sh` and `pr_state`; and the bash body itself, which
+`dev-tooling-save-commands-python` converts once the remaining in-flight
+bash-touching pull requests land. Five of those six remain: #107, #110, #121, #126, and
+#139's own `.claude/stack/` work — #109 and #115 are now both in.

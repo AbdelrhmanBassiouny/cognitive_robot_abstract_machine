@@ -1057,7 +1057,7 @@ items:
     pull_request_number: 115
     track: personal-data
     depends_on: []
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01UrxbEr6ZHMThA2p4Vcnrqv
     notes: >
       Implements the recheck-deltas convention recorded in cram-notes.md (2026-07-31): a
@@ -1123,6 +1123,18 @@ items:
       needs-resolution dropped (full label set re-sent so cram2-link-sent survived),
       pull request back to draft. This unblocks its half of decision 12's sequencing
       constraint, which cannot land ahead of the in-flight bash-touching pull requests.
+
+      Merged into fork main 2026-08-05, hours after the resolve above cleared its
+      conflict. Verified by content rather than from the merge notification alone:
+      99c92c3c is a git merge-base --is-ancestor of origin/main, and
+      plan-updates-since.sh, plan_updates_since_support.py and
+      test_plan_updates_since_sh.py are all present on main, with README.md at the
+      re-authored 180 lines. The recurring test_world_sim_state_sync Mujoco flake,
+      red on this pull request since 2026-07-31, passed on the post-merge run, so
+      the branch went green on every check rather than merging with a known red.
+      The convention this item implements is therefore live on main: session-start.sh
+      stamps the notes-branch commit on every run, and any session can now recheck a
+      plan by delta instead of rereading it.
 
   - id: ready-to-start-dependency-free-fix
     branch: claude/funny-feynman-wexezs
