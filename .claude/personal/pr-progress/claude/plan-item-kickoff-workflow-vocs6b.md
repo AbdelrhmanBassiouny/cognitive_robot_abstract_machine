@@ -97,14 +97,28 @@ Files: `.claude/hooks/plan_item_bootstrap.py`, its test module under
   `dev-tooling-config-shim-slimming` as a second carrier for its planned
   consistency test.
 
-## State 2026-08-05 — out of draft, by the user
+## State 2026-08-05 — merged main, promoted, out of draft
 
-- They marked #143 ready for review at `fbe6b90b`. Not re-drafted: the standing
-  rule fires when *I* push, not when they flip it, and their flip is the
-  explicit signal it asks for. Any further push here re-drafts it again.
-- CI on `fbe6b90b`: no failures. `test_claude_dev_tooling` green, and
-  `test_quizzes.sh` — the leg the apt mirror-sync killed on `7352cfb7` — is
-  green too, confirming that red was transient infrastructure.
+- Head is `f77794b0`, a merge of `origin/main`. The routine reported a conflict
+  and it was real: `.claude/hooks/README.md`, where main gained #115's
+  `plan-updates-since.sh` bullet in the same list this branch extends. Both
+  kept. `resolve-personal-notes-config.sh` auto-merged; checked semantically —
+  `PLAN_ITEM_BOOTSTRAP_SCRIPT` and main's `PLAN_STATE_SYNC_STAMP`/`STACK_*`
+  blocks all present. 367 tests, CI's scope now three directories (the stack
+  suite arrived with #106).
+- Reported on #139: that conflict comment named **no** files
+  (`Conflicting files:\n\n\n`) while merge-tree names exactly one. Detection
+  right, naming empty. Did not reproduce on #139's own branch, so it is
+  conditional. Their own live-pass notes cover a different defect (promote
+  stripping `needs-resolution` from a board-time snapshot).
+- The user marked it ready and promoted it: label is now `in-review`, so it has
+  been sent to cram2. Not re-drafted — the standing rule fires when *I* push,
+  and their flip is the explicit signal it asks for. Any further push re-drafts
+  it again.
+- CI: `test_claude_dev_tooling` green on `f77794b0`, no failures anywhere. The
+  earlier reds were container-setup `apt` failures before any test ran (`xvfb`
+  deps at the bootstrap commit, an `archive.ubuntu.com` mirror-sync mismatch on
+  `7352cfb7`); `test_quizzes.sh` passed on the next commit, confirming transient.
 
 ## Next
 
