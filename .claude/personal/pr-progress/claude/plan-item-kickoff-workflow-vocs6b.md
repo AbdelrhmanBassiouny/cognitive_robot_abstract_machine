@@ -72,6 +72,17 @@ Files: `.claude/hooks/plan_item_bootstrap.py`, its test module under
   correct for both `notes` (folded scalar) and `blockers` (sequence).
 - 259 tests, was 257. Three mutations checked.
 
+## Same round's last comment — the mapping, applied in `7352cfb7`
+
+- `apply_item_fields` takes `dict[ManifestKey, str]`, not a list of pairs: the
+  list accepted the same key twice and let the second write silently win, which
+  a dataclass of pairs would have kept and a mapping cannot express.
+- Same shape for `render_new_item`'s body and the required-keys check.
+- Insertion order still governs line order; pinned by a mutation check
+  (reordering fails only the field-order test). 259 tests, unchanged — refactor.
+- All 19 + 5 + 1 review threads on this PR replied to and resolved except the
+  one below.
+
 ## Next
 
 - **One open thread, waiting on the user**: whether to re-base this item onto
@@ -79,8 +90,10 @@ Files: `.claude/hooks/plan_item_bootstrap.py`, its test module under
   that basing on #111 would *not* unify it (that file only moves in
   `dev-tooling-python-package`, `not_started`), and recommended leaving the
   five-member overlap to that migration. Do not act until they answer.
-- CI on #143 was red at the empty bootstrap commit for an apt breakage in
-  container setup (`xvfb` deps), unrelated and noted on the PR; watch whether it
-  clears on the implementation commits.
+- CI: `test_claude_dev_tooling` — the only job this `.claude/`-only diff reaches
+  — is green on `7352cfb7`. The reds are container-setup `apt` failures before
+  any test runs (`xvfb` deps at the bootstrap commit, an `archive.ubuntu.com`
+  mirror-sync mismatch on `7352cfb7`), both noted once on the PR. Nothing to fix
+  from this branch.
 - Residue needing out-of-harness deletion: the remote branch
   `claude/plan-item-bootstrap-probe-vocs6b` (sessions cannot delete branches).
