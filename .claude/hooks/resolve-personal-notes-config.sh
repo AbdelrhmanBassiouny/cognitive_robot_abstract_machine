@@ -41,6 +41,41 @@ NOTES_PATH="${NOTES_PATH:-${CLAUDE_PERSONAL_NOTES_PATH:-.claude/personal/cram-no
 # fork something else) - the URL form works without depending on that
 # session-specific remote name/alias existing at all.
 
+# PERSONAL_SETTINGS_PATH / LOCAL_SETTINGS_RELATIVE_PATH / LOCAL_SETTINGS_JSON /
+# PERSONAL_SETTINGS_SYNC_STAMP: the personal Claude Code settings round trip -
+# `.claude/personal/settings.local.json` on the personal-notes branch, synced into
+# this clone's `.claude/settings.local.json` (the file Claude Code itself reads as
+# local settings, and which is gitignored). Fixed convention, never overridden: the
+# destination is dictated by Claude Code, and the source is per-contributor already
+# by virtue of living on that contributor's own notes branch - same reasoning as
+# PLANS_DIR and the pr-progress directory below.
+PERSONAL_SETTINGS_PATH=".claude/personal/settings.local.json"
+LOCAL_SETTINGS_RELATIVE_PATH=".claude/settings.local.json"
+LOCAL_SETTINGS_JSON="${PROJECT_ROOT}/${LOCAL_SETTINGS_RELATIVE_PATH}"
+# The stamp records the hash of the settings content last synced into - or saved
+# out of - LOCAL_SETTINGS_JSON, which is what makes "has this been edited since?"
+# answerable at all: without it, a session start cannot tell a file it wrote itself
+# last time from one Claude Code (or a human) has since added rules to.
+PERSONAL_SETTINGS_SYNC_STAMP="${PROJECT_ROOT}/.claude/.personal-settings-sync-hash"
+
+# personal_settings_are_locally_modified: returns 0 if this clone's local settings
+# exist and differ from what was last synced or saved (so overwriting them would
+# lose an edit - typically permission rules Claude Code itself appended after an
+# "always allow"), 1 otherwise. Settings that exist but were never synced count as
+# modified: nothing recorded them, so nothing may claim them.
+personal_settings_are_locally_modified() {
+  [ -f "${LOCAL_SETTINGS_JSON}" ] || return 1
+  [ -f "${PERSONAL_SETTINGS_SYNC_STAMP}" ] || return 0
+  [ "$(git hash-object "${LOCAL_SETTINGS_JSON}")" \
+    != "$(cat "${PERSONAL_SETTINGS_SYNC_STAMP}")" ]
+}
+
+# record_personal_settings_sync: stamps the local settings' current content as the
+# synced baseline, so the next session start may update them in place.
+record_personal_settings_sync() {
+  git hash-object "${LOCAL_SETTINGS_JSON}" > "${PERSONAL_SETTINGS_SYNC_STAMP}"
+}
+
 # current_branch_upstream_remote: prints the remote name the current branch
 # tracks (e.g. "abdel-direct" for a branch whose upstream is
 # "abdel-direct/some-branch"), or nothing if it has no upstream (detached
@@ -375,4 +410,31 @@ plan_id_for_branch() {
   git cat-file -e "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null || return 1
   git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
     | awk -F'\t' -v branch="${branch}" '$1 == branch { print $2; exit }'
+}
+
+# PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit
+# SHA that was FETCH_HEAD the last time this clone read plan state (either
+# session-start.sh's own auto-discovery, or ./plan-updates-since.sh). This is
+# the "last-seen SHA" the recheck-deltas convention in cram-notes.md is built
+# around: a session that wants to know what changed since it last looked
+# diffs from this stamp instead of rereading whole files - see
+# ./plan-updates-since.sh, which is also what advances it.
+PLAN_STATE_SYNC_STAMP="${PROJECT_ROOT}/.claude/.plan-state-sync-sha"
+
+# record_plan_state_sync_stamp: stamps FETCH_HEAD as the notes-branch commit
+# this clone has now read plan state at. Caller must have already fetched
+# NOTES_BRANCH successfully (see fetch_personal_notes_branch) - reads
+# FETCH_HEAD directly rather than fetching again itself, same reasoning as
+# plan_id_for_branch above.
+record_plan_state_sync_stamp() {
+  git rev-parse FETCH_HEAD > "${PLAN_STATE_SYNC_STAMP}"
+}
+
+# last_recorded_plan_state_sha: prints the SHA record_plan_state_sync_stamp
+# last recorded, and returns 0. Returns 1 (prints nothing) if nothing has
+# been recorded yet - a fresh clone, or one whose session-start.sh predates
+# this stamp.
+last_recorded_plan_state_sha() {
+  [ -f "${PLAN_STATE_SYNC_STAMP}" ] || return 1
+  cat "${PLAN_STATE_SYNC_STAMP}"
 }

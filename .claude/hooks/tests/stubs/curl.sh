@@ -1,17 +1,22 @@
 #!/bin/bash
 set -uo pipefail
 
-# Test stub standing in for `curl`, so the hook tests can exercise github-api.sh's
-# token fallback - the path taken when `gh` isn't installed - without reaching
-# GitHub. Copied into place as an executable named `curl`, earlier on PATH than
-# the real one; see stub_executables.py.
+# Test stub standing in for `curl`, so the hook tests can exercise the token
+# fallback - the path taken when `gh` isn't installed - without reaching GitHub.
+# Copied into place as an executable named `curl`, earlier on PATH than the real
+# one; see stub_executables.py and the stub_bin fixture in
+# test_plan_updates_since_sh.py.
 #
-# Recognizes only the three request shapes github-api.sh makes, and answers them
-# from the environment:
-#   STUB_CURL_LOGIN              - the login GET /user reports
-#   STUB_CURL_MISSING_LABELS     - space-separated labels that answer 404
+# Serves two callers with disjoint request shapes, so one stub covers both
+# rather than two files racing for the same name on PATH:
+#   github-api.sh          - the authenticated login, and label read/create
+#   plan-updates-since.sh  - a plan tracking issue's comments
+#
+#   STUB_CURL_LOGIN               - the login GET /user reports
+#   STUB_CURL_MISSING_LABELS      - space-separated labels that answer 404
 #   STUB_CURL_CREATE_LABEL_STATUS - the status a label POST answers (default 201)
-#   STUB_CURL_CALL_LOG           - file every invocation is appended to
+#   STUB_CURL_ISSUE_COMMENTS_JSON - the JSON body the comments request prints
+#   STUB_CURL_CALL_LOG            - file every invocation is appended to
 #
 # Exits 64 on an unrecognized invocation for the same reason gh.sh does: a
 # changed call must fail a test rather than pass by accident.
@@ -42,6 +47,10 @@ if [ "${REQUEST_METHOD}" = "POST" ]; then
 fi
 
 case "${REQUEST_URL}" in
+  */issues/*/comments\?*)
+    printf '%s' "${STUB_CURL_ISSUE_COMMENTS_JSON:-[]}"
+    exit 0
+    ;;
   */user)
     printf '{"login":"%s","type":"User"}\n' "${STUB_CURL_LOGIN:-stub-user}"
     exit 0

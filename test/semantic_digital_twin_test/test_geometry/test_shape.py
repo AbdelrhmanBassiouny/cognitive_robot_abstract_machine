@@ -179,3 +179,69 @@ def test_mesh_volume(tmp_path):
     mesh = Mesh.from_trimesh(mesh=source, dirname=str(tmp_path), file_type="stl")
 
     assert mesh.volume == pytest.approx(8.0)
+
+
+# %% the units a mesh file declares
+
+
+def collada_fixture_path(file_name: str) -> str:
+    """
+    :param file_name: The name of the COLLADA file inside the collada resources.
+    :return: The absolute path of that file.
+    """
+    return os.path.join(
+        Path(files("semantic_digital_twin")).parent.parent,
+        "resources",
+        "collada",
+        file_name,
+    )
+
+
+def test_mesh_declaring_centimeters_loads_in_meters():
+    """
+    A mesh file stating that its coordinates are centimeters loads at its real size.
+
+    The world is in meters throughout, so a file measuring its cube as 100 across in
+    centimeters must arrive as a cube of one meter.
+    """
+    mesh = Mesh(filename=collada_fixture_path("centimeter_cube.dae"))
+
+    assert mesh.mesh.extents == pytest.approx([1.0, 1.0, 1.0])
+
+
+def test_mesh_declaring_no_units_is_taken_as_meters():
+    """
+    A mesh file that states no units is read as it is written.
+
+    Without a declaration there is nothing to convert from, so the coordinates are
+    already the meters the world expects.
+    """
+    mesh = Mesh(filename=collada_fixture_path("unitless_cube.dae"))
+
+    assert mesh.mesh.extents == pytest.approx([100.0, 100.0, 100.0])
+
+
+def test_declared_units_compose_with_the_meshs_own_scale():
+    """
+    A mesh keeps scaling by its own :attr:`~Mesh.scale` on top of the file's units.
+
+    The two are independent: the file says what its numbers mean, the shape says how
+    much to resize the result.
+    """
+    mesh = Mesh(
+        filename=collada_fixture_path("centimeter_cube.dae"), scale=Scale(2, 2, 2)
+    )
+
+    assert mesh.mesh.extents == pytest.approx([2.0, 2.0, 2.0])
+
+
+def test_stl_without_unit_metadata_loads_unchanged(tmp_path):
+    """
+    An STL carries no unit metadata at all, which must not be mistaken for a conversion
+    request.
+    """
+    source = trimesh.creation.box(extents=(1.0, 2.0, 4.0))
+
+    mesh = Mesh.from_trimesh(mesh=source, dirname=str(tmp_path), file_type="stl")
+
+    assert mesh.mesh.extents == pytest.approx([1.0, 2.0, 4.0])
