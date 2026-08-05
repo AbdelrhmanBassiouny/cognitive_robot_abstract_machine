@@ -41,6 +41,7 @@ from semantic_digital_twin.reasoning.robot_predicates import (
     BlockingBodies,
     BodiesInGripper,
     BodyInGripperFraction,
+    IsBodyGripped,
     IsGripperHoldingSomething,
     IsPoseFreeForRobot,
     RobotCollisions,
@@ -103,6 +104,7 @@ results: Tuple[VerbalizationResult, ...] = (
         BodyInGripperFraction,
         "the part of a Body that is between the fingers of an EndEffector",
     ),
+    VerbalizationResult(IsBodyGripped, "a Body is gripped by an EndEffector"),
     VerbalizationResult(
         IsGripperHoldingSomething, "an EndEffector is holding something"
     ),

@@ -322,6 +322,54 @@ is_body_in_gripper = symbolic_callable_to_function(BodyInGripperFraction)
 
 
 @dataclass(eq=False)
+class IsBodyGripped(Predicate):
+    """
+    Whether a gripper holds a body with at least the given confidence.
+    """
+
+    body: Body
+    """
+    The body checked for being held.
+    """
+
+    gripper: EndEffector
+    """
+    The gripper the body is checked against.
+    """
+
+    threshold: float = 0.9
+    """
+    Minimum fraction of sampled rays that must hit the body for it to count as held.
+    """
+
+    sample_size: int = 100
+    """
+    The number of rays to sample.
+    """
+
+    def __call__(self) -> bool:
+        return (
+            is_body_in_gripper(self.body, self.gripper, self.sample_size)
+            > self.threshold
+        )
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        # "<body> is gripped by <gripper>" -- the confidence threshold and the ray sample
+        # size decide the check, not what is claimed.
+        return clause(
+            Noun(fields["body"]),
+            Copula(),
+            Adjective("gripped"),
+            Prepositions.BY,
+            Noun(fields["gripper"]),
+        )
+
+
+is_body_gripped = symbolic_callable_to_function(IsBodyGripped)
+
+
+@dataclass(eq=False)
 class IsGripperHoldingSomething(Predicate):
     """
     Whether a gripper is holding something -- a body mounted beneath it in the kinematic
