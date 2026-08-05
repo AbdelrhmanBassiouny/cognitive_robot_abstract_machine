@@ -31,4 +31,4 @@ below it.
 
 **Not subscribed to #139.** Not this session's PR, and already marked ready by the developer.
 
-**Next:** confirm CI `test_claude_dev_tooling` is green on `895baca6c`. Nothing else pending.
+**CI:** `test_claude_dev_tooling` green on `895baca6c`. Nothing pending; work on #139 is done.
