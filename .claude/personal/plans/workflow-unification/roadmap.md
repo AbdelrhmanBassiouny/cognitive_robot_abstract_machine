@@ -3644,19 +3644,38 @@ The round's last comment asked for docstrings on the enum members at one line of
 `BranchStatus`, `IntegrationStrategy`, `CommitMoveAction`, and the two undocumented module
 variables. Neither module now has an undocumented enum member or module-level variable.
 
-### Merged, and what the item leaves behind
+## Update 2026-08-05 (merged): stack-tooling-on-main lands on fork main
 
-#115 merged into fork `main` on 2026-08-05, the same day the conflict was cleared.
-Confirmed from `main` rather than from the notification: `99c92c3c` is an ancestor of
-`origin/main`, the three new files are present, and `README.md` is the re-authored
-180-line version rather than the 228-line spliced one. `test_each_lib
-(semantic_digital_twin)` — red on this pull request since 2026-07-31 — passed on the
-post-merge run, so it went in green rather than with a known-ignorable red.
+PR #106 merged into fork `main` at `2026-08-05T14:10:36Z` (`merged_by: AbdelrhmanBassiouny`,
+head `b3e240e6` - the cram2-checkout fork-resolution fix from earlier the same session). Marked
+ready for review by the user directly (not a session action) shortly before the merge, and merged
+normally rather than by push/fast-forward.
 
-Two things this leaves for later, both already owned by named items rather than loose:
-the inline `gh`-CLI-else-token rule in `plan-updates-since.sh`, which
-`dev-tooling-github-api-unification` absorbs as its third carrier alongside
-`github-api.sh` and `pr_state`; and the bash body itself, which
-`dev-tooling-save-commands-python` converts once the remaining in-flight
-bash-touching pull requests land. Five of those six remain: #107, #110, #121, #126, and
-#139's own `.claude/stack/` work — #109 and #115 are now both in.
+Verified by presence on fork `main`, not from the merge notification alone: `.claude/stack/stack.py`,
+`.claude/skills/stacked-pr-maintenance/SKILL.md` and `.claude/stack/tests/test_maintenance_skill.py`
+all `git cat-file -e` clean on `origin/main` - the same discipline `setup-personal-notes-pr101`'s
+verification used.
+
+**This is the fork-internal merge only, not the cram2 landing.** PR #106's base was fork `main`
+(head repo and base repo both `AbdelrhmanBassiouny/...`), not `cram2/cognitive_robot_abstract_machine`
+directly - the separate cram2 promotion is the manual step the PR's own "Promote" section already
+describes (a compare-and-create link, since the GitHub app has no write access to cram2). So
+`routine-cutover`'s gate ("only after PR 1 is on cram2/main and fork main fast-forwards") is **not**
+met by this merge alone - it needs the promotion to actually happen and cram2 to merge it, then
+fork main to fast-forward from cram2/main. Worth stating plainly since this merge could easily read
+as satisfying that gate at a glance.
+
+**Consequence for dependents.** `setup-stacked-prs-skill` (#110), `setup-personal-notes-script`
+(#107), `shared-pr-state-chips` (#111) and `stack-maintenance-executor` (#139) were all based on
+`claude/stack-tooling-on-main`'s branch directly; now that its content is on `main`, each can rebase
+onto `main` instead of the now-merged branch - not done here, left for whichever session next
+touches each of them.
+
+**One CI check was red at merge time, confirmed unrelated before the merge**: `test_each_lib
+(giskardpy)`'s `test_pacer.py::test_with_executor - assert 26.0 == 42`, a physics/timing assertion
+with an `rclpy.InvalidHandle` teardown warning during the executor's control-cycle count. PR #106's
+diff against `main` was 11 files, entirely `.claude/`/`ci.yml`/`README.md` - nothing in giskardpy's
+import graph. Matches this PR's own already-documented pattern of unrelated robotics-stack flakes
+(`test_world_sim_state_sync`, the `semantic_digital_twin` texture-pair failure); `test_claude_dev_tooling`
+- the job that actually exercises this PR's changes - was green. Noted on the PR rather than chased,
+per the standing instruction for this PR.
