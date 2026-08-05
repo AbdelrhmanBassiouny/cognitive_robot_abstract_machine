@@ -3429,3 +3429,63 @@ own identity and a personal access token never reaches GitHub. The refusal's
 **A reply is not a resolution.** All twenty-five got one; the three that record a deferral
 or answer a question without changing anything stay open for the user to close, per the
 notes-branch rule that a thread is resolved only once what it asked for has been done.
+
+### Second round the same day: two questions asked rather than guessed
+
+Twelve more comments on #139. Ten were answerable by doing them; two were not, and asking
+is what made them come out right.
+
+**`PreFlight` → `CommitMoveChecks`** (the reviewer marked it *discuss with me*, and four
+options were costed). The objection was exact: the name said *when it runs*, not what it
+does. `CommitMoveChecks(...).refusals(move)` names its subject and pairs with the
+`ProposedCommitMove` it is handed. `PreFlightRefusal` → `CommitMoveRefusal`, the
+subcommand → `stack.py check-move`, and both tools' `PREFLIGHT_REFUSED` → `MOVE_REFUSED`,
+still `5` in each and still aligned.
+
+**"Actions as dataclasses with a shared abstract parent"** had two plausible referents -
+the restack's per-branch steps, or `stack.py`'s `CommitMoveAction` enum - and they are
+materially different pieces of work. Asked; it was the steps. `_restack_branch` was a
+chain of ifs, and each branch of it is now a `RestackStep` subclass whose `attempt` either
+concludes the branch or returns `None`. `BranchUnderRestack` carries what a step needs and
+builds the outcome, which is what let `_withhold` and `_report_conflict` stop being free
+functions taking six arguments and become the steps that own them.
+
+Worth keeping: **these steps are listed, the commands are discovered.** The reviewer asked
+for `COMMANDS` to come from `MaintenanceCommand.__subclasses__()`, and that is right there
+- a command class that exists should be reachable, and the failure the explicit tuple
+allowed was writing the class and forgetting the line. It is *wrong* for the steps, whose
+order is the procedure: publishing before checking the move is a bug no type catches, so
+the tuple is the specification rather than boilerplate. Same shape, opposite answer,
+because one list carries meaning and the other carried only maintenance.
+
+### The rule that decided what the skill says
+
+The reviewer asked why the skill explains things only the scripts need to care about, then
+sharpened it: *what I fear is staleness when we are mentioning things that is code
+explanations.* That second sentence is the whole rule, and it is better than the one the
+document was written against.
+
+A sentence in a skill describing what the code does has nothing holding it true - no test
+fails when the code changes under it - so every one of them is a future lie with a delay
+attached. Applied: **if a statement would have to change when `maintenance.py` changes, it
+does not belong in the skill.** That deleted the conflict-labelling description, the
+force-with-lease rule, the board deletion, the per-outcome table and the flag lists; each
+already lives in the docstring of the thing that does it, where it moves with the code.
+Step 2 went from ~70 lines to ~30.
+
+What survives is either an instruction to the agent - the document's actual subject - or a
+status name the agent matches on, and those are pinned: they are
+`MaintenanceExitCode.name_for_a_caller`, derived from the enum member, so renaming a status
+changes what the document refers to rather than silently diverging from it.
+
+This is the counterpart to the earlier round's finding. There, doctrine and command
+explanation had fused into single paragraphs and had to be split apart before the document
+could be reordered. Here, the same split is what made the deletion safe: once the rules
+lived in their own section, everything left in the command prose was disposable.
+
+### Left open on purpose
+
+The `stack.py` half of the rename is arguably #106's work by `scope-decision.md`'s
+prefer-the-change test - `CommitMoveChecks` is defined in a file #106 introduces - so #139
+now carries an edit to its parent's file and #110 will meet it on rebase. Done here because
+that is where it was asked for, flagged there rather than left silent.
