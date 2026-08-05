@@ -17,9 +17,20 @@ import trimesh.exchange.stl
 from PIL import Image
 from plyfile import PlyData
 from trimesh.visual.texture import TextureVisuals, SimpleMaterial
-from typing_extensions import Optional, List, Dict, Any, Self, Tuple, TYPE_CHECKING
+from typing_extensions import (
+    Optional,
+    List,
+    Dict,
+    Any,
+    Self,
+    Tuple,
+    TYPE_CHECKING,
+    Generic,
+    TypeVar,
+)
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
+from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
@@ -338,7 +349,7 @@ class Scale:
     @property
     def xy(self):
         """
-        Returns the scale in the xy-plane with a zero for z
+        Returns the scale in the xy-plane with a zero for z.
 
         :return: The scale in the xy-plane
         """
@@ -1084,6 +1095,26 @@ class Box(Shape):
         )
 
 
+T = TypeVar("T")
+
+
+@dataclass
+class Bounds(Generic[T], SubClassSafeGeneric):
+    """
+    The lower and upper corner of an axis-aligned region.
+    """
+
+    lower: T
+    """
+    The corner with the smallest coordinate on every axis.
+    """
+
+    upper: T
+    """
+    The corner with the largest coordinate on every axis.
+    """
+
+
 @dataclass(eq=False)
 class BoundingBox:
     min_x: float
@@ -1162,6 +1193,40 @@ class BoundingBox:
             Bound.CLOSED,
             Bound.CLOSED,
         )
+
+    def to_array_bounds(self) -> Bounds[np.ndarray]:
+        """
+        Express this bounding box's lower and upper corners as plain-float 3-vectors.
+
+        :return: The corners, in the same frame as ``origin``.
+        """
+        lower = np.array(
+            [self.x_interval.lower, self.y_interval.lower, self.z_interval.lower]
+        )
+        upper = np.array(
+            [self.x_interval.upper, self.y_interval.upper, self.z_interval.upper]
+        )
+        return Bounds(lower, upper)
+
+    def to_point3_bounds(self) -> Bounds[Point3]:
+        """
+        Express this bounding box's lower and upper corners as ``Point3`` instances.
+
+        :return: The corners, in the same frame as ``origin``.
+        """
+        lower = Point3(
+            self.x_interval.lower,
+            self.y_interval.lower,
+            self.z_interval.lower,
+            reference_frame=self.origin.reference_frame,
+        )
+        upper = Point3(
+            self.x_interval.upper,
+            self.y_interval.upper,
+            self.z_interval.upper,
+            reference_frame=self.origin.reference_frame,
+        )
+        return Bounds(lower, upper)
 
     @property
     def scale(self) -> Scale:

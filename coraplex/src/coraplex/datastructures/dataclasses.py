@@ -89,6 +89,11 @@ class Context(PlanEntity):
     Should debug information be printed or visualized.
     """
 
+    teleport_to_navigate_in_simulation: bool = False
+    """
+    If True, the robot will teleport to navigate when in ExecutionType.SIMULATED. Otherwise, CartesianPose will be used
+    """
+
     @property
     def debug(self):
         return self._debug

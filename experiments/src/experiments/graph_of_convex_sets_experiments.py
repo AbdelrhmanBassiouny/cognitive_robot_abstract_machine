@@ -45,8 +45,8 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import BoundingBox
-from semantic_digital_twin.world_description.graph_of_convex_sets import (
-    GraphOfConvexSets,
+from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
+    GraphOfBoundingBoxes,
 )
 from semantic_digital_twin.world_description.shape_collection import (
     BoundingBoxCollection,
@@ -274,7 +274,9 @@ def _run_benchmark(
     )
 
     def _compute_connectivity():
-        graph_of_convex_sets = GraphOfConvexSets(world=world, search_space=search_space)
+        graph_of_convex_sets = GraphOfBoundingBoxes(
+            world=world, search_space=search_space
+        )
         for bounding_box in free_space_collection:
             graph_of_convex_sets.add_node(bounding_box)
         graph_of_convex_sets.calculate_connectivity(tolerance=0.001)
@@ -287,7 +289,9 @@ def _run_benchmark(
     def _run_end_to_end():
         loaded_world = world_loader()
         e2e_search_space = search_space_factory(loaded_world)
-        return GraphOfConvexSets.free_space_from_world(loaded_world, e2e_search_space)
+        return GraphOfBoundingBoxes.free_space_from_world(
+            loaded_world, e2e_search_space
+        )
 
     _, end_to_end_elapsed = _measure(_run_end_to_end)
     end_to_end_duration_milliseconds = end_to_end_elapsed[0] * 1000.0
