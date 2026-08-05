@@ -106,11 +106,19 @@ Files: `.claude/hooks/plan_item_bootstrap.py`, its test module under
   `PLAN_ITEM_BOOTSTRAP_SCRIPT` and main's `PLAN_STATE_SYNC_STAMP`/`STACK_*`
   blocks all present. 367 tests, CI's scope now three directories (the stack
   suite arrived with #106).
-- Reported on #139: that conflict comment named **no** files
-  (`Conflicting files:\n\n\n`) while merge-tree names exactly one. Detection
-  right, naming empty. Did not reproduce on #139's own branch, so it is
-  conditional. Their own live-pass notes cover a different defect (promote
-  stripping `needs-resolution` from a board-time snapshot).
+- Reported on #139, then **corrected**: the first report (14:10) named no files
+  while merge-tree named exactly one, which read as "detection right, naming
+  empty". A second pass (20:37) disproved that half — it reported a conflict on
+  `origin/main` `0626bdce` vs `f77794b0` where `merge-tree` exits 0 and GitHub
+  says `clean`, and re-applied `needs-resolution`. main had not moved since
+  14:27 UTC, so both passes ran on pinned, re-testable inputs. A false positive
+  withholds a healthy branch from every later pass, and it was labelled while
+  already `clean`, so detection and the clearing check disagree within one pass.
+  Cleared the label myself (full set re-sent, `in-review` survived).
+  One hypothesis covers both symptoms: any failed integration classified as a
+  conflict, with unmerged paths enumerated from a state that has none.
+  Their own live-pass notes cover a third, separate defect (promote stripping
+  `needs-resolution` from a board-time snapshot).
 - The user marked it ready and promoted it: label is now `in-review`, so it has
   been sent to cram2. Not re-drafted — the standing rule fires when *I* push,
   and their flip is the explicit signal it asks for. Any further push re-drafts
