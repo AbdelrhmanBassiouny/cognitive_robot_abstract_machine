@@ -38,10 +38,19 @@ is unavoidable; what the change removes is the *process-global mutable list*.
 
 ## Next
 
-- PR #142 open as a **draft**, base `claude/dag-facade-hardening-emrhza` (#118's branch),
-  head d795e183. No `bug` label. Subscribed to its activity; CI was still running at
-  hand-off - watch and drive to green. No promote link: it cannot go upstream until
-  #118 lands.
+- PR #142 open as a **draft**, base `main`, head df0aef5e. No `bug` label. Subscribed.
+- #118 merged 2026-08-05, so GitHub retargeted #142 onto `main`; `main` merged in
+  cleanly (df0aef5e). A stack-maintenance routine had reported a conflict naming no
+  files - there was none, because this branch already contained #118's commits. Its
+  `needs-resolution` label was cleared, since a labelled branch is skipped by later
+  passes and would have stayed parked.
+- Post-merge suites: 1443 passed, 6 skipped (2 `test_object_diagram` = missing
+  Graphviz `dot`, reproduces on `main`). PR description rewritten for the new base.
+- Dashboard tooling bug found, NOT fixed here (would bundle unrelated `.claude/`
+  cleanup into a focused PR): `build_dashboard.py:1232` gates "Ready to review" on
+  every dependency having an *open* PR, so a *merged* dependency drops the dependent
+  off the list - the opposite of the docstring's intent. #142 vanished from
+  "Ready to review" the moment #118 landed. Worth its own tiny PR on `main`.
 - Ask the developer whether removing `Conclusion.__post_init__`'s dead
   `_conditions_root_` fallback is right, or whether it encoded an intent that never
   worked.
