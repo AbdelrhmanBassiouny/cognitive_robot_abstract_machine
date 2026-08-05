@@ -3489,3 +3489,98 @@ The `stack.py` half of the rename is arguably #106's work by `scope-decision.md`
 prefer-the-change test - `CommitMoveChecks` is defined in a file #106 introduces - so #139
 now carries an edit to its parent's file and #110 will meet it on rebase. Done here because
 that is where it was asked for, flagged there rather than left silent.
+
+## Update 2026-08-05 (resolved): #115's conflict was a README rewrite resolved hunk-by-hunk
+
+`/plan-item-resolve workflow-unification plan-updates-since-helper`, session
+https://claude.ai/code/session_016kAVapbHxDokYjZBukKA5X. The item had been `in_progress` and
+untouched since 2026-07-31, `mergeable_state: dirty`, labelled `needs-resolution`, with **all four
+review threads already resolved** - nothing was blocking it on review.
+
+### The manifest was the least accurate source, again
+
+Its `notes` ended on *"All 29 tests pass ... verified live"* and it carried no `blockers` field, so
+it read as ready while the pull request had been unmergeable for five days. This is the same
+finding the 2026-08-03 entry recorded for #109, in the same week, on the same plan - which makes it
+a pattern rather than an incident. Both times everything needed to diagnose it was on the pull
+request the whole time: a `dirty` state, a `needs-resolution` label, and a routine comment naming
+the conflicting files.
+
+### The README conflict was not the one the routine reported
+
+The 2026-08-03 routine comment described `.gitignore` as a safe concatenation (correct) and
+`.claude/hooks/README.md` as *"both sides add an overlapping Safety bullet ... this branch's bullet
+is a subset of the wording a landed main change already added"*. True, and much too small.
+
+This branch was cut from `0fd14357`, before #101 rewrote the README from 378 lines to ~140. An
+earlier merge on the branch resolved that rewrite **hunk-by-hunk**, and the head therefore carried:
+
+- `## Setup: overriding the default remote/branch/path` (plus four subsections) and
+  `## Verifying it worked` - pre-#101 sections - sitting alongside the `## Configuration` /
+  `### Where to put them` sections that had replaced them. Two documents about the same three
+  settings.
+- `Any other label is preserved but not interpreted.` stranded 75 lines below the labels list it
+  closes, because the resurrected block had been spliced into the middle of that section.
+
+Visible in the branch's own history rather than inferred: `151934ff` carried the README at 367
+lines, and the merge at `01d112c0` produced 228 rather than `main`'s 142.
+
+**The 2026-08-03 entry's own generalization is what resolved it** - *a documentation conflict
+against a restructured file is a rewrite, and resolving it hunk-by-hunk produces a document that
+reads as two.* That was written about #109's README two days before this branch's merge produced
+the identical artifact. Re-authored against `main`, and only after checking that both resurrected
+sections are superseded verbatim: `## Configuration` / `### Where to put them` covers the setup
+half, and Quick start already carries the `session-start.sh && cat CLAUDE.local.md` verify line.
+
+What survives is this branch's own content: the `plan-updates-since.sh` entry under *Plan
+dashboards*, and two *existing* Safety bullets extended rather than duplicated - the `FETCH_HEAD`
+read-only bullet now names the script, the gitignored-files bullet now names the stamp. The branch's
+README delta went from **+86/-0 to +12/-2**.
+
+**Worth carrying, because the routine will meet this again:** its conflict report names files, and a
+file name understates a conflict against a restructured document. The report was accurate and still
+led to the wrong size of fix - a session acting on it alone would have resolved the markers and left
+both defects in place, since neither is visible in the conflict hunks.
+
+### What was checked and found clean
+
+- **The same-artifact-twice pattern**, this plan's recorded-three-times failure and exactly what a
+  long-lived branch off a moving base produces. No instance: the test module already imports `main`'s
+  shared `ScratchRepository` (an earlier merge had adopted it), `tests/stubs/` has no counterpart on
+  `main`, and `plan_updates_since_support.py` does not overlap `plan_manifest_tools.py`.
+- **The two auto-merged files, semantically rather than textually.**
+  `resolve-personal-notes-config.sh` and `session-start.sh` merged without markers, and the merged
+  summary block carries both #109's `local settings:` line and this branch's `plan state SHA:` line.
+- **`depends_on: []`**, and `check_dependency_readiness.py --item plan-updates-since-helper` returns
+  `[]` - nothing had regressed underneath it.
+
+### Verification, and the feature verifying itself
+
+243 tests across the two suites CI's `test_claude_dev_tooling` job runs - 194 plan-dashboard, 49
+hooks (this module's 13 plus `main`'s 36, including the `test_personal_settings_sync.py` arriving
+with the merge). None lost.
+
+The live run is the part worth recording: `plan-updates-since.sh workflow-unification --since <sha>`
+returned a delta that **included a manifest change another session pushed during this resolve**. The
+notes branch moved twice while the conflict was being fixed (`75d0b61a` to `b39153aa` to `b56fee94`,
+242 lines), so the anti-stale-save rule was not theoretical here - these edits were re-applied onto
+the freshly fetched manifest rather than the copy loaded at the start.
+
+### CI, unchanged and still not this pull request's
+
+`test_each_lib (semantic_digital_twin)` fails on `test_world_sim_state_sync`, the Mujoco
+box-settling assertion (`final_pos=[~0, ~0, 0.1499]` against `[0.3, 0.2, 0.15]`). Unreachable from a
+`.claude/`-only diff; `test_claude_dev_tooling` is green. Already ruled ignorable for `.claude/`-only
+pull requests on #101.
+
+**State**: pushed as `99c92c3c`, `mergeable_state: unstable` against `main` at `b52da84d`,
+`needs-resolution` dropped (the full label set re-sent so `cram2-link-sent` survived, per #139's
+replace-not-add finding), back to draft per the standing re-draft-after-push rule. This clears one of
+the six in-flight bash-touching pull requests decision 12's items 2-6 cannot land ahead of.
+
+### A note on where this was done from
+
+The fix had to land on #115's head, which belongs to another session, so it was pushed to
+`claude/plan-item-kickoff-workflow-n814iz` rather than this session's own designated branch - the
+same override already on record for #133 into #117 and #143's one line onto #135's branch. There is
+no alternative that resolves #115 itself: a new branch is a new pull request.

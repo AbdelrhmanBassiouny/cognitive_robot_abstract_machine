@@ -1071,6 +1071,36 @@ items:
       3.11), and a missing `|| true` on the default_repository grep that let `set -e`
       silently kill the script on a plan with tracking_issue but no default_repository.
 
+      Resolved 2026-08-05 via /plan-item-resolve (session
+      https://claude.ai/code/session_016kAVapbHxDokYjZBukKA5X): the item had sat
+      in_progress since 2026-07-31 with notes asserting readiness and no blockers
+      field, while the pull request was mergeable_state: dirty and labelled
+      needs-resolution - the same stale-entry failure #109's resolution recorded two
+      days earlier. The conflict was .gitignore (two independent additive blocks,
+      concatenated) and .claude/hooks/README.md. The README was not merely a
+      conflict: this branch was cut before #101's 378-to-140-line rewrite, and an
+      earlier merge here resolved that rewrite hunk-by-hunk, resurrecting the
+      pre-#101 "Setup: overriding the default remote/branch/path" and "Verifying it
+      worked" sections alongside the "Configuration" sections that had replaced them,
+      and stranding the labels list's closing sentence 75 lines from its list.
+      Re-authored against main rather than merged, per #109's own generalization, and
+      only after confirming both resurrected sections are superseded verbatim. The
+      branch's README delta is now +12/-2, was +86/-0. resolve-personal-notes-config.sh
+      and session-start.sh auto-merged and were checked semantically, not just
+      textually - the summary block carries both #109's local-settings line and this
+      branch's plan-state-SHA line. Checked for the same-artifact-twice pattern and
+      found no instance: the test module already imports main's shared
+      ScratchRepository, tests/stubs/ has no counterpart on main, and
+      plan_updates_since_support.py does not overlap plan_manifest_tools.py. 243 tests
+      pass across the two suites CI runs (194 plan-dashboard, 49 hooks - this module's
+      13 plus main's 36), none lost. Verified live: session-start.sh prints all five
+      summary lines and writes the stamp, and plan-updates-since.sh against the real
+      plan returned a delta that included a manifest change another session had pushed
+      mid-resolve. Pushed as 99c92c3c; mergeable_state back to unstable,
+      needs-resolution dropped (full label set re-sent so cram2-link-sent survived),
+      pull request back to draft. This unblocks its half of decision 12's sequencing
+      constraint, which cannot land ahead of the in-flight bash-touching pull requests.
+
   - id: ready-to-start-dependency-free-fix
     branch: claude/funny-feynman-wexezs
     title: "Fix ready-to-start dashboard list dropping dependency-free items"
