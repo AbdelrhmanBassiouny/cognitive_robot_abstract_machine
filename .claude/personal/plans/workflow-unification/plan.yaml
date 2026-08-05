@@ -1072,7 +1072,7 @@ items:
     pull_request_number: 115
     track: personal-data
     depends_on: []
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01UrxbEr6ZHMThA2p4Vcnrqv
     notes: >
       Implements the recheck-deltas convention recorded in cram-notes.md (2026-07-31): a
