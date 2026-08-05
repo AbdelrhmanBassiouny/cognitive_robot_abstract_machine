@@ -765,6 +765,14 @@ items:
       CI consistency test asserting the sourced variables equal python3 -m
       development_tooling configuration output. hooks/README.md and plan-schema.md
       prose touch-ups ride along.
+      Second carrier found 2026-08-05, while answering a review question on #143 about
+      duplication with stack.py: stack.py already reimplements the same precedence in
+      Python as _resolve_personal_notes_remote/_resolve_personal_notes_branch, whose own
+      docstrings concede "by the same precedence as resolve-personal-notes-config.sh".
+      So the consistency test above has two Python copies to hold equal, not one, and
+      stack.py's is the older of them. plan_item_bootstrap.py (#143) deliberately adds no
+      third: its fetch_notes_branch sources the shell file and calls its own
+      fetch_personal_notes_branch rather than restating the rules.
 
   - id: dev-tooling-github-api-unification
     branch: null

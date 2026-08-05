@@ -3306,3 +3306,36 @@ mutation check rather than assumed - reordering the mapping fails exactly the te
 names the field order. The same shape replaced two other pair-lists, including the
 required-keys check, which now reports what is missing from the mapping itself instead of
 from a parallel list beside it.
+
+#### The duplication question, asked of the whole file and answered by measurement
+
+The round's last comment asked simply whether there is any duplication with `stack.py`.
+Answering it required reading that file rather than the docstring that had asserted a
+relationship, and the assertion did not survive. The two `ExitCode` enums share only
+`SUCCESS = 0` and reuse 3, 4 and 5 for *unrelated* meanings - `BOARD_UNAVAILABLE` /
+`REMOTES_UNRESOLVED` / `PREFLIGHT_REFUSED` against `UNKNOWN_PLAN` / `UNKNOWN_ITEM` /
+`INCOMPLETE_NEW_ITEM` - because the two tools fail in different ways. So the promise that
+"aligning the two belongs with whichever item brings them into one package" described a
+unification with no content, and it is deleted; the class states its contract instead, and
+gained the per-member docstrings it was the one enum in the file still missing. Nothing
+else overlaps: `stack.py` makes no network call at all, never touches `plan.yaml`, and the
+only literal overlap is the `subprocess.run(["git", ...])` boilerplate, where the contracts
+are deliberately opposite - `_git` returns `""` on failure, right for derivation, while
+`run_git` raises, because a push that silently did nothing must not read as one that
+worked. That is the same distinction #139 introduced its own `GitCommandRunner` over.
+
+**One real duplication turned up, and it belongs to `stack.py`.** Its
+`_resolve_personal_notes_remote`/`_resolve_personal_notes_branch` reimplement the
+notes-branch precedence in Python, their own docstrings conceding "by the same precedence
+as `resolve-personal-notes-config.sh`" - a second copy of rules the shell owns, free to
+drift from them. `dev-tooling-config-shim-slimming` already plans a CI test holding the
+bash and Python resolutions equal; this is a second carrier for it to cover, and it is
+recorded on that item. This module adds no third copy: `fetch_notes_branch` sources the
+shell file and calls its own `fetch_personal_notes_branch`.
+
+Worth carrying, since this plan keeps recording the reverse case: **a docstring can
+invent a relationship as easily as it can miss one.** Three same-artifact-twice
+duplications are on record here, all found late; this is the opposite failure - a
+forward-looking note asserting a duplication that did not exist, which would have sent a
+later reader looking for something to unify. Both are fixed the same way, by reading the
+other file rather than reasoning about it.
