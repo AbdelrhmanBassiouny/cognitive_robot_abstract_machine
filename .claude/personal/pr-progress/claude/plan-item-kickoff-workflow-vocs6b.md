@@ -48,6 +48,18 @@ Files: `.claude/hooks/plan_item_bootstrap.py`, its test module under
 - 60 tests under `.claude/hooks/tests` (was 36 at branch start). 17 of 18
   threads replied to and resolved.
 
+## Second review round 2026-08-05 — 5 comments, applied in `df4f0225`
+
+- `PlanField` members carry a `FieldSpecification` dataclass value (key, quoted,
+  spans-following-lines) via `__new__`, keeping the member equal to its key.
+  `render` moved onto the field; `ItemFieldLine` and its `quoting` are gone.
+- `PlanDocument.path_within_notes_branch` names the plans directory once;
+  `PlanLocation` collapsed to `fetch_notes_branch`. A test holds
+  `PLANS_DIRECTORY` equal to the shell's `PLANS_DIR`.
+- Docstrings on every enum member and on the test module's constants; the
+  fixture docstring no longer explains the design it replaced.
+- 257 tests, was 254. Three mutations checked. All 5 threads replied + resolved.
+
 ## Next
 
 - **One open thread, waiting on the user**: whether to re-base this item onto
