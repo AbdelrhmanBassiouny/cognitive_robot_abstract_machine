@@ -25,6 +25,7 @@ if TYPE_CHECKING:
         Selectable,
     )
     from krrood.entity_query_language.core.variable import Variable
+    from krrood.entity_query_language.rule_tree_context import RuleTreeBlock
     from krrood.entity_query_language.query.match import (
         Match,
         AbstractMatchExpression,
@@ -708,6 +709,62 @@ class SelfReferentialInsertionError(DataclassException):
 
     def suggest_correction(self) -> str:
         return "Provide a condition that is a different node than the anchor."
+
+
+@dataclass
+class RuleTreeEditWithoutEnclosingBlock(UsageError):
+    """
+    Raised when a rule-tree edit is attempted while no ``with`` block is open.
+    """
+
+    expression_type: Type[SymbolicExpression]
+    """
+    The expression type the edit would have created.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.expression_type.__name__} has no rule tree to attach to because no "
+            "``with`` block is open."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Open a block first, for example ``with query:`` or ``with condition:``, or "
+            "grow an existing rule tree explicitly with "
+            "``ConclusionSelector.insert_at(anchor, ...)``."
+        )
+
+
+@dataclass
+class UnbalancedRuleTreeBlockExit(UsageError):
+    """
+    Raised when leaving a rule-tree ``with`` block that is not the innermost open one.
+    """
+
+    exiting_expression: SymbolicExpression
+    """
+    The expression whose block was being left.
+    """
+
+    innermost_block: Optional[RuleTreeBlock]
+    """
+    The block that is actually innermost, or ``None`` when no block is open at all.
+    """
+
+    def error_message(self) -> str:
+        if self.innermost_block is None:
+            return f"{self.exiting_expression!r} left a rule-tree block while none was open."
+        return (
+            f"{self.exiting_expression!r} left a rule-tree block, but the innermost open "
+            f"block belongs to {self.innermost_block.entered_expression!r}."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Leave rule-tree blocks in the order they were entered; prefer the ``with`` "
+            "statement over calling ``__enter__``/``__exit__`` directly."
+        )
 
 
 @dataclass
