@@ -371,3 +371,30 @@ plan_id_for_branch() {
   git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
     | awk -F'\t' -v branch="${branch}" '$1 == branch { print $2; exit }'
 }
+
+# PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit
+# SHA that was FETCH_HEAD the last time this clone read plan state (either
+# session-start.sh's own auto-discovery, or ./plan-updates-since.sh). This is
+# the "last-seen SHA" the recheck-deltas convention in cram-notes.md is built
+# around: a session that wants to know what changed since it last looked
+# diffs from this stamp instead of rereading whole files - see
+# ./plan-updates-since.sh, which is also what advances it.
+PLAN_STATE_SYNC_STAMP="${PROJECT_ROOT}/.claude/.plan-state-sync-sha"
+
+# record_plan_state_sync_stamp: stamps FETCH_HEAD as the notes-branch commit
+# this clone has now read plan state at. Caller must have already fetched
+# NOTES_BRANCH successfully (see fetch_personal_notes_branch) - reads
+# FETCH_HEAD directly rather than fetching again itself, same reasoning as
+# plan_id_for_branch above.
+record_plan_state_sync_stamp() {
+  git rev-parse FETCH_HEAD > "${PLAN_STATE_SYNC_STAMP}"
+}
+
+# last_recorded_plan_state_sha: prints the SHA record_plan_state_sync_stamp
+# last recorded, and returns 0. Returns 1 (prints nothing) if nothing has
+# been recorded yet - a fresh clone, or one whose session-start.sh predates
+# this stamp.
+last_recorded_plan_state_sha() {
+  [ -f "${PLAN_STATE_SYNC_STAMP}" ] || return 1
+  cat "${PLAN_STATE_SYNC_STAMP}"
+}

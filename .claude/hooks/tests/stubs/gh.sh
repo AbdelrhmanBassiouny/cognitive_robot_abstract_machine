@@ -1,21 +1,28 @@
 #!/bin/bash
 set -uo pipefail
 
-# Test stub standing in for the `gh` CLI, so the hook tests can exercise
-# github-api.sh's preferred backend without reaching GitHub or needing
+# Test stub standing in for the `gh` CLI, so the hook tests can exercise the
+# backends that would otherwise reach GitHub - without a network and without
 # credentials. Copied into place as an executable named `gh`, earlier on PATH
-# than any real one - see stub_executables.py.
+# than any real one; see stub_executables.py and the stub_bin fixture in
+# test_plan_updates_since_sh.py.
+#
+# Serves two callers with disjoint calls, so one stub covers both rather than
+# two files racing for the same name on PATH:
+#   github-api.sh          - the authenticated login, and label read/create
+#   plan-updates-since.sh  - a plan tracking issue's comments
 #
 # Driven entirely by the environment, so a test declares the GitHub state it
 # wants rather than patching this file:
-#   STUB_GH_LOGIN               - the login `gh api user` reports
-#   STUB_GH_MISSING_LABELS      - space-separated labels that answer 404
-#   STUB_GH_CREATE_LABEL_FAILS  - set to 1 to make label creation fail
-#   STUB_GH_CALL_LOG            - file every invocation is appended to, so a
-#                                 test can assert which calls were made
+#   STUB_GH_LOGIN                - the login `gh api user` reports
+#   STUB_GH_MISSING_LABELS       - space-separated labels that answer 404
+#   STUB_GH_CREATE_LABEL_FAILS   - set to 1 to make label creation fail
+#   STUB_GH_ISSUE_COMMENTS_JSON  - the JSON body the comments call prints
+#   STUB_GH_CALL_LOG             - file every invocation is appended to, so a
+#                                  test can assert which calls were made
 #
 # Exits 64 on an invocation it doesn't recognize, rather than a plausible-looking
-# success: a test must fail loudly when github-api.sh changes the call it makes.
+# success: a test must fail loudly when a caller changes the call it makes.
 
 if [ -n "${STUB_GH_CALL_LOG:-}" ]; then
   printf '%s\n' "$*" >> "${STUB_GH_CALL_LOG}"
@@ -30,6 +37,16 @@ fi
 if [ "${2:-}" = "user" ]; then
   printf '%s\n' "${STUB_GH_LOGIN:-stub-user}"
   exit 0
+fi
+
+# `gh api --paginate repos/<owner>/<repo>/issues/<n>/comments?...`
+if [ "${2:-}" = "--paginate" ]; then
+  case "${3:-}" in
+    repos/*/issues/*/comments\?*)
+      printf '%s' "${STUB_GH_ISSUE_COMMENTS_JSON:-[]}"
+      exit 0
+      ;;
+  esac
 fi
 
 # `gh api --method POST repos/<owner>/<repo>/labels -f name=<label> ...`

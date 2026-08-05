@@ -25,6 +25,7 @@ from krrood.entity_query_language.factories import (
     an,
 )
 from krrood.entity_query_language.operators.comparator import Comparator
+from krrood.entity_query_language.operators.core_logical_operators import AND, OR
 from krrood.entity_query_language.query.query import Query
 from krrood.entity_query_language.query_graph import QueryGraph
 from krrood.symbol_graph.symbol_graph import Symbol
@@ -270,6 +271,16 @@ def _get_true_results(query: Query):
     return list(query._true_results_())
 
 
+def _get_satisfied_names(ids, condition_root):
+    """
+    Get expression names from satisfied condition IDs by traversing the condition tree.
+    """
+    return {
+        expression._name_
+        for expression in condition_root._subtree_expressions_with_ids_(ids)
+    }
+
+
 def test_satisfied_conditions_simple():
     """
     A single Comparator condition tracks its ID as satisfied.
@@ -362,6 +373,27 @@ def test_satisfied_conditions_or_first_true():
 
     # Exact set: the short-circuited right side is absent rather than satisfied.
     assert set(result.satisfied_condition_ids) == {condition._id_, greater._id_}
+
+
+def test_satisfied_conditions_exclude_a_short_circuited_operator():
+    """
+    A whole operator skipped by a short-circuit is not satisfied.
+
+    The operand-level cases above only pin a skipped comparator; an operator that was
+    never evaluated must be excluded on the same grounds, since it made no truth claim
+    for this evaluation at all.
+    """
+    val = variable_from([6])
+    query = entity(val).where(or_(val > 5, and_(val < 10, val != 0)))
+
+    true_results = _get_true_results(query)
+    assert len(true_results) == 1
+
+    satisfied = val._conditions_root_._subtree_expressions_with_ids_(
+        true_results[0].satisfied_condition_ids
+    )
+    assert any(isinstance(expression, OR) for expression in satisfied)
+    assert not any(isinstance(expression, AND) for expression in satisfied)
 
 
 def test_satisfied_conditions_or_fallback():
