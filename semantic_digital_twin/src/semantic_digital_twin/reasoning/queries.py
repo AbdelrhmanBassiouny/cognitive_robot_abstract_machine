@@ -1,8 +1,12 @@
-
-from krrood.inheritance_path_length import nearest_common_ancestor, inheritance_path_length, inheritance_distance
+from krrood.inheritance_path_length import (
+    nearest_common_ancestor,
+    inheritance_path_length,
+    inheritance_distance,
+)
 
 from krrood.entity_query_language.factories import not_, set_of, type_
 import math
+from dataclasses import dataclass
 from typing import List, Optional
 from krrood.entity_query_language.factories import (
     variable_from,
@@ -12,7 +16,16 @@ from krrood.entity_query_language.factories import (
     an,
 )
 from krrood.entity_query_language.query.query import Entity
-from krrood.entity_query_language.predicate import symbolic_function, length
+from krrood.entity_query_language.predicate import (
+    SymbolicFunction,
+    symbolic_callable_to_function,
+    length,
+)
+from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
+from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    Noun,
+    phrase,
+)
 from krrood.utils import recursive_subclasses
 
 from semantic_digital_twin.reasoning.predicates import (
@@ -35,7 +48,7 @@ from semantic_digital_twin.world_description.world_entity import (
 
 
 def semantic_annotations_on_surfaces(
-        supporting_surfaces: List[HasSupportingSurface], world: World
+    supporting_surfaces: List[HasSupportingSurface], world: World
 ) -> List[HasRootBody]:
     """
     Queries a list of Semantic annotations that are on top of a given list of other
@@ -55,9 +68,9 @@ def semantic_annotations_on_surfaces(
 
 
 def get_next_object_using_planar_distance(
-        main_body: Body,
-        supporting_surface,
-        ignore_dimension,
+    main_body: Body,
+    supporting_surface,
+    ignore_dimension,
 ) -> Entity[SemanticAnnotation]:
     """
     Queries the next object based on Euclidean distance in x and y coordinates relative
@@ -84,9 +97,9 @@ def get_next_object_using_planar_distance(
 
 
 def goal_surface_of_object(
-        object_of_interest: SemanticAnnotation,
-        supporting_surfaces: List[HasSupportingSurface],
-        threshold: int = 1,
+    object_of_interest: SemanticAnnotation,
+    supporting_surfaces: List[HasSupportingSurface],
+    threshold: int = 1,
 ) -> Optional[HasSupportingSurface]:
     """
     Finds the most similar object to a given semantic annotation among a list of tables
@@ -108,19 +121,30 @@ def goal_surface_of_object(
     supporting_surface = variable(HasSupportingSurface, supporting_surfaces)
     supporting_body = supporting_surface.bodies[0]
     non_supporting_table = entity(supporting_surface).where(
-        not_(is_supporting(supporting_body)))
+        not_(is_supporting(supporting_body))
+    )
 
     # Query annotations on the surfaces of the tables
-    obj = variable(SemanticAnnotation, semantic_annotations_on_surfaces(
-        supporting_surfaces, object_of_interest._world
-    ))
+    obj = variable(
+        SemanticAnnotation,
+        semantic_annotations_on_surfaces(
+            supporting_surfaces, object_of_interest._world
+        ),
+    )
 
-    query = set_of(obj, supporting_surface).where(
-        (distance := inheritance_distance(object_of_interest, type_(obj))) <= threshold,
-        is_supported_by(obj.bodies[0], supporting_body)
-    ).ordered_by(distance)
-    return next(query[supporting_surface].evaluate(), next(non_supporting_table.evaluate(), None))
-
+    query = (
+        set_of(obj, supporting_surface)
+        .where(
+            (distance := inheritance_distance(object_of_interest, type_(obj)))
+            <= threshold,
+            is_supported_by(obj.bodies[0], supporting_body),
+        )
+        .ordered_by(distance)
+    )
+    return next(
+        query[supporting_surface].evaluate(),
+        next(non_supporting_table.evaluate(), None),
+    )
 
 
 def filter_annotations_by_color(
@@ -150,6 +174,39 @@ def filter_annotations_by_color(
     return entity(semantic_annotation).where(semantic_annotation.root == matching_body)
 
 
+@dataclass(eq=False)
+class ClassNameLowercased(SymbolicFunction):
+    """
+    A class's own name, lowercased, for case-insensitive label matching.
+    """
+
+    semantic_class: type
+    """
+    The class whose name is lowercased.
+    """
+
+    def __call__(self) -> str:
+        return self.semantic_class.__name__.lower()
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        # "the lower case form of the name of <semantic_class>" -- what the value is, which
+        # the class name read as a possessive ("the class name lowercased of …") was not.
+        return phrase(
+            Noun.the("lower case form"),
+            Prepositions.OF,
+            Noun.the("name"),
+            Prepositions.OF,
+            Noun(fields["semantic_class"]),
+        )
+
+
+class_name_lowercased = symbolic_callable_to_function(ClassNameLowercased)
+"""
+Functional form of :class:`ClassNameLowercased`.
+"""
+
+
 def annotation_class_by_label(label: str) -> Optional[type]:
     """
     Finds the class whose name is contained within the given label.
@@ -160,14 +217,6 @@ def annotation_class_by_label(label: str) -> Optional[type]:
         "bowl_collapsable_yellowgrey").
     :return: The matching class (e.g., Bowl) or None if no match is found.
     """
-
-    @symbolic_function
-    def class_name_lowercased(semantic_class: type) -> str:
-        """
-        The class's own name, lowercased, for case-insensitive label matching.
-        """
-        return semantic_class.__name__.lower()
-
     semantic_class = variable_from(recursive_subclasses(IsPerceivable))
     matching_class = an(
         entity(semantic_class).where(
@@ -175,6 +224,44 @@ def annotation_class_by_label(label: str) -> Optional[type]:
         )
     )
     return next(matching_class.evaluate(), None)
+
+
+@dataclass(eq=False)
+class AnnotationVolume(SymbolicFunction):
+    """
+    The volume of a semantic annotation, from its body's collision scale (x * y * z).
+    """
+
+    annotation: SemanticAnnotation
+    """
+    The annotation whose volume is computed.
+    """
+
+    def __call__(self) -> float:
+        body = self.annotation.bodies[0]
+
+        # Get shapes from collision if available, otherwise from visual
+        if body.collision is not None:
+            return (
+                body.collision.scale.x * body.collision.scale.y * body.collision.scale.z
+            )
+        return 0.0
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields):
+        # "the volume of <annotation>" -- the operand already names what is measured, so
+        # repeating it in the head ("the annotation volume of an annotation") is redundant.
+        return phrase(
+            Noun.the("volume"),
+            Prepositions.OF,
+            Noun(fields["annotation"]),
+        )
+
+
+get_volume = symbolic_callable_to_function(AnnotationVolume)
+"""
+Functional form of :class:`AnnotationVolume`.
+"""
 
 
 def sort_annotations_by_volume(
@@ -189,23 +276,8 @@ def sort_annotations_by_volume(
     :param order: Whether to sort in ascending or descending order (default is True).
     :return: List of SemanticAnnotation objects sorted by volume (largest to smallest).
     """
-    annotaion_var = entity(a := variable_from(annotations)).where(a.bodies)
+    annotation_variable = entity(a := variable_from(annotations)).where(a.bodies)
 
-    @symbolic_function
-    def get_volume(annotation: SemanticAnnotation) -> float:
-        """
-        Calculate volume from the annotation's body scale.
-        """
-        body = annotation.bodies[0]
-
-        # Get shapes from collision if available, otherwise from visual
-        if body.collision is not None:
-            return (
-                body.collision.scale.x * body.collision.scale.y * body.collision.scale.z
-            )
-        else:
-            return 0.0
-
-    return entity(annotaion_var).ordered_by(
-        get_volume(annotaion_var), descending=not order
+    return entity(annotation_variable).ordered_by(
+        get_volume(annotation_variable), descending=not order
     )
