@@ -118,6 +118,14 @@ Read `roadmap.md`'s standing-conventions section (however it's titled in
 this plan) and this repository's own `AGENTS.md`. Whatever the resolution
 turns out to be, it must honor both.
 
+Also ask whether the item should still exist separately: follow
+`${SCOPE_DECISION_DOCUMENT}`. If nothing substantial would remain once the
+overlapping edits are removed, folding it into that item is often the
+resolution — an item stuck behind its own parent is sometimes stuck because it
+was never really a separate item. The same goes when two items turn out to have
+built the same thing, which that document's purpose comparison is there to
+catch.
+
 ## 5. Propose the plan — plan mode, no code
 
 Before drafting the plan or raising any open question with the user, check

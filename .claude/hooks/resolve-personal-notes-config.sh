@@ -302,6 +302,26 @@ SETUP_PREREQUISITE_DOCUMENT="${SETUP_PERSONAL_NOTES_DIRECTORY}/prerequisite-chec
 # conventions instead of an empty file.
 STARTER_NOTES_FILE="${SETUP_PERSONAL_NOTES_DIRECTORY}/starter-notes.md"
 
+# ADD_PLAN_ITEM_DIRECTORY / SCOPE_DECISION_DOCUMENT /
+# CHECK_SCOPE_OVERLAP_SCRIPT / ADD_PLAN_ITEM_TESTS_DIRECTORY: the
+# where-does-this-work-belong half of the system - the skill someone runs when
+# describing new work (/add-plan-item), the shared scope rule all four plan
+# skills defer to instead of each restating it, the script that gathers that
+# rule's evidence, and its pytest suite. Same defined-once reasoning as every
+# path above.
+ADD_PLAN_ITEM_DIRECTORY=".claude/skills/add-plan-item"
+# scope-decision.md: the shared "is this new work, or a change to work already
+# in flight?" rule that plan-create, plan-item-kickoff, plan-item-resolve and
+# add-plan-item each reference in a line rather than each spelling it out.
+SCOPE_DECISION_DOCUMENT="${ADD_PLAN_ITEM_DIRECTORY}/scope-decision.md"
+# check_scope_overlap.py: reports which of the work's paths the base branch
+# lacks, and which unlanded branches already touch them - see the script's own
+# module docstring.
+CHECK_SCOPE_OVERLAP_SCRIPT="${ADD_PLAN_ITEM_DIRECTORY}/check_scope_overlap.py"
+# tests/: the pytest suite covering check_scope_overlap.py - the exact
+# directory CI and a session both run against.
+ADD_PLAN_ITEM_TESTS_DIRECTORY="${ADD_PLAN_ITEM_DIRECTORY}/tests"
+
 # SAVE_PLAN_SCRIPT: same reasoning as the block above, extended to
 # save-plan.sh - unlike the other hook scripts in this directory (which are
 # always run directly by a human, once, per hooks/README.md's own setup
