@@ -44,10 +44,15 @@ headless site build also pushes merged→done manifest corrections).
 
 ## Next
 
-- CI on #111 (head 8cb9fef1, after the stack Routine restacked the chain main -> #101 ->
-  #106 -> this branch with merge commits; local branch fast-forwarded to match): every
-  job green - test_claude_dev_tooling and coraplex included - except the one known
-  pre-existing test_world_sim_state_sync failure, identical assertion on both runs and
-  on main (noted once on the PR thread; no re-noting per event). Re-check when the base
-  recovers.
+- 2026-08-05: #106's chain landed on main, GitHub retargeted #111 to main, and the
+  maintenance pass reported a real conflict (needs-resolution) in stack.py, README.md,
+  build_dashboard.py. Resolved by taking main's re-reviewed versions and re-applying
+  this PR's deltas in their idiom (export as a Command member via
+  Configuration.fork_repository, own URL helper deleted in favour of
+  Repository.from_remote_url, ExitCode.GITHUB_UNAVAILABLE 6, personal-notes resolver
+  delegation kept, from_mapping keeps #119's guard + chip fields). 401 tests green
+  (357 .claude suites + 44 development_tooling); pushed merge 52e3ede4; replied on the
+  PR; label clears on the next maintenance pass.
+- Watch CI on the merge commit; the known test_world_sim_state_sync flake may still red
+  the semantic_digital_twin job (fails on main too - already noted once on the thread).
 - Keep the PR draft until told otherwise; self-review pass before undrafting, when asked.
