@@ -69,11 +69,22 @@
 - Matrix run 31013925756 on the same head still in progress, 7/13 green, no
   failures so far.
 
+## 2026-08-05 (evening): restack onto 0626bdce; robokudo network outage
+- Routine restacked again: head 9343f34b merges main 0626bdce (#492 gripper
+  friction params) — supersedes a1ba9140 and its pending notebook rerun.
+- Matrix run 31044994608: robokudo failed — CI runner couldn't reach
+  gitlab.informatik.uni-bremen.de for the robokudo test-data zip (Errno 101
+  network unreachable; 3 failed + 1 error all from the download; test_query
+  TypeError downstream of missing data). External outage; #492 touches no
+  robokudo code. Commented on the PR (part 6).
+- rerun_failed_jobs refused (workflow still running).
+
 ## Next
-- When the notebooks run finishes: re-run its failed job (rerun refused while
-  in progress). Act via events or user ping — no timed polling.
-- If the matrix run completes green + notebook rerun green → fully green head;
-  PR ready for user review/mark-ready. The restack routine handles #54/#14/#15.
+- When run 31044994608 completes: re-run failed jobs (robokudo should recover
+  once the Uni Bremen GitLab is reachable). Act via events or user ping — no
+  timed polling.
+- Once a head goes fully green: PR ready for user review/mark-ready. The restack
+  routine handles #54/#14/#15.
 - Candidate separate bug-fix PR (needs user approval to open): guard the coraplex
   conftest ORM regen from xdist workers (skip when `config.workerinput` is set),
   matching sdt's guarded pattern. One root cause, off main, `bug` label.
