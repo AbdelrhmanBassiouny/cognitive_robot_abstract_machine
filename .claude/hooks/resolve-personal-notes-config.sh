@@ -261,6 +261,20 @@ STACK_CONFIG_FILE="${STACK_DIRECTORY}/stack.toml"
 # config-layering behaviour (via the hooks tests' ScratchRepository).
 STACK_TESTS_DIRECTORY="${STACK_DIRECTORY}/tests"
 
+# DEVELOPMENT_TOOLING_*: the development_tooling Python package - the shared
+# import home for the PR-state fetch/compute layer and the Python side of
+# personal-notes resolution. A plain repository-root directory importable
+# with no install; see its own package docstring.
+DEVELOPMENT_TOOLING_DIRECTORY="development_tooling"
+# build_site.py: the headless static-site build (every plan dashboard plus
+# the master index) a Pages workflow runs with no live session.
+BUILD_SITE_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/build_site.py"
+# test/development_tooling_test/: the package's pytest suite, under the
+# standard test/ directory. Run it with
+# --confcutdir="${DEVELOPMENT_TOOLING_TESTS_DIRECTORY}" so the repository
+# root test/conftest.py (which imports the robotics stack) is not loaded.
+DEVELOPMENT_TOOLING_TESTS_DIRECTORY="test/development_tooling_test"
+
 # plan-schema.md: the full plan.yaml field reference every plan-* skill
 # reads before drafting or interpreting a manifest. On main, next to the
 # tooling that enforces it, so every clone has it with no setup - unlike the

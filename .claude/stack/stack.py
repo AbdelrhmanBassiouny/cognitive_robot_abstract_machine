@@ -20,6 +20,7 @@ Commands (run from the repo root; ``--help`` on any of them for its flags)::
     python .claude/stack/stack.py next           # which branches to submit upstream next
     python .claude/stack/stack.py next --porcelain    # machine-readable: one 'name<TAB>pr' line per branch
     python .claude/stack/stack.py restack-plan   # bottom-up restack plan as JSON
+    python .claude/stack/stack.py export         # (re)write board.json from the fork's live open PRs
     python .claude/stack/stack.py configuration  # every resolved setting, including the remotes
     python .claude/stack/stack.py labels         # the complete label set a write must send
     python .claude/stack/stack.py preflight      # may these commits move onto that branch?
@@ -31,14 +32,15 @@ The last five exist so the steps most easily got wrong by hand are computed rath
 label write replaces the whole set, a push whose two sides name different branches moves the wrong
 commits, an unencoded compare URL loses its prefill, and a landed parent is decided by git ancestry
 rather than by pull-request state. ``landed`` reports only - GitHub closes a pull request as merged
-by itself once its head is contained in its base, so nothing here has to close one.
+by itself once its head is contained in its base, so nothing here has to close one. ``export``
+writes the ``board.json`` the board-reading commands consume, through the repository-root
+``development_tooling`` package's shared ``pr_state`` layer.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 import tomllib
@@ -48,6 +50,23 @@ from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote
+
+# The shared PR-state layer lives in the repository-root development_tooling package;
+# this entry script is planned to become a thin wrapper inside it, at which point this
+# path insertion goes away.
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+
+from development_tooling.personal_notes import (
+    resolve_personal_notes_branch,
+    resolve_personal_notes_remote,
+)
+from development_tooling.pr_state import (
+    GitHubAccessError,
+    GitHubApi,
+    board_document,
+    fetch_pull_request_states,
+    resolve_github_api,
+)
 
 # %% configuration
 
@@ -393,36 +412,19 @@ def _remote_urls() -> dict[str, str]:
     return {name: _git("remote", "get-url", name) for name in listed if name}
 
 
-def _resolve_personal_notes_remote() -> str:
-    """:return: the personal-notes remote, by the same precedence as
-    ``resolve-personal-notes-config.sh``: git config, then an environment variable, then a default.
-    """
-    return (
-        _git("config", "--get", "claude.personalNotesRemote")
-        or os.environ.get("CLAUDE_PERSONAL_NOTES_REMOTE")
-        or "origin"
-    )
-
-
-def _resolve_personal_notes_branch() -> str:
-    """:return: the personal-notes branch name, by the same precedence as
-    :func:`_resolve_personal_notes_remote`."""
-    return (
-        _git("config", "--get", "claude.personalNotesBranch")
-        or os.environ.get("CLAUDE_PERSONAL_NOTES_BRANCH")
-        or "claude/personal-notes"
-    )
-
-
 def _personal_configuration_overrides() -> dict[str, object]:
     """Fetch the personal-notes branch and parse its configuration override file, if any.
+
+    The remote and branch come from :mod:`development_tooling.personal_notes`, the
+    shared Python home of the resolution precedence, rather than a second copy of it
+    here.
 
     :return: The parsed contents of ``.claude/personal/stack.toml`` on the personal-notes branch, or
         an empty mapping if the branch or the file doesn't exist (e.g. before it has ever been
         written).
     """
-    remote = _resolve_personal_notes_remote()
-    branch = _resolve_personal_notes_branch()
+    remote = resolve_personal_notes_remote()
+    branch = resolve_personal_notes_branch()
     if not _git_succeeds("fetch", remote, branch, "--quiet"):
         return {}
     if not _git_succeeds(
@@ -827,6 +829,22 @@ def _count(rev_range: str) -> int | None:
     :return: The number of commits in it, or ``None`` if a ref is missing."""
     out = _git("rev-list", "--count", rev_range)
     return int(out) if out.isdigit() else None
+
+
+# %% board export
+
+
+def export_board(repository: str, api: GitHubApi, path: Path = BOARD_PATH) -> int:
+    """Write ``board.json`` from the fork's live open pull requests.
+
+    :param repository: The fork's ``owner/repository``.
+    :param api: The GitHub transport to fetch through.
+    :param path: Where to write the board export.
+    :return: The number of pull requests exported.
+    """
+    states = fetch_pull_request_states(repository, api, state="open")
+    path.write_text(json.dumps(board_document(states), indent=2) + "\n")
+    return len(states)
 
 
 # %% stack assembly
@@ -1352,13 +1370,14 @@ class Command(StrEnum):
     CONFIGURATION = "configuration"
     LABELS = "labels"
     PROMOTION_LINK = "promotion-link"
+    EXPORT = "export"
 
     @property
     def needs_a_board(self) -> bool:
         """Whether answering this command means deriving the stack.
 
         The ones that do not are answerable from git and configuration alone, so they
-        run before a board has ever been exported.
+        run before a board has ever been exported - ``export`` is what writes one.
 
         :return: Whether ``board.json`` must exist.
         """
@@ -1366,6 +1385,7 @@ class Command(StrEnum):
             Command.CONFIGURATION,
             Command.LABELS,
             Command.PROMOTION_LINK,
+            Command.EXPORT,
         }
 
 
@@ -1396,6 +1416,9 @@ class ExitCode(IntEnum):
     PREFLIGHT_REFUSED = 5
     """The proposed move must not be made; the reasons are on stderr."""
 
+    GITHUB_UNAVAILABLE = 6
+    """No route to the GitHub API: neither the ``gh`` CLI nor a token is available."""
+
 
 def _argument_parser() -> argparse.ArgumentParser:
     """:return: The parser for every command and its own flags."""
@@ -1419,6 +1442,10 @@ def _argument_parser() -> argparse.ArgumentParser:
         help="print only 'name<TAB>pr' per branch to promote",
     )
     commands.add_parser(Command.RESTACK_PLAN, help="the bottom-up restack plan as JSON")
+    commands.add_parser(
+        Command.EXPORT,
+        help="(re)write board.json from the fork's live open pull requests",
+    )
     commands.add_parser(
         Command.REPARENTS, help="children whose base has landed, and the base they need"
     )
@@ -1514,6 +1541,11 @@ def _run_without_a_board(command: Command, arguments: argparse.Namespace) -> Exi
             )
         )
         return ExitCode.SUCCESS
+    if command is Command.EXPORT:
+        configuration = load_configuration()
+        count = export_board(str(configuration.fork_repository), resolve_github_api())
+        print(f"Wrote {BOARD_PATH.name} ({count} open fork PRs).")
+        return ExitCode.SUCCESS
     print_promotion_link(
         PromotionLink.build(
             load_configuration(), arguments.branch, arguments.title, arguments.body
@@ -1594,6 +1626,9 @@ def main() -> ExitCode:
     except (ContradictoryLabelWriteError, PromotionLinkTooLongError) as error:
         print(f"{error}", file=sys.stderr)
         return ExitCode.USAGE
+    except GitHubAccessError as error:
+        print(f"{error}", file=sys.stderr)
+        return ExitCode.GITHUB_UNAVAILABLE
 
 
 if __name__ == "__main__":

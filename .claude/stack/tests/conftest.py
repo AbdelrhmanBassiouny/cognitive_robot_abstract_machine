@@ -5,7 +5,8 @@ single-file scripts run directly, not installed packages, so their
 directories are added to ``sys.path`` here rather than requiring an
 ``__init__.py``/packaging setup just for tests. Mirrors
 ``.claude/skills/plan-dashboard/tests/conftest.py`` and
-``.claude/hooks/tests/conftest.py``.
+``.claude/hooks/tests/conftest.py``. The repository root is added too, for
+the ``development_tooling`` package the export tests exercise.
 """
 
 import sys
@@ -14,6 +15,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "hooks"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "hooks" / "tests"))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent))
 
 import pytest  # noqa: E402
 from scratch_repository import ScratchRepository  # noqa: E402

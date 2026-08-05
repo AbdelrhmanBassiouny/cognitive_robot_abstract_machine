@@ -36,8 +36,8 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   (see `stack.py`'s `load_configuration`), including a `fork_repository` to pick between remotes
   when more than one could be the fork.
 - **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `ci`,
-  `session`) that `stack.py` reads. Written from GitHub as scratch by whatever refreshes it -
-  never committed, and not produced by anything in this directory.
+  `session`) that `stack.py` reads. Written from GitHub as scratch by `stack.py export`
+  (below) or whatever else refreshes it - never committed.
 - **`stack.py`** - read-only status tool (never mutates branches). Reads `board.json` + git:
   - `python .claude/stack/stack.py status` - the whole stack, with ahead/behind drift per parent.
   - `python .claude/stack/stack.py check` - would each branch integrate cleanly onto its parent
@@ -49,6 +49,10 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   - `python .claude/stack/stack.py restack-plan` - the bottom-up restack plan as JSON (one
     `{branch, parent, strategy}` per not-yet-`merged` branch, in-review ones included so they
     pick up a moved parent via a conflict-free `merge`).
+  - `python .claude/stack/stack.py export` - (re)write `board.json` from the fork's live open
+    PRs, through the repository-root `development_tooling` package's shared `pr_state` layer
+    (`gh` when installed, else a `GH_TOKEN`/`GITHUB_TOKEN`). Exits `6` when neither route to
+    the GitHub API is available.
   - `python .claude/stack/stack.py configuration` - every resolved setting as `key<TAB>value`
     lines, keyed by `Configuration`'s own field names: the labels, the upstream base, which
     remote is the fork and which is the upstream, plus the exact `git remote add` command when
@@ -127,8 +131,8 @@ To run it unattended, register it as a scheduled Routine; the prompt to paste is
 - **The branch is the durable state** - commit + push often; cloud containers are ephemeral.
 - **Restack only after the parent has landed/updated.** Restacking onto a still-conflicting,
   unmerged parent is premature - land the parent first.
-- **Refresh `board.json` before acting.** It's a snapshot; the routine brings it current with
-  GitHub.
+- **Refresh `board.json` before acting.** It's a snapshot; `stack.py export` (or the routine)
+  brings it current with GitHub.
 - **CI is the validator; validate ROS-free first.** Cloud containers have no ROS, so never try
   to run the coraplex/SDT suites locally - poll a PR's CI with the GitHub MCP and treat its
   red/green as the oracle (leave `subscribe_pr_activity` to an interactive session babysitting
