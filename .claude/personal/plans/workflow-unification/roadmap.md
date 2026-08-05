@@ -3229,3 +3229,35 @@ The general shape, since this plan keeps meeting it: **a reviewer's instruction 
 remedy the branch cannot reach.** The answer is not to follow it into a worse place or to
 silently ignore it, but to say which part is reachable, do that part, and hand the rest back
 with the reason.
+
+#### Second round, same day: the field knows how it is written
+
+Five more comments, and one of them is a design the reviewer had proposed twice before it
+was understood: **a `PlanField` member's value is a `FieldSpecification` dataclass** - the
+key, whether the value is quoted, whether it spans the lines beneath it - reached through a
+`__new__` that keeps the member's string value equal to its key, so it still indexes parsed
+YAML with no `.value`. `render` moves onto the field, so nothing outside the enum knows that
+a title is quoted and a track is not.
+
+`ItemFieldLine` disappeared with it, along with its `quoting` classmethod: it existed only
+to hold a choice the caller was making, and once the field knows, there is nothing left for
+it to do. `FOLDED_PLAN_FIELDS` is derived from the specifications rather than listed, so
+declaring a field folded is the only step in making it folded.
+
+The path half went the same way. `PlanDocument.path_within_notes_branch` names the plans
+directory once, which the *fixture* had still been composing by hand even after the previous
+round fixed `published_plan` - so the earlier reply on that thread was right about the
+production side and wrong about the test. That made `PlanLocation` redundant, since its only
+remaining job was the fetch: it is now a plain `fetch_notes_branch`, and the two concerns
+are split by owner - the shell says which branch, `PlanDocument` says where within it. The
+`PLANS_DIR` mirror is held by a test that asserts against what the shell actually resolves;
+changing the Python constant alone fails six tests.
+
+Worth carrying: **a reviewer repeating a suggestion is a signal it was not understood the
+first time.** This one was made in the first round ("dataclass specification that is
+inherited from in the Enum") and answered with something adjacent but weaker - an enum plus
+a separate line-rendering class - which is why it came back. Re-reading the original wording
+rather than the previous answer is what produced the right shape.
+
+257 tests, was 254. Three mutations checked: dropping `TITLE`'s quoting, rendering without
+consulting the specification, and drifting the plans directory.
