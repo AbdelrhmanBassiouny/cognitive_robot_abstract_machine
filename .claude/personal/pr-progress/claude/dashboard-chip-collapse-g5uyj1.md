@@ -1,5 +1,8 @@
 PR #124: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/124
-(draft, based off main, subscribed to activity)
+(marked ready for review by the user themselves 2026-08-03 - a deliberate
+user action, not reverted to draft, per this plan's own established
+precedent for a user-made draft-to-ready flip; based off main, subscribed
+to activity)
 
 Tracked as `dashboard-chip-notes-collapse` in the `workflow-unification`
 plan (`dashboards` track), per the user's explicit request - added after
@@ -64,6 +67,8 @@ Done:
   here. Pattern is now well-established: every CI failure on this PR has
   come from unrelated upstream code arriving via external main-merges,
   never from this diff.
+- PR marked ready for review by the user themselves (2026-08-03, not by
+  this session). Left as-is - not reverted to draft.
 
 Next:
 - Watch for CI results and review activity via the webhook subscription
