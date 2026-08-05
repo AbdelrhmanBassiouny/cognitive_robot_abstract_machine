@@ -310,6 +310,12 @@ STARTER_NOTES_FILE="${SETUP_PERSONAL_NOTES_DIRECTORY}/starter-notes.md"
 # duplication risk, just for a hook script instead of a plan-dashboard one.
 SAVE_PLAN_SCRIPT=".claude/hooks/save-plan.sh"
 
+# PLAN_ITEM_BOOTSTRAP_SCRIPT: same reasoning again, for the script that opens
+# an item's branch and draft pull request and records its manifest entry -
+# invoked from plan-item-kickoff/SKILL.md and add-plan-item/SKILL.md, so it is
+# a path this codebase controls rather than one a human types once.
+PLAN_ITEM_BOOTSTRAP_SCRIPT=".claude/hooks/plan_item_bootstrap.py"
+
 # GITHUB_LIST_PULL_REQUESTS_TOOL / GITHUB_PULL_REQUEST_READ_TOOL: the two
 # MCP tools every pr_data.json-gathering procedure in this system calls
 # (see pr-data-fetching.md), named once here so every doc references the

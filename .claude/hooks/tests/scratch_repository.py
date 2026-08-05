@@ -65,6 +65,13 @@ class ScratchRepository:
     The bare repository the notes branch is pushed to and fetched from.
     """
 
+    work_remote_path: Path | None = None
+    """
+    The bare repository standing in for the project's own remote, created only by
+    :meth:`add_work_remote` so a test that never publishes a work branch has no
+    ``origin`` it did not ask for.
+    """
+
     @classmethod
     def create(cls, parent_directory: Path) -> ScratchRepository:
         """
@@ -201,6 +208,19 @@ class ScratchRepository:
         self.run_git("commit", "--quiet", "-m", f"Set {relative_path}", cwd=checkout)
         self.run_git("push", "--quiet", "origin", NOTES_BRANCH, cwd=checkout)
         shutil.rmtree(checkout)
+
+    def add_work_remote(self) -> Path:
+        """
+        Create a bare repository standing in for the project's own remote and register
+        it as ``origin``, for a hook that publishes a work branch rather than notes.
+
+        :return: The work remote's path.
+        """
+        self.work_remote_path = initialize_bare_repository(
+            self.project_root.parent / "work-remote.git"
+        )
+        self.run_git("remote", "add", "origin", str(self.work_remote_path))
+        return self.work_remote_path
 
     def resolve_notes_remote_to(self, remote: Path | None = None) -> None:
         """
