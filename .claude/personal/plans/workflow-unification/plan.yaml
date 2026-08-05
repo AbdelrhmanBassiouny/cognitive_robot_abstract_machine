@@ -726,6 +726,19 @@ items:
       unusable from sessions) and renders a stack chip ("layer p/n · stack #N") when
       the PR is a stack member. #106's cut may simplify or remove the "stack.py
       export restored through the package" interplay; pr_state itself is unaffected.
+      Restacked onto main 2026-08-05 (session_014KoJeaTUxyECZZpfWiVmvr): once #106's
+      chain landed, GitHub retargeted #111 to main and the maintenance pass reported a
+      real conflict (needs-resolution) in stack.py, README.md and build_dashboard.py -
+      this branch's edits against main's re-reviewed versions. Resolved by taking
+      main's restructured files and re-applying the deltas in their idiom: export is a
+      Command member in the argparse dispatch resolving the fork via
+      Configuration.fork_repository (the branch's own URL helper deleted -
+      Repository.from_remote_url owns that now), ExitCode gains GITHUB_UNAVAILABLE 6,
+      main's duplicate personal-notes resolvers are replaced by the
+      development_tooling.personal_notes imports, and from_mapping keeps both #119's
+      MissingMergeTimestampError guard and the optional chip fields. 401 tests green
+      (357 + 44); pushed as merge 52e3ede4, mergeable again, label clears on the next
+      pass. The stack-chip addition recorded above is still not implemented.
 
   - id: dev-tooling-python-package
     branch: null
