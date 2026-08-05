@@ -30,7 +30,7 @@ no manifest edit, no dashboard republish.
 
 ## State
 
-Draft PR #123 open, still 1 file, +30/−10 — verified after the restack below.
+MERGED 2026-08-05. Was 1 file, +30/−10 throughout — verified after each restack below.
 
 Restacked by another session on 2026-08-02 18:11: it merged `origin/claude/personal-notes`
 into this branch ("Merge remote-tracking branch ... into
@@ -83,5 +83,21 @@ needs a branch name to key on.
 
 ## Next
 
-Nothing. Awaiting the user's review. Per this PR's own rule, converting it out of
-draft ends this session's job on it: unsubscribe from #123 and stop.
+Nothing — done. The user converted #123 out of draft on 2026-08-05 and it merged,
+red CI and a stale `needs-resolution` label notwithstanding. The rule this PR adds
+is now live in `cram-notes.md` and applied to its own PR: the draft→ready flip
+ended this session's job, and the subscription is gone (torn down automatically on
+merge). No triggers were ever armed from this session.
+
+Carried out of this branch, belonging elsewhere:
+
+- A real bug in #139's `.claude/stack/maintenance.py`. `IntegrateParent.attempt`
+  treats any non-zero `git merge`/`git rebase` exit as a conflict, so a failure
+  leaving no unmerged paths (dirty worktree, unrelated histories, bad ref) reports
+  a conflict with an empty file list, labels `needs-resolution`, and comments. #123
+  was a live reproduction: two identical false reports while merging cleanly by
+  three independent checks. `WithheldWhileConflicted` then clears the label
+  correctly (GitHub says mergeable, not `dirty`), the branch rejoins, and the false
+  conflict recurs — an unbounded comment loop, not a deadlock. Fix is a guard
+  clause: empty conflicting set is not a conflict. Same class as the #111 port fix.
+  Belongs on #139's branch by the scope rule; `maintenance.py` is not on `main`.
