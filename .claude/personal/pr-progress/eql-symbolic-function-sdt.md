@@ -117,11 +117,28 @@ real blockers; dashboard republished.
     *byte-identical*, so the rewrite added no new `SymbolicCallable` and changed no
     rendering. The merge touched `krrood/ormatic/utils.py` but only to type-hint
     `classproperty`; `classes_of_package` unchanged.
+  - *Round 4 (`5bd99c82b`)*: a **real conflict**, and ours — `main`'s `f56de6978`
+    added `is_body_gripped` as a new `@symbolic_function` between two helpers this
+    branch had migrated to classes. An automated pass labelled the branch
+    `needs-resolution`. Resolved by migrating it: `IsBodyGripped(Predicate)` reading
+    *"a Body is gripped by an EndEffector"* (passive, like `IsSupportedBy`), threshold
+    and sample_size unspoken. Wrapper keeps the name + arg order, so coraplex's four
+    call sites in `pick_up.py`/`placing.py` are untouched. Post-merge: 30 callables,
+    all with fragments; krrood verbalization+ormatic 770 passed / 3 skipped. Pushed;
+    reported on #33 (5197134133).
+  - *sdt job on `36e2624f`*: 2 failed / **1051 passed**, both failures
+    `test_adapters/test_multi_sim.py` texture/material builder tests (`assert '' != ''`)
+    — simulator adapters, not ours. Round 2's `test_world_synchronizer` flake **passed**
+    this time, confirming it was flakiness.
+  - **Local env gap**: the specifications rewrite added a `pydrake` import
+    (`world_description/graph_of_convex_sets/polygons.py`, hard-imported by
+    `test_gcs_polygons.py`), so a full local sdt pytest run dies at collection with
+    `ModuleNotFoundError: pydrake`. sdt source degrades gracefully with a warning; only
+    that one test module hard-fails. Verify verbalization directly via the
+    `VerbalizationResultsOfPackage` snippet instead of pytest when this bites.
   - **Open loop**: `rerun_failed_jobs` keeps returning 403 "workflow is already
-    running" (there is nearly always a job in flight). Retry when a later event
-    arrives or the user asks — no timed check-in, per these notes. Still unconfirmed
-    whether round 2's `test_world_synchronizer` flake recurs; that file was changed
-    again in round 3's merge.
+    running" (there is nearly always a job in flight). No longer needed for the
+    synchronizer flake (it passed), but the same block applies if a re-run is wanted.
 - Reacting to webhook events; per these notes, no timed check-in is armed. When a
   base-branch-recovered notice arrives, merge `main` again and let CI re-run.
 - When the type-noun decision lands: if it is "type-level display noun", that is a
