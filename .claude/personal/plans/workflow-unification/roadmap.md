@@ -3644,6 +3644,23 @@ The round's last comment asked for docstrings on the enum members at one line of
 `BranchStatus`, `IntegrationStrategy`, `CommitMoveAction`, and the two undocumented module
 variables. Neither module now has an undocumented enum member or module-level variable.
 
+### Merged, and what the item leaves behind
+
+#115 merged into fork `main` on 2026-08-05, the same day the conflict was cleared.
+Confirmed from `main` rather than from the notification: `99c92c3c` is an ancestor of
+`origin/main`, the three new files are present, and `README.md` is the re-authored
+180-line version rather than the 228-line spliced one. `test_each_lib
+(semantic_digital_twin)` — red on this pull request since 2026-07-31 — passed on the
+post-merge run, so it went in green rather than with a known-ignorable red.
+
+Two things this leaves for later, both already owned by named items rather than loose:
+the inline `gh`-CLI-else-token rule in `plan-updates-since.sh`, which
+`dev-tooling-github-api-unification` absorbs as its third carrier alongside
+`github-api.sh` and `pr_state`; and the bash body itself, which
+`dev-tooling-save-commands-python` converts once the remaining in-flight
+bash-touching pull requests land. Five of those six remain: #107, #110, #121, #126, and
+#139's own `.claude/stack/` work — #109 and #115 are now both in.
+
 ## Update 2026-08-05 (merged): stack-tooling-on-main lands on fork main
 
 PR #106 merged into fork `main` at `2026-08-05T14:10:36Z` (`merged_by: AbdelrhmanBassiouny`,
@@ -3679,30 +3696,3 @@ import graph. Matches this PR's own already-documented pattern of unrelated robo
 (`test_world_sim_state_sync`, the `semantic_digital_twin` texture-pair failure); `test_claude_dev_tooling`
 - the job that actually exercises this PR's changes - was green. Noted on the PR rather than chased,
 per the standing instruction for this PR.
-
-### Merged, and what the item leaves behind
-
-#115 merged into fork `main` on 2026-08-05, the same day the conflict was cleared.
-Confirmed from `main` rather than from the notification: `99c92c3c` is an ancestor of
-`origin/main`, the three new files are present, and `README.md` is the re-authored
-180-line version rather than the 228-line spliced one. `test_each_lib
-(semantic_digital_twin)` — red on this pull request since 2026-07-31 — passed on the
-post-merge run, so it went in green rather than with a known-ignorable red.
-
-Two things this leaves for later, both already owned by named items rather than loose:
-the inline `gh`-CLI-else-token rule in `plan-updates-since.sh`, which
-`dev-tooling-github-api-unification` absorbs as its third carrier alongside
-`github-api.sh` and `pr_state`; and the bash body itself, which
-`dev-tooling-save-commands-python` converts once the remaining in-flight
-bash-touching pull requests land. Five of those six remain: #107, #110, #121, #126, and
-#139's own `.claude/stack/` work — #109 and #115 are now both in.
-
-**A third stale-save revert, and the first one caught in the act.** The paragraph above
-was written once, saved, and then silently reverted by a concurrent push from another
-session minutes later — the same race this roadmap records for 2026-07-29 and
-2026-07-30. It was noticed only because the republish that followed reported
-`sync_manifest_status.py` correcting this item from `in_progress`, a status the save had
-already set to `done`. That is worth keeping as the detection signal: **an auto-correction
-for something you just wrote yourself means your write is gone.** The manifest's own
-tooling re-derived `status` independently, which is exactly why `status` survived and the
-prose did not — auto-sync protects the one field it owns and nothing else.

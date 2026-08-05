@@ -1139,6 +1139,18 @@ items:
       pull request back to draft. This unblocks its half of decision 12's sequencing
       constraint, which cannot land ahead of the in-flight bash-touching pull requests.
 
+      Merged into fork main 2026-08-05, hours after the resolve above cleared its
+      conflict. Verified by content rather than from the merge notification alone:
+      99c92c3c is a git merge-base --is-ancestor of origin/main, and
+      plan-updates-since.sh, plan_updates_since_support.py and
+      test_plan_updates_since_sh.py are all present on main, with README.md at the
+      re-authored 180 lines. The recurring test_world_sim_state_sync Mujoco flake,
+      red on this pull request since 2026-07-31, passed on the post-merge run, so
+      the branch went green on every check rather than merging with a known red.
+      The convention this item implements is therefore live on main: session-start.sh
+      stamps the notes-branch commit on every run, and any session can now recheck a
+      plan by delta instead of rereading it.
+
   - id: ready-to-start-dependency-free-fix
     branch: claude/funny-feynman-wexezs
     title: "Fix ready-to-start dashboard list dropping dependency-free items"
@@ -1187,7 +1199,7 @@ items:
     pull_request_number: 119
     track: dashboards
     depends_on: []
-    status: done
+    status: in_progress
     session: https://claude.ai/code/session_01BsUHGwZaRpxo97jVDUmaau
     notes: >
       Opened 2026-07-31 from the false drift flags this plan's own dashboard raised
