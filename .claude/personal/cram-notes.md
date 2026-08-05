@@ -11,7 +11,9 @@ file itself must never be merged into `main`.
   by default; mark it ready only when explicitly told to.
 - Always convert a PR back to **draft** after pushing any commit to it or
   otherwise modifying it, even if it was previously marked ready for review.
-  Mark it ready again only when explicitly told to.
+  Mark it ready again only when explicitly told to. The one exception is a PR
+  I marked ready myself - leave that one ready and stop working on it, see
+  "When your PR's job ends".
 - Bug-fix PRs must always carry the **`bug`** label.
 - Keep bug-fix PRs focused: one root cause per PR, based off `main`, no
   unrelated cleanup bundled in.
@@ -22,7 +24,8 @@ file itself must never be merged into `main`.
   describing an earlier state of the PR.
 - Always subscribe to all events on every PR you open - including plain
   conversation comments, not just inline review comments - and handle each
-  event with an explanation summary in the session chat.
+  event with an explanation summary in the session chat. Keep this up until
+  that PR's job ends, and no longer.
 
 ## Scheduled checks
 
@@ -168,12 +171,29 @@ imperative, same style as above.
   changes (scope change, landing hazard). Pure FYIs go in the manifest/roadmap only - PR
   comments wake subscribed sessions, so keep them action-only.
 
-## When your branch merges or closes
+## When your PR's job ends
 
-- The moment a PR your session owns is merged or closed: unsubscribe from its activity
-  (`unsubscribe_pr_activity`), delete any armed triggers or check-ins that reference it
-  (`list_triggers` → `delete_trigger`), and stop any polling or monitoring tied to it.
-  Nothing may stay armed or subscribed for a finished branch.
-- This includes subscriptions taken out only for that branch's sake (e.g. a tracking-issue
-  subscription held solely to steward that one item).
+- A PR your session owns is finished the moment any of three things happens: it merges, it
+  closes, or **I convert it from draft to ready-for-review myself**. All three mean the same
+  thing for you - there is nothing left for this session to do on it.
+- The moment one of them happens: unsubscribe from its activity (`unsubscribe_pr_activity`),
+  delete any armed triggers or check-ins that reference it (`list_triggers` →
+  `delete_trigger`), and stop any polling or monitoring tied to it. Nothing may stay armed or
+  subscribed for a finished branch.
+- Tear down everything you subscribed to on that PR's behalf, not just the PR itself - the
+  plan's tracking issue, a dependency's or parent's PR, an upstream mirror of it. The test is
+  "did I subscribe to this for that PR's sake?", not "is this held solely for it?". If the
+  finished PR was this session's only work, the turn ends with nothing subscribed and nothing
+  armed.
+- Why draft→ready counts: a PR of yours stays a draft until I have reviewed it, so taking it
+  out of draft is my record that I read the changes and accepted them. Push no further
+  commits, do not re-draft it, and start no new work on it. This overrides the built-in rule
+  that a subscription only ends when a PR is merged or closed.
+- Only a flip I made counts. A session marking its own PR ready - because I told it to, or to
+  unblock a dependent item - is not the signal: keep working, and keep re-drafting after each
+  push as usual.
+- Report anything still outstanding when the signal arrives - red CI, a merge conflict, an
+  unresolved review thread - in the session chat before unsubscribing, and on the PR only if
+  it is genuinely blocking. Then stop anyway; do not stay to fix it.
+- If I want more work on that PR afterwards, I will start a new session for it.
 
