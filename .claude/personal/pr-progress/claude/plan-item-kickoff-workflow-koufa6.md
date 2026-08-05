@@ -1,31 +1,31 @@
-## Plan
-`stack-maintenance-executor` (workflow-unification, stack-tooling track) — a deterministic
-executor for the stacked-PR maintenance pass. Draft PR #139 off #106's head.
+## claude/stacking-branch-switch-issue-v1kzqq - stack tooling vanishing on branch switch
 
-## Done
-- Credential probe (item's step 0) on throwaway PR #138, now closed: labels PUT 200,
-  comments POST 201, body-only PATCH 200, base-branch PATCH 403 as the control on the same
-  PR. The 403 is scoped to the `base` field, not to writes.
-- `.claude/stack/maintenance.py`, five commands: `board --write`, `fast-forward`,
-  `restack`, `promote`, `run-report --json`. Separate entry point, zero edits to `stack.py`.
-- Scope widened on the user's instruction once the probe came back: all three writes moved
-  into code. Conflicts are labelled + commented and the label is cleared again once
-  `mergeable_state` stops being `dirty` (closing a loop nothing previously closed);
-  `promote` writes the compare link into the PR description and manages `cram2-link-sent`.
-- 30 new tests, TDD, real git + a recording write stand-in. 351 pass, was 321. Eight
-  mutations checked, each caught by exactly the test naming it.
-- Two ambient-state bugs found and fixed, both invisible locally:
-  (1) `board --write` made a local `board.json` routine, breaking two tests (one
-  pre-existing) that assert on a missing board → autouse fixture sets it aside;
-  (2) CI caught credential resolution having moved ahead of board derivation, so `restack`
-  reported a missing token instead of the missing board → reordered, and the CLI tests now
-  strip the credential.
-- SKILL.md steps 1–5 + Finish rewritten; `.gitignore` gains `board.json`.
-- Manifest + roadmap saved; dashboard republished.
+**Outcome: folded into PR #139 (`claude/plan-item-kickoff-workflow-koufa6`), pushed as
+`c70506567`.** The designated branch was never used - the fold test pointed at #139, since
+`.claude/stack/maintenance.py` (which does the branch switching) exists only there.
 
-## Next
-- Watch #139's CI after the ordering fix (8dfd3d89). Re-draft after any push.
-- Residue needing out-of-harness deletion: branch `claude/credential-probe-koufa6`.
-- `.gitignore`'s `board.json` line is duplicated with #110 — whoever lands second drops one.
-- Still not run against the live fork: `restack`, `promote`, `run-report` (they rewrite real
-  descriptions and push real branches).
+**Root cause:** `.claude/stack/` is tracked content and `restack` switched branches in the
+checkout carrying it. 126 of 146 fork branches predate the tooling merge, so this fired on
+nearly every pass. Second defect, same cause: step 0's `git checkout <ref> -- .claude/stack/`
+recovery writes the index, so the tooling would ride a restack merge commit into a feature
+branch and then upstream.
+
+**Shipped:** `RestackWorktree` (detached worktree outside the project, owned by `restack`
+so no caller can forget it); `SKILL.md` switched to `git restore --source=<ref> --worktree`;
+5 new tests, 145 passing (was 140). `board.json` was already gitignored on #139.
+
+**One existing test changed** - `test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict`
+kept every assertion, swapped its cause from an untracked file in the caller's checkout
+(unreachable now) to unrelated histories. Called out on the PR since the repo rule forbids
+modifying failing tests.
+
+**Left for the developer, raised in the PR comment, not acted on:**
+1. A stack branch checked out in the invoking checkout still moves under it (`checkout -B`
+   skips the already-checked-out guard). Would be a new pre-flight refusal - scope creep.
+2. #139's description carries a literal `## Promote` heading at line 50, so a future
+   `promote` would delete both correction sections below it.
+
+**Not subscribed to #139.** It is not this session's PR and it was already marked ready by
+the developer, so its job had ended; the fold was a one-off on request.
+
+**Next:** nothing pending unless CI on #139 comes back red.
