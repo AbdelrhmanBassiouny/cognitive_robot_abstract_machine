@@ -1187,7 +1187,7 @@ items:
     pull_request_number: 119
     track: dashboards
     depends_on: []
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01BsUHGwZaRpxo97jVDUmaau
     notes: >
       Opened 2026-07-31 from the false drift flags this plan's own dashboard raised
