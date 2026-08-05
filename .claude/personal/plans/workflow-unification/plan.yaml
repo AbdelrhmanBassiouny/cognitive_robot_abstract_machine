@@ -369,6 +369,20 @@ items:
       resolves when told. Still unverified, same reason as #107: live label creation, exercised
       only through a stub because this environment's token is a fine-grained installation token.
 
+      Merged its base a second time 2026-08-05 (44df7fdb), after main moved a long way beneath it
+      - #106 landed there, along with #109, #115 and #119. Conflicts were .gitignore and
+      tests/scratch_repository.py, both the benign additive shape: two independent blocks in the
+      first, two different methods added at the same place in the second (notes_branch_commit here,
+      update_notes_branch_file from main). Base stays #107 - github-api.sh is still not on main,
+      re-checked rather than assumed.
+
+      One integration break the conflict markers did not show, which is the part worth carrying:
+      test_personal_settings_sync.py arrives from main and installs the hook scripts it calls, but
+      this branch made write-personal-notes-file.sh delegate to write-branch-files.sh - a
+      transitive dependency that does not exist on main. Two tests went red only after the merge,
+      with "No such file or directory". Resolving the markers alone would have left the suite
+      broken; the fixture installs it now. 433 tests pass, was 408.
+
   - id: stack-maintenance-executor
     branch: claude/plan-item-kickoff-workflow-koufa6
     title: "Deterministic maintenance executor: board, fast-forward, restack, run-report"
