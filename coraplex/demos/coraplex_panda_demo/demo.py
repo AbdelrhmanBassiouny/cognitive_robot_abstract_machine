@@ -19,7 +19,7 @@ from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 
-from panda_assets import PandaMeshAssets
+from semantic_digital_twin.robots.panda_assets import PandaMeshAssets
 from semantic_digital_twin.adapters.mjcf import MJCFParser
 from semantic_digital_twin.adapters.multi_sim import MujocoSim, MujocoBody
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import (

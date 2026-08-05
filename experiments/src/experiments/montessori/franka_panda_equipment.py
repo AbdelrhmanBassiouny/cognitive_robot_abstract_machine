@@ -26,6 +26,7 @@ from semantic_digital_twin.adapters.multi_sim import (
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.panda import Panda
+from semantic_digital_twin.robots.panda_assets import PandaMeshAssets
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.world_entity import Actuator, Body
@@ -68,6 +69,9 @@ def parse_panda() -> World:
 
     :return: A world holding only the Panda's body tree.
     """
+    # The scene's meshes are tens of megabytes and are not kept in the repository, so a
+    # checkout that has never run a Panda demo has none of them.
+    PandaMeshAssets(scene=PANDA_SCENE_PATH).download_if_missing()
     panda_world = MJCFParser(str(PANDA_SCENE_PATH)).parse()
     with panda_world.modify_world():
         for body in [
