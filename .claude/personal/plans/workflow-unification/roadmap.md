@@ -3724,3 +3724,95 @@ respect: nothing in the diff looks wrong, and a reader would have to know the it
 corrected to notice it had been un-corrected. **Verify after writing, not only before** -
 fetching first is necessary and not sufficient when another writer can land between your
 read and your push.
+
+## Update 2026-08-05 (live, again): the first real-stack pass found the executor promoting what it had just withheld
+
+The Routine was pointed at `claude/plan-item-kickoff-workflow-koufa6` (#139) rather than #106, since
+`maintenance.py` lives only there, and fired against the real 44-pull-request stack for the first
+time. It worked - and the thing it caught was a defect in the executor itself, on the executor's
+own pull request.
+
+### What happened
+
+The pass restacked, hit a `.gitignore` conflict on #139, labelled it `needs-resolution` and posted
+the naming comment - exactly as designed. Then, a minute later in the same pass, it took the label
+straight back off:
+
+| time | event | actor |
+|---|---|---|
+| 14:10:42 | labeled `needs-resolution` | claude[bot] |
+| 14:11:46 | **unlabeled** `needs-resolution` | claude[bot] |
+| 14:11:46 | labeled `cram2-link-sent` | claude[bot] |
+
+The tell was a disagreement between two reports: the comment said the branch was labelled
+`needs-resolution`, and the pull request carried only `cram2-link-sent`.
+
+### Root cause: a write computed from a snapshot a later step invalidates
+
+`board --write` exports the fork's open pull requests at the *start* of a pass. `restack` then
+withholds a conflicted branch by writing a label *live*. `promote` read neither back:
+`promotion_order`'s `needs_resolution` exclusion and `LabelWrite.replacing(branch.labels, ...)` both
+take `branch.labels`, which is the snapshot.
+
+So within one pass, promotion promoted a branch that same pass had just conflicted on, and then
+computed a whole-set label write from a list that was already out of date - stripping the label
+written ninety seconds earlier.
+
+This is the production incident `LabelWrite.replacing` was built for, re-entered through a different
+door. That class exists because a label write replaces the entire set, and its rule was stated as
+*never compute the set yourself; compute it from the labels the pull request carries now*. The rule
+was followed to the letter and still broken, because `branch.labels` is not "now" - it is "at board
+time". A helper that guarantees correctness given correct input guarantees nothing about where the
+input came from.
+
+The consequence is the loop this item exists to close staying open: with the label gone, the next
+pass has nothing to withhold on, so it restacks the still-conflicted branch, fails again, and posts
+a *second* comment - the precise behaviour the design promises it prevents. The label was invented
+to stop re-reporting; a bug that removes it restores the problem it solved.
+
+### The general shape, which is new to this roadmap
+
+Two ambient-state lessons are already recorded on this item - a test reading `board.json` beside the
+module, and a test reading an exported `GH_TOKEN` - and both were about *tests* reading state they
+should have controlled. This is the production counterpart, and it generalises further:
+
+**Any write computed from a snapshot that a later step in the same pass can invalidate is wrong.**
+
+`restack`'s own withhold check was already right for exactly this reason - it re-reads
+`mergeable_state` live, per branch, rather than trusting the export. Promotion was the one step that
+trusted the board, and it was also the one step issuing a *replacing* write, which is what made it
+destructive rather than merely stale. Both properties had to coincide, which is why no throwaway run
+had surfaced it: #140/#141 exercised conflict-then-withhold and promote, but never a branch that was
+conflicted *and* promotable in the same pass.
+
+### The fix, and one test whose setup changed
+
+`promote` already fetches each candidate's pull request record for its title and description, so the
+live labels were there to be read all along. Both the eligibility decision and the label write now
+read that record. Two tests written failing first - a branch labelled mid-pass is not promoted, and
+the label write keeps a label added since the board was taken - each checked by mutation and each
+failing alone when its own half is reverted.
+
+One pre-existing test, `test_a_branch_already_carrying_the_link_label_is_not_promoted_again`, had put
+the label on the board. Its **setup** moved to the fork stand-in; its assertions are untouched. The
+behaviour it names is unchanged and still correct - only *where* "already carrying" is read from
+moved - which is the same treatment #103 gave the two tests whose incidental fixture items became
+ready-to-start under its corrected semantics.
+
+### Two things confirmed rather than assumed
+
+The conflict comment cited *this* session's link, which looked like a hardcoded value. It is not:
+`get_session_link_in` reads the link out of the pull request's own description, so a report reaches
+the branch's owner - and this session owns #139. The design working, not a bug.
+
+And the `.gitignore` conflict itself was the benign shape #115's resolution already recorded - two
+independent additive blocks, this branch's `board.json` entry and main's `.plan-state-sync-sha` stamp
+- concatenated, both kept.
+
+### State this pass also revealed
+
+**#106 has landed on main.** `.claude/stack/` and `.claude/skills/stacked-pr-maintenance/` are on
+`main` now; `maintenance.py` is not, so the Routine prompt still has to resolve #139's branch rather
+than falling through to `main`. #139's base was retargeted to `main` accordingly, and merging main
+brought the whole of #106's landed head. 385 tests pass across the three directories CI runs, up from
+366 - main's own tests plus the two added here.

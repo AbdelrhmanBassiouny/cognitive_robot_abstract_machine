@@ -650,6 +650,38 @@ items:
       stack.py's enum members and its two undocumented module variables gained docstrings, swept
       by an AST pass over both modules rather than fixed at the one line flagged. 366 tests pass.
 
+      First live run against the real stack, 2026-08-05, and it found a defect in this pull
+      request that every throwaway run had missed. The pass restacked, hit a .gitignore conflict
+      on this very branch, labelled it needs-resolution at 14:10:42 - and then promote stripped
+      that label at 14:11:46, in the same pass, replacing the set with cram2-link-sent alone.
+
+      Root cause: board --write exports a snapshot at the start of a pass, restack then withholds
+      a conflicted branch by labelling it live, and promote read neither back. promotion_order's
+      needs_resolution exclusion and LabelWrite.replacing both took branch.labels, which is the
+      snapshot - so promotion promoted a branch the same pass had just conflicted on, and computed
+      a whole-set label write from a list already stale. That is the production incident
+      LabelWrite.replacing exists to prevent, re-entered through a different door: the rule is
+      compute it from the labels the pull request carries now, and branch.labels is at board time.
+      The consequence was the loop this item exists to close staying open, since with the label
+      gone the next pass has nothing to withhold on and re-reports the same conflict.
+
+      Fixed by reading both the decision and the write off the pull request record promote already
+      fetches for its title and description. Two tests written failing first, each checked by
+      mutation. One pre-existing test changed setup only, not assertions: the behaviour it names -
+      a branch already carrying the link label is not promoted again - is unchanged and still
+      correct, and only where "already carrying" is read from moved.
+
+      Also merged main, which had moved a long way: #106 landed, so this branch's base became main
+      and .claude/stack/ plus the maintenance skill are now on main (maintenance.py is not, so the
+      routine prompt still has to resolve this branch). The .gitignore conflict was the benign
+      two-additive-blocks shape - this branch's board.json entry and main's .plan-state-sync-sha
+      stamp arriving with #115 - both kept. 385 tests pass, was 366; the difference is main's own
+      tests plus the two added here.
+
+      Confirmed rather than assumed while diagnosing: the conflict comment addressing this session
+      was correct rather than a bug - get_session_link_in reads the link out of the pull request's
+      own description, so a report reaches the branch's owner.
+
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script
     title: "Extract a deterministic setup script from /setup-personal-notes"
