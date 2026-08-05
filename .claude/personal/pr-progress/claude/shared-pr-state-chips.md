@@ -55,4 +55,9 @@ headless site build also pushes merged→done manifest corrections).
   PR; label clears on the next maintenance pass.
 - Watch CI on the merge commit; the known test_world_sim_state_sync flake may still red
   the semantic_digital_twin job (fails on main too - already noted once on the thread).
+- 2026-08-05 (later): the pass merged main again (2b316dc5, clean - #492 gripper
+  params); run 31044969651's robokudo job red on infrastructure only (uni GitLab
+  unreachable while downloading test data; noted on the thread). rerun_failed_jobs was
+  refused while the run's other jobs still execute - retry it on the next event for
+  this run once it has completed.
 - Keep the PR draft until told otherwise; self-review pass before undrafting, when asked.
