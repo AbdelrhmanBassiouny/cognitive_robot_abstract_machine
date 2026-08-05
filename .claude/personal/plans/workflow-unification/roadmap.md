@@ -3261,3 +3261,37 @@ rather than the previous answer is what produced the right shape.
 
 257 tests, was 254. Three mutations checked: dropping `TITLE`'s quoting, rendering without
 consulting the specification, and drifting the plans directory.
+
+#### Third round: the mixin, and what YAML calls these things
+
+The reviewer's third pass replaced the `__new__` outright:
+`ManifestKey(KeySpecification, Enum)`, so a member *is* a specification -
+`isinstance` and `issubclass` hold, and the style is reached directly rather than
+through an attribute a type checker cannot see. Their instinct was right, and three
+things only prototyping settled:
+
+- **A member's value must be the constructor's argument tuple, not a built
+  specification.** `TITLE = KeySpecification(key="title", …)` raises nothing and lands
+  the whole instance in `.key`. That is the one hazard the mixin introduces, and it is
+  guarded by a test asserting every key is a string; making the mistake fails four.
+- **The field cannot be called `name`.** `Enum` reserves it - `AttributeError: cannot
+  set attribute 'name'`. It stays `key`, which is also YAML's own term for the left-hand
+  side of a mapping (JSON's RFC says "name"; this is a `.yaml` file), and which sidesteps
+  `dataclasses.Field` - a collision already live in the test module, where a parameter
+  named `field` shadowed the `dataclasses` import.
+- **A key cannot be both `str` and `KeySpecification`** - `TypeError: too many data
+  types`. So str-ness goes, and the nine lookups relying on it read `.key`. One was
+  missed by the rename and caught by a test, which is exactly the failure class that
+  trade buys.
+
+The two booleans collapsed into one `ValueStyle` (`PLAIN` / `DOUBLE_QUOTED` / `BLOCK`),
+because they were never independent: a value is written one way, never two. `BLOCK` is
+YAML's own word for a value continuing beneath its key, and is correct for both cases
+here - `notes` is a folded scalar, `blockers` a sequence - where "folded" would have been
+wrong for one of them. Two booleans had allowed a state that cannot exist.
+
+Worth carrying: **when a reviewer proposes a language feature, prototype it before
+answering.** The first two rounds answered this suggestion from reasoning and produced
+something adjacent but weaker each time. Running it took minutes and produced the
+argument tuple hazard, the `name` collision and the data-type limit - none of which
+reasoning had surfaced, and all three of which shaped the final design.
