@@ -83,6 +83,20 @@ Files: `.claude/hooks/plan_item_bootstrap.py`, its test module under
 - All 19 + 5 + 1 review threads on this PR replied to and resolved except the
   one below.
 
+## The duplication question, applied in `fbe6b90b`
+
+- Asked whether anything here duplicates `stack.py`. Measured: the two
+  `ExitCode` enums share only `SUCCESS = 0` and reuse 3/4/5 for unrelated
+  meanings, `stack.py` makes no network call and never touches `plan.yaml`,
+  and the only literal overlap is git boilerplate with opposite contracts.
+- So the docstring's promise to align the two later described a unification
+  with no content — deleted. `ExitCode` also gained the per-member docstrings
+  it was the one enum in the file still missing.
+- The one real duplication is `stack.py`'s own: it reimplements the
+  notes-branch precedence the shell owns. Recorded on
+  `dev-tooling-config-shim-slimming` as a second carrier for its planned
+  consistency test.
+
 ## Next
 
 - **One open thread, waiting on the user**: whether to re-base this item onto
