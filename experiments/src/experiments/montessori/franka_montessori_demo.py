@@ -29,7 +29,11 @@ from experiments.montessori.franka_panda_equipment import (
     equip_panda_for_physical_simulation,
     parse_panda,
 )
-from experiments.montessori.semantics import MontessoriShape, NoMatchingHoleError
+from experiments.montessori.semantics import (
+    MontessoriShape,
+    MontessoriShapeCategory,
+    NoMatchingHoleError,
+)
 from experiments.montessori.world import MontessoriWorld
 from semantic_digital_twin.robots.panda import Panda
 from semantic_digital_twin.spatial_types.spatial_types import Point3
@@ -66,6 +70,14 @@ SYNC_RATE_HZ = 100
 """
 Rate at which the physically simulated joints' real, physics-driven positions are read
 back into the world model.
+"""
+
+SKIPPED_SHAPE_CATEGORIES = frozenset({MontessoriShapeCategory.DISK})
+"""
+Shape categories the demo leaves where they are.
+
+Checked before anything else about a shape, so a listed category is passed over even
+where the board has a matching hole for it.
 """
 
 MAX_INSERTION_ATTEMPTS = 3
@@ -234,7 +246,8 @@ def _insert_shape_or_none(
 def _insert_all_shapes(montessori: MontessoriWorld, context) -> None:
     """
     Have the Panda pick up and insert every loose shape that has a matching hole into
-    the shape-sorting board, skipping any that don't (e.g. the sphere).
+    the shape-sorting board, skipping any that don't (e.g. the sphere) and any whose
+    category is listed in :data:`SKIPPED_SHAPE_CATEGORIES`.
 
     Each shape gets one insertion, whether or not it actually drops through: a shape left
     resting on the board is reported and left there. Only an attempt that never ran --
@@ -248,6 +261,12 @@ def _insert_all_shapes(montessori: MontessoriWorld, context) -> None:
     :param context: The CRAM execution context to run every insertion action in.
     """
     for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape):
+        if shape.shape_category in SKIPPED_SHAPE_CATEGORIES:
+            logger.info(
+                "Skipping %s: %s is not sorted.", shape.name, shape.shape_category
+            )
+            continue
+
         try:
             montessori.board.hole_for(shape)
         except NoMatchingHoleError:
