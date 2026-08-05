@@ -97,6 +97,15 @@ Files: `.claude/hooks/plan_item_bootstrap.py`, its test module under
   `dev-tooling-config-shim-slimming` as a second carrier for its planned
   consistency test.
 
+## State 2026-08-05 — out of draft, by the user
+
+- They marked #143 ready for review at `fbe6b90b`. Not re-drafted: the standing
+  rule fires when *I* push, not when they flip it, and their flip is the
+  explicit signal it asks for. Any further push here re-drafts it again.
+- CI on `fbe6b90b`: no failures. `test_claude_dev_tooling` green, and
+  `test_quizzes.sh` — the leg the apt mirror-sync killed on `7352cfb7` — is
+  green too, confirming that red was transient infrastructure.
+
 ## Next
 
 - **One open thread, waiting on the user**: whether to re-base this item onto
