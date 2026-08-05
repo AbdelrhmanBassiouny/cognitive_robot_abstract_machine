@@ -3339,3 +3339,93 @@ duplications are on record here, all found late; this is the opposite failure - 
 forward-looking note asserting a duplication that did not exist, which would have sent a
 later reader looking for something to unify. Both are fixed the same way, by reading the
 other file rather than reasoning about it.
+
+## Update 2026-08-05 (review round): the executor's 25 comments, and the shape they kept asking for
+
+Session https://claude.ai/code/session_014E9nB1MUvm4jwgC2UTN5GT, on #139. Three of the
+twenty-five were decisions rather than corrections, and the useful part of each is the
+argument that settled it.
+
+### Leading with `run-report` was possible only once the doctrine moved out of the commands
+
+The reviewer asked, marked *discuss with me*: why explain the separate commands at all
+rather than name the one that does the whole pass? Their reading won, and the skill now
+leads with `run-report --json` as step 2 with the four commands demoted to a reference
+section for resuming a partial run.
+
+Worth recording *why it was written the other way first*, so it does not creep back: the
+per-command sections carried doctrine that had nowhere else to live — what a `refused`
+outcome means, why the fork's base must stay a pristine mirror, what happens to a
+conflict. Explaining a command and stating a rule had become the same paragraph, and a
+document in that state cannot be reordered without losing rules. Splitting them apart is
+what made the change possible, and it gave the reviewer's other two points a home:
+
+- **The pass never resolves a conflict.** The escape hatch — "if you resolve one
+  yourself, comment saying what you took" — is deleted, and the header's promise changed
+  with it, from *"the only file changes you ever make are conflict resolutions"* to no
+  file changes at all. A conflict is a change to somebody else's branch.
+- **It never attempts to open the upstream pull request.** It had said the call "fails
+  every time", which reads as a thing to try and expect to fail.
+
+### The same design, asked for twice, in two places
+
+*"If `PullRequestField` inherits from a specification and `Enum`, it can hold per-member
+specification instances."* That is now the module's idiom twice over — `PullRequestField`
+carrying each field's key, read shape and requiredness, and `Command` carrying each
+command's name and help text.
+
+Both hit the two hazards `plan-item-bootstrap`'s own third review round already recorded,
+which is the first time this plan has had a lesson available *before* meeting it rather
+than after:
+
+- a member's value must be the **argument tuple**, never a built specification — passing
+  one raises nothing and lands the whole instance in the key. Guarded by a test here,
+  verified by making the mistake deliberately.
+- the field cannot be called `name` — `Enum` reserves it. `PullRequestField` sidesteps it
+  with `key`; `Command` needed `invoked_as`.
+
+The payoff is not tidiness: `_required`, `_branch_reference` and `_label_names` collapsed
+into `PullRequestField.read`, and the three raw `record.get(...)` calls in `promote` and
+the conflict check went with them — those were reading the API's shape *outside* the only
+place that was supposed to know it.
+
+### Dispatch, and the one thing it must not stop doing
+
+`_dispatch` was flagged as violating open/closed, correctly. Each command is now a
+`MaintenanceCommand` subclass owning its flags and its work, listed once in `COMMANDS`,
+which is also what builds the parser — so a command that exists but is unreachable from
+the command line is not expressible.
+
+The constraint that survived the refactor is the one CI caught earlier: the board is
+still derived *before* the credential is resolved, so a checkout missing both is sent
+after the board rather than after a token. `MaintenancePass` resolves each lazily, in that
+order, which is what keeps it true structurally rather than by remembering.
+
+### `run-report` deletes the board it finished with
+
+The user's question on `.gitignore` — could it be deleted automatically once we are done
+with it — is a better idea than the gitignore line it was asked about. Scoped to
+`run-report` only: that is the one command meaning "the pass is over", while the other
+four are the resume path and a board they deleted would strand their own caller.
+
+### What was deferred rather than done, and why that is the honest answer
+
+Three threads are left open on purpose. Two ask why the GitHub calls are urllib rather
+than `gh` or a Python library; `gh` genuinely is absent from a session container and the
+SessionStart-reachable tier is stdlib-only by decision 12, but neither is a reason to
+settle it *here*. `dev-tooling-github-api-unification` exists because `github-api.sh` and
+`pr_state` already implement the same rule twice, and this module is now a third carrier —
+so that item gains a decision it did not have: whether the shared backend may require an
+install, answered once for all three rather than three times.
+
+The third asks whether a supplied credential could do the base-branch reparent from a
+session. It cannot, and the measurement is worth keeping: the `PATCH` returns 403
+identically with the exported `GH_TOKEN`, with a junk `Authorization` header, and with no
+header at all, while a *read* with no header returns 200 — so the proxy substitutes its
+own identity and a personal access token never reaches GitHub. The refusal's
+`documentation_url` is on **docs.anthropic.com**. That is one notch sharper than the
+2026-08-04 finding: not a property of one credential, but of the request path.
+
+**A reply is not a resolution.** All twenty-five got one; the three that record a deferral
+or answer a question without changing anything stay open for the user to close, per the
+notes-branch rule that a thread is resolved only once what it asked for has been done.

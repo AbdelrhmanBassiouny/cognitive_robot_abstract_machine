@@ -531,6 +531,55 @@ items:
       which is the case it matters most for, since routine-cutover's Action reads the document
       rather than the process status. 361 tests pass, was 357; three more mutations checked.
 
+      Review round 2026-08-05 (25 comments) applied in 7048a962. Three were design decisions
+      taken with the user rather than corrections, and the largest reshaped the skill: the
+      document now leads with run-report --json as step 2 and demotes the four individual
+      commands to a reference section for resuming a partial run. Writing it that way round the
+      first time was not arbitrary - the per-command sections carried doctrine that had nowhere
+      else to live, so explaining a command and stating a rule had become one paragraph. What
+      made the change possible was splitting those apart: a What this pass never does section now
+      holds the rules with no command attached, and it is where the reviewer's two other points
+      landed - the pass never resolves a conflict (the "if you resolve one yourself" escape is
+      deleted, and the header's promise changed with it from "the only file changes are conflict
+      resolutions" to no file changes at all) and it never attempts to open the upstream pull
+      request, which previously read as a call to try and expect to fail.
+
+      The shape the reviewer asked for repeatedly is a member carrying its own specification, and
+      it is now the module's idiom twice over: PullRequestField(FieldSpecification, Enum) carries
+      each field's key, how its value has to be read and whether a record omitting it is rejected,
+      and Command(CommandSpecification, Enum) carries each command's name and help text. Both hit
+      the same two hazards #143's roadmap entry already records - a member's value must be the
+      argument tuple rather than a built specification, and the field cannot be called name
+      because Enum reserves it - so the first is guarded by a test and the second is invoked_as.
+      That collapsed _required, _branch_reference and _label_names into PullRequestField.read, and
+      took the three raw record.get calls in promote and the conflict check with it.
+
+      ExternalCallFailed is the shared parent of GitCommandFailed and GitHubRequestFailed, holding
+      status and detail and composing the message from an abstract call - krrood's
+      DataclassException idiom mirrored rather than imported, per decision 12's stdlib-only
+      boundary. GitCommandRunner has one named method per command it runs, which deleted two free
+      functions and replaced four hand-spelled merge-base invocations, one of which had its
+      arguments in the opposite order to its neighbours. ProposedPush is where forcing is decided,
+      so the runner's push cannot decide it separately. BranchAncestry is a frozen dataclass rather
+      than a returned closure; ForkPullRequests names the reader-plus-writer union, with the two
+      halves kept separate so the board export cannot write.
+
+      Dispatch is open/closed now: each command is a MaintenanceCommand subclass owning its flags
+      and its work, listed once in COMMANDS, which is also what builds the parser - so a command
+      that exists but is unreachable is not expressible. MaintenancePass preserves the
+      board-before-credential ordering CI caught earlier. run-report deletes board.json when the
+      pass finishes with it (the user's call, scoped to that command alone, since the other four
+      are the resume path); a stale snapshot read as current is worse than none, and exit 3 names
+      the command that fixes it.
+
+      Three threads left open deliberately: the two asking why not gh or PyGithub - answered with
+      the reason for now (gh absent, stdlib-only tier) and deferred to
+      dev-tooling-github-api-unification, which exists to settle exactly that once - and the
+      question about supplying a credential that can reparent, which is answered but calls for no
+      change here. 364 tests pass, was 361; two new (what the export reads out of each field's own
+      shape, and that every field is named by a string) plus the board-deletion one, each checked
+      by mutation.
+
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script
     title: "Extract a deterministic setup script from /setup-personal-notes"
@@ -787,6 +836,17 @@ items:
       development_tooling github_backend.py implements it once; github-api.sh
       becomes a shim. Blocked until both carriers land; scope-boxed to the backend
       rule, not the callers' features.
+
+      Third carrier recorded 2026-08-05: .claude/stack/maintenance.py (#139) now makes the same
+      calls a third time, in urllib rather than curl. Its review asked directly why not gh and why
+      not a GitHub Python library, and both were deferred here rather than answered in that pull
+      request - adding a third copy of the rule, even a better one, is what this item exists to
+      stop. So this item's scope gains one decision it did not have: which backend all three
+      converge on. gh is absent from a session container but present on Actions runners; PyGithub
+      would be the natural client but is a dependency, and the SessionStart-reachable tier is
+      stdlib-only by decision 12, so the choice turns on whether the shared backend is allowed to
+      require an install - which is the same question for all three carriers and should be
+      answered once here.
 
   - id: stack-board-single-site
     branch: null
