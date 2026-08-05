@@ -60,6 +60,18 @@ Files: `.claude/hooks/plan_item_bootstrap.py`, its test module under
   fixture docstring no longer explains the design it replaced.
 - 257 tests, was 254. Three mutations checked. All 5 threads replied + resolved.
 
+## Third round 2026-08-05 — the mixin, applied in `b1bc98f5`
+
+- `ManifestKey(KeySpecification, Enum)` replaces the `__new__`: a member *is* a
+  specification, so `isinstance`/`issubclass` hold and `.style` is direct.
+- Members are declared as argument tuples; a built `KeySpecification` is accepted
+  silently and lands in `.key`, guarded by a test (breaking it fails 4).
+- `name` is impossible — `Enum` reserves it. `key` is YAML's own term and dodges
+  `dataclasses.Field`, which was already shadowed in the test module.
+- Two booleans → one `ValueStyle` (`PLAIN`/`DOUBLE_QUOTED`/`BLOCK`); `BLOCK` is
+  correct for both `notes` (folded scalar) and `blockers` (sequence).
+- 259 tests, was 257. Three mutations checked.
+
 ## Next
 
 - **One open thread, waiting on the user**: whether to re-base this item onto
