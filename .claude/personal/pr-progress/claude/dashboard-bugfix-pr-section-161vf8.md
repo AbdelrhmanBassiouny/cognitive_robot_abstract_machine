@@ -88,6 +88,16 @@ applied: it governs my pushes, and re-drafting would have undone their explicit
 action. `needs-resolution` still on at time of writing; the routine clears it on
 the next pass now that the branch is mergeable again.
 
+**CI (2026-08-05, post-merge run).** 12 of 13 jobs green. `semantic_digital_twin`
+passed — main's texture fix confirmed cleared here — and `test_claude_dev_tooling`
+passed. Sole red is `test_each_lib (segmind)`:
+`test_csv_player.py::test_replay_episode` line 63, `assert not
+file_player.is_alive()` after `stop()` + a hard-coded `sleep(0.5)`; the thread
+was still `PlayerStatus.PLAYING`. Timing assumption about thread teardown on a
+loaded runner, same family as the rclpy abort and the kernel timeout. Fourth
+distinct robotics job across six runs, each a different cause, only one ever a
+real bug (and that one on main). Reported briefly; nothing to fix.
+
 **Spun out, not fixed here.** `_compute_ready_to_review` treats a *merged*
 dependency as not-open, so an item whose dependency fully landed is excluded
 while one whose dependency is merely open is included. Now its own plan item
