@@ -612,6 +612,29 @@ items:
       should use __post_init__ regardless now that making the derived values fields removed the
       need for it (and for object.__setattr__, which is what the neighbouring comment objected to).
 
+      Third round, four comments, in 62133080 and 16d04f99. The reviewer's reading that a member
+      could be written as a constructor call was right, and prototyping it settled the shape the
+      previous two rounds had both got wrong: written plainly it builds and is silently wrong -
+      an enum hands a member's value straight to the type it mixes in, so the whole specification
+      lands in key and required reverts to its default - but an __init__ on the enum that unpacks
+      the specification onto the member fixes it, and the arguments become real keywords rather
+      than a helper's. That helper, which existed only to return its arguments unchanged, is
+      deleted. Removing the __init__ fails three tests, so the silent form cannot come back
+      unnoticed.
+
+      The same reviewer's suggestion to find RESTACK_STEPS from its subclasses was applied and
+      then reverted on their own call once they had read why it was a list. The mutation check is
+      what settled it and is worth keeping: swapping PublishBranch ahead of RefuseAnUnsafeMove
+      fails test_a_push_the_move_checks_refuse_is_not_made, a behavioural test that publishes to a
+      real scratch fork and asserts the destination ref never moved. So the order is load-bearing
+      behaviour a test already catches, which also made the order test added during the
+      auto-discovery attempt redundant - it restated the tuple - and it was dropped with the
+      revert. COMMANDS stays discovered, because its list carried no meaning; the steps stay
+      listed, because theirs is a decision about what a pass does.
+
+      stack.py's enum members and its two undocumented module variables gained docstrings, swept
+      by an AST pass over both modules rather than fixed at the one line flagged. 366 tests pass.
+
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script
     title: "Extract a deterministic setup script from /setup-personal-notes"

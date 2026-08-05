@@ -3584,3 +3584,55 @@ The fix had to land on #115's head, which belongs to another session, so it was 
 `claude/plan-item-kickoff-workflow-n814iz` rather than this session's own designated branch - the
 same override already on record for #133 into #117 and #143's one line onto #135's branch. There is
 no alternative that resolves #115 itself: a new branch is a new pull request.
+
+### Third round: the mixin, and what YAML calls these things
+
+The reviewer's third pass replaced the `__new__` outright:
+`ManifestKey(KeySpecification, Enum)`, so a member *is* a specification -
+`isinstance` and `issubclass` hold, and the style is reached directly rather than
+through an attribute a type checker cannot see. Their instinct was right, and three
+things only prototyping settled:
+
+- **A member's value must be the constructor's argument tuple, not a built
+  specification.** `TITLE = KeySpecification(key="title", …)` raises nothing and lands
+  the whole instance in `.key`. That is the one hazard the mixin introduces, and it is
+  guarded by a test asserting every key is a string; making the mistake fails four.
+- **The field cannot be called `name`.** `Enum` reserves it - `AttributeError: cannot
+  set attribute 'name'`. It stays `key`, which is also YAML's own term for the left-hand
+  side of a mapping (JSON's RFC says "name"; this is a `.yaml` file), and which sidesteps
+  `dataclasses.Field` - a collision already live in the test module, where a parameter
+  named `field` shadowed the `dataclasses` import.
+- **A key cannot be both `str` and `KeySpecification`** - `TypeError: too many data
+  types`. So str-ness goes, and the nine lookups relying on it read `.key`. One was
+  missed by the rename and caught by a test, which is exactly the failure class that
+  trade buys.
+
+Worth carrying: **when a reviewer proposes a language feature, prototype it before
+answering.** #139's own third round proved the same point from the other direction - two
+rounds there had answered "can the member just be a constructor call?" from reasoning and
+said no, and the third prototyped it and found yes, given an `__init__` that unpacks the
+specification onto the member. A helper that existed only to return its arguments
+unchanged came out with that answer.
+
+### The revert that a mutation check earned
+
+The same round asked for `RESTACK_STEPS` to be found from `RestackStep.__subclasses__()`,
+as `COMMANDS` already is. It was applied, and then the reviewer withdrew it themselves on
+reading the reason it was a list.
+
+What settled it is worth keeping, because the argument alone had not: swapping
+`PublishBranch` ahead of `RefuseAnUnsafeMove` fails
+`test_a_push_the_move_checks_refuse_is_not_made` - a behavioural test that publishes to a
+real scratch fork and asserts the destination ref never moved. The order is not a
+stylistic preference; it is load-bearing behaviour a test already catches, and
+auto-discovery would have made it a consequence of where the classes happen to sit in the
+file.
+
+That also disposed of the order test added while auto-discovery was in. It asserted the
+sequence as a literal, which against an explicit tuple only restates it - one change
+failing two tests for the same reason. Deleted with the revert.
+
+The distinction that survives, now in `RESTACK_STEPS`'s own docstring: **discover a list
+that carries no meaning, state one that does.** `COMMANDS` is discovered because its only
+content was the chance of forgetting a line; the steps are listed because their order is a
+decision about what a pass does, and it belongs where it is read.
