@@ -352,8 +352,14 @@ recorded. #118's two splice regression tests pass unmodified, which is the evide
 that `anchored_on` still hands back the live `RuleTreeContext` that `insert_at`
 mutates.
 
-Its base is #118's branch, not `main`, so #142 carries no promote link — it cannot
-go upstream until #118 lands.
+Its base was #118's branch, not `main`. **#118 merged on 2026-08-05**, so GitHub
+auto-retargeted #142 onto `main`, and `main` was merged into the branch. That merge
+was clean: a stack-maintenance routine had reported a conflict, but its comment named
+no conflicting files and none existed — the branch already contained #118's commits,
+so `main`'s merge of them had nothing to conflict with. The `needs-resolution` label
+it added was cleared, since a labelled branch is skipped by later passes and would
+otherwise have stayed stuck. Promotion is no longer gated on #118; it waits only on
+the PR leaving draft, which is this workflow's author sign-off.
 
 ### Positioning
 
