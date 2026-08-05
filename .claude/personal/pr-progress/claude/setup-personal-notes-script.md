@@ -76,6 +76,26 @@ common but the runner. **Decided to stop reporting these individually** — said
 so on the PR. Only `test_claude_dev_tooling` going red is signal for this
 branch.
 
+## Merge conflict resolved, head f8bdcd07 (2026-08-05)
+
+**Base is now `main`** — #101 and #106 have both landed, GitHub retargeted.
+The routine reported `needs-resolution`: add/add conflict on
+`.claude/hooks/tests/stubs/{gh,curl}.sh`. Fourth instance of the
+same-artifact-twice pattern — main grew its own stubs via #115's
+`plan-updates-since.sh`, which landed first, written when mine didn't exist
+on any shared branch.
+
+Resolved as a **union, not a winner**: the two recognize disjoint calls (login
++ labels here, issue comments there) and share the exit-64-on-unknown
+discipline, so one stub per name now serves both callers with both sets of
+`STUB_*` variables. Separate filenames would have been worse — both claim the
+same name on PATH, so whichever suite ran second would silently get the
+other's stub. Proven by mutation: breaking the issue-comments branch fails
+exactly main's two backend tests, breaking the login branch fails exactly
+mine. 286 pass (was 254 here, and main's `test_plan_updates_since_sh.py` is
+included and green). PR description refreshed — base, test count and the
+merge note were all stale.
+
 ## Next
 - Do not fix semantic_digital_twin or coraplex here — separate root causes,
   other packages; AGENTS.md routes ORM issues via
@@ -83,6 +103,4 @@ branch.
 - Still unverified: label **creation** against a real token. This
   environment's is a fine-grained installation token, so `POST .../labels`
   is exercised only through the stub. Flagged in the PR body.
-- The PR body still says "Stacked on `claude/patch-pr-rheubx`" — stale after
-  the restack, worth one edit next time it's touched.
 - Leave as draft until told otherwise.
