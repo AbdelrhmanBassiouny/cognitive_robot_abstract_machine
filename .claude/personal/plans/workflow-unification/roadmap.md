@@ -3295,3 +3295,14 @@ answering.** The first two rounds answered this suggestion from reasoning and pr
 something adjacent but weaker each time. Running it took minutes and produced the
 argument tuple hazard, the `name` collision and the data-type limit - none of which
 reasoning had surfaced, and all three of which shaped the final design.
+
+The same round's last comment asked for the field list to become a dataclass "or better
+maybe a `dict[ManifestKey, str]`", and the mapping is the stronger of the two offered
+because it makes a state *unrepresentable*: `[(STATUS, "in_progress"), (STATUS, "done")]`
+was accepted by the list, patched the same line twice, and let the second write silently
+win. A dataclass of pairs would have kept that; a mapping cannot express it. Insertion
+order still governs line order, which `render_new_item` depends on, and is pinned by a
+mutation check rather than assumed - reordering the mapping fails exactly the test that
+names the field order. The same shape replaced two other pair-lists, including the
+required-keys check, which now reports what is missing from the mapping itself instead of
+from a parallel list beside it.
