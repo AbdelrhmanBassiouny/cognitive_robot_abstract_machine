@@ -1654,6 +1654,13 @@ items:
       native-stacks-prototype established that push-based merges mark a PR merged without
       retargeting its children). Neither PR is a native stack member, so the Phase-1
       reparent 422 does not apply and a plain PATCH of the base is the recovery.
+      A second pull request existed on this branch and was closed on 2026-08-05: #125,
+      opened 95 seconds before #126 from the same head commit but based on main, so its
+      diff was #121 plus this item and its title and body were GitHub's auto-fill from
+      commit a525d117 - #121's commit message. It was never tracked here, never mentioned
+      on the tracking issue, carried no reviews, and was the only non-draft pull request
+      on the fork. Closed as a duplicate with the reasoning on the pull request; #126
+      remains this item's only pull request.
 
   - id: ready-to-review-merged-dependency
     branch: claude/plan-item-kickoff-workflow-s9e8bj

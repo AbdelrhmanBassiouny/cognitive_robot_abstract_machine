@@ -3874,3 +3874,49 @@ the contracts are deliberately opposite* — `_git` returns `""` where `run_git`
 reasoning is sound and does not apply here: #135's and #143's contracts are the same. Worth
 noticing, because citing a precedent by its conclusion rather than its reason is how a real
 duplication gets waved through.
+
+## Update 2026-08-05 (resolved): #125 was a second pull request for #126's branch, and no plan surface could have shown it
+
+#125 has been closed as a duplicate. It was not a piece of work at all: its head was
+`claude/workflow-unification-git-identity-ppzcyh` at `d4fdc5b7`, the identical commit
+#126 points at, differing only in base - `main` instead of #121's branch, which is why
+its diff read as 1,329 additions (#121's 548 plus this item's 828) rather than #126's
+828. It was opened 95 seconds before #126, carried no reviews and no comments, and was
+the only non-draft pull request on the fork.
+
+### The tell was in the description, not the diff
+
+Its title and body were the verbatim commit message of `a525d117` - #121's first commit,
+ending in the `Made with the help of Claude.` trailer. That is GitHub's auto-fill for a
+pull request opened without a title or body, and it is a reliable signature: every
+deliberately opened pull request in this plan has markdown headings, an
+`Implements <item-id> (plan ..., track ...)` line and a session link, because the
+conventions require them. A pull request whose body is a commit message was opened by a
+call that passed neither.
+
+The confusing part follows from it rather than adding anything: the text described #121's
+session-start work while the diff also added `save-git-identity.sh`, so reading either
+one alone gave a coherent but wrong account of what the pull request was.
+
+### Why nothing flagged it
+
+Not an oversight in the manifest - the plan has no mechanism that could have caught it.
+Coverage runs in one direction only: `_generated/branch-index.tsv` maps branch → plan-id,
+and an item names its `pull_request_number`. Nothing enumerates the repository's open
+pull requests and asks which item owns each one, so a *second* pull request on an
+already-tracked branch is invisible to every surface the plan has. The dashboards cross-
+check live GitHub state for the pull requests the manifest names; #125 was never named.
+
+This is worth stating plainly because the fork's own convention - one branch, one item,
+one pull request - is what makes the reverse lookup unnecessary in the normal case, and
+also what makes a violation of it undetectable. The stack maintenance executor is the
+one component that does enumerate pull requests, and it reads them as stack members
+rather than checking them against plan items.
+
+### What was left where it was
+
+The `dirty` state on #125 was #121's conflict against `main`
+(`resolve-personal-notes-config.sh`, `session-start.sh`, plus `.claude/hooks/README.md`
+from the git-identity commit). Resolving it on the closed duplicate would have been the
+same conflict resolved twice, so it stays with #121, whose branch owns those two files'
+changes. #126 remains stacked on #121 and inherits the resolution when it lands.
