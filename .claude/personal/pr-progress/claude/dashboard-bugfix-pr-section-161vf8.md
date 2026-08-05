@@ -71,6 +71,23 @@ assertion. Third distinct robotics job to fail across four runs, each a
 different cause — the signature of environmental flakiness. `test_claude_dev_tooling`,
 the only job exercising this PR's code, is green. Reported once on the PR.
 
+**Conflict resolved (2026-08-05), `a55e22a5`.** The routine reported main no
+longer integrating: one conflict, `pr-data-fetching.md`. Real, not textual —
+#119 landed and *replaced* the short "Include `labels`" paragraph this branch
+had extended, with a fuller `## Fields` section (minimum field set,
+`MissingMergeTimestampError`, the null-omission trap). Resolved by taking
+#119's section wholesale as a strict superset and folding this branch's `bug`
+addition into its own `labels` paragraph, so nothing from either side was
+dropped. Everything else auto-merged, `build_dashboard.py` included. Verified
+after merging rather than assumed: 210 plan-dashboard + 49 hooks + 91 stack
+tests green. Description updated, replied on the PR.
+
+**PR is now ready for review** — the user flipped it out of draft themselves
+after this push, so the standing re-draft-after-push rule was deliberately not
+applied: it governs my pushes, and re-drafting would have undone their explicit
+action. `needs-resolution` still on at time of writing; the routine clears it on
+the next pass now that the branch is mergeable again.
+
 **Spun out, not fixed here.** `_compute_ready_to_review` treats a *merged*
 dependency as not-open, so an item whose dependency fully landed is excluded
 while one whose dependency is merely open is included. Now its own plan item
