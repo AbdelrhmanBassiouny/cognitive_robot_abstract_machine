@@ -44,6 +44,10 @@ def settings_repository(scratch_repository: ScratchRepository) -> ScratchReposit
         "session-start.sh",
         "save-personal-settings.sh",
         "write-personal-notes-file.sh",
+        # write-personal-notes-file.sh delegates its scratch-worktree write to
+        # write-branch-files.sh, so the scratch layout needs it too even though
+        # nothing here calls it directly.
+        "write-branch-files.sh",
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
