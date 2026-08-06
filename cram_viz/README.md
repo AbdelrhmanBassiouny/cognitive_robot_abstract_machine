@@ -19,7 +19,7 @@ cram-viz-live path/to/demo.py             # run a demo with the live bridge
 
 Scene bundles are **generated artifacts** (tens of MB per scene) and are not
 part of this repository — ready-made demo recordings live in
-[sunava/cram-scenes](https://github.com/sunava/cram-scenes), wired as an
+[cram2/cram-scenes](https://github.com/cram2/cram-scenes), wired as an
 **optional** submodule:
 
 ```bash
