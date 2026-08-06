@@ -138,13 +138,19 @@ penetration -- comparable to the shapes' own half-widths -- which wedges it out
 sideways instead of gripping it.
 """
 
-GRASP_FRICTION = [1.0, 0.05, 0.001]
+GRASP_FRICTION = [0.5, 0.05, 0.001]
 """
 Contact friction (sliding, torsional, rolling; see
 :attr:`~semantic_digital_twin.adapters.multi_sim.MujocoGeom.friction`) given to every
-loose shape's collision geometry, matching the cube in
-``coraplex_panda_demo``'s own grasping scene, which the Panda picks up and stacks
-reliably.
+loose shape's collision geometry.
+
+Sliding friction lowered from ``coraplex_panda_demo``'s own ``1.0`` (tuned for a
+reliable grip between rubber fingertips, which keep their own separate friction --
+see :func:`equip_panda_for_physical_simulation` -- so this term is not the only thing
+holding a grasp) as an experiment: a shape landing centered and upright on a hole's rim
+has been observed to stay stuck there rather than sliding or tipping through, which
+high sliding friction against the rim could explain. Watch for this also making grasps
+less reliable, since it does still contribute to the gripper's own hold.
 """
 
 GRASP_SOLVER_REFERENCE = [0.008, 1.0]

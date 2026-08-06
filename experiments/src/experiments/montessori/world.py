@@ -113,12 +113,12 @@ X-coordinate, in the world frame, of the row in which loose shapes are placed on
 table; clear of the shape-sorting board's footprint.
 """
 
-TABLE_SHAPE_ROW_START_Y = -0.45
+TABLE_SHAPE_ROW_START_Y = -0.2
 """
 Y-coordinate of the first loose shape in the row on the table.
 """
 
-TABLE_SHAPE_ROW_SPACING = 0.15
+TABLE_SHAPE_ROW_SPACING = 0.07
 """
 Distance, along y, between adjacent loose shapes in the row on the table.
 """
@@ -533,11 +533,15 @@ def _table_shapes(
     return shapes
 
 
-SHAPE_FOOTPRINT_CLEARANCE_SCALE = 0.85
+SHAPE_FOOTPRINT_CLEARANCE_SCALE = 0.7
 """
 In-plane scale applied to a hole's true footprint when deriving the matching loose
 shape's cross-section from it, so the shape is a smaller copy of the hole rather than an
 exact fit, leaving clearance to actually pass through.
+
+Widened from the original 0.85 (roughly doubling the per-side gap) as a hacky attempt to
+make a shape's release pose more forgiving of the small positioning error that otherwise
+leaves it resting on the hole's rim instead of falling through.
 """
 
 
@@ -588,20 +592,18 @@ def _shape_body(
 
     :param footprint: The footprint of the hole this shape is meant to be dropped
         through, used to derive the shape's cross-section (see
-        :func:`_footprint_shape_mesh`) for every category except cube, disk, and
-        sphere: a cube and a disk fit through their hole at any fixed size and yaw
-        (mirroring the board's single hole of each category), and the sphere has no
-        hole at all. A cylinder's cross-section is derived like the rectangular and
-        triangular prisms', not fixed like the cube's, because the board has two
-        circular holes of different sizes (see
-        :meth:`~experiments.montessori.semantics.MontessoriShape.fits_through`), so
-        each cylinder shape must be sized after its own matching hole rather than a
-        single shared constant.
+        :func:`_footprint_shape_mesh`) for every category except disk and sphere: a
+        disk fits through its hole at any fixed size and yaw (mirroring the board's
+        single hole of that category), and the sphere has no hole at all. A cube's
+        cross-section is derived the same way rather than kept at a fixed size, so it
+        gets the same :data:`SHAPE_FOOTPRINT_CLEARANCE_SCALE` clearance every other
+        footprint-derived shape does instead of whatever clearance the hole's own true
+        size happens to leave against a hardcoded constant.
     """
     color = _SHAPE_COLORS[category]
     match category:
         case MontessoriShapeCategory.CUBE:
-            shape = Box(scale=Scale(0.03, 0.03, 0.03), color=color)
+            shape = _footprint_shape_mesh(footprint, thickness=0.03, color=color)
         case MontessoriShapeCategory.CYLINDER:
             shape = _footprint_shape_mesh(footprint, thickness=0.03, color=color)
         case MontessoriShapeCategory.DISK:

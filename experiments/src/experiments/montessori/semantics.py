@@ -22,6 +22,9 @@ from semantic_digital_twin.semantic_annotations.mixins import (
     HasRootBody,
     HasRootKinematicStructureEntity,
 )
+from semantic_digital_twin.semantic_annotations.part_whole import (
+    IsPartWholeRelationship,
+)
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.spatial_types import Vector3
 from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
@@ -251,9 +254,21 @@ class ShapeSortingHole(Aperture):
         bounds = self.root.area.combined_mesh.bounds
         return float(max(bounds[1][0] - bounds[0][0], bounds[1][1] - bounds[0][1]))
 
-    def _mount_strategy(self, main_has_root_body_annotation: HasRootBody) -> None:
+    def _mount_strategy(
+        self,
+        main_has_root_body_annotation: HasRootBody,
+        relationship: IsPartWholeRelationship,
+    ) -> None:
+        """
+        Mount as a kinematic child of the board without cutting its geometry, since the
+        board's mesh already has this hole's true shape cut into it.
+
+        :param main_has_root_body_annotation: The board this hole is being added to.
+        :param relationship: The metadata of the part-whole relationship field being
+            mounted into.
+        """
         HasRootKinematicStructureEntity._mount_strategy(
-            self, main_has_root_body_annotation
+            self, main_has_root_body_annotation, relationship
         )
 
 
@@ -302,9 +317,16 @@ class ShapeSortingBoard(HasCaseAsRootBody, HasDrawers, HasApertures):
         fits through (see :meth:`MontessoriShape.fits_through`).
 
         More than one hole can share a category (e.g. the board's two circular holes
-        are both :attr:`MontessoriShapeCategory.CYLINDER`, but sized differently), so
-        the smallest fitting hole is returned, not just the first same-category one:
-        that is the one ``montessori_shape`` is actually meant for.
+        are both :attr:`MontessoriShapeCategory.CYLINDER`, but sized differently). A
+        hole whose name matches ``montessori_shape``'s own name (stripped of its
+        ``"_shape"`` suffix, the naming convention :meth:`~experiments.montessori.world.MontessoriWorld._build_shapes`
+        pairs a shape and the hole it was built for with) is preferred: relying on
+        size alone breaks once a shape sized after one hole (see
+        :func:`~experiments.montessori.world._footprint_shape_mesh`) is also small
+        enough to fit through a different, same-category hole, which silently resolves
+        it to the wrong one instead of the hole it was actually built for. Falls back
+        to the smallest fitting hole (for shapes with no such name pairing, e.g. in
+        tests) when no name matches.
 
         :raises NoMatchingHoleError: If this board has no hole ``montessori_shape``
             fits through.
@@ -316,4 +338,8 @@ class ShapeSortingBoard(HasCaseAsRootBody, HasDrawers, HasApertures):
         ]
         if not fitting_holes:
             raise NoMatchingHoleError(montessori_shape, self)
+        shape_key = montessori_shape.name.name.removesuffix("_shape")
+        for hole in fitting_holes:
+            if hole.name.name == shape_key:
+                return hole
         return min(fitting_holes, key=lambda hole: hole.cross_section_size)

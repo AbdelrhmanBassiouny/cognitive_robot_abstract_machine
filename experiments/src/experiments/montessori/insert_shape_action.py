@@ -8,6 +8,8 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 
+import logging
+
 import rustworkx
 from typing_extensions import Optional
 
@@ -30,11 +32,15 @@ from semantic_digital_twin.exceptions import PointOccupiedError
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Table
 from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose, Pose2D
-from semantic_digital_twin.world_description.graph_of_convex_sets import (
-    navigation_map_at_target,
+from semantic_digital_twin.world_description.graph_of_convex_sets.base import (
     translate_free_space_to_where_condition,
 )
+from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
+    navigation_map_at_target,
+)
 from semantic_digital_twin.world_description.world_entity import Body
+
+logger = logging.getLogger(__name__)
 
 STANDOFF_CLEARANCE = 0.1
 """
@@ -126,7 +132,7 @@ class InsertMontessoriShapeAction(ActionDescription):
         A point just outside ``surface``'s bounding box, offset from whichever edge is
         nearest to ``target_position``, at ``target_position``'s height.
 
-        :func:`~semantic_digital_twin.world_description.graph_of_convex_sets.navigation_map_at_target`
+        :func:`~semantic_digital_twin.world_description.graph_of_convex_sets.boxes.navigation_map_at_target`
         projects obstacles to a 2D floor footprint (any point above or on a wide
         surface like a table or the sorting board reads as occupied, regardless of
         height), so a reach target actually on ``surface`` is never in free space.
@@ -342,11 +348,20 @@ class InsertMontessoriShapeAction(ActionDescription):
                 object_designator=self.montessori_shape.root,
                 arm=self.arm,
                 grasp_description=self._grasp_description_query(),
+                grasp_closing_velocity=0.2,
+                lift_linear_velocity=0.12,
+                grasp_stall_minimum_time=0.3,
+                final_approach_linear_velocity=0.115,
+                object_friction= 1.5
             )
             place_shape: PlanNode = a(PlaceAction)(
                 object_designator=self.montessori_shape.root,
                 target_location=target_location,
                 arm=self.arm,
+                placing_linear_velocity=0.05,
+                transport_linear_velocity=0.08,
+                release_opening_velocity=0.07,
+                retract_linear_velocity=0.08
             )
         else:
             navigate_to_shape = []
@@ -355,11 +370,20 @@ class InsertMontessoriShapeAction(ActionDescription):
                 object_designator=self.montessori_shape.root,
                 arm=self.arm,
                 grasp_description=self.grasp_description,
+                grasp_closing_velocity=0.2,
+                lift_linear_velocity=0.12,
+                grasp_stall_minimum_time=0.3,
+                final_approach_linear_velocity=0.05,
+                object_friction=1.5,
             )
             place_shape = PlaceAction(
                 object_designator=self.montessori_shape.root,
                 target_location=target_location,
                 arm=self.arm,
+                placing_linear_velocity=0.09,
+                transport_linear_velocity=0.08,
+                release_opening_velocity=0.07,
+                #retract_linear_velocity=0.08,
             )
 
         return sequential(
@@ -419,5 +443,38 @@ class InsertMontessoriShapeAction(ActionDescription):
             )
             .bounding_box()
             .max_z
+        )
+        # Temporary diagnostic: which check (horizontal miss vs. resting too high)
+        # is actually failing for a shape that doesn't fall through, and whether a
+        # box shape's yaw lines up with its hole's.
+        hole_roll, hole_pitch, hole_yaw = (
+            hole.root.global_transform.to_rotation_matrix().to_rpy()
+        )
+        shape_roll, shape_pitch, shape_yaw = (
+            self.montessori_shape.root.global_transform.to_rotation_matrix().to_rpy()
+        )
+        logger.info(
+            "has_fallen_through_hole(%s): hole_center=(%.4f, %.4f) hole_x=[%.4f, %.4f] "
+            "hole_y=[%.4f, %.4f] shape_xy=(%.4f, %.4f) is_below_the_hole=%s "
+            "board_top_z=%.4f shape_top_z=%.4f hole_rpy_deg=(%.2f, %.2f, %.2f) "
+            "shape_rpy_deg=(%.2f, %.2f, %.2f)",
+            self.montessori_shape.name,
+            float(hole_position.x),
+            float(hole_position.y),
+            hole_min_x,
+            hole_max_x,
+            hole_min_y,
+            hole_max_y,
+            shape_x,
+            shape_y,
+            is_below_the_hole,
+            board_top_z,
+            shape_top_z,
+            math.degrees(float(hole_roll)),
+            math.degrees(float(hole_pitch)),
+            math.degrees(float(hole_yaw)),
+            math.degrees(float(shape_roll)),
+            math.degrees(float(shape_pitch)),
+            math.degrees(float(shape_yaw)),
         )
         return bool(is_below_the_hole and shape_top_z < board_top_z)

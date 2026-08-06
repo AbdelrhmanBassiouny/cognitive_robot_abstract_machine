@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import argparse
 import logging
-import random
+import math
 import threading
 import time
 
@@ -86,16 +86,6 @@ Number of times a single shape's insertion is repeated while the attempt never g
 far as releasing the shape, before giving up on it and logging a warning.
 """
 
-RETRY_HORIZONTAL_JITTER = 0.003
-"""
-Maximum magnitude, along either axis, of the random horizontal offset an insertion's drop
-point is jittered by.
-
-Releasing every shape at the exact same offset over its hole gives the physics engine no
-new information about how it first contacts the hole's edge, so a repeated insertion is
-prone to failing the same way again.
-"""
-
 SHAPE_SETTLE_DURATION = 2.0
 """
 Real-time seconds a just-released shape is given to physically fall and come to rest
@@ -103,6 +93,20 @@ before it is checked whether it made it through its hole.
 
 The simulation keeps running throughout (see :mod:`~experiments.montessori.franka_panda_equipment`);
 this is a settling wait, not a separate physics pass.
+"""
+
+MINIMUM_PICKUP_DISPLACEMENT = 0.03
+"""
+Minimum distance (in meters) a shape must have moved between just before its
+:class:`~experiments.montessori.insert_shape_action.InsertMontessoriShapeAction` starts
+and right after it finishes, for the pickup to be considered real (see :func:`_insert_shape`).
+
+A grasp that silently fails to actually close on the shape (rather than raising) has
+been observed to let the rest of the action run to completion anyway, with the shape
+left exactly where it started the whole time -- indistinguishable, without this check,
+from a shape that really was picked up, carried to the hole, and simply didn't fall
+through. A real pickup lifts the shape and carries it toward the hole, decimeters away,
+so this threshold only needs to rule out the shape having simply not moved at all.
 """
 
 
@@ -123,18 +127,6 @@ def _mount_position(montessori: MontessoriWorld) -> Point3:
         table_bounding_box.max_x + MOUNT_STANDOFF_DISTANCE,
         0.0,
         table_bounding_box.max_z,
-    )
-
-
-def _random_horizontal_jitter() -> Point3:
-    """
-    A random ``(x, y, 0)`` offset within :data:`RETRY_HORIZONTAL_JITTER` of the origin,
-    so an insertion releases its shape at an actually different drop point.
-    """
-    return Point3(
-        random.uniform(-RETRY_HORIZONTAL_JITTER, RETRY_HORIZONTAL_JITTER),
-        random.uniform(-RETRY_HORIZONTAL_JITTER, RETRY_HORIZONTAL_JITTER),
-        0.0,
     )
 
 
@@ -159,8 +151,24 @@ def _insert_shape(
         equipped (see :func:`~experiments.montessori.franka_panda_equipment.equip_panda_for_physical_simulation`),
         inside a running simulation.
     :param context: The CRAM execution context to run the insertion action in.
-    :param target_horizontal_offset: Horizontal offset to release the shape at; a
-        random :func:`_random_horizontal_jitter` is used if not given.
+    :param target_horizontal_offset: Horizontal offset to release the shape at; the
+        hole's exact center is used if not given.
+    :raises BodyUnfetchable: If ``shape`` moved less than :data:`MINIMUM_PICKUP_DISPLACEMENT`
+        over the whole insertion, i.e. the grasp silently failed to pick it up at all.
+
+        ``is_body_gripped`` can't be checked directly after pickup instead: doing so needs
+        either a real mid-plan checkpoint (``CodeNode`` doesn't work -- its callback fires
+        during plan *construction*, not at its position in real execution order) or
+        splitting the pickup and place halves into two separate ``execute_single`` calls,
+        which breaks :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`'s own
+        lookup of the grasp it should place with -- resolved via
+        ``plan_node.get_previous_node_by_designator_type(PickUpAction)`` within a single
+        plan graph, so a fresh, separate plan for the place half never finds it, silently
+        falling back to a generic (not our real top-down) grasp. Checking ``evaluate_conditions=True``
+        (making :attr:`~coraplex.robot_plans.actions.core.placing.PlaceAction.pre_condition`,
+        which already does this ``is_body_gripped`` check, run) was tried too, but that
+        re-enables ``ReachAction``/``PickUpAction``'s ``IsObjectReachableBy`` precondition
+        along with it, which hung for 5+ minutes on the very first pickup.
     :return: Whether the shape actually fell through its hole after settling.
     """
     from coraplex.datastructures.enums import (
@@ -172,10 +180,12 @@ def _insert_shape(
     from coraplex.datastructures.grasp import GraspDescription
     from coraplex.execution_environment import ExecutionEnvironment
     from coraplex.plans.factories import execute_single
+    from coraplex.plans.failures import BodyUnfetchable
     from coraplex.view_manager import ViewManager
     from experiments.montessori.insert_shape_action import InsertMontessoriShapeAction
 
-    offset = target_horizontal_offset or _random_horizontal_jitter()
+    spawn_position = shape.root.global_transform.to_position()
+    offset = target_horizontal_offset or Point3(0.0, 0.0, 0.0)
     action = InsertMontessoriShapeAction(
         montessori_shape=shape,
         board=montessori.board,
@@ -196,14 +206,55 @@ def _insert_shape(
     with ExecutionEnvironment(
         execution_type=ExecutionType.SIMULATED,
         collision_avoidance=False,
-        real_time_pacing=True,
+        real_time_pacing=False,
     ):
         node = execute_single(action, context=context)
         node.perform()
 
-    logger.info("Letting %s settle.", shape.name)
-    time.sleep(SHAPE_SETTLE_DURATION)
     montessori.world.update_forward_kinematics()
+    release_position = shape.root.global_transform.to_position()
+    displacement = math.dist(
+        (float(spawn_position.x), float(spawn_position.y), float(spawn_position.z)),
+        (float(release_position.x), float(release_position.y), float(release_position.z)),
+    )
+    if displacement < MINIMUM_PICKUP_DISPLACEMENT:
+        raise BodyUnfetchable(body=shape.root, arm=Arms.RIGHT)
+
+    # Temporary diagnostic: where the shape actually is right after physical
+    # release, before settling has a chance to slide/tip it further.
+    hole = montessori.board.hole_for(shape)
+    hole_position = hole.root.global_transform.to_position()
+    release_position = shape.root.global_transform.to_position()
+    logger.info(
+        "%s released at (%.4f, %.4f, %.4f); hole center at (%.4f, %.4f, %.4f).",
+        shape.name,
+        float(release_position.x),
+        float(release_position.y),
+        float(release_position.z),
+        float(hole_position.x),
+        float(hole_position.y),
+        float(hole_position.z),
+    )
+
+    logger.info("Letting %s settle.", shape.name)
+    # Temporary diagnostic: sample position through the settle window instead of
+    # only before/after, to tell a real physics freeze apart from a stale
+    # world-model/visualization read.
+    sample_count = 10
+    sample_interval = SHAPE_SETTLE_DURATION / sample_count
+    for sample_index in range(sample_count):
+        time.sleep(sample_interval)
+        montessori.world.update_forward_kinematics()
+        sample_position = shape.root.global_transform.to_position()
+        logger.info(
+            "%s settle sample %d/%d: (%.4f, %.4f, %.4f)",
+            shape.name,
+            sample_index + 1,
+            sample_count,
+            float(sample_position.x),
+            float(sample_position.y),
+            float(sample_position.z),
+        )
 
     return action.has_fallen_through_hole()
 
@@ -243,7 +294,9 @@ def _insert_shape_or_none(
         return None
 
 
-def _insert_all_shapes(montessori: MontessoriWorld, context) -> None:
+def _insert_all_shapes(
+    montessori: MontessoriWorld, context, max_shapes: Optional[int] = None
+) -> None:
     """
     Have the Panda pick up and insert every loose shape that has a matching hole into
     the shape-sorting board, skipping any that don't (e.g. the sphere) and any whose
@@ -259,7 +312,11 @@ def _insert_all_shapes(montessori: MontessoriWorld, context) -> None:
     :param montessori: The Montessori scene, with the Panda already mounted and
         equipped, inside a running simulation.
     :param context: The CRAM execution context to run every insertion action in.
+    :param max_shapes: Stop after this many shapes have actually been attempted
+        (skipped shapes don't count), for fast iteration while tuning parameters on a
+        single shape. ``None`` attempts every shape.
     """
+    attempted = 0
     for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape):
         if shape.shape_category in SKIPPED_SHAPE_CATEGORIES:
             logger.info(
@@ -272,6 +329,11 @@ def _insert_all_shapes(montessori: MontessoriWorld, context) -> None:
         except NoMatchingHoleError:
             logger.info("Skipping %s: no matching hole.", shape.name)
             continue
+
+        if max_shapes is not None and attempted >= max_shapes:
+            logger.info("Reached max_shapes=%d; stopping.", max_shapes)
+            break
+        attempted += 1
 
         fell_through = None
         for attempt in range(1, MAX_INSERTION_ATTEMPTS + 1):
@@ -301,13 +363,29 @@ def _insert_all_shapes(montessori: MontessoriWorld, context) -> None:
 
 def _parse_arguments() -> argparse.Namespace:
     """
-    Parse command-line arguments selecting whether a MuJoCo viewer window is opened.
+    Parse command-line arguments selecting whether a MuJoCo viewer window is opened
+    and how many shapes to attempt.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--viewer",
         action="store_true",
         help="Open a MuJoCo viewer window; off by default so the demo runs headless.",
+    )
+    parser.add_argument(
+        "--max-shapes",
+        type=int,
+        default=None,
+        help=(
+            "Stop after this many shapes have been attempted, for fast iteration "
+            "while tuning parameters on a single shape. Attempts every shape by "
+            "default."
+        ),
+    )
+    parser.add_argument(
+        "--no-rviz",
+        action="store_true",
+        help="Don't publish TF/visualization markers to RViz; publishes by default.",
     )
     return parser.parse_args()
 
@@ -358,12 +436,15 @@ def main() -> None:
     )
     logger.info("Built Montessori world with %d bodies.", len(montessori.world.bodies))
 
-    tf_publisher = TFPublisher(node=node, _world=montessori.world)
-    viz_marker_publisher = VizMarkerPublisher(_world=montessori.world, node=node)
-    logger.info(
-        "Visualizing the Montessori world on topic '%s'.",
-        viz_marker_publisher.topic_name,
-    )
+    tf_publisher = None
+    viz_marker_publisher = None
+    if not arguments.no_rviz:
+        tf_publisher = TFPublisher(node=node, _world=montessori.world)
+        viz_marker_publisher = VizMarkerPublisher(_world=montessori.world, node=node)
+        logger.info(
+            "Visualizing the Montessori world on topic '%s'.",
+            viz_marker_publisher.topic_name,
+        )
 
     multi_sim = MujocoSim(
         world=montessori.world,
@@ -377,12 +458,19 @@ def main() -> None:
         robot,
         ros_node=node,
         update_world_model_attachment=False,
+        # IsObjectReachableBy (PickUpAction/ReachAction's pre_condition) runs a full
+        # simulated IK/collision-avoidance reach on a deep-copied world; re-enabling
+        # evaluate_conditions to get PlaceAction's own gripped-check for free was tried,
+        # but that check is still too unreliable even with the shapes' now-more-central
+        # table row -- it hung for 5+ minutes on the very first pickup. Our own
+        # is_body_gripped check in _insert_shape covers the same thing without it.
+        evaluate_conditions=False,
     )
     context.simulation_clock = lambda: multi_sim.simulator.current_simulation_time
 
     multi_sim.start_simulation()
     try:
-        _insert_all_shapes(montessori, context)
+        _insert_all_shapes(montessori, context, max_shapes=arguments.max_shapes)
         logger.info("Sorting done; the simulation keeps running.")
         logger.info("Done. Press Ctrl+C to stop.")
         while True:
@@ -391,8 +479,10 @@ def main() -> None:
         pass
     finally:
         multi_sim.stop_simulation()
-        viz_marker_publisher.stop()
-        tf_publisher.stop()
+        if viz_marker_publisher is not None:
+            viz_marker_publisher.stop()
+        if tf_publisher is not None:
+            tf_publisher.stop()
         executor.shutdown()
         spinner.join(timeout=2.0)
         node.destroy_node()
