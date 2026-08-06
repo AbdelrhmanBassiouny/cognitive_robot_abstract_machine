@@ -24,7 +24,7 @@ license = { text = "GPL-3.0-only" }
 
 [project.scripts]
 cram-viz = "cram_viz.server:main"
-cram-viz-live = "cram_viz.live.__main__:main"
+cram-viz-live = "cram_viz.live.runner:main"
 cram-viz-onboard = "cram_viz.onboard.demo:main"
 
 [tool.setuptools.packages.find]
