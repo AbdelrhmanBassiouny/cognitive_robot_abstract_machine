@@ -28,6 +28,9 @@ from krrood.entity_query_language.rdr.serialization import (
     RDR_CONCLUSION_ATTRIBUTE_NAME,
     RDR_CORNER_CASES_NAME,
     RDR_QUERY_NAME,
+    FileModelSaver,
+    ModelSaver,
+    NullModelSaver,
     rdr_to_python,
     walk_rules_in_emission_order,
 )
@@ -179,3 +182,35 @@ def test_recorded_corner_case_with_an_enum_field_round_trips_through_the_generat
     namespace = _exec_generated_module(source)
 
     assert corner_case in namespace[RDR_CORNER_CASES_NAME].values()
+
+
+# %% ModelSaver strategies
+
+
+def test_null_saver_is_a_model_saver():
+    assert isinstance(NullModelSaver(), ModelSaver)
+
+
+def test_null_saver_writes_nothing_for_a_fitted_tree(tmp_path):
+    NullModelSaver().save(_flat_tree_rdr())
+
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_file_saver_writes_the_generated_source_to_its_path(tmp_path):
+    rdr = _flat_tree_rdr()
+    destination = tmp_path / "zoo_rules.py"
+
+    FileModelSaver(str(destination)).save(rdr)
+
+    assert destination.read_text() == rdr_to_python(rdr)
+
+
+def test_file_saver_rewrites_the_file_on_every_save(tmp_path):
+    rdr = _flat_tree_rdr()
+    destination = tmp_path / "zoo_rules.py"
+    destination.write_text("stale contents")
+
+    FileModelSaver(str(destination)).save(rdr)
+
+    assert destination.read_text() == rdr_to_python(rdr)

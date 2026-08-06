@@ -37,7 +37,6 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.rdr.conclusion_domain import ConclusionDomain
     from krrood.entity_query_language.rdr.condition_resolver import ResolvedCondition
     from krrood.entity_query_language.rdr.observer import ClassificationTrace
-    from krrood.entity_query_language.rdr.progress import ProgressReporter
 
 
 @dataclass
@@ -176,26 +175,12 @@ class ExpertInterface(ABC):
     """
     The I/O strategy an :class:`Expert` uses as the interaction interface through which
     answers and questions are communicated.
+
+    Carries the question-and-answer surface only. Model persistence
+    (:class:`~krrood.entity_query_language.rdr.serialization.ModelSaver`) and fitting
+    progress (:class:`~krrood.entity_query_language.rdr.progress.ProgressReporter`) are
+    the RDR's own collaborators.
     """
-
-    on_save: Optional[Callable[[], None]] = field(default=None, kw_only=True)
-    """
-    Zero-arg callable that persists the model state.
-
-    ``None`` when no save path is configured (see :attr:`~EQLSingleClassRDR.save_path`).
-    Injected automatically by :meth:`EQLSingleClassRDR.fit` when a save path is present,
-    or supplied directly by callers that need a custom persistence strategy.
-    """
-
-    def save(self) -> None:
-        """
-        Persist the current model state.
-
-        Calls :attr:`on_save` if configured; silently no-ops otherwise so callers never
-        need to guard against an unconfigured interface.
-        """
-        if self.on_save is not None:
-            self.on_save()
 
     def interact(
         self,
@@ -306,15 +291,6 @@ class ExpertInterface(ABC):
         for error in errors:
             lines.append(f"[error] {error.answer_name}: {error}")
         return "\n".join(lines)
-
-    def make_progress_reporter(self) -> Optional[ProgressReporter]:
-        """
-        Return a :class:`ProgressReporter` for this interface, or ``None``.
-
-        Override in concrete subclasses that want to display a progress bar during
-        fitting.  The default returns ``None`` (no progress displayed).
-        """
-        return None
 
     @abstractmethod
     def _run(

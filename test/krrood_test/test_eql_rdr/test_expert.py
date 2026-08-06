@@ -217,3 +217,27 @@ class TestAnswerName(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestInterfaceCarriesOnlyTheQuestionAndAnswerSurface(unittest.TestCase):
+    """
+    Model persistence and fitting progress belong to the RDR, not to the object the
+    expert is asked questions through.
+    """
+
+    def test_does_not_carry_model_persistence(self):
+        interface = AbortingInterface()
+
+        self.assertFalse(hasattr(interface, "on_save"))
+        self.assertFalse(hasattr(interface, "save"))
+
+    def test_does_not_carry_fitting_progress(self):
+        interface = AbortingInterface()
+
+        self.assertFalse(hasattr(interface, "make_progress_reporter"))
+
+    def test_still_carries_the_question_and_answer_surface(self):
+        interface = AbortingInterface()
+
+        self.assertTrue(hasattr(interface, "interact"))
+        self.assertTrue(hasattr(interface, "_run"))

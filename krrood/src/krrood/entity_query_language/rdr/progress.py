@@ -1,11 +1,10 @@
 """
-An optional :class:`ProgressReporter` abstraction for RDR fitting, and an IPython
-implementation backed by :mod:`tqdm`.
+The :class:`ProgressReporter` abstraction for RDR fitting, its no-op default, and an
+IPython implementation backed by :mod:`tqdm`.
 
-The ProgressReporter is obtained from an ``ExpertInterface`` via the optional factory
-method :meth:`ExpertInterface.make_progress_reporter`.  Interfaces that don't want
-progress simply inherit the default (returns ``None``), and ``fit()`` calls its
-lifecycle methods only when a reporter is available.
+Progress belongs to the fitting loop, so the RDR holds a reporter as its own
+collaborator. :class:`NullProgressReporter` is the default, so the loop reports
+unconditionally and no caller needs to guard on an absent reporter.
 """
 
 from __future__ import annotations
@@ -13,8 +12,20 @@ from __future__ import annotations
 import tqdm
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 from typing_extensions import List, Optional, Tuple, Dict
+
+
+class ProgressDescription(StrEnum):
+    """
+    The labels shown alongside a progress bar, one per phase that reports progress.
+    """
+
+    FITTING = "Fitting RDR"
+    """
+    Shown while the fitting loop works through the pending cases.
+    """
 
 
 class ProgressReporter(ABC):
@@ -57,6 +68,28 @@ class ProgressReporter(ABC):
         """
         Mark progress complete and clean up the display.
         """
+
+
+@dataclass
+class NullProgressReporter(ProgressReporter):
+    """
+    The reporter used when progress should not be displayed.
+
+    Accepts the full lifecycle and does nothing, so the fitting loop never branches on
+    whether a reporter is present.
+    """
+
+    def start(self, total: int, description: str = "") -> None:
+        pass
+
+    def update(self, n: int = 1) -> None:
+        pass
+
+    def reset(self, total: int) -> None:
+        pass
+
+    def finish(self) -> None:
+        pass
 
 
 @dataclass

@@ -13,6 +13,7 @@ import ast
 import enum
 import operator
 import os
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from textwrap import indent as _indent
 from typing import TYPE_CHECKING
@@ -542,6 +543,49 @@ def save_rdr_with_case(rdr: EQLSingleClassRDR, path: str) -> str:
     with open(path, "w") as file:
         file.write(source)
     return source
+
+
+class ModelSaver(ABC):
+    """
+    Strategy for persisting a fitted RDR.
+
+    Held by the RDR itself rather than by the expert's interface: what a model does with
+    its own state is the RDR's concern, not the expert's.
+    """
+
+    @abstractmethod
+    def save(self, rdr: EQLSingleClassRDR) -> None:
+        """
+        Persist ``rdr``'s current state.
+
+        :param rdr: The RDR to persist.
+        """
+
+
+@dataclass
+class NullModelSaver(ModelSaver):
+    """
+    The saver used when a model should not be persisted.
+
+    Persists nothing, so the fitting loop never branches on whether saving is
+    configured.
+    """
+
+    def save(self, rdr: EQLSingleClassRDR) -> None:
+        pass
+
+
+@dataclass
+class FileModelSaver(ModelSaver):
+    """
+    Persists a fitted RDR as a Python module via :func:`save_rdr_with_case`.
+    """
+
+    path: str
+    """Destination ``.py`` file path, overwritten on every save."""
+
+    def save(self, rdr: EQLSingleClassRDR) -> None:
+        save_rdr_with_case(rdr, self.path)
 
 
 def load_rdr(path: str) -> EQLSingleClassRDR:

@@ -27,11 +27,15 @@ from krrood.entity_query_language.rdr.condition_resolver import (
     TargetKnowledgeResolver,
     _materialize,
 )
+from krrood.entity_query_language.rdr.interface import CaseContext
+from krrood.entity_query_language.rdr.observer import ClassificationTrace
 
 
 @dataclass(unsafe_hash=True)
 class Animal:
-    """Minimal RDR classification target used only by this test module."""
+    """
+    Minimal RDR classification target used only by this test module.
+    """
 
     name: str
     has_fur: bool = False
@@ -47,6 +51,35 @@ class Species(Enum):
 
 def _empty_knowledge(value):
     return ConclusionKnowledge(conclusion_value=value, sufficient_condition_sets=())
+
+
+def _context(
+    case,
+    case_variable,
+    target_conclusion,
+    current_conclusion,
+    corner_case,
+    firing_anchor=None,
+):
+    """
+    Build the :class:`CaseContext` a resolver reads its case facts from.
+
+    The trace carries only ``firing_anchor``; the id-sets a real classification would
+    fill in are irrelevant to condition resolution.
+    """
+    return CaseContext(
+        case_instance=case,
+        case_variable=case_variable,
+        current_conclusion=current_conclusion,
+        target_conclusion=target_conclusion,
+        corner_case=corner_case,
+        trace=ClassificationTrace(
+            rule_tree_root=None,
+            satisfied_condition_ids=None,
+            evaluated_expression_ids=None,
+            firing_anchor=firing_anchor,
+        ),
+    )
 
 
 # %% ResolutionMode / ResolvedCondition
@@ -111,11 +144,7 @@ def test_target_knowledge_resolver_finds_a_discriminating_guard():
     corner_case = Animal("cat", can_fly=False)
 
     resolved = TargetKnowledgeResolver().resolve(
-        case=case,
-        case_variable=animal,
-        target_conclusion=Species.BIRD,
-        current_conclusion=Species.MAMMAL,
-        corner_case=corner_case,
+        context=_context(case, animal, Species.BIRD, Species.MAMMAL, corner_case),
         target_knowledge=target_knowledge,
         current_knowledge=_empty_knowledge(Species.MAMMAL),
     )
@@ -141,11 +170,7 @@ def test_target_knowledge_resolver_returns_none_when_no_guard_discriminates():
     corner_case = Animal("eagle", can_fly=True)
 
     resolved = TargetKnowledgeResolver().resolve(
-        case=case,
-        case_variable=animal,
-        target_conclusion=Species.BIRD,
-        current_conclusion=Species.MAMMAL,
-        corner_case=corner_case,
+        context=_context(case, animal, Species.BIRD, Species.MAMMAL, corner_case),
         target_knowledge=target_knowledge,
         current_knowledge=_empty_knowledge(Species.MAMMAL),
     )
@@ -157,11 +182,9 @@ def test_target_knowledge_resolver_returns_none_with_no_known_paths():
     animal = variable(Animal, domain=[])
 
     resolved = TargetKnowledgeResolver().resolve(
-        case=Animal("bat"),
-        case_variable=animal,
-        target_conclusion=Species.BIRD,
-        current_conclusion=Species.MAMMAL,
-        corner_case=Animal("cat"),
+        context=_context(
+            Animal("bat"), animal, Species.BIRD, Species.MAMMAL, Animal("cat")
+        ),
         target_knowledge=_empty_knowledge(Species.BIRD),
         current_knowledge=_empty_knowledge(Species.MAMMAL),
     )
@@ -173,11 +196,12 @@ def test_target_knowledge_resolver_returns_none_with_no_known_paths():
 
 
 def _two_path_current_knowledge(animal):
-    """Two independent sufficient condition sets both concluding the wrong value.
+    """
+    Two independent sufficient condition sets both concluding the wrong value.
 
     ``active_guard`` (can_fly) models the path that actually fired and caused the
-    misclassification; ``non_active_guard`` (lays_eggs) models an unrelated,
-    already-known path to the same wrong conclusion.
+    misclassification; ``non_active_guard`` (lays_eggs) models an unrelated, already-
+    known path to the same wrong conclusion.
     """
     active_guard = animal.can_fly == True  # noqa: E712
     non_active_guard = animal.lays_eggs == True  # noqa: E712
@@ -196,7 +220,9 @@ def _two_path_current_knowledge(animal):
 
 def test_corner_case_resolver_skips_the_active_path_via_firing_anchor():
     animal = variable(Animal, domain=[])
-    active_guard, non_active_guard, current_knowledge = _two_path_current_knowledge(animal)
+    active_guard, non_active_guard, current_knowledge = _two_path_current_knowledge(
+        animal
+    )
 
     # Discriminates on the active guard only -- must NOT be returned, since that
     # path is excluded via firing_anchor.
@@ -204,14 +230,16 @@ def test_corner_case_resolver_skips_the_active_path_via_firing_anchor():
     corner_case = Animal("plain", can_fly=False, lays_eggs=False)
 
     resolved = CornerCaseKnowledgeResolver().resolve(
-        case=case,
-        case_variable=animal,
-        target_conclusion=Species.BIRD,
-        current_conclusion=Species.MAMMAL,
-        corner_case=corner_case,
+        context=_context(
+            case,
+            animal,
+            Species.BIRD,
+            Species.MAMMAL,
+            corner_case,
+            firing_anchor=active_guard,
+        ),
         target_knowledge=_empty_knowledge(Species.BIRD),
         current_knowledge=current_knowledge,
-        firing_anchor=active_guard,
     )
 
     assert resolved is None
@@ -219,20 +247,24 @@ def test_corner_case_resolver_skips_the_active_path_via_firing_anchor():
 
 def test_corner_case_resolver_finds_a_discriminating_guard_on_a_non_active_path():
     animal = variable(Animal, domain=[])
-    active_guard, non_active_guard, current_knowledge = _two_path_current_knowledge(animal)
+    active_guard, non_active_guard, current_knowledge = _two_path_current_knowledge(
+        animal
+    )
 
     case = Animal("weird", can_fly=False, lays_eggs=True)
     corner_case = Animal("plain", can_fly=False, lays_eggs=False)
 
     resolved = CornerCaseKnowledgeResolver().resolve(
-        case=case,
-        case_variable=animal,
-        target_conclusion=Species.BIRD,
-        current_conclusion=Species.MAMMAL,
-        corner_case=corner_case,
+        context=_context(
+            case,
+            animal,
+            Species.BIRD,
+            Species.MAMMAL,
+            corner_case,
+            firing_anchor=active_guard,
+        ),
         target_knowledge=_empty_knowledge(Species.BIRD),
         current_knowledge=current_knowledge,
-        firing_anchor=active_guard,
     )
 
     assert resolved is not None
@@ -242,7 +274,9 @@ def test_corner_case_resolver_finds_a_discriminating_guard_on_a_non_active_path(
 
 def test_corner_case_resolver_searches_every_path_when_firing_anchor_is_none():
     animal = variable(Animal, domain=[])
-    active_guard, non_active_guard, current_knowledge = _two_path_current_knowledge(animal)
+    active_guard, non_active_guard, current_knowledge = _two_path_current_knowledge(
+        animal
+    )
 
     # Discriminates on the guard that would otherwise be excluded as "active" --
     # with no firing_anchor, nothing is excluded, so it must be found.
@@ -250,14 +284,34 @@ def test_corner_case_resolver_searches_every_path_when_firing_anchor_is_none():
     corner_case = Animal("plain", can_fly=False, lays_eggs=False)
 
     resolved = CornerCaseKnowledgeResolver().resolve(
-        case=case,
-        case_variable=animal,
-        target_conclusion=Species.BIRD,
-        current_conclusion=Species.MAMMAL,
-        corner_case=corner_case,
+        context=_context(
+            case, animal, Species.BIRD, Species.MAMMAL, corner_case, firing_anchor=None
+        ),
         target_knowledge=_empty_knowledge(Species.BIRD),
         current_knowledge=current_knowledge,
-        firing_anchor=None,
+    )
+
+    assert resolved is not None
+    assert resolved.expression is active_guard
+
+
+def test_corner_case_resolver_searches_every_path_when_the_context_has_no_trace():
+    animal = variable(Animal, domain=[])
+    active_guard, _non_active_guard, current_knowledge = _two_path_current_knowledge(
+        animal
+    )
+
+    # An empty rule tree produces no trace at all, which must be read the same way as
+    # a trace whose firing_anchor is None: nothing is excluded as "active".
+    case = Animal("weird", can_fly=True, lays_eggs=False)
+    corner_case = Animal("plain", can_fly=False, lays_eggs=False)
+    context = _context(case, animal, Species.BIRD, Species.MAMMAL, corner_case)
+    context.trace = None
+
+    resolved = CornerCaseKnowledgeResolver().resolve(
+        context=context,
+        target_knowledge=_empty_knowledge(Species.BIRD),
+        current_knowledge=current_knowledge,
     )
 
     assert resolved is not None
@@ -266,20 +320,19 @@ def test_corner_case_resolver_searches_every_path_when_firing_anchor_is_none():
 
 def test_corner_case_resolver_returns_none_when_no_path_discriminates():
     animal = variable(Animal, domain=[])
-    _active_guard, _non_active_guard, current_knowledge = _two_path_current_knowledge(animal)
+    _active_guard, _non_active_guard, current_knowledge = _two_path_current_knowledge(
+        animal
+    )
 
     case = Animal("weird", can_fly=False, lays_eggs=False)
     corner_case = Animal("plain", can_fly=False, lays_eggs=False)
 
     resolved = CornerCaseKnowledgeResolver().resolve(
-        case=case,
-        case_variable=animal,
-        target_conclusion=Species.BIRD,
-        current_conclusion=Species.MAMMAL,
-        corner_case=corner_case,
+        context=_context(
+            case, animal, Species.BIRD, Species.MAMMAL, corner_case, firing_anchor=None
+        ),
         target_knowledge=_empty_knowledge(Species.BIRD),
         current_knowledge=current_knowledge,
-        firing_anchor=None,
     )
 
     assert resolved is None
@@ -312,11 +365,9 @@ def test_chain_resolver_returns_the_first_non_none_result():
     )
 
     resolved = chain.resolve(
-        case=Animal("cat"),
-        case_variable=animal,
-        target_conclusion=Species.MAMMAL,
-        current_conclusion=Species.REPTILE,
-        corner_case=Animal("snake"),
+        context=_context(
+            Animal("cat"), animal, Species.MAMMAL, Species.REPTILE, Animal("snake")
+        ),
         target_knowledge=_empty_knowledge(Species.MAMMAL),
         current_knowledge=_empty_knowledge(Species.REPTILE),
     )
@@ -328,14 +379,14 @@ def test_chain_resolver_returns_the_first_non_none_result():
 
 def test_chain_resolver_returns_none_when_every_resolver_fails():
     animal = variable(Animal, domain=[])
-    chain = ChainConditionResolver(resolvers=[_AlwaysFailsResolver(), _AlwaysFailsResolver()])
+    chain = ChainConditionResolver(
+        resolvers=[_AlwaysFailsResolver(), _AlwaysFailsResolver()]
+    )
 
     resolved = chain.resolve(
-        case=Animal("cat"),
-        case_variable=animal,
-        target_conclusion=Species.MAMMAL,
-        current_conclusion=Species.REPTILE,
-        corner_case=Animal("snake"),
+        context=_context(
+            Animal("cat"), animal, Species.MAMMAL, Species.REPTILE, Animal("snake")
+        ),
         target_knowledge=_empty_knowledge(Species.MAMMAL),
         current_knowledge=_empty_knowledge(Species.REPTILE),
     )
@@ -362,20 +413,24 @@ def test_chain_resolver_default_prefers_target_knowledge_over_corner_case():
             ),
         ),
     )
-    active_guard, _non_active_guard, current_knowledge = _two_path_current_knowledge(animal)
+    active_guard, _non_active_guard, current_knowledge = _two_path_current_knowledge(
+        animal
+    )
 
     case = Animal("bat", can_fly=True, lays_eggs=True)
     corner_case = Animal("cat", can_fly=False, lays_eggs=False)
 
     resolved = ChainConditionResolver.backward_inference_default().resolve(
-        case=case,
-        case_variable=animal,
-        target_conclusion=Species.BIRD,
-        current_conclusion=Species.MAMMAL,
-        corner_case=corner_case,
+        context=_context(
+            case,
+            animal,
+            Species.BIRD,
+            Species.MAMMAL,
+            corner_case,
+            firing_anchor=active_guard,
+        ),
         target_knowledge=target_knowledge,
         current_knowledge=current_knowledge,
-        firing_anchor=active_guard,
     )
 
     assert resolved is not None
