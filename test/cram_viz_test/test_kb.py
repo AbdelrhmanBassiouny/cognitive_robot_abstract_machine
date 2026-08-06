@@ -49,8 +49,8 @@ class TestQueries:
         """
         A query naming something the namespace does not define must raise.
 
-        The server turns this into a JSON error payload; the knowledge base itself
-        does not swallow it.
+        The server turns this into a JSON error payload; the knowledge base itself does
+        not swallow it.
         """
         with pytest.raises(NameError):
             kb.run_query("this is not python")
@@ -144,6 +144,16 @@ class TestViewPayloads:
         # recorded inner nodes stay CREATED (only the root is performed)
         assert by_label["Transport"]["status"] == "CREATED"
         assert len(payload["edges"]) == len(payload["nodes"]) - 1
+
+    def test_plan_view_legend(self, fixture_scene):
+        payload = kb.view_payload("plan")
+        assert payload["legend"] == [
+            {"group": "event", "label": "Action"},
+            {"group": "robot", "label": "Motion"},
+            {"group": "goal", "label": "Condition"},
+            {"group": "object", "label": "Attach / detach"},
+            {"group": "ind", "label": "Other plan node"},
+        ]
 
     def test_chart_view_is_live_only(self, fixture_scene):
         payload = kb.view_payload("chart")

@@ -23,7 +23,7 @@ import logging
 import os
 import re
 from collections import Counter, defaultdict
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import asdict, dataclass, fields, is_dataclass
 from enum import Enum
 from pathlib import Path
 
@@ -1636,23 +1636,52 @@ def expand_node(node_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+class PlanNodeGroup(str, Enum):
+    """
+    Node colour group of the plan view's graph panel.
+    """
+
+    EVENT = "event"
+    ROBOT = "robot"
+    GOAL = "goal"
+    OBJECT = "object"
+    OTHER = "ind"
+
+
+@dataclass(frozen=True)
+class PlanLegendEntry:
+    """
+    One row of the plan view's legend.
+    """
+
+    group: PlanNodeGroup
+    """
+    Node colour group this row explains.
+    """
+
+    label: str
+    """
+    Human-readable name shown next to the group's colour.
+    """
+
+
 #: plan-node kind → node colour group of the graph panel
-PLAN_GROUPS = {
-    "ActionNode": "event",
-    "MotionNode": "robot",
-    "ConditionNode": "goal",
-    "AttachmentNode": "object",
-    "DetachmentNode": "object",
+PLAN_GROUPS: Dict[str, PlanNodeGroup] = {
+    "ActionNode": PlanNodeGroup.EVENT,
+    "MotionNode": PlanNodeGroup.ROBOT,
+    "ConditionNode": PlanNodeGroup.GOAL,
+    "AttachmentNode": PlanNodeGroup.OBJECT,
+    "DetachmentNode": PlanNodeGroup.OBJECT,
 }
 
 #: legend rows of the plan view
-PLAN_LEGEND = [
-    {"group": "event", "label": "Action"},
-    {"group": "robot", "label": "Motion"},
-    {"group": "goal", "label": "Condition"},
-    {"group": "object", "label": "Attach / detach"},
-    {"group": "ind", "label": "Other plan node"},
-]
+PLAN_LEGEND: Tuple[PlanLegendEntry, ...] = (
+    PlanLegendEntry(PlanNodeGroup.EVENT, "Action"),
+    PlanLegendEntry(PlanNodeGroup.ROBOT, "Motion"),
+    PlanLegendEntry(PlanNodeGroup.GOAL, "Condition"),
+    PlanLegendEntry(PlanNodeGroup.OBJECT, "Attach / detach"),
+    PlanLegendEntry(PlanNodeGroup.OTHER, "Other plan node"),
+)
 
 
 def shorten_action_label(label: str) -> str:
@@ -1697,7 +1726,7 @@ def _plan_view() -> Dict[str, Any]:
         add(
             node_id,
             label,
-            PLAN_GROUPS.get(tree.get("kind"), "ind"),
+            PLAN_GROUPS.get(tree.get("kind"), PlanNodeGroup.OTHER),
             lines,
             status=status,
         )
@@ -1716,7 +1745,7 @@ def _plan_view() -> Dict[str, Any]:
         "nodes": nodes,
         "edges": edges,
         "details": details,
-        "legend": PLAN_LEGEND,
+        "legend": [asdict(entry) for entry in PLAN_LEGEND],
         "layout": "hier",
         "live": "plan",
         "statusLegend": True,
