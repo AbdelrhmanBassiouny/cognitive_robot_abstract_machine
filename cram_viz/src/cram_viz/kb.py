@@ -756,7 +756,7 @@ def _side_of_name(name: str) -> Optional[ArmSide]:
     return None
 
 
-class KB:
+class EpisodeKnowledgeBase:
     """
     The recorded episode as EQL-queryable entities.
 
@@ -995,25 +995,25 @@ class KB:
         ]
 
 
-_kb: Optional[KB] = None
+_knowledge_base: Optional[EpisodeKnowledgeBase] = None
 
 
-def get_kb() -> KB:
+def get_knowledge_base() -> EpisodeKnowledgeBase:
     """
     The process-wide knowledge base, built on first use.
     """
-    global _kb
-    if _kb is None:
-        _kb = KB()
-    return _kb
+    global _knowledge_base
+    if _knowledge_base is None:
+        _knowledge_base = EpisodeKnowledgeBase()
+    return _knowledge_base
 
 
-def reset_kb() -> None:
+def reset_knowledge_base() -> None:
     """
-    Drop the cached KB (tests point CRAM_VIZ_SCENES at fixtures).
+    Drop the cached knowledge base (tests point CRAM_VIZ_SCENES at fixtures).
     """
-    global _kb
-    _kb = None
+    global _knowledge_base
+    _knowledge_base = None
 
 
 # %% EQL session
@@ -1021,7 +1021,7 @@ def fresh_namespace() -> Dict[str, Any]:
     """
     A namespace for evaluating one EQL query (fresh variables each time).
     """
-    kb = get_kb()
+    kb = get_knowledge_base()
     namespace: Dict[str, Any] = eql_factory_namespace()
     namespace.update(
         Position=Position,
@@ -1185,7 +1185,7 @@ def graph_payload() -> Dict[str, Any]:
     """
     The knowledge-graph overview: nodes, edges, details and presets.
     """
-    kb = get_kb()
+    kb = get_knowledge_base()
     nodes, edges, details = [], [], {}
 
     def add(node_id: str, label: str, group: str, lines: List[str]) -> None:
@@ -1463,7 +1463,7 @@ def view_payload(name: str) -> Dict[str, Any]:
     structural views of the same demo that the UI can overlay with live status from the
     bridge (see :mod:`cram_viz.live.http`, ``/plan`` and ``/chart``).
     """
-    kb = get_kb()
+    kb = get_knowledge_base()
     if name == "knowledge":
         return graph_payload()
     if name == "kinematics":
@@ -1575,7 +1575,7 @@ def expand_node(node_id: str) -> Optional[Dict[str, Any]]:
     """
     The inside view of a double-clicked node, or None if not drillable.
     """
-    kb = get_kb()
+    kb = get_knowledge_base()
     if node_id == kb.robot.name:  # robot → full URDF kinematic tree
         return _urdf_view(kb)
     if node_id == "plan":  # → the executed plan tree
@@ -1724,7 +1724,7 @@ def _is_movable(joint: Dict[str, str]) -> bool:
     return joint["type"] != FIXED_JOINT_TYPE
 
 
-def _urdf_view(kb: KB) -> Dict[str, Any]:
+def _urdf_view(knowledge_base: EpisodeKnowledgeBase) -> Dict[str, Any]:
     """
     The scene robot's URDF as a kinematic tree.
 
@@ -1737,7 +1737,7 @@ def _urdf_view(kb: KB) -> Dict[str, Any]:
     if not links:
         return {
             "ok": True,
-            "crumb": kb.robot.name + " · URDF (not found)",
+            "crumb": knowledge_base.robot.name + " · URDF (not found)",
             "nodes": [],
             "edges": [],
             "details": {},
@@ -1806,7 +1806,7 @@ def _urdf_view(kb: KB) -> Dict[str, Any]:
     # the sensor head spread out around the base than as one wide LR tree
     return {
         "ok": True,
-        "crumb": kb.robot.name + " · URDF",
+        "crumb": knowledge_base.robot.name + " · URDF",
         "nodes": nodes,
         "edges": edges,
         "details": details,
@@ -1814,16 +1814,20 @@ def _urdf_view(kb: KB) -> Dict[str, Any]:
     }
 
 
-def _package_view(kb: KB, package: Package) -> Dict[str, Any]:
+def _package_view(
+    knowledge_base: EpisodeKnowledgeBase, package: Package
+) -> Dict[str, Any]:
     """
     Inside view of a package: its subpackages and top-level classes.
     """
     nodes, edges, details, add = _view()
-    subpackages = [entry for entry in kb.subpackages if entry.package == package.name]
+    subpackages = [
+        entry for entry in knowledge_base.subpackages if entry.package == package.name
+    ]
     top_level = sorted(
         (
             entry
-            for entry in kb.classes
+            for entry in knowledge_base.classes
             if entry.package == package.name and entry.subpackage == package.name
         ),
         key=lambda entry: -entry.methods,
@@ -1870,13 +1874,19 @@ def _package_view(kb: KB, package: Package) -> Dict[str, Any]:
     }
 
 
-def _subpackage_view(kb: KB, subpackage: SubPackage) -> Dict[str, Any]:
+def _subpackage_view(
+    knowledge_base: EpisodeKnowledgeBase, subpackage: SubPackage
+) -> Dict[str, Any]:
     """
     Inside view of a subpackage: its classes with inheritance edges.
     """
     nodes, edges, details, add = _view()
     classes = sorted(
-        (entry for entry in kb.classes if entry.subpackage == subpackage.name),
+        (
+            entry
+            for entry in knowledge_base.classes
+            if entry.subpackage == subpackage.name
+        ),
         key=lambda entry: -entry.methods,
     )
     add(
@@ -1905,7 +1915,9 @@ def _subpackage_view(kb: KB, subpackage: SubPackage) -> Dict[str, Any]:
 SUBCLASS_CAP = 80
 
 
-def _class_view(kb: KB, python_class: PythonClass) -> Dict[str, Any]:
+def _class_view(
+    knowledge_base: EpisodeKnowledgeBase, python_class: PythonClass
+) -> Dict[str, Any]:
     """
     Inheritance view of one class: bases above, repo subclasses below.
     """
@@ -1920,7 +1932,7 @@ def _class_view(kb: KB, python_class: PythonClass) -> Dict[str, Any]:
     # direct base classes: resolve inside the repo (same package preferred),
     # otherwise show them as external
     for base in python_class.bases:
-        candidates = [entry for entry in kb.classes if entry.name == base]
+        candidates = [entry for entry in knowledge_base.classes if entry.name == base]
         pick = next(
             (entry for entry in candidates if entry.package == python_class.package),
             candidates[0] if candidates else None,
@@ -1939,7 +1951,7 @@ def _class_view(kb: KB, python_class: PythonClass) -> Dict[str, Any]:
     # every subclass in the repo (matched by base name)
     subclasses = [
         entry
-        for entry in kb.classes
+        for entry in knowledge_base.classes
         if python_class.name in entry.bases and _class_id(entry) != class_id
     ]
     for subclass in subclasses[:SUBCLASS_CAP]:
@@ -1994,7 +2006,7 @@ def get_presets() -> List[Dict[str, str]]:
     Scene presets are generated from the loaded scene, so they stay valid for any
     onboarded robot/environment; the architecture presets are static.
     """
-    kb = get_kb()
+    kb = get_knowledge_base()
     presets = [
         {"text": "which robot is this?", "code": "the(entity(rob))"},
         {"text": "which arms does it have?", "code": "an(entity(arm))"},

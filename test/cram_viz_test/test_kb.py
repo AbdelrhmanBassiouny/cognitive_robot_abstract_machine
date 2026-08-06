@@ -10,32 +10,36 @@ from cram_viz import kb  # noqa: E402  (importable once krrood is present)
 
 
 @pytest.fixture()
-def fresh_kb(fixture_scene):
-    kb.reset_kb()
-    return kb.get_kb()
+def fresh_knowledge_base(fixture_scene):
+    kb.reset_knowledge_base()
+    return kb.get_knowledge_base()
 
 
-class TestKB:
-    def test_scene_entities(self, fresh_kb):
-        assert [o.name for o in fresh_kb.objects] == ["milk", "place_area"]
-        assert fresh_kb.robot.name == "pr2"
-        assert [a.side for a in fresh_kb.arms] == ["left"]
-        assert fresh_kb.arms[0].gripper.name == "left_gripper"
+class TestEpisodeKnowledgeBase:
+    def test_scene_entities(self, fresh_knowledge_base):
+        assert [o.name for o in fresh_knowledge_base.objects] == ["milk", "place_area"]
+        assert fresh_knowledge_base.robot.name == "pr2"
+        assert [a.side for a in fresh_knowledge_base.arms] == ["left"]
+        assert fresh_knowledge_base.arms[0].gripper.name == "left_gripper"
 
-    def test_episodes_link_objects(self, fresh_kb):
-        transport = next(e for e in fresh_kb.episodes if e.name == "transport_milk")
-        assert transport.picks is fresh_kb.objects[0]
+    def test_episodes_link_objects(self, fresh_knowledge_base):
+        transport = next(
+            e for e in fresh_knowledge_base.episodes if e.name == "transport_milk"
+        )
+        assert transport.picks is fresh_knowledge_base.objects[0]
         assert transport.places_at.name == "place_area"
         assert transport.performed_by.side == "left"
 
-    def test_joint_motion_ranges(self, fresh_kb):
-        torso = next(j for j in fresh_kb.joints if j.name == "torso_lift_joint")
+    def test_joint_motion_ranges(self, fresh_knowledge_base):
+        torso = next(
+            j for j in fresh_knowledge_base.joints if j.name == "torso_lift_joint"
+        )
         assert torso.min_rad == 0.0 and torso.max_rad == 0.3
 
-    def test_architecture_scan(self, fresh_kb):
-        names = {p.name for p in fresh_kb.packages}
+    def test_architecture_scan(self, fresh_knowledge_base):
+        names = {p.name for p in fresh_knowledge_base.packages}
         assert {"coraplex", "krrood"} <= names
-        assert any(c.name == "Plan" for c in fresh_kb.classes)
+        assert any(c.name == "Plan" for c in fresh_knowledge_base.classes)
 
 
 class TestQueries:
@@ -61,15 +65,17 @@ class TestQueries:
 
 
 class TestRecordedMeasurements:
-    def test_an_unrecorded_height_stays_unknown(self, fresh_kb):
+    def test_an_unrecorded_height_stays_unknown(self, fresh_knowledge_base):
         """
         The fixture bundle records no object height, so none may be invented.
         """
-        milk = next(entry for entry in fresh_kb.objects if entry.name == "milk")
+        milk = next(
+            entry for entry in fresh_knowledge_base.objects if entry.name == "milk"
+        )
         assert milk.height_m is None
 
-    def test_an_unrecorded_gripper_opening_stays_unknown(self, fresh_kb):
-        assert fresh_kb.arms[0].gripper.opening_m is None
+    def test_an_unrecorded_gripper_opening_stays_unknown(self, fresh_knowledge_base):
+        assert fresh_knowledge_base.arms[0].gripper.opening_m is None
 
     def test_a_recorded_height_is_used(self, fixture_scene, monkeypatch):
         """
@@ -78,8 +84,10 @@ class TestRecordedMeasurements:
         scene, trajectory = kb.load_scene()
         scene["objects"][0]["height"] = 0.23
         monkeypatch.setattr(kb, "load_scene", lambda: (scene, trajectory))
-        kb.reset_kb()
-        milk = next(entry for entry in kb.get_kb().objects if entry.name == "milk")
+        kb.reset_knowledge_base()
+        milk = next(
+            entry for entry in kb.get_knowledge_base().objects if entry.name == "milk"
+        )
         assert milk.height_m == 0.23
 
     def test_unknown_measurements_are_left_out_of_the_graph(self, fixture_scene):
