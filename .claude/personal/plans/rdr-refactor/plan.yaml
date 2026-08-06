@@ -288,8 +288,25 @@ items:
     That subsumes the Null-Object item - the defaults attach to the RDR''s collaborators
     rather than to ExpertInterface. Larger ask of this PR than the original framing, and it
     has an integration cost D-ui (#76) absorbs, so it needs the developer''s call.
-    Also: this PR has never had CI run on it (get_status on ed805dc7 returns
-    state=pending, total_count=0).'
+    2026-08-06: developer chose to segregate ExpertInterface. All four items implemented
+    and pushed as 28a89ff4. ConditionResolver.resolve takes CaseContext across all four
+    definitions, reading the firing anchor off context.trace (absent trace and absent
+    anchor both mean "no active path", both pinned). ExpertInterface lost on_save/save()/
+    make_progress_reporter(); ModelSaver (NullModelSaver + FileModelSaver over the existing
+    save_rdr_with_case) landed in serialization.py beside the function it wraps rather than
+    in a new module, and NullProgressReporter in progress.py; the RDR holds both, which
+    deletes the mega-branch''s expert.interface.on_save reach-through. ProgressDescription
+    StrEnum replaces _FITTING_DESCRIPTION. Verified before/after rather than on absolute
+    counts (this container lacks the probabilistic_model rspn submodule): test_eql_rdr
+    6 failed/113 passed before, 6 failed/125 passed after - identical failure set, +12 exactly
+    the new tests; test_eql failure set byte-for-byte identical (211 entries) either side.
+    format_docstrings.py churn reverted in serialization.py (~180 unrelated lines) and
+    test_serialization.py, kept where the PR substantially rewrites the file - same call
+    and reason as #41''s backward_inference.py. D-ui (#76) told what it must absorb at
+    comment 5201827158 (interactive.py:231/335/440, magics.py:171).
+    Still true: no CI run has ever been queued for this PR since b772e959 (2026-07-30).
+    The 28a89ff4 push did not trigger one either, so "push a commit to get a baseline" is
+    not the fix - see roadmap.md section 14.'
 - id: d-core-single-class
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
   branch: D-core-single-class

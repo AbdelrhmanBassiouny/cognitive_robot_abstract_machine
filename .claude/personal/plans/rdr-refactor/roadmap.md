@@ -883,3 +883,97 @@ signing off on all four — replied to each with a one-line pointer and resolved
 The `#67`/`#99` `is_condition_false`-removal collision recorded in §10 / tracking-issue comment
 `5146833251` — #67 hasn't merged, so it isn't part of `main` yet. Still "whichever lands second
 reconciles it."
+
+## 14. Addendum (2026-08-06) — `d-core-expert` (#98): the four handed-back items landed; the CI trigger is a real, separate problem
+
+A `/plan-item-resolve` session picked up `d-core-expert`. What it found, what it changed, and one
+thing it could not fix.
+
+### What was actually stalling it
+
+Not a conflict and not a bad base: #98 was `mergeable_state: clean` against `D-core-support`, and
+**all 27 review threads were resolved** — including `PRRT_kwDOQhJw3c6VZoGj` (`interface.py:127`,
+"why keep the `__call__` methods?"), which `pr-progress/D-core-expert.md` still recorded as open
+and waiting on the developer. The developer had resolved it without a counter-argument, so the
+decision was already made: **keep `AnswerValidator.__call__`**. That note was stale, in the same
+class §5 caught for `rdr/why-answer`'s progress note.
+
+What actually stalled it was §11's four handed-back items, none of which had been implemented —
+confirmed by diff, not by the notes: `condition_resolver.py` and `progress.py` did not appear in
+#98's 9-file diff at all. Items 1–3 were decided; **item 4 had no answer anywhere** — not on the
+PR, not on #94, not here. Put to the developer, who chose to segregate `ExpertInterface`.
+
+### What landed (commit `28a89ff4`)
+
+- **`ConditionResolver.resolve` takes `CaseContext`** across all four definitions, eight flattened
+  parameters down to three. The firing anchor comes off `context.trace.firing_anchor`, so
+  `_active_path` now guards on both an absent trace and an absent anchor — the second case is new
+  (an empty rule tree produces no trace at all) and is pinned by its own test.
+- **`ExpertInterface` segregated to the Q&A surface.** `ModelSaver`/`NullModelSaver`/`FileModelSaver`
+  landed in `serialization.py` rather than a new `persistence.py` — `save_rdr_with_case` already
+  lives there, and a new module would have needed to import it anyway. `NullProgressReporter`
+  landed in `progress.py`. The RDR holds both; `expert.interface.on_save = lambda: …` has nothing
+  left to reach through.
+- **`ProgressDescription(StrEnum)`** replaces `_FITTING_DESCRIPTION`. Worth recording the tension
+  honestly: that global does not exist on this branch — its only consumer is the mega-branch's
+  `single_class.py` — so this lands a type whose consumer arrives in the next slice. Same shape as
+  `CaseContext` in #98's first round, and the same YAGNI question could be asked of both.
+
+`FileModelSaver` is tested here against `test_serialization.py`'s existing `_SerializableRuleTree`
+stand-in; the engine-level round trip stays `d-core-single-class`'s, as that module's docstring
+already says.
+
+### Verification followed §12's method, and it mattered again
+
+This container also shipped without the project's dependencies — and, separately, with the wrong
+Python: `pyproject.toml` requires `>=3.12,<3.13` and the default interpreter was 3.11, which fails
+inside `class_diagram.py` on `make_dataclass(module=…)` (a 3.12 addition). A 3.12 venv plus the
+dependency set got the suite running, minus `probabilistic_model`'s `relational.rspn` submodule,
+which the public PyPI release still lacks (§9's gap, unchanged).
+
+- `test_eql_rdr`: **6 failed / 113 passed** before, **6 failed / 125 passed** after — identical
+  failure set, all six the `rspn` gap, and the +12 exactly the new tests.
+- `test_eql`: failure sets diffed **byte-for-byte identical** (211 entries) on both sides.
+
+### The CI trigger is a genuine, unsolved problem — and the plan's assumed fix does not work
+
+§11 recorded that #98 had never had CI run on it. That is still true, and it is worse than a
+missing run: **it is not self-healing.** Verified this session:
+
+- Workflow runs exist for `a235d4bd` (green) and `b772e959` (failed, `coraplex` flake only). The
+  three commits since — `ad75cf4e`, `ed805dc7`, and now `28a89ff4` — queued **nothing**.
+- It is not repo-wide: `ci.yml` ran on a dozen other branches through 2026-08-05, including other
+  Claude-session branches.
+- `ci.yml` has no `workflow_dispatch`, so it cannot be dispatched manually.
+
+The resolve plan assumed "the implementation push supplies the baseline". **That assumption was
+wrong** — the push landed and no run was queued. Immediately after it, GitHub reported #98's
+`mergeable_state` as `unknown`, which is the most likely lead: a `pull_request` workflow runs
+against `refs/pull/98/merge`, and that ref cannot be computed while mergeability is unresolved.
+Whether it settles on its own is not something this session could establish without waiting.
+
+Worth carrying forward, because it invalidates a readiness assumption the dashboard makes:
+`open_ready` keys on open + non-draft only. It is a proxy for "safe to build on" and, as §11
+already warned, does not imply the branch was ever tested. #98 is the concrete case — clean,
+non-draft-eligible, and never once verified by CI.
+
+### A dependency regression nothing flagged
+
+`D-core-support` (#67), this item's only `depends_on`, is now `mergeable_state: dirty` with a
+`needs-resolution` label. §10 and §11 both recorded it clean. Cause: `D-core-serialization`
+advanced to `08f2fbdd` (a 2026-08-03 merge of `D-core-corner-case`) while #67 stayed at
+`8eb7518a` (2026-07-19), so it is now three commits behind rather than two.
+
+This does **not** block #98 — #98's own base is unchanged at `8eb7518a` and #98 is clean against
+it — but it blocks the stack landing, and the readiness rule reports #67 as `OPEN_READY`
+regardless, so neither the manifest nor the dashboard shows it. Steward's job, per §11's standing
+call that the cascade is not a prerequisite for working an item.
+
+### One formatter deviation, same as §12's
+
+`scripts/format_docstrings.py` rewrote `serialization.py` wholesale — ~180 lines of docstring
+rewrapping unrelated to the change — and similar churn in `test_serialization.py`, where the real
+change is a small addition. That churn was reverted in those two files and the formatter's output
+kept in the files this commit substantially rewrites. No `:return:`-space regression appeared this
+time. The tool still deserves its own pass across the package, as §12 already concluded for
+`backward_inference.py`.
