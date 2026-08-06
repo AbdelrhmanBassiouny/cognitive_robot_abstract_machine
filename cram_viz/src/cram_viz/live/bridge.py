@@ -884,7 +884,7 @@ class Bridge:
         """
         return [
             connection
-            for connection in world.connections or []
+            for connection in world.connections
             if isinstance(connection, ActiveConnection1DOF)
         ]
 

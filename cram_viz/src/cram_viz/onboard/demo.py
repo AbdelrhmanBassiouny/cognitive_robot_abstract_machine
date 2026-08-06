@@ -357,7 +357,7 @@ class Recorder:
                 self._bodies[name] = body
         self._connections = [
             connection
-            for connection in self.world.connections or []
+            for connection in self.world.connections
             if isinstance(connection, ActiveConnection1DOF)
         ]
         log(

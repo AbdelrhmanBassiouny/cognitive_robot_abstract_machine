@@ -23,7 +23,7 @@ import logging
 import os
 import re
 from collections import Counter, defaultdict
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import asdict, dataclass, fields, is_dataclass
 from enum import Enum
 from pathlib import Path
 
@@ -38,6 +38,8 @@ from typing_extensions import (
 )
 
 from krrood.entity_query_language import factories as eql_factories
+from krrood.entity_query_language.evaluable import Evaluable
+from krrood.entity_query_language.scope import eql_factory_namespace
 
 from cram_viz import get_logger, paths
 
@@ -51,18 +53,6 @@ class NamesAnEntity(Protocol):
     """
 
     name: Any
-
-
-@runtime_checkable
-class IsEvaluable(Protocol):
-    """
-    An EQL expression that still has to be evaluated to yield its solutions.
-    """
-
-    def evaluate(self) -> Any:
-        """
-        Run the query and return its result.
-        """
 
 
 @runtime_checkable
@@ -766,7 +756,7 @@ def _side_of_name(name: str) -> Optional[ArmSide]:
     return None
 
 
-class KB:
+class EpisodeKnowledgeBase:
     """
     The recorded episode as EQL-queryable entities.
 
@@ -1005,64 +995,34 @@ class KB:
         ]
 
 
-_kb: Optional[KB] = None
+_knowledge_base: Optional[EpisodeKnowledgeBase] = None
 
 
-def get_kb() -> KB:
+def get_knowledge_base() -> EpisodeKnowledgeBase:
     """
     The process-wide knowledge base, built on first use.
     """
-    global _kb
-    if _kb is None:
-        _kb = KB()
-    return _kb
+    global _knowledge_base
+    if _knowledge_base is None:
+        _knowledge_base = EpisodeKnowledgeBase()
+    return _knowledge_base
 
 
-def reset_kb() -> None:
+def reset_knowledge_base() -> None:
     """
-    Drop the cached KB (tests point CRAM_VIZ_SCENES at fixtures).
+    Drop the cached knowledge base (tests point CRAM_VIZ_SCENES at fixtures).
     """
-    global _kb
-    _kb = None
+    global _knowledge_base
+    _knowledge_base = None
 
 
 # %% EQL session
-#: EQL factories re-exported into every query namespace.
-#: Imported by name rather than looked up, so a factory that krrood renames or drops
-#: breaks the import instead of silently vanishing from the query console.
-EQL_FACTORIES = {
-    "entity": eql_factories.entity,
-    "set_of": eql_factories.set_of,
-    "variable": eql_factories.variable,
-    "an": eql_factories.an,
-    "a": eql_factories.a,
-    "the": eql_factories.the,
-    "and_": eql_factories.and_,
-    "or_": eql_factories.or_,
-    "not_": eql_factories.not_,
-    "contains": eql_factories.contains,
-    "in_": eql_factories.in_,
-    "exists": eql_factories.exists,
-    "for_all": eql_factories.for_all,
-    "count": eql_factories.count,
-    "count_all": eql_factories.count_all,
-    "average": eql_factories.average,
-    "sum": eql_factories.sum,
-    "max": eql_factories.max,
-    "min": eql_factories.min,
-    "mode": eql_factories.mode,
-    "distinct": eql_factories.distinct,
-    "flat_variable": eql_factories.flat_variable,
-    "variable_from": eql_factories.variable_from,
-}
-
-
 def fresh_namespace() -> Dict[str, Any]:
     """
     A namespace for evaluating one EQL query (fresh variables each time).
     """
-    kb = get_kb()
-    namespace: Dict[str, Any] = dict(EQL_FACTORIES)
+    kb = get_knowledge_base()
+    namespace: Dict[str, Any] = eql_factory_namespace()
     namespace.update(
         Position=Position,
         Gripper=Gripper,
@@ -1140,7 +1100,7 @@ def run_query(code: str, limit: int = 200) -> Dict[str, Any]:
         exec(compile(tree, "<eql>", "exec"), namespace)
         result = namespace.get("result")
 
-    if isinstance(result, IsEvaluable):
+    if isinstance(result, Evaluable):
         result = result.evaluate()
     rows, highlight, more = _result_rows(result, limit)
     kind = "rows" if rows and "__entity__" not in rows[0] else "entities"
@@ -1225,7 +1185,7 @@ def graph_payload() -> Dict[str, Any]:
     """
     The knowledge-graph overview: nodes, edges, details and presets.
     """
-    kb = get_kb()
+    kb = get_knowledge_base()
     nodes, edges, details = [], [], {}
 
     def add(node_id: str, label: str, group: str, lines: List[str]) -> None:
@@ -1404,12 +1364,14 @@ def graph_payload() -> Dict[str, Any]:
 
         # ground the demo in the architecture at the SUBPACKAGE that actually
         # realises each part (only wire to a node that exists in this view)
-        def link(src: str, dst: str, label: str) -> None:
+        def link(source: str, target: str, label: str) -> None:
             """
-            Add an edge, but only if dst is actually a node in this view.
+            Add an edge, but only if target is actually a node in this view.
             """
-            if any(n["id"] == dst for n in nodes):
-                edges.append({"from": src, "to": dst, "kind": "type", "label": label})
+            if any(n["id"] == target for n in nodes):
+                edges.append(
+                    {"from": source, "to": target, "kind": "type", "label": label}
+                )
 
         # anchor one representative manipulation episode (they share the stack)
         anchor = next((episode.name for episode in kb.episodes if episode.picks), None)
@@ -1501,7 +1463,7 @@ def view_payload(name: str) -> Dict[str, Any]:
     structural views of the same demo that the UI can overlay with live status from the
     bridge (see :mod:`cram_viz.live.http`, ``/plan`` and ``/chart``).
     """
-    kb = get_kb()
+    kb = get_knowledge_base()
     if name == "knowledge":
         return graph_payload()
     if name == "kinematics":
@@ -1613,7 +1575,7 @@ def expand_node(node_id: str) -> Optional[Dict[str, Any]]:
     """
     The inside view of a double-clicked node, or None if not drillable.
     """
-    kb = get_kb()
+    kb = get_knowledge_base()
     if node_id == kb.robot.name:  # robot → full URDF kinematic tree
         return _urdf_view(kb)
     if node_id == "plan":  # → the executed plan tree
@@ -1634,23 +1596,52 @@ def expand_node(node_id: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+class PlanNodeGroup(str, Enum):
+    """
+    Node colour group of the plan view's graph panel.
+    """
+
+    EVENT = "event"
+    ROBOT = "robot"
+    GOAL = "goal"
+    OBJECT = "object"
+    OTHER = "ind"
+
+
+@dataclass(frozen=True)
+class PlanLegendEntry:
+    """
+    One row of the plan view's legend.
+    """
+
+    group: PlanNodeGroup
+    """
+    Node colour group this row explains.
+    """
+
+    label: str
+    """
+    Human-readable name shown next to the group's colour.
+    """
+
+
 #: plan-node kind → node colour group of the graph panel
-PLAN_GROUPS = {
-    "ActionNode": "event",
-    "MotionNode": "robot",
-    "ConditionNode": "goal",
-    "AttachNode": "object",
-    "DetachNode": "object",
+PLAN_GROUPS: Dict[str, PlanNodeGroup] = {
+    "ActionNode": PlanNodeGroup.EVENT,
+    "MotionNode": PlanNodeGroup.ROBOT,
+    "ConditionNode": PlanNodeGroup.GOAL,
+    "AttachNode": PlanNodeGroup.OBJECT,
+    "DetachNode": PlanNodeGroup.OBJECT,
 }
 
 #: legend rows of the plan view
-PLAN_LEGEND = [
-    {"group": "event", "label": "Action"},
-    {"group": "robot", "label": "Motion"},
-    {"group": "goal", "label": "Condition"},
-    {"group": "object", "label": "Attach / detach"},
-    {"group": "ind", "label": "Other plan node"},
-]
+PLAN_LEGEND: Tuple[PlanLegendEntry, ...] = (
+    PlanLegendEntry(PlanNodeGroup.EVENT, "Action"),
+    PlanLegendEntry(PlanNodeGroup.ROBOT, "Motion"),
+    PlanLegendEntry(PlanNodeGroup.GOAL, "Condition"),
+    PlanLegendEntry(PlanNodeGroup.OBJECT, "Attach / detach"),
+    PlanLegendEntry(PlanNodeGroup.OTHER, "Other plan node"),
+)
 
 
 def shorten_action_label(label: str) -> str:
@@ -1695,7 +1686,7 @@ def _plan_view() -> Dict[str, Any]:
         add(
             node_id,
             label,
-            PLAN_GROUPS.get(tree.get("kind"), "ind"),
+            PLAN_GROUPS.get(tree.get("kind"), PlanNodeGroup.OTHER),
             lines,
             status=status,
         )
@@ -1714,7 +1705,7 @@ def _plan_view() -> Dict[str, Any]:
         "nodes": nodes,
         "edges": edges,
         "details": details,
-        "legend": PLAN_LEGEND,
+        "legend": [asdict(entry) for entry in PLAN_LEGEND],
         "layout": "hier",
         "live": "plan",
         "statusLegend": True,
@@ -1733,7 +1724,7 @@ def _is_movable(joint: Dict[str, str]) -> bool:
     return joint["type"] != FIXED_JOINT_TYPE
 
 
-def _urdf_view(kb: KB) -> Dict[str, Any]:
+def _urdf_view(knowledge_base: EpisodeKnowledgeBase) -> Dict[str, Any]:
     """
     The scene robot's URDF as a kinematic tree.
 
@@ -1746,7 +1737,7 @@ def _urdf_view(kb: KB) -> Dict[str, Any]:
     if not links:
         return {
             "ok": True,
-            "crumb": kb.robot.name + " · URDF (not found)",
+            "crumb": knowledge_base.robot.name + " · URDF (not found)",
             "nodes": [],
             "edges": [],
             "details": {},
@@ -1815,7 +1806,7 @@ def _urdf_view(kb: KB) -> Dict[str, Any]:
     # the sensor head spread out around the base than as one wide LR tree
     return {
         "ok": True,
-        "crumb": kb.robot.name + " · URDF",
+        "crumb": knowledge_base.robot.name + " · URDF",
         "nodes": nodes,
         "edges": edges,
         "details": details,
@@ -1823,16 +1814,20 @@ def _urdf_view(kb: KB) -> Dict[str, Any]:
     }
 
 
-def _package_view(kb: KB, package: Package) -> Dict[str, Any]:
+def _package_view(
+    knowledge_base: EpisodeKnowledgeBase, package: Package
+) -> Dict[str, Any]:
     """
     Inside view of a package: its subpackages and top-level classes.
     """
     nodes, edges, details, add = _view()
-    subpackages = [entry for entry in kb.subpackages if entry.package == package.name]
+    subpackages = [
+        entry for entry in knowledge_base.subpackages if entry.package == package.name
+    ]
     top_level = sorted(
         (
             entry
-            for entry in kb.classes
+            for entry in knowledge_base.classes
             if entry.package == package.name and entry.subpackage == package.name
         ),
         key=lambda entry: -entry.methods,
@@ -1879,13 +1874,19 @@ def _package_view(kb: KB, package: Package) -> Dict[str, Any]:
     }
 
 
-def _subpackage_view(kb: KB, subpackage: SubPackage) -> Dict[str, Any]:
+def _subpackage_view(
+    knowledge_base: EpisodeKnowledgeBase, subpackage: SubPackage
+) -> Dict[str, Any]:
     """
     Inside view of a subpackage: its classes with inheritance edges.
     """
     nodes, edges, details, add = _view()
     classes = sorted(
-        (entry for entry in kb.classes if entry.subpackage == subpackage.name),
+        (
+            entry
+            for entry in knowledge_base.classes
+            if entry.subpackage == subpackage.name
+        ),
         key=lambda entry: -entry.methods,
     )
     add(
@@ -1914,7 +1915,9 @@ def _subpackage_view(kb: KB, subpackage: SubPackage) -> Dict[str, Any]:
 SUBCLASS_CAP = 80
 
 
-def _class_view(kb: KB, python_class: PythonClass) -> Dict[str, Any]:
+def _class_view(
+    knowledge_base: EpisodeKnowledgeBase, python_class: PythonClass
+) -> Dict[str, Any]:
     """
     Inheritance view of one class: bases above, repo subclasses below.
     """
@@ -1929,7 +1932,7 @@ def _class_view(kb: KB, python_class: PythonClass) -> Dict[str, Any]:
     # direct base classes: resolve inside the repo (same package preferred),
     # otherwise show them as external
     for base in python_class.bases:
-        candidates = [entry for entry in kb.classes if entry.name == base]
+        candidates = [entry for entry in knowledge_base.classes if entry.name == base]
         pick = next(
             (entry for entry in candidates if entry.package == python_class.package),
             candidates[0] if candidates else None,
@@ -1948,7 +1951,7 @@ def _class_view(kb: KB, python_class: PythonClass) -> Dict[str, Any]:
     # every subclass in the repo (matched by base name)
     subclasses = [
         entry
-        for entry in kb.classes
+        for entry in knowledge_base.classes
         if python_class.name in entry.bases and _class_id(entry) != class_id
     ]
     for subclass in subclasses[:SUBCLASS_CAP]:
@@ -2003,7 +2006,7 @@ def get_presets() -> List[Dict[str, str]]:
     Scene presets are generated from the loaded scene, so they stay valid for any
     onboarded robot/environment; the architecture presets are static.
     """
-    kb = get_kb()
+    kb = get_knowledge_base()
     presets = [
         {"text": "which robot is this?", "code": "the(entity(rob))"},
         {"text": "which arms does it have?", "code": "an(entity(arm))"},

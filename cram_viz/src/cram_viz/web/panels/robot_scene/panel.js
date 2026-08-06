@@ -956,11 +956,8 @@ Panels.define('robot-scene', function (root, bus) {
       if (key === liveDraggedKey) continue;    // the mouse owns this one right now
       const g = objectMeshes[key];
       if (g) {
-        // the running world HAS this object, so it belongs on screen. An earlier
-        // catalog answer may have hidden it (the demo spawns its objects some
-        // seconds after the world exists — attaching before that used to hide
-        // every bundle object permanently, because a hidden-but-known object
-        // never counts as "unknown" and so never triggered another reconcile).
+        // the running world HAS this object, so it belongs on screen, even if an
+        // earlier catalog answer hid it.
         if (!g.visible) { g.visible = true; needsRender = true; }
         setPose(g, liveStateKeys[key], liveStateKeys[key], 0);
       } else unknown = true;                   // an object the demo spawned mid-run

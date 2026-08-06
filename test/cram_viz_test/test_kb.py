@@ -10,32 +10,36 @@ from cram_viz import kb  # noqa: E402  (importable once krrood is present)
 
 
 @pytest.fixture()
-def fresh_kb(fixture_scene):
-    kb.reset_kb()
-    return kb.get_kb()
+def fresh_knowledge_base(fixture_scene):
+    kb.reset_knowledge_base()
+    return kb.get_knowledge_base()
 
 
-class TestKB:
-    def test_scene_entities(self, fresh_kb):
-        assert [o.name for o in fresh_kb.objects] == ["milk", "place_area"]
-        assert fresh_kb.robot.name == "pr2"
-        assert [a.side for a in fresh_kb.arms] == ["left"]
-        assert fresh_kb.arms[0].gripper.name == "left_gripper"
+class TestEpisodeKnowledgeBase:
+    def test_scene_entities(self, fresh_knowledge_base):
+        assert [o.name for o in fresh_knowledge_base.objects] == ["milk", "place_area"]
+        assert fresh_knowledge_base.robot.name == "pr2"
+        assert [a.side for a in fresh_knowledge_base.arms] == ["left"]
+        assert fresh_knowledge_base.arms[0].gripper.name == "left_gripper"
 
-    def test_episodes_link_objects(self, fresh_kb):
-        transport = next(e for e in fresh_kb.episodes if e.name == "transport_milk")
-        assert transport.picks is fresh_kb.objects[0]
+    def test_episodes_link_objects(self, fresh_knowledge_base):
+        transport = next(
+            e for e in fresh_knowledge_base.episodes if e.name == "transport_milk"
+        )
+        assert transport.picks is fresh_knowledge_base.objects[0]
         assert transport.places_at.name == "place_area"
         assert transport.performed_by.side == "left"
 
-    def test_joint_motion_ranges(self, fresh_kb):
-        torso = next(j for j in fresh_kb.joints if j.name == "torso_lift_joint")
+    def test_joint_motion_ranges(self, fresh_knowledge_base):
+        torso = next(
+            j for j in fresh_knowledge_base.joints if j.name == "torso_lift_joint"
+        )
         assert torso.min_rad == 0.0 and torso.max_rad == 0.3
 
-    def test_architecture_scan(self, fresh_kb):
-        names = {p.name for p in fresh_kb.packages}
+    def test_architecture_scan(self, fresh_knowledge_base):
+        names = {p.name for p in fresh_knowledge_base.packages}
         assert {"coraplex", "krrood"} <= names
-        assert any(c.name == "Plan" for c in fresh_kb.classes)
+        assert any(c.name == "Plan" for c in fresh_knowledge_base.classes)
 
 
 class TestQueries:
@@ -61,15 +65,17 @@ class TestQueries:
 
 
 class TestRecordedMeasurements:
-    def test_an_unrecorded_height_stays_unknown(self, fresh_kb):
+    def test_an_unrecorded_height_stays_unknown(self, fresh_knowledge_base):
         """
         The fixture bundle records no object height, so none may be invented.
         """
-        milk = next(entry for entry in fresh_kb.objects if entry.name == "milk")
+        milk = next(
+            entry for entry in fresh_knowledge_base.objects if entry.name == "milk"
+        )
         assert milk.height_m is None
 
-    def test_an_unrecorded_gripper_opening_stays_unknown(self, fresh_kb):
-        assert fresh_kb.arms[0].gripper.opening_m is None
+    def test_an_unrecorded_gripper_opening_stays_unknown(self, fresh_knowledge_base):
+        assert fresh_knowledge_base.arms[0].gripper.opening_m is None
 
     def test_a_recorded_height_is_used(self, fixture_scene, monkeypatch):
         """
@@ -78,8 +84,10 @@ class TestRecordedMeasurements:
         scene, trajectory = kb.load_scene()
         scene["objects"][0]["height"] = 0.23
         monkeypatch.setattr(kb, "load_scene", lambda: (scene, trajectory))
-        kb.reset_kb()
-        milk = next(entry for entry in kb.get_kb().objects if entry.name == "milk")
+        kb.reset_knowledge_base()
+        milk = next(
+            entry for entry in kb.get_knowledge_base().objects if entry.name == "milk"
+        )
         assert milk.height_m == 0.23
 
     def test_unknown_measurements_are_left_out_of_the_graph(self, fixture_scene):
@@ -145,6 +153,16 @@ class TestViewPayloads:
         assert by_label["Transport"]["status"] == "CREATED"
         assert len(payload["edges"]) == len(payload["nodes"]) - 1
 
+    def test_plan_view_legend(self, fixture_scene):
+        payload = kb.view_payload("plan")
+        assert payload["legend"] == [
+            {"group": "event", "label": "Action"},
+            {"group": "robot", "label": "Motion"},
+            {"group": "goal", "label": "Condition"},
+            {"group": "object", "label": "Attach / detach"},
+            {"group": "ind", "label": "Other plan node"},
+        ]
+
     def test_chart_view_is_live_only(self, fixture_scene):
         payload = kb.view_payload("chart")
         assert payload["ok"] and payload["nodes"] == []
@@ -171,7 +189,7 @@ class TestPlanGroups:
             }
         )
         monkeypatch.setattr(kb, "load_scene", lambda: (scene, trajectory))
-        kb.reset_kb()
+        kb.reset_knowledge_base()
         node = next(
             n for n in kb.view_payload("plan")["nodes"] if n["label"] == "AttachNode"
         )
@@ -191,7 +209,7 @@ class TestPlanGroups:
             }
         )
         monkeypatch.setattr(kb, "load_scene", lambda: (scene, trajectory))
-        kb.reset_kb()
+        kb.reset_knowledge_base()
         node = next(
             n for n in kb.view_payload("plan")["nodes"] if n["label"] == "DetachNode"
         )
@@ -210,7 +228,7 @@ class TestPresetSafety:
         scene["objects"][0]["id"] = "o'brien"
         scene["segments"][1]["picks"] = "o'brien"
         monkeypatch.setattr(kb, "load_scene", lambda: (scene, trajectory))
-        kb.reset_kb()
+        kb.reset_knowledge_base()
         preset = next(p for p in kb.get_presets() if "obj.name" in p["code"])
         result = kb.run_query(preset["code"])
         assert result["ok"] and result["rows"][0]["__entity__"] == "o'brien"
@@ -225,6 +243,6 @@ class TestPresetSafety:
         scene, trajectory = kb.load_scene()
         scene["segments"][1]["step"] = "transport_o'brien"
         monkeypatch.setattr(kb, "load_scene", lambda: (scene, trajectory))
-        kb.reset_kb()
+        kb.reset_knowledge_base()
         for preset in kb.get_presets():
             assert kb.run_query(preset["code"])["ok"]

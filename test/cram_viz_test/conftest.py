@@ -38,7 +38,7 @@ def reset_knowledge_base_cache() -> None:
         return
     from cram_viz import kb
 
-    kb.reset_kb()
+    kb.reset_knowledge_base()
 
 
 @pytest.fixture()

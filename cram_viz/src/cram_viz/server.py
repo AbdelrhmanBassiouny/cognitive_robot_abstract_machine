@@ -205,8 +205,8 @@ def main(argv: Optional[List[str]] = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
     argv = sys.argv[1:] if argv is None else argv
     port = int(argv[0]) if argv else DEFAULT_PORT
-    if kb_module is not None:  # build the KB once, before the first query
-        kb_module.get_kb()
+    if kb_module is not None:  # build the knowledge base once, before the first query
+        kb_module.get_knowledge_base()
     with make_server(port) as httpd:
         eql = (
             "EQL ready (krrood)"
