@@ -39,6 +39,7 @@ from typing_extensions import (
 
 from krrood.entity_query_language import factories as eql_factories
 from krrood.entity_query_language.evaluable import Evaluable
+from krrood.entity_query_language.scope import eql_factory_namespace
 
 from cram_viz import get_logger, paths
 
@@ -1016,42 +1017,12 @@ def reset_kb() -> None:
 
 
 # %% EQL session
-#: EQL factories re-exported into every query namespace.
-#: Imported by name rather than looked up, so a factory that krrood renames or drops
-#: breaks the import instead of silently vanishing from the query console.
-EQL_FACTORIES = {
-    "entity": eql_factories.entity,
-    "set_of": eql_factories.set_of,
-    "variable": eql_factories.variable,
-    "an": eql_factories.an,
-    "a": eql_factories.a,
-    "the": eql_factories.the,
-    "and_": eql_factories.and_,
-    "or_": eql_factories.or_,
-    "not_": eql_factories.not_,
-    "contains": eql_factories.contains,
-    "in_": eql_factories.in_,
-    "exists": eql_factories.exists,
-    "for_all": eql_factories.for_all,
-    "count": eql_factories.count,
-    "count_all": eql_factories.count_all,
-    "average": eql_factories.average,
-    "sum": eql_factories.sum,
-    "max": eql_factories.max,
-    "min": eql_factories.min,
-    "mode": eql_factories.mode,
-    "distinct": eql_factories.distinct,
-    "flat_variable": eql_factories.flat_variable,
-    "variable_from": eql_factories.variable_from,
-}
-
-
 def fresh_namespace() -> Dict[str, Any]:
     """
     A namespace for evaluating one EQL query (fresh variables each time).
     """
     kb = get_kb()
-    namespace: Dict[str, Any] = dict(EQL_FACTORIES)
+    namespace: Dict[str, Any] = eql_factory_namespace()
     namespace.update(
         Position=Position,
         Gripper=Gripper,
