@@ -63,6 +63,9 @@ from semantic_digital_twin.world_description.world_entity import (
     WorldEntityWithClassBasedID,
     WorldEntityWithID,
 )
+from semantic_digital_twin.world_description.world_modification import (
+    AttributeUpdateModification,
+)
 from semantic_digital_twin.world_description.world_state import (
     WorldStateTrajectory,
     WorldState,
@@ -71,6 +74,51 @@ from semantic_digital_twin.world_description.world_state_trajectory_plotter impo
     WorldStateTrajectoryPlotter,
 )
 from semantic_digital_twin.orm.ormatic_interface import *
+
+
+def test_create_with_root_body_names_the_root_from_a_plain_string():
+    world = World.create_with_root_body("kitchen")
+    assert world.root.name == PrefixedName("kitchen")
+
+
+def test_create_with_root_body_defaults_the_root_name_to_map():
+    world = World.create_with_root_body()
+    assert world.root.name == PrefixedName("map")
+
+
+def test_force_root_name_renames_the_root_body():
+    world = World.create_with_root_body("map")
+    world.force_root_name(PrefixedName("odom"))
+    assert world.root.name == PrefixedName("odom")
+
+
+def test_force_root_name_preserves_root_identity_and_children(world_setup):
+    world, l1, l2, bf, r1, r2 = world_setup
+    root_id = world.root.id
+    bf_connection_before = world.get_connection(world.root, bf)
+
+    world.force_root_name(PrefixedName("new_root", prefix="world"))
+
+    assert world.root.id == root_id
+    assert world.root.name == PrefixedName("new_root", prefix="world")
+    assert world.get_connection(world.root, bf) is bf_connection_before
+    assert world.get_kinematic_structure_entity_by_name(PrefixedName("bf")) is bf
+
+
+def test_force_root_name_records_an_attribute_update_modification():
+    world = World.create_with_root_body("map")
+    root_id = world.root.id
+
+    world.force_root_name(PrefixedName("odom"))
+
+    last_block = world._model_manager.model_modification_blocks[-1]
+    attribute_updates = [
+        modification
+        for modification in last_block.modifications
+        if isinstance(modification, AttributeUpdateModification)
+        and modification.entity_id == root_id
+    ]
+    assert len(attribute_updates) == 1
 
 
 def test_set_state(world_setup):
@@ -650,6 +698,24 @@ def test_remove_connection(world_setup):
         with world.modify_world():
             # if you remove a connection, the child must be connected some other way or deleted
             world.remove_connection(world.get_connection(r1, r2))
+
+
+def test_remove_branch_from_world(world_setup):
+    world, l1, l2, bf, r1, r2 = world_setup
+    parent_connection = world.get_connection(bf, r1)
+    inner_connection = world.get_connection(r1, r2)
+
+    world.remove_branch_from_world(r1)
+
+    # The whole r-branch and the connection attaching it to its parent are gone.
+    assert r1 not in world.kinematic_structure_entities
+    assert r2 not in world.kinematic_structure_entities
+    assert parent_connection not in world.connections
+    assert inner_connection not in world.connections
+
+    # The rest of the world is untouched.
+    for remaining in (world.root, bf, l1, l2):
+        assert remaining in world.kinematic_structure_entities
 
 
 def test_kinematic_structure_entity_hash(world_setup):

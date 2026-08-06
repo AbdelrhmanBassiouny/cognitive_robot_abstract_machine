@@ -1,3 +1,4 @@
+import os
 from copy import deepcopy
 from functools import partial
 
@@ -33,6 +34,11 @@ from semantic_digital_twin.robots.stretch import Stretch
 
 
 def pytest_configure(config):
+    # Only the xdist controller generates: workers run this hook too, and
+    # concurrent writers would truncate the file while another process formats it.
+    if os.environ.get("PYTEST_XDIST_WORKER"):
+        return
+
     # Ensure ORM classes are generated before tests run
     repo_root = Path(__file__).resolve().parents[2]
     generate_orm_path = repo_root / "coraplex" / "scripts" / "generate_orm.py"

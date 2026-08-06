@@ -2,7 +2,7 @@ from __future__ import annotations, absolute_import
 
 from dataclasses import dataclass, field, Field
 from pathlib import Path
-from typing import Dict, Set, Any
+from typing import Dict, Set
 from uuid import UUID
 
 import mujoco
@@ -346,6 +346,48 @@ class InvalidConnectionLimits(UsageError):
 
 
 @dataclass
+class MissingConnectionParentError(UsageError):
+    """
+    Raised when a connection is spawned without a parent kinematic structure entity.
+    """
+
+    connection_name: Optional[str]
+    """
+    The name of the connection specification that was spawned without a parent.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Connecting the connection '{self.connection_name}' requires a parent kinematic structure entity, "
+            f"but None could be identified."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "pass the parent entity via the 'parent' keyword argument of connect, or make sure that the current "
+            "world is not empty."
+        )
+
+
+@dataclass
+class MissingConnectionAxisError(UsageError):
+    """
+    Raised when an active connection is created without a movement axis.
+    """
+
+    connection_type_name: str
+    """
+    The name of the active connection type that was created without an axis.
+    """
+
+    def error_message(self) -> str:
+        return f"'{self.connection_type_name}' is an active connection and requires an axis."
+
+    def suggest_correction(self) -> str:
+        return "pass a movement axis via the 'axis' keyword argument."
+
+
+@dataclass
 class MimicDofLimitOverwriteError(UsageError):
     """
     Raised when trying to overwrite the limits of a mimic degree of freedom.
@@ -469,9 +511,9 @@ class UnknownPartWholeRelationshipField(UsageError):
     relationship field of the annotation.
     """
 
-    annotation: HasRootBody
+    annotation: Type[HasRootBody]
     """
-    The annotation the part was being added to.
+    The annotation type the part was being added to.
     """
 
     field_name: str
@@ -487,7 +529,7 @@ class UnknownPartWholeRelationshipField(UsageError):
 
     def error_message(self) -> str:
         return (
-            f"{type(self.annotation).__name__} has no part-whole relationship field "
+            f"{self.annotation.__name__} has no part-whole relationship field "
             f"'{self.field_name}."
         )
 
@@ -496,6 +538,65 @@ class UnknownPartWholeRelationshipField(UsageError):
             f"the available fields are:"
             f" {', '.join(self.available_fields) or '(none)'}"
         )
+
+
+@dataclass
+class PartWholeCardinalityError(UsageError):
+    """
+    Raised when a part specification supplies a list of parts for a singular (non-to-
+    many) part-whole relationship field.
+    """
+
+    annotation_type_name: str
+    """
+    The name of the annotation type the parts were being mounted onto.
+    """
+
+    field_name: str
+    """
+    The singular part-whole relationship field that was given a list of parts.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The part-whole relationship field '{self.field_name}' of "
+            f"'{self.annotation_type_name}' is singular and accepts only one part, "
+            f"but a list of parts was supplied."
+        )
+
+    def suggest_correction(self) -> str:
+        return "supply a single part specification for this field instead of a list."
+
+
+@dataclass
+class PartWholeFieldInAnnotationKwargs(UsageError):
+    """
+    Raised when ``annotation_kwargs`` contains a key that names a part-whole
+    relationship field.
+
+    Such fields must be supplied via ``part_specifications`` on the annotation
+    specification factory so they are spawned and mounted, not passed straight to the
+    annotation constructor.
+    """
+
+    annotation_type_name: str
+    """
+    The name of the annotation type the keyword arguments were meant for.
+    """
+
+    field_names: List[str]
+    """
+    The offending ``annotation_kwargs`` keys that name part-whole relationship fields.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"annotation_kwargs for '{self.annotation_type_name}' contains part-whole relationship "
+            f"fields: {', '.join(self.field_names)}."
+        )
+
+    def suggest_correction(self) -> str:
+        return "move these entries to part_specifications instead of annotation_kwargs."
 
 
 @dataclass
@@ -1273,7 +1374,8 @@ class MujocoEntityNotFoundError(MujocoError):
 @dataclass
 class VideoRecordingError(MultiSimError):
     """
-    Base class for all :class:`~semantic_digital_twin.adapters.mujoco_video_recording.MujocoVideoRecorder`
+    Base class for all
+    :class:`~semantic_digital_twin.adapters.mujoco_video_recording.MujocoVideoRecorder`
     exceptions.
     """
 
@@ -1281,7 +1383,8 @@ class VideoRecordingError(MultiSimError):
 @dataclass
 class VideoRecordingAlreadyStartedError(VideoRecordingError):
     """
-    Raised when :meth:`~semantic_digital_twin.adapters.mujoco_video_recording.MujocoVideoRecorder.start`
+    Raised when
+    :meth:`~semantic_digital_twin.adapters.mujoco_video_recording.MujocoVideoRecorder.start`
     is called on a recorder that is already recording.
     """
 
@@ -1300,7 +1403,8 @@ class VideoRecordingAlreadyStartedError(VideoRecordingError):
 @dataclass
 class VideoRecordingNotStartedError(VideoRecordingError):
     """
-    Raised when :meth:`~semantic_digital_twin.adapters.mujoco_video_recording.MujocoVideoRecorder.stop`
+    Raised when
+    :meth:`~semantic_digital_twin.adapters.mujoco_video_recording.MujocoVideoRecorder.stop`
     is called on a recorder that was never started.
     """
 
@@ -1340,7 +1444,8 @@ class EmptyWorldVideoRecordingError(VideoRecordingError):
 @dataclass
 class EmptyVideoRecordingError(VideoRecordingError):
     """
-    Raised when :meth:`~semantic_digital_twin.adapters.mujoco_video_recording.RecordedVideo.write`
+    Raised when
+    :meth:`~semantic_digital_twin.adapters.mujoco_video_recording.RecordedVideo.write`
     is called on a recording that has no frames.
     """
 
@@ -1359,7 +1464,8 @@ class EmptyVideoRecordingError(VideoRecordingError):
 @dataclass
 class InvalidVideoRecordingRateError(VideoRecordingError):
     """
-    Raised when a :class:`~semantic_digital_twin.adapters.mujoco_video_recording.MujocoVideoRecorder`
+    Raised when a
+    :class:`~semantic_digital_twin.adapters.mujoco_video_recording.MujocoVideoRecorder`
     is configured with a non-positive rate.
     """
 
@@ -1378,3 +1484,52 @@ class InvalidVideoRecordingRateError(VideoRecordingError):
 
     def suggest_correction(self) -> str:
         return "use a positive integer."
+
+
+@dataclass
+class MergedRobotAnnotationNotFound(UsageError):
+    """
+    Raised when merging a robot into a world produced no semantic annotation for the
+    branch the robot was annotated on.
+    """
+
+    annotation_type_name: str
+    """
+    The name of the robot annotation type that was expected in the merged world.
+    """
+
+    annotation_root_id: UUID
+    """
+    The identifier of the annotated robot's root entity.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The merged world holds no '{self.annotation_type_name}' annotation rooted "
+            f"at the entity '{self.annotation_root_id}'."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "check that merging the robot world replays its semantic annotations into "
+            "the target world."
+        )
+
+
+@dataclass
+class ExerciseVerificationFailed(UsageError):
+    """
+    Raised when a solution written in a self-assessment exercise does not satisfy one of
+    the exercise's requirements.
+    """
+
+    requirement: str
+    """
+    The requirement that the solution failed to satisfy.
+    """
+
+    def error_message(self) -> str:
+        return f"Your solution does not satisfy this requirement: {self.requirement}"
+
+    def suggest_correction(self) -> str:
+        return "revisit the task description of this exercise and adjust your solution."

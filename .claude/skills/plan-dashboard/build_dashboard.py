@@ -18,9 +18,10 @@ Usage:
 
 pr_data.json shape: {"<owner>/<repo>": {"<pr_number>": {"state": "open"|
 "closed", "draft": bool, "merged_at": str|null, "labels": [str, ...]}}} -
-one entry per pull request number referenced by any item. See
-pr-data-fetching.md (next to this script) for how a session should gather
-it.
+one entry per pull request number referenced by any item. A closed entry
+must carry merged_at explicitly, null included; omitting it is rejected
+rather than read as unmerged. See pr-data-fetching.md (next to this script)
+for how a session should gather it.
 
 Prints a one-line JSON summary to stdout (status counts, drift count,
 ready-to-start/blocker-maybe-cleared item titles) so the calling skill can
@@ -136,8 +137,8 @@ class PullRequestLabel(StrEnum):
     may add labels this dashboard never needs to know about. See
     :attr:`PullRequestRecord.identified_labels` for how an unrecognized
     label is handled (silently excluded, not an error), and
-    ``.claude/hooks/README.md``'s "pull request labels this tooling relies on"
-    section for what each member means and who applies it.
+    ``.claude/hooks/README.md``'s "labels the dashboard reads" list for what
+    each member means and who applies it.
     """
 
     MERGED = "merged"
@@ -146,7 +147,7 @@ class PullRequestLabel(StrEnum):
 
 
 class ValidationProblem(ABC):
-    """A single problem found while validating a plan.yaml - see plans/README.md.
+    """A single problem found while validating a plan.yaml - see plan-schema.md.
 
     One dataclass subclass per validation rule, each carrying the specific
     fields that rule cares about rather than a pre-formatted string - so a
@@ -297,7 +298,7 @@ class DependencyCycle(ValidationProblem):
 
 
 class PlanValidationError(Exception):
-    """Raised when a plan.yaml fails schema validation - see plans/README.md."""
+    """Raised when a plan.yaml fails schema validation - see plan-schema.md."""
 
     def __init__(self, problems: list[ValidationProblem]) -> None:
         self.problems = problems
@@ -418,6 +419,12 @@ def validate_plan(plan: dict[str, Any]) -> None:
         raise PlanValidationError(problems)
 
 
+class MissingMergeTimestampError(ValueError):
+    """Raised when a closed pull request's ``pr_data.json`` entry omits the
+    ``merged_at`` key altogether, which leaves no way to tell a merged pull
+    request from one closed unmerged."""
+
+
 @dataclass
 class PullRequestRecord:
     """The live GitHub state of one pull request, as gathered by the skill."""
@@ -459,10 +466,23 @@ class PullRequestRecord:
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> PullRequestRecord:
-        """Build a record from one entry of ``pr_data.json``."""
+        """Build a record from one entry of ``pr_data.json``.
+
+        A closed entry must carry ``merged_at`` explicitly, ``null`` included:
+        a gatherer that never requested the field would otherwise be
+        indistinguishable from GitHub reporting no merge, silently turning
+        every merged pull request into a closed-unmerged one.
+
+        :raises MissingMergeTimestampError: If a closed entry omits ``merged_at``.
+        """
+        state = PullRequestState(data["state"])
+        if state is PullRequestState.CLOSED and "merged_at" not in data:
+            raise MissingMergeTimestampError(
+                "a closed pull request entry must carry merged_at (null included)"
+            )
         merged_at = data.get("merged_at")
         return cls(
-            state=PullRequestState(data["state"]),
+            state=state,
             draft=data.get("draft", False),
             merged_at=datetime.fromisoformat(merged_at) if merged_at else None,
             labels=list(data.get("labels") or []),
@@ -592,6 +612,13 @@ class DependencyChip:
     tooltip: str
     """The chip's hover title: the dependency's title, or its identifier
     again if it doesn't resolve to a known item."""
+
+    is_ready: bool
+    """Whether the dependency is actually safe to build on right now
+    (:meth:`Item.is_ready_to_unblock_dependents`) - ``False`` for an
+    unresolved identifier, since an item this plan doesn't know about can
+    never be considered ready. Drives the chip's ``chip-unmet`` styling, the
+    dashboard's one visual cue that an item is blocked on this dependency."""
 
 
 @dataclass(frozen=True)
@@ -1104,13 +1131,17 @@ class DashboardRenderer:
             if dependency is None:
                 chips.append(
                     DependencyChip(
-                        identifier=dependency_identifier, tooltip=dependency_identifier
+                        identifier=dependency_identifier,
+                        tooltip=dependency_identifier,
+                        is_ready=False,
                     )
                 )
             else:
                 chips.append(
                     DependencyChip(
-                        identifier=dependency.identifier, tooltip=dependency.title
+                        identifier=dependency.identifier,
+                        tooltip=dependency.title,
+                        is_ready=dependency.is_ready_to_unblock_dependents(),
                     )
                 )
         return chips
@@ -1165,7 +1196,7 @@ class DashboardRenderer:
                 for identifier in item.depends_on
                 if identifier in self.items_by_identifier
             ]
-            if not dependencies or item.status not in (
+            if item.status not in (
                 ItemStatus.NOT_STARTED,
                 ItemStatus.BLOCKED,
             ):
