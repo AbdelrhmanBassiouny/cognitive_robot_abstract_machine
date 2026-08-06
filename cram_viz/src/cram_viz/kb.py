@@ -38,6 +38,7 @@ from typing_extensions import (
 )
 
 from krrood.entity_query_language import factories as eql_factories
+from krrood.entity_query_language.evaluable import Evaluable
 
 from cram_viz import get_logger, paths
 
@@ -51,18 +52,6 @@ class NamesAnEntity(Protocol):
     """
 
     name: Any
-
-
-@runtime_checkable
-class IsEvaluable(Protocol):
-    """
-    An EQL expression that still has to be evaluated to yield its solutions.
-    """
-
-    def evaluate(self) -> Any:
-        """
-        Run the query and return its result.
-        """
 
 
 @runtime_checkable
@@ -1140,7 +1129,7 @@ def run_query(code: str, limit: int = 200) -> Dict[str, Any]:
         exec(compile(tree, "<eql>", "exec"), namespace)
         result = namespace.get("result")
 
-    if isinstance(result, IsEvaluable):
+    if isinstance(result, Evaluable):
         result = result.evaluate()
     rows, highlight, more = _result_rows(result, limit)
     kind = "rows" if rows and "__entity__" not in rows[0] else "entities"
