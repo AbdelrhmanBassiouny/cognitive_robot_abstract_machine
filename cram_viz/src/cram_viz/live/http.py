@@ -7,8 +7,8 @@ HTTP endpoints of the live bridge (default port 8765).
     GET /state   {seq, frames: {prefixed_joint: pos}, base: pose7,
                   objects: {mesh_key: pose7}}
     GET /objects geometry catalog (mesh served via /mesh?key=)
-    GET /plan    {sig, nodes: [{id, parent, kind, label, status, derived}]}
-    GET /chart   {sig, title, nodes: [{id, parent, name, cls, life, obs}],
+    GET /plan    {signature, nodes: [{id, parent, kind, label, status, derived}]}
+    GET /chart   {signature, title, nodes: [{id, parent, name, cls, life, obs}],
                   edges: [{from, to, kind}]}
     POST /move   queue an object move (applied on the simulation thread)
 

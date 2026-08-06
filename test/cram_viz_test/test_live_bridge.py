@@ -244,11 +244,11 @@ class TestPlanSnapshot:
         bridge, root, action, condition, motion = plan_bridge
         bridge.bind_motion_group(running_group(motion))
         bridge.snapshot_plan()
-        while_running = bridge.get_plan()["sig"]
+        while_running = bridge.get_plan()["signature"]
         bridge.freeze_motion_group(
             MotionGroup(motion_mappings={motion: None}), TaskStatusName.SUCCEEDED
         )
-        assert bridge.get_plan()["sig"] == while_running
+        assert bridge.get_plan()["signature"] == while_running
 
     def test_structurally_identical_nodes_keep_separate_statuses(self):
         """
@@ -600,16 +600,16 @@ class TestChartSnapshot:
         bridge = Bridge()
         chart = make_chart()
         bridge.observe_chart(chart)
-        signature = bridge.get_chart()["sig"]
+        signature = bridge.get_chart()["signature"]
         chart.life_cycle_state.data = [3, 3, 3]
         bridge.observe_chart(chart)
-        assert bridge.get_chart()["sig"] == signature
+        assert bridge.get_chart()["signature"] == signature
         assert [node["life"] for node in bridge.get_chart()["nodes"]] == ["DONE"] * 3
 
     def test_new_chart_replaces_structure(self):
         bridge = Bridge()
         bridge.observe_chart(make_chart())
-        signature = bridge.get_chart()["sig"]
+        signature = bridge.get_chart()["signature"]
         single_node = [ChartNode(0, "OtherGoal")]
         bridge.observe_chart(
             ObservedStatechart(
@@ -620,7 +620,7 @@ class TestChartSnapshot:
             )
         )
         chart = bridge.get_chart()
-        assert chart["sig"] != signature
+        assert chart["signature"] != signature
         assert len(chart["nodes"]) == 1
         assert chart["nodes"][0]["obs"] == "TRUE"
 
