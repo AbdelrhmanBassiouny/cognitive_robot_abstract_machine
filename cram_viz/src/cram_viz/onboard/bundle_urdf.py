@@ -91,14 +91,16 @@ def _resolve_package_uri(uri: str) -> Optional[str]:
 
     The ``ament_index_python`` import is local and its failure ignored on purpose: this
     module has to work on a machine with no ROS installed at all, which is the whole
-    point of bundling.
+    point of bundling. ``ament_index_python`` also raises a plain ``OSError`` (via
+    ``EnvironmentError``) when it is installed but ``AMENT_PREFIX_PATH`` is unset - a
+    ROS installation that simply is not sourced, not a broken environment.
     """
     package, _, relative_path = uri[len(PACKAGE_SCHEME) :].partition("/")
     try:
         resolved = PackageUriResolver().resolve(uri)
         if os.path.isfile(resolved):
             return resolved
-    except ParsingError as error:
+    except (ParsingError, OSError) as error:
         logger.debug("the CRAM package resolver could not resolve %s: %s", uri, error)
     try:
         from ament_index_python.packages import get_package_share_directory
@@ -106,7 +108,7 @@ def _resolve_package_uri(uri: str) -> Optional[str]:
         resolved = os.path.join(get_package_share_directory(package), relative_path)
         if os.path.isfile(resolved):
             return resolved
-    except (ImportError, LookupError) as error:
+    except (ImportError, LookupError, OSError) as error:
         logger.debug("the ament index could not resolve %s: %s", uri, error)
     for root in _search_root_candidates():
         for candidate in (
