@@ -1404,12 +1404,14 @@ def graph_payload() -> Dict[str, Any]:
 
         # ground the demo in the architecture at the SUBPACKAGE that actually
         # realises each part (only wire to a node that exists in this view)
-        def link(src: str, dst: str, label: str) -> None:
+        def link(source: str, target: str, label: str) -> None:
             """
-            Add an edge, but only if dst is actually a node in this view.
+            Add an edge, but only if target is actually a node in this view.
             """
-            if any(n["id"] == dst for n in nodes):
-                edges.append({"from": src, "to": dst, "kind": "type", "label": label})
+            if any(n["id"] == target for n in nodes):
+                edges.append(
+                    {"from": source, "to": target, "kind": "type", "label": label}
+                )
 
         # anchor one representative manipulation episode (they share the stack)
         anchor = next((episode.name for episode in kb.episodes if episode.picks), None)
