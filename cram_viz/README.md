@@ -32,6 +32,27 @@ override) → the initialized submodule `cram_viz/scenes` → `~/.cram_viz/scene
 onboarded scenes need none of the ready-made bundles. Select a scene with
 `?scene=<name>` or `CRAM_VIZ_SCENE=<name>`.
 
+## Live mode
+
+Two ways to attach the live bridge to a running coraplex demo:
+
+1. As the run wrapper (e.g. a PyCharm run configuration):
+
+   ```bash
+   cram-viz-live path/to/demo.py
+   ```
+
+2. As a one-liner at the top of a demo file:
+
+   ```python
+   from cram_viz.live.runner import start; start()
+   ```
+
+Either way an HTTP bridge starts on port 8765 (`LIVE_VIZ_PORT` to change);
+while it is reachable the viewer shows a *Live* button that renders the
+running world instead of the recording, and dragging an object writes its
+pose back into the demo's world.
+
 ## Panels — how the UI is composed
 
 The frontend (`src/cram_viz/web/`) is a set of **panels** mounted into layout
