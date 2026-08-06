@@ -246,3 +246,348 @@ class TestPresetSafety:
         kb.reset_knowledge_base()
         for preset in kb.get_presets():
             assert kb.run_query(preset["code"])["ok"]
+
+
+# %% characterization: graph_payload() structure
+class TestGraphPayloadStructure:
+    def test_robot_arm_gripper_chain(self, fixture_scene):
+        payload = kb.graph_payload()
+        by_id = {n["id"]: n for n in payload["nodes"]}
+        assert by_id["pr2"]["label"] == "pr2" and by_id["pr2"]["group"] == "robot"
+        assert by_id["left_arm"]["label"] == "left arm"
+        assert by_id["left_gripper"]["label"] == "left gripper"
+        chain_edges = [e for e in payload["edges"] if e["label"] == "has part"]
+        assert chain_edges == [
+            {"from": "pr2", "to": "left_arm", "kind": "prop", "label": "has part"},
+            {
+                "from": "left_arm",
+                "to": "left_gripper",
+                "kind": "prop",
+                "label": "has part",
+            },
+        ]
+        assert payload["details"]["pr2"] == {
+            "label": "pr2",
+            "group": "robot",
+            "lines": ["a Robot", "1 arm", "double-click: full URDF tree"],
+        }
+
+    def test_episode_chain(self, fixture_scene):
+        payload = kb.graph_payload()
+        episode_edges = [
+            e
+            for e in payload["edges"]
+            if e["label"] in ("precedes", "performed by", "picks", "places at")
+        ]
+        assert episode_edges == [
+            {
+                "from": "prepare",
+                "to": "transport_milk",
+                "kind": "type",
+                "label": "precedes",
+            },
+            {
+                "from": "transport_milk",
+                "to": "pr2",
+                "kind": "prop",
+                "label": "performed by",
+            },
+            {
+                "from": "transport_milk",
+                "to": "milk",
+                "kind": "prop",
+                "label": "picks",
+            },
+            {
+                "from": "transport_milk",
+                "to": "place_area",
+                "kind": "prop",
+                "label": "places at",
+            },
+        ]
+
+    def test_object_detail_lines(self, fixture_scene):
+        payload = kb.graph_payload()
+        assert payload["details"]["milk"] == {
+            "label": "Milk",
+            "group": "object",
+            "lines": [
+                "a BenchObject",
+                "kind: object",
+                "position: (2.37, 2.00, 1.05)",
+            ],
+        }
+        # place_area's height (0.0) is recorded, unlike milk's, so its measurement
+        # line is present
+        assert payload["details"]["place_area"] == {
+            "label": "Place area",
+            "group": "object",
+            "lines": [
+                "a BenchObject",
+                "kind: location",
+                "position: (4.90, 3.30, 0.72)",
+                "height: 0.00 m",
+            ],
+        }
+
+    def test_architecture_cluster(self, fixture_scene):
+        payload = kb.graph_payload()
+        ids = {n["id"] for n in payload["nodes"]}
+        assert {"cram", "root", "coraplex", "krrood", "coraplex.plans"} <= ids
+        assert payload["details"]["cram"] == {
+            "label": "CRAM architecture",
+            "group": "root",
+            "lines": [
+                "~/cognitive_robot_abstract_machine",
+                "3 packages · 4 Python classes",
+            ],
+        }
+        assert payload["details"]["coraplex"] == {
+            "label": "coraplex",
+            "group": "concept",
+            "lines": [
+                "a Package",
+                "the plan executive: designators, plans, locations",
+                "2 modules · 2 classes",
+                "double-click to open",
+            ],
+        }
+        assert payload["details"]["coraplex.plans"] == {
+            "label": "plans",
+            "group": "klass",
+            "lines": [
+                "a SubPackage of coraplex",
+                "2 modules · 2 classes",
+                "double-click to open",
+            ],
+        }
+        contains_edges = [e for e in payload["edges"] if e["label"] == "contains"]
+        assert contains_edges == [
+            {"from": "cram", "to": "root", "kind": "prop", "label": "contains"},
+            {"from": "cram", "to": "coraplex", "kind": "prop", "label": "contains"},
+            {"from": "cram", "to": "krrood", "kind": "prop", "label": "contains"},
+            {
+                "from": "coraplex",
+                "to": "coraplex.plans",
+                "kind": "prop",
+                "label": "contains",
+            },
+        ]
+        import_edges = [e for e in payload["edges"] if e["label"] == "imports"]
+        assert import_edges == [
+            {"from": "coraplex", "to": "krrood", "kind": "type", "label": "imports"}
+        ]
+
+    def test_link_grounding_edge_present_branch(self, fixture_scene):
+        """
+        ``link()`` wires the anchor episode to ``coraplex.plans``, which exists as a
+        node in the fixture architecture.
+        """
+        payload = kb.graph_payload()
+        assert {
+            "from": "transport_milk",
+            "to": "coraplex.plans",
+            "kind": "type",
+            "label": "planned by",
+        } in payload["edges"]
+
+    def test_link_grounding_edge_absent_branch(self, fixture_scene):
+        """
+        ``link()`` silently drops edges whose target isn't a node in this view — neither
+        ``giskardpy.motion_statechart`` nor ``semantic_digital_twin`` exists in the
+        fixture architecture, so no edge may target them.
+        """
+        payload = kb.graph_payload()
+        targets = {e["to"] for e in payload["edges"]}
+        assert "giskardpy.motion_statechart" not in targets
+        assert "semantic_digital_twin" not in targets
+
+    def test_plan_tree_cluster(self, fixture_scene):
+        payload = kb.graph_payload()
+        assert payload["details"]["plan"] == {
+            "label": "executed plan",
+            "group": "goal",
+            "lines": [
+                "the plan tree the demo actually executed",
+                "4 nodes",
+                "double-click to open",
+            ],
+        }
+        plan_edges = [e for e in payload["edges"] if e["from"] == "plan"]
+        assert plan_edges == [
+            {"from": "plan", "to": "pr2", "kind": "prop", "label": "executed by"},
+            {"from": "plan", "to": "prepare", "kind": "type", "label": "spans"},
+            {
+                "from": "plan",
+                "to": "transport_milk",
+                "kind": "type",
+                "label": "spans",
+            },
+        ]
+
+    def test_status_string_reports_derived_counts(self, fixture_scene):
+        """
+        The status line's numbers must track the live payload/knowledge base, not a
+        second hardcoded copy of them.
+        """
+        payload = kb.graph_payload()
+        knowledge_base = kb.get_knowledge_base()
+        assert payload["status"] == (
+            "EQL ready · %d graph nodes · %d joints · %d CRAM classes"
+            % (
+                len(payload["nodes"]),
+                len(knowledge_base.joints),
+                len(knowledge_base.classes),
+            )
+        )
+
+
+# %% characterization: expand_node() dispatch
+class TestExpandNode:
+    def test_robot_dispatches_to_urdf_view(self, fixture_scene):
+        payload = kb.expand_node("pr2")
+        assert payload["crumb"] == "pr2 · URDF"
+        ids = {n["id"] for n in payload["nodes"]}
+        assert "urdf:base_link" in ids
+
+    def test_plan_dispatches_to_plan_view(self, fixture_scene):
+        payload = kb.expand_node("plan")
+        assert payload["crumb"] == "executed plan"
+        assert len(payload["nodes"]) == 4
+        assert len(payload["edges"]) == 3
+
+    def test_package_dispatches_to_package_view(self, fixture_scene):
+        payload = kb.expand_node("coraplex")
+        assert {n["id"] for n in payload["nodes"]} == {"coraplex", "coraplex.plans"}
+        assert payload["edges"] == [
+            {
+                "from": "coraplex",
+                "to": "coraplex.plans",
+                "kind": "prop",
+                "label": "contains",
+            }
+        ]
+
+    def test_subpackage_dispatches_to_subpackage_view(self, fixture_scene):
+        payload = kb.expand_node("coraplex.plans")
+        assert {n["id"] for n in payload["nodes"]} == {
+            "coraplex.plans",
+            "coraplex.src.coraplex.plans.plan.Plan",
+            "coraplex.src.coraplex.plans.typed_plan.TypedPlan",
+        }
+
+    def test_class_dispatches_to_class_view(self, fixture_scene):
+        payload = kb.expand_node("coraplex.src.coraplex.plans.plan.Plan")
+        assert payload["crumb"] == "Plan"
+        assert {n["id"] for n in payload["nodes"]} == {
+            "coraplex.src.coraplex.plans.plan.Plan",
+            "coraplex.src.coraplex.plans.typed_plan.TypedPlan",
+        }
+
+    def test_unknown_node_is_not_drillable(self, fixture_scene):
+        assert kb.expand_node("does-not-exist") is None
+
+    def test_class_view_resolves_an_internal_base(self, fixture_scene):
+        """
+        ``TypedPlan``'s base ``Plan`` is scanned from the same fixture repository, so it
+        resolves to the real class node rather than an external stub.
+        """
+        payload = kb.expand_node("coraplex.src.coraplex.plans.typed_plan.TypedPlan")
+        assert {
+            "from": "coraplex.src.coraplex.plans.typed_plan.TypedPlan",
+            "to": "coraplex.src.coraplex.plans.plan.Plan",
+            "kind": "type",
+            "label": "inherits",
+        } in payload["edges"]
+        assert (
+            payload["details"]["coraplex.src.coraplex.plans.plan.Plan"]["group"]
+            == "pyclass"
+        )
+
+    def test_class_view_falls_back_to_an_external_base(self, fixture_scene):
+        """
+        ``EqlError``'s base ``Exception`` is not defined anywhere in the scanned
+        repository, so it renders as an external stub instead of a real class node.
+        """
+        payload = kb.expand_node("krrood.src.krrood.errors.EqlError")
+        assert payload["details"]["ext:Exception"] == {
+            "label": "Exception",
+            "group": "upper",
+            "lines": ["external base class (outside the repo)"],
+        }
+        assert {
+            "from": "krrood.src.krrood.errors.EqlError",
+            "to": "ext:Exception",
+            "kind": "type",
+            "label": "inherits",
+        } in payload["edges"]
+
+    def test_class_view_lists_repository_subclasses(self, fixture_scene):
+        """
+        ``Plan`` has no declared bases, but ``TypedPlan`` names it as a base — so
+        ``Plan``'s inheritance view must list ``TypedPlan`` as a subclass.
+        """
+        payload = kb.expand_node("coraplex.src.coraplex.plans.plan.Plan")
+        assert {
+            "from": "coraplex.src.coraplex.plans.typed_plan.TypedPlan",
+            "to": "coraplex.src.coraplex.plans.plan.Plan",
+            "kind": "type",
+            "label": "inherits",
+        } in payload["edges"]
+
+    def test_package_view_truncates_to_class_cap(self, fixture_scene):
+        knowledge_base = kb.get_knowledge_base()
+        synthetic_classes = [
+            kb.PythonClass(
+                name="Synthetic%d" % index,
+                package="synthetic_pkg",
+                subpackage="synthetic_pkg",
+                module="synthetic_pkg.synthetic%d" % index,
+                bases=(),
+                methods=index,
+                doc="",
+            )
+            for index in range(kb.CLASS_CAP + 1)
+        ]
+        knowledge_base.packages = knowledge_base.packages + [
+            kb.Package(
+                name="synthetic_pkg", description="", module_count=0, class_count=0
+            )
+        ]
+        knowledge_base.classes = knowledge_base.classes + synthetic_classes
+        payload = kb.expand_node("synthetic_pkg")
+        assert payload["details"]["synthetic_pkg"]["lines"][-1] == (
+            "showing the %d largest of %d classes (by method count)"
+            % (kb.CLASS_CAP, kb.CLASS_CAP + 1)
+        )
+
+    def test_class_view_truncates_to_subclass_cap(self, fixture_scene):
+        knowledge_base = kb.get_knowledge_base()
+        base_class = kb.PythonClass(
+            name="SyntheticBase",
+            package="synthetic_pkg",
+            subpackage="synthetic_pkg",
+            module="synthetic_pkg.base",
+            bases=(),
+            methods=0,
+            doc="",
+        )
+        synthetic_subclasses = [
+            kb.PythonClass(
+                name="SyntheticSubclass%d" % index,
+                package="synthetic_pkg",
+                subpackage="synthetic_pkg",
+                module="synthetic_pkg.sub%d" % index,
+                bases=("SyntheticBase",),
+                methods=0,
+                doc="",
+            )
+            for index in range(kb.SUBCLASS_CAP + 1)
+        ]
+        knowledge_base.classes = (
+            knowledge_base.classes + [base_class] + synthetic_subclasses
+        )
+        payload = kb.expand_node("synthetic_pkg.base.SyntheticBase")
+        assert payload["details"]["synthetic_pkg.base.SyntheticBase"]["lines"][-1] == (
+            "showing %d of %d subclasses" % (kb.SUBCLASS_CAP, kb.SUBCLASS_CAP + 1)
+        )
