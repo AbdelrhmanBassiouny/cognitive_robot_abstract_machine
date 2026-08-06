@@ -179,7 +179,7 @@ Panels.define('graph', function (root, bus) {
   // change only re-colours the rings, so the layout never jumps.
   const PLAN_GROUP = {
     ActionNode: 'event', MotionNode: 'robot', ConditionNode: 'goal',
-    AttachmentNode: 'object', DetachmentNode: 'object',
+    AttachNode: 'object', DetachNode: 'object',
   };
   const PLAN_LEGEND = [
     { group: 'event', label: 'Action' }, { group: 'robot', label: 'Motion' },

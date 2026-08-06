@@ -1639,8 +1639,8 @@ PLAN_GROUPS = {
     "ActionNode": "event",
     "MotionNode": "robot",
     "ConditionNode": "goal",
-    "AttachmentNode": "object",
-    "DetachmentNode": "object",
+    "AttachNode": "object",
+    "DetachNode": "object",
 }
 
 #: legend rows of the plan view
@@ -2019,7 +2019,8 @@ def get_presets() -> List[Dict[str, str]]:
         presets.append(
             {
                 "text": "the %s" % first_object.label.lower(),
-                "code": "the(entity(obj).where(obj.name == '%s'))" % first_object.name,
+                "code": "the(entity(obj).where(obj.name == %s))"
+                % repr(first_object.name),
             }
         )
     manipulation = next((episode for episode in kb.episodes if episode.picks), None)
@@ -2028,16 +2029,16 @@ def get_presets() -> List[Dict[str, str]]:
             presets.append(
                 {
                     "text": "where does it place them?",
-                    "code": "the(entity(ep.places_at).where(ep.name == '%s'))"
-                    % manipulation.name,
+                    "code": "the(entity(ep.places_at).where(ep.name == %s))"
+                    % repr(manipulation.name),
                 }
             )
         if manipulation.performed_by:
             presets.append(
                 {
                     "text": "which arm does '%s'?" % manipulation.name,
-                    "code": "the(entity(ep.performed_by).where(ep.name == '%s'))"
-                    % manipulation.name,
+                    "code": "the(entity(ep.performed_by).where(ep.name == %s))"
+                    % repr(manipulation.name),
                 }
             )
     return presets + ARCH_PRESETS

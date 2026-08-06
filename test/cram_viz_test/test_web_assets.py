@@ -2,8 +2,8 @@
 Consistency checks of the packaged frontend, plus the node-based JS tests.
 
 The asset checks keep the panel architecture honest: every asset the shell references
-must exist, every panel id in config.js must be defined by an included panel script,
-and panels must not reach outside their own DOM subtree.
+must exist, every panel id in config.js must be defined by an included panel script, and
+panels must not reach outside their own DOM subtree.
 """
 
 import re
@@ -120,3 +120,6 @@ class TestJsUnits:
 
     def test_graph_status_rendering(self):
         self.run_node("test_graph_status.js")
+
+    def test_graph_panel(self):
+        self.run_node("test_graph_panel.js")
