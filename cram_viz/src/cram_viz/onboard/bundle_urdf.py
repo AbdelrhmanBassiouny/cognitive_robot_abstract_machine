@@ -28,6 +28,9 @@ from pathlib import Path
 
 from typing_extensions import Any, Dict, List, Optional
 
+from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
+from semantic_digital_twin.exceptions import ParsingError
+
 from cram_viz import get_logger, paths
 
 logger = get_logger(__name__)
@@ -86,18 +89,16 @@ def _resolve_package_uri(uri: str) -> Optional[str]:
     """
     Resolve a ``package://`` URI, trying the ROS resolvers before the filesystem.
 
-    The two resolver imports are local and their failures ignored on purpose: this
+    The ``ament_index_python`` import is local and its failure ignored on purpose: this
     module has to work on a machine with no ROS installed at all, which is the whole
     point of bundling.
     """
     package, _, relative_path = uri[len(PACKAGE_SCHEME) :].partition("/")
     try:
-        from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
-
         resolved = PackageUriResolver().resolve(uri)
         if os.path.isfile(resolved):
             return resolved
-    except Exception as error:
+    except ParsingError as error:
         logger.debug("the CRAM package resolver could not resolve %s: %s", uri, error)
     try:
         from ament_index_python.packages import get_package_share_directory
@@ -105,7 +106,7 @@ def _resolve_package_uri(uri: str) -> Optional[str]:
         resolved = os.path.join(get_package_share_directory(package), relative_path)
         if os.path.isfile(resolved):
             return resolved
-    except Exception as error:
+    except (ImportError, LookupError) as error:
         logger.debug("the ament index could not resolve %s: %s", uri, error)
     for root in _search_root_candidates():
         for candidate in (

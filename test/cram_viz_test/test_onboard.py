@@ -295,6 +295,17 @@ class TestResolveUri:
         mesh.write_text("solid cup\nendsolid cup\n")
         assert bundler.resolve_uri(str(mesh)) == str(mesh)
 
+    def test_an_unresolvable_package_uri_is_unresolved(self, monkeypatch):
+        """
+        Without a recorded hint and with no ROS installation to ask, every resolver tier
+        (the CRAM package resolver, ``ament_index_python``, the filesystem search) fails
+        in turn, and the URI comes back unresolved rather than raising.
+        """
+        monkeypatch.delenv("AMENT_PREFIX_PATH", raising=False)
+        monkeypatch.delenv("ROS_PACKAGE_PATH", raising=False)
+        monkeypatch.delenv("CMAKE_PREFIX_PATH", raising=False)
+        assert bundler.resolve_uri("package://no_such_package/cup.stl") is None
+
 
 class TestReferenceLayout:
     def test_a_package_reference_keeps_its_package_directory(self):
