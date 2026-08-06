@@ -171,3 +171,78 @@ class TestViewPayloads:
     def test_unknown_view(self, fixture_scene):
         payload = kb.view_payload("bogus")
         assert not payload["ok"]
+
+
+# %% BUG-1 -- attach/detach plan-node grouping
+class TestPlanGroups:
+    def test_attach_node_renders_in_the_object_group(self, fixture_scene, monkeypatch):
+        """
+        Coraplex's real class is ``AttachNode``, not ``AttachmentNode``.
+        """
+        scene, trajectory = kb.load_scene()
+        scene["planTrees"][0]["children"].append(
+            {
+                "kind": "AttachNode",
+                "label": "AttachNode",
+                "status": "CREATED",
+                "children": [],
+            }
+        )
+        monkeypatch.setattr(kb, "load_scene", lambda: (scene, trajectory))
+        kb.reset_knowledge_base()
+        node = next(
+            n for n in kb.view_payload("plan")["nodes"] if n["label"] == "AttachNode"
+        )
+        assert node["group"] == "object"
+
+    def test_detach_node_renders_in_the_object_group(self, fixture_scene, monkeypatch):
+        """
+        Coraplex's real class is ``DetachNode``, not ``DetachmentNode``.
+        """
+        scene, trajectory = kb.load_scene()
+        scene["planTrees"][0]["children"].append(
+            {
+                "kind": "DetachNode",
+                "label": "DetachNode",
+                "status": "CREATED",
+                "children": [],
+            }
+        )
+        monkeypatch.setattr(kb, "load_scene", lambda: (scene, trajectory))
+        kb.reset_knowledge_base()
+        node = next(
+            n for n in kb.view_payload("plan")["nodes"] if n["label"] == "DetachNode"
+        )
+        assert node["group"] == "object"
+
+
+# %% BUG-2 -- EQL preset splicing
+class TestPresetSafety:
+    def test_an_apostrophe_in_an_object_name_does_not_break_its_preset(
+        self, fixture_scene, monkeypatch
+    ):
+        """
+        ``get_presets()`` must escape object names, not splice them raw into EQL source.
+        """
+        scene, trajectory = kb.load_scene()
+        scene["objects"][0]["id"] = "o'brien"
+        scene["segments"][1]["picks"] = "o'brien"
+        monkeypatch.setattr(kb, "load_scene", lambda: (scene, trajectory))
+        kb.reset_knowledge_base()
+        preset = next(p for p in kb.get_presets() if "obj.name" in p["code"])
+        result = kb.run_query(preset["code"])
+        assert result["ok"] and result["rows"][0]["__entity__"] == "o'brien"
+
+    def test_an_apostrophe_in_an_episode_name_does_not_break_its_presets(
+        self, fixture_scene, monkeypatch
+    ):
+        """
+        Covers both the ``places_at`` and ``performed_by`` presets, which splice the
+        same episode name.
+        """
+        scene, trajectory = kb.load_scene()
+        scene["segments"][1]["step"] = "transport_o'brien"
+        monkeypatch.setattr(kb, "load_scene", lambda: (scene, trajectory))
+        kb.reset_knowledge_base()
+        for preset in kb.get_presets():
+            assert kb.run_query(preset["code"])["ok"]
