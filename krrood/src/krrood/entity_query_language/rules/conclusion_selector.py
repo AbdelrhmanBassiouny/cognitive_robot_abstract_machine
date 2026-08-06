@@ -70,12 +70,14 @@ class ConclusionSelector(TruthValueOperator, ABC):
         *conditions: ConditionType,
     ) -> SymbolicExpression:
         """
-        Attach a new branch to ``anchor`` without relying on the ``with`` context stack.
+        Attach a new branch to an explicitly given ``anchor``.
 
         This is the explicit-anchor counterpart of :meth:`create_and_update_rule_tree`,
         used to grow a live rule-tree DAG (e.g. when an RDR inserts a refinement or
         alternative after observing a misclassification). Conditions are chained with
-        AND; the new branch is spliced in between ``anchor`` and its current parent.
+        AND; the new branch is spliced in between ``anchor`` and the parent the asking
+        branch reaches it by, which the enclosing ``with`` context supplies when one
+        anchors on ``anchor`` and the structural parent supplies otherwise.
 
         Any condition already in a tree (has a ``_parent_``) is replaced with the node from
         :meth:`~krrood.entity_query_language.core.base_expressions.SymbolicExpression._node_for_new_position_`
@@ -102,9 +104,14 @@ class ConclusionSelector(TruthValueOperator, ABC):
         ):
             new_condition = new_condition._node_for_new_position_()
 
-        # Splice above the anchor's structural parent — a ConclusionSelector for a node already
-        # in a rule tree, or a Filter for a direct WHERE condition.
-        previous_parent = anchor._parent_
+        # Splice above the parent the asking branch reaches the anchor by. A shared anchor
+        # keeps whichever parent was attached first as its structural one, which may belong to
+        # an unrelated branch entirely, so the enclosing ``with`` context decides instead and
+        # the structural parent only stands in when no enclosing context anchors on it.
+        anchor_context = SymbolicExpression._rule_tree_context_anchored_on_(anchor)
+        previous_parent = (
+            anchor._parent_ if anchor_context is None else anchor_context.owning_parent
+        )
 
         # Only raise when the anchor is already established in a rule tree (has parents).
         # A freshly-created anchor with no parents indicates _conditions_root_ returned a node
@@ -117,6 +124,11 @@ class ConclusionSelector(TruthValueOperator, ABC):
 
         if new_context is not anchor and previous_parent is not None:
             previous_parent._replace_child_(anchor, new_context)
+
+        # The splice moved the anchor under the node just created, so the asking branch now
+        # reaches it by that edge; a later edit in the same context must splice above it.
+        if new_context is not anchor and anchor_context is not None:
+            anchor_context.owning_parent = new_context
 
         return new_condition
 

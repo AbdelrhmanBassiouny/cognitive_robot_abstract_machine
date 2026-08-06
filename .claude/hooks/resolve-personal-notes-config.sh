@@ -244,6 +244,23 @@ PLAN_DASHBOARD_TESTS_DIRECTORY="${PLAN_DASHBOARD_DIRECTORY}/tests"
 # hooks/tests/: the pytest suite covering plan_manifest_tools.py (the one
 # hook-directory script with non-trivial logic worth testing the same way).
 HOOKS_TESTS_DIRECTORY=".claude/hooks/tests"
+
+# STACK_DIRECTORY / *_SCRIPT / *_CONFIG_FILE / *_TESTS_DIRECTORY: the
+# stacked-PR fork-staging/cram2-review tooling's canonical location, same
+# defined-once reasoning as the PLAN_DASHBOARD_* block above - so the
+# setup-stacked-prs skill and the shared pr_state module reference these
+# instead of retyping the literal paths.
+STACK_DIRECTORY=".claude/stack"
+# stack.py: read-only stacked-PR status tool (status/check/next/restack-plan)
+# - see its own module docstring and STACK_DIRECTORY/README.md.
+STACK_SCRIPT="${STACK_DIRECTORY}/stack.py"
+# stack.toml: the committed defaults stack.py's load_configuration layers a
+# personal-notes .claude/personal/stack.toml override on top of.
+STACK_CONFIG_FILE="${STACK_DIRECTORY}/stack.toml"
+# tests/: the pytest suite covering stack.py, including its personal-notes
+# config-layering behaviour (via the hooks tests' ScratchRepository).
+STACK_TESTS_DIRECTORY="${STACK_DIRECTORY}/tests"
+
 # plan-schema.md: the full plan.yaml field reference every plan-* skill
 # reads before drafting or interpreting a manifest. On main, next to the
 # tooling that enforces it, so every clone has it with no setup - unlike the
@@ -293,6 +310,12 @@ STARTER_NOTES_FILE="${SETUP_PERSONAL_NOTES_DIRECTORY}/starter-notes.md"
 # duplication risk, just for a hook script instead of a plan-dashboard one.
 SAVE_PLAN_SCRIPT=".claude/hooks/save-plan.sh"
 
+# PLAN_ITEM_BOOTSTRAP_SCRIPT: same reasoning again, for the script that opens
+# an item's branch and draft pull request and records its manifest entry -
+# invoked from plan-item-kickoff/SKILL.md and add-plan-item/SKILL.md, so it is
+# a path this codebase controls rather than one a human types once.
+PLAN_ITEM_BOOTSTRAP_SCRIPT=".claude/hooks/plan_item_bootstrap.py"
+
 # GITHUB_LIST_PULL_REQUESTS_TOOL / GITHUB_PULL_REQUEST_READ_TOOL: the two
 # MCP tools every pr_data.json-gathering procedure in this system calls
 # (see pr-data-fetching.md), named once here so every doc references the
@@ -330,4 +353,31 @@ plan_id_for_branch() {
   git cat-file -e "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null || return 1
   git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
     | awk -F'\t' -v branch="${branch}" '$1 == branch { print $2; exit }'
+}
+
+# PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit
+# SHA that was FETCH_HEAD the last time this clone read plan state (either
+# session-start.sh's own auto-discovery, or ./plan-updates-since.sh). This is
+# the "last-seen SHA" the recheck-deltas convention in cram-notes.md is built
+# around: a session that wants to know what changed since it last looked
+# diffs from this stamp instead of rereading whole files - see
+# ./plan-updates-since.sh, which is also what advances it.
+PLAN_STATE_SYNC_STAMP="${PROJECT_ROOT}/.claude/.plan-state-sync-sha"
+
+# record_plan_state_sync_stamp: stamps FETCH_HEAD as the notes-branch commit
+# this clone has now read plan state at. Caller must have already fetched
+# NOTES_BRANCH successfully (see fetch_personal_notes_branch) - reads
+# FETCH_HEAD directly rather than fetching again itself, same reasoning as
+# plan_id_for_branch above.
+record_plan_state_sync_stamp() {
+  git rev-parse FETCH_HEAD > "${PLAN_STATE_SYNC_STAMP}"
+}
+
+# last_recorded_plan_state_sha: prints the SHA record_plan_state_sync_stamp
+# last recorded, and returns 0. Returns 1 (prints nothing) if nothing has
+# been recorded yet - a fresh clone, or one whose session-start.sh predates
+# this stamp.
+last_recorded_plan_state_sha() {
+  [ -f "${PLAN_STATE_SYNC_STAMP}" ] || return 1
+  cat "${PLAN_STATE_SYNC_STAMP}"
 }

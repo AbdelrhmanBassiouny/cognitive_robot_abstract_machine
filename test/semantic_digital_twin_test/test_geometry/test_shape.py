@@ -8,7 +8,10 @@ import pytest
 import trimesh
 
 from krrood.adapters.json_serializer import from_json, to_json
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Point3
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import (
     Box,
     Cylinder,
@@ -17,6 +20,7 @@ from semantic_digital_twin.world_description.geometry import (
     Sphere,
     Texture,
 )
+from semantic_digital_twin.world_description.world_entity import Body
 
 
 def test_recenter_origin_centers_bounding_box():
@@ -245,3 +249,46 @@ def test_stl_without_unit_metadata_loads_unchanged(tmp_path):
     mesh = Mesh.from_trimesh(mesh=source, dirname=str(tmp_path), file_type="stl")
 
     assert mesh.mesh.extents == pytest.approx([1.0, 2.0, 4.0])
+
+
+# %% expressing a shape's mesh in another frame
+
+
+def test_mesh_in_frame_applies_the_owning_bodys_world_transform():
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("map"))
+        world.add_kinematic_structure_entity(root)
+        obstacle = Body(name=PrefixedName("obstacle"))
+        world.add_connection(
+            FixedConnection(
+                root,
+                child=obstacle,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=2.0, y=0.0, z=0.0, reference_frame=root
+                ),
+            )
+        )
+        shape = Box(scale=Scale(1.0, 1.0, 1.0))
+        obstacle.collision.append(shape)
+
+    world_mesh = shape.mesh_in_frame(root)
+
+    np.testing.assert_allclose(
+        world_mesh.bounds, shape.mesh.bounds + np.array([2.0, 0.0, 0.0])
+    )
+
+
+def test_mesh_in_frame_in_the_shapes_own_frame_matches_its_local_mesh():
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("map"))
+        world.add_kinematic_structure_entity(root)
+        obstacle = Body(name=PrefixedName("obstacle"))
+        world.add_connection(FixedConnection.create_with_dofs(world, root, obstacle))
+        shape = Box(scale=Scale(1.0, 1.0, 1.0))
+        obstacle.collision.append(shape)
+
+    world_mesh = shape.mesh_in_frame(obstacle)
+
+    np.testing.assert_allclose(world_mesh.bounds, shape.mesh.bounds)

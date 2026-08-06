@@ -412,7 +412,9 @@ class Query(
         """
         self.build()
         expression = self._conditions_root_
-        SymbolicExpression._symbolic_expression_stack_.append(expression)
+        SymbolicExpression._symbolic_expression_stack_.append(
+            expression._rule_tree_context_()
+        )
         return expression
 
     def build(self) -> Self:

@@ -13,6 +13,7 @@ import uuid
 import weakref
 from abc import ABC, abstractmethod
 from collections import UserDict
+from contextlib import AbstractContextManager
 from copy import copy
 from dataclasses import dataclass, field
 from functools import cached_property
@@ -58,8 +59,31 @@ identifier to its value.
 """
 
 
+@dataclass
+class RuleTreeContext:
+    """
+    A ``with``-block anchor together with the parent edge its rule tree reaches it by.
+
+    A shared node has several parents, so which parent a rule-tree edit must happen above
+    is only defined relative to the branch that is asking. Recording that edge when the
+    block is entered keeps the answer independent of which parent happened to be attached
+    first.
+    """
+
+    condition: SymbolicExpression
+    """
+    The condition node the ``with`` block anchors on.
+    """
+
+    owning_parent: Optional[SymbolicExpression]
+    """
+    The parent through which the asking rule tree reaches :attr:`condition`, kept current
+    by whoever splices a new node into that edge.
+    """
+
+
 @dataclass(eq=False)
-class SymbolicExpression(ABC):
+class SymbolicExpression(AbstractContextManager):
     """
     Base class for all symbolic expressions.
 
@@ -78,10 +102,10 @@ class SymbolicExpression(ABC):
     truth value of this node is true during evaluation.
     """
 
-    _symbolic_expression_stack_: ClassVar[List[SymbolicExpression]] = []
+    _symbolic_expression_stack_: ClassVar[List[RuleTreeContext]] = []
     """
     The current stack of symbolic expressions that has been entered using the ``with``
-    statement.
+    statement, each paired with the parent edge its rule tree reaches it by.
     """
 
     _children_: List[SymbolicExpression] = field(
@@ -514,6 +538,13 @@ class SymbolicExpression(ABC):
         """
         pass
 
+    def _has_parent_(self, expression: SymbolicExpression) -> bool:
+        """
+        :param expression: The expression to look for among this expression's parents.
+        :return: Whether the given expression is one of this expression's parents.
+        """
+        return expression._id_ in [parent._id_ for parent in self._parents_]
+
     @property
     def _parent_(self) -> Optional[SymbolicExpression]:
         """
@@ -536,7 +567,7 @@ class SymbolicExpression(ABC):
                 self._remove_parent_(self._parent__)
             return
 
-        if value._id_ not in [v._id_ for v in self._parents_]:
+        if not self._has_parent_(value):
             self._parents_.append(value)
             value._ensure_children_ids_are_cached_(self)
 
@@ -731,9 +762,56 @@ class SymbolicExpression(ABC):
         :return: The current parent symbolic expression in the enclosing context of the ``with`` statement. Used when
         making rule trees.
         """
+        innermost_context = cls._innermost_rule_tree_context_()
+        if innermost_context is None:
+            return None
+        return innermost_context.condition
+
+    @classmethod
+    def _innermost_rule_tree_context_(cls) -> Optional[RuleTreeContext]:
+        """
+        :return: The context of the innermost enclosing ``with`` statement, or ``None``
+            outside any.
+        """
         if not cls._symbolic_expression_stack_:
             return None
         return cls._symbolic_expression_stack_[-1]
+
+    @classmethod
+    def _rule_tree_context_anchored_on_(
+        cls, condition: SymbolicExpression
+    ) -> Optional[RuleTreeContext]:
+        """
+        :param condition: The condition an edit is about to be made relative to.
+        :return: The context of the innermost enclosing ``with`` statement that anchors on
+            the given condition, or ``None`` when no enclosing statement does.
+        """
+        return next(
+            (
+                context
+                for context in reversed(cls._symbolic_expression_stack_)
+                if context.condition._id_ == condition._id_
+            ),
+            None,
+        )
+
+    def _rule_tree_context_(self) -> RuleTreeContext:
+        """
+        :return: This expression paired with the parent edge the enclosing rule tree
+            reaches it by.
+
+        The enclosing block's own owning parent is the node a rule-tree edit just created
+        to hold this expression, so it is this expression's owning parent too whenever
+        this expression is the branch that edit introduced. Otherwise there is no asking
+        branch to speak of and the structural parent stands in.
+        """
+        enclosing_context = self._innermost_rule_tree_context_()
+        enclosing_parent = (
+            enclosing_context.owning_parent if enclosing_context is not None else None
+        )
+        if enclosing_parent is None or not self._has_parent_(enclosing_parent):
+            return RuleTreeContext(self, self._parent_)
+        return RuleTreeContext(self, enclosing_parent)
 
     @property
     def _unique_variables_(self) -> Set[Variable]:
@@ -781,7 +859,9 @@ class SymbolicExpression(ABC):
         This updates the current parent symbolic expression, the context stack and
         returns this expression.
         """
-        SymbolicExpression._symbolic_expression_stack_.append(self)
+        SymbolicExpression._symbolic_expression_stack_.append(
+            self._rule_tree_context_()
+        )
         return self
 
     def __exit__(self, *args):
