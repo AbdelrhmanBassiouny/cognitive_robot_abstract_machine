@@ -18,6 +18,7 @@ from pathlib import Path
 import mujoco
 from typing_extensions import Iterable, Mapping, Tuple
 
+from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
 from semantic_digital_twin.adapters.mjcf import MJCFParser
 from semantic_digital_twin.adapters.multi_sim import (
     MujocoActuator,
@@ -29,6 +30,7 @@ from semantic_digital_twin.robots.panda import Panda
 from semantic_digital_twin.robots.panda_assets import PandaMeshAssets
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
+from semantic_digital_twin.world_description.geometry import Shape
 from semantic_digital_twin.world_description.world_entity import Actuator, Body
 
 PANDA_SCENE_PATH = (
@@ -138,19 +140,52 @@ penetration -- comparable to the shapes' own half-widths -- which wedges it out
 sideways instead of gripping it.
 """
 
-GRASP_FRICTION = [0.5, 0.05, 0.001]
+GRASP_FRICTION = [0.3, 0.05, 0.001]
 """
 Contact friction (sliding, torsional, rolling; see
 :attr:`~semantic_digital_twin.adapters.multi_sim.MujocoGeom.friction`) given to every
 loose shape's collision geometry.
 
-Sliding friction lowered from ``coraplex_panda_demo``'s own ``1.0`` (tuned for a
-reliable grip between rubber fingertips, which keep their own separate friction --
-see :func:`equip_panda_for_physical_simulation` -- so this term is not the only thing
-holding a grasp) as an experiment: a shape landing centered and upright on a hole's rim
-has been observed to stay stuck there rather than sliding or tipping through, which
-high sliding friction against the rim could explain. Watch for this also making grasps
-less reliable, since it does still contribute to the gripper's own hold.
+History of the sliding component: started at ``coraplex_panda_demo``'s own ``1.0``
+(tuned for a reliable grip between rubber fingertips, which keep their own separate
+friction -- see :func:`equip_panda_for_physical_simulation`); lowered to ``0.5`` as an
+experiment to stop a shape landing centered and upright on a hole's rim from staying
+stuck there; tried at ``1.0`` again for every shape except the cube (a per-category
+override), which over a 90-run batch traded down overall (blowup-magnitude physics
+instability jumped from 10% to 39% of runs, and pass rates for rectangular_hole and
+circular_hole_2 fell rather than improving) -- so reverted back to ``0.5`` globally.
+
+Now set to ``0.3``: contact friction is combined by MuJoCo as the element-wise maximum
+of the two participating geoms, and the shape-sorting board's own collision geometry had
+no friction set at all until :data:`BOARD_FRICTION`, defaulting to MuJoCo's own ``1.0``
+sliding friction -- so every shape-board contact was silently pinned at ``1.0`` no matter
+what this value was tuned to, and every prior experiment here was only ever testing the
+finger-shape grip (where the fingertip's own ``~1.0`` friction dominates regardless of
+this value), never the rim-sticking interaction it was meant to fix. ``0.3`` approximates
+real sliding friction between painted wood/plastic surfaces (~0.25-0.4), now paired with
+an equally explicit :data:`BOARD_FRICTION` so the shape-board contact can actually drop
+below the finger-dominated grip instead of being masked by it.
+"""
+
+GRASP_FRICTION_OVERRIDES: dict[MontessoriShapeCategory, list[float]] = {}
+"""
+Per-:class:`~experiments.montessori.semantics.MontessoriShapeCategory` override of
+:data:`GRASP_FRICTION`, used by :func:`apply_montessori_grasp_contact_parameters`. A
+category absent from this mapping (currently all of them) uses :data:`GRASP_FRICTION`.
+"""
+
+BOARD_FRICTION = [0.3, 0.005, 0.0001]
+"""
+Contact friction (sliding, torsional, rolling) given to the shape-sorting board's
+collision geometry via :func:`apply_contact_friction`.
+
+Approximates real sliding friction between painted wood/plastic surfaces (~0.25-0.4),
+matching :data:`GRASP_FRICTION`'s own sliding component so the shape-board contact is
+governed by this pair rather than by MuJoCo's own ``1.0`` default the board previously
+had no override for (see :data:`GRASP_FRICTION`'s docstring for why that masked every
+prior friction experiment). Torsional and rolling use MuJoCo's own defaults rather than
+:data:`GRASP_FRICTION`'s grip-stabilizing multiples of them, since the board is never
+pinched between fingers.
 """
 
 GRASP_SOLVER_REFERENCE = [0.008, 1.0]
@@ -227,33 +262,77 @@ def _add_actuator(world: World, dof: DegreeOfFreedom, tuning: JointServoTuning) 
     world.add_actuator(actuator=actuator)
 
 
-def apply_grasp_contact_parameters(shapes: Iterable[Body]) -> None:
+def _mujoco_geom_for(geometry: Shape) -> MujocoGeom:
+    """
+    Return ``geometry``'s existing :class:`~semantic_digital_twin.adapters.multi_sim.MujocoGeom`,
+    or a new one appended to it.
+
+    :class:`~semantic_digital_twin.adapters.multi_sim.MujocoBuilder` reads only the first
+    ``MujocoGeom`` it finds on a geometry, so a second, appended one would be silently
+    ignored: callers must modify the returned instance in place rather than replacing it.
+
+    :param geometry: The geometry to find or create a ``MujocoGeom`` on, modified in
+        place if none exists yet.
+    """
+    existing = [
+        prop
+        for prop in geometry.simulator_additional_properties
+        if isinstance(prop, MujocoGeom)
+    ]
+    if existing:
+        return existing[0]
+    mujoco_geom = MujocoGeom()
+    geometry.simulator_additional_properties.append(mujoco_geom)
+    return mujoco_geom
+
+
+def apply_contact_friction(bodies: Iterable[Body], friction: list[float]) -> None:
+    """
+    Give every collision geometry of every body in ``bodies`` the given contact
+    friction (see :attr:`~semantic_digital_twin.adapters.multi_sim.MujocoGeom.friction`),
+    without touching solver reference or impedance (see
+    :func:`apply_grasp_contact_parameters` for a grasped-shape variant that also sets
+    those).
+
+    :param bodies: The bodies to modify in place.
+    :param friction: Contact friction to give every body's collision geometry.
+    """
+    for body in bodies:
+        for geometry in body.collision:
+            _mujoco_geom_for(geometry).friction = list(friction)
+
+
+def apply_grasp_contact_parameters(
+    shapes: Iterable[Body], friction: list[float]
+) -> None:
     """
     Give every body in ``shapes`` the contact parameters that let the Panda pick it up
-    and hold it: the friction, solver reference, and solver impedance of
+    and hold it: ``friction`` plus the solver reference and solver impedance of
     ``coraplex_panda_demo``'s own reliably-grasped cube (see :data:`GRASP_FRICTION`,
     :data:`GRASP_SOLVER_REFERENCE`, :data:`GRASP_SOLVER_IMPEDANCE`).
 
-    An existing :class:`~semantic_digital_twin.adapters.multi_sim.MujocoGeom` on a
-    geometry is modified in place rather than a second one appended:
-    :class:`~semantic_digital_twin.adapters.multi_sim.MujocoBuilder` reads only the first
-    ``MujocoGeom`` it finds on a shape, so a second, appended one is silently ignored.
-
     :param shapes: The bodies to modify in place.
+    :param friction: Contact friction to give every body's collision geometry.
     """
     for shape in shapes:
         for geometry in shape.collision:
-            existing = [
-                prop
-                for prop in geometry.simulator_additional_properties
-                if isinstance(prop, MujocoGeom)
-            ]
-            mujoco_geom = existing[0] if existing else MujocoGeom()
-            mujoco_geom.friction = list(GRASP_FRICTION)
+            mujoco_geom = _mujoco_geom_for(geometry)
+            mujoco_geom.friction = list(friction)
             mujoco_geom.solver_reference = list(GRASP_SOLVER_REFERENCE)
             mujoco_geom.solver_impedance = list(GRASP_SOLVER_IMPEDANCE)
-            if not existing:
-                geometry.simulator_additional_properties.append(mujoco_geom)
+
+
+def apply_montessori_grasp_contact_parameters(shapes: Iterable[MontessoriShape]) -> None:
+    """
+    :func:`apply_grasp_contact_parameters` for a mix of Montessori shapes, giving each
+    its own :attr:`~experiments.montessori.semantics.MontessoriShape.shape_category`'s
+    friction (see :data:`GRASP_FRICTION_OVERRIDES`).
+
+    :param shapes: The shapes to modify in place.
+    """
+    for shape in shapes:
+        friction = GRASP_FRICTION_OVERRIDES.get(shape.shape_category, GRASP_FRICTION)
+        apply_grasp_contact_parameters([shape.root], friction)
 
 
 def equip_panda_for_physical_simulation(robot: Panda) -> set[DegreeOfFreedom]:

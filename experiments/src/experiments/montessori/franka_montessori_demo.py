@@ -25,7 +25,9 @@ import numpy as np
 from typing_extensions import Optional
 
 from experiments.montessori.franka_panda_equipment import (
-    apply_grasp_contact_parameters,
+    BOARD_FRICTION,
+    apply_contact_friction,
+    apply_montessori_grasp_contact_parameters,
     equip_panda_for_physical_simulation,
     parse_panda,
 )
@@ -107,6 +109,27 @@ left exactly where it started the whole time -- indistinguishable, without this 
 from a shape that really was picked up, carried to the hole, and simply didn't fall
 through. A real pickup lifts the shape and carries it toward the hole, decimeters away,
 so this threshold only needs to rule out the shape having simply not moved at all.
+"""
+
+TCP_POSITION_THRESHOLD = 0.007
+"""
+Position tolerance in meters used for every :class:`~coraplex.robot_plans.motions.gripper.MoveToolCenterPointMotion`
+in this demo (see :attr:`~coraplex.datastructures.dataclasses.MotionToleranceConfig.default_tcp_position_threshold`),
+in place of Giskard's own tighter default (0.005m).
+
+A physically simulated, PD-tracked arm settles with some residual error rather than
+converging exactly onto a goal; the tight default was observed to have the arm hover and
+make small corrections near the placing pose for a long time before the goal finally
+registered as reached, rather than actually improving placement accuracy. 0.01 cut that
+hovering down, but also let one release land far enough off to miss and tumble a shape
+that had never missed before; splitting the difference between the two.
+"""
+
+TCP_ORIENTATION_THRESHOLD = 0.03
+"""
+Orientation tolerance in rad used for every :class:`~coraplex.robot_plans.motions.gripper.MoveToolCenterPointMotion`
+in this demo (see :attr:`~coraplex.datastructures.dataclasses.MotionToleranceConfig.tool_orientation_threshold`),
+loosened for the same reason as :data:`TCP_POSITION_THRESHOLD`.
 """
 
 
@@ -295,7 +318,10 @@ def _insert_shape_or_none(
 
 
 def _insert_all_shapes(
-    montessori: MontessoriWorld, context, max_shapes: Optional[int] = None
+    montessori: MontessoriWorld,
+    context,
+    max_shapes: Optional[int] = None,
+    only_shape: Optional[str] = None,
 ) -> None:
     """
     Have the Panda pick up and insert every loose shape that has a matching hole into
@@ -315,6 +341,12 @@ def _insert_all_shapes(
     :param max_shapes: Stop after this many shapes have actually been attempted
         (skipped shapes don't count), for fast iteration while tuning parameters on a
         single shape. ``None`` attempts every shape.
+    :param only_shape: Attempt only the shape whose name (with the trailing ``_shape``
+        removed, e.g. ``"square_hole"``) equals this, skipping every other shape. Every
+        other shape still sits in the world (unlike a lower :attr:`max_shapes`, which
+        never even reaches them), so the scene matches a full run; only the robot's
+        insertion attempts are limited, for isolating one shape's own tuning without a
+        full run's time cost.
     """
     attempted = 0
     for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape):
@@ -328,6 +360,11 @@ def _insert_all_shapes(
             montessori.board.hole_for(shape)
         except NoMatchingHoleError:
             logger.info("Skipping %s: no matching hole.", shape.name)
+            continue
+
+        shape_key = shape.name.name.removesuffix("_shape")
+        if only_shape is not None and shape_key != only_shape:
+            logger.info("Skipping %s: not %s.", shape.name, only_shape)
             continue
 
         if max_shapes is not None and attempted >= max_shapes:
@@ -383,6 +420,16 @@ def _parse_arguments() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--only-shape",
+        type=str,
+        default=None,
+        help=(
+            "Attempt only the shape with this name (trailing '_shape' removed, e.g. "
+            "'square_hole'), skipping every other shape while still spawning them, for "
+            "isolating one shape's own tuning. Attempts every shape by default."
+        ),
+    )
+    parser.add_argument(
         "--no-rviz",
         action="store_true",
         help="Don't publish TF/visualization markers to RViz; publishes by default.",
@@ -408,7 +455,7 @@ def main() -> None:
     import rclpy
     from rclpy.executors import SingleThreadedExecutor
 
-    from coraplex.datastructures.dataclasses import Context
+    from coraplex.datastructures.dataclasses import Context, MotionToleranceConfig
     from semantic_digital_twin.adapters.multi_sim import MujocoSim
     from semantic_digital_twin.adapters.ros.tf_publisher import TFPublisher
     from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
@@ -430,10 +477,10 @@ def main() -> None:
         Panda, parse_panda(), mount_position, mount_yaw=np.pi
     )
     physically_simulated_dofs = equip_panda_for_physical_simulation(robot)
-    apply_grasp_contact_parameters(
-        shape.root
-        for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape)
+    apply_montessori_grasp_contact_parameters(
+        montessori.world.get_semantic_annotations_by_type(MontessoriShape)
     )
+    apply_contact_friction([montessori.board.root], BOARD_FRICTION)
     logger.info("Built Montessori world with %d bodies.", len(montessori.world.bodies))
 
     tf_publisher = None
@@ -465,12 +512,21 @@ def main() -> None:
         # table row -- it hung for 5+ minutes on the very first pickup. Our own
         # is_body_gripped check in _insert_shape covers the same thing without it.
         evaluate_conditions=False,
+        motion_tolerances=MotionToleranceConfig(
+            default_tcp_position_threshold=TCP_POSITION_THRESHOLD,
+            tool_orientation_threshold=TCP_ORIENTATION_THRESHOLD,
+        ),
     )
     context.simulation_clock = lambda: multi_sim.simulator.current_simulation_time
 
     multi_sim.start_simulation()
     try:
-        _insert_all_shapes(montessori, context, max_shapes=arguments.max_shapes)
+        _insert_all_shapes(
+            montessori,
+            context,
+            max_shapes=arguments.max_shapes,
+            only_shape=arguments.only_shape,
+        )
         logger.info("Sorting done; the simulation keeps running.")
         logger.info("Done. Press Ctrl+C to stop.")
         while True:

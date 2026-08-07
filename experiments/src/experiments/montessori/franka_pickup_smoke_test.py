@@ -25,7 +25,9 @@ import threading
 import numpy as np
 
 from experiments.montessori.franka_panda_equipment import (
-    apply_grasp_contact_parameters,
+    BOARD_FRICTION,
+    apply_contact_friction,
+    apply_montessori_grasp_contact_parameters,
     equip_panda_for_physical_simulation,
     parse_panda,
 )
@@ -178,10 +180,10 @@ def main() -> None:
         Panda, parse_panda(), mount_position, mount_yaw=np.pi
     )
     physically_simulated_dofs = equip_panda_for_physical_simulation(robot)
-    apply_grasp_contact_parameters(
-        shape.root
-        for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape)
+    apply_montessori_grasp_contact_parameters(
+        montessori.world.get_semantic_annotations_by_type(MontessoriShape)
     )
+    apply_contact_friction([montessori.board.root], BOARD_FRICTION)
     shape = _shape_with_category(montessori, arguments.shape)
 
     multi_sim = MujocoSim(

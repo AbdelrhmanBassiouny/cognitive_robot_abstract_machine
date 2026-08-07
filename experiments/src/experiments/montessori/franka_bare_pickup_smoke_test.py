@@ -23,6 +23,7 @@ import threading
 import numpy as np
 
 from experiments.montessori.franka_panda_equipment import (
+    GRASP_FRICTION,
     apply_grasp_contact_parameters,
     equip_panda_for_physical_simulation,
     parse_panda,
@@ -217,7 +218,7 @@ def build_scene() -> tuple[World, Panda, Body]:
     robot = mount_stationary_robot(
         world, Panda, parse_panda(), MOUNT_POSITION, mount_yaw=MOUNT_YAW
     )
-    apply_grasp_contact_parameters([cube])
+    apply_grasp_contact_parameters([cube], GRASP_FRICTION)
 
     return world, robot, cube
 

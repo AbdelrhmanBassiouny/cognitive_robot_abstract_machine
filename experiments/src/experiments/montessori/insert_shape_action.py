@@ -370,7 +370,7 @@ class InsertMontessoriShapeAction(ActionDescription):
                 object_designator=self.montessori_shape.root,
                 arm=self.arm,
                 grasp_description=self.grasp_description,
-                grasp_closing_velocity=0.2,
+                grasp_closing_velocity=0.08,
                 lift_linear_velocity=0.12,
                 grasp_stall_minimum_time=0.3,
                 final_approach_linear_velocity=0.05,

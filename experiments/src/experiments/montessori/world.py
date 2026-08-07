@@ -541,7 +541,12 @@ exact fit, leaving clearance to actually pass through.
 
 Widened from the original 0.85 (roughly doubling the per-side gap) as a hacky attempt to
 make a shape's release pose more forgiving of the small positioning error that otherwise
-leaves it resting on the hole's rim instead of falling through.
+leaves it resting on the hole's rim instead of falling through. circular_hole_1 has the
+smallest true footprint of the six holes, so the same fraction leaves it the least
+absolute clearance in mm and was observed to have the worst pass rate (50% over 20 runs)
+of any shape. Widening further to 0.6 was tested (5 full runs): circular_hole_1 scored
+2/5, no better than the 0.7 baseline, so 0.6 was reverted. circular_hole_1's failure mode
+is not explained by clearance alone.
 """
 
 
