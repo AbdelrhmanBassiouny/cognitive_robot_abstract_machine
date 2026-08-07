@@ -9,24 +9,12 @@ recorded in a scene bundle, not a coraplex ``Plan`` itself.
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-from enum import Enum
 
 from typing_extensions import Any, Dict, Optional, Tuple
 
+from cram_viz.knowledge.enums import EdgeKind, NodeGroup
 from cram_viz.knowledge.scene_bundle import load_scene
 from cram_viz.knowledge.views.base import _view
-
-
-class PlanNodeGroup(str, Enum):
-    """
-    Node colour group of the plan view's graph panel.
-    """
-
-    EVENT = "event"
-    ROBOT = "robot"
-    GOAL = "goal"
-    OBJECT = "object"
-    OTHER = "ind"
 
 
 @dataclass(frozen=True)
@@ -35,7 +23,7 @@ class PlanLegendEntry:
     One row of the plan view's legend.
     """
 
-    group: PlanNodeGroup
+    group: NodeGroup
     """
     Node colour group this row explains.
     """
@@ -47,21 +35,21 @@ class PlanLegendEntry:
 
 
 #: plan-node kind → node colour group of the graph panel
-PLAN_GROUPS: Dict[str, PlanNodeGroup] = {
-    "ActionNode": PlanNodeGroup.EVENT,
-    "MotionNode": PlanNodeGroup.ROBOT,
-    "ConditionNode": PlanNodeGroup.GOAL,
-    "AttachNode": PlanNodeGroup.OBJECT,
-    "DetachNode": PlanNodeGroup.OBJECT,
+PLAN_GROUPS: Dict[str, NodeGroup] = {
+    "ActionNode": NodeGroup.EVENT,
+    "MotionNode": NodeGroup.ROBOT,
+    "ConditionNode": NodeGroup.GOAL,
+    "AttachNode": NodeGroup.OBJECT,
+    "DetachNode": NodeGroup.OBJECT,
 }
 
 #: legend rows of the plan view
 PLAN_LEGEND: Tuple[PlanLegendEntry, ...] = (
-    PlanLegendEntry(PlanNodeGroup.EVENT, "Action"),
-    PlanLegendEntry(PlanNodeGroup.ROBOT, "Motion"),
-    PlanLegendEntry(PlanNodeGroup.GOAL, "Condition"),
-    PlanLegendEntry(PlanNodeGroup.OBJECT, "Attach / detach"),
-    PlanLegendEntry(PlanNodeGroup.OTHER, "Other plan node"),
+    PlanLegendEntry(NodeGroup.EVENT, "Action"),
+    PlanLegendEntry(NodeGroup.ROBOT, "Motion"),
+    PlanLegendEntry(NodeGroup.GOAL, "Condition"),
+    PlanLegendEntry(NodeGroup.OBJECT, "Attach / detach"),
+    PlanLegendEntry(NodeGroup.OTHER, "Other plan node"),
 )
 
 
@@ -107,13 +95,18 @@ def _plan_view() -> Dict[str, Any]:
         add(
             node_id,
             label,
-            PLAN_GROUPS.get(tree.get("kind"), PlanNodeGroup.OTHER),
+            PLAN_GROUPS.get(tree.get("kind"), NodeGroup.OTHER),
             lines,
             status=status,
         )
         if parent:
             edges.append(
-                {"from": parent, "to": node_id, "kind": "prop", "label": "has step"}
+                {
+                    "from": parent,
+                    "to": node_id,
+                    "kind": EdgeKind.PROP,
+                    "label": "has step",
+                }
             )
         for child in tree.get("children", []):
             walk(child, node_id)

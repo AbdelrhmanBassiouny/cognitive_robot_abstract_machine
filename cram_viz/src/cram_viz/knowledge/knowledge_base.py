@@ -13,13 +13,13 @@ from cram_viz.knowledge.architecture_scan import load_architecture
 from cram_viz.knowledge.entities import (
     ActionEpisode,
     Arm,
-    ArmSide,
     BenchObject,
     Gripper,
     JointMotion,
     Position,
     Robot,
 )
+from cram_viz.knowledge.enums import ArmSide
 from cram_viz.knowledge.scene_bundle import load_scene
 
 
@@ -142,7 +142,7 @@ class EpisodeKnowledgeBase:
         ]
         grippers, arms = [], []
         for arm_part in sorted(arm_parts):
-            side = _side_of_name(arm_part) or "n/a"
+            side = _side_of_name(arm_part) or ArmSide.UNKNOWN
             gripper_part = next(
                 (part for part in gripper_parts if _side_of_name(part) == side), None
             )

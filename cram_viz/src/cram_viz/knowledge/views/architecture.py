@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing_extensions import Any, Dict, List, TYPE_CHECKING
 
 from cram_viz.knowledge.architecture_entities import Package, PythonClass, SubPackage
+from cram_viz.knowledge.enums import EdgeKind, NodeGroup
 from cram_viz.knowledge.views.base import _view
 
 if TYPE_CHECKING:
@@ -60,9 +61,14 @@ def _add_classes(
     name_to_id: Dict[str, str] = {}
     for python_class in shown:
         class_id = _class_id(python_class)
-        add(class_id, python_class.name, "pyclass", _class_lines(python_class))
+        add(class_id, python_class.name, NodeGroup.PYCLASS, _class_lines(python_class))
         edges.append(
-            {"from": parent_id, "to": class_id, "kind": "prop", "label": "defines"}
+            {
+                "from": parent_id,
+                "to": class_id,
+                "kind": EdgeKind.PROP,
+                "label": "defines",
+            }
         )
         name_to_id.setdefault(python_class.name, class_id)
     for python_class in shown:
@@ -72,7 +78,7 @@ def _add_classes(
                     {
                         "from": _class_id(python_class),
                         "to": name_to_id[base],
-                        "kind": "type",
+                        "kind": EdgeKind.TYPE,
                         "label": "inherits",
                     }
                 )
@@ -105,7 +111,7 @@ def _package_view(
     add(
         package.name,
         package.name,
-        "concept",
+        NodeGroup.CONCEPT,
         [
             "a Package",
             package.description,
@@ -116,7 +122,7 @@ def _package_view(
         add(
             subpackage.name,
             subpackage.name.split(".", 1)[1],
-            "klass",
+            NodeGroup.KLASS,
             [
                 "a SubPackage of " + subpackage.package,
                 "%d modules · %d classes"
@@ -128,7 +134,7 @@ def _package_view(
             {
                 "from": package.name,
                 "to": subpackage.name,
-                "kind": "prop",
+                "kind": EdgeKind.PROP,
                 "label": "contains",
             }
         )
@@ -162,7 +168,7 @@ def _subpackage_view(
     add(
         subpackage.name,
         subpackage.name.split(".", 1)[1],
-        "klass",
+        NodeGroup.KLASS,
         [
             "a SubPackage of " + subpackage.package,
             "%d modules · %d classes"
@@ -192,7 +198,7 @@ def _class_view(
     add(
         class_id,
         python_class.name,
-        "pyclass",
+        NodeGroup.PYCLASS,
         _class_lines(python_class, drill_hint=False),
     )
     # direct base classes: resolve inside the repo (same package preferred),
@@ -206,13 +212,23 @@ def _class_view(
         if pick:
             base_id = _class_id(pick)
             if base_id not in details:
-                add(base_id, pick.name, "pyclass", _class_lines(pick))
+                add(base_id, pick.name, NodeGroup.PYCLASS, _class_lines(pick))
         else:
             base_id = "ext:" + base
             if base_id not in details:
-                add(base_id, base, "upper", ["external base class (outside the repo)"])
+                add(
+                    base_id,
+                    base,
+                    NodeGroup.UPPER,
+                    ["external base class (outside the repo)"],
+                )
         edges.append(
-            {"from": class_id, "to": base_id, "kind": "type", "label": "inherits"}
+            {
+                "from": class_id,
+                "to": base_id,
+                "kind": EdgeKind.TYPE,
+                "label": "inherits",
+            }
         )
     # every subclass in the repo (matched by base name)
     subclasses = [
@@ -223,9 +239,14 @@ def _class_view(
     for subclass in subclasses[:SUBCLASS_CAP]:
         subclass_id = _class_id(subclass)
         if subclass_id not in details:
-            add(subclass_id, subclass.name, "pyclass", _class_lines(subclass))
+            add(subclass_id, subclass.name, NodeGroup.PYCLASS, _class_lines(subclass))
         edges.append(
-            {"from": subclass_id, "to": class_id, "kind": "type", "label": "inherits"}
+            {
+                "from": subclass_id,
+                "to": class_id,
+                "kind": EdgeKind.TYPE,
+                "label": "inherits",
+            }
         )
     if len(subclasses) > SUBCLASS_CAP:
         details[class_id]["lines"].append(

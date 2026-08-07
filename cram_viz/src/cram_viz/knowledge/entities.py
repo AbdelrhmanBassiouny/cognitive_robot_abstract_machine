@@ -5,9 +5,10 @@ The recorded episode's entity model: robot parts, objects, episodes and joint mo
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
 
 from typing_extensions import Optional
+
+from cram_viz.knowledge.enums import ArmSide
 
 
 @dataclass(unsafe_hash=True)
@@ -35,17 +36,6 @@ class Position:
         return "(%.2f, %.2f, %.2f)" % (self.x, self.y, self.z)
 
 
-class ArmSide(str, Enum):
-    """
-    Which body side a joint/part belongs to, as inferred from its name.
-    """
-
-    LEFT = "left"
-    RIGHT = "right"
-    BODY = "body"
-    ENVIRONMENT = "environment"
-
-
 @dataclass(unsafe_hash=True)
 class Gripper:
     """
@@ -57,9 +47,9 @@ class Gripper:
     Part name from the scene's robot annotation.
     """
 
-    side: str
+    side: ArmSide
     """
-    Body side the gripper belongs to ('left' / 'right').
+    Body side the gripper belongs to.
     """
 
     opening_m: Optional[float] = None
@@ -80,9 +70,9 @@ class Arm:
     Part name from the scene's robot annotation.
     """
 
-    side: str
+    side: ArmSide
     """
-    Body side of the arm ('left' / 'right').
+    Body side of the arm.
     """
 
     robot: str
