@@ -47,3 +47,43 @@ assert its wording); flagged for a follow-up.
 - Two pre-existing failures in `test_check_setup_sh.py` reproduce on clean
   `origin/main` (the setup check probes system `python3`, which lacks pytest) —
   not from this branch, left alone.
+
+## Review round 2026-08-07 (21 comments), applied in `bd159319`
+
+One theme throughout: structured data over strings. Everything naming a fixed
+thing is a `StrEnum` member now (`PayloadKey`, `QueryVariable`,
+`GraphQLDocument`, `EnvironmentVariable`, `ReviewState`, `PullRequestState`,
+`ThreadMarker`); the query documents moved into `.graphql` files, which
+`AGENTS.md`'s no-inline-snippets rule had already required and the first
+version simply did not follow; every model gained `from_payload`, and
+`RepositoryPayload` owns the one access path so neither keys nor path are
+written twice; errors are dataclasses with typed context; `snapshot` became
+`read_current_state`; the tests no longer contain the reviewed file path,
+comment bodies or URLs at all, comparing against the recorded payload and the
+report's own `heading()`/constants instead. 32 tests, was 29.
+
+Two things worth carrying:
+
+- `GraphQLErrorsReturned` split out of `GitHubCommandFailed`. A failed process
+  and a GraphQL error array are different failures, and separating them is what
+  lets a test assert by type rather than on message text — which is the
+  reviewer's stated preference over string matching.
+- **`ABC` cannot enforce abstractness on an exception.** `UpstreamReviewError`
+  gets the right metaclass and a populated `__abstractmethods__`, but
+  `BaseException.__new__` bypasses the check `object.__new__` performs, so the
+  base still instantiates. Kept for declared intent; the enforcement is not
+  real and should not be claimed.
+
+Deliberately answered differently from what was asked, and left unresolved for
+the user: `GraphQLTransport` became an abstract base class rather than a
+dataclass — it holds no data, it is the interface.
+
+## Spun out
+
+Draft #147 off `main` carries the AGENTS.md rules the review asked for as a
+separate PR. It *replaces* the existing one-liner "Instead of passing around
+strings, use enums instead" rather than adding a duplicate, and adds the
+testing half (assert against the definition; assert by type where a type
+distinguishes the case). Documentation only, +7/−1. It has no plan item — a
+repo-wide convention change rather than workflow-unification work — flagged to
+the user rather than adding one unilaterally.
