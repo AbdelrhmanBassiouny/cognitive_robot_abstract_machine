@@ -4,12 +4,72 @@ The knowledge-graph overview: nodes, edges, details and presets for the UI.
 
 from __future__ import annotations
 
+from dataclasses import asdict, dataclass
+
 from typing_extensions import Any, Dict, List, Optional
 
 from cram_viz.knowledge.enums import EdgeKind, NodeGroup
 from cram_viz.knowledge.knowledge_base import get_knowledge_base
 from cram_viz.knowledge.presets import get_presets
 from cram_viz.knowledge.scene_bundle import load_scene
+from cram_viz.knowledge.subgraph import (
+    DetailEntry,
+    GraphEdge,
+    GraphNode,
+    SubgraphAccumulator,
+)
+
+
+@dataclass
+class KnowledgeGraphPayload:
+    """
+    The knowledge-graph overview: nodes, edges, details and presets.
+    """
+
+    ok: bool
+    """
+    Always ``True`` — this view has no failure mode.
+    """
+
+    status: str
+    """
+    Human-readable summary line shown above the graph panel.
+    """
+
+    nodes: List[GraphNode]
+    """
+    Every node in this view.
+    """
+
+    edges: List[GraphEdge]
+    """
+    Every edge in this view.
+    """
+
+    details: Dict[str, DetailEntry]
+    """
+    Detail-panel entry per node id.
+    """
+
+    presets: List[Dict[str, str]]
+    """
+    Ready-made EQL queries for the EQL panel.
+    """
+
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The JSON-serializable shape the frontend's graph panel expects.
+        """
+        return {
+            "ok": self.ok,
+            "status": self.status,
+            "nodes": [node.to_payload() for node in self.nodes],
+            "edges": [edge.to_payload() for edge in self.edges],
+            "details": {
+                node_id: asdict(entry) for node_id, entry in self.details.items()
+            },
+            "presets": self.presets,
+        }
 
 
 def _measurement_line(
@@ -32,29 +92,15 @@ def _count_plan_nodes(tree: Dict[str, Any]) -> int:
     return 1 + sum(_count_plan_nodes(child) for child in tree.get("children", []))
 
 
-def graph_payload() -> Dict[str, Any]:
+def graph_payload() -> KnowledgeGraphPayload:
     """
     The knowledge-graph overview: nodes, edges, details and presets.
     """
     kb = get_knowledge_base()
-    nodes, edges, details = [], [], {}
-
-    def add(node_id: str, label: str, group: NodeGroup, lines: List[str]) -> None:
-        """
-        Append one graph node and its detail-panel entry.
-        """
-        nodes.append(
-            {
-                "id": node_id,
-                "label": label,
-                "group": group,
-                "title": "\n".join([label] + lines),
-            }
-        )
-        details[node_id] = {"label": label, "group": group, "lines": lines}
+    view = SubgraphAccumulator()
 
     rob = kb.robot.name
-    add(
+    view.add(
         rob,
         rob,
         NodeGroup.ROBOT,
@@ -65,33 +111,26 @@ def graph_payload() -> Dict[str, Any]:
         ],
     )
     for arm in kb.arms:
-        add(
+        view.add(
             arm.name,
             arm.name.replace("_", " "),
             NodeGroup.ROBOT,
             ["an Arm", "side: " + arm.side, "gripper: " + arm.gripper.name],
         )
-        edges.append(
-            {"from": rob, "to": arm.name, "kind": EdgeKind.PROP, "label": "has part"}
-        )
-        add(
+        view.edges.append(GraphEdge(rob, arm.name, EdgeKind.PROP, "has part"))
+        view.add(
             arm.gripper.name,
             arm.gripper.name.replace("_", " "),
             NodeGroup.ROBOT,
             ["a Gripper", "side: " + arm.gripper.side]
             + _measurement_line("opening", arm.gripper.opening_m, "%.3f"),
         )
-        edges.append(
-            {
-                "from": arm.name,
-                "to": arm.gripper.name,
-                "kind": EdgeKind.PROP,
-                "label": "has part",
-            }
+        view.edges.append(
+            GraphEdge(arm.name, arm.gripper.name, EdgeKind.PROP, "has part")
         )
 
     for bench_object in kb.objects:
-        add(
+        view.add(
             bench_object.name,
             bench_object.label,
             NodeGroup.OBJECT,
@@ -105,7 +144,7 @@ def graph_payload() -> Dict[str, Any]:
 
     previous = None
     for episode in kb.episodes:
-        add(
+        view.add(
             episode.name,
             episode.name,
             NodeGroup.EVENT,
@@ -118,49 +157,36 @@ def graph_payload() -> Dict[str, Any]:
             + (["places at: " + episode.places_at.name] if episode.places_at else []),
         )
         if previous:
-            edges.append(
-                {
-                    "from": previous,
-                    "to": episode.name,
-                    "kind": EdgeKind.TYPE,
-                    "label": "precedes",
-                }
+            view.edges.append(
+                GraphEdge(previous, episode.name, EdgeKind.TYPE, "precedes")
             )
         previous = episode.name
         # the robot performs the episode (with its arm); don't wire the episode
         # straight to the arm — the arm hangs off the robot, so the chain reads
         # transport_milk → pr2 → left_arm → left_gripper
         if episode.performed_by:
-            edges.append(
-                {
-                    "from": episode.name,
-                    "to": episode.performed_by.robot,
-                    "kind": EdgeKind.PROP,
-                    "label": "performed by",
-                }
+            view.edges.append(
+                GraphEdge(
+                    episode.name,
+                    episode.performed_by.robot,
+                    EdgeKind.PROP,
+                    "performed by",
+                )
             )
         if episode.picks:
-            edges.append(
-                {
-                    "from": episode.name,
-                    "to": episode.picks.name,
-                    "kind": EdgeKind.PROP,
-                    "label": "picks",
-                }
+            view.edges.append(
+                GraphEdge(episode.name, episode.picks.name, EdgeKind.PROP, "picks")
             )
         if episode.places_at:
-            edges.append(
-                {
-                    "from": episode.name,
-                    "to": episode.places_at.name,
-                    "kind": EdgeKind.PROP,
-                    "label": "places at",
-                }
+            view.edges.append(
+                GraphEdge(
+                    episode.name, episode.places_at.name, EdgeKind.PROP, "places at"
+                )
             )
 
     # the CRAM architecture cluster: repo root → packages, plus import edges
     if kb.packages:
-        add(
+        view.add(
             "cram",
             "CRAM architecture",
             NodeGroup.ROOT,
@@ -170,7 +196,7 @@ def graph_payload() -> Dict[str, Any]:
             ],
         )
         for package in kb.packages:
-            add(
+            view.add(
                 package.name,
                 package.name,
                 NodeGroup.CONCEPT,
@@ -182,16 +208,11 @@ def graph_payload() -> Dict[str, Any]:
                     "double-click to open",
                 ],
             )
-            edges.append(
-                {
-                    "from": "cram",
-                    "to": package.name,
-                    "kind": EdgeKind.PROP,
-                    "label": "contains",
-                }
+            view.edges.append(
+                GraphEdge("cram", package.name, EdgeKind.PROP, "contains")
             )
         for subpackage in kb.subpackages:
-            add(
+            view.add(
                 subpackage.name,
                 subpackage.name.split(".", 1)[1],
                 NodeGroup.KLASS,
@@ -202,23 +223,13 @@ def graph_payload() -> Dict[str, Any]:
                     "double-click to open",
                 ],
             )
-            edges.append(
-                {
-                    "from": subpackage.package,
-                    "to": subpackage.name,
-                    "kind": EdgeKind.PROP,
-                    "label": "contains",
-                }
+            view.edges.append(
+                GraphEdge(
+                    subpackage.package, subpackage.name, EdgeKind.PROP, "contains"
+                )
             )
         for source, target in kb.package_deps:
-            edges.append(
-                {
-                    "from": source,
-                    "to": target,
-                    "kind": EdgeKind.TYPE,
-                    "label": "imports",
-                }
-            )
+            view.edges.append(GraphEdge(source, target, EdgeKind.TYPE, "imports"))
 
         # ground the demo in the architecture at the SUBPACKAGE that actually
         # realises each part (only wire to a node that exists in this view)
@@ -226,15 +237,8 @@ def graph_payload() -> Dict[str, Any]:
             """
             Add an edge, but only if target is actually a node in this view.
             """
-            if any(n["id"] == target for n in nodes):
-                edges.append(
-                    {
-                        "from": source,
-                        "to": target,
-                        "kind": EdgeKind.TYPE,
-                        "label": label,
-                    }
-                )
+            if any(node.id == target for node in view.nodes):
+                view.edges.append(GraphEdge(source, target, EdgeKind.TYPE, label))
 
         # anchor one representative manipulation episode (they share the stack)
         anchor = next((episode.name for episode in kb.episodes if episode.picks), None)
@@ -250,7 +254,7 @@ def graph_payload() -> Dict[str, Any]:
     scene, _ = load_scene()
     if scene.get("planTrees"):
         node_count = sum(_count_plan_nodes(tree) for tree in scene["planTrees"])
-        add(
+        view.add(
             "plan",
             "executed plan",
             NodeGroup.GOAL,
@@ -260,29 +264,15 @@ def graph_payload() -> Dict[str, Any]:
                 "double-click to open",
             ],
         )
-        edges.append(
-            {"from": "plan", "to": rob, "kind": EdgeKind.PROP, "label": "executed by"}
-        )
+        view.edges.append(GraphEdge("plan", rob, EdgeKind.PROP, "executed by"))
         for episode in kb.episodes:
-            edges.append(
-                {
-                    "from": "plan",
-                    "to": episode.name,
-                    "kind": EdgeKind.TYPE,
-                    "label": "spans",
-                }
-            )
+            view.edges.append(GraphEdge("plan", episode.name, EdgeKind.TYPE, "spans"))
 
     status = "EQL ready · %d graph nodes · %d joints · %d CRAM classes" % (
-        len(nodes),
+        len(view.nodes),
         len(kb.joints),
         len(kb.classes),
     )
-    return {
-        "ok": True,
-        "status": status,
-        "nodes": nodes,
-        "edges": edges,
-        "details": details,
-        "presets": get_presets(),
-    }
+    return KnowledgeGraphPayload(
+        True, status, view.nodes, view.edges, view.details, get_presets()
+    )

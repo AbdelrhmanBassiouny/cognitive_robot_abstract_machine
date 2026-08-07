@@ -89,7 +89,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def _json(self, payload: Any, code: int = 200) -> None:
         """
         Send a payload as JSON with the given status code.
+
+        ``payload`` may be a plain JSON-able dict, or a knowledge-package payload
+        dataclass exposing ``to_payload()`` — either is serialized the same way.
         """
+        if hasattr(payload, "to_payload"):
+            payload = payload.to_payload()
         body = json.dumps(payload).encode("utf-8")
         self.send_response(code)
         self.send_header("Content-Type", "application/json")

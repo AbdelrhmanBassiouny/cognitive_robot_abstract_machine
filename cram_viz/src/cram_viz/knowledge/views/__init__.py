@@ -4,21 +4,92 @@ The graph-panel tabs and drill-down subgraphs of the knowledge package.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import Union
+
 from typing_extensions import Any, Dict, Optional
 
-from cram_viz.knowledge.graph_payload import graph_payload
+from cram_viz.knowledge.graph_payload import KnowledgeGraphPayload, graph_payload
 from cram_viz.knowledge.knowledge_base import get_knowledge_base
 from cram_viz.knowledge.views.architecture import (
+    SubgraphViewPayload,
     _class_id,
     _class_view,
     _package_view,
     _subpackage_view,
 )
-from cram_viz.knowledge.views.kinematics import _urdf_view
-from cram_viz.knowledge.views.plan_tree import _plan_view
+from cram_viz.knowledge.views.kinematics import UrdfViewPayload, _urdf_view
+from cram_viz.knowledge.views.plan_tree import PlanViewPayload, _plan_view
 
 
-def view_payload(name: str) -> Dict[str, Any]:
+@dataclass
+class ChartViewPayload:
+    """
+    The (live-only) statechart tab.
+
+    Motion statecharts only exist while giskardpy executes them: one is compiled per
+    merged motion group and thrown away afterwards, and nothing of it is recorded into
+    the bundle — the UI fills this view from the bridge's ``/chart`` while attached.
+    """
+
+    ok: bool
+    """
+    Always ``True`` — this view has no failure mode.
+    """
+
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The JSON-serializable shape the frontend expects.
+        """
+        return {
+            "ok": self.ok,
+            "crumb": "motion statechart",
+            "nodes": [],
+            "edges": [],
+            "details": {},
+            "layout": "hier",
+            "live": "chart",
+            "empty": "Motion statecharts are built and ticked at execution time. "
+            "Start the demo with cram-viz-live and press ◉ Live — "
+            "the statechart of the running motion group appears here, "
+            "coloured by its node life cycle.",
+        }
+
+
+@dataclass
+class UnknownViewPayload:
+    """
+    The error payload returned for a graph-panel tab name that does not exist.
+    """
+
+    ok: bool
+    """
+    Always ``False``.
+    """
+
+    error: str
+    """
+    Human-readable description of the unknown tab name.
+    """
+
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The JSON-serializable shape the frontend expects.
+        """
+        return {"ok": self.ok, "error": self.error}
+
+
+#: any payload one of the graph-panel tabs or drill-down subgraphs can return
+ViewPayload = Union[
+    KnowledgeGraphPayload,
+    ChartViewPayload,
+    UrdfViewPayload,
+    PlanViewPayload,
+    SubgraphViewPayload,
+]
+
+
+def view_payload(name: str) -> Union[ViewPayload, UnknownViewPayload]:
     """
     One tab of the graph panel.
 
@@ -35,34 +106,17 @@ def view_payload(name: str) -> Dict[str, Any]:
         return _plan_view()
     if name == "chart":
         return _chart_view()
-    return {"ok": False, "error": "unknown view: %s" % name}
+    return UnknownViewPayload(False, "unknown view: %s" % name)
 
 
-def _chart_view() -> Dict[str, Any]:
+def _chart_view() -> ChartViewPayload:
     """
     The (live-only) statechart tab.
-
-    Motion statecharts only exist while giskardpy executes them: one is
-    compiled per merged motion group and thrown away afterwards, and nothing
-    of it is recorded into the bundle — the UI fills this view from the
-    bridge's ``/chart`` while attached.
     """
-    return {
-        "ok": True,
-        "crumb": "motion statechart",
-        "nodes": [],
-        "edges": [],
-        "details": {},
-        "layout": "hier",
-        "live": "chart",
-        "empty": "Motion statecharts are built and ticked at execution time. "
-        "Start the demo with cram-viz-live and press ◉ Live — "
-        "the statechart of the running motion group appears here, "
-        "coloured by its node life cycle.",
-    }
+    return ChartViewPayload(True)
 
 
-def expand_node(node_id: str) -> Optional[Dict[str, Any]]:
+def expand_node(node_id: str) -> Optional[ViewPayload]:
     """
     The inside view of a double-clicked node, or None if not drillable.
     """
