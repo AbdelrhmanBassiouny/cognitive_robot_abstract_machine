@@ -143,21 +143,27 @@ def pytest_configure(config):
         os.environ["ROS_DOMAIN_ID"] = str(100 + worker_num)
 
 
-@pytest.fixture(autouse=True, scope="function")
-def cleanup_after_test():
-    # We need to pass the class diagram, since otherwise some names are not found anymore after clearing the symbol graph
-    # for the first time, since World is not a symbol
-    SymbolGraph.clear()
-    class_diagram = ClassDiagram(
+@pytest.fixture(scope="session")
+def _session_class_diagram() -> ClassDiagram:
+    # We need to pass the class diagram, since otherwise some names are not found anymore
+    # after clearing the symbol graph, since World is not a symbol. Built once per
+    # session: the set of Symbol subclasses is static after collection, and the
+    # SymbolGraph singleton reset below only needs to drop per-test instance state, not
+    # this class-level graph.
+    return ClassDiagram(
         recursive_subclasses(Symbol) + [World],
         introspector=DescriptorAwareIntrospector(),
     )
-    SymbolGraph(_class_diagram=class_diagram)
+
+
+@pytest.fixture(autouse=True, scope="function")
+def cleanup_after_test(_session_class_diagram):
+    SymbolGraph.clear_instance()
+    SymbolGraph(_class_diagram=_session_class_diagram)
     # runs BEFORE each test
     yield
     # runs AFTER each test (even if the test fails or errors)
-    SymbolGraph.clear()
-    class_diagram.clear()
+    SymbolGraph.clear_instance()
 
 
 @pytest.fixture(autouse=True, scope="module")

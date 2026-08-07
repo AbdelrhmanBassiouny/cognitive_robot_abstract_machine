@@ -367,11 +367,7 @@ class GiskardExecutable(Executable):
         Executes the motion state chart on the real robot via giskard while monitoring
         for interrupts.
         """
-        from giskardpy.middleware.ros2.python_interface import GiskardWrapper
-
-        giskard = GiskardWrapper(self.context.ros_node, world=self.context.world)
-
-        giskard.execute(self.motion_state_chart)
+        self.context.giskard_wrapper.execute(self.motion_state_chart)
 
 
 @dataclass
