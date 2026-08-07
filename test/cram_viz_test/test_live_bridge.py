@@ -29,6 +29,7 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import Connection6DoF
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Any, Dict, List, Optional, Tuple
 
@@ -459,12 +460,20 @@ class TestViewerAccessors:
     def test_an_object_without_a_mesh_is_catalogued_as_a_sized_box(self):
         """
         An object the viewer has no mesh for still needs a spawnable size.
+
+        A real ``Body`` registered in its own ``World`` is required here, not the
+        ``ShapeSet`` mimic: ``_box_size`` measures through ``ShapeCollection.scale``,
+        which transforms each shape's bounding box through its reference frame, and that
+        frame must belong to an actual world.
         """
         bridge = Bridge()
-        scaled = PublishedBody(
-            name="world/cube.stl",
-            visual=ShapeSet(shapes=[Box(scale=Scale(0.2, 0.3, 0.4))]),
+        scaled = Body(
+            name=PrefixedName("cube.stl"),
+            visual=ShapeCollection(shapes=[Box(scale=Scale(0.2, 0.3, 0.4))]),
         )
+        world = World()
+        with world.modify_world():
+            world.add_body(scaled)
         bridge.publish_bodies({"cube.stl": scaled})
         entry = bridge.object_catalog()[0]
         assert entry["kind"] == "box"
