@@ -482,3 +482,49 @@ Two smaller outcomes:
 
 No production behaviour changed in this round — the fix-1 regression test passes
 unmodified across it, which is what makes it a refactor rather than a second fix.
+
+### Second review round (2026-08-07) — `Role[Query]` declined, and the merge deferred to Phase C
+
+Two design questions on #92's new accessor, both settled by the developer in session.
+
+**`OutermostQuery` as `Role[Query]` — declined.** The naming genuinely fits; "outermost
+query" is role-shaped language, and `krrood.patterns.role.Role` is the repo's own pattern
+for it. It fails on the import graph. `class OutermostQuery(Role[Query])` evaluates `Query`
+at class-creation time — a base-class expression, which `from __future__ import
+annotations` does not defer — and `Role.get_role_taker_type` resolves the parameter at
+runtime as well. But `evaluation_context.py` deliberately keeps *every* expression type
+behind `TYPE_CHECKING`: it is a leaf that `query.py` and `base_expressions.py` both import
+at runtime and that imports nothing back. Requiring `Query` at runtime closes that into a
+cycle.
+
+Two further reasons, either of which would matter on its own:
+
+- `Role.role_taker` is required and keyword-only, but this record is created empty by
+  `EvaluationContext`'s `default_factory` and filling it *is* its job. A role cannot exist
+  un-taken, so adopting one means `Optional[OutermostQuery] = None` plus moving the
+  first-wins arbitration onto `EvaluationContext` — a restructure, not a change of base.
+- `Role.__eq__` is identity-only and a role is never equal to its taker. This plan is about
+  ownership *identity*, and the path ends in `explanation.query_root is second_query._root_`.
+  A role there either gets unwrapped to `.role_taker` at every use site, earning nothing, or
+  silently breaks identity comparisons.
+
+Underneath all three: after `_query_id` collapsed away, the class is one optional reference
+plus arbitration, with no role-specific fields. "Outermost in this pass" is a fact the
+*pass* owns, which is why it belongs on `EvaluationContext` beside `ActiveConditionsRoot`
+and `TruthValueOperatorChildren` rather than on the query. Noted for anyone revisiting: there
+is no `Role[...]` subclass anywhere in `krrood/src` today, so this would have been the
+pattern's first production use, on the evaluation hot path.
+
+**The merge with `_root_query_` is Phase C's, not #92's.** The developer asked whether the
+new accessor should replace `_root_query_` outright. It should, eventually — but not as a
+refactor. `_root_query_`'s only consumer is
+`QuantifiedConditional._ids_of_variables_to_add_to_sources_`, which needs a real `Query` for
+`_selected_variables_`; `_evaluation_root_query_` falls back to `_root_`, which is any
+expression. Merging therefore means narrowing the fallback to a `Query`-typed lookup — which
+is the *same edit* as fixing that consumer's shared-quantifier cache staleness, this plan's
+Phase C. Doing it in #92 would have made it a two-bug PR without the failing-first
+shared-quantifier test that fix requires.
+
+So #92 keeps the rename only: `_evaluating_query_root_` → `_evaluation_root_query_`, taking
+the neighbouring `_root_query_`'s phrasing. Phase C collapses the two into one property named
+`_root_query_`, and this name disappears.

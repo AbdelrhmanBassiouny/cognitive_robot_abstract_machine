@@ -120,7 +120,15 @@ items:
       and _root_query_, on the developer's observation that nothing about it was
       specific to inference variables. Four new tests (three for OutermostQuery's
       own contract, one pinning the fallback branch, which nothing covered);
-      1441 passed, 7 skipped. Also flagged for Phase D and
+      1441 passed, 7 skipped. Second review round (commit a9682633): the property
+      renamed again to _evaluation_root_query_ on the developer's preference for
+      the neighbouring _root_query_'s phrasing. Two design questions settled and
+      recorded in the roadmap addendum - the Role[Query] proposal for
+      OutermostQuery declined (it would close an import cycle, since
+      evaluation_context.py keeps every expression type behind TYPE_CHECKING
+      while query.py and base_expressions.py import it at runtime), and the
+      full merge of _evaluation_root_query_ into _root_query_ deferred to
+      Phase C, which is where that consumer's bug fix belongs. Also flagged for Phase D and
       not fixed here: _is_faded_gate reads node.parent while
       _add_children_to_graph reassigns child_node.parent on every visit, so a
       node reached through two parents keeps only the last-assigned one.
@@ -147,6 +155,13 @@ items:
       enumerate remaining semantic _root_/_root_query_/_parent_ reads and
       per-node caches, TDD a shared-node regression test for each unsafe one,
       fix via the context accessor. TDD throughout; krrood-internal mimics only.
+      Also handed over from #92's second review round (2026-08-07): Phase C must
+      collapse SymbolicExpression._evaluation_root_query_ (added by #92) and
+      _root_query_ into a single property named _root_query_. They cannot merge
+      before then - _root_query_'s only consumer needs a real Query for
+      _selected_variables_, while _evaluation_root_query_ falls back to _root_,
+      which is any expression - so the merge means narrowing the fallback to a
+      Query-typed lookup, which is the same edit as this item's own fix.
       Handed over from #92 on 2026-08-07: _is_faded_gate (query_graph.py) reads
       node.parent while _add_children_to_graph reassigns child_node.parent on
       every visit, so a node reached through two parents keeps only the
