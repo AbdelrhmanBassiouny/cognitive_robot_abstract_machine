@@ -4,6 +4,10 @@ from functools import partial
 
 import pytest
 
+from semantic_digital_twin.predetermined_maps.building_floor import BuildingFloor
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.world import World
+
 try:
     import rclpy
 except ModuleNotFoundError:
@@ -112,3 +116,17 @@ def immutable_stretch_apartment_world(stretch_apartment_world):
     yield stretch_apartment_world, context.robot, context
 
     stretch_apartment_world.state._data[:] = state
+
+
+@pytest.fixture(scope="session")
+def _multi_story_building_world_setup():
+    world = World.create_with_root_body("root")
+    building_floor = BuildingFloor()
+    building_floor.spawn(world, "ground_floor")
+    building_floor.spawn(
+        world,
+        "first_floor",
+        parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 3),
+    )
+
+    return world

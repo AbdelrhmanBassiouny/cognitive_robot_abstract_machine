@@ -11,8 +11,8 @@ import pytest
 from semantic_digital_twin.api import (
     ConnectionSpecification,
     ActiveConnection1DOFSpecification,
-    RevoluteConnectionSpecification,
 )
+from semantic_digital_twin.predetermined_maps.building_floor import BuildingFloor
 from semantic_digital_twin.robots.daisy import DAiSy
 from semantic_digital_twin.semantic_annotations.mixins import (
     HasRootBody,
@@ -76,9 +76,6 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Elevator,
     Slider,
     Door,
-    Floor,
-    Wall,
-    Aperture,
     Hinge,
 )
 from semantic_digital_twin.spatial_types import (
@@ -830,74 +827,11 @@ def kitchen_world():
     return world
 
 
-def _generic_room_setup():
-    world = World.create_with_root_body("root")
-
-    scale = Scale(2, 2, 2)
-    wall_thickness = 0.05
-    door_scale = Scale(wall_thickness, 1, 1.8)
-
-    floor = Floor.create_with_new_body_in_world(name="floor", world=world, scale=scale.xy)
-
-    wall_spec = Wall.get_default_root_specification(
-        name="wall", scale=Scale(wall_thickness, scale.x, scale.z)
-    )
-    with world.modify_world():
-        for i in range(0, 4):
-            yaw = (np.pi / 2) * i
-            wall_pose = HomogeneousTransformationMatrix.from_xyz_rpy(
-                (scale.x / 2) * np.cos(yaw),
-                (scale.y / 2) * np.sin(yaw),
-                0,
-                0,
-                0,
-                yaw,
-            )
-            wall_body = wall_spec.spawn(name=f"wall_{i}", world=world, parent=floor.root, parent_T_self=wall_pose)
-            world.add_semantic_annotation(Wall(root=wall_body))
-
-        door = Door.get_default_root_specification(
-            name="door", scale=door_scale, connection_specification=RevoluteConnectionSpecification(axis=Vector3.Z())
-        ).spawn(world=world,parent=wall_body, parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(z=door_scale.z / 2))
-
-        door.collision.shapes[0].color = Color(1,0, 0, 1)
-        handle = Handle.get_default_root_specification(name="handle").spawn(world=world, parent=door, parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(y=door_scale.y / 2 * 0.9, yaw=np.pi))
-        handle_anno = Handle(root=handle)
-        world.add_semantic_annotation(handle_anno)
-        door_anno = Door(root=door)
-        world.add_semantic_annotation(door_anno)
-        world.get_semantic_annotations_by_type(Door)[0].add(handle_anno)
-
-    with world.modify_world():
-        door_apeture = Aperture.create_with_new_region_in_world_from_body(
-            "door_apeture",
-            world=world,
-            body=door,
-            parent_T_self=door.global_transform
-        )
-        world.get_semantic_annotations_by_type(Wall)[-1].add(door_apeture)
-
-    return world
-
 @pytest.fixture(scope="session")
 def building_floor():
     world = World.create_with_root_body("root")
-
-    floor = Floor.create_with_new_body_in_world(
-        name="floor", world=world, scale=Scale(8, 8,0)
-    )
-    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(-1., 2.5, 0, reference_frame=world.root))
-
-    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(-1., -2.5, 0, yaw=np.pi ))
-
-    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(1., 2.5, 0))
-
-    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(1., -2.5, 0, yaw=np.pi))
-
+    BuildingFloor().spawn(world, "building_floor")
     return world
-
-
-
 
 
 @pytest.fixture(scope="session")
