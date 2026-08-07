@@ -151,11 +151,11 @@ class VizMarkerPublisher(ModelChangeCallback):
         self.markers = MarkerArray()
         for body in self._world.bodies:
             shapes = self._select_shapes(body)
-            self._add_markers_for_shapes(shapes, str(body.name))
+            self._add_markers_for_shapes(shapes, self._world.get_human_readable_unique_name(body))
 
         for region in self._world.regions:
             self._add_markers_for_shapes(
-                region.area.shapes, str(region.name), force_alpha=self.region_alpha
+                region.area.shapes, self._world.get_human_readable_unique_name(region), force_alpha=self.region_alpha
             )
 
         self.publisher.publish(self.markers)

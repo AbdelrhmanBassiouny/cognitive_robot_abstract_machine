@@ -534,6 +534,11 @@ class World(HasSimulatorProperties):
     Lock used to prevent multiple threads from modifying the world at the same time.
     """
 
+    _human_readable_unique_names: Dict[str, Dict[UUID, str]] = field(default_factory=dict, init=False)
+    """
+    Dict that translates names to a Tuple of UUID and the unique name
+    """
+
     def __post_init__(self):
         self.state = WorldState(_world=self)
         self._forward_kinematic_manager = ForwardKinematicsManager(_world=self)
@@ -2413,3 +2418,22 @@ class World(HasSimulatorProperties):
         for connection, value in new_state.items():
             connection.position = value
         self.notify_state_change()
+
+    def get_human_readable_unique_name(self, entity: KinematicStructureEntity) -> str:
+        """
+        Returns a unique name for this specific entity. Names are created by enumerating the names of enteties,
+        so the name of the entity is used and for multiple names a number is appended.
+
+        :param entity: Entity for which a unique name is returned.
+        :return: The unique name of this entity as string.
+        """
+        id_to_unique_name = self._human_readable_unique_names.get(entity.name.name, None)
+        if id_to_unique_name is None:
+            self._human_readable_unique_names[entity.name.name] = {entity.id: entity.name.name}
+            return entity.name.name
+        elif entity.id in id_to_unique_name:
+            return id_to_unique_name[entity.id]
+        else:
+            human_readable_unique_name = f"{entity.name.name}_{len(self._human_readable_unique_names[entity.name.name])}"
+            self._human_readable_unique_names[entity.name.name][entity.id] = human_readable_unique_name
+            return human_readable_unique_name

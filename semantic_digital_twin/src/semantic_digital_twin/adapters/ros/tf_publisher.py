@@ -112,8 +112,8 @@ class TfPublisherModelCallback(ModelChangeCallback):
             )
             child_link = self._world.get_kinematic_structure_entity_by_id(child_link_id)
 
-            self.tf_message.transforms[i].header.frame_id = str(parent_link.name)
-            self.tf_message.transforms[i].child_frame_id = str(child_link.name)
+            self.tf_message.transforms[i].header.frame_id = self._world.get_human_readable_unique_name(parent_link)
+            self.tf_message.transforms[i].child_frame_id = self._world.get_human_readable_unique_name(child_link)
 
     def update_tf_message(self):
         if self.compiled_tf.is_result_empty():

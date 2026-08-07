@@ -886,13 +886,13 @@ def building_floor():
     floor = Floor.create_with_new_body_in_world(
         name="floor", world=world, scale=Scale(8, 8,0)
     )
-    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(-1.5, 1.5, 1.02, yaw=np.pi, reference_frame=world.root))
+    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(-1.5, 1.5, 0, yaw=np.pi, reference_frame=world.root))
 
-    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(-1.5, -1.5, 1.02, yaw=np.pi))
+    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(-1.5, -1.5, 0, yaw=np.pi))
 
-    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(1.5, 1., 1.02))
+    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(1.5, 1., 0))
 
-    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(1.5, -1.5, 1.02))
+    world.merge_world_at_pose(_generic_room_setup(), HomogeneousTransformationMatrix.from_xyz_rpy(1.5, -1.5, 0))
 
     print(len(world.bodies))
 
