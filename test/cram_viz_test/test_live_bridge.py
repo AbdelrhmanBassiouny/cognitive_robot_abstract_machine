@@ -34,6 +34,7 @@ from typing_extensions import Any, Dict, List, Optional, Tuple
 
 from cram_viz.live.bridge import (
     Bridge,
+    ChartEdgeEntry,
     DEFAULT_OBJECT_SIZE,
     LiveHook,
     MalformedMoveRequest,
@@ -572,6 +573,12 @@ def make_chart(life=(1, 1, 0), obs=(0.5, 0.5, 0.0)) -> ObservedStatechart:
         life_cycle_state=NodeStateVector(data=list(life)),
         observation_state=NodeStateVector(data=list(obs)),
     )
+
+
+class TestChartEdgeEntry:
+    def test_to_payload_renames_source_and_target_to_from_and_to(self):
+        edge = ChartEdgeEntry(source="s0", target="s1", kind="START")
+        assert edge.to_payload() == {"from": "s0", "to": "s1", "kind": "START"}
 
 
 class TestChartSnapshot:

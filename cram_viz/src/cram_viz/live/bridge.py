@@ -406,6 +406,15 @@ class ChartEdgeEntry:
     target: str
     kind: str
 
+    def to_payload(self) -> Dict[str, str]:
+        """
+        This edge as the wire shape the frontend reads.
+
+        Uses ``from``/``to`` rather than :attr:`source`/:attr:`target`, since ``from`` is a
+        Python keyword and cannot be a dataclass field name.
+        """
+        return {"from": self.source, "to": self.target, "kind": self.kind}
+
 
 @dataclass(frozen=True)
 class _ChartStructure:
@@ -1276,10 +1285,7 @@ class Bridge:
         with self._lock:
             chart = self.chart_state
         payload = asdict(chart)
-        payload["edges"] = [
-            {"from": edge.source, "to": edge.target, "kind": edge.kind}
-            for edge in chart.edges
-        ]
+        payload["edges"] = [edge.to_payload() for edge in chart.edges]
         return payload
 
 
