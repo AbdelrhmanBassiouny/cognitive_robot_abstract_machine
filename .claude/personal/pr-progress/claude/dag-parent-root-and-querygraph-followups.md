@@ -28,11 +28,35 @@ Fix 2 (the `QueryGraph` memoization order-bug) was **dropped** — see below.
 - Pushed `c7253f8b`; `needs-resolution` cleared by hand; PR title + body rewritten;
   `plan.yaml` + `roadmap.md` addendum saved.
 
+## Review round 1 (2026-08-07, commit `82859a81`)
+
+Three threads, all from the developer on `c7253f8b`, all replied to and resolved:
+
+- `explanation.py:688` "remove the word claim, rename to `outermost_query`" →
+  `OutermostQueryClaim` → `OutermostQuery`, field
+  `outermost_query_claim` → `outermost_query`. Renamed the class too, not just
+  the attribute; flagged that in the reply.
+- `evaluation_context.py:238` "remove the word claimed" → gone from the field
+  docstring, `is_nested`'s docstring and the class name. Also collapsed
+  `_query_id` into `node` — storing the node made the id field redundant, and
+  that redundancy was this PR's own doing.
+- `explanation.py:671` "isn't this general for all expressions? move it into
+  SymbolicExpression and simplify the docstring" → agreed. `_resolve_query_root`
+  is now `SymbolicExpression._evaluating_query_root_` beside `_root_`/
+  `_root_query_`; `base_expressions.py` already imported
+  `get_evaluation_context`, so no import problem.
+
+Four new tests (three for `OutermostQuery`'s contract, one for the fallback
+branch, which nothing covered). Suites: **1441 passed, 7 skipped, 0 failed**.
+
 ## Next
 
-- Waiting on CI for `c7253f8b` (`mergeable_state` was `unstable` = checks running).
+- Waiting on CI for `82859a81`.
 - PR stays a **draft** until the developer signs off.
 - **Blocked on nothing.** `depends_on` (#90) merged 2026-08-03.
+- Minor: running `format_docstrings.py` reflowed two pre-existing docstrings in
+  `test_evaluation_context_lifecycle.py`. Mandated by AGENTS.md but it is
+  unrelated diff noise — revert if the developer objects.
 
 ## Watch-outs
 
