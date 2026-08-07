@@ -262,8 +262,8 @@ Panels.define('graph', function (root, bus) {
     } catch (err) { return; }                    // bridge gone — the 3D side handles it
     if (!live || !live.nodes) return;
     const payload = src === 'plan' ? planPayload(live) : chartPayload(live);
-    if (force || live.sig !== liveSig[src]) {    // structure changed → rebuild
-      liveSig[src] = live.sig;
+    if (force || live.signature !== liveSig[src]) {    // structure changed → rebuild
+      liveSig[src] = live.signature;
       base[tab] = payload;
       setView(payload);
       return;

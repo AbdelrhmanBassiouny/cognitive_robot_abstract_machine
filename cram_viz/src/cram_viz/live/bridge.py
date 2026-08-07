@@ -373,7 +373,7 @@ class PlanSnapshot:
     The plan tree in the shape the viewer walks.
     """
 
-    sig: str = ""
+    signature: str = ""
     """
     Node-id signature of the tree's shape, stable across status-only changes.
     """
@@ -420,7 +420,7 @@ class _ChartStructure:
     Each node's index into the chart's life-cycle/observation state vectors.
     """
 
-    sig: str = ""
+    signature: str = ""
     """
     Node-id signature of the structure, stable while it does not change.
     """
@@ -463,7 +463,7 @@ class ChartSnapshot:
     The motion statechart in the shape the viewer renders.
     """
 
-    sig: str = ""
+    signature: str = ""
     title: str = ""
     """
     Name of the action whose motion group this statechart belongs to.
@@ -1082,7 +1082,7 @@ class Bridge:
         order: List[str] = []
         self._serialize_plan_node(root, None, nodes, order)
         with self._lock:
-            self.plan_state = PlanSnapshot(sig="|".join(order), nodes=nodes)
+            self.plan_state = PlanSnapshot(signature="|".join(order), nodes=nodes)
 
     def _serialize_plan_node(
         self,
@@ -1218,7 +1218,7 @@ class Bridge:
         ]
         with self._lock:
             self.chart_state = ChartSnapshot(
-                sig=structure.sig,
+                signature=structure.signature,
                 title=self._chart_title,
                 nodes=nodes,
                 edges=structure.edges,
@@ -1265,7 +1265,9 @@ class Bridge:
                 )
             )
         signature = "|".join(node.id + ":" + node.name for node in nodes)
-        return _ChartStructure(nodes=nodes, edges=edges, indices=indices, sig=signature)
+        return _ChartStructure(
+            nodes=nodes, edges=edges, indices=indices, signature=signature
+        )
 
     def get_chart(self) -> Dict[str, Any]:
         """

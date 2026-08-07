@@ -94,7 +94,7 @@ test('AttachNode and DetachNode plan nodes render in the object colour group', a
     '/api/kb': { ok: true, nodes: [], edges: [], details: {} },
     '/api/kb/view?name=plan': { ok: true, nodes: [], edges: [], details: {}, live: 'plan' },
     'http://bridge/plan': {
-      sig: 's1',
+      signature: 's1',
       nodes: [
         { id: 'a1', kind: 'AttachNode', label: 'AttachNode', status: 'CREATED' },
         { id: 'd1', kind: 'DetachNode', label: 'DetachNode', status: 'CREATED' },
