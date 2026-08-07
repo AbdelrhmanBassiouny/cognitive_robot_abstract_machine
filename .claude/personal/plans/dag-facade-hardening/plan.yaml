@@ -84,17 +84,36 @@ items:
       Also tracked in rdr-refactor as a side-quest that unblocks #41.
 
   - id: pr-92-shared-node-followups
-    title: "Fix two more shared-node bugs found while following up on #90"
+    title: "Fix _root_-based query_root for a variable shared across two queries"
     branch: claude/dag-parent-root-and-querygraph-followups
     pull_request_number: 92
     track: leak-fixes
     depends_on: [pr-90-is-condition-participant]
     status: in_progress
-    session: https://claude.ai/code/session_01NUtpYahbtZiRK7ijBXp5gi
+    session: https://claude.ai/code/session_011nQuYfjic8RoZYhWk9z3AB
     notes: >
-      bug label; open draft, mergeable clean. Fixes _root_-based query_root
-      via OutermostQueryClaim + a QueryGraph memoization order-bug. Merges in
-      #90. Explicitly flags the QuantifiedConditional cache staleness as
+      bug label; open draft. Was blocked 2026-08-03..2026-08-07 on a
+      needs-resolution merge conflict in query_graph.py, not on CI (all 20
+      checks green) or review (zero review threads) - three routine comments,
+      all naming that one file. Cause: this branch merged an earlier state of
+      #90's branch (#90's tip d63dce6b is not an ancestor of it, but is of
+      main), and #90's review round then deleted the machinery fix 2 was built
+      on - exactly the hazard recorded on pr-90-is-condition-participant.
+      Resolved 2026-08-07 (via /plan-item-resolve): fix 2 is dead on main, since
+      #90 removed the position-dependent is_condition_participant term from
+      construct_graph's is_satisfied as redundant, so the memoization can no
+      longer stale. Verified empirically - fix 2's test passes on main
+      unmodified, fix 1's fails there. query_graph.py resolved to main's version
+      wholesale (the branch no longer touches it); fix 2's test kept as a
+      visit-order-independence guard, renamed after that behaviour. What remains
+      is fix 1 only: OutermostQueryClaim.node + _resolve_query_root, 4 files,
+      +118/-10. Full run 1437 passed, 7 skipped, zero failures. PR title/body
+      rewritten to match; needs-resolution label cleared by hand so later
+      maintenance passes stop skipping the branch. Also flagged for Phase D and
+      not fixed here: _is_faded_gate reads node.parent while
+      _add_children_to_graph reassigns child_node.parent on every visit, so a
+      node reached through two parents keeps only the last-assigned one.
+      Still explicitly flags the QuantifiedConditional cache staleness as
       out-of-scope - picked up by this plan's Wave 1.
 
   - id: quantified-conditional-and-audit
@@ -117,6 +136,11 @@ items:
       enumerate remaining semantic _root_/_root_query_/_parent_ reads and
       per-node caches, TDD a shared-node regression test for each unsafe one,
       fix via the context accessor. TDD throughout; krrood-internal mimics only.
+      Handed over from #92 on 2026-08-07: _is_faded_gate (query_graph.py) reads
+      node.parent while _add_children_to_graph reassigns child_node.parent on
+      every visit, so a node reached through two parents keeps only the
+      last-assigned one for the faded BFS. Same defect class; no failing test
+      constructed for it yet.
       Phase D's audit scope explicitly includes rules/conclusion_selector.py (on
       main) and, once rdr-refactor's Wave-0 stack lands, rdr/rule_tree.py and
       rdr/rule_tree_view.py - the RDR rule-tree consumers are not on main yet, so

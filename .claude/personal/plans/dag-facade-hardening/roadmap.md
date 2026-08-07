@@ -369,3 +369,83 @@ only changed its element type, so the work stands alone once #118 lands. Filed u
 `facade-rename` track rather than `bugs-and-audit` — it is the construction-time counterpart
 of Phase B's "one reusable accessor", not a bug fix. No dependency was added to
 `facade-rename-and-guard`; that item is sequenced last and rebases over this one.
+
+## Addendum (2026-08-07) — #92's fix 2 was dissolved by #90's own review round
+
+#92 sat blocked from 2026-08-03 to 2026-08-07 with a `needs-resolution` label and a
+merge conflict in `query_graph.py`. Not CI — all 20 checks were green — and not review:
+the PR has **zero** review threads, and all three of its comments are automated
+stack-maintenance reports naming that same one file and declining to guess.
+
+### Why it conflicted
+
+#92's branch merged an *earlier* state of #90's branch. Verified: #90's final tip
+`d63dce6b` is **not** an ancestor of #92's head, but **is** an ancestor of `main`.
+#90's 2026-08-01 review round then changed `query_graph.py` in ways that delete the
+machinery #92's fix 2 was built on — the `is_condition_participant` call in
+`construct_graph`'s `is_satisfied`, the `parent` threading, and the not-supplied
+sentinel.
+
+This is exactly the hazard already recorded on `pr-90-is-condition-participant`
+("#92 … must re-merge tip 58671190; construct_graph parent-param revert may
+conflict"). The warning was right, and the item it was recorded on is the one that
+came true.
+
+### The finding: fix 2 is dead code on `main`
+
+`construct_graph`'s satisfaction check on `main` is now
+
+```python
+is_satisfied = (
+    self.satisfied_condition_ids is not None
+    and expression._id_ in self.satisfied_condition_ids
+)
+```
+
+— **position-independent**. Fix 2's bug required a position-dependent term to be
+computed at the first-visited position and then memoized. With that term gone, the
+first visit computes what every later visit would, so the memoization cannot stale.
+
+Verified empirically rather than argued: applied to a clean `main`, #92's fix-2 test
+**passes** unmodified, and #92's fix-1 test **fails** with a genuine assertion error.
+So fix 1 is still needed and fix 2 is not.
+
+The trap avoided: keeping #92's `_is_satisfied()` helper would have reinstated the
+very check #90's review removed as redundant, with the `or`-fold over the memoized
+node existing only to work around the check it reinstates. A "keep both sides"
+resolution was also not viable on its own terms — the auto-merge is broken *outside*
+the conflict markers, since `construct_graph`'s signature loses `parent` (main's side)
+while the body still passes `parent` to `self._is_satisfied(...)` twice.
+
+### How it was resolved
+
+`query_graph.py` taken from `main` wholesale, so the branch no longer touches that
+file at all. Fix 2's regression test kept, retargeted as a guard that the
+classification stays independent of visit order, and renamed after that behaviour
+rather than after the mechanism it used to exercise — it passes on `main`, which is
+what makes it a guard rather than a fix. #92 now reduces to fix 1: `OutermostQueryClaim`
+gaining the claimed node, the `query.py` call site, and `_resolve_query_root`.
+
+Full run on the resolved tip: `test_eql` + `test_ormatic` + `test_class_diagram` +
+`test_class_diagrams` + `test_ripple_down_rules` at **1437 passed, 7 skipped**, zero
+failures. Unlike the runs recorded for #118 and #142, the two `test_object_diagram`
+tests pass here — the Graphviz `dot` binary was installed in this session's
+environment, so that long-standing pair of failures is confirmed environmental rather
+than a real defect.
+
+### One item handed to Phase D
+
+`_is_faded_gate` reads `node.parent`, while `_add_children_to_graph` reassigns
+`child_node.parent` on *every* visit — so for a node reached through two parents, the
+faded BFS sees only the last-assigned one. Same defect class as everything else in
+this plan, but no failing test was constructed for it and it is outside #92's proven
+scope, so it is recorded on `quantified-conditional-and-audit` rather than folded in.
+
+### A note on the generic lesson
+
+The plan's own machinery caught this: the cross-item warning recorded on #90 named
+both the file and the mechanism, and it was accurate months before it fired. What it
+could not do was update #92's manifest entry, which still read "mergeable clean" four
+days after the branch went `dirty`. Live PR state belongs in the manifest as soon as
+it is fact — a stale "clean" is what made this look like an idle item rather than a
+blocked one.
