@@ -7,6 +7,7 @@ import pytest
 krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
 from cram_viz import knowledge  # noqa: E402  (importable once krrood is present)
+from cram_viz.knowledge import knowledge_base  # noqa: E402
 
 
 @pytest.fixture()
@@ -83,7 +84,7 @@ class TestRecordedMeasurements:
         """
         scene, trajectory = knowledge.load_scene()
         scene["objects"][0]["height"] = 0.23
-        monkeypatch.setattr(knowledge, "load_scene", lambda: (scene, trajectory))
+        monkeypatch.setattr(knowledge_base, "load_scene", lambda: (scene, trajectory))
         knowledge.reset_knowledge_base()
         milk = next(
             entry
@@ -235,7 +236,7 @@ class TestPresetSafety:
         scene, trajectory = knowledge.load_scene()
         scene["objects"][0]["id"] = "o'brien"
         scene["segments"][1]["picks"] = "o'brien"
-        monkeypatch.setattr(knowledge, "load_scene", lambda: (scene, trajectory))
+        monkeypatch.setattr(knowledge_base, "load_scene", lambda: (scene, trajectory))
         knowledge.reset_knowledge_base()
         preset = next(p for p in knowledge.get_presets() if "obj.name" in p["code"])
         result = knowledge.run_query(preset["code"])
@@ -250,7 +251,7 @@ class TestPresetSafety:
         """
         scene, trajectory = knowledge.load_scene()
         scene["segments"][1]["step"] = "transport_o'brien"
-        monkeypatch.setattr(knowledge, "load_scene", lambda: (scene, trajectory))
+        monkeypatch.setattr(knowledge_base, "load_scene", lambda: (scene, trajectory))
         knowledge.reset_knowledge_base()
         for preset in knowledge.get_presets():
             assert knowledge.run_query(preset["code"])["ok"]
