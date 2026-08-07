@@ -435,15 +435,22 @@ class InsertMontessoriShapeAction(ActionDescription):
                 # retract_linear_velocity=0.08,
             )
 
+        intermediate_park_arms: list[PlanNode] = (
+            [
+                ParkArmsAction(
+                    Arms.BOTH,
+                    max_joint_velocity=PARKING_WHILE_HOLDING_MAX_JOINT_VELOCITY,
+                )
+            ]
+            if self.montessori_shape.requires_intermediate_arm_parking
+            else []
+        )
         return sequential(
             [
                 ParkArmsAction(Arms.BOTH),
                 *navigate_to_shape,
                 pick_up_shape,
-                ParkArmsAction(
-                   Arms.BOTH,
-                   max_joint_velocity=PARKING_WHILE_HOLDING_MAX_JOINT_VELOCITY,
-                ),
+                *intermediate_park_arms,
                 *navigate_to_hole,
                 place_shape,
                 ParkArmsAction(Arms.BOTH),
