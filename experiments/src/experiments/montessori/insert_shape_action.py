@@ -352,7 +352,7 @@ class InsertMontessoriShapeAction(ActionDescription):
                 lift_linear_velocity=0.12,
                 grasp_stall_minimum_time=0.3,
                 final_approach_linear_velocity=0.115,
-                object_friction= 1.5
+                object_friction=1.5,
             )
             place_shape: PlanNode = a(PlaceAction)(
                 object_designator=self.montessori_shape.root,
@@ -361,7 +361,7 @@ class InsertMontessoriShapeAction(ActionDescription):
                 placing_linear_velocity=0.05,
                 transport_linear_velocity=0.08,
                 release_opening_velocity=0.07,
-                retract_linear_velocity=0.08
+                retract_linear_velocity=0.08,
             )
         else:
             navigate_to_shape = []
@@ -383,7 +383,7 @@ class InsertMontessoriShapeAction(ActionDescription):
                 placing_linear_velocity=0.09,
                 transport_linear_velocity=0.08,
                 release_opening_velocity=0.07,
-                #retract_linear_velocity=0.08,
+                # retract_linear_velocity=0.08,
             )
 
         return sequential(

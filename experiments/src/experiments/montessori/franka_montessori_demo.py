@@ -21,6 +21,7 @@ import math
 import threading
 import time
 
+import mujoco
 import numpy as np
 from typing_extensions import Optional
 
@@ -68,10 +69,25 @@ tunes for this step size; a coarser step under the same gains was observed to ma
 arm shake rather than hold still near a commanded pose.
 """
 
+MUJOCO_INTEGRATOR = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
+"""
+Numerical integrator MuJoCo advances the physics with, matching
+``coraplex_panda_demo/stacking_scene.xml``'s own ``<option integrator="implicitfast" />``
+(:class:`~physics_simulators.mujoco_simulator.MujocoSimulator` otherwise falls back to
+its own ``RK4`` default regardless of what a scene declares). RK4's four force
+evaluations per step measured about four times slower here than ``implicitfast``, with
+no observed difference in insertion outcomes.
+"""
+
 SYNC_RATE_HZ = 100
 """
 Rate at which the physically simulated joints' real, physics-driven positions are read
 back into the world model.
+
+Kept above the 50 Hz control loop rate (see :attr:`~coraplex.plans.executables.GiskardExecutable._build_pacer`'s
+``target_frequency``): lowering it to 30 Hz was tried for the extra Python-side sync
+overhead it saves, but produced an unreliable/wedged grasp and, once, a run that never
+converged -- the controller needs joint state read back at least as often as it commands.
 """
 
 SKIPPED_SHAPE_CATEGORIES = frozenset({MontessoriShapeCategory.DISK})
@@ -230,6 +246,11 @@ def _insert_shape(
         execution_type=ExecutionType.SIMULATED,
         collision_avoidance=False,
         real_time_pacing=False,
+        # A full insertion (pick, place, three ParkArms) was observed to need
+        # roughly 1250 ticks total across its 12 motion mappings; this budget stays
+        # a comfortable multiple of that per mapping while bounding a stuck motion
+        # to a fraction of the default (2000 * 12 ticks).
+        max_ticks_per_motion_mapping=300,
     ):
         node = execute_single(action, context=context)
         node.perform()
@@ -238,7 +259,11 @@ def _insert_shape(
     release_position = shape.root.global_transform.to_position()
     displacement = math.dist(
         (float(spawn_position.x), float(spawn_position.y), float(spawn_position.z)),
-        (float(release_position.x), float(release_position.y), float(release_position.z)),
+        (
+            float(release_position.x),
+            float(release_position.y),
+            float(release_position.z),
+        ),
     )
     if displacement < MINIMUM_PICKUP_DISPLACEMENT:
         raise BodyUnfetchable(body=shape.root, arm=Arms.RIGHT)
@@ -497,8 +522,15 @@ def main() -> None:
         world=montessori.world,
         headless=not arguments.viewer,
         step_size=MUJOCO_STEP_SIZE,
+        # None: run as fast as the CPU allows rather than throttled to wall-clock
+        # real time, matching franka_pickup_smoke_test.py's own reasoning;
+        # real_time_pacing paces against context.simulation_clock (set below to this
+        # simulation's own clock) so the sorting still completes correctly. --viewer
+        # stays real-time so the run is actually watchable.
+        real_time_factor=None if not arguments.viewer else 1.0,
         physically_simulated_dofs=physically_simulated_dofs,
         sync_rate_hz=SYNC_RATE_HZ,
+        integrator=MUJOCO_INTEGRATOR,
     )
     context = Context(
         montessori.world,
