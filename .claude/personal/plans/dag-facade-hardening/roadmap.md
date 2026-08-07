@@ -449,3 +449,36 @@ could not do was update #92's manifest entry, which still read "mergeable clean"
 days after the branch went `dirty`. Live PR state belongs in the manifest as soon as
 it is fact — a stale "clean" is what made this look like an idle item rather than a
 blocked one.
+
+### Review round (2026-08-07) — the ownership accessor landed early, on `SymbolicExpression`
+
+#92's review round was three naming-and-placement threads, but one of them moves this
+plan's own end state forward and is worth recording.
+
+The developer asked of `_resolve_query_root` (then a module-private function in
+`explanation.py`): *"Is this method not general for all expressions? If it is generally
+useful to all expressions then it should be moved to the core base expressions inside
+SymbolicExpression."* It is, and it was. It now lives as
+`SymbolicExpression._evaluating_query_root_`, directly beside `_root_` and `_root_query_`.
+
+That placement matters beyond tidiness: **`_root_` and `_evaluating_query_root_` are now
+the structural and ownership answers to the same question, sitting side by side on the
+same class.** Phase A renames the first to `_structural_root_`; the second is already
+named for what it resolves from. So the pair reads as the contrast this plan exists to
+draw, rather than one accessor silently doing both jobs — and Phase B's "one reusable
+accessor" gains a second concrete slice on the *expression* side, after
+`is_child_of_truth_value_operator`'s slice on the `EvaluationContext` side.
+
+Two smaller outcomes:
+
+- `OutermostQueryClaim` → `OutermostQuery`, and `EvaluationContext.outermost_query_claim`
+  → `outermost_query`; the word "claim" is gone from the class, its field docstrings and
+  `is_nested`'s. The record classes named in the 2026-08-01 addendum should be read under
+  the new name from here on.
+- `OutermostQuery._query_id` collapsed into `node`. Fix 1 added `node` and left the id
+  beside it, so the class briefly tracked one fact twice; `node is None` is exactly
+  "nothing recorded yet". Worth noting for the Phase C watch-item: when the records are
+  folded into a single ownership collaborator, this one is already down to one field.
+
+No production behaviour changed in this round — the fix-1 regression test passes
+unmodified across it, which is what makes it a refactor rather than a second fix.

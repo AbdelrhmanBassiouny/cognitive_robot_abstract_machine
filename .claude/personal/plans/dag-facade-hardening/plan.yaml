@@ -109,7 +109,18 @@ items:
       is fix 1 only: OutermostQueryClaim.node + _resolve_query_root, 4 files,
       +118/-10. Full run 1437 passed, 7 skipped, zero failures. PR title/body
       rewritten to match; needs-resolution label cleared by hand so later
-      maintenance passes stop skipping the branch. Also flagged for Phase D and
+      maintenance passes stop skipping the branch. 2026-08-07 review round
+      handled (commit 82859a81): three threads, all naming-and-placement, all
+      replied to and resolved. OutermostQueryClaim -> OutermostQuery and
+      outermost_query_claim -> outermost_query (the word "claim" removed from
+      the class, its field docstrings and is_nested); _query_id collapsed into
+      node, since storing the node made the id redundant - a redundancy this PR
+      itself introduced; and _resolve_query_root moved off explanation.py onto
+      SymbolicExpression as the _evaluating_query_root_ property, beside _root_
+      and _root_query_, on the developer's observation that nothing about it was
+      specific to inference variables. Four new tests (three for OutermostQuery's
+      own contract, one pinning the fallback branch, which nothing covered);
+      1441 passed, 7 skipped. Also flagged for Phase D and
       not fixed here: _is_faded_gate reads node.parent while
       _add_children_to_graph reassigns child_node.parent on every visit, so a
       node reached through two parents keeps only the last-assigned one.
