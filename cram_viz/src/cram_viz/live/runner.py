@@ -39,23 +39,24 @@ def start(
     :param port: Port of the bridge's HTTP endpoints.
     :return: The running HTTP server (a daemon thread).
     """
-    if BRIDGE.live_server is not None:
+    bridge = BRIDGE
+    if bridge.live_server is not None:
         logger.info("live bridge is already running — reusing it")
-        return BRIDGE.live_server
+        return bridge.live_server
     hooks.install_mesh_hook()  # before the demo parses its objects
     hooks.install_plan_hooks()
     if world is not None:
-        BRIDGE.world = world
-        BRIDGE.bind()
-        BRIDGE.snapshot()  # single-threaded here, before execution starts
+        bridge.world = world
+        bridge.bind()
+        bridge.snapshot()  # single-threaded here, before execution starts
     hooks.install_tick_hook()
-    BRIDGE.live_server = serve(port)
+    bridge.live_server = serve(bridge, port)
     logger.info(
         "bridge on http://localhost:%d (the viewer shows a Live button "
         "while this runs)",
         port,
     )
-    return BRIDGE.live_server
+    return bridge.live_server
 
 
 def main() -> None:

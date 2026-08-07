@@ -18,6 +18,7 @@ Handlers only ever read finished snapshot dicts — never the world (see
 
 from __future__ import annotations
 
+import functools
 import json
 import os
 import threading
@@ -28,7 +29,7 @@ from pathlib import Path
 from typing_extensions import Any, Dict
 
 from cram_viz import get_logger
-from cram_viz.live.bridge import BRIDGE, MalformedMoveRequest, MoveRequest
+from cram_viz.live.bridge import Bridge, MalformedMoveRequest, MoveRequest
 
 logger = get_logger(__name__)
 
@@ -39,6 +40,14 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
     """
     Serves the bridge's snapshots and accepts viewer moves.
     """
+
+    def __init__(self, *args: Any, bridge: Bridge, **kwargs: Any) -> None:
+        """
+        Capture the bridge before delegating, since the base constructor already
+        dispatches the request synchronously.
+        """
+        self.bridge = bridge
+        super().__init__(*args, **kwargs)
 
     def _send_json(self, payload: Dict[str, Any], code: int = 200) -> None:
         """
@@ -58,17 +67,17 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         Route the read-only snapshot endpoints.
         """
         if self.path.startswith("/state"):
-            return self._send_json(BRIDGE.get_state())
+            return self._send_json(self.bridge.get_state())
         if self.path.startswith("/plan"):
-            return self._send_json(BRIDGE.get_plan())
+            return self._send_json(self.bridge.get_plan())
         if self.path.startswith("/chart"):
-            return self._send_json(BRIDGE.get_chart())
+            return self._send_json(self.bridge.get_chart())
         if self.path.startswith("/objects"):
-            return self._send_json({"objects": BRIDGE.object_catalog()})
+            return self._send_json({"objects": self.bridge.object_catalog()})
         if self.path.startswith("/mesh"):
             return self._send_mesh()
         if self.path.startswith("/info"):
-            return self._send_json(BRIDGE.status())
+            return self._send_json(self.bridge.status())
         self.send_response(404)
         self.end_headers()
 
@@ -78,7 +87,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         """
         query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
         key = (query.get("key") or [""])[0]
-        path = BRIDGE.mesh_path(key)
+        path = self.bridge.mesh_path(key)
         if not path or not Path(path).is_file():
             self.send_response(404)
             self.end_headers()
@@ -116,7 +125,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             move = MoveRequest.from_payload(payload)
         except MalformedMoveRequest as error:
             return self._send_json({"ok": False, "error": str(error)}, code=400)
-        BRIDGE.queue_move(move)
+        self.bridge.queue_move(move)
         return self._send_json({"ok": True})
 
     def do_OPTIONS(self) -> None:
@@ -136,13 +145,15 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         logger.debug(format, *args)
 
 
-def serve(port: int = DEFAULT_PORT) -> ThreadingHTTPServer:
+def serve(bridge: Bridge, port: int = DEFAULT_PORT) -> ThreadingHTTPServer:
     """
-    Start the bridge's HTTP server on a daemon thread.
+    Start an HTTP server on a daemon thread, serving ``bridge``.
 
+    :param bridge: The bridge every request handler on this server reads and writes.
     :param port: Port to listen on (all interfaces).
     :return: The running server.
     """
-    server = ThreadingHTTPServer(("0.0.0.0", port), BridgeRequestHandler)
+    handler = functools.partial(BridgeRequestHandler, bridge=bridge)
+    server = ThreadingHTTPServer(("0.0.0.0", port), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server
