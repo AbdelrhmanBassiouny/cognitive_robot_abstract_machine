@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from typing_extensions import Any, Dict, List, Optional, TYPE_CHECKING
 
 from cram_viz.knowledge.enums import EdgeKind, NodeGroup
-from cram_viz.knowledge.scene_bundle import load_scene, load_urdf
+from cram_viz.knowledge.scene_bundle import UrdfJoint, load_scene, load_urdf
 from cram_viz.knowledge.subgraph import (
     DetailEntry,
     GraphEdge,
@@ -79,11 +79,11 @@ class UrdfViewPayload:
         return payload
 
 
-def _is_movable(joint: Dict[str, str]) -> bool:
+def _is_movable(joint: UrdfJoint) -> bool:
     """
     Whether a URDF joint can move (every type except ``fixed``).
     """
-    return joint["type"] != FIXED_JOINT_TYPE
+    return joint.type != FIXED_JOINT_TYPE
 
 
 def _urdf_view(knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
@@ -94,14 +94,15 @@ def _urdf_view(knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
     edges, fixed ones dashed. Links are coloured by robot part from the recorded
     annotation.
     """
-    links, joints = load_urdf()
+    parsed_urdf = load_urdf()
+    links, joints = parsed_urdf.links, parsed_urdf.joints
     view = SubgraphAccumulator()
     if not links:
         return UrdfViewPayload(
             True, knowledge_base.robot.name + " · URDF (not found)", [], [], {}
         )
 
-    scene, _ = load_scene()
+    scene = load_scene().scene
     parts = (scene.get("robot") or {}).get("parts") or {}
     link_to_part = {
         link: part for part, part_links in parts.items() for link in part_links
@@ -127,26 +128,26 @@ def _urdf_view(knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
         return NodeGroup.CONCEPT  # base, torso, casters (green)
 
     # which joint drives each link (child link → its parent joint), for tooltips
-    parent_joint = {joint["child"]: joint for joint in joints}
+    parent_joint = {joint.child: joint for joint in joints}
     for link in links:
         joint = parent_joint.get(link)
         lines = ["a URDF Link"]
         if joint:
-            lines.append("joint: %s (%s)" % (joint["name"], joint["type"]))
-            lines.append("parent link: " + joint["parent"])
+            lines.append("joint: %s (%s)" % (joint.name, joint.type))
+            lines.append("parent link: " + joint.parent)
         else:
             lines.append("root link")
         view.add("urdf:" + link, link, chain_group(link), lines)
     for joint in joints:
-        if ("urdf:" + joint["parent"]) in view.details and (
-            "urdf:" + joint["child"]
+        if ("urdf:" + joint.parent) in view.details and (
+            "urdf:" + joint.child
         ) in view.details:
             view.edges.append(
                 GraphEdge(
-                    "urdf:" + joint["parent"],
-                    "urdf:" + joint["child"],
+                    "urdf:" + joint.parent,
+                    "urdf:" + joint.child,
                     EdgeKind.PROP if _is_movable(joint) else EdgeKind.TYPE,
-                    "%s (%s)" % (joint["name"], joint["type"]),
+                    "%s (%s)" % (joint.name, joint.type),
                 )
             )
     movable_count = sum(1 for joint in joints if _is_movable(joint))

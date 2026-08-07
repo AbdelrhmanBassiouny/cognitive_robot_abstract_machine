@@ -255,7 +255,7 @@ def graph_payload() -> KnowledgeGraphPayload:
             link(bench_object.name, "semantic_digital_twin", "modelled in")
 
     # the executed plan tree (captured from the real PlanNode graph)
-    scene, _ = load_scene()
+    scene = load_scene().scene
     if scene.get("planTrees"):
         node_count = sum(_count_plan_nodes(tree) for tree in scene["planTrees"])
         view.add(

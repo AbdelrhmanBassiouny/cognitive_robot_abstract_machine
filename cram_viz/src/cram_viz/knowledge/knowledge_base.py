@@ -49,7 +49,8 @@ class EpisodeKnowledgeBase:
         Build every entity list from the active scene bundle and a static scan of the
         CRAM architecture.
         """
-        scene, trajectory = load_scene()
+        bundle = load_scene()
+        scene, trajectory = bundle.scene, bundle.trajectory
         frames_per_second = scene.get("fps", 30)
         parts = (scene.get("robot") or {}).get("parts") or {}
         robot_name = (scene.get("robot") or {}).get("name", "robot")

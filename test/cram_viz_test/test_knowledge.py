@@ -14,6 +14,7 @@ from cram_viz.knowledge.architecture_entities import (  # noqa: E402
 )
 from cram_viz.knowledge.architecture_scan import ArchitectureScanner  # noqa: E402
 from cram_viz.knowledge.enums import ArmSide, EdgeKind, NodeGroup  # noqa: E402
+from cram_viz.knowledge.scene_bundle import SceneBundle  # noqa: E402
 from cram_viz.knowledge.subgraph import DetailEntry, GraphEdge  # noqa: E402
 from cram_viz.knowledge.views import plan_tree as plan_view  # noqa: E402
 
@@ -92,9 +93,12 @@ class TestArmSideInference:
         An arm part name that names neither `left` nor `right` cannot be assigned a side
         by name inspection, and must not silently masquerade as one.
         """
-        scene, trajectory = knowledge.load_scene()
+        bundle = knowledge.load_scene()
+        scene, trajectory = bundle.scene, bundle.trajectory
         scene["robot"]["parts"]["center_arm"] = ["center_link"]
-        monkeypatch.setattr(knowledge_base, "load_scene", lambda: (scene, trajectory))
+        monkeypatch.setattr(
+            knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
+        )
         knowledge.reset_knowledge_base()
         center_arm = next(
             arm
@@ -143,9 +147,12 @@ class TestRecordedMeasurements:
         """
         A bundle that reports a height must be taken at its word.
         """
-        scene, trajectory = knowledge.load_scene()
+        bundle = knowledge.load_scene()
+        scene, trajectory = bundle.scene, bundle.trajectory
         scene["objects"][0]["height"] = 0.23
-        monkeypatch.setattr(knowledge_base, "load_scene", lambda: (scene, trajectory))
+        monkeypatch.setattr(
+            knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
+        )
         knowledge.reset_knowledge_base()
         milk = next(
             entry
@@ -245,7 +252,8 @@ class TestPlanGroups:
         """
         Coraplex's real class is ``AttachNode``, not ``AttachmentNode``.
         """
-        scene, trajectory = knowledge.load_scene()
+        bundle = knowledge.load_scene()
+        scene, trajectory = bundle.scene, bundle.trajectory
         scene["planTrees"][0]["children"].append(
             {
                 "kind": "AttachNode",
@@ -254,7 +262,9 @@ class TestPlanGroups:
                 "children": [],
             }
         )
-        monkeypatch.setattr(plan_view, "load_scene", lambda: (scene, trajectory))
+        monkeypatch.setattr(
+            plan_view, "load_scene", lambda: SceneBundle(scene, trajectory)
+        )
         knowledge.reset_knowledge_base()
         node = next(
             n for n in knowledge.view_payload("plan").nodes if n.label == "AttachNode"
@@ -265,7 +275,8 @@ class TestPlanGroups:
         """
         Coraplex's real class is ``DetachNode``, not ``DetachmentNode``.
         """
-        scene, trajectory = knowledge.load_scene()
+        bundle = knowledge.load_scene()
+        scene, trajectory = bundle.scene, bundle.trajectory
         scene["planTrees"][0]["children"].append(
             {
                 "kind": "DetachNode",
@@ -274,7 +285,9 @@ class TestPlanGroups:
                 "children": [],
             }
         )
-        monkeypatch.setattr(plan_view, "load_scene", lambda: (scene, trajectory))
+        monkeypatch.setattr(
+            plan_view, "load_scene", lambda: SceneBundle(scene, trajectory)
+        )
         knowledge.reset_knowledge_base()
         node = next(
             n for n in knowledge.view_payload("plan").nodes if n.label == "DetachNode"
@@ -290,10 +303,13 @@ class TestPresetSafety:
         """
         ``get_presets()`` must escape object names, not splice them raw into EQL source.
         """
-        scene, trajectory = knowledge.load_scene()
+        bundle = knowledge.load_scene()
+        scene, trajectory = bundle.scene, bundle.trajectory
         scene["objects"][0]["id"] = "o'brien"
         scene["segments"][1]["picks"] = "o'brien"
-        monkeypatch.setattr(knowledge_base, "load_scene", lambda: (scene, trajectory))
+        monkeypatch.setattr(
+            knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
+        )
         knowledge.reset_knowledge_base()
         preset = next(p for p in knowledge.get_presets() if "obj.name" in p.code)
         result = knowledge.run_query(preset.code)
@@ -306,9 +322,12 @@ class TestPresetSafety:
         Covers both the ``places_at`` and ``performed_by`` presets, which splice the
         same episode name.
         """
-        scene, trajectory = knowledge.load_scene()
+        bundle = knowledge.load_scene()
+        scene, trajectory = bundle.scene, bundle.trajectory
         scene["segments"][1]["step"] = "transport_o'brien"
-        monkeypatch.setattr(knowledge_base, "load_scene", lambda: (scene, trajectory))
+        monkeypatch.setattr(
+            knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
+        )
         knowledge.reset_knowledge_base()
         for preset in knowledge.get_presets():
             assert knowledge.run_query(preset.code)["ok"]

@@ -108,7 +108,7 @@ def _plan_view() -> PlanViewPayload:
     real per-step progress only shows up while the live bridge is attached
     (it derives it from the statechart life cycle).
     """
-    scene, _ = load_scene()
+    scene = load_scene().scene
     trees = scene.get("planTrees") or []
     view = SubgraphAccumulator()
     counter = [0]
