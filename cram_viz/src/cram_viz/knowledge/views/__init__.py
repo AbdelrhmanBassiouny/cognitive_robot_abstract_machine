@@ -12,11 +12,9 @@ from typing_extensions import Any, Dict, Optional
 from cram_viz.knowledge.graph_payload import KnowledgeGraphPayload, graph_payload
 from cram_viz.knowledge.knowledge_base import get_knowledge_base
 from cram_viz.knowledge.views.architecture import (
+    ArchitectureViews,
     SubgraphViewPayload,
     _class_id,
-    _class_view,
-    _package_view,
-    _subpackage_view,
 )
 from cram_viz.knowledge.views.kinematics import UrdfViewPayload, _urdf_view
 from cram_viz.knowledge.views.plan_tree import PlanViewPayload, _plan_view
@@ -127,15 +125,15 @@ def expand_node(node_id: str) -> Optional[ViewPayload]:
         return _plan_view()
     package = next((entry for entry in kb.packages if entry.name == node_id), None)
     if package:
-        return _package_view(kb, package)
+        return ArchitectureViews.package_view(kb, package)
     subpackage = next(
         (entry for entry in kb.subpackages if entry.name == node_id), None
     )
     if subpackage:
-        return _subpackage_view(kb, subpackage)
+        return ArchitectureViews.subpackage_view(kb, subpackage)
     python_class = next(
         (entry for entry in kb.classes if _class_id(entry) == node_id), None
     )
     if python_class:
-        return _class_view(kb, python_class)
+        return ArchitectureViews.class_view(kb, python_class)
     return None

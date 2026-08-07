@@ -20,12 +20,6 @@ from cram_viz.knowledge.subgraph import (
 if TYPE_CHECKING:
     from cram_viz.knowledge.knowledge_base import EpisodeKnowledgeBase
 
-#: at most this many classes are drawn in one drill-down view
-CLASS_CAP = 150
-
-#: at most this many subclasses are drawn in a class inheritance view
-SUBCLASS_CAP = 80
-
 
 @dataclass
 class SubgraphViewPayload:
@@ -137,35 +131,88 @@ def _add_classes(
     return []
 
 
-def _package_view(
-    knowledge_base: EpisodeKnowledgeBase, package: Package
-) -> SubgraphViewPayload:
+class ArchitectureViews:
     """
-    Inside view of a package: its subpackages and top-level classes.
+    Drill-down views of the CRAM architecture: packages, subpackages and classes.
     """
-    view = SubgraphAccumulator()
-    subpackages = [
-        entry for entry in knowledge_base.subpackages if entry.package == package.name
-    ]
-    top_level = sorted(
-        (
+
+    #: at most this many classes are drawn in one drill-down view
+    CLASS_CAP = 150
+
+    #: at most this many subclasses are drawn in a class inheritance view
+    SUBCLASS_CAP = 80
+
+    @classmethod
+    def package_view(
+        cls, knowledge_base: EpisodeKnowledgeBase, package: Package
+    ) -> SubgraphViewPayload:
+        """
+        Inside view of a package: its subpackages and top-level classes.
+        """
+        view = SubgraphAccumulator()
+        subpackages = [
             entry
-            for entry in knowledge_base.classes
-            if entry.package == package.name and entry.subpackage == package.name
-        ),
-        key=lambda entry: -entry.methods,
-    )
-    view.add(
-        package.name,
-        package.name,
-        NodeGroup.CONCEPT,
-        [
-            "a Package",
-            package.description,
-            "%d modules · %d classes" % (package.module_count, package.class_count),
-        ],
-    )
-    for subpackage in subpackages:
+            for entry in knowledge_base.subpackages
+            if entry.package == package.name
+        ]
+        top_level = sorted(
+            (
+                entry
+                for entry in knowledge_base.classes
+                if entry.package == package.name and entry.subpackage == package.name
+            ),
+            key=lambda entry: -entry.methods,
+        )
+        view.add(
+            package.name,
+            package.name,
+            NodeGroup.CONCEPT,
+            [
+                "a Package",
+                package.description,
+                "%d modules · %d classes" % (package.module_count, package.class_count),
+            ],
+        )
+        for subpackage in subpackages:
+            view.add(
+                subpackage.name,
+                subpackage.name.split(".", 1)[1],
+                NodeGroup.KLASS,
+                [
+                    "a SubPackage of " + subpackage.package,
+                    "%d modules · %d classes"
+                    % (subpackage.module_count, subpackage.class_count),
+                    "double-click to open",
+                ],
+            )
+            view.edges.append(
+                GraphEdge(package.name, subpackage.name, EdgeKind.PROP, "contains")
+            )
+        note = _add_classes(
+            view, package.name, top_level[: cls.CLASS_CAP], len(top_level)
+        )
+        if note:
+            view.details[package.name].lines += note
+        return SubgraphViewPayload(
+            True, package.name, view.nodes, view.edges, view.details
+        )
+
+    @classmethod
+    def subpackage_view(
+        cls, knowledge_base: EpisodeKnowledgeBase, subpackage: SubPackage
+    ) -> SubgraphViewPayload:
+        """
+        Inside view of a subpackage: its classes with inheritance edges.
+        """
+        view = SubgraphAccumulator()
+        classes = sorted(
+            (
+                entry
+                for entry in knowledge_base.classes
+                if entry.subpackage == subpackage.name
+            ),
+            key=lambda entry: -entry.methods,
+        )
         view.add(
             subpackage.name,
             subpackage.name.split(".", 1)[1],
@@ -174,104 +221,82 @@ def _package_view(
                 "a SubPackage of " + subpackage.package,
                 "%d modules · %d classes"
                 % (subpackage.module_count, subpackage.class_count),
-                "double-click to open",
             ],
         )
-        view.edges.append(
-            GraphEdge(package.name, subpackage.name, EdgeKind.PROP, "contains")
+        note = _add_classes(
+            view, subpackage.name, classes[: cls.CLASS_CAP], len(classes)
         )
-    note = _add_classes(view, package.name, top_level[:CLASS_CAP], len(top_level))
-    if note:
-        view.details[package.name].lines += note
-    return SubgraphViewPayload(True, package.name, view.nodes, view.edges, view.details)
+        if note:
+            view.details[subpackage.name].lines += note
+        return SubgraphViewPayload(
+            True, subpackage.name.split(".", 1)[1], view.nodes, view.edges, view.details
+        )
 
-
-def _subpackage_view(
-    knowledge_base: EpisodeKnowledgeBase, subpackage: SubPackage
-) -> SubgraphViewPayload:
-    """
-    Inside view of a subpackage: its classes with inheritance edges.
-    """
-    view = SubgraphAccumulator()
-    classes = sorted(
-        (
+    @classmethod
+    def class_view(
+        cls, knowledge_base: EpisodeKnowledgeBase, python_class: PythonClass
+    ) -> SubgraphViewPayload:
+        """
+        Inheritance view of one class: bases above, repo subclasses below.
+        """
+        view = SubgraphAccumulator()
+        class_id = _class_id(python_class)
+        view.add(
+            class_id,
+            python_class.name,
+            NodeGroup.PYCLASS,
+            _class_lines(python_class, drill_hint=False),
+        )
+        # direct base classes: resolve inside the repo (same package preferred),
+        # otherwise show them as external
+        for base in python_class.bases:
+            candidates = [
+                entry for entry in knowledge_base.classes if entry.name == base
+            ]
+            pick = next(
+                (
+                    entry
+                    for entry in candidates
+                    if entry.package == python_class.package
+                ),
+                candidates[0] if candidates else None,
+            )
+            if pick:
+                base_id = _class_id(pick)
+                if base_id not in view.details:
+                    view.add(base_id, pick.name, NodeGroup.PYCLASS, _class_lines(pick))
+            else:
+                base_id = "ext:" + base
+                if base_id not in view.details:
+                    view.add(
+                        base_id,
+                        base,
+                        NodeGroup.UPPER,
+                        ["external base class (outside the repo)"],
+                    )
+            view.edges.append(GraphEdge(class_id, base_id, EdgeKind.TYPE, "inherits"))
+        # every subclass in the repo (matched by base name)
+        subclasses = [
             entry
             for entry in knowledge_base.classes
-            if entry.subpackage == subpackage.name
-        ),
-        key=lambda entry: -entry.methods,
-    )
-    view.add(
-        subpackage.name,
-        subpackage.name.split(".", 1)[1],
-        NodeGroup.KLASS,
-        [
-            "a SubPackage of " + subpackage.package,
-            "%d modules · %d classes"
-            % (subpackage.module_count, subpackage.class_count),
-        ],
-    )
-    note = _add_classes(view, subpackage.name, classes[:CLASS_CAP], len(classes))
-    if note:
-        view.details[subpackage.name].lines += note
-    return SubgraphViewPayload(
-        True, subpackage.name.split(".", 1)[1], view.nodes, view.edges, view.details
-    )
-
-
-def _class_view(
-    knowledge_base: EpisodeKnowledgeBase, python_class: PythonClass
-) -> SubgraphViewPayload:
-    """
-    Inheritance view of one class: bases above, repo subclasses below.
-    """
-    view = SubgraphAccumulator()
-    class_id = _class_id(python_class)
-    view.add(
-        class_id,
-        python_class.name,
-        NodeGroup.PYCLASS,
-        _class_lines(python_class, drill_hint=False),
-    )
-    # direct base classes: resolve inside the repo (same package preferred),
-    # otherwise show them as external
-    for base in python_class.bases:
-        candidates = [entry for entry in knowledge_base.classes if entry.name == base]
-        pick = next(
-            (entry for entry in candidates if entry.package == python_class.package),
-            candidates[0] if candidates else None,
-        )
-        if pick:
-            base_id = _class_id(pick)
-            if base_id not in view.details:
-                view.add(base_id, pick.name, NodeGroup.PYCLASS, _class_lines(pick))
-        else:
-            base_id = "ext:" + base
-            if base_id not in view.details:
+            if python_class.name in entry.bases and _class_id(entry) != class_id
+        ]
+        for subclass in subclasses[: cls.SUBCLASS_CAP]:
+            subclass_id = _class_id(subclass)
+            if subclass_id not in view.details:
                 view.add(
-                    base_id,
-                    base,
-                    NodeGroup.UPPER,
-                    ["external base class (outside the repo)"],
+                    subclass_id,
+                    subclass.name,
+                    NodeGroup.PYCLASS,
+                    _class_lines(subclass),
                 )
-        view.edges.append(GraphEdge(class_id, base_id, EdgeKind.TYPE, "inherits"))
-    # every subclass in the repo (matched by base name)
-    subclasses = [
-        entry
-        for entry in knowledge_base.classes
-        if python_class.name in entry.bases and _class_id(entry) != class_id
-    ]
-    for subclass in subclasses[:SUBCLASS_CAP]:
-        subclass_id = _class_id(subclass)
-        if subclass_id not in view.details:
-            view.add(
-                subclass_id, subclass.name, NodeGroup.PYCLASS, _class_lines(subclass)
+            view.edges.append(
+                GraphEdge(subclass_id, class_id, EdgeKind.TYPE, "inherits")
             )
-        view.edges.append(GraphEdge(subclass_id, class_id, EdgeKind.TYPE, "inherits"))
-    if len(subclasses) > SUBCLASS_CAP:
-        view.details[class_id].lines.append(
-            "showing %d of %d subclasses" % (SUBCLASS_CAP, len(subclasses))
+        if len(subclasses) > cls.SUBCLASS_CAP:
+            view.details[class_id].lines.append(
+                "showing %d of %d subclasses" % (cls.SUBCLASS_CAP, len(subclasses))
+            )
+        return SubgraphViewPayload(
+            True, python_class.name, view.nodes, view.edges, view.details
         )
-    return SubgraphViewPayload(
-        True, python_class.name, view.nodes, view.edges, view.details
-    )

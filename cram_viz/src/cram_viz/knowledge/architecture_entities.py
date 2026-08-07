@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from typing_extensions import Tuple
+
 
 @dataclass(unsafe_hash=True)
 class Package:
@@ -87,7 +89,7 @@ class PythonClass:
     Repository-relative module path.
     """
 
-    bases: tuple
+    bases: Tuple[str, ...]
     """
     Names of the direct base classes.
     """
