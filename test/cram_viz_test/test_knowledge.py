@@ -8,6 +8,7 @@ krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
 from cram_viz import knowledge  # noqa: E402  (importable once krrood is present)
 from cram_viz.knowledge import knowledge_base  # noqa: E402
+from cram_viz.knowledge.views import plan as plan_view  # noqa: E402
 
 
 @pytest.fixture()
@@ -193,7 +194,7 @@ class TestPlanGroups:
                 "children": [],
             }
         )
-        monkeypatch.setattr(knowledge, "load_scene", lambda: (scene, trajectory))
+        monkeypatch.setattr(plan_view, "load_scene", lambda: (scene, trajectory))
         knowledge.reset_knowledge_base()
         node = next(
             n
@@ -215,7 +216,7 @@ class TestPlanGroups:
                 "children": [],
             }
         )
-        monkeypatch.setattr(knowledge, "load_scene", lambda: (scene, trajectory))
+        monkeypatch.setattr(plan_view, "load_scene", lambda: (scene, trajectory))
         knowledge.reset_knowledge_base()
         node = next(
             n
