@@ -1648,6 +1648,16 @@ items:
       stays grouped by summary line. The user resolved the write_setup_prerequisites and Python
       threads themselves, so every thread on this pull request is now closed.
 
+      Handed over 2026-08-07T09:02Z: the user marked #121 ready for review themselves, which
+      by the notes-branch convention is their record of having read and accepted it, and ends
+      the resolving session's job on the pull request. State at handover: head a438bcdc, nine
+      commits, 758 additions across 15 files, mergeable_state unstable (mergeable, CI still
+      running), bug label, no unresolved review threads. test_claude_dev_tooling - the only job
+      that reaches this .claude/-only diff - passed on the final head; of the robotics matrix
+      eight had passed and eleven were still in flight, none failed. The item stays in_progress
+      because it has not merged; nothing is outstanding for a session to act on. #126 is stacked
+      on this branch and inherits the resolution when it lands.
+
   - id: plan-item-edit-guard
     branch: null
     title: "PreToolUse guard: refuse source edits from a branch with no plan item"
