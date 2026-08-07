@@ -44,12 +44,12 @@ DEFAULT_PORT = 8711
 try:
     import krrood  # noqa: F401  (the EQL engine)
 
-    from cram_viz import kb as kb_module
+    from cram_viz import knowledge as knowledge_module
 except ImportError:  # pragma: no cover - depends on the environment
-    kb_module = None
+    knowledge_module = None
     logger.warning("krrood not importable — serving the viewer without the EQL API")
 except Exception:  # pragma: no cover - a broken KB should not kill the viewer
-    kb_module = None
+    knowledge_module = None
     traceback.print_exc()
 
 
@@ -107,7 +107,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         """
         Run an API handler; report exceptions as a JSON error payload.
         """
-        if kb_module is None:
+        if knowledge_module is None:
             return self._json(_no_eql_error())
         try:
             return self._json(fn())
@@ -149,10 +149,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if route.startswith("/scenes/"):
             return self._serve_scene_file(route)
         if route == "/api/kb":
-            return self._guarded(lambda: kb_module.graph_payload())
+            return self._guarded(lambda: knowledge_module.graph_payload())
         if route == "/api/kb/view":
             name = (self._query().get("name") or ["knowledge"])[0]
-            return self._guarded(lambda: kb_module.view_payload(name))
+            return self._guarded(lambda: knowledge_module.view_payload(name))
         if route == "/api/kb/expand":
             node = (self._query().get("node") or [""])[0]
 
@@ -160,7 +160,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 """
                 The node's subgraph, or a "not drillable" error if it has none.
                 """
-                payload = kb_module.expand_node(node)
+                payload = knowledge_module.expand_node(node)
                 return payload if payload else {"ok": False, "error": "not drillable"}
 
             return self._guarded(expand)
@@ -172,7 +172,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         """
         if self.path.split("?")[0] != "/api/eql":
             return self._json({"ok": False, "error": "unknown endpoint"}, 404)
-        if kb_module is None:
+        if knowledge_module is None:
             return self._json(_no_eql_error())
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -181,7 +181,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if not code:
                 return self._json({"ok": False, "error": "empty query"})
             with _EQL_LOCK:
-                return self._json(kb_module.run_query(code))
+                return self._json(knowledge_module.run_query(code))
         except SyntaxError as ex:
             return self._json({"ok": False, "error": "SyntaxError: %s" % ex})
         except Exception as ex:
@@ -205,12 +205,14 @@ def main(argv: Optional[List[str]] = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
     argv = sys.argv[1:] if argv is None else argv
     port = int(argv[0]) if argv else DEFAULT_PORT
-    if kb_module is not None:  # build the knowledge base once, before the first query
-        kb_module.get_knowledge_base()
+    if (
+        knowledge_module is not None
+    ):  # build the knowledge base once, before the first query
+        knowledge_module.get_knowledge_base()
     with make_server(port) as httpd:
         eql = (
             "EQL ready (krrood)"
-            if kb_module is not None
+            if knowledge_module is not None
             else "EQL unavailable — static only"
         )
         scenes = paths.scenes_dir()
