@@ -164,7 +164,10 @@ class ShapeToRos2Converter(SemDTToRos2Converter[InputType, Marker]):
     @classmethod
     def convert(cls, data: InputType) -> Marker:
         marker = visualization_msgs.Marker()
-        marker.header.frame_id = str(data.origin.reference_frame.name)
+        reference_frame = data.origin.reference_frame
+        marker.header.frame_id = reference_frame._world.get_human_readable_unique_name(
+            reference_frame
+        )
         marker.color = ColorToRos2Converter.convert(data.color)
         marker.pose = PoseToRos2Converter.convert(data.origin.to_pose())
         return marker
