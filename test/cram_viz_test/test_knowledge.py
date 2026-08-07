@@ -8,9 +8,14 @@ krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
 from cram_viz import knowledge  # noqa: E402  (importable once krrood is present)
 from cram_viz.knowledge import knowledge_base  # noqa: E402
+from cram_viz.knowledge.architecture_entities import (  # noqa: E402
+    Package,
+    PythonClass,
+)
+from cram_viz.knowledge.architecture_scan import ArchitectureScanner  # noqa: E402
 from cram_viz.knowledge.enums import ArmSide, EdgeKind, NodeGroup  # noqa: E402
-from cram_viz.knowledge.views import plan_tree as plan_view  # noqa: E402
 from cram_viz.knowledge.subgraph import DetailEntry, GraphEdge  # noqa: E402
+from cram_viz.knowledge.views import plan_tree as plan_view  # noqa: E402
 
 
 @pytest.fixture()
@@ -44,6 +49,39 @@ class TestEpisodeKnowledgeBase:
         names = {p.name for p in fresh_knowledge_base.packages}
         assert {"coraplex", "krrood"} <= names
         assert any(c.name == "Plan" for c in fresh_knowledge_base.classes)
+
+
+class TestArchitectureScanner:
+    def test_scan_returns_real_entities_without_an_intermediate_dict(
+        self, fixture_scene
+    ):
+        """
+        ``scan()`` must hand back typed ``Package``/``PythonClass`` instances directly,
+        not the raw dicts the on-disk cache stores.
+        """
+        result = ArchitectureScanner().scan()
+        assert result.packages and all(
+            isinstance(package, Package) for package in result.packages
+        )
+        assert result.classes and all(
+            isinstance(python_class, PythonClass) for python_class in result.classes
+        )
+        plan_class = next(c for c in result.classes if c.name == "Plan")
+        assert plan_class.subpackage == "coraplex.plans"
+
+    def test_load_caches_the_scan_on_disk(self, fixture_scene):
+        """
+        ``load()`` must return the same entities as ``scan()``, from the cache on a
+        second call.
+        """
+        scanner = ArchitectureScanner()
+        scanned = scanner.scan()
+        loaded_once = scanner.load()
+        loaded_again = scanner.load()
+        assert {p.name for p in loaded_once.packages} == {
+            p.name for p in scanned.packages
+        }
+        assert loaded_once.classes == loaded_again.classes
 
 
 class TestArmSideInference:

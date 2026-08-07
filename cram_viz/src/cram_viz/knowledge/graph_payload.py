@@ -228,8 +228,12 @@ def graph_payload() -> KnowledgeGraphPayload:
                     subpackage.package, subpackage.name, EdgeKind.PROP, "contains"
                 )
             )
-        for source, target in kb.package_deps:
-            view.edges.append(GraphEdge(source, target, EdgeKind.TYPE, "imports"))
+        for dependency in kb.package_deps:
+            view.edges.append(
+                GraphEdge(
+                    dependency.source, dependency.target, EdgeKind.TYPE, "imports"
+                )
+            )
 
         # ground the demo in the architecture at the SUBPACKAGE that actually
         # realises each part (only wire to a node that exists in this view)
