@@ -8,7 +8,7 @@ krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
 from cram_viz import knowledge  # noqa: E402  (importable once krrood is present)
 from cram_viz.knowledge import knowledge_base  # noqa: E402
-from cram_viz.knowledge.views import plan as plan_view  # noqa: E402
+from cram_viz.knowledge.views import plan_tree as plan_view  # noqa: E402
 
 
 @pytest.fixture()

@@ -15,7 +15,7 @@ from cram_viz.knowledge.views.architecture import (
     _subpackage_view,
 )
 from cram_viz.knowledge.views.kinematics import _urdf_view
-from cram_viz.knowledge.views.plan import _plan_view
+from cram_viz.knowledge.views.plan_tree import _plan_view
 
 
 def view_payload(name: str) -> Dict[str, Any]:

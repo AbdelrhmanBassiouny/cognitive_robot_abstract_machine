@@ -37,4 +37,6 @@ from cram_viz.knowledge.views.architecture import (
     CLASS_CAP as CLASS_CAP,
     SUBCLASS_CAP as SUBCLASS_CAP,
 )
-from cram_viz.knowledge.views.plan import shorten_action_label as shorten_action_label
+from cram_viz.knowledge.views.plan_tree import (
+    shorten_action_label as shorten_action_label,
+)

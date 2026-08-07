@@ -1,5 +1,9 @@
 """
 The executed-plan-tree drill-down/tab view.
+
+Named ``plan_tree`` rather than ``plan`` to keep it distinct from coraplex's own
+``Plan``/``PlanNode`` types: this module renders the serialized tree of plan nodes
+recorded in a scene bundle, not a coraplex ``Plan`` itself.
 """
 
 from __future__ import annotations
