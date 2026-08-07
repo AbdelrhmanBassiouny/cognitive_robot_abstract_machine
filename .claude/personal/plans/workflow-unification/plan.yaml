@@ -1635,6 +1635,19 @@ items:
       the user, since dev-tooling-session-start-python is the item that takes the floor raise
       deliberately, behind a shim that probes for python3 and exits 0 without it.
 
+      Third round the same day, five comments, all naming, applied in a438bcdc. The
+      SummaryMessage members had been transliterated from the shell function each one calls,
+      which read badly in Python: PLAN_NO_PLANS_TRACKED stuttered, PLAN_TRACKED read as though
+      the plan were what is tracked, and SETUP_NEEDS_SETUP said setup twice. They now name the
+      situation a test exercises - NO_PLANS_TRACKED, NO_PLAN_ITEM_TRACKS_BRANCH,
+      BRANCH_TRACKED_IN_PLAN, SETUP_SCRIPT_MISSING, CHECKS_NEED_SETUP - while PLAN_NOT_APPLICABLE
+      and PLAN_MANIFEST_MISSING keep the prefix, since there it carries a noun rather than
+      stuttering. The knock-on worth recording: the class docstring said the members were named
+      by the shell function, which the rename made untrue, so it now states the two vocabularies
+      and why they differ - the enum is the one place the mapping lives, and the shell file
+      stays grouped by summary line. The user resolved the write_setup_prerequisites and Python
+      threads themselves, so every thread on this pull request is now closed.
+
   - id: plan-item-edit-guard
     branch: null
     title: "PreToolUse guard: refuse source edits from a branch with no plan item"
