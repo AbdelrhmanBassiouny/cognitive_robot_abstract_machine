@@ -3920,3 +3920,115 @@ The `dirty` state on #125 was #121's conflict against `main`
 from the git-identity commit). Resolving it on the closed duplicate would have been the
 same conflict resolved twice, so it stays with #121, whose branch owns those two files'
 changes. #126 remains stacked on #121 and inherits the resolution when it lands.
+
+## Update 2026-08-07 (resolved): #121's conflict and its six-day-old review round
+
+`/plan-item-resolve workflow-unification session-start-plan-and-setup-guards`, session
+https://claude.ai/code/session_01JF8sH4isJxrY6Ca5NgD7es. The item had been `in_progress`
+and untouched since 2026-08-01, `mergeable_state: dirty`, labelled `needs-resolution`, with
+**five review threads unresolved and none outdated**.
+
+### The manifest was the least accurate source, a third time
+
+Its `notes` ended on *"Two TDD tests, 233 green (was 231)"* and it carried no `blockers`
+field, so it read as finished while the pull request had been unmergeable for four days and
+unanswered on review for six. That is the same finding the 2026-08-03 entry recorded for
+#109 and the 2026-08-05 entry recorded for #115 - three times on one plan, in one week.
+Both earlier entries already noted that everything needed to diagnose it was on the pull
+request the whole time, and that held again: `dirty`, the `needs-resolution` label, two
+routine comments naming the conflicting files, and five threads sitting in plain sight.
+
+Worth stating as a pattern rather than a third incident: what these three items have in
+common is that the *implementing* session's last act was to write a notes field describing
+what it had shipped, and nothing after that point ever wrote to the field again. Review
+arriving and `main` moving are both events with no writer. The `notes` field records what a
+session did; it has never recorded what happened to the branch afterwards.
+
+### Both conflicts were additive-vs-additive, and the ordering comment was the real content
+
+`session-start.sh` and `resolve-personal-notes-config.sh`, three hunks, nothing
+contradictory - this branch's setup-verdict block against #109's personal-settings block,
+its `setup:` line against #115's `plan state SHA:` line, and its
+`branch_can_hold_plan_item`/`plan_branch_index_exists`/`tracked_plan_count` against #115's
+`PLAN_STATE_SYNC_STAMP` helpers. Each resolved by keeping both sides in sequence.
+
+The one judgement in it was ordering, and it is the piece worth carrying: the setup verdict
+must run **after everything the hook writes**, not merely after `CLAUDE.local.md`. Its
+comment said the latter, which was true when it was written and became too narrow the
+moment #109's settings sync landed beside it - and will be too narrow again when #126's
+git-identity write arrives, whose own notes already require it to precede the check. The
+comment now states the general rule, so the next block added there inherits it instead of
+having to rediscover it.
+
+#115's warning was applied rather than assumed: the merged `README.md` and `session-start.sh`
+were read end to end for the resurrected-section and stranded-line defects that hunk-by-hunk
+resolution produced on #109 and #115. Neither is present here - this branch is young enough
+that `main` never restructured underneath it.
+
+### The review round, and one thread left open on purpose
+
+Four threads acted on. The tooling-file paths became a `SetupPrerequisiteFile` StrEnum with
+the requirements file among them; the whole set-up-clone layout became a checked-in fixture
+tree at `tests/fixtures/set-up-clone/`, mirroring the paths it occupies in a scratch project
+root, so `settings.json` and `requirements.txt` are real files of their own type and
+`write_setup_prerequisites` is one `copytree`; the summary wording moved into
+`session-start-messages.sh`; and the README paragraph moved to the third person.
+
+The fifth - *"I guess this won't be needed once you do my previous comment"*, on
+`write_setup_prerequisites` - was answered rather than resolved. The method shrank to one
+line but survives, because leaving `CLAUDE.local.md` out of it is exactly what lets the
+session-start tests run against a clone that does not have one yet. Reading the comment as
+*delete the method* was an interpretation, not something the reviewer said, so the thread
+stays open with the reasoning and an offer to fold the copy into `create` instead. The
+general rule this follows is already in cram-notes.md: resolve a thread only once you have
+genuinely done what it asked.
+
+### The wording move re-ran #135's trap deliberately
+
+Single-sourcing the messages is the same shape as the `ReportKey` enum two days earlier, and
+it has the same cost: with the hook and the tests both reading one definition, a reword
+changes them identically and nothing fails. So
+`test_every_summary_message_reads_as_written` owns the wording and nothing else does, and it
+was verified by mutation rather than by argument - rewording one message fails that test and
+no other.
+
+This is now the second time on this plan that a *"can this string be fetched from where it
+is defined?"* comment has been answered by single-sourcing plus one contract test. Worth
+promoting from precedent to expectation: the comment is always right, and the fix is always
+two changes rather than one, because the duplication being removed was carrying a guard.
+
+### The defect only a staged diff could show
+
+The fixture's `requirements.txt` was silently not added: the repo's `.gitignore` ignores
+`*.txt`, and every real `requirements.txt` in this repo predates that rule and is tracked
+only because it was already tracked. The local suite passed regardless, because the file
+existed on disk - CI on a fresh checkout would not have. It was caught by diffing the staged
+tree against `main` and noticing one expected path missing, and fixed with a `.gitignore`
+exception rather than `git add -f`, following the `*.png` exception the example screenshots
+already carry.
+
+The generalizable part: **a test suite that passes locally proves nothing about files the
+index does not have.** Every suite here was re-run from a clean clone of the pushed branch
+afterwards, which is the cheap check that would have caught it directly.
+
+### State
+
+Pushed as `862da392`; `mergeable_state: clean` against `main` at `0626bdce`;
+`needs-resolution` dropped by re-sending the full label set, per #139's replace-not-add
+finding; still a draft; description rewritten to match what the pull request now does. 350
+tests green across the three directories `test_claude_dev_tooling` runs - 194
+plan-dashboard, 65 hooks, 91 stack - against 349 after the merge and 233 before it.
+`test_each_lib (semantic_digital_twin)` remains the base's, not this pull request's, and is
+re-checked on the new run rather than inherited from the 2026-08-03 ruling.
+
+This unblocks `git-identity-from-personal-notes` (#126), which is stacked on this branch and
+inherits the resolution, and clears one of the bash-touching pull requests decision 12's
+items 2-6 cannot land ahead of.
+
+### A note on where this was done from
+
+The fix had to land on #121's head, so it was pushed to
+`claude/workflow-unification-setup-jgvs53` rather than this session's designated branch -
+the same override recorded for #115, #133 into #117, and #143's one line onto #135's branch.
+There is no alternative that resolves #121 itself: a new branch is a new pull request, which
+is precisely what #125 turned out to be.

@@ -1560,6 +1560,49 @@ items:
       naming the branch still wins over the whole check, so a tracked branch is unaffected.
       Two TDD tests, 233 green (was 231).
 
+      Resolved 2026-08-07 via /plan-item-resolve (session_01JF8sH4isJxrY6Ca5NgD7es) after
+      stalling since 2026-08-01 on two blockers, neither of which this notes field recorded -
+      the third time on this plan the manifest has been the least accurate source, after #109
+      (2026-08-03) and #115 (2026-08-05), and both times everything needed to diagnose it was
+      on the pull request itself. (1) mergeable_state dirty against main, labelled
+      needs-resolution, reported twice by the routine. Both conflicts were additive-vs-additive
+      at a shared location and resolved keeping each side: session-start.sh runs #109's
+      personal-settings sync and then this branch's setup-verdict block, and prints both
+      `setup:` and #115's `plan state SHA:`; resolve-personal-notes-config.sh carries this
+      branch's branch_can_hold_plan_item / plan_branch_index_exists / tracked_plan_count beside
+      #115's PLAN_STATE_SYNC_STAMP helpers. The setup verdict's comment now says "last of
+      everything the hook writes" rather than naming only CLAUDE.local.md, which is the
+      constraint #126's git-identity write also has to sit before. #115's warning that a
+      conflict report understates a conflict against a restructured document was applied - the
+      merged README and session-start.sh were read end to end, and neither carries a
+      resurrected or stranded section. (2) Five review threads from 2026-08-01, none outdated,
+      none answered. Four are done and resolved: the tooling-file paths are a
+      SetupPrerequisiteFile StrEnum with the requirements file among them; the set-up-clone
+      layout is a checked-in fixture tree at tests/fixtures/set-up-clone/ mirroring the paths
+      it occupies in a scratch root, so settings.json and requirements.txt are real files of
+      their own type and write_setup_prerequisites is one copytree call; the summary wording
+      moved into session-start-messages.sh, sourced by the hook and rendered by the tests so an
+      assertion is no longer a second copy of the sentence; and the README paragraph speaks in
+      the third person. The wording move carried #135's recorded trap - single-sourcing an
+      external contract deletes the guard the duplicate literals were providing - so
+      test_every_summary_message_reads_as_written owns the wording and nothing else does,
+      verified by mutation rather than assumed. The fifth thread ("this won't be needed once
+      you do my previous comment", on write_setup_prerequisites) is deliberately left open: the
+      method shrank to one line but survives, because leaving CLAUDE.local.md out of it is what
+      lets the session-start tests run against a clone that has none yet, and reading it as
+      "delete the method" was an interpretation rather than something the reviewer said. Two
+      things the fixture tree forced that are worth carrying: the repo ignores *.txt, so the
+      fixture's requirements.txt needed a .gitignore exception rather than a silent `git add
+      -f` (same treatment the example screenshots get for *.png), and it was only caught by
+      diffing the staged tree against main - the local suite passed either way, and CI on a
+      fresh checkout would not have. Every suite was therefore re-run from a clean clone as
+      well as in place. 350 tests green across the three directories CI runs, was 349 after the
+      merge and 233 before it. Pushed as 862da392, mergeable_state clean, needs-resolution
+      dropped by re-sending the full label set per #139's replace-not-add finding, still a
+      draft, description rewritten to match. Pushed to this item's own branch rather than the
+      resolving session's designated one, per the precedent the #115 resolve set: a new branch
+      is a new pull request, which is what produced #125.
+
   - id: plan-item-edit-guard
     branch: null
     title: "PreToolUse guard: refuse source edits from a branch with no plan item"
