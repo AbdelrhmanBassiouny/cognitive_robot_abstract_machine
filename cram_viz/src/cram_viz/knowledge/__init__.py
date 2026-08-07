@@ -53,6 +53,7 @@ from cram_viz.knowledge.entities import (
     Robot,
 )
 from cram_viz.knowledge.scene_bundle import _read_json, load_scene, load_urdf
+from cram_viz.knowledge.views.base import _view
 
 logger = get_logger(__name__)
 
@@ -1039,31 +1040,6 @@ def graph_payload() -> Dict[str, Any]:
 
 #: at most this many classes are drawn in one drill-down view
 CLASS_CAP = 150
-
-
-def _view() -> tuple:
-    """
-    Fresh (nodes, edges, details, add) accumulators for one subgraph.
-    """
-    nodes, edges, details = [], [], {}
-
-    def add(
-        node_id: str, label: str, group: str, lines: List[str], **extra: Any
-    ) -> None:
-        """
-        Append one graph node (plus arbitrary extra fields) and its detail entry.
-        """
-        node = {
-            "id": node_id,
-            "label": label,
-            "group": group,
-            "title": "\n".join([label] + lines),
-        }
-        node.update(extra)
-        nodes.append(node)
-        details[node_id] = {"label": label, "group": group, "lines": lines}
-
-    return nodes, edges, details, add
 
 
 # %% the graph-panel tabs
