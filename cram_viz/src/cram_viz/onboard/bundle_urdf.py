@@ -24,9 +24,10 @@ import re
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Dict, List, Optional
 
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.exceptions import ParsingError
@@ -251,9 +252,66 @@ def xacro_to_urdf_text(path: str) -> str:
 
 
 # %% bundling
+@dataclass
+class BundleReport:
+    """
+    What :func:`bundle_urdf` wrote for one URDF or xacro model.
+    """
+
+    name: str
+    """
+    Output model name, as passed to :func:`bundle_urdf`.
+    """
+
+    urdf: str
+    """
+    Path of the written, reference-rewritten URDF.
+    """
+
+    source: str
+    """
+    Resolved path of the URDF/xacro the bundle was built from.
+    """
+
+    links: List[str]
+    """
+    Names of every ``<link>`` in the written URDF, in document order.
+    """
+
+    joints: List[str]
+    """
+    Names of every ``<joint>`` in the written URDF, in document order.
+    """
+
+    movable_joints: List[str]
+    """
+    Names of the joints among :attr:`joints` whose type is not ``fixed``.
+    """
+
+    meshes_copied: int
+    """
+    Count of distinct mesh files copied into the bundle.
+    """
+
+    mesh_exts: List[str]
+    """
+    Sorted, deduplicated file extensions of the copied meshes.
+    """
+
+    refs_rewritten: int
+    """
+    Count of mesh references rewritten to their bundled, relative path.
+    """
+
+    missing: List[str]
+    """
+    References that could not be resolved to any file.
+    """
+
+
 def bundle_urdf(
     source: str, name: str, out_dir: str, hints: Optional[Dict[str, str]] = None
-) -> Dict[str, Any]:
+) -> BundleReport:
     """
     Bundle one URDF or xacro with every mesh it references.
 
@@ -298,22 +356,22 @@ def bundle_urdf(
     links = LINK_PATTERN.findall(urdf_text)
     joints = JOINT_PATTERN.findall(urdf_text)
     suffixes = sorted({os.path.splitext(path)[1].lower() for path in copied})
-    return {
-        "name": name,
-        "urdf": urdf_out,
-        "source": source_path,
-        "links": links,
-        "joints": [joint_name for joint_name, _ in joints],
-        "movable_joints": [
+    return BundleReport(
+        name=name,
+        urdf=urdf_out,
+        source=source_path,
+        links=links,
+        joints=[joint_name for joint_name, _ in joints],
+        movable_joints=[
             joint_name
             for joint_name, joint_type in joints
             if joint_type != FIXED_JOINT_TYPE
         ],
-        "meshes_copied": len(copied),
-        "mesh_exts": suffixes,
-        "refs_rewritten": rewritten,
-        "missing": missing,
-    }
+        meshes_copied=len(copied),
+        mesh_exts=suffixes,
+        refs_rewritten=rewritten,
+        missing=missing,
+    )
 
 
 def main() -> None:
@@ -338,15 +396,15 @@ def main() -> None:
     report = bundle_urdf(arguments.source, name, arguments.out)
     logger.info(
         "wrote %s  (%d links, %d joints, %d meshes %s)",
-        report["urdf"],
-        len(report["links"]),
-        len(report["joints"]),
-        report["meshes_copied"],
-        report["mesh_exts"],
+        report.urdf,
+        len(report.links),
+        len(report.joints),
+        report.meshes_copied,
+        report.mesh_exts,
     )
-    if report["missing"]:
-        logger.warning("missing %d assets:", len(report["missing"]))
-        for missing_asset in report["missing"][:MISSING_ASSETS_LOGGED]:
+    if report.missing:
+        logger.warning("missing %d assets:", len(report.missing))
+        for missing_asset in report.missing[:MISSING_ASSETS_LOGGED]:
             logger.warning("   %s", missing_asset)
         sys.exit(2)
 

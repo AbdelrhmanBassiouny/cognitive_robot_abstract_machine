@@ -34,6 +34,7 @@ import runpy
 import shutil
 import sys
 import time
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from semantic_digital_twin.adapters.mesh import STLParser
@@ -183,6 +184,7 @@ def log(*parts: object) -> None:
 
 
 # %% recorder
+@dataclass
 class Recorder:
     """
     Records one demo run: assets, per-tick motion and the executed plan.
@@ -195,71 +197,70 @@ class Recorder:
        them. This is one of the documented exceptions to the imports-at-top rule.
     """
 
-    def __init__(self) -> None:
-        self.resolutions: Dict[str, str] = {}
-        """
-        ``package://`` URI to the path it resolved to while the demo ran.
-        """
+    resolutions: Dict[str, str] = field(default_factory=dict)
+    """
+    ``package://`` URI to the path it resolved to while the demo ran.
+    """
 
-        self.urdf_sources: List[str] = []
-        """
-        URDF/xacro files the world was built from, in load order.
-        """
+    urdf_sources: List[str] = field(default_factory=list)
+    """
+    URDF/xacro files the world was built from, in load order.
+    """
 
-        self.mesh_sources: List[str] = []
-        """
-        Mesh files of the loose objects, in load order.
-        """
+    mesh_sources: List[str] = field(default_factory=list)
+    """
+    Mesh files of the loose objects, in load order.
+    """
 
-        self.frames: List[Dict[str, float]] = []
-        """
-        Per-tick joint positions, keyed by prefixed connection name.
-        """
+    frames: List[Dict[str, float]] = field(default_factory=list)
+    """
+    Per-tick joint positions, keyed by prefixed connection name.
+    """
 
-        self.base_frames: List[Optional[List[float]]] = []
-        """
-        Per-tick robot base pose as ``[x, y, z, qx, qy, qz, qw]``.
-        """
+    base_frames: List[Optional[List[float]]] = field(default_factory=list)
+    """
+    Per-tick robot base pose as ``[x, y, z, qx, qy, qz, qw]``.
+    """
 
-        self.object_frames: List[Dict[str, List[float]]] = []
-        """
-        Per-tick world pose of every tracked object, keyed by mesh basename.
-        """
+    object_frames: List[Dict[str, List[float]]] = field(default_factory=list)
+    """
+    Per-tick world pose of every tracked object, keyed by mesh basename.
+    """
 
-        self.actions: List[Dict[str, Any]] = []
-        """
-        One entry per parsed action: its class, arm and target object.
-        """
+    actions: List[Dict[str, Any]] = field(default_factory=list)
+    """
+    One entry per parsed action: its class, arm and target object.
+    """
 
-        self.plan_nodes: List[Any] = []
-        """
-        The plan nodes the demo parsed, used to serialize the executed plan tree.
-        """
+    plan_nodes: List[Any] = field(default_factory=list)
+    """
+    The plan nodes the demo parsed, used to serialize the executed plan tree.
+    """
 
-        self.world: Optional[Any] = None
-        """
-        The executing world, captured on the first tick.
-        """
+    world: Optional[Any] = None
+    """
+    The executing world, captured on the first tick.
+    """
 
-        self.robot: Optional[Any] = None
-        """
-        The robot annotation of :attr:`world`.
-        """
+    robot: Optional[Any] = None
+    """
+    The robot annotation of :attr:`world`.
+    """
 
-        self.control_dt: Optional[float] = None
-        """
-        The controller's timestep, from which the recording's frame rate follows.
-        """
+    control_dt: Optional[float] = None
+    """
+    The controller's timestep, from which the recording's frame rate follows.
+    """
 
-        self._connections: Optional[List[Any]] = None
-        """
-        Connections whose position is recorded; None until the first tick binds.
-        """
+    _connections: Optional[List[Any]] = field(default=None)
+    """
+    Connections whose position is recorded; None until the first tick binds.
+    """
 
-        self._bodies: Optional[Dict[str, Any]] = None
-        """
-        Recorded bodies by mesh basename, plus :data:`ROBOT_BASE_KEY`.
-        """
+    _bodies: Optional[Dict[str, Any]] = field(default=None)
+    """
+    Recorded bodies by mesh basename, plus :data:`ROBOT_BASE_KEY`.
+    """
 
     # %% asset hooks
     def install_asset_hooks(self) -> None:
@@ -381,8 +382,8 @@ class Recorder:
 
     def record_frame(self, executor: Executor) -> None:
         """
-        Append one frame: every movable connection's position, the robot base pose
-        and every tracked object's pose.
+        Append one frame: every movable connection's position, the robot base pose and
+        every tracked object's pose.
         """
         if self._connections is None:
             self.bind_to_executor(executor)
@@ -437,8 +438,8 @@ class Recorder:
 
     def install_segment_hook(self) -> None:
         """
-        Wrap ActionNode.parse to record each action's class, arm and target as
-        it is parsed (in plan order).
+        Wrap ActionNode.parse to record each action's class, arm and target as it is
+        parsed (in plan order).
         """
         from coraplex.plans.plan_node import ActionNode
 
@@ -559,8 +560,8 @@ def object_windows(recorder: Recorder) -> List[Dict[str, Any]]:
     The attach..detach frame window of every object that travelled overall.
 
     An object whose first and last pose differ was transported; the window spans from
-    the first frame that differs from where it started to just past the last frame
-    that differs from where it ended up.
+    the first frame that differs from where it started to just past the last frame that
+    differs from where it ended up.
     """
     object_frames = recorder.object_frames
     frame_count = len(object_frames)
@@ -737,8 +738,8 @@ def build_scene(
     recorder: Recorder, name: str, out_dir: str, step: int
 ) -> Dict[str, Any]:
     """
-    Downsample the recording to every step-th frame (always keeping the last)
-    and assemble scene.json + trajectory.json from it.
+    Downsample the recording to every step-th frame (always keeping the last) and
+    assemble scene.json + trajectory.json from it.
     """
     frame_count = len(recorder.frames)
     kept_indices = list(range(0, frame_count, step))
@@ -866,10 +867,10 @@ def build_scene(
     for source in recorder.urdf_sources:
         base_name = os.path.splitext(os.path.basename(source))[0]
         report = bundle_urdf(source, base_name, out_dir, hints=recorder.resolutions)
-        missing += report["missing"]
+        missing += report.missing
         # find this model's prefix in the composed world via one of its links
         model_prefix = ""
-        for link in report["links"][:PREFIX_PROBE_LINKS]:
+        for link in report.links[:PREFIX_PROBE_LINKS]:
             prefixed = next(
                 (
                     body_name
@@ -881,15 +882,15 @@ def build_scene(
             if prefixed:
                 model_prefix = prefixed.split("/", 1)[0]
                 break
-        is_robot = base_body in report["links"]
+        is_robot = base_body in report.links
         models.append(
             {
                 "name": base_name,
                 "urdf": "%s.urdf" % base_name,
                 "prefix": model_prefix,
                 "robot": is_robot,
-                "links": len(report["links"]),
-                "movableJoints": report["movable_joints"],
+                "links": len(report.links),
+                "movableJoints": report.movable_joints,
             }
         )
         log(
@@ -898,8 +899,8 @@ def build_scene(
                 base_name,
                 model_prefix or "-",
                 is_robot,
-                report["meshes_copied"],
-                len(report["missing"]),
+                report.meshes_copied,
+                len(report.missing),
             )
         )
 
@@ -958,8 +959,8 @@ def _write_json(path: Path, payload: Any, indent: Optional[int] = None) -> None:
     """
     Write a bundle file, replacing it only once it is complete.
 
-    A bundle is the artifact of a long recording, so a failure part-way through a
-    write must not leave a truncated file behind.
+    A bundle is the artifact of a long recording, so a failure part-way through a write
+    must not leave a truncated file behind.
     """
     temporary = path.with_suffix(path.suffix + ".part")
     temporary.write_text(json.dumps(payload, indent=indent), encoding="utf-8")

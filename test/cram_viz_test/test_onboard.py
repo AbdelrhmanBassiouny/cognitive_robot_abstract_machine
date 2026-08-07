@@ -51,6 +51,29 @@ def recording(
     return recorder
 
 
+# %% recorder field defaults
+class TestRecorderMutableDefaults:
+    """
+    Each ``Recorder()`` must own its own containers, never a class-shared one.
+    """
+
+    def test_two_recorders_do_not_share_their_mutable_fields(self):
+        first = Recorder()
+        second = Recorder()
+
+        for field_name in (
+            "resolutions",
+            "urdf_sources",
+            "mesh_sources",
+            "frames",
+            "base_frames",
+            "object_frames",
+            "actions",
+            "plan_nodes",
+        ):
+            assert getattr(first, field_name) is not getattr(second, field_name)
+
+
 # %% asset and tick hooks
 class TestAssetHookMethods:
     """
@@ -347,8 +370,8 @@ class TestBundleUrdf:
         report = bundler.bundle_urdf(str(source_tree), "demo", str(out_dir))
         assert (out_dir / "demo.urdf").is_file()
         assert (out_dir / "meshes" / "_local" / "cup.stl").is_file()
-        assert report["meshes_copied"] == 1
-        assert report["missing"] == []
+        assert report.meshes_copied == 1
+        assert report.missing == []
 
     def test_the_reference_is_rewritten_to_the_bundled_copy(
         self, source_tree, tmp_path
@@ -361,9 +384,9 @@ class TestBundleUrdf:
 
     def test_links_and_joints_are_reported(self, source_tree, tmp_path):
         report = bundler.bundle_urdf(str(source_tree), "demo", str(tmp_path / "bundle"))
-        assert report["links"] == ["base_link", "cup_link"]
-        assert report["joints"] == ["cup_joint"]
-        assert report["movable_joints"] == []
+        assert report.links == ["base_link", "cup_link"]
+        assert report.joints == ["cup_joint"]
+        assert report.movable_joints == []
 
     def test_an_unresolvable_mesh_is_reported_as_missing(self, tmp_path):
         urdf = tmp_path / "robot.urdf"
@@ -375,8 +398,8 @@ class TestBundleUrdf:
             "</robot>\n"
         )
         report = bundler.bundle_urdf(str(urdf), "demo", str(tmp_path / "bundle"))
-        assert report["missing"] == [bundler.UNRESOLVED_REFERENCE]
-        assert report["meshes_copied"] == 0
+        assert report.missing == [bundler.UNRESOLVED_REFERENCE]
+        assert report.meshes_copied == 0
 
     def test_a_missing_source_is_refused(self, tmp_path):
         with pytest.raises(FileNotFoundError):
