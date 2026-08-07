@@ -17,8 +17,6 @@ is unavailable. Scene bundles are read from paths.scenes_dir().
 
 from __future__ import annotations
 
-import logging
-
 from cram_viz.knowledge.architecture_entities import (
     Package as Package,
     PythonClass as PythonClass,
@@ -40,15 +38,3 @@ from cram_viz.knowledge.views.architecture import (
     SUBCLASS_CAP as SUBCLASS_CAP,
 )
 from cram_viz.knowledge.views.plan import shorten_action_label as shorten_action_label
-
-if __name__ == "__main__":
-    # smoke test: run every preset against the active scene
-    logging.basicConfig(level=logging.INFO)
-    for preset in get_presets():
-        try:
-            result = run_query(preset["code"])
-            logging.info("OK   %-32s -> %d rows", preset["text"], result["count"])
-        except Exception as error:
-            logging.error(
-                "FAIL %-32s -> %s: %s", preset["text"], type(error).__name__, error
-            )

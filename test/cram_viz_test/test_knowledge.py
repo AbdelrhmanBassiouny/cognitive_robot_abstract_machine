@@ -604,3 +604,18 @@ class TestExpandNode:
             "showing %d of %d subclasses"
             % (knowledge.SUBCLASS_CAP, knowledge.SUBCLASS_CAP + 1)
         )
+
+
+# %% smoke test: every generated preset must run without raising
+class TestPresetSmoke:
+    def test_every_preset_runs_and_returns_rows(self, fixture_scene):
+        """
+        Every preset ``get_presets()`` hands to the EQL panel must actually run.
+
+        Replaces the module's former ``if __name__ == "__main__":`` smoke script, which
+        logged OK/FAIL per preset instead of asserting anything.
+        """
+        for preset in knowledge.get_presets():
+            result = knowledge.run_query(preset["code"])
+            assert result["ok"], "%s: %s" % (preset["text"], result)
+            assert result["count"] == len(result["rows"])
