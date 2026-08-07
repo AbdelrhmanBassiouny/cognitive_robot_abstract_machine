@@ -2,7 +2,7 @@
 # plan's published Artifact URL (keyed by plan id) plus the master index's
 # own URL (key: _index), so a later run of /plan-dashboard updates the
 # existing page in place instead of minting a new one.
-dag-facade-hardening: https://claude.ai/code/artifact/2346fe25-f4f9-4200-a7d8-065c35f93afa
+dag-facade-hardening: https://claude.ai/code/artifact/49053971-8640-496c-86e2-406be02ec6f4
 eql-existential-semantics: https://claude.ai/code/artifact/376d5fd0-7083-4581-9dfa-7b034809d9ff
 eql-performatives: https://claude.ai/code/artifact/13eb3f43-c968-431a-8cd1-aa114d70c9de
 eql-verbalization: https://claude.ai/code/artifact/dd4058ce-b5be-4924-b6bf-ac591f9b0ff6
