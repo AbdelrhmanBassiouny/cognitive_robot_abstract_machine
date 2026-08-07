@@ -27,6 +27,21 @@ from cram_viz.onboard.demo import (
 #: a pose that stays put, used wherever a frame's value must not matter
 RESTING = [0.0, 0.0, 1.0, 0, 0, 0, 1]
 
+#: a URDF referencing exactly one mesh, shared by the URDF- and xacro-source bundling tests
+ONE_MESH_URDF_TEXT = (
+    '<robot name="demo">\n'
+    '  <link name="base_link"/>\n'
+    '  <link name="cup_link">\n'
+    "    <visual><geometry>\n"
+    '      <mesh filename="meshes/cup.stl"/>\n'
+    "    </geometry></visual>\n"
+    "  </link>\n"
+    '  <joint name="cup_joint" type="fixed">\n'
+    '    <parent link="base_link"/><child link="cup_link"/>\n'
+    "  </joint>\n"
+    "</robot>\n"
+)
+
 
 def pose_at(x: float, y: float, z: float = 1.0) -> List[float]:
     """
@@ -320,9 +335,9 @@ class TestResolveUri:
 
     def test_an_unresolvable_package_uri_is_unresolved(self, monkeypatch):
         """
-        Without a recorded hint and with no ROS installation to ask, every resolver tier
-        (the CRAM package resolver, ``ament_index_python``, the filesystem search) fails
-        in turn, and the URI comes back unresolved rather than raising.
+        Without a recorded hint and with no ROS installation to ask,
+        :class:`PackageUriResolver` fails to resolve the package, and the URI comes back
+        unresolved rather than raising.
         """
         monkeypatch.delenv("AMENT_PREFIX_PATH", raising=False)
         monkeypatch.delenv("ROS_PACKAGE_PATH", raising=False)
@@ -340,6 +355,35 @@ class TestReferenceLayout:
         assert bundler._bundled_relative_path("../far/away/cup.stl") == "_local/cup.stl"
 
 
+# %% xacro expansion
+class TestXacroToUrdfText:
+    def test_a_xacro_file_expands_to_urdf_text(self, tmp_path):
+        """
+        A macro-free xacro file expands to URDF text carrying the same links and joints,
+        via :class:`URDFParser.from_xacro` rather than the ``xacro`` CLI.
+        """
+        source = (
+            '<robot name="demo">\n'
+            '  <link name="base_link"/>\n'
+            '  <link name="cup_link"/>\n'
+            '  <joint name="cup_joint" type="fixed">\n'
+            '    <parent link="base_link"/><child link="cup_link"/>\n'
+            "  </joint>\n"
+            "</robot>\n"
+        )
+        xacro_path = tmp_path / "robot.xacro"
+        xacro_path.write_text(source)
+
+        expanded = bundler.xacro_to_urdf_text(str(xacro_path))
+
+        assert bundler.LINK_PATTERN.findall(expanded) == bundler.LINK_PATTERN.findall(
+            source
+        )
+        assert bundler.JOINT_PATTERN.findall(expanded) == bundler.JOINT_PATTERN.findall(
+            source
+        )
+
+
 # %% bundling a URDF
 class TestBundleUrdf:
     @pytest.fixture()
@@ -350,20 +394,19 @@ class TestBundleUrdf:
         (tmp_path / "meshes").mkdir()
         (tmp_path / "meshes" / "cup.stl").write_text("solid cup\nendsolid cup\n")
         urdf = tmp_path / "robot.urdf"
-        urdf.write_text(
-            '<robot name="demo">\n'
-            '  <link name="base_link"/>\n'
-            '  <link name="cup_link">\n'
-            "    <visual><geometry>\n"
-            '      <mesh filename="meshes/cup.stl"/>\n'
-            "    </geometry></visual>\n"
-            "  </link>\n"
-            '  <joint name="cup_joint" type="fixed">\n'
-            '    <parent link="base_link"/><child link="cup_link"/>\n'
-            "  </joint>\n"
-            "</robot>\n"
-        )
+        urdf.write_text(ONE_MESH_URDF_TEXT)
         return urdf
+
+    @pytest.fixture()
+    def xacro_source_tree(self, tmp_path):
+        """
+        The same URDF content as :attr:`source_tree`, saved with a ``.xacro`` extension.
+        """
+        (tmp_path / "meshes").mkdir()
+        (tmp_path / "meshes" / "cup.stl").write_text("solid cup\nendsolid cup\n")
+        xacro = tmp_path / "robot.xacro"
+        xacro.write_text(ONE_MESH_URDF_TEXT)
+        return xacro
 
     def test_the_mesh_is_copied_next_to_the_rewritten_urdf(self, source_tree, tmp_path):
         out_dir = tmp_path / "bundle"
@@ -387,6 +430,22 @@ class TestBundleUrdf:
         assert report.links == ["base_link", "cup_link"]
         assert report.joints == ["cup_joint"]
         assert report.movable_joints == []
+
+    def test_a_xacro_source_is_bundled_like_a_urdf_source(
+        self, xacro_source_tree, tmp_path
+    ):
+        """
+        Bundling a xacro source produces the same links, joints and mesh copy as
+        bundling the equivalent URDF - :func:`xacro_to_urdf_text`'s ElementTree
+        round-trip does not break the regex-based mesh rewriting.
+        """
+        report = bundler.bundle_urdf(
+            str(xacro_source_tree), "demo", str(tmp_path / "bundle")
+        )
+        assert report.links == ["base_link", "cup_link"]
+        assert report.joints == ["cup_joint"]
+        assert report.meshes_copied == 1
+        assert report.missing == []
 
     def test_an_unresolvable_mesh_is_reported_as_missing(self, tmp_path):
         urdf = tmp_path / "robot.urdf"

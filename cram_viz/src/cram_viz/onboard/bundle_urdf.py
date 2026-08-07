@@ -17,12 +17,10 @@ it the exact uri->path resolutions recorded while the demo ran.
 """
 
 import argparse
-import glob
 import logging
 import os
 import re
 import shutil
-import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,6 +28,7 @@ from pathlib import Path
 from typing_extensions import Dict, List, Optional
 
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
+from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.exceptions import ParsingError
 
 from cram_viz import get_logger, paths
@@ -47,9 +46,6 @@ FIXED_JOINT_TYPE = "fixed"
 
 #: stands in for a reference the bundler could not resolve to any file
 UNRESOLVED_REFERENCE = "<unresolved>"
-
-#: how much of xacro's stderr a failure report keeps
-XACRO_ERROR_TAIL = 2000
 
 #: what the bundler reads out of a URDF
 MESH_REFERENCE_PATTERN = re.compile(r'filename="([^"]+)"')
@@ -70,56 +66,22 @@ LOCAL_MESH_DIRECTORY = "_local"
 
 
 # %% reference resolution
-def _search_root_candidates() -> List[str]:
-    """
-    Likely ROS install prefixes to search for a ``package://`` URI: environment
-    variables first, then common workspace layouts under the home directory and
-    ``/opt/ros``.
-    """
-    roots = []
-    for variable in ("AMENT_PREFIX_PATH", "ROS_PACKAGE_PATH", "CMAKE_PREFIX_PATH"):
-        roots += [entry for entry in os.environ.get(variable, "").split(":") if entry]
-    home = os.path.expanduser("~")
-    roots += glob.glob(os.path.join(home, "*_ws", "install"))
-    roots += glob.glob(os.path.join(home, "*", "install"))
-    roots += glob.glob("/opt/ros/*")
-    return roots
-
-
 def _resolve_package_uri(uri: str) -> Optional[str]:
     """
-    Resolve a ``package://`` URI, trying the ROS resolvers before the filesystem.
+    Resolve a ``package://`` URI via :class:`PackageUriResolver`.
 
-    The ``ament_index_python`` import is local and its failure ignored on purpose: this
-    module has to work on a machine with no ROS installed at all, which is the whole
-    point of bundling. ``ament_index_python`` also raises a plain ``OSError`` (via
-    ``EnvironmentError``) when it is installed but ``AMENT_PREFIX_PATH`` is unset - a
-    ROS installation that simply is not sourced, not a broken environment.
+    This module has to work on a machine with no ROS installed at all, which is the
+    whole point of bundling - :class:`PackageUriResolver`'s default locator chain
+    already covers that case (an ament index, ``ROS_PACKAGE_PATH``, and a plain
+    filesystem search of common install prefixes), so failure to resolve is reported
+    rather than raised.
     """
-    package, _, relative_path = uri[len(PACKAGE_SCHEME) :].partition("/")
     try:
         resolved = PackageUriResolver().resolve(uri)
-        if os.path.isfile(resolved):
-            return resolved
     except (ParsingError, OSError) as error:
         logger.debug("the CRAM package resolver could not resolve %s: %s", uri, error)
-    try:
-        from ament_index_python.packages import get_package_share_directory
-
-        resolved = os.path.join(get_package_share_directory(package), relative_path)
-        if os.path.isfile(resolved):
-            return resolved
-    except (ImportError, LookupError, OSError) as error:
-        logger.debug("the ament index could not resolve %s: %s", uri, error)
-    for root in _search_root_candidates():
-        for candidate in (
-            os.path.join(root, package, "share", package, relative_path),
-            os.path.join(root, "share", package, relative_path),
-            os.path.join(root, package, relative_path),
-        ):
-            if os.path.isfile(candidate):
-                return candidate
-    return None
+        return None
+    return resolved if os.path.isfile(resolved) else None
 
 
 def resolve_uri(
@@ -238,17 +200,9 @@ def _copy_side_assets(
 # %% xacro
 def xacro_to_urdf_text(path: str) -> str:
     """
-    Expand a xacro file to URDF text using the xacro CLI.
-
-    :raises RuntimeError: If xacro is missing or fails; it needs a sourced ROS
-        environment on ``PATH``.
+    Expand a xacro file to URDF text in-process, without any ROS installed.
     """
-    result = subprocess.run(["xacro", path], capture_output=True, text=True)
-    if result.returncode != 0:
-        raise RuntimeError(
-            "xacro failed for %s:\n%s" % (path, result.stderr[-XACRO_ERROR_TAIL:])
-        )
-    return result.stdout
+    return URDFParser.from_xacro(path).urdf
 
 
 # %% bundling
