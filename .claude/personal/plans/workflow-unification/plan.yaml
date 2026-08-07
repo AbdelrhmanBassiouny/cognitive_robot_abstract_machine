@@ -1610,6 +1610,31 @@ items:
       resolving session's designated one, per the precedent the #115 resolve set: a new branch
       is a new pull request, which is what produced #125.
 
+      Second review round the same day, three comments, applied in b57d3902. Two were
+      straightforward: the message names the tests pass became a SummaryMessage StrEnum, and the
+      README/fixture work stood. The third reversed this session's own recommendation and is the
+      one worth carrying. test_every_summary_message_reads_as_written - added hours earlier
+      specifically to replace the guard that single-sourcing the wording had removed, the #135
+      ReportKey precedent applied - was cut on the user's instruction ("remove these wording
+      assertions or replace only one of them by being not empty"). Replaced by
+      test_every_summary_message_renders_something, which iterates the enum and asserts each
+      member renders non-empty. So a reword is now invisible to the suite, deliberately and with
+      the trade stated on the thread rather than argued a second time; what survives is the pair
+      of failures that actually break the hook, both mutation-checked - a member naming a
+      function that does not exist, and a function that prints nothing (which would make
+      session-start.sh emit a blank setup: line silently). Worth recording against the
+      2026-08-07 entry's own generalization, which claimed the single-source-plus-contract-test
+      pairing was ready to be promoted from precedent to expectation: it is the reviewer's call
+      whether wording is worth pinning, and here it was not.
+      The third comment asked whether session-start-messages.sh could be Python instead, "if no
+      harm from it". There is harm and it was measured rather than asserted: with python3 taken
+      off PATH entirely the hook still prints every line and exits 0, degrading only
+      check-setup.sh's dependency row into a row that says python3 is missing - as Python, that
+      whole block becomes nothing. That is also the rule resolve-personal-notes-config.sh:343
+      already states for itself. Not converted; replied with the measurement and left open for
+      the user, since dev-tooling-session-start-python is the item that takes the floor raise
+      deliberately, behind a shim that probes for python3 and exits 0 without it.
+
   - id: plan-item-edit-guard
     branch: null
     title: "PreToolUse guard: refuse source edits from a branch with no plan item"

@@ -4110,3 +4110,54 @@ enabled on the fork and 15 other workflows are registered, so this is the defaul
 and nothing else. The first real dispatch is only possible once this lands on the fork's
 main, which also means the GraphQL document itself is unexercised against a live schema until
 then - the one residual risk in the change.
+
+### Second round on #121: the contract test is cut, and the Python question has a measurement
+
+Three more comments the same day, applied in `b57d3902`. Two were plain — the message names
+the tests pass became a `SummaryMessage` StrEnum. The third reversed this session's own
+recommendation, and that is the part worth keeping.
+
+`test_every_summary_message_reads_as_written` had been added hours earlier for one reason:
+single-sourcing the wording removes the guard the duplicate literals were carrying, so
+something has to pin it. That is #135's `ReportKey` finding applied verbatim, and the entry
+above went as far as calling it *"promoting it from precedent to expectation"*. The reviewer
+looked at the resulting test and said to cut it — *"remove these wording assertions or replace
+only one of them by being not empty."*
+
+Cut, second option taken: `test_every_summary_message_renders_something` iterates the enum and
+asserts each member renders non-empty. A reword is now invisible to the suite. That is a real
+loss and it was stated once on the thread rather than argued a second time.
+
+**The correction to the generalization is the useful part.** "Single-source, then add one
+contract test" is right about the *mechanism* — the guard genuinely does disappear otherwise —
+and wrong to treat as automatic. Whether a given string is worth pinning is the owner's call,
+not a property of the refactor. Here the wording is a diagnostic line in a hook's summary,
+reworded freely and read by a human; on #135 it was a JSON wire format other code parses. The
+precedent should be read as *notice the guard you are deleting and say so*, not *always replace
+it*.
+
+What survives is the pair of failures that actually break the hook, both mutation-checked: a
+member naming a function that does not exist, and a function that prints nothing — the second
+would make `session-start.sh` emit a blank `setup:` line with nothing noticing.
+
+### The Python question, answered by measurement
+
+The third comment asked whether `session-start-messages.sh` could be a Python file instead,
+*"if it can be a python file then make it so, if no harm from it"*. The condition is the whole
+answer, so it was measured rather than reasoned about: with `python3` removed from `PATH`
+entirely, the hook still prints all six summary lines and exits 0, degrading only
+`check-setup.sh`'s dependency row — into a row that says python3 is missing. As a Python file
+that entire block produces nothing.
+
+`resolve-personal-notes-config.sh:343` already states the same rule from the other end: the
+branch index is TSV read with `awk` precisely so *"session-start.sh must not gain a hard
+dependency on python3/PyYAML"*.
+
+Not converted; replied with the measurement and left open for the user. `dev-tooling-session-start-python`
+is the item that takes this floor raise deliberately, behind a shim that probes for python3 ≥
+3.11 and exits 0 with one diagnostic line when it is absent — converting one sourced file now
+would take the raise without the shim that makes it safe.
+
+Worth generalizing: **a conditional instruction ("if no harm") is answered by testing the
+condition, not by weighing it.** Removing python3 from `PATH` took one command and turned a
+judgement call into a demonstration.
