@@ -8,6 +8,7 @@ krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
 from cram_viz import knowledge  # noqa: E402  (importable once krrood is present)
 from cram_viz.knowledge import knowledge_base  # noqa: E402
+from cram_viz.knowledge.enums import ArmSide  # noqa: E402
 from cram_viz.knowledge.views import plan_tree as plan_view  # noqa: E402
 
 
@@ -42,6 +43,26 @@ class TestEpisodeKnowledgeBase:
         names = {p.name for p in fresh_knowledge_base.packages}
         assert {"coraplex", "krrood"} <= names
         assert any(c.name == "Plan" for c in fresh_knowledge_base.classes)
+
+
+class TestArmSideInference:
+    def test_an_arm_whose_name_encodes_no_side_is_unknown(
+        self, fixture_scene, monkeypatch
+    ):
+        """
+        An arm part name that names neither `left` nor `right` cannot be assigned a side
+        by name inspection, and must not silently masquerade as one.
+        """
+        scene, trajectory = knowledge.load_scene()
+        scene["robot"]["parts"]["center_arm"] = ["center_link"]
+        monkeypatch.setattr(knowledge_base, "load_scene", lambda: (scene, trajectory))
+        knowledge.reset_knowledge_base()
+        center_arm = next(
+            arm
+            for arm in knowledge.get_knowledge_base().arms
+            if arm.name == "center_arm"
+        )
+        assert center_arm.side == ArmSide.UNKNOWN
 
 
 class TestQueries:
