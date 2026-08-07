@@ -49,9 +49,30 @@ Three threads, all from the developer on `c7253f8b`, all replied to and resolved
 Four new tests (three for `OutermostQuery`'s contract, one for the fallback
 branch, which nothing covered). Suites: **1441 passed, 7 skipped, 0 failed**.
 
+## Review round 2 (2026-08-07, commit `a9682633`)
+
+Two threads on `82859a81`:
+
+- `base_expressions.py:630` "shouldn't this replace `_root_query_`? I like
+  `_root_query_` more as a name" → renamed to `_evaluation_root_query_`
+  (developer picked the exact name). Merge **deferred to Phase C**: the sole
+  `_root_query_` consumer needs a real `Query` for `_selected_variables_`,
+  while this one falls back to `_root_` (any expression), so merging means
+  narrowing the fallback — the same edit as Phase C's own bug fix. Replied +
+  resolved.
+- `evaluation_context.py:219` "should this be `Role[Query]`?" → **declined**,
+  developer agreed. Hard blocker: `Role[Query]` needs `Query` at runtime (base-
+  class expressions aren't deferred), but `evaluation_context.py` is a leaf
+  with all expression types behind `TYPE_CHECKING` → import cycle. Plus
+  `role_taker` is required at construction (this record starts empty) and
+  `Role.__eq__` never equals its taker (the path ends in an identity assert).
+  Replied; **left open** since no code change was made.
+
+Suites still **1441 passed, 7 skipped, 0 failed**.
+
 ## Next
 
-- Waiting on CI for `82859a81`.
+- Waiting on CI for `a9682633`.
 - PR stays a **draft** until the developer signs off.
 - **Blocked on nothing.** `depends_on` (#90) merged 2026-08-03.
 - Minor: running `format_docstrings.py` reflowed two pre-existing docstrings in
