@@ -5,7 +5,7 @@ Running one EQL query against the knowledge base and rendering its result.
 from __future__ import annotations
 
 import ast
-from dataclasses import fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass
 
 from typing_extensions import (
     Any,
@@ -13,7 +13,6 @@ from typing_extensions import (
     List,
     Optional,
     Protocol,
-    Tuple,
     runtime_checkable,
 )
 
@@ -32,6 +31,78 @@ from cram_viz.knowledge.entities import (
     Robot,
 )
 from cram_viz.knowledge.knowledge_base import get_knowledge_base
+
+
+@dataclass
+class QueryResult:
+    """
+    The rendered result of one EQL query.
+    """
+
+    ok: bool
+    """
+    Always ``True`` — a query that cannot run raises instead of returning this.
+    """
+
+    kind: str
+    """
+    ``"rows"`` for arbitrary answer rows, ``"entities"`` when every row names an entity.
+    """
+
+    rows: List[Dict[str, Any]]
+    """
+    The query's answer rows; each row's own keys depend on what the query asked for.
+    """
+
+    count: int
+    """
+    Number of rows returned (``len(rows)``).
+    """
+
+    more: bool
+    """
+    Whether the result was truncated at ``limit``.
+    """
+
+    highlight: List[str]
+    """
+    Ids of the graph nodes this result should highlight, sorted and deduplicated.
+    """
+
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The JSON-serializable shape the frontend's EQL panel expects.
+        """
+        return {
+            "ok": self.ok,
+            "kind": self.kind,
+            "rows": self.rows,
+            "count": self.count,
+            "more": self.more,
+            "highlight": self.highlight,
+        }
+
+
+@dataclass
+class _RenderedRows:
+    """
+    A query result rendered into answer rows, before it is wrapped as a QueryResult.
+    """
+
+    rows: List[Dict[str, Any]]
+    """
+    The rendered answer rows.
+    """
+
+    highlight: List[str]
+    """
+    Ids of the graph nodes to highlight, collected while rendering.
+    """
+
+    more: bool
+    """
+    Whether rendering stopped early because ``limit`` was reached.
+    """
 
 
 @runtime_checkable
@@ -114,9 +185,9 @@ def _jsonable(value: Any) -> Any:
     return repr(value)
 
 
-def run_query(code: str, limit: int = 200) -> Dict[str, Any]:
+def run_query(code: str, limit: int = 200) -> QueryResult:
     """
-    Execute an EQL query string and return a JSON-able result payload.
+    Execute an EQL query string and return its rendered result.
 
     The last expression of ``code`` is the query; preceding statements are executed as
     setup.
@@ -140,44 +211,44 @@ def run_query(code: str, limit: int = 200) -> Dict[str, Any]:
 
     if isinstance(result, Evaluable):
         result = result.evaluate()
-    rows, highlight, more = _result_rows(result, limit)
-    kind = "rows" if rows and "__entity__" not in rows[0] else "entities"
-    return {
-        "ok": True,
-        "kind": kind,
-        "rows": rows,
-        "count": len(rows),
-        "more": more,
-        "highlight": sorted(set(highlight)),
-    }
+    rendered = _result_rows(result, limit)
+    kind = (
+        "rows" if rendered.rows and "__entity__" not in rendered.rows[0] else "entities"
+    )
+    return QueryResult(
+        ok=True,
+        kind=kind,
+        rows=rendered.rows,
+        count=len(rendered.rows),
+        more=rendered.more,
+        highlight=sorted(set(rendered.highlight)),
+    )
 
 
-def _result_rows(
-    result: Any, limit: int
-) -> Tuple[List[Dict[str, Any]], List[str], bool]:
+def _result_rows(result: Any, limit: int) -> _RenderedRows:
     """
-    Render a query result into (answer rows, highlight ids, truncated).
+    Render a query result into answer rows.
     """
     rows: List[Dict[str, Any]] = []
     highlight: List[str] = []
     if result is None:
-        return rows, highlight, False
+        return _RenderedRows(rows, highlight, False)
     if isinstance(result, (str, int, float, bool)):
         rows.append({"value": _jsonable(result)})
-        return rows, highlight, False
+        return _RenderedRows(rows, highlight, False)
     if is_dataclass(result) and not isinstance(result, type):
         rows.append(_entity_row(result, highlight))
-        return rows, highlight, False
+        return _RenderedRows(rows, highlight, False)
     try:
         iterator = iter(result)
     except TypeError:
         rows.append({"value": _jsonable(result)})
-        return rows, highlight, False
+        return _RenderedRows(rows, highlight, False)
     for item in iterator:
         if len(rows) >= limit:
-            return rows, highlight, True
+            return _RenderedRows(rows, highlight, True)
         rows.append(_item_row(item, highlight))
-    return rows, highlight, False
+    return _RenderedRows(rows, highlight, False)
 
 
 def _entity_row(item: Any, highlight: List[str]) -> Dict[str, Any]:

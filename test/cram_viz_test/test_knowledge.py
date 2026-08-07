@@ -111,9 +111,9 @@ class TestArmSideInference:
 class TestQueries:
     def test_entity_query(self, fixture_scene):
         result = knowledge.run_query("the(entity(obj).where(obj.name == 'milk'))")
-        assert result["ok"] and result["count"] == 1
-        assert result["rows"][0]["__entity__"] == "milk"
-        assert "milk" in result["highlight"]
+        assert result.ok and result.count == 1
+        assert result.rows[0]["__entity__"] == "milk"
+        assert "milk" in result.highlight
 
     def test_an_unknown_name_raises(self, fixture_scene):
         """
@@ -313,7 +313,7 @@ class TestPresetSafety:
         knowledge.reset_knowledge_base()
         preset = next(p for p in knowledge.get_presets() if "obj.name" in p.code)
         result = knowledge.run_query(preset.code)
-        assert result["ok"] and result["rows"][0]["__entity__"] == "o'brien"
+        assert result.ok and result.rows[0]["__entity__"] == "o'brien"
 
     def test_an_apostrophe_in_an_episode_name_does_not_break_its_presets(
         self, fixture_scene, monkeypatch
@@ -330,7 +330,7 @@ class TestPresetSafety:
         )
         knowledge.reset_knowledge_base()
         for preset in knowledge.get_presets():
-            assert knowledge.run_query(preset.code)["ok"]
+            assert knowledge.run_query(preset.code).ok
 
 
 # %% characterization: graph_payload() structure
@@ -659,5 +659,5 @@ class TestPresetSmoke:
         """
         for preset in knowledge.get_presets():
             result = knowledge.run_query(preset.code)
-            assert result["ok"], "%s: %s" % (preset.text, result)
-            assert result["count"] == len(result["rows"])
+            assert result.ok, "%s: %s" % (preset.text, result)
+            assert result.count == len(result.rows)
