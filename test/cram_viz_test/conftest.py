@@ -31,14 +31,14 @@ def reset_knowledge_base_cache() -> None:
     """
     Drop the cached knowledge base so the next build picks up the current environment.
 
-    Does nothing without krrood: :mod:`cram_viz.kb` is then not importable, and the
-    tests that need it skip themselves.
+    Does nothing without krrood: :mod:`cram_viz.knowledge` is then not importable, and
+    the tests that need it skip themselves.
     """
     if importlib.util.find_spec("krrood") is None:
         return
-    from cram_viz import kb
+    from cram_viz import knowledge
 
-    kb.reset_knowledge_base()
+    knowledge.reset_knowledge_base()
 
 
 @pytest.fixture()

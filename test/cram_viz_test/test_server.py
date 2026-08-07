@@ -17,7 +17,7 @@ def server(fixture_scene):
     """
     from cram_viz import server as server_module
 
-    importlib.reload(server_module)  # rebind kb_module under the fixture env
+    importlib.reload(server_module)  # rebind knowledge_module under the fixture env
     httpd = server_module.make_server(0)
     thread = threading.Thread(target=httpd.serve_forever, daemon=True)
     thread.start()

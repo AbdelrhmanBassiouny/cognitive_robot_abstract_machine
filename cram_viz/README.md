@@ -123,7 +123,7 @@ live-only.
 ```
 src/cram_viz/
   server.py        static frontend + JSON API (/api/kb, /api/eql, /scenes/)
-  kb.py            scene-driven EQL knowledge base + graph payloads
+  knowledge/       scene-driven EQL knowledge base + graph payloads (package)
   paths.py         all filesystem locations (env-overridable)
   live/
     bridge.py      bridge state + serializers (runs on the sim thread)

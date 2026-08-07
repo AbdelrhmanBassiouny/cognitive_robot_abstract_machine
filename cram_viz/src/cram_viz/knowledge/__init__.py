@@ -1,7 +1,7 @@
 """
 The recorded demo scene as an EQL (Entity Query Language) knowledge base.
 
-EQL is krrood's pythonic relational query language. This module models the recorded
+EQL is krrood's pythonic relational query language. This package models the recorded
 coraplex/giskardpy episode — bench objects, robot parts, action episodes, per-joint
 motion — as plain dataclasses and exposes:
 
