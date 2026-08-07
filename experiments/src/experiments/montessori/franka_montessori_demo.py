@@ -253,7 +253,17 @@ def _insert_shape(
         max_ticks_per_motion_mapping=300,
     ):
         node = execute_single(action, context=context)
+        # Temporary diagnostic: simulated-time span of the whole pick+place action, as
+        # a proxy for how much the arm hovers/corrects near its Cartesian goals rather
+        # than converging directly onto them.
+        insertion_start_time = context.simulation_clock()
         node.perform()
+        insertion_duration = context.simulation_clock() - insertion_start_time
+        logger.info(
+            "%s insertion action took %.3fs of simulated time.",
+            shape.name,
+            insertion_duration,
+        )
 
     montessori.world.update_forward_kinematics()
     release_position = shape.root.global_transform.to_position()
@@ -459,6 +469,15 @@ def _parse_arguments() -> argparse.Namespace:
         action="store_true",
         help="Don't publish TF/visualization markers to RViz; publishes by default.",
     )
+    parser.add_argument(
+        "--world2",
+        action="store_true",
+        help=(
+            "Use experiments.montessori.world2's layout (board directly ahead of the "
+            "robot, loose shapes on a separate stand to its side) instead of the "
+            "default single-table layout."
+        ),
+    )
     return parser.parse_args()
 
 
@@ -495,8 +514,14 @@ def main() -> None:
     spinner = threading.Thread(target=executor.spin, daemon=True, name="rclpy-executor")
     spinner.start()
 
-    montessori = MontessoriWorld(shapes_are_movable=True)
-    mount_position = _mount_position(montessori)
+    if arguments.world2:
+        from experiments.montessori.world2 import MontessoriWorld2, ROBOT_MOUNT_POSITION
+
+        montessori = MontessoriWorld2(shapes_are_movable=True)
+        mount_position = ROBOT_MOUNT_POSITION
+    else:
+        montessori = MontessoriWorld(shapes_are_movable=True)
+        mount_position = _mount_position(montessori)
     montessori.add_robot_stand(mount_position)
     robot = montessori.mount_stationary_robot(
         Panda, parse_panda(), mount_position, mount_yaw=np.pi

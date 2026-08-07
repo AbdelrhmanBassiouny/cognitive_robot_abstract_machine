@@ -23,6 +23,7 @@ from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
+from coraplex.robot_plans.motions.robot_body import MoveJointsMotion
 from coraplex.view_manager import ViewManager
 from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
 from experiments.montessori.world import DEFAULT_ROBOT_STANDOFF_DISTANCE
@@ -54,6 +55,16 @@ that method's docstring), not clear the robot's whole body: unlike
 robot, since inflating it to a wide robot's full footprint would push the pre-grasp
 hover point (and, transitively, the base stance :meth:`_move_to_reach` resolves near
 it) far enough from the target to put the actual grasp out of comfortable arm reach.
+"""
+
+PARKING_WHILE_HOLDING_MAX_JOINT_VELOCITY = 0.4
+"""
+Joint velocity cap (in rad/s) for the arm's park motion between picking a shape up and
+placing it, while the shape is held by gripper friction alone --
+:class:`~coraplex.robot_plans.actions.core.pick_up.PickUpAction` never kinematically
+attaches it. Parking at :class:`~coraplex.robot_plans.actions.core.robot_body.ParkArmsAction`'s
+default unconstrained speed was observed to slip or fling the shape out of the grasp
+before the place motion even starts.
 """
 
 
@@ -218,6 +229,43 @@ class InsertMontessoriShapeAction(ActionDescription):
             rotate_gripper=self.grasp_description.rotate_gripper,
         )
 
+    def _rotate_base_towards_shape_plan(self) -> PlanNode:
+        """
+        Rotate a bolted arm's own first (shoulder-pan) joint to face
+        :attr:`montessori_shape`, before reaching for it.
+
+        A bolted arm (see the ``HasMobileBase``-absent branch of :attr:`_action_plan`)
+        has no base to navigate into a comfortable stance with, unlike
+        :meth:`_move_to_reach`'s resolved standing offset; it reaches for the shape
+        directly from wherever it is bolted via a single Cartesian goal, which Giskard's
+        solver resolves through whatever combination of the arm's 7 joints satisfies
+        it -- including, when the shape sits well off to the arm's side rather than
+        roughly ahead of it, configurations that reach the goal correctly but bend the
+        elbow and wrist through an unnecessarily convoluted path to get there. Pre-
+        rotating just the shoulder-pan joint towards the shape first, while the rest of
+        the arm is still in its parked configuration, gives the following Cartesian
+        reach a starting configuration already facing the shape, so it only has to
+        resolve the remaining reach rather than a near-full turn.
+
+        :return: A joint-space motion for the arm's own first joint only.
+        """
+        arm_view = ViewManager.get_arm_view(self.arm, self.robot)
+        base_joint = arm_view.active_connections[0]
+        robot_base_position = self.robot.root.global_transform.to_position()
+        _, _, robot_base_yaw = (
+            self.robot.root.global_transform.to_rotation_matrix().to_rpy()
+        )
+        shape_position = self.montessori_shape.root.global_pose.to_position()
+        heading_to_shape = math.atan2(
+            float(shape_position.y) - float(robot_base_position.y),
+            float(shape_position.x) - float(robot_base_position.x),
+        )
+        target_joint_angle = heading_to_shape - float(robot_base_yaw)
+        target_joint_angle = (target_joint_angle + math.pi) % (2 * math.pi) - math.pi
+        return MoveJointsMotion(
+            names=[base_joint.name.name], positions=[target_joint_angle]
+        )
+
     def _move_to_reach(self, target: Body, target_pose_end_effector: Pose) -> PlanNode:
         """
         Move the robot to a stance, within the free space of a Graph of Convex Sets
@@ -308,7 +356,7 @@ class InsertMontessoriShapeAction(ActionDescription):
     @property
     def _action_plan(self) -> PlanNode:
         hole = self.board.hole_for(self.montessori_shape)
-        offset = self.target_horizontal_offset or Point3(0.0, 0.0, 0.0)
+        offset = Point3(0.0, 0.0, 0.0)
         insertion_pose = self.montessori_shape.insertion_pose_relative_to_hole(
             hole, offset, self.insertion_hover_height
         )
@@ -318,6 +366,7 @@ class InsertMontessoriShapeAction(ActionDescription):
             ApproachDirection.FRONT,
             VerticalAlignment.TOP,
             ViewManager.get_end_effector_view(self.arm, self.robot),
+
         )
 
         # A robot with a mobile base reaches whole-body from an underspecified standing
@@ -364,13 +413,13 @@ class InsertMontessoriShapeAction(ActionDescription):
                 retract_linear_velocity=0.08,
             )
         else:
-            navigate_to_shape = []
+            navigate_to_shape = [self._rotate_base_towards_shape_plan()]
             navigate_to_hole = []
             pick_up_shape = PickUpAction(
                 object_designator=self.montessori_shape.root,
                 arm=self.arm,
                 grasp_description=self.grasp_description,
-                grasp_closing_velocity=0.08,
+                grasp_closing_velocity=0.2,
                 lift_linear_velocity=0.12,
                 grasp_stall_minimum_time=0.3,
                 final_approach_linear_velocity=0.05,
@@ -380,7 +429,7 @@ class InsertMontessoriShapeAction(ActionDescription):
                 object_designator=self.montessori_shape.root,
                 target_location=target_location,
                 arm=self.arm,
-                placing_linear_velocity=0.09,
+                placing_linear_velocity=0.05,
                 transport_linear_velocity=0.08,
                 release_opening_velocity=0.07,
                 # retract_linear_velocity=0.08,
@@ -391,7 +440,10 @@ class InsertMontessoriShapeAction(ActionDescription):
                 ParkArmsAction(Arms.BOTH),
                 *navigate_to_shape,
                 pick_up_shape,
-                ParkArmsAction(Arms.BOTH),
+                ParkArmsAction(
+                   Arms.BOTH,
+                   max_joint_velocity=PARKING_WHILE_HOLDING_MAX_JOINT_VELOCITY,
+                ),
                 *navigate_to_hole,
                 place_shape,
                 ParkArmsAction(Arms.BOTH),
