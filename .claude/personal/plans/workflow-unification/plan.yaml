@@ -993,6 +993,13 @@ items:
       require an install - which is the same question for all three carriers and should be
       answered once here.
 
+      Fourth carrier considered and declined 2026-08-07 by upstream-review-reader: that item
+      needed the same GitHub access and chose gh api graphql, which its Actions context
+      guarantees, rather than adding a fourth hand-rolled client. It is therefore evidence for
+      this item's open question rather than another carrier for it - the install-or-not question
+      only bites the SessionStart-reachable tier, and an Actions-only caller can already assume
+      gh. The three recorded carriers are unchanged.
+
   - id: stack-board-single-site
     branch: null
     title: "PR 4: plans-only Pages site (stack board retired for the native stack map)"
@@ -1979,3 +1986,28 @@ items:
       names the script's path rather than a ${PLAN_ITEM_BOOTSTRAP_SCRIPT} constant, since
       that constant arrives with this item and a variable reference would expand to nothing
       in the window where #135 has landed and this has not.
+
+  - id: upstream-review-reader
+    branch: claude/automate-upstream-reviews-0fte9f
+    title: "Read upstream review threads from a fork via a dispatched Action"
+    pull_request_number: null
+    track: stack-tooling
+    depends_on: [stack-tooling-on-main]
+    status: in_progress
+    session: https://claude.ai/code/session_01MQavvbnknGrFiw6q7ccZaE
+    notes: >
+      User's problem, 2026-08-07: review threads on cram2 reached a session only by the user
+      reading them and retyping them, making them the bottleneck on every review round. Measured
+      rather than assumed: cram2 is public and git-readable from a session, but its REST API and
+      even its HTML are 403 for a session not scoped to it, and GraphQL is refused for every
+      repository including the fork's own ("only the pinned set of PR-review operations is
+      served"). Thread resolved-state exists only in GraphQL, and the user required it, so no
+      script running in a session can produce this report.
+      The read therefore runs as a workflow_dispatch Action on the contributor's own fork, where
+      gh and GITHUB_TOKEN are already present, and the session reads the job log over plain REST
+      (verified: runs, jobs and job-logs endpoints all answer 200). Queue time on this fork
+      measured median 0s and max 0s over the last 14 completed runs, so the round trip is the job
+      itself. Dispatch-only, never scheduled. Portable by construction: upstream comes from
+      stack.toml and the fork owner from the runner context, so no repository is named anywhere;
+      a fresh fork need only enable Actions once. plan-item-resolve gathers the report in its
+      PR-state step, gated on the in-review label.

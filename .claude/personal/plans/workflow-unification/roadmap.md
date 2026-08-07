@@ -4032,3 +4032,81 @@ The fix had to land on #121's head, so it was pushed to
 the same override recorded for #115, #133 into #117, and #143's one line onto #135's branch.
 There is no alternative that resolves #121 itself: a new branch is a new pull request, which
 is precisely what #125 turned out to be.
+
+## Update 2026-08-07 (new item): upstream-review-reader, and a premise that was wrong
+
+The user's complaint was concrete: reading cram2 review threads and retyping them into a
+session is slow, and it makes them the bottleneck on every review round. The question was
+whether anything - phone, GitHub, or Claude - could automate it.
+
+### "cram2 is not readable from the cloud" was false
+
+`stack.toml` and `stack.py` both state this as fact, and `ready-to-promote-upstream-links`
+and the promotion-link design are built on it. It is wrong. cram2 is a **public** repository:
+anonymous `git ls-remote` against it succeeds from a session, and the user's account even
+reports `can_push: true` on it. What is actually true is narrower and different: a session is
+scoped to an allowlist of repositories, and the agent proxy enforces that scope on the GitHub
+API. The upstream is readable; the session is simply not permitted to be the reader. The
+prose was not corrected here - it lives in `stacked-pr-maintenance`, whose tests assert its
+wording - but it should be, and it is flagged rather than folded in.
+
+### What was measured, not assumed
+
+| route | fork | cram2 |
+| --- | --- | --- |
+| `git ls-remote` | yes | yes |
+| REST from Python | 200 | 403, repository not in session scope |
+| github.com HTML | - | 403 |
+| GraphQL | 403 | 403, "only the pinned set of PR-review operations is served" |
+
+The GraphQL refusal is the load-bearing one, and it applies to the fork too, not just to
+cram2. Thread resolved-state is exposed *only* by GraphQL - REST has no such field - and the
+user made resolved-state a hard requirement. The proxy README classifies a 403 as an
+organization policy denial to report rather than route around. So the conclusion was forced:
+no script running inside a session can produce this report, whatever its design.
+
+### Why an Action, and why dispatch-only
+
+The same script runs fine where GraphQL is not blocked. GitHub Actions on the fork start
+with no queue - median 0s, max 0s across the last 14 completed runs, out of 3563 - so the
+round trip is the job itself rather than a wait. The session reads the result over plain
+read-only REST; `runs`, `jobs` and `job-logs` were all confirmed to answer 200. The only
+non-read call in the whole design is the dispatch POST, which starts a job and changes no
+repository content; the user accepted that explicitly after it was put to them as the one
+exception to "no write calls at all".
+
+Dispatch-only, never a cron. That keeps it inside the no-scheduled-checks rule and matches
+what `routine-cutover` wants of every deterministic duty.
+
+### The backend question, answered rather than deferred again
+
+The first draft used a stdlib `urllib` GraphQL client. That would have been the *fourth*
+implementation of the gh-CLI-else-token access rule, after `github-api.sh`, `pr_state` and
+`maintenance.py` - precisely what `dev-tooling-github-api-unification` exists to stop, and
+#139's review had already asked "why not gh?" only for the answer to be deferred to that
+item. So this uses `gh api graphql`: Actions runners ship gh and `GITHUB_TOKEN` authenticates
+it, so the caller adds no backend and needs no secret. This does not resolve that item, but
+it is evidence for its open question - the install-or-not tension only binds the
+SessionStart-reachable tier, and an Actions-only caller can already assume gh.
+
+### Portability
+
+The user required this to work for every cram2 contributor in their own fork, which the
+plan's standing portability rule already demanded. No owner or repository is named anywhere:
+upstream comes from `stack.toml`, the fork owner from `github.repository_owner`, and
+`--upstream` overrides for a checkout whose upstream differs. The one manual step per fork is
+that Actions are disabled by default on a new fork and must be enabled once.
+
+### State
+
+Two commits on `claude/automate-upstream-reviews-0fte9f`; 29 tests, all offline against
+recorded payloads with `gh` stubbed, so CI needs no credentials. A stubbed end-to-end run
+exercised branch resolution, cursor pagination, resolved-filtering and the step summary.
+
+Live dispatch could **not** be verified in this session, and the reason is worth recording:
+`workflow_dispatch` only registers a workflow that exists on the repository's **default**
+branch, so a workflow still on its own feature branch returns 404 on dispatch. Actions are
+enabled on the fork and 15 other workflows are registered, so this is the default-branch rule
+and nothing else. The first real dispatch is only possible once this lands on the fork's
+main, which also means the GraphQL document itself is unexercised against a live schema until
+then - the one residual risk in the change.
