@@ -78,6 +78,25 @@ Deliberately answered differently from what was asked, and left unresolved for
 the user: `GraphQLTransport` became an abstract base class rather than a
 dataclass — it holds no data, it is the interface.
 
+## Review round 2 2026-08-07 (8 comments), applied in `7b2cee5f`
+
+Mostly renames: "transport" named the layer rather than the thing, so
+`GraphQLClient`/`GitHubCommandLineClient`/`.client`; every parser is `from_json`;
+`PayloadKey` is `PullRequestJSONKey`; the report's subject is
+`current_pull_request_reviews` and its fixed lines are a `ReportText` StrEnum.
+
+The one that mattered: the tests still indexed the raw payload with enum keys —
+the exact access path the mirror dataclasses exist to remove. Having built the
+mirror in production and not used it in the tests was the inconsistency.
+`FixtureName.recorded()` reads a fixture through `RepositoryPayload` now, and
+`RepositoryPayload.pull_request_reviews` stops the raw node escaping at all.
+
+Deliberately not converted, flagged for the user: one parser test still states
+its expected values (a line number, a comment identifier, two booleans). A test
+that reads its expectation back through the parser under test compares the
+parser against itself and proves nothing. Everything else compares against the
+recorded thread as a whole, which does check the reader's paging and ordering.
+
 ## Spun out
 
 Draft #147 off `main` carries the AGENTS.md rules the review asked for as a
