@@ -10,7 +10,7 @@ from typing_extensions import Any, Dict, List, Optional
 
 from cram_viz.knowledge.enums import EdgeKind, NodeGroup
 from cram_viz.knowledge.knowledge_base import get_knowledge_base
-from cram_viz.knowledge.presets import get_presets
+from cram_viz.knowledge.presets import Preset, get_presets
 from cram_viz.knowledge.scene_bundle import load_scene
 from cram_viz.knowledge.subgraph import (
     DetailEntry,
@@ -51,7 +51,7 @@ class KnowledgeGraphPayload:
     Detail-panel entry per node id.
     """
 
-    presets: List[Dict[str, str]]
+    presets: List[Preset]
     """
     Ready-made EQL queries for the EQL panel.
     """
@@ -68,7 +68,7 @@ class KnowledgeGraphPayload:
             "details": {
                 node_id: asdict(entry) for node_id, entry in self.details.items()
             },
-            "presets": self.presets,
+            "presets": [asdict(preset) for preset in self.presets],
         }
 
 

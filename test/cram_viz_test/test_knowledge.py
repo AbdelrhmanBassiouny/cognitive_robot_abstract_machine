@@ -257,8 +257,8 @@ class TestPresetSafety:
         scene["segments"][1]["picks"] = "o'brien"
         monkeypatch.setattr(knowledge_base, "load_scene", lambda: (scene, trajectory))
         knowledge.reset_knowledge_base()
-        preset = next(p for p in knowledge.get_presets() if "obj.name" in p["code"])
-        result = knowledge.run_query(preset["code"])
+        preset = next(p for p in knowledge.get_presets() if "obj.name" in p.code)
+        result = knowledge.run_query(preset.code)
         assert result["ok"] and result["rows"][0]["__entity__"] == "o'brien"
 
     def test_an_apostrophe_in_an_episode_name_does_not_break_its_presets(
@@ -273,7 +273,7 @@ class TestPresetSafety:
         monkeypatch.setattr(knowledge_base, "load_scene", lambda: (scene, trajectory))
         knowledge.reset_knowledge_base()
         for preset in knowledge.get_presets():
-            assert knowledge.run_query(preset["code"])["ok"]
+            assert knowledge.run_query(preset.code)["ok"]
 
 
 # %% characterization: graph_payload() structure
@@ -601,6 +601,6 @@ class TestPresetSmoke:
         logged OK/FAIL per preset instead of asserting anything.
         """
         for preset in knowledge.get_presets():
-            result = knowledge.run_query(preset["code"])
-            assert result["ok"], "%s: %s" % (preset["text"], result)
+            result = knowledge.run_query(preset.code)
+            assert result["ok"], "%s: %s" % (preset.text, result)
             assert result["count"] == len(result["rows"])
