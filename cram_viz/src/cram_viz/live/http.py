@@ -45,6 +45,10 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         """
         Capture the bridge before delegating, since the base constructor already
         dispatches the request synchronously.
+
+        :param args: Positional arguments forwarded to the base handler.
+        :param bridge: The bridge this handler serves.
+        :param kwargs: Keyword arguments forwarded to the base handler.
         """
         self.bridge = bridge
         super().__init__(*args, **kwargs)
@@ -52,6 +56,9 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
     def _send_json(self, payload: Dict[str, Any], code: int = 200) -> None:
         """
         Send a JSON payload with the CORS headers the viewer needs.
+
+        :param payload: The JSON-serializable payload to send.
+        :param code: HTTP status code to respond with.
         """
         body = json.dumps(payload).encode()
         self.send_response(code)
@@ -141,6 +148,9 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         """
         Route the per-request access log to debug (15 Hz polling is noisy).
+
+        :param format: ``printf``-style log message format.
+        :param args: Values to interpolate into ``format``.
         """
         logger.debug(format, *args)
 

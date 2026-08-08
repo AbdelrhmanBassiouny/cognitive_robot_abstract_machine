@@ -56,6 +56,11 @@ class LiveHooks:
     ) -> None:
         """
         Run the real tick, then let the bridge observe its result.
+
+        :param original: The real, unpatched ``Executor.tick`` bound method.
+        :param executor: The executor whose tick is being run.
+        :param args: Positional arguments forwarded to the wrapped call.
+        :param kwargs: Keyword arguments forwarded to the wrapped call.
         """
         result = original(executor, *args, **kwargs)
         if self.bridge.world is None:
@@ -73,6 +78,11 @@ class LiveHooks:
     ) -> Any:
         """
         Capture the plan the moment it starts performing.
+
+        :param original: The real, unpatched ``Plan.perform`` bound method.
+        :param plan: The plan starting to perform.
+        :param args: Positional arguments forwarded to the wrapped call.
+        :param kwargs: Keyword arguments forwarded to the wrapped call.
         """
         self.bridge.begin_plan(plan)
         return original(plan, *args, **kwargs)
@@ -86,6 +96,11 @@ class LiveHooks:
     ) -> None:
         """
         Track this executable's motion group and freeze its final status.
+
+        :param original: The real, unpatched ``GiskardExecutable.execute`` bound method.
+        :param executable: The executable whose motion group is tracked.
+        :param args: Positional arguments forwarded to the wrapped call.
+        :param kwargs: Keyword arguments forwarded to the wrapped call.
         """
         self.bridge.bind_motion_group(executable)
         try:
@@ -105,6 +120,11 @@ class LiveHooks:
     ) -> World:
         """
         Remember this mesh's file path before parsing it.
+
+        :param original: The real, unpatched ``MeshParser.parse`` bound method.
+        :param mesh_parser: The parser about to parse the mesh.
+        :param args: Positional arguments forwarded to the wrapped call.
+        :param kwargs: Keyword arguments forwarded to the wrapped call.
         """
         if mesh_parser.file_path:
             self.bridge.remember_mesh_file(mesh_parser.file_path)
