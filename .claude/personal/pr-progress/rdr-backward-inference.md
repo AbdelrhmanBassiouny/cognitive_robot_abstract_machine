@@ -1,81 +1,57 @@
-# rdr-backward-inference (#41) — resolving the `negated`-vs-`Not()` design thread
+# `claude/rdr-guard-conclusion-arch-8htmfu` — GuardCondition / conclusion-selector architecture
 
-This session's designated branch carries no PR of its own; the work is a
-`/plan-item-resolve` on `rdr-refactor` / `rdr-backward-inference`, whose PR is **#41**
-on branch `rdr-backward-inference`. No code has been written on either branch.
+## What this session is
 
-## Plan
+`/plan-item-resolve rdr-refactor rdr-backward-inference` plus a design question:
+should `GuardCondition` move into `rules/conclusion_selector.py`, should the
+selectors move into `rdr/`, or is the current shape fine?
 
-Answer review thread `r3702021144` (`backward_inference.py:64`): should
-`GuardCondition.negated` be replaced by wrapping the guard expression in `Not()`?
-The developer asked for a discussion considering every use of the guard across the
-plan, so the deliverable is a recommendation, not a commit.
+## Findings (2026-08-08)
 
-## Done
+- The item is **not stalled**. #41: open, `draft: false`, `mergeable_state:
+  clean`, 23/23 review threads resolved, CI 20/20 green on head `b224ec2e`.
+  `depends_on: ripple-down-rules-refactor` is `done` (#53). Nothing on #94 about
+  this topic; `roadmap.md` §12 settled `negated`-vs-`Not()` only, never placement.
+- Answer given: **no** to both moves (layering — `conclusion_selector.py` has
+  EQL-core consumers in `factories.py`/`scope.py`/`query_graph.py`;
+  `GuardCondition` has only `rdr/` consumers), **yes** to the open/closed
+  instinct, landed as a strategy family in `rdr/` modelled on `PhraseRule` /
+  `SpecificityRule` + `krrood/patterns/specificity_ranking.py`.
+- Scoping test run (`git ls-tree main -- …`): `backward_inference.py` is not on
+  `main`. Under the recommendation the change touches only files #41 introduces,
+  so it **folds into #41** — this branch must not become a separate PR.
 
-- Verified #41's live state: reparented onto `main` 2026-08-02, `mergeable_state: clean`,
-  CI green 20/20 on head `cbbf7bf3`. The `plan.yaml` note claiming "ready for the steward
-  to merge" was stale — #41 is blocked on this design question.
-- Found the recorded rationale: `backward_inference_design.md` on `rdr-engine`, "Key Design
-  Decisions" #1 — the flag exists to avoid live tree mutation. Re-verified the hazard:
-  `factories.not_` → `_invert_` → `Not(self)` → `base_expressions.py:299`
-  `child._parent_ = self`. Same defect class as `dag-facade-hardening` (#96).
-- Mapped all eight guard use sites. `Not()`-wrapping is cleaner at four of six concrete
-  sites; the flag wins on the structural hazard alone.
-- Established that verbalization does not decide it: `ConditionAssembler.predicate(
-  comparator, *, negated)` is already the `(expression, polarity)` pair, and
-  `NotComparatorRule`/`NotBooleanAttributeRule` render `Not(Comparator)` natively.
-- Replied at `r3702169709` recommending the field be kept, with the expiry condition
-  (`Not()`-wrapping wins once #96 lands a non-mutating negation). Thread left unresolved
-  deliberately — the call is the developer's.
-- `plan.yaml` note + roadmap §12 updated and saved (`569a3552`); dashboard republished.
-- Subscribed to #41 activity. No scheduled check armed, per the standing rule; confirmed
-  no stale triggers are armed (every `send_later` has already fired).
+## Decision and outcome (2026-08-08)
 
-## Resolved (same day)
+Developer chose: **strategy family in `rdr/`**, implemented **now, onto #41**.
 
-The developer resolved the thread without counter-argument and marked #41 ready for review:
-**keep the flag**. They then chose to take all three follow-ups onto #41 now, and to file
-`_materialize` on `dag-facade-hardening`.
+Landed as `19e387a9` on `rdr-backward-inference`:
 
-- Pushed `29c27cca` to `rdr-backward-inference`: the field docstring now carries the
-  reparenting reason, `holds_for`'s comment describes the real mechanism, and the dead
-  `isinstance(OperationResult)` branch plus its import are gone. Two tests added first —
-  `test_guard_expressions_evaluate_to_plain_values_never_operation_results` and
-  `test_guard_condition_holds_for_a_not_wrapped_expression`.
-- Converted #41 back to draft per convention. All 23 threads resolved, `mergeable_state: clean`.
-- **Corrected an earlier claim of mine** on the thread: `evaluate()` does *not* only yield true
-  results. A leaf predicate yields a literal `False` when it fails, so `bool(result)` is
-  load-bearing; "simplifying" to `any(expression.evaluate())` would have made every false leaf
-  guard read as true. Only the `isinstance` branch was dead. Probed, not reasoned.
-- Verified per §8's method: 206 failed / 935 passed on the previous head vs 206 / 937 after —
-  identical failures, +2 exactly the new tests.
-- `scripts/format_docstrings.py` deliberately not run: it rewrites the whole module (125
-  unrelated lines) and regresses `:return: ``True``` to `:return:``True```. Flagged on the
-  thread as deserving its own pass.
-- Filed `non-mutating-negation` on `dag-facade-hardening`, reported at #96 comment 5164248289.
-  Both plans saved (`335b4d76`) and both dashboards republished.
+- New `rdr/branch_semantics.py` — `SelectorBranchSemantics` + one class per
+  selector holding both `sibling_guards` and `branches`; dispatch via
+  `krrood/patterns/specificity_ranking.py`, as `PhraseRule`/`SpecificityRule` do.
+- New `rdr/exceptions.py` — `AmbiguousBranchSemanticsError`.
+- `_leaf_guards` / `_collect_rule_paths` reduced to recursion + lookup;
+  `Not(ConclusionSelector)` stays put (core operator, not selector dispatch).
+- `test_backward_inference.py` dashed dividers → `# %%` per AGENTS.md.
 
-## Closed
+The `Alternative` positive-guard hypothesis was **probed and not confirmed**:
+0/0/0/1 positive calls across four DSL shapes, the 1 being a hand-built
+`Refinement(Alternative(A,B), C)`. Unreachable because `refinement()` anchors on a
+`with`-entered condition while `alternative()`/`next_rule()` anchor on the
+conditions root. No semantics changed; constraint documented on
+`AlternativeBranchSemantics`.
 
-The developer marked #41 ready for review again after the push. **CI green 20/20 on
-`29c27cca`**, including `test_each_lib (krrood)`; `draft: false`, `mergeable_state: clean`,
-23/23 threads resolved. #41 is ready to merge as the stack bottom; the next steward pass
-cascades it forward through #63–#67/#98.
+Verification: `test_eql_rdr` 33 → 45 (existing 33 untouched); the 3 open/closed
+tests mutation-checked; sweep 109 failed/921 passed → 109 failed/933 passed with
+264 failed+errored ids byte-for-byte identical.
 
-CI green is the verification that counts here — this container had no interpreter with the
-project's dependencies, so the local sweep could only show *no new* failures (206 identical
-before and after), never *no* failures.
+`plan.yaml` + `roadmap.md` §15 updated and saved (`c50504f9`).
 
 ## Next
 
-Nothing outstanding. When `non-mutating-negation` (#96) lands, `rdr-refactor` should reopen the
-`GuardCondition.negated` question — the recommendation was explicitly conditional on it.
-
-Environment note for any follow-up in a fresh container: this repo's tests need **python3.12**
-(`make_dataclass(module=...)`), and no interpreter here ships the deps. What worked:
-`python3.12 -m venv --system-site-packages`, install the krrood requirements plus
-`antlr4-python3-runtime==4.9.3` before `omegaconf`, install `random_events` from PyPI (the
-workspace copy's compiled `random_events_lib` is the wrong version), then run with
-`PYTHONPATH=krrood/src` and `--confcutdir=test/krrood_test` to bypass the root conftest's
-`semantic_digital_twin` import.
+- #41 is back in **draft**; developer marks it ready when happy.
+- **CI on `19e387a9` is unwatched** — both `subscribe_pr_activity` tools returned
+  "Could not subscribe to this PR". Needs a manual check.
+- This session's branch `claude/rdr-guard-conclusion-arch-8htmfu` is deliberately
+  unused: the change folded into #41 per the fold-don't-stack rule.
