@@ -79,6 +79,10 @@ def _measurement_line(
     A detail line for a measurement in metres, or nothing when it was not recorded.
 
     Showing a fabricated number would read as a fact about the scene.
+
+    :param label: Label the measurement is shown under.
+    :param value: The recorded measurement in metres, or None if it was not recorded.
+    :param number_format: ``%``-style format applied to ``value``.
     """
     if value is None:
         return []
@@ -88,6 +92,8 @@ def _measurement_line(
 def _count_plan_nodes(tree: Dict[str, Any]) -> int:
     """
     Number of nodes in a serialized plan tree.
+
+    :param tree: The serialized plan tree to count.
     """
     return 1 + sum(_count_plan_nodes(child) for child in tree.get("children", []))
 
@@ -240,6 +246,11 @@ def graph_payload() -> KnowledgeGraphPayload:
         def link(source: str, target: str, label: str) -> None:
             """
             Add an edge, but only if target is actually a node in this view.
+
+            :param source: Id of the edge's source node.
+            :param target: Id of the edge's target node; the edge is dropped if this
+                  node is not in the view.
+            :param label: Label shown on the edge.
             """
             if any(node.id == target for node in view.nodes):
                 view.edges.append(GraphEdge(source, target, EdgeKind.TYPE, label))

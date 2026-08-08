@@ -70,6 +70,8 @@ class SubgraphViewPayload:
 def _class_id(python_class: PythonClass) -> str:
     """
     Graph node id of a scanned class (module-qualified).
+
+    :param python_class: The scanned class to id.
     """
     return python_class.module + "." + python_class.name
 
@@ -77,6 +79,9 @@ def _class_id(python_class: PythonClass) -> str:
 def _class_lines(python_class: PythonClass, drill_hint: bool = True) -> List[str]:
     """
     Detail lines shown for a class node.
+
+    :param python_class: The scanned class to describe.
+    :param drill_hint: Whether to append the "double-click" drill-down hint.
     """
     lines = [
         "a PythonClass",
@@ -102,6 +107,10 @@ def _add_classes(
     """
     Add class nodes plus their on-screen inheritance edges to a view.
 
+    :param view: The subgraph accumulator to add nodes and edges to.
+    :param parent_id: Id of the package/subpackage node the classes belong to.
+    :param shown: The classes actually drawn (already capped).
+    :param total: The total number of classes before capping, for the truncation note.
     :return: Extra detail lines for the parent (a truncation notice, if any).
     """
     name_to_id: Dict[str, str] = {}
@@ -148,6 +157,9 @@ class ArchitectureViews:
     ) -> SubgraphViewPayload:
         """
         Inside view of a package: its subpackages and top-level classes.
+
+        :param knowledge_base: The knowledge base the package's entities are read from.
+        :param package: The package to render.
         """
         view = SubgraphAccumulator()
         subpackages = [
@@ -203,6 +215,10 @@ class ArchitectureViews:
     ) -> SubgraphViewPayload:
         """
         Inside view of a subpackage: its classes with inheritance edges.
+
+        :param knowledge_base: The knowledge base the subpackage's classes are read
+            from.
+        :param subpackage: The subpackage to render.
         """
         view = SubgraphAccumulator()
         classes = sorted(
@@ -238,6 +254,10 @@ class ArchitectureViews:
     ) -> SubgraphViewPayload:
         """
         Inheritance view of one class: bases above, repo subclasses below.
+
+        :param knowledge_base: The knowledge base the class's bases/subclasses are read
+            from.
+        :param python_class: The class to render.
         """
         view = SubgraphAccumulator()
         class_id = _class_id(python_class)

@@ -94,6 +94,8 @@ def view_payload(name: str) -> Union[ViewPayload, UnknownViewPayload]:
     ``knowledge`` is the entity graph (the default, with drill-down); the others are
     structural views of the same demo that the UI can overlay with live status from the
     bridge (see :mod:`cram_viz.live.http`, ``/plan`` and ``/chart``).
+
+    :param name: Name of the requested tab.
     """
     kb = get_knowledge_base()
     if name == "knowledge":
@@ -117,6 +119,8 @@ def _chart_view() -> ChartViewPayload:
 def expand_node(node_id: str) -> Optional[ViewPayload]:
     """
     The inside view of a double-clicked node, or None if not drillable.
+
+    :param node_id: Id of the double-clicked node.
     """
     kb = get_knowledge_base()
     if node_id == kb.robot.name:  # robot → full URDF kinematic tree

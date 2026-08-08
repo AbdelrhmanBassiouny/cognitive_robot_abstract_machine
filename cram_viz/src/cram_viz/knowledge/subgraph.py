@@ -169,6 +169,12 @@ class SubgraphAccumulator:
     ) -> None:
         """
         Append one graph node and its detail-panel entry.
+
+        :param node_id: Id of the node to add.
+        :param label: Display label of the node, also used as the detail entry's label.
+        :param group: Colour group the node and its detail entry belong to.
+        :param lines: Detail-panel lines shown under the node's label.
+        :param status: Status colouring for the node, if any.
         """
         title = "\n".join([label] + lines)
         self.nodes.append(GraphNode(node_id, label, group, title, status=status))

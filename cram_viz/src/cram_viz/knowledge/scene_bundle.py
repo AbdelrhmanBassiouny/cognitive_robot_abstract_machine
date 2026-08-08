@@ -98,6 +98,8 @@ def _read_json(path: Path) -> Any:
 
     Scene bundles and the scan cache are generated artifacts that a failed run can leave
     half-written; the viewer degrades instead of refusing to start.
+
+    :param path: Path of the JSON file to read.
     """
     try:
         return json.loads(path.read_text(encoding="utf-8", errors="replace"))

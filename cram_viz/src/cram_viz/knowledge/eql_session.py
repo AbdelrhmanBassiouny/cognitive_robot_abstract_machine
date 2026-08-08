@@ -168,6 +168,8 @@ def fresh_namespace() -> Dict[str, Any]:
 def _entity_name(value: Any) -> Optional[str]:
     """
     The entity's name attribute, or None for non-entities.
+
+    :param value: The value to check for a name attribute.
     """
     return str(value.name) if isinstance(value, NamesAnEntity) else None
 
@@ -175,6 +177,8 @@ def _entity_name(value: Any) -> Optional[str]:
 def _jsonable(value: Any) -> Any:
     """
     A JSON-serializable rendering of one query result value.
+
+    :param value: The raw query result value to render.
     """
     if is_dataclass(value) and not isinstance(value, type):
         return _entity_name(value) or repr(value)
@@ -228,6 +232,9 @@ def run_query(code: str, limit: int = 200) -> RenderResult:
 def _result_rows(result: Any, limit: int) -> _RenderedRows:
     """
     Render a query result into answer rows.
+
+    :param result: The evaluated query result to render.
+    :param limit: Maximum number of result rows to return.
     """
     rows: List[Dict[str, Any]] = []
     highlight: List[str] = []
@@ -254,6 +261,9 @@ def _result_rows(result: Any, limit: int) -> _RenderedRows:
 def _entity_row(item: Any, highlight: List[str]) -> Dict[str, Any]:
     """
     One entity as an answer row; collects the ids to highlight.
+
+    :param item: The entity to render as a row.
+    :param highlight: Output list entity/package ids to highlight are appended to.
     """
     name = _entity_name(item)
     if name:
@@ -272,6 +282,9 @@ def _entity_row(item: Any, highlight: List[str]) -> Dict[str, Any]:
 def _item_row(item: Any, highlight: List[str]) -> Dict[str, Any]:
     """
     One arbitrary query result item as an answer row.
+
+    :param item: The query result item to render as a row.
+    :param highlight: Output list entity ids to highlight are appended to.
     """
     if is_dataclass(item) and not isinstance(item, type):
         return _entity_row(item, highlight)

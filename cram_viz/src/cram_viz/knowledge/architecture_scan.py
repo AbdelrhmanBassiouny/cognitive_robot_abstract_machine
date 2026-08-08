@@ -131,6 +131,8 @@ class ArchitectureScanner:
     def _first_readme_line(self, directory: str) -> str:
         """
         The first non-empty line of a directory's README, or ``''``.
+
+        :param directory: The directory to look for a README in.
         """
         for name in ("README.md", "readme.md"):
             readme_path = Path(directory) / name
@@ -229,6 +231,14 @@ class ArchitectureScanner:
     ) -> None:
         """
         Collect class definitions and cross-package imports from one module.
+
+        :param tree: Parsed AST of the module.
+        :param package: Name of the package the module belongs to.
+        :param module: Dotted module path, used to qualify collected classes.
+        :param package_names: Every known top-level package name, to recognize imports.
+        :param classes: Output list class dicts are appended to.
+        :param imports: Output mapping package name to the set of packages it imports;
+            updated in place.
         """
         for node in ast.walk(tree):
             if isinstance(node, ast.ClassDef):
@@ -273,6 +283,10 @@ class ArchitectureScanner:
 
         A cache written for another repository root is not trusted (unless no repository
         exists at all, in which case any cache beats nothing).
+
+        :param cram_root: The current CRAM repository root, for the cache's origin
+            check.
+        :param require_classes: Whether a cache with no classes should be rejected.
         """
         cache_path = Path(self._architecture_cache())
         if not cache_path.is_file():
@@ -340,6 +354,9 @@ class ArchitectureScanner:
 
         ``coraplex.src.coraplex.plans.designator`` → ``coraplex.plans``; top-level
         modules collapse onto the package itself.
+
+        :param package: Name of the module's top-level package.
+        :param module: Dotted module path.
         """
         segments = module.split(".")
         if segments and segments[0] == package:
@@ -356,6 +373,10 @@ class ArchitectureScanner:
     ) -> ArchitectureScan:
         """
         The raw scan's dicts/tuples, converted into real entities.
+
+        :param packages: Raw scanned packages, as plain dicts.
+        :param classes: Raw scanned classes, as plain dicts.
+        :param dependency_edges: Raw scanned package-to-package import edges.
         """
         return ArchitectureScan(
             packages=[Package(**entry) for entry in packages],
