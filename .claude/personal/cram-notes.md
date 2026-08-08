@@ -49,6 +49,22 @@ file itself must never be merged into `main`.
   action, do not resolve it — reply explaining the situation and asking the
   question.
 - Always reply to a PR comment explaining what you did before resolving it.
+  **Resolving a thread without an inline reply on that thread is forbidden.**
+  Reply first, resolve second, one thread at a time.
+- A summary comment on the pull request is never a substitute for the inline
+  replies. Post one if it helps a reader see the round as a whole, but the
+  thread itself still gets its own reply saying what changed and in which
+  commit — that is where the reviewer is reading, and an unanswered thread
+  marked resolved reads as the comment having been dismissed.
+- Before resolving, re-check the thread's ask against the *current* file, not
+  against what the round intended to do. GitHub shows an outdated diff snippet
+  on an old thread, so neither of us is looking at live code there; a resolve
+  claims the work is done, so verify it is. When a comment has several parts
+  (for example "don't repeat the keys *and* the access path"), check each part
+  separately — the usual failure is doing one and resolving as though both.
+- Never resolve a thread whose ask was answered differently from what it asked,
+  even when the alternative is better. Reply with the reasoning and leave it
+  open for me to close.
 
 ## Before starting work
 
