@@ -46,6 +46,7 @@ class BodyExtent:
         :attr:`ShapeCollection.scale`, which measures any shape type from its bounding
         box rather than relying on a shape-specific scale attribute.
 
+        :param body: The body to measure.
         :return: The extent, or None when both collections are empty.
         """
         for shape_collection in (body.visual, body.collision):
@@ -58,6 +59,8 @@ class BodyExtent:
     def rounded(self, precision: int) -> List[float]:
         """
         The extent as ``[x, y, z]``, rounded for publication.
+
+        :param precision: Number of decimal places to round each axis to.
         """
         return [
             round(self.x, precision),
