@@ -177,7 +177,16 @@ items:
     all 23 threads resolved. CI passing is the stronger verification here -- the resolve session''s
     own container lacked the dependency set entirely (206 environment failures, identical before and
     after), whereas CI runs the real one. Nothing outstanding: #41 is ready to merge as the stack
-    bottom, and the next steward pass should cascade it forward through #63-#67/#98.'
+    bottom, and the next steward pass should cascade it forward through #63-#67/#98.
+    2026-08-08: superseding the "ready to merge" claim above -- the developer has continued the
+    work themselves since. Head moved 29c27cca -> 19e387a9 (7 further commits, 57 -> 64), the base
+    was restacked onto a newer main (0626bdce), the diff grew from 7 files/+1,357 to 11 files/
+    +1,945/-2, the description gained a "Promote" section with a cram2 upstream compare link, and
+    the PR is draft again. mergeable_state: unstable reflects CI still in progress on the new head
+    (17 jobs running, 3 green), not a failure. None of those commits are this session''s; its work
+    ended when the developer marked #41 ready on 2026-08-03. Whoever picks this up next should read
+    the current head rather than trusting the 2026-08-03 verification above, which describes
+    29c27cca.'
 - id: D-core-aid
   title: 'RDR engine: ConclusionAid (expert-labelling assistance)'
   branch: D-core-aid
