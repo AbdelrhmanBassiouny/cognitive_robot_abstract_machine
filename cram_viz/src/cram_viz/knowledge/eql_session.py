@@ -34,7 +34,7 @@ from cram_viz.knowledge.knowledge_base import get_knowledge_base
 
 
 @dataclass
-class QueryResult:
+class RenderResult:
     """
     The rendered result of one EQL query.
     """
@@ -86,7 +86,7 @@ class QueryResult:
 @dataclass
 class _RenderedRows:
     """
-    A query result rendered into answer rows, before it is wrapped as a QueryResult.
+    A query result rendered into answer rows, before it is wrapped as a RenderResult.
     """
 
     rows: List[Dict[str, Any]]
@@ -185,7 +185,7 @@ def _jsonable(value: Any) -> Any:
     return repr(value)
 
 
-def run_query(code: str, limit: int = 200) -> QueryResult:
+def run_query(code: str, limit: int = 200) -> RenderResult:
     """
     Execute an EQL query string and return its rendered result.
 
@@ -215,7 +215,7 @@ def run_query(code: str, limit: int = 200) -> QueryResult:
     kind = (
         "rows" if rendered.rows and "__entity__" not in rendered.rows[0] else "entities"
     )
-    return QueryResult(
+    return RenderResult(
         ok=True,
         kind=kind,
         rows=rendered.rows,
