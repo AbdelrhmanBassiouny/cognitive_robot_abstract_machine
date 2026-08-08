@@ -279,9 +279,32 @@ the question left open in round 2: the user reads the no-examples instruction as
 covering it. The section now carries no examples at all, and the only backticked
 text left is the bound identifiers.
 
+## #147 handed over 2026-08-08T21:12Z
+
+The user marked #147 ready for review themselves, which ends this session's job on
+it. Unsubscribed; nothing was armed for it (this session created no triggers, and
+every trigger on the account is an already-fired `run_once_fired` from July
+sessions referencing other pull requests). State at handover: head `4cb02456`,
++25/−4 in one file, mergeable, no labels, five review threads open — every one
+answered, none needing action. One red check, `test_each_lib (robokudo)`, which is
+the `gitlab.informatik.uni-bremen.de` outage rather than the diff; left alone
+deliberately rather than re-run, since the job is done.
+
+## Review round 7 on #146 (1 comment), applied in `bf8040d0`
+
+`models_read_from_one_object` and its test removed on the user's instruction. The
+lesson is about the round before it: I had answered "this list is not open-closed"
+by deriving the list, when the better answer was that the guarantee was already
+made by the abstract base and neither the list nor the derivation needed to exist.
+Answering the objection as posed can still leave the wrong thing in place. 34
+tests, was 35.
+
 ## Next
 
-- #146 and #147 both draft, both waiting on the user. Threads on #146 that stay
+- #146 draft, waiting on the user. #147 is handed over — do not touch it.
+- #146 carries one red `test_each_lib (robokudo)` from the same GitLab outage. A
+  re-run was refused with `403 This workflow is already running` while sibling
+  jobs were in flight; it still needs firing once the run completes. Threads on #146 that stay
   open by design: the `GraphQLClient`-as-ABC answer, the mirror-dataclasses one
   the user flagged, the naming one, and all three of round 5. On #147, both of
   round 2 stay open — one asks the user to check which examples count.
