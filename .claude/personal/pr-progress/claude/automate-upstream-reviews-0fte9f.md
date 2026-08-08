@@ -187,10 +187,35 @@ to perform and only earns its place where the plain word would be wrong. They
 open the section rather than joining the list; everything below them is a
 specific case of one or the other. +24/−4.
 
+## Review round 5 2026-08-08 (3 comments), applied in `1012cce6`
+
+All three landed on the `JSONItemList` introduced the round before, and following
+the third one through deleted the class the other two were complaining about. The
+reviewer asked to fold `parsed_into` into `from_json` so one call does the read;
+once folded, `items` had nothing to carry between calls, so no class was left. The
+read is a method on `PullRequestJSONKey` now — `PullRequestJSONKey.COMMENTS
+.read_list(data, ThreadComment)` — which also answers the other two by
+construction: the scope comes from where the method lives rather than from a name
+trying to carry it, and the key names the entries at every call site. `nodes`
+unwrapping went from two places to one; `ReviewThreadPage.from_json` takes the
+`pullRequest` node so it reads through the same key. −70/+31, 33 tests, both halves
+mutation-checked. Left unresolved: it answers the ask differently (delete the
+wrapper rather than give it `from_json(data, model)`).
+
+Worth carrying, and now a rule on #147 (`bfe28fbf`): **when no honest specific
+name exists, suspect the code rather than your vocabulary.** "There isn't a more
+specific name than `items`" was a true statement about a container that genuinely
+had no single subject, and the fix was removing it rather than hunting for a
+better word. Also worth noting the prototype-first rule paid again — the shape
+only became visible by writing it.
+
+`scripts/format_docstrings.py` cannot run in this environment (no `tqdm`, no
+`docformatter`); `black` alone was run and left the file unchanged.
+
 ## Next
 
-- #146 and #147 both draft, both waiting on the user. Three threads on #146 stay
+- #146 and #147 both draft, both waiting on the user. Threads on #146 that stay
   open by design: the `GraphQLClient`-as-ABC answer, the mirror-dataclasses one
-  the user flagged, and the naming one now that its rules have landed on #147.
+  the user flagged, the naming one, and all three of round 5.
 - Live dispatch is still blocked until #146 merges — `workflow_dispatch` only
   registers a workflow present on the default branch.
