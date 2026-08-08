@@ -267,6 +267,18 @@ unset expands to `cp file /orig.py`, which *succeeds* as root, so the `||` fallb
 never ran and a later restore brought back a pre-rename snapshot. Use an absolute
 scratch path, and check `git diff --stat` after any restore.
 
+## Review on #147 round 3 (3 comments), applied in `4cb02456`
+
+All three were the minimize-jargon rule turned back on the file that states it,
+which is the part worth carrying: **a rules document is the first place its own
+rules should be applied, and it is the last place anyone thinks to check.**
+"Umbrella word" became "generic word" and "stutter" became two plain clauses —
+both were figures of speech a reader has to decode, three lines below a bullet
+forbidding exactly that. The umbrella bullet's word list went too, which settles
+the question left open in round 2: the user reads the no-examples instruction as
+covering it. The section now carries no examples at all, and the only backticked
+text left is the bound identifiers.
+
 ## Next
 
 - #146 and #147 both draft, both waiting on the user. Threads on #146 that stay
