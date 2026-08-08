@@ -212,10 +212,43 @@ only became visible by writing it.
 `scripts/format_docstrings.py` cannot run in this environment (no `tqdm`, no
 `docformatter`); `black` alone was run and left the file unchanged.
 
+## Review on #147 round 2 (2 comments), applied in `f250275f` and #146's `3aaa7f0a`
+
+Both were about the rules file and both improved it.
+
+**Formalize a shared name.** "One operation, one name" was advice held by
+discipline; the reviewer asked for a mixin or protocol that makes the method name
+a requirement. The rule says so now, and it was applied to the code that produced
+it in the same round rather than written and not taken: `read_list` was calling
+`from_json` on an unbound `TypeVar`, so `JSONMirror(ABC)` declares it and
+`ParsedItem` is bound to it. Chose the base class over a `Protocol` on a measured
+ground — nothing type-checks `.claude/` in CI, so a `Protocol` documents without
+enforcing, while the ABC makes a mirror missing the reader unbuildable. Note this
+is the *opposite* of the `UpstreamReviewError` finding: `ABC` fails to enforce on
+exceptions because `BaseException.__new__` bypasses the check, and enforces
+normally on ordinary classes. Mutation-proved rather than assumed. 35 tests, was
+33. Two models stay outside the contract with the reason in the base docstring;
+formalizing the name is also what exposed that `GraphQLResponse.from_json` parses
+text rather than an object, so it is arguably misnamed under the very rule —
+flagged, not renamed.
+
+**Remove the examples.** Every `X, not Y` pair read as a verdict on `Y`, when `Y`
+was only wrong in the design it came from. Took the removal option; the rules
+stand alone. Worth carrying: **an example in a rules file is a dependency on code
+that will move.** One removed pair already named `JSONItemList`/`items` as good
+practice, and that class had been deleted an hour later by the next review round —
+so the file was wrong within a day of being written. Two kinds of backticked text
+were kept and the judgment stated on the thread rather than made silently: the
+umbrella-word list (the rule's content) and the bound identifiers (facts about the
+language, not judgments about a design).
+
 ## Next
 
 - #146 and #147 both draft, both waiting on the user. Threads on #146 that stay
   open by design: the `GraphQLClient`-as-ABC answer, the mirror-dataclasses one
-  the user flagged, the naming one, and all three of round 5.
+  the user flagged, the naming one, and all three of round 5. On #147, both of
+  round 2 stay open — one asks the user to check which examples count.
 - Live dispatch is still blocked until #146 merges — `workflow_dispatch` only
   registers a workflow present on the default branch.
+- `scripts/format_docstrings.py` cannot run in this environment (no `tqdm`, no
+  `docformatter`), so only `black` has been applied to the recent commits.
