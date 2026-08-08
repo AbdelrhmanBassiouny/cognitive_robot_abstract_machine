@@ -177,16 +177,32 @@ items:
     all 23 threads resolved. CI passing is the stronger verification here -- the resolve session''s
     own container lacked the dependency set entirely (206 environment failures, identical before and
     after), whereas CI runs the real one. Nothing outstanding: #41 is ready to merge as the stack
-    bottom, and the next steward pass should cascade it forward through #63-#67/#98.
-    2026-08-08: superseding the "ready to merge" claim above -- the developer has continued the
-    work themselves since. Head moved 29c27cca -> 19e387a9 (7 further commits, 57 -> 64), the base
-    was restacked onto a newer main (0626bdce), the diff grew from 7 files/+1,357 to 11 files/
-    +1,945/-2, the description gained a "Promote" section with a cram2 upstream compare link, and
-    the PR is draft again. mergeable_state: unstable reflects CI still in progress on the new head
-    (17 jobs running, 3 green), not a failure. None of those commits are this session''s; its work
-    ended when the developer marked #41 ready on 2026-08-03. Whoever picks this up next should read
-    the current head rather than trusting the 2026-08-03 verification above, which describes
-    29c27cca.'
+    bottom, and the next steward pass should cascade it forward through #63-#67/#98. 2026-08-08:
+    reopened by the developer as a design question -- should GuardCondition move into
+    rules/conclusion_selector.py, should the selectors move into rdr/, or is the isinstance dispatch
+    in _leaf_guards/_collect_rule_paths fine as a closed set? Answered: neither move (conclusion_selector.py
+    has EQL-core consumers in factories.py/scope.py/query_graph.py, so moving the selectors inverts the
+    layering; GuardCondition has only rdr/ consumers, so moving it does the same in miniature), but the
+    open/closed instinct was right for a reason other than extensibility -- ConclusionSelector already
+    makes the insertion side polymorphic (_get_current_context_condition, _create_between_two_expressions)
+    while traversal was an isinstance ladder over the same three classes, and one per-selector rule set
+    lived in two functions with nothing forcing them to change together. Landed as rdr/branch_semantics.py
+    (SelectorBranchSemantics, one class per selector holding both sibling_guards and branches), dispatching
+    through krrood/patterns/specificity_ranking.py -- the same primitives behind the grammar PhraseRule
+    registry and the SpecificityRule families -- plus a new rdr/exceptions.py for
+    AmbiguousBranchSemanticsError. Behaviour unchanged: the 33 existing tests pass untouched, 12 new ones
+    added (33 -> 45), and the test_eql + test_eql_rdr sweep went 109 failed/921 passed -> 109 failed/933
+    passed with the 264 failed+errored ids byte-for-byte identical. A suspected soundness bug was probed
+    and NOT confirmed: _leaf_guards(Alternative, negated=False) returns both sides into a conjunctive
+    SufficientConditionSet, but instrumenting four DSL-built shapes recorded 0 positive-Alternative calls
+    (only a hand-built Refinement(Alternative(A,B), C) triggers it), because refinement() anchors on a
+    with-entered condition while alternative()/next_rule() anchor on the conditions root -- so an
+    Alternative always sits above a refinement, never as its left child. No semantics changed; the
+    constraint is now documented on AlternativeBranchSemantics. Pushed as 19e387a9 and converted back to
+    draft per the always-drafts-until-ready convention. Scoping note: the change touches only files #41
+    introduces, so per the fold-don''t-stack rule it went onto #41 rather than becoming a separate PR from
+    the session branch claude/rdr-guard-conclusion-arch-8htmfu. Neither subscribe_pr_activity tool could
+    subscribe this session to #41, so its CI result is unwatched -- check it manually.'
 - id: D-core-aid
   title: 'RDR engine: ConclusionAid (expert-labelling assistance)'
   branch: D-core-aid

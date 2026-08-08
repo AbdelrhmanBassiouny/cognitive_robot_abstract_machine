@@ -977,3 +977,103 @@ change is a small addition. That churn was reverted in those two files and the f
 kept in the files this commit substantially rewrites. No `:return:`-space regression appeared this
 time. The tool still deserves its own pass across the package, as §12 already concluded for
 `backward_inference.py`.
+
+## 15. Addendum (2026-08-08) — `rdr-backward-inference` (#41): where the selector branching logic belongs
+
+§12 closed this item twice as "ready to merge". The developer reopened it as a *design*
+question rather than a defect, and the answer is worth recording because the reasoning
+generalises past this PR.
+
+### The question
+
+Should `GuardCondition` move into `rules/conclusion_selector.py`; should the conclusion
+selectors move into `rdr/` beside it; or are `_leaf_guards` / `_collect_rule_paths` fine
+as they are, since the selectors are a closed set of branching logic?
+
+### Neither move — the layering decides it both ways
+
+- **Selectors into `rdr/`**: `rules/conclusion_selector.py` is on `main` with EQL-core
+  consumers that have nothing to do with RDR — `factories.py:562,575,588` (the public
+  `refinement()` / `alternative()` / `next_rule()` DSL), `scope.py:121-123`,
+  `query_graph.py:312`. They are EQL operators by inheritance too
+  (`Refinement(LogicalBinaryOperator)`, `Alternative(OR)`, `Next(EQLUnion)`). The move
+  points the DSL front door at the RDR subpackage.
+- **`GuardCondition` into `rules/`**: the same error smaller. It is a backward-chaining
+  concept — a leaf predicate plus the polarity under which a path was taken — and every
+  consumer is in `rdr/` (`backward_inference.py`, `condition_resolver.py`, `%knows`).
+  Nothing in forward evaluation needs it. YAGNI until a non-RDR consumer exists.
+
+### "Closed set, leave it" was half right, and extensibility was the weaker argument
+
+Refinement / alternative / next is RDR's fixed branch vocabulary, and neither Track G nor
+Wave 2 obviously adds a selector — so the open/closed case does not rest on a fourth
+selector arriving. Two other things were wrong:
+
+1. **The code disagreed with itself.** `ConclusionSelector` already makes the *insertion*
+   side polymorphic (`_get_current_context_condition`, `_create_between_two_expressions`
+   are abstract per-selector classmethods, deliberately not an `isinstance` ladder in
+   `factories.py`). The *traversal* side was an `isinstance` ladder over the same classes.
+2. **One rule set lived in two functions.** `_leaf_guards` and `_collect_rule_paths` are
+   not duplicated code, but they are two facets of one per-selector semantics, with
+   nothing forcing them to change together.
+
+### What landed (`19e387a9`)
+
+`rdr/branch_semantics.py`: `SelectorBranchSemantics`, one concrete class per selector
+holding **both** halves — `sibling_guards` (decompose as a competing sibling branch) and
+`branches` (children to descend into, with their entry guards). Dispatch reuses
+`krrood/patterns/specificity_ranking.py` (`concrete_subclasses`, `mro_depth`,
+`sole_maximum`), the same primitives behind the grammar's `PhraseRule` registry and its
+`SpecificityRule` families — so this is the repo's existing answer to per-node-type
+behaviour owned by a *consuming* layer, not a new mechanism. Equally specific candidates
+raise `AmbiguousBranchSemanticsError` (new `rdr/exceptions.py`) rather than resolving by
+declaration order.
+
+The `Not(ConclusionSelector)` De Morgan pushdown deliberately stayed in `_leaf_guards` —
+it is a core-operator case, not selector dispatch. One incidental find: `_leaf_guards`'
+`Alternative` branch had an `if negated:` whose two arms were byte-identical.
+
+### A hypothesis that did not survive the probe
+
+The plan flagged a suspected soundness bug: `_leaf_guards(Alternative(A, B),
+negated=False)` returns `[A, B]`, and `SufficientConditionSet` **conjoins**, so a positive
+`Alternative` guard would read `A AND B` where the semantics is `A OR B`.
+
+Instrumenting `_leaf_guards` across four DSL-built shapes recorded positive-Alternative
+calls of **0, 0, 0, 1** — only a hand-built `Refinement(Alternative(A,B), C)` triggers it.
+The reason is structural: `refinement()` anchors on a `with`-entered condition while
+`alternative()` / `next_rule()` anchor on the conditions root, so an `Alternative` is
+always spliced *above* a refinement, never as its left child.
+
+So: unreachable, no semantics changed, and the constraint is now stated on
+`AlternativeBranchSemantics` instead of being implicit. This is §12's measure-don't-reason
+lesson applying in the other direction — there the probe *disproved* a claimed
+simplification, here it disproved a claimed bug. Both times the instrumented run, not the
+reading, was the evidence.
+
+### Verification
+
+`test_eql_rdr` 33 → 45, the 33 existing ones untouched. The 3 open/closed and specificity
+tests were mutation-checked (pointing the test semantics at a different selector makes
+exactly those 3 fail, falling back to `AlternativeBranchSemantics`), so they are not
+vacuous. Sweep over `test_eql` + `test_eql_rdr` against this branch's previous head in the
+same container: **109 failed / 921 passed → 109 failed / 933 passed**, 264 failed+errored
+ids byte-for-byte identical, +12 exactly the new tests. Per §12's standing note, CI is
+still the load-bearing check.
+
+### Two things carried forward
+
+- **`rdr/exceptions.py` now exists here.** §6 plans a module at that path for the `D-core`
+  split; that is an additive merge, not a conflict, but whoever lands it should know.
+- **This session could not subscribe to #41.** Both `subscribe_pr_activity` tools returned
+  "Could not subscribe to this PR", so the post-push CI result is unwatched — unlike every
+  earlier round on this item. Check it by hand.
+
+### Scoping, applied rather than assumed
+
+`git ls-tree main -- .../rdr/backward_inference.py` is empty; `conclusion_selector.py`
+exists. The change as landed touches only files #41 introduces, and nothing in it stands
+alone without #41 — so it folded into #41 rather than becoming a separate PR from the
+session's own branch (`claude/rdr-guard-conclusion-arch-8htmfu`, which stays unused). #41
+went back to draft per the always-drafts-until-ready convention, for the third time on
+this PR, which the developer chose knowingly.
