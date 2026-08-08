@@ -97,6 +97,24 @@ that reads its expectation back through the parser under test compares the
 parser against itself and proves nothing. Everything else compares against the
 recorded thread as a whole, which does check the reader's paging and ordering.
 
+## Review round 3 2026-08-07 (4 comments), applied in `27b9bb3b`
+
+`RepositoryPayload` is `RepositoryJSON` holding `data`; the word "payload" is
+gone from the module; the two single-use expectations are inlined at their
+assertions.
+
+The one worth carrying: a blind `payload` → `data` substitution renamed
+`GraphQLResponse.payload()` to `data()`, which the dataclass field of the same
+name shadows — the client then called a dict and four tests failed with
+`TypeError: 'dict' object is not callable`. It is `result()` now. A mechanical
+rename across a file is exactly where a method and a field silently converge,
+and without the transport tests this would have shipped as a runtime failure on
+the first live run rather than anything a parse or import would catch. Also
+swept the docstrings the substitution passed through ("the ``data`` data").
+
+Whole `.claude/` suite is green at 371 — the two `test_check_setup_sh.py`
+failures recorded above as pre-existing/environmental have since cleared.
+
 ## Spun out
 
 Draft #147 off `main` carries the AGENTS.md rules the review asked for as a
