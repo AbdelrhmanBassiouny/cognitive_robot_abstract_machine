@@ -26,6 +26,8 @@ from cram_viz.knowledge.scene_bundle import load_scene
 def _side_of_name(name: str) -> Optional[ArmSide]:
     """
     Body side encoded in a part/link name, or None when it names neither.
+
+    :param name: The part or link name to inspect.
     """
     lowered = name.lower()
     if "left" in lowered or lowered.startswith("l_"):
@@ -77,6 +79,8 @@ class EpisodeKnowledgeBase:
     def _build_objects(scene: Dict[str, Any]) -> List[BenchObject]:
         """
         Scene objects (spawn poses recorded at frame 0) plus the place area.
+
+        :param scene: The active scene bundle's ``scene.json`` content.
         """
         objects = []
         for entry in scene.get("objects") or []:
@@ -117,6 +121,10 @@ class EpisodeKnowledgeBase:
 
         Gripper keywords take precedence — robot names can contain 'arm' themselves, so
         'arm' alone must not decide.
+
+        :param parts: Robot part names to link names, from the recorded robot
+            annotation.
+        :param robot_name: Name of the recorded robot, used to build each :class:`Arm`.
         """
         gripper_parts = [
             part
@@ -150,12 +158,20 @@ class EpisodeKnowledgeBase:
     ) -> List[ActionEpisode]:
         """
         Action episodes from the recorded plan segments.
+
+        :param scene: The active scene bundle's ``scene.json`` content.
+        :param frames_per_second: The recording's frame rate, for episode durations.
+        :param objects_by_id: Scene objects keyed by their id, for picked/placed
+            lookups.
+        :param place_area: The scene's place-area object, if any.
         """
 
         def arm_for(segment: Dict[str, Any]) -> Optional[Arm]:
             """
             The arm matching the segment's recorded side hint, falling back to the first
             arm if the segment picks something but names no side.
+
+            :param segment: The recorded plan segment to match an arm to.
             """
             hint = (segment.get("arm") or "").lower()
             for arm in self.arms:
@@ -189,6 +205,11 @@ class EpisodeKnowledgeBase:
     ) -> List[JointMotion]:
         """
         Per-joint motion statistics over the whole recorded trajectory.
+
+        :param trajectory: The active scene bundle's ``trajectory.json`` content.
+        :param parts: Robot part names to link names, from the recorded robot
+            annotation.
+        :param robot_prefix: World-name prefix of the recorded robot's own joints.
         """
         minimum: Dict[str, float] = {}
         maximum: Dict[str, float] = {}
@@ -205,6 +226,8 @@ class EpisodeKnowledgeBase:
             """
             Which arm side a prefixed joint key belongs to, or ``ENVIRONMENT``/``BODY``
             when it isn't part of an arm.
+
+            :param key: The prefixed joint key to classify.
             """
             prefix, _, joint_name = key.partition("/")
             if "/" not in key:
@@ -231,6 +254,8 @@ class EpisodeKnowledgeBase:
     def _build_subpackages(classes: List[PythonClass]) -> List[SubPackage]:
         """
         Subpackage entities aggregated from the scanned classes.
+
+        :param classes: The scanned Python classes to aggregate subpackages from.
         """
         modules = defaultdict(set)
         class_counts = defaultdict(int)

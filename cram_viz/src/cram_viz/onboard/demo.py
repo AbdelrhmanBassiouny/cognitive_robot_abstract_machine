@@ -175,6 +175,8 @@ class HasAnEndEffector(Protocol):
 def log(*parts: object) -> None:
     """
     Emit a progress line prefixed with the elapsed recording time.
+
+    :param parts: Values joined by a space to form the log message.
     """
     logger.info(
         "[%6.1fs] %s",
@@ -279,6 +281,11 @@ class Recorder:
     ) -> str:
         """
         Resolve as usual, but remember the uri -> path mapping.
+
+        :param original: The real, unpatched ``PackageUriResolver.resolve`` bound
+            method.
+        :param resolver: The resolver resolving the URI.
+        :param uri: The ``package://`` URI being resolved.
         """
         resolved = original(resolver, uri)
         self.resolutions[uri] = resolved
@@ -293,6 +300,11 @@ class Recorder:
     ) -> URDFParser:
         """
         Parse as usual, but remember this URDF/xacro source file.
+
+        :param original: The real, unpatched ``URDFParser.from_file`` classmethod.
+        :param cls: The ``URDFParser`` class the method is bound to.
+        :param file_path: Path of the URDF/xacro source file being parsed.
+        :param kwargs: Keyword arguments forwarded to the wrapped call.
         """
         if file_path not in self.urdf_sources:
             self.urdf_sources.append(file_path)
@@ -308,6 +320,12 @@ class Recorder:
     ) -> None:
         """
         Initialize as usual, but remember this loose object's mesh file.
+
+        :param original: The real, unpatched ``STLParser.__init__`` bound method.
+        :param stl_parser: The parser being initialized.
+        :param file_path: Path of the object's mesh file.
+        :param args: Positional arguments forwarded to the wrapped call.
+        :param kwargs: Keyword arguments forwarded to the wrapped call.
         """
         if file_path not in self.mesh_sources:
             self.mesh_sources.append(file_path)
@@ -331,6 +349,11 @@ class Recorder:
     ) -> None:
         """
         Run the real tick, then record its resulting world state.
+
+        :param original: The real, unpatched ``Executor.tick`` bound method.
+        :param executor: The executor whose tick is being run.
+        :param args: Positional arguments forwarded to the wrapped call.
+        :param kwargs: Keyword arguments forwarded to the wrapped call.
         """
         result = original(executor, *args, **kwargs)
         self.record_frame(executor)
@@ -341,6 +364,8 @@ class Recorder:
         Locate the world, robot and recordable objects of a running executor.
 
         Deferred until the first tick, because the world does not exist any earlier.
+
+        :param executor: The executor whose world is bound to.
         """
         from semantic_digital_twin.robots.robot_parts import AbstractRobot
 
@@ -374,6 +399,8 @@ class Recorder:
     def _pose_as_position_quaternion(body: Body) -> List[float]:
         """
         A body's world pose as ``[x, y, z, qx, qy, qz, qw]``.
+
+        :param body: The body whose world pose is read.
         """
         return [
             round(value, POSE_PRECISION)
@@ -384,6 +411,8 @@ class Recorder:
         """
         Append one frame: every movable connection's position, the robot base pose and
         every tracked object's pose.
+
+        :param executor: The executor whose current tick is recorded.
         """
         if self._connections is None:
             self.bind_to_executor(executor)
@@ -417,6 +446,8 @@ class Recorder:
     def _target_of(self, designator: Any) -> Optional[str]:
         """
         The recorded object a designator refers to, matched by mesh basename.
+
+        :param designator: The designator to search for a world-entity reference.
         """
         basenames = {os.path.basename(path) for path in self.mesh_sources}
         for value in vars(designator).values():
@@ -431,6 +462,8 @@ class Recorder:
     def _arm_of(designator: Any) -> Optional[str]:
         """
         The arm a designator names, whether it calls the field ``arm`` or ``arms``.
+
+        :param designator: The designator to read the arm field from.
         """
         fields = vars(designator)
         arm = fields.get("arm") or fields.get("arms")
@@ -449,6 +482,10 @@ class Recorder:
         def parse(node: ActionNode, *args: Any, **kwargs: Any) -> Executable:
             """
             Record this action's designator before letting it parse normally.
+
+            :param node: The action node being parsed.
+            :param args: Positional arguments forwarded to the wrapped call.
+            :param kwargs: Keyword arguments forwarded to the wrapped call.
             """
             designator = node.designator
             recorder.actions.append(
@@ -493,6 +530,8 @@ class Recorder:
         def serialize(node: Any) -> Optional[Dict[str, Any]]:
             """
             One plan node and its children as a dict, or None past ``max_nodes``.
+
+            :param node: The plan node to serialize.
             """
             if next(serialized_count) >= max_nodes:
                 return None
@@ -546,6 +585,8 @@ def moved(
     """
     Whether two poses are more than ``tolerance`` apart (planar distance plus height).
 
+    :param first: The pose to compare against ``second``.
+    :param second: The pose to compare against ``first``.
     :param tolerance: Tolerance in metres, so sensor jitter does not read as movement.
     """
     return (
@@ -562,6 +603,8 @@ def object_windows(recorder: Recorder) -> List[Dict[str, Any]]:
     An object whose first and last pose differ was transported; the window spans from
     the first frame that differs from where it started to just past the last frame that
     differs from where it ended up.
+
+    :param recorder: The finished recording to derive windows from.
     """
     object_frames = recorder.object_frames
     frame_count = len(object_frames)
@@ -609,6 +652,8 @@ def first_base_motion(recorder: Recorder, before: int) -> int:
     """
     The first frame before ``before`` at which the robot base left its spawn.
 
+    :param recorder: The finished recording to search.
+    :param before: Frame index to stop searching before.
     :return: That frame's index, or ``before`` if the base never moved.
     """
     spawn = recorder.base_frames[0]
@@ -622,7 +667,11 @@ def first_base_motion(recorder: Recorder, before: int) -> int:
 
 
 def derive_segments(recorder: Recorder) -> List[Dict[str, Any]]:
-    """Segments = data-driven windows, labelled from the parsed action list."""
+    """
+    Segments = data-driven windows, labelled from the parsed action list.
+
+    :param recorder: The finished recording to derive segments from.
+    """
     frame_count = len(recorder.frames)
     transport_windows = object_windows(recorder)
     manipulation_actions = [
@@ -724,6 +773,8 @@ def derive_segments(recorder: Recorder) -> List[Dict[str, Any]]:
 def link_set(part: Any) -> List[str]:
     """
     A robot part's link names, stripped of their model-name prefix.
+
+    :param part: The robot part whose link names are read.
     """
     if not isinstance(part, HasBodies):
         return []
@@ -740,6 +791,11 @@ def build_scene(
     """
     Downsample the recording to every step-th frame (always keeping the last) and
     assemble scene.json + trajectory.json from it.
+
+    :param recorder: The finished recording to build a scene from.
+    :param name: Scene name, used as the output folder and in the scene metadata.
+    :param out_dir: Directory the scene bundle is written into.
+    :param step: Downsampling step; every ``step``-th frame is kept.
     """
     frame_count = len(recorder.frames)
     kept_indices = list(range(0, frame_count, step))
@@ -750,6 +806,8 @@ def build_scene(
     def nearest(raw_index: int) -> int:
         """
         The downsampled index closest to a raw frame index.
+
+        :param raw_index: Frame index in the original, un-downsampled recording.
         """
         return downsampled_index.get(
             raw_index,
@@ -942,6 +1000,9 @@ def _update_scene_index(path: Path, name: str) -> None:
 
     A missing or unreadable index is rebuilt from scratch; an index that exists but
     lacks the keys is filled in rather than crashing on them.
+
+    :param path: Path of the scene index file.
+    :param name: Name of the scene to register.
     """
     index: Dict[str, Any] = {}
     if path.is_file():
@@ -961,6 +1022,10 @@ def _write_json(path: Path, payload: Any, indent: Optional[int] = None) -> None:
 
     A bundle is the artifact of a long recording, so a failure part-way through a write
     must not leave a truncated file behind.
+
+    :param path: Destination path of the file.
+    :param payload: JSON-serializable content to write.
+    :param indent: Indentation passed to :func:`json.dumps`, or None to compact it.
     """
     temporary = path.with_suffix(path.suffix + ".part")
     temporary.write_text(json.dumps(payload, indent=indent), encoding="utf-8")

@@ -93,6 +93,8 @@ def shorten_action_label(label: str) -> str:
 
     Only the suffix goes: a label that merely *contains* the word, such as
     ``ActionNode``, is left alone.
+
+    :param label: The plan-node label to shorten.
     """
     return label.removesuffix("Action") or label
 
@@ -116,6 +118,9 @@ def _plan_view() -> PlanViewPayload:
     def walk(tree: Dict[str, Any], parent: Optional[str]) -> None:
         """
         Add this plan node (with a freshly assigned id) and recurse into its children.
+
+        :param tree: The serialized plan node to add.
+        :param parent: Id of the node's parent entry, or None for the root.
         """
         node_id = "pn%d" % counter[0]
         counter[0] += 1

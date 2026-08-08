@@ -136,6 +136,8 @@ SIZE_PRECISION = 4
 def _pose_as_position_quaternion(body: Body) -> List[float]:
     """
     Return a body's world pose as ``[x, y, z, qx, qy, qz, qw]``.
+
+    :param body: The body whose world pose is read.
     """
     return [
         round(value, POSE_PRECISION)
@@ -200,6 +202,7 @@ class MoveRequest:
         """
         Build a request from a decoded ``POST /move`` body.
 
+        :param payload: The decoded JSON body of a ``POST /move`` request.
         :raises MalformedMoveRequest: If the object key or the position is unusable.
             Validating here keeps bad input from raising inside the simulation tick,
             where the only recovery is to drop the whole snapshot.
@@ -224,6 +227,10 @@ class MoveRequest:
     def _coordinates(value: Any, name: str, length: int) -> List[float]:
         """
         Read a fixed-length list of finite coordinates out of a payload field.
+
+        :param value: The raw payload field to validate and convert.
+        :param name: The field's name, used in the error message if it is invalid.
+        :param length: The number of coordinates the field must contain.
         """
         if not isinstance(value, (list, tuple)) or len(value) != length:
             raise MalformedMoveRequest(
@@ -671,6 +678,7 @@ class Bridge:
         Patching the same method twice wraps the original a second time, so every
         snapshot would run once per wrapper.
 
+        :param hook: The hook being claimed.
         :return: True on the first claim, False once the hook is installed.
         """
         if hook in self._installed_hooks:
@@ -682,6 +690,8 @@ class Bridge:
     def attach(self, world: World) -> None:
         """
         Bind to the world a demo is executing and publish its geometry catalog.
+
+        :param world: The world the demo is executing in.
         """
         self.world = world
         self.bind()
@@ -697,6 +707,8 @@ class Bridge:
 
         Applies queued viewer moves first, because the tick hook runs on the only
         thread allowed to write to the world.
+
+        :param chart: The motion statechart the executor is currently ticking, if any.
         """
         self.apply_moves()
         self.snapshot()
@@ -711,6 +723,8 @@ class Bridge:
 
         Drops the previous plan's per-node progress, so a long-running process does not
         accumulate entries for nodes that no longer exist.
+
+        :param plan: The plan that started performing.
         """
         self._plan = plan
         self._motion_nodes.clear()
@@ -722,12 +736,16 @@ class Bridge:
 
         The viewer is served the mesh from here, keyed by the file's basename, which
         is also how the world names the resulting body.
+
+        :param file_path: Path the object's geometry was parsed from.
         """
         self._mesh_files[Path(file_path).name.lower()] = file_path
 
     def publish_bodies(self, bodies: Dict[str, Body]) -> None:
         """
         Replace the published bodies and rebuild the viewer's geometry catalog.
+
+        :param bodies: The current published bodies, keyed by mesh key.
         """
         self._bodies = bodies
         self._build_object_metadata(bodies)
@@ -750,6 +768,8 @@ class Bridge:
     def mesh_path(self, key: str) -> Optional[str]:
         """
         Absolute path of an object's mesh file, or None if it is not served.
+
+        :param key: Mesh key of the object, as published in the geometry catalog.
         """
         with self._lock:
             return self._mesh_serve.get(key)
@@ -775,6 +795,8 @@ class Bridge:
     def queue_move(self, request: MoveRequest) -> None:
         """
         Queue an object move from the viewer (called on an HTTP thread).
+
+        :param request: The move to apply on the next simulation tick.
         """
         with self._moves_lock:
             self._moves.append(request)
@@ -811,6 +833,9 @@ class Bridge:
            running it inside the tick hook while a giskard goal is live hangs the
            executor. The plain pose write already makes ``body.global_pose`` correct,
            which is what the plan's navigate/pick reachability reads.
+
+        :param move: The queued move to apply.
+        :param body: The body the move targets.
         """
         connection = body.parent_connection
         if not isinstance(connection, Connection6DoF):
@@ -890,6 +915,8 @@ class Bridge:
     def _actuated_connections(world: World) -> List[ActiveConnection1DOF]:
         """
         All 1-DOF connections — the joints published as trajectory frames.
+
+        :param world: The world to scan for actuated connections.
         """
         return [
             connection
@@ -903,6 +930,8 @@ class Bridge:
 
         Each object gets either a mesh URL (served by the bridge) or a box size, so
         objects the viewer does not know yet can appear mid-run.
+
+        :param bodies: The current published bodies, keyed by mesh key.
         """
         catalog: List[ObjectCatalogEntry] = []
         serve: Dict[str, str] = {}
@@ -943,6 +972,8 @@ class Bridge:
     def _box_size(body: Body) -> Optional[List[float]]:
         """
         Size of a body's geometry in metres, or None when no shape reports one.
+
+        :param body: The body whose geometry is measured.
         """
         extent = BodyExtent.of(body)
         return extent.rounded(SIZE_PRECISION) if extent else None
@@ -996,6 +1027,8 @@ class Bridge:
         so two structurally identical steps of one plan would otherwise share a status.
         The :class:`MotionNodeProgress` entry pins the node itself, which keeps CPython
         from handing its ``id`` to a later object.
+
+        :param node: The plan node to key.
         """
         return id(node)
 
@@ -1005,6 +1038,8 @@ class Bridge:
 
         Called when a ``GiskardExecutable`` is about to run, so the plan tree can show
         live per-step progress.
+
+        :param executable: The executable about to run.
         """
         for node, task in (executable.motion_mappings or {}).items():
             self._motion_nodes[self._node_key(node)] = MotionNodeProgress(
@@ -1016,6 +1051,8 @@ class Bridge:
     def _motion_group_title(executable: GiskardExecutable) -> str:
         """
         Name of the action the motion group belongs to, or ``''``.
+
+        :param executable: The executable whose motion group is named.
         """
         for node in executable.motion_mappings or {}:
             action_node = node.parent_action_node
@@ -1031,6 +1068,9 @@ class Bridge:
 
         Reading the tasks' life cycle afterwards is not reliable — the executor cleans
         its nodes up.
+
+        :param executable: The motion group that finished.
+        :param status: The final status to pin on its nodes.
         """
         frozen_nodes = list(executable.motion_mappings or {})
         frozen_nodes += [
@@ -1053,6 +1093,8 @@ class Bridge:
 
         A live task wins over a pinned status, so a node that is running again after a
         previous attempt reports the current life cycle.
+
+        :param node: The plan node whose live status is looked up.
         """
         progress = self._motion_nodes.get(self._node_key(node))
         if progress is None:
@@ -1102,6 +1144,12 @@ class Bridge:
     ) -> str:
         """
         Serialize one plan node and its subtree; returns the node's status.
+
+        :param node: The plan node to serialize.
+        :param parent_id: Id of the node's parent entry, or None for the root.
+        :param nodes: Output list every serialized entry is appended to.
+        :param order: Output list every serialized node id is appended to, in
+            traversal order, to build the tree's signature.
         """
         node_id = "p%d" % id(node)
         designator = node.designator if isinstance(node, DescribesAnAction) else None
@@ -1145,6 +1193,9 @@ class Bridge:
     ) -> None:
         """
         Add arm and target-object info from a node's designator, if any.
+
+        :param entry: The serialized entry to fill in, mutated in place.
+        :param designator: The node's designator, or None.
         """
         if designator is None:
             return
@@ -1160,6 +1211,9 @@ class Bridge:
     def _max_status(first: str, second: str) -> str:
         """
         The higher-ranked of two statuses (see ``STATUS_RANK``).
+
+        :param first: The first status to compare.
+        :param second: The second status to compare.
         """
         if STATUS_RANK.get(first, 0) >= STATUS_RANK.get(second, 0):
             return first
@@ -1168,6 +1222,8 @@ class Bridge:
     def _designator_target(self, designator: Any) -> Optional[str]:
         """
         Name of the published object a designator refers to, if any.
+
+        :param designator: The designator to search for a world-entity reference.
         """
         known = set(self._bodies)
         for value in vars(designator).values():
@@ -1193,6 +1249,8 @@ class Bridge:
         Called from the tick hook. The structure is re-serialized only when the executor
         compiled a new chart; the life-cycle and observation vectors are cheap and
         republished whenever either of them changes.
+
+        :param chart: The motion statechart the executor is currently ticking, if any.
         """
         if chart is None:
             return
@@ -1237,6 +1295,8 @@ class Bridge:
     def _observation_name(observation: float) -> ObservationName:
         """
         Trinary observation value → name (0 false, 0.5 unknown, 1 true).
+
+        :param observation: The raw trinary observation value.
         """
         if observation >= 0.75:
             return ObservationName.TRUE
@@ -1248,6 +1308,8 @@ class Bridge:
     def _serialize_chart_structure(chart: MotionStatechart) -> _ChartStructure:
         """
         Nodes and transition edges of a statechart.
+
+        :param chart: The statechart to serialize.
         """
         nodes: List[ChartNodeStructure] = []
         indices: List[int] = []

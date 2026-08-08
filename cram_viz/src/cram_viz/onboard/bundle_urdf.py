@@ -75,6 +75,8 @@ def _resolve_package_uri(uri: str) -> Optional[str]:
     already covers that case (an ament index, ``ROS_PACKAGE_PATH``, and a plain
     filesystem search of common install prefixes), so failure to resolve is reported
     rather than raised.
+
+    :param uri: The ``package://`` URI to resolve.
     """
     try:
         resolved = PackageUriResolver().resolve(uri)
@@ -116,6 +118,8 @@ def _bundled_relative_path(uri: str) -> str:
 
     Package references keep their package directory so same-named meshes from different
     packages cannot collide; everything else is flattened.
+
+    :param uri: The reference as written in the URDF.
     """
     if uri.startswith(PACKAGE_SCHEME):
         package, _, relative_path = uri[len(PACKAGE_SCHEME) :].partition("/")
@@ -157,6 +161,11 @@ def _copy_side_assets(
     """
     Copy the textures a ``.dae`` references, or the ``.mtl`` plus its textures for an
     ``.obj``.
+
+    :param source_mesh: Path of the resolved source mesh.
+    :param bundled_mesh: Path the mesh was copied to inside the bundle.
+    :param copied: Source path to bundled path, doubling as the already-copied memo.
+    :param missing: Collects references that could not be copied.
     """
     source_directory = os.path.dirname(source_mesh)
     bundled_directory = os.path.dirname(bundled_mesh)
@@ -201,6 +210,8 @@ def _copy_side_assets(
 def xacro_to_urdf_text(path: str) -> str:
     """
     Expand a xacro file to URDF text in-process, without any ROS installed.
+
+    :param path: Path of the xacro (or plain URDF) source file.
     """
     return URDFParser.from_xacro(path).urdf
 

@@ -70,6 +70,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     """
 
     def __init__(self, *args, **kwargs):
+        """
+        Delegate to the base handler, serving from the packaged web root.
+
+        :param args: Positional arguments forwarded to the base handler.
+        :param kwargs: Keyword arguments forwarded to the base handler.
+        """
         super().__init__(*args, directory=str(paths.WEB_ROOT), **kwargs)
 
     def end_headers(self) -> None:
@@ -82,6 +88,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def log_message(self, format: str, *args) -> None:
         """
         Route the per-request access log through logging.
+
+        :param format: ``printf``-style log message format.
+        :param args: Values to interpolate into ``format``.
         """
         logger.info("  " + format, *args)
 
@@ -92,6 +101,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         ``payload`` may be a plain JSON-able dict, or a knowledge-package payload
         dataclass exposing ``to_payload()`` — either is serialized the same way.
+
+        :param payload: The payload to serialize and send.
+        :param code: HTTP status code to respond with.
         """
         if hasattr(payload, "to_payload"):
             payload = payload.to_payload()
@@ -111,6 +123,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def _guarded(self, fn: Callable[[], Any]) -> None:
         """
         Run an API handler; report exceptions as a JSON error payload.
+
+        :param fn: The handler to run, returning the payload to send on success.
         """
         if knowledge_module is None:
             return self._json(_no_eql_error())
@@ -125,6 +139,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
     def _serve_scene_file(self, url_path: str) -> None:
         """
         Serve one file of a scene bundle, with path-traversal protection.
+
+        :param url_path: The request path, starting with ``/scenes/``.
         """
         rel = url_path[len("/scenes/") :]
         base = paths.scenes_dir().resolve()
@@ -196,7 +212,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
 
 def make_server(port: int = 0) -> socketserver.ThreadingTCPServer:
-    """A ready-to-serve ThreadingTCPServer (port 0 = ephemeral, for tests)."""
+    """
+    A ready-to-serve ThreadingTCPServer (port 0 = ephemeral, for tests).
+
+    :param port: Port to listen on, or 0 for an ephemeral port.
+    """
     socketserver.TCPServer.allow_reuse_address = True
     return socketserver.ThreadingTCPServer(("127.0.0.1", port), Handler)
 
@@ -204,6 +224,8 @@ def make_server(port: int = 0) -> socketserver.ThreadingTCPServer:
 def main(argv: Optional[List[str]] = None) -> None:
     """
     ``cram-viz`` — serve the viewer, the scenes and the JSON API.
+
+    :param argv: Command-line arguments, or None to use ``sys.argv``.
     """
     # force: an imported CRAM package may already have configured the root logger,
     # which would otherwise make this call a no-op and swallow the startup output

@@ -82,6 +82,8 @@ class UrdfViewPayload:
 def _is_movable(joint: UrdfJoint) -> bool:
     """
     Whether a URDF joint can move (every type except ``fixed``).
+
+    :param joint: The URDF joint to check.
     """
     return joint.type != FIXED_JOINT_TYPE
 
@@ -93,6 +95,8 @@ def _urdf_view(knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
     Every link is a node, every joint an edge (parent → child); movable joints are solid
     edges, fixed ones dashed. Links are coloured by robot part from the recorded
     annotation.
+
+    :param knowledge_base: The knowledge base whose robot's URDF is rendered.
     """
     parsed_urdf = load_urdf()
     links, joints = parsed_urdf.links, parsed_urdf.joints
@@ -111,6 +115,8 @@ def _urdf_view(knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
     def chain_group(link_name: str) -> NodeGroup:
         """
         The visual group (colour) a kinematic-chain link is bucketed into.
+
+        :param link_name: Name of the link to classify.
         """
         part = link_to_part.get(link_name, "").lower()
         if "gripper" in part or "hand" in part or "effector" in part:
