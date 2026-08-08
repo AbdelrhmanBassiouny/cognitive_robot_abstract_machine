@@ -242,6 +242,31 @@ were kept and the judgment stated on the thread rather than made silently: the
 umbrella-word list (the rule's content) and the bound identifiers (facts about the
 language, not judgments about a design).
 
+## Review round 6 on #146 (2 comments), applied in `820676cf`
+
+`JSONMirror` is `JSONModel` — "mirror" was this module's own coinage where "model"
+is the plain word, which is the minimize-jargon rule applied to the code that
+prompted it. The word is swept from the docstrings and test names too.
+
+The second comment is the one that taught something. The contract test listed its
+four subjects, and the reviewer's objection was open/closed: a model added later
+would not be covered until somebody remembered. Deriving the subjects removed the
+list rather than fixing it — every class whose `from_json` takes only the object
+to read — and the selection criterion *is* the contract's boundary, so the two
+models that need more than the object exclude themselves rather than sitting on a
+hand-maintained exception list. The test and the base docstring can no longer
+disagree about who is covered.
+
+Worth carrying: the derivation **widened** coverage from 4 to 7 immediately,
+picking up `Author`, `ReviewThreadPage` and `RepositoryJSON` — models I had simply
+not thought to list. A hand-written list of subjects is not just a future
+maintenance cost; it is usually already incomplete when written.
+
+Also recorded because it cost time: `cp file "$SCRATCH/orig.py"` with `$SCRATCH`
+unset expands to `cp file /orig.py`, which *succeeds* as root, so the `||` fallback
+never ran and a later restore brought back a pre-rename snapshot. Use an absolute
+scratch path, and check `git diff --stat` after any restore.
+
 ## Next
 
 - #146 and #147 both draft, both waiting on the user. Threads on #146 that stay
