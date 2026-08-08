@@ -10,29 +10,17 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from typing_extensions import Any, Dict, Optional, Tuple
+from typing_extensions import Any, Dict, List, Optional, Tuple
 
 from cram_viz.knowledge.enums import EdgeKind, NodeGroup
 from cram_viz.knowledge.scene_bundle import load_scene
-from cram_viz.knowledge.views.base import _view
-
-
-@dataclass(frozen=True)
-class PlanLegendEntry:
-    """
-    One row of the plan view's legend.
-    """
-
-    group: NodeGroup
-    """
-    Node colour group this row explains.
-    """
-
-    label: str
-    """
-    Human-readable name shown next to the group's colour.
-    """
-
+from cram_viz.knowledge.subgraph import (
+    DetailEntry,
+    GraphEdge,
+    GraphNode,
+    LegendEntry,
+    SubgraphAccumulator,
+)
 
 #: plan-node kind → node colour group of the graph panel
 PLAN_GROUPS: Dict[str, NodeGroup] = {
@@ -44,13 +32,59 @@ PLAN_GROUPS: Dict[str, NodeGroup] = {
 }
 
 #: legend rows of the plan view
-PLAN_LEGEND: Tuple[PlanLegendEntry, ...] = (
-    PlanLegendEntry(NodeGroup.EVENT, "Action"),
-    PlanLegendEntry(NodeGroup.ROBOT, "Motion"),
-    PlanLegendEntry(NodeGroup.GOAL, "Condition"),
-    PlanLegendEntry(NodeGroup.OBJECT, "Attach / detach"),
-    PlanLegendEntry(NodeGroup.OTHER, "Other plan node"),
+PLAN_LEGEND: Tuple[LegendEntry, ...] = (
+    LegendEntry(NodeGroup.EVENT, "Action"),
+    LegendEntry(NodeGroup.ROBOT, "Motion"),
+    LegendEntry(NodeGroup.GOAL, "Condition"),
+    LegendEntry(NodeGroup.OBJECT, "Attach / detach"),
+    LegendEntry(NodeGroup.OTHER, "Other plan node"),
 )
+
+
+@dataclass
+class PlanViewPayload:
+    """
+    The executed plan as a tree, one node per plan node the demo ran.
+    """
+
+    ok: bool
+    """
+    Always ``True`` — this view has no failure mode.
+    """
+
+    nodes: List[GraphNode]
+    """
+    Every node in this view.
+    """
+
+    edges: List[GraphEdge]
+    """
+    Every edge in this view.
+    """
+
+    details: Dict[str, DetailEntry]
+    """
+    Detail-panel entry per node id.
+    """
+
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The JSON-serializable shape the frontend's graph panel expects.
+        """
+        return {
+            "ok": self.ok,
+            "crumb": "executed plan",
+            "nodes": [node.to_payload() for node in self.nodes],
+            "edges": [edge.to_payload() for edge in self.edges],
+            "details": {
+                node_id: asdict(entry) for node_id, entry in self.details.items()
+            },
+            "legend": [asdict(entry) for entry in PLAN_LEGEND],
+            "layout": "hier",
+            "live": "plan",
+            "statusLegend": True,
+            "empty": "No plan tree in this bundle — re-run cram-viz-onboard.",
+        }
 
 
 def shorten_action_label(label: str) -> str:
@@ -63,7 +97,7 @@ def shorten_action_label(label: str) -> str:
     return label.removesuffix("Action") or label
 
 
-def _plan_view() -> Dict[str, Any]:
+def _plan_view() -> PlanViewPayload:
     """
     The executed plan as a tree, one node per plan node the demo ran.
 
@@ -74,9 +108,9 @@ def _plan_view() -> Dict[str, Any]:
     real per-step progress only shows up while the live bridge is attached
     (it derives it from the statechart life cycle).
     """
-    scene, _ = load_scene()
+    scene = load_scene().scene
     trees = scene.get("planTrees") or []
-    nodes, edges, details, add = _view()
+    view = SubgraphAccumulator()
     counter = [0]
 
     def walk(tree: Dict[str, Any], parent: Optional[str]) -> None:
@@ -92,7 +126,7 @@ def _plan_view() -> Dict[str, Any]:
         if tree.get("target"):
             lines.append("target: " + tree["target"])
         label = shorten_action_label(tree.get("label", "?"))
-        add(
+        view.add(
             node_id,
             label,
             PLAN_GROUPS.get(tree.get("kind"), NodeGroup.OTHER),
@@ -100,28 +134,10 @@ def _plan_view() -> Dict[str, Any]:
             status=status,
         )
         if parent:
-            edges.append(
-                {
-                    "from": parent,
-                    "to": node_id,
-                    "kind": EdgeKind.PROP,
-                    "label": "has step",
-                }
-            )
+            view.edges.append(GraphEdge(parent, node_id, EdgeKind.PROP, "has step"))
         for child in tree.get("children", []):
             walk(child, node_id)
 
     for tree in trees:
         walk(tree, None)
-    return {
-        "ok": True,
-        "crumb": "executed plan",
-        "nodes": nodes,
-        "edges": edges,
-        "details": details,
-        "legend": [asdict(entry) for entry in PLAN_LEGEND],
-        "layout": "hier",
-        "live": "plan",
-        "statusLegend": True,
-        "empty": "No plan tree in this bundle — re-run cram-viz-onboard.",
-    }
+    return PlanViewPayload(True, view.nodes, view.edges, view.details)

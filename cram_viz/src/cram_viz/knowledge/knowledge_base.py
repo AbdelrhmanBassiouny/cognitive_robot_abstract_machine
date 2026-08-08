@@ -8,8 +8,8 @@ from collections import defaultdict
 
 from typing_extensions import Any, Dict, List, Optional, Tuple
 
-from cram_viz.knowledge.architecture_entities import Package, PythonClass, SubPackage
-from cram_viz.knowledge.architecture_scan import load_architecture
+from cram_viz.knowledge.architecture_entities import PythonClass, SubPackage
+from cram_viz.knowledge.architecture_scan import ArchitectureScanner
 from cram_viz.knowledge.entities import (
     ActionEpisode,
     Arm,
@@ -49,7 +49,8 @@ class EpisodeKnowledgeBase:
         Build every entity list from the active scene bundle and a static scan of the
         CRAM architecture.
         """
-        scene, trajectory = load_scene()
+        bundle = load_scene()
+        scene, trajectory = bundle.scene, bundle.trajectory
         frames_per_second = scene.get("fps", 30)
         parts = (scene.get("robot") or {}).get("parts") or {}
         robot_name = (scene.get("robot") or {}).get("name", "robot")
@@ -66,21 +67,10 @@ class EpisodeKnowledgeBase:
         )
         self.joints = self._build_joint_motions(trajectory, parts, robot_prefix)
 
-        packages, classes, dependency_edges = load_architecture()
-        self.packages = [Package(**entry) for entry in packages]
-        self.classes = [
-            PythonClass(
-                name=entry["name"],
-                package=entry["package"],
-                subpackage=self._subpackage_of(entry["package"], entry["module"]),
-                module=entry["module"],
-                bases=tuple(entry["bases"]),
-                methods=entry["methods"],
-                doc=entry["doc"],
-            )
-            for entry in classes
-        ]
-        self.package_deps = dependency_edges
+        architecture_scan = ArchitectureScanner().load()
+        self.packages = architecture_scan.packages
+        self.classes = architecture_scan.classes
+        self.package_deps = architecture_scan.dependency_edges
         self.subpackages = self._build_subpackages(self.classes)
 
     @staticmethod
@@ -236,21 +226,6 @@ class EpisodeKnowledgeBase:
             )
             for key in sorted(minimum)
         ]
-
-    @staticmethod
-    def _subpackage_of(package: str, module: str) -> str:
-        """
-        Qualified subpackage of a module path.
-
-        ``coraplex.src.coraplex.plans.designator`` → ``coraplex.plans``; top-level
-        modules collapse onto the package itself.
-        """
-        segments = module.split(".")
-        if segments and segments[0] == package:
-            segments = segments[1:]
-        while segments and segments[0] in ("src", package):
-            segments = segments[1:]
-        return package + "." + segments[0] if len(segments) >= 2 else package
 
     @staticmethod
     def _build_subpackages(classes: List[PythonClass]) -> List[SubPackage]:

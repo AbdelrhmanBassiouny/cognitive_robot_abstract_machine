@@ -7,13 +7,75 @@ from __future__ import annotations
 import json
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
-from typing_extensions import Any, Dict, List, Optional, Tuple
+from typing_extensions import Any, Dict, List, Optional
 
 from cram_viz import get_logger, paths
 
 logger = get_logger(__name__)
+
+
+@dataclass
+class SceneBundle:
+    """
+    The active scene's parsed ``scene.json``/``trajectory.json``.
+    """
+
+    scene: Dict[str, Any]
+    """
+    Parsed ``scene.json``, or ``{}`` when no scene is active or it is unreadable.
+    """
+
+    trajectory: Dict[str, Any]
+    """
+    Parsed ``trajectory.json``, or ``{}`` when absent or unreadable.
+    """
+
+
+@dataclass
+class UrdfJoint:
+    """
+    One joint of a parsed URDF, as needed by the kinematic-tree view.
+    """
+
+    name: str
+    """
+    Joint name.
+    """
+
+    type: str
+    """
+    URDF joint type, e.g. ``revolute``, ``prismatic``, ``fixed``.
+    """
+
+    parent: str
+    """
+    Name of the parent link.
+    """
+
+    child: str
+    """
+    Name of the child link.
+    """
+
+
+@dataclass
+class ParsedUrdf:
+    """
+    A scene robot's URDF, parsed into its kinematic-tree shape.
+    """
+
+    links: List[str]
+    """
+    Every link name found in the URDF.
+    """
+
+    joints: List[UrdfJoint]
+    """
+    Every joint found in the URDF.
+    """
 
 
 def scene_name() -> Optional[str]:
@@ -52,37 +114,37 @@ def scene_dir() -> Optional[Path]:
     return paths.scenes_dir() / name if name else None
 
 
-def load_scene() -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def load_scene() -> SceneBundle:
     """
-    The active scene's (scene.json, trajectory.json), or ``({}, {})``.
+    The active scene's scene/trajectory bundle, or an empty one without a scene.
     """
     directory = scene_dir()
     if not directory:
-        return {}, {}
+        return SceneBundle({}, {})
     scene = _read_json(directory / "scene.json")
     if not isinstance(scene, dict):
-        return {}, {}
+        return SceneBundle({}, {})
     trajectory = _read_json(directory / scene.get("trajectory", "trajectory.json"))
-    return scene, trajectory if isinstance(trajectory, dict) else {}
+    return SceneBundle(scene, trajectory if isinstance(trajectory, dict) else {})
 
 
-def load_urdf() -> Tuple[List[str], List[Dict[str, str]]]:
+def load_urdf() -> ParsedUrdf:
     """
-    Parse the active scene's robot URDF into (links, joints).
+    Parse the active scene's robot URDF into its kinematic tree.
 
     Used by the kinematic-tree view; a regex parse suffices because the bundled URDFs
     are flat.
     """
-    scene, _ = load_scene()
+    scene = load_scene().scene
     robot_model = next(
         (model for model in scene.get("models", []) if model.get("robot")), None
     )
     directory = scene_dir()
     if not robot_model or not directory:
-        return [], []
+        return ParsedUrdf([], [])
     urdf_path = directory / robot_model["urdf"]
     if not urdf_path.is_file():
-        return [], []
+        return ParsedUrdf([], [])
     text = urdf_path.read_text(encoding="utf-8", errors="replace")
     links = re.findall(r'<link\s+name="([^"]+)"', text)
     joints = []
@@ -94,11 +156,11 @@ def load_urdf() -> Tuple[List[str], List[Dict[str, str]]]:
         child = re.search(r'<child\s+link="([^"]+)"', body)
         if parent and child:
             joints.append(
-                {
-                    "name": joint.group(1),
-                    "type": joint.group(2),
-                    "parent": parent.group(1),
-                    "child": child.group(1),
-                }
+                UrdfJoint(
+                    name=joint.group(1),
+                    type=joint.group(2),
+                    parent=parent.group(1),
+                    child=child.group(1),
+                )
             )
-    return links, joints
+    return ParsedUrdf(links, joints)
