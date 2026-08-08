@@ -121,6 +121,18 @@ Draft #147 off `main` carries the AGENTS.md rules the review asked for as a
 separate PR. It *replaces* the existing one-liner "Instead of passing around
 strings, use enums instead" rather than adding a duplicate, and adds the
 testing half (assert against the definition; assert by type where a type
-distinguishes the case). Documentation only, +7/−1. It has no plan item — a
+distinguishes the case). Documentation only, +8/−1. It has no plan item — a
 repo-wide convention change rather than workflow-unification work — flagged to
 the user rather than adding one unilaterally.
+
+Review on #147 (2 comments), applied in `23b1a363`: the tuple bullet offers an
+enum as well as a dataclass, and the JSON bullet became two, because reading
+`krrood.adapters.json_serializer.SubclassJSONSerializer` showed the cases
+differ — it resolves a concrete subclass from a `type` key *it wrote itself*,
+so it serves our own classes round-tripping but has nothing to dispatch on for
+an API response or a foreign configuration file, which still want a mirror plus
+`from_json`. Flagged rather than caveated in the file: decision 12 fixes the
+SessionStart-reachable tier as stdlib-only, so hook-safe code cannot import that
+serializer even when the JSON is ours; "when possible" carries it until
+`dev-tooling-krrood-adoption` revisits it. Subscribed to #147's activity, which
+had been missed when it was opened.
