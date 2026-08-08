@@ -179,6 +179,14 @@ the one with teeth — those fail at runtime rather than at import, and both
 recorded instances actually happened. #147 re-drafted, description rewritten,
 +22/−4.
 
+The user then added the two rules that outrank all of those, in `2553ffd8`:
+technically correct, simple, descriptive — in that order, because an inaccurate
+name is worse than a vague one (a reader who trusts it stops reading) — and
+minimize jargon, since a specialist or in-house term is a lookup the reader has
+to perform and only earns its place where the plain word would be wrong. They
+open the section rather than joining the list; everything below them is a
+specific case of one or the other. +24/−4.
+
 ## Next
 
 - #146 and #147 both draft, both waiting on the user. Three threads on #146 stay
