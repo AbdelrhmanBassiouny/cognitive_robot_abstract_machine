@@ -202,7 +202,27 @@ items:
     draft per the always-drafts-until-ready convention. Scoping note: the change touches only files #41
     introduces, so per the fold-don''t-stack rule it went onto #41 rather than becoming a separate PR from
     the session branch claude/rdr-guard-conclusion-arch-8htmfu. Neither subscribe_pr_activity tool could
-    subscribe this session to #41, so its CI result is unwatched -- check it manually.'
+    subscribe this session to #41, so its CI result is unwatched -- check it manually.
+    2026-08-08 (review round): 11 new threads on 19e387a9. Developer chose to keep the
+    branch-semantics family and apply every other fix; my own recommendation in the session
+    had been the opposite (collapse it into methods on the selector classes), so that thread
+    is deliberately left unresolved for the developer to close. Landed as b0107c76: the
+    dispatch key is now a bound generic parameter via SubClassSafeGeneric instead of a
+    ClassVar (frozen=True had to be dropped -- a frozen dataclass cannot inherit from a
+    non-frozen one); every method is a classmethod so most_specific_for returns the class and
+    nothing is constructed; GuardCondition moved to its own rdr/guard_condition.py, which is
+    what let LeafGuardDecomposition drop its quoted type arguments (backward_inference
+    runtime-imports branch_semantics, so the reverse import was a cycle); the abstract methods
+    take ConclusionSelector rather than SymbolicExpression; GuardedBranch.node became
+    child_expression. The reviewer also caught a real test defect: comparing SymbolicExpressions
+    with == builds a truthy Comparator, so 9 assertions in test_branch_semantics.py asserted
+    nothing about which expression was returned -- proven by making the expected value
+    deliberately wrong and watching them pass. They now compare _id_, and three fresh mutants
+    (swapped Refinement branch order, Next repeating one child, Alternative dropping a side)
+    each fail exactly one test. Sweep unchanged against the 19e387a9 baseline: 109 failed/933
+    passed, 264 failed+errored ids byte-for-byte identical. AGENTS.md rule for
+    SubClassSafeGeneric opened separately as PR #148 off main (draft), deliberately not
+    migrating PhraseRule.construct or the SpecificityRule families.'
 - id: D-core-aid
   title: 'RDR engine: ConclusionAid (expert-labelling assistance)'
   branch: D-core-aid

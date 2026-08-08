@@ -1077,3 +1077,97 @@ alone without #41 — so it folded into #41 rather than becoming a separate PR f
 session's own branch (`claude/rdr-guard-conclusion-arch-8htmfu`, which stays unused). #41
 went back to draft per the always-drafts-until-ready convention, for the third time on
 this PR, which the developer chose knowingly.
+
+## 16. Addendum (2026-08-08) — `rdr-backward-inference` (#41): the review round on the family
+
+§15's `19e387a9` drew 11 review threads the same evening. Ten were applied; one was a
+design question the developer settled against this session's own recommendation, and one
+was a genuine defect in the tests §15 had just praised.
+
+### The developer kept the family, over my advice
+
+The reviewer asked directly whether the strategy family was overkill "for something we
+know will not be extended further and has well-known semantics", and whether methods on
+the selector classes would be better. Asked to answer in-session rather than on the PR.
+
+**My answer was that they were right and I had over-built it**, on three grounds:
+
+1. **Ratio.** +659/−91: `branch_semantics.py` (267) and `exceptions.py` (39) replacing 81
+   lines of `isinstance` ladders, plus 318 lines of tests. The specificity-ranking dispatch
+   solves a problem verbalization genuinely has — 30 `PhraseRule` subclasses across 7
+   packages, with `when` guards and real subsumption — and this one does not: 3 classes, no
+   guards, no subsumption.
+2. **§15's own argument cut the other way.** It justified the family partly on
+   "`ConclusionSelector` already makes insertion polymorphic via
+   `_get_current_context_condition` / `_create_between_two_expressions`". Those are *methods
+   on the selector classes*. Read properly that argues for putting branch semantics there
+   too — the reviewer's suggestion — so §15 used a consistency argument and then broke the
+   consistency.
+3. **Extensibility.** §15's own probe already said refinement / alternative / next is RDR's
+   fixed vocabulary, and neither Track G nor Wave 2 adds a branch operator. §15 said so and
+   built for extensibility anyway.
+
+A coupling worth carrying forward: if the semantics ever *do* move onto the selectors, the
+natural return type is an `(expression, polarity)` pair — an EQL-level concept, not an RDR
+one (`ConditionAssembler.predicate(comparator, *, negated=False)` is already that shape).
+That would make the developer's *original* question — should `GuardCondition` live in
+`rules/`? — coherent in a way §15 argued it was not. §15 answered the first question partly
+on grounds the second undermines.
+
+**Developer's call: keep the family, apply everything else.** Landed as `b0107c76`. The
+thread is deliberately left unresolved, per the standing rule that a thread answered
+differently from its ask is the developer's to close.
+
+### The defect: `==` on symbolic expressions asserts nothing
+
+The reviewer flagged that comparing expressions with `==` triggers `__eq__`, which builds a
+`Comparator`. Probing it showed the consequence is total, not marginal:
+
+| assertion | result |
+|---|---|
+| `nodes == [correct expressions]` | `True` |
+| `nodes == [wrong expressions]` | `True` |
+| `[n._id_ …] == [correct ids]` | `True` |
+| `[n._id_ …] == [wrong ids]` | `False` |
+
+The `Comparator` is truthy, so list/tuple comparison reports equality for *any* two
+expressions. **Nine assertions in `test_branch_semantics.py` asserted nothing about which
+expression came back.** Only the `negated` booleans and the list lengths did any work —
+which is why §15's mutation check still passed: the mutant it used changed a list *length*.
+
+Fixed by comparing `_id_` through a helper whose docstring records the trap, then
+re-mutation-checked with three mutants the old form could not catch — swapped `Refinement`
+branch order, `Next` repeating one child, `Alternative` dropping a side — each failing
+exactly one test. The other two `test_eql_rdr` files were audited and are clean.
+
+This is the same lesson as §12 and §15 in a third variant: the assertion *looked* specific,
+and only running a deliberately-wrong expectation showed it was not.
+
+### The other nine
+
+- **`ClassVar` → bound generic parameter.** `SelectorBranchSemantics` is now
+  `Generic[SelectorType]` + `SubClassSafeGeneric`, each member binding it
+  (`SelectorBranchSemantics[Refinement]`) and reading it back via
+  `get_generic_type_parameters()`. One constraint found by spiking it first: **`frozen=True`
+  had to go** — `SubClassSafeGeneric` is a plain dataclass and Python rejects a frozen
+  dataclass inheriting from a non-frozen one.
+- **Classmethods throughout**, so `most_specific_for` returns the class and nothing is
+  constructed.
+- **Quotes off the type alias**, which needed `GuardCondition` moved to
+  `rdr/guard_condition.py`: `backward_inference` runtime-imports `branch_semantics`, so the
+  reverse import was a cycle, and `from __future__ import annotations` does not help a
+  type-alias *value*.
+- Abstract methods take `ConclusionSelector`; `GuardedBranch.node` → `child_expression`;
+  docstrings lose their cross-references to the grammar; test asserts on lengths and on
+  `__name__` rather than literals.
+
+### Also
+
+- **PR #148** opened off `main` (draft) recording the `SubClassSafeGeneric` rule in
+  `AGENTS.md`, at the reviewer's request. It deliberately does not migrate
+  `PhraseRule.construct` or the `SpecificityRule` families, and says so.
+- `scripts/format_docstrings.py` reproduced §12's `:return: ``True``` → `:return:``True```
+  regression on the moved `guard_condition.py`; reverted that one line by hand. Third
+  recorded instance of the same tool defect.
+- Sweep unchanged from §15's baseline: 109 failed / 933 passed, 264 failed+errored ids
+  byte-for-byte identical.
