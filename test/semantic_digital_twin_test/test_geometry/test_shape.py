@@ -8,7 +8,10 @@ import pytest
 import trimesh
 
 from krrood.adapters.json_serializer import from_json, to_json
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Point3
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import (
     Box,
     Cylinder,
@@ -17,6 +20,8 @@ from semantic_digital_twin.world_description.geometry import (
     Sphere,
     Texture,
 )
+from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
+from semantic_digital_twin.world_description.world_entity import Body
 
 
 def test_recenter_origin_centers_bounding_box():
@@ -95,7 +100,7 @@ def test_mesh_color_survives_serialization(tmp_path):
     source = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
     source.visual.vertex_colors = np.tile([200, 50, 50, 255], (len(source.vertices), 1))
 
-    mesh = Mesh.from_trimesh(mesh=source, dirname=str(tmp_path), file_type="ply")
+    mesh = Mesh.from_trimesh(mesh=source, directory=tmp_path, file_type="ply")
     restored = Mesh.from_json(mesh.to_json())
 
     assert restored.filename.endswith(".obj")
@@ -112,9 +117,66 @@ def test_mesh_color_is_lost_without_color_preserving_format(tmp_path):
     source = trimesh.creation.box(extents=(1.0, 1.0, 1.0))
     source.visual.vertex_colors = np.tile([200, 50, 50, 255], (len(source.vertices), 1))
 
-    mesh = Mesh.from_trimesh(mesh=source, dirname=str(tmp_path), file_type="stl")
+    mesh = Mesh.from_trimesh(mesh=source, directory=tmp_path, file_type="stl")
 
     assert not (mesh.mesh.visual.vertex_colors[:, :3] == [200, 50, 50]).all()
+
+
+# %% where an exported mesh file is written
+
+
+def test_exported_mesh_gets_a_directory_of_its_own():
+    """
+    An export writes into a directory holding nothing else, so the material file trimesh
+    writes beside the mesh belongs to that mesh alone and a consumer resolving the
+    material relative to the mesh finds the right one.
+    """
+    mesh = Mesh.from_ply_file(
+        ply_file_path=os.path.join(
+            Path(files("semantic_digital_twin")).parent.parent,
+            "resources",
+            "ply",
+            "chair.ply",
+        ),
+        texture_file_path=os.path.join(
+            Path(files("semantic_digital_twin")).parent.parent,
+            "resources",
+            "ply",
+            "chair_texture.png",
+        ),
+    )
+
+    mesh_directory = Path(mesh.filename).parent
+    assert mesh_directory.parent.name.startswith(MeshFileStorage.root_prefix)
+    assert {path.suffix for path in mesh_directory.iterdir()} == {
+        ".obj",
+        ".mtl",
+        ".png",
+    }
+
+
+def test_exported_mesh_basenames_are_unique(tmp_path):
+    """
+    Two exports never share a file name, because a consumer identifies a mesh by that
+    name and would otherwise treat the second mesh as the first.
+    """
+    first = Mesh.from_trimesh(
+        mesh=trimesh.creation.box(extents=(1.0, 1.0, 1.0)), directory=tmp_path
+    )
+    second = Mesh.from_trimesh(
+        mesh=trimesh.creation.box(extents=(2.0, 2.0, 2.0)), directory=tmp_path
+    )
+
+    assert Path(first.filename).stem != Path(second.filename).stem
+
+
+def test_explicit_directory_overrides_session_root(tmp_path):
+    mesh = Mesh.from_trimesh(
+        mesh=trimesh.creation.box(extents=(1.0, 1.0, 1.0)), directory=tmp_path
+    )
+
+    assert Path(mesh.filename).parent.parent == tmp_path
+    assert MeshFileStorage.root_prefix not in mesh.filename
 
 
 def test_texture_defaults():
@@ -176,7 +238,7 @@ def test_cylinder_volume():
 def test_mesh_volume(tmp_path):
     source = trimesh.creation.box(extents=(1.0, 2.0, 4.0))
 
-    mesh = Mesh.from_trimesh(mesh=source, dirname=str(tmp_path), file_type="stl")
+    mesh = Mesh.from_trimesh(mesh=source, directory=tmp_path, file_type="stl")
 
     assert mesh.volume == pytest.approx(8.0)
 
@@ -242,6 +304,49 @@ def test_stl_without_unit_metadata_loads_unchanged(tmp_path):
     """
     source = trimesh.creation.box(extents=(1.0, 2.0, 4.0))
 
-    mesh = Mesh.from_trimesh(mesh=source, dirname=str(tmp_path), file_type="stl")
+    mesh = Mesh.from_trimesh(mesh=source, directory=tmp_path, file_type="stl")
 
     assert mesh.mesh.extents == pytest.approx([1.0, 2.0, 4.0])
+
+
+# %% expressing a shape's mesh in another frame
+
+
+def test_mesh_in_frame_applies_the_owning_bodys_world_transform():
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("map"))
+        world.add_kinematic_structure_entity(root)
+        obstacle = Body(name=PrefixedName("obstacle"))
+        world.add_connection(
+            FixedConnection(
+                root,
+                child=obstacle,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=2.0, y=0.0, z=0.0, reference_frame=root
+                ),
+            )
+        )
+        shape = Box(scale=Scale(1.0, 1.0, 1.0))
+        obstacle.collision.append(shape)
+
+    world_mesh = shape.mesh_in_frame(root)
+
+    np.testing.assert_allclose(
+        world_mesh.bounds, shape.mesh.bounds + np.array([2.0, 0.0, 0.0])
+    )
+
+
+def test_mesh_in_frame_in_the_shapes_own_frame_matches_its_local_mesh():
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("map"))
+        world.add_kinematic_structure_entity(root)
+        obstacle = Body(name=PrefixedName("obstacle"))
+        world.add_connection(FixedConnection.create_with_dofs(world, root, obstacle))
+        shape = Box(scale=Scale(1.0, 1.0, 1.0))
+        obstacle.collision.append(shape)
+
+    world_mesh = shape.mesh_in_frame(obstacle)
+
+    np.testing.assert_allclose(world_mesh.bounds, shape.mesh.bounds)
