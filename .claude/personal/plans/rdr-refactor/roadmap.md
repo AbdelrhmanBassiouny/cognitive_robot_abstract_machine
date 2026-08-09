@@ -1171,3 +1171,100 @@ and only running a deliberately-wrong expectation showed it was not.
   recorded instance of the same tool defect.
 - Sweep unchanged from §15's baseline: 109 failed / 933 passed, 264 failed+errored ids
   byte-for-byte identical.
+
+## 17. Addendum (2026-08-09) — `rdr-backward-inference` (#41): `UNSET` unified with `...`
+
+The developer asked whether `UNSET` can be removed in favour of `...` (`Ellipsis`), so the
+RDR sentinel conforms with what underspecified statements already use — or whether that
+collides with Ellipsis's existing meaning. Recorded because the first answer was wrong, and
+wrong on a principle worth not repeating.
+
+### The wrong answer, and what disproved it
+
+The first answer was "no, it collides", argued from the principle that *a sentinel over `Any`
+must sit outside the value space it guards*. That principle is sound in general and wrong for
+this codebase.
+
+`CountRange` already reads `...` as an **outcome-side** "not yet determined":
+`operators/aggregators.py:234` counts `value is ...` over an evaluated `child_result.value`,
+and `:268` does the same over the child's domain via `_count_ellipsis_in_domain_`. Each `...`
+widens the result from a plain `int` to a closed `SimpleInterval`. So EQL deliberately puts
+"undetermined" *inside* the value space and reasons about it — which is exactly what `UNSET`
+means when no rule fired.
+
+The developer's framing was the correct one from the start: `...` means **"an oracle must
+supply this value"**, and it does not matter whether the oracle is a human expert, a
+probabilistic model, or an RDR. `rdr/backend.py` is that argument in code — it is the RDR
+playing the role `ProbabilisticBackend` plays for a model.
+
+### What was checked before agreeing
+
+| concern | finding |
+|---|---|
+| Can a *case attribute* holding `...` confuse an existing Ellipsis check? | No. Every check reads the **query template**: `backends.py:181,198` and `parametrization/parameterizer.py:160-170,237` read `attribute_match.assigned_value`; `query/match.py:462-463` reads the match's own assignments; `verbalization/grammar/match/planner.py:199` reads a `Literal._value_`. None reads a case instance. |
+| Persistence | `type(Ellipsis)` is already in `ormatic/utils.py:118`'s `leaf_types`, so a case carrying `...` round-trips. |
+| Mechanics | Both are singletons compared with `is`; every `is UNSET` / `is not UNSET` substitutes unchanged. |
+| Display | `_Unset.__repr__`/`__str__` rendered `"UNSET"` deliberately, but `git grep` found **no** consumers on `D-ui` (`magics.py`, `case_table.py`, `interactive.py`, `prompt_sections.py`). Cosmetic. |
+
+### The one thing that does not fall out for free
+
+Not a collision — a **narrowing**, left as a probe rather than an argument, per §12's and
+§15's standing lesson.
+
+`parametrization/parameterizer.py:167` raises `InvalidEllipsis` when `...` is assigned to a
+field whose type is outside `random_events.variable.compatible_types` (`int`, `float`, `bool`,
+`Enum`). `UNSET` has no such restriction, and `ConclusionDomain` explicitly supports
+non-enumerable conclusions (`str`, arbitrary classes) with a type-check fallback. So an
+unclassified case whose conclusion attribute is a `str` holds `...` after `backend.py`'s
+`setattr` and would hit `InvalidEllipsis` **if** such a case can reach the parameterizer.
+Filed on `no-rule-fired-resolution`, which also inherits the second consequence: an expert
+typing `conclusion = ...` is now *delegating to a backend*, which
+`make_conclusion_validator` (`expert.py:94`) currently rejects as "No rule fired for this case".
+
+### What landed (`efc8a0679`), and why so little
+
+`UNSET` had **zero consumers on #41**: `git grep UNSET` matched only `rdr/utils.py` itself and
+nothing imported `rdr.utils`. All ~40 sites (`backend.py`, `expert.py`, `interface.py`,
+`observer.py`, `single_class.py` + tests) land with the D-core slices. So #41's share of this
+change is deleting a dead module — which also clears the catch-all `utils` filename AGENTS.md
+forbids for a module holding one value. The substitution, the probe and the tests that pin them
+belong on `d-core-expert` and above, where there is something to run them against.
+
+One defect to fix while doing that: `single_class.classify` is annotated `-> Optional[Any]`
+with *"or `None` if no rule fires"* while it returns `self._observe(case).conclusion` — the
+sentinel (`observer.py:132-137`). §6's `classify()`→`UNSET` decision was implemented in the
+observer and the signature never followed.
+
+### `query_graph.pdf`, and a mechanism reproduced by accident
+
+The same commit restores `query_graph.pdf` to `main`'s blob, answering a thread
+(`PRRT_kwDOQhJw3c6Xg0sj`) that had sat **unanswered** since 2026-08-08.
+
+It is neither an error nor a fix: it is test output. `QueryGraph.render` defaults to
+`filename="query_graph.pdf"` in the *working directory* (`query_graph.py:160`),
+`test_rendering.py` exercises it, and the file is **both `.gitignore`d (`.gitignore:152`) and
+tracked** — `.gitignore` has no effect on an already-tracked file, so any local suite run
+dirties it and it gets swept into the next commit.
+
+This session reproduced it without meaning to: the verification sweep dirtied
+`query_graph.pdf` *and* `drawer_explanation.pdf` (`.gitignore:154`), which is how we know it
+is at least two files rather than one.
+
+**The thread was replied to and deliberately left open.** Its ask had two halves — revert, and
+stop it being generated — and only the revert is in scope here; untracking generated PDFs is a
+`main`-level change affecting every branch, and does not belong at the bottom of a seven-PR
+stack. Per the standing rule, a half-answered ask is not resolved.
+
+### Verification
+
+`test_eql_rdr` 45/45, unchanged. Sweep over `test_eql` + `test_eql_rdr` against this branch's
+previous head in the same container: **207 failed / 982 passed on both sides**, 214
+failed+errored ids **byte-for-byte identical**, with 3 files excluded for the documented
+`probabilistic_model…relational.rspn` gap.
+
+Worth recording for the next session in a bare container: this one had **no dependency set at
+all** and neither interpreter could import `numpy`. Installing the workspace requirements got
+`test_eql_rdr` running, but the root `test/conftest.py` transitively needs
+`giskardpy_bullet_bindings`, which is not installable from PyPI — so the sweep ran with
+`--confcutdir=test/krrood_test`. §12's note stands and tightens: a local run here shows *no new
+failures* and cannot show *no failures*, and it may not be able to load the root conftest at all.

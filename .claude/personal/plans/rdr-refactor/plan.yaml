@@ -222,7 +222,44 @@ items:
     each fail exactly one test. Sweep unchanged against the 19e387a9 baseline: 109 failed/933
     passed, 264 failed+errored ids byte-for-byte identical. AGENTS.md rule for
     SubClassSafeGeneric opened separately as PR #148 off main (draft), deliberately not
-    migrating PhraseRule.construct or the SpecificityRule families.'
+    migrating PhraseRule.construct or the SpecificityRule families.
+    2026-08-09: developer asked whether UNSET can be removed in favour of ... (Ellipsis), to
+    conform with underspecified statements. Answer: yes -- and my first answer was wrong. I
+    argued a sentinel over Any must sit outside the value space; EQL deliberately does the
+    opposite. CountRange (operators/aggregators.py:234,268) already counts `value is ...` over
+    evaluated results and domains, widening an int to a closed SimpleInterval, so ... in a
+    *result* already means "not yet determined" -- exactly UNSET''s meaning. Every other
+    Ellipsis check in krrood/src reads the query template, never a case instance
+    (backends.py:181,198, parameterizer.py:160-170,237, query/match.py:462-463,
+    planner.py:199), so a case attribute holding ... confuses nothing; type(Ellipsis) is
+    already in ormatic leaf_types so it persists; both are singletons compared with `is`, so
+    every site substitutes unchanged. The unifying reading is the developer''s: ... means "an
+    oracle must supply this value", and rdr/backend.py is the RDR playing the role
+    ProbabilisticBackend plays for a model. One open narrowing, deliberately not guessed at:
+    parameterizer.py:167 raises InvalidEllipsis for a field whose type is outside
+    random_events compatible_types, while ConclusionDomain supports str/arbitrary-class
+    conclusions -- so an unclassified case with a str conclusion could hit it IF such a case
+    can reach the parameterizer. Reachability is a probe for the slice that has consumers.
+    Landed on #41 as efc8a0679: rdr/utils.py deleted outright, because UNSET had ZERO
+    consumers here (git grep matched only utils.py; nothing imported rdr.utils) -- all ~40
+    sites live on d-core-expert and above. This also cleared the catch-all `utils` filename
+    AGENTS.md forbids. The same commit restored query_graph.pdf to main''s blob. Verified
+    45/45 test_eql_rdr and a test_eql+test_eql_rdr sweep of 207 failed/982 passed on both
+    sides with 214 failed+errored ids byte-for-byte identical (3 files excluded for the
+    documented probabilistic_model relational.rspn gap; this container could not load the root
+    conftest at all -- giskardpy_bullet_bindings -- so the sweep ran with --confcutdir and CI
+    stays the load-bearing check). PR converted back to draft, fourth time. The
+    query_graph.pdf thread (PRRT_kwDOQhJw3c6Xg0sj) was replied to but deliberately LEFT OPEN:
+    its ask had two halves and only the revert was done -- untracking the generated PDFs is a
+    main-level fix. Root-caused it: QueryGraph.render defaults to filename="query_graph.pdf"
+    in the working directory (query_graph.py:160), test_rendering.py exercises it, and the
+    file is both gitignored (.gitignore:152) and tracked, so any local suite run dirties it.
+    Reproduced accidentally -- the verification sweep also dirtied drawer_explanation.pdf
+    (.gitignore:154), so it is at least two files. Still to do, on d-core-expert and above:
+    the is UNSET -> is ... substitution, the parameterizer reachability probe, and fixing
+    single_class.classify, annotated -> Optional[Any] with "or None if no rule fires" while it
+    returns the sentinel (observer.py:132-137) -- the #68 review''s classify()->UNSET decision
+    was implemented in the observer and the signature never followed.'
 - id: D-core-aid
   title: 'RDR engine: ConclusionAid (expert-labelling assistance)'
   branch: D-core-aid
@@ -758,4 +795,16 @@ items:
   status: blocked
   blockers:
   - Blocked until the Wave-0 engine stack lands on main.
-  notes: Beyond interim classify->UNSET. Conclusion provenance coordinates with Wave-3 JTMS (rdr-justifications).
+  notes: 'Beyond interim classify->UNSET. Conclusion provenance coordinates with Wave-3 JTMS
+    (rdr-justifications).
+    2026-08-09: the sentinel itself is being unified with ... (Ellipsis) -- see
+    rdr-backward-inference and roadmap Sec.17 -- so this item now inherits "no conclusion" being
+    spelled the same way as "generate one". Two consequences it owns. (1) Expert delegation:
+    once ... is the sentinel, an expert typing `conclusion = ...` in the shell is asking the
+    generative backend to supply the value, but make_conclusion_validator (rdr/expert.py:94)
+    currently rejects that as "No rule fired for this case" unless allow_unset. Routing it to a
+    backend instead is a capability the engine does not have, and it belongs here rather than
+    on any D-core slice. (2) The parameterizer narrowing: parameterizer.py:167 raises
+    InvalidEllipsis outside random_events compatible_types, so a non-enumerable conclusion
+    (str/arbitrary class) left unclassified may be unrepresentable as ... -- if reachable, the
+    no-rule-fired modes are where the answer lives.'
