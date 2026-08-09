@@ -4262,3 +4262,70 @@ The generalizable part, for the next branch that sits here a while: an all-green
 never reachable from this branch, so "wait for green" would have been an indefinite block.
 What made the pull request reviewable anyway was having one job that genuinely covers the
 diff, and being able to say precisely why each of the other four failures was not it.
+
+## Update 2026-08-09: the dashboard-URL cache was drifting because the write was prose
+
+The URL cache had reached the point where five of six plans plus the master index
+pointed at artifacts that did not exist, and two plans had acquired duplicate
+dashboards. It had been hand-corrected at least six times since 2026-07-26 and drifted
+again every time, so the question was the mechanism, not the mapping.
+
+### What the cache's own history shows
+
+Classifying every URL ever written to `_generated/dashboard-urls.yaml` against the
+account's real artifact listing separates cleanly by *what kind of run wrote it*:
+
+| commit kind | URLs written | named a real artifact |
+| --- | --- | --- |
+| first publish (`Record dashboard URL for <plan>`) | 13 | 10 |
+| bulk refresh (`Update dashboard URLs after refresh`) | 23 | **0** |
+| correction (`Repoint...at the live artifacts`) | 15 | 15 |
+
+Not one bulk refresh ever wrote a URL that resolved. Every correction did — and every
+correction was made by reading `Artifact` with `action: "list"`.
+
+### The mechanism
+
+`SKILL.md` step 3 told the session to "merge your updated url(s) into the existing
+`dashboard-urls.yaml` content" and hand-write the result. On a *first* publish that
+works: the tool mints a page and hands back its URL, which the session copies. On a
+*re-publish* the session passes `url:` and the page updates in place — so there is no
+new URL in front of it to copy, and the instruction still asks for one. A plausible
+UUID got written instead, and nothing anywhere checked it.
+
+The fabricated URLs are not near-misses of the real ones; they share no characters. They
+were invented, not mistyped.
+
+That alone would only produce dead entries. The duplicates come from the next run: it
+reads the dead URL, passes it as `url:`, the update cannot land on a page that is not
+there, a fresh artifact is minted, and the plan now has two dashboards. Both live pairs
+were born exactly this way — `dag-facade-hardening`'s `49053971` on 2026-08-07 after the
+08-06 refresh poisoned its entry, and `workflow-unification`'s `07123af6` on 2026-08-04
+after the 08-04 refresh poisoned that one. A human then corrected the cache, and the loop
+went round again.
+
+### The fix
+
+The deterministic half moves into a committed script, as this skill's own header always
+required. `record_dashboard_url.py` is given the cache key and the title the dashboard is
+published under; it finds that artifact in the `action: "list"` output and records *its*
+URL. No UUID passes through the session at any point, so there is nothing left to
+fabricate. It refuses rather than guesses when a title matches nothing (never published)
+and when a title matches several (a duplicate exists, and which one survives is the
+user's call, so it names both and demands `--url`). That last check is also what stops a
+key being silently repointed at some other plan's artifact.
+
+The cache path moves into `resolve-personal-notes-config.sh` as
+`DASHBOARD_URL_CACHE_PATH`, beside `PLAN_BRANCH_INDEX_PATH`, instead of remaining a
+literal typed into `SKILL.md`.
+
+### State
+
+The cache is reconciled against the live artifacts, using the new script for every key
+rather than by hand — `dag-facade-hardening` keeps `49053971` by the user's choice, and
+`workflow-unification` reported `changed: false`, independently confirming the entry the
+user had already fixed. The redundant artifact of each pair is now unreferenced; it is
+not deleted, because a session cannot delete an artifact.
+
+Not addressed here: the pre-existing entries have no automated audit, so a URL that dies
+for some *other* reason still surfaces only when someone opens the page.

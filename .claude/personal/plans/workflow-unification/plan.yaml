@@ -2109,3 +2109,10 @@ items:
       stack.toml and the fork owner from the runner context, so no repository is named anywhere;
       a fresh fork need only enable Actions once. plan-item-resolve gathers the report in its
       PR-state step, gated on the in-review label.
+
+  - id: dashboard-url-cache-integrity
+    title: "Record dashboard URLs from the live artifact listing instead of by hand"
+    branch: null
+    track: dashboards
+    depends_on: []
+    status: in_progress
