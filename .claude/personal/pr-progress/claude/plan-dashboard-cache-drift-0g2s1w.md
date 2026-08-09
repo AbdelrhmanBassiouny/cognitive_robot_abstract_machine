@@ -23,12 +23,16 @@ artifact, and produced the duplicate. Both live pairs arose that way.
   `workflow-unification` reported `changed: false`, confirming it was already right.
 - 291 tests pass (plan-dashboard + hooks). Branch pushed.
 
+- Manifest carries `branch` + `session`; branch reverse-index regenerated via
+  `save-plan.sh`. Dashboard republished to `07123af6` — **same URL, and the artifact
+  count stayed at 11**, which is the end-to-end proof the duplicate-minting loop is
+  closed.
+
 **Next**
-- Awaiting the user's call on opening the draft PR. Once opened, run
-  `plan_item_bootstrap.py open --pull-request-number` to fill `branch`, `session`
-  and `pull_request_number` — currently `branch: null`, since `record` does not set
-  them and no PR exists yet.
-- Republish the `workflow-unification` dashboard (manifest changed by the `record`).
+- No PR opened: the task did not ask for one, and `add-plan-item` step 6 says `record`
+  only, never `open`. Say the word and I will open it as a draft with the `bug` label
+  and fill `pull_request_number`.
+- Nothing subscribed, nothing armed (no scheduled checks, per the notes).
 
 **Not addressed:** no automated audit of existing cache entries, so a URL that dies
 for some other reason still surfaces only when someone opens the page.
