@@ -1,5 +1,6 @@
 """
-Unit tests for :class:`cram_viz.body_geometry.BodyExtent`.
+Unit tests for :func:`cram_viz.body_geometry.measure_body` and
+:func:`~cram_viz.body_geometry.rounded_scale`.
 
 Every shape is attached to a real, single-body ``World`` rather than a duck-typed mimic:
 ``ShapeCollection.scale`` transforms each shape's bounding box through its reference
@@ -22,7 +23,7 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Optional
 
-from cram_viz.body_geometry import BodyExtent
+from cram_viz.body_geometry import measure_body, rounded_scale
 
 
 # %% fixtures
@@ -47,12 +48,12 @@ def _body_with_shapes(
     return body
 
 
-# %% BodyExtent.of
+# %% measure_body
 def test_of_measures_a_box():
     body = _body_with_shapes(
         collision=ShapeCollection(shapes=[Box(scale=Scale(0.2, 0.3, 0.4))])
     )
-    extent = BodyExtent.of(body)
+    extent = measure_body(body)
     assert [extent.x, extent.y, extent.z] == pytest.approx([0.2, 0.3, 0.4])
 
 
@@ -68,7 +69,7 @@ def test_of_measures_a_mesh():
             shapes=[Mesh.box(extents=(1.0, 1.0, 1.0), scale=Scale(0.2, 0.3, 0.4))]
         )
     )
-    extent = BodyExtent.of(body)
+    extent = measure_body(body)
     assert [extent.x, extent.y, extent.z] == pytest.approx([0.2, 0.3, 0.4])
 
 
@@ -77,7 +78,7 @@ def test_of_measures_a_sphere():
     A sphere has no ``.scale`` attribute; before the fix this reported ``None``.
     """
     body = _body_with_shapes(collision=ShapeCollection(shapes=[Sphere(radius=0.5)]))
-    extent = BodyExtent.of(body)
+    extent = measure_body(body)
     assert [extent.x, extent.y, extent.z] == pytest.approx([1.0, 1.0, 1.0])
 
 
@@ -88,13 +89,13 @@ def test_of_measures_a_cylinder():
     body = _body_with_shapes(
         collision=ShapeCollection(shapes=[Cylinder(width=0.4, height=0.6)])
     )
-    extent = BodyExtent.of(body)
+    extent = measure_body(body)
     assert [extent.x, extent.y, extent.z] == pytest.approx([0.4, 0.4, 0.6])
 
 
 def test_of_returns_none_when_the_body_has_no_shapes():
     body = _body_with_shapes()
-    assert BodyExtent.of(body) is None
+    assert measure_body(body) is None
 
 
 def test_of_prefers_visual_over_collision():
@@ -102,11 +103,10 @@ def test_of_prefers_visual_over_collision():
         visual=ShapeCollection(shapes=[Box(scale=Scale(0.1, 0.1, 0.1))]),
         collision=ShapeCollection(shapes=[Box(scale=Scale(0.9, 0.9, 0.9))]),
     )
-    extent = BodyExtent.of(body)
+    extent = measure_body(body)
     assert [extent.x, extent.y, extent.z] == pytest.approx([0.1, 0.1, 0.1])
 
 
-# %% BodyExtent.rounded
-def test_rounded_rounds_each_axis():
-    extent = BodyExtent(x=0.123456, y=1.0, z=2.987654)
-    assert extent.rounded(3) == [0.123, 1.0, 2.988]
+# %% rounded_scale
+def test_rounded_scale_rounds_each_axis():
+    assert rounded_scale(Scale(x=0.123456, y=1.0, z=2.987654), 3) == [0.123, 1.0, 2.988]

@@ -46,7 +46,7 @@ from semantic_digital_twin.spatial_types import (
     RotationMatrix,
 )
 from cram_viz import get_logger
-from cram_viz.body_geometry import BodyExtent
+from cram_viz.body_geometry import measure_body, rounded_scale
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
     Connection6DoF,
@@ -975,8 +975,8 @@ class Bridge:
 
         :param body: The body whose geometry is measured.
         """
-        extent = BodyExtent.of(body)
-        return extent.rounded(SIZE_PRECISION) if extent else None
+        extent = measure_body(body)
+        return rounded_scale(extent, SIZE_PRECISION) if extent else None
 
     # %% world snapshot
     def snapshot(self) -> None:

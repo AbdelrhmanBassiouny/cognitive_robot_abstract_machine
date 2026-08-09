@@ -19,6 +19,7 @@ from typing_extensions import (
 from krrood.entity_query_language import factories as eql_factories
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.scope import eql_factory_namespace
+from semantic_digital_twin.spatial_types import Point3
 
 from cram_viz.knowledge.architecture_entities import Package, PythonClass, SubPackage
 from cram_viz.knowledge.entities import (
@@ -27,7 +28,6 @@ from cram_viz.knowledge.entities import (
     BenchObject,
     Gripper,
     JointMotion,
-    Position,
     Robot,
 )
 from cram_viz.knowledge.knowledge_base import get_knowledge_base
@@ -133,7 +133,7 @@ def fresh_namespace() -> Dict[str, Any]:
     kb = get_knowledge_base()
     namespace: Dict[str, Any] = eql_factory_namespace()
     namespace.update(
-        Position=Position,
+        Point3=Point3,
         Gripper=Gripper,
         Arm=Arm,
         Robot=Robot,
@@ -180,6 +180,8 @@ def _jsonable(value: Any) -> Any:
 
     :param value: The raw query result value to render.
     """
+    if isinstance(value, Point3):
+        return "(%.2f, %.2f, %.2f)" % tuple(value.to_np().tolist()[:3])
     if is_dataclass(value) and not isinstance(value, type):
         return _entity_name(value) or repr(value)
     if isinstance(value, float):
@@ -240,7 +242,7 @@ def _result_rows(result: Any, limit: int) -> _RenderedRows:
     highlight: List[str] = []
     if result is None:
         return _RenderedRows(rows, highlight, False)
-    if isinstance(result, (str, int, float, bool)):
+    if isinstance(result, (str, int, float, bool, Point3)):
         rows.append({"value": _jsonable(result)})
         return _RenderedRows(rows, highlight, False)
     if is_dataclass(result) and not isinstance(result, type):
@@ -286,6 +288,8 @@ def _item_row(item: Any, highlight: List[str]) -> Dict[str, Any]:
     :param item: The query result item to render as a row.
     :param highlight: Output list entity ids to highlight are appended to.
     """
+    if isinstance(item, Point3):
+        return {"value": _jsonable(item)}
     if is_dataclass(item) and not isinstance(item, type):
         return _entity_row(item, highlight)
     if isinstance(item, MapsNamesToValues):  # a unification row from set_of()

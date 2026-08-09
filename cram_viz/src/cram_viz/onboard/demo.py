@@ -54,7 +54,7 @@ from typing_extensions import (
 )
 
 from cram_viz import get_logger, paths
-from cram_viz.body_geometry import BodyExtent
+from cram_viz.body_geometry import measure_body
 from cram_viz.live.bridge import ROBOT_BASE_KEY
 from cram_viz.monkey_patch import MethodPatch
 from cram_viz.onboard.bundle_urdf import bundle_urdf
@@ -882,7 +882,7 @@ def build_scene(
         # recorded from the world, so the knowledge base does not have to guess it;
         # omitted when the object's shapes report no measurable size
         body = (recorder._bodies or {}).get(mesh)
-        extent = BodyExtent.of(body) if body is not None else None
+        extent = measure_body(body) if body is not None else None
         if extent is not None:
             entry["height"] = round(extent.z, POSE_PRECISION)
         objects.append(entry)

@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
+from coraplex.datastructures.enums import JointType
 from typing_extensions import Any, Dict, List, Optional, TYPE_CHECKING
 
 from cram_viz.knowledge.enums import EdgeKind, NodeGroup
@@ -20,9 +21,6 @@ from cram_viz.knowledge.subgraph import (
 
 if TYPE_CHECKING:
     from cram_viz.knowledge.knowledge_base import EpisodeKnowledgeBase
-
-#: the one URDF joint type that cannot move
-FIXED_JOINT_TYPE = "fixed"
 
 
 @dataclass
@@ -85,7 +83,7 @@ def _is_movable(joint: UrdfJoint) -> bool:
 
     :param joint: The URDF joint to check.
     """
-    return joint.type != FIXED_JOINT_TYPE
+    return joint.type != JointType.FIXED
 
 
 def _urdf_view(knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
@@ -139,7 +137,7 @@ def _urdf_view(knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
         joint = parent_joint.get(link)
         lines = ["a URDF Link"]
         if joint:
-            lines.append("joint: %s (%s)" % (joint.name, joint.type))
+            lines.append("joint: %s (%s)" % (joint.name, joint.type.name.lower()))
             lines.append("parent link: " + joint.parent)
         else:
             lines.append("root link")
@@ -153,7 +151,7 @@ def _urdf_view(knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
                     "urdf:" + joint.parent,
                     "urdf:" + joint.child,
                     EdgeKind.PROP if _is_movable(joint) else EdgeKind.TYPE,
-                    "%s (%s)" % (joint.name, joint.type),
+                    "%s (%s)" % (joint.name, joint.type.name.lower()),
                 )
             )
     movable_count = sum(1 for joint in joints if _is_movable(joint))

@@ -6,6 +6,8 @@ import pytest
 
 krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
+from coraplex.datastructures.enums import Arms  # noqa: E402
+
 from cram_viz import knowledge  # noqa: E402  (importable once krrood is present)
 from cram_viz.knowledge import knowledge_base  # noqa: E402
 from cram_viz.knowledge.architecture_entities import (  # noqa: E402
@@ -13,7 +15,7 @@ from cram_viz.knowledge.architecture_entities import (  # noqa: E402
     PythonClass,
 )
 from cram_viz.knowledge.architecture_scan import ArchitectureScanner  # noqa: E402
-from cram_viz.knowledge.enums import ArmSide, EdgeKind, NodeGroup  # noqa: E402
+from cram_viz.knowledge.enums import EdgeKind, NodeGroup  # noqa: E402
 from cram_viz.knowledge.scene_bundle import SceneBundle  # noqa: E402
 from cram_viz.knowledge.subgraph import DetailEntry, GraphEdge  # noqa: E402
 from cram_viz.knowledge.views import plan_tree as plan_view  # noqa: E402
@@ -29,7 +31,7 @@ class TestEpisodeKnowledgeBase:
     def test_scene_entities(self, fresh_knowledge_base):
         assert [o.name for o in fresh_knowledge_base.objects] == ["milk", "place_area"]
         assert fresh_knowledge_base.robot.name == "pr2"
-        assert [a.side for a in fresh_knowledge_base.arms] == ["left"]
+        assert [a.side for a in fresh_knowledge_base.arms] == [Arms.LEFT]
         assert fresh_knowledge_base.arms[0].gripper.name == "left_gripper"
 
     def test_episodes_link_objects(self, fresh_knowledge_base):
@@ -38,7 +40,7 @@ class TestEpisodeKnowledgeBase:
         )
         assert transport.picks is fresh_knowledge_base.objects[0]
         assert transport.places_at.name == "place_area"
-        assert transport.performed_by.side == "left"
+        assert transport.performed_by.side == Arms.LEFT
 
     def test_joint_motion_ranges(self, fresh_knowledge_base):
         torso = next(
@@ -105,7 +107,7 @@ class TestArmSideInference:
             for arm in knowledge.get_knowledge_base().arms
             if arm.name == "center_arm"
         )
-        assert center_arm.side == ArmSide.UNKNOWN
+        assert center_arm.side is None
 
 
 class TestQueries:
@@ -203,6 +205,18 @@ class TestViewPayloads:
         kinds = {e.label.split(" ")[0]: e.kind for e in payload.edges}
         assert kinds["torso_lift_joint"] == EdgeKind.PROP
         assert kinds["l_gripper_joint"] == EdgeKind.TYPE
+
+    def test_kinematics_edge_label_shows_the_urdf_joint_type(self, fixture_scene):
+        """
+        ``UrdfJoint.type`` is a :class:`~coraplex.datastructures.enums.JointType` now,
+        but the tooltip must still read the plain URDF word (``prismatic``), not the
+        enum member's own text (``JointType.PRISMATIC``).
+        """
+        payload = knowledge.view_payload("kinematics")
+        torso_edge = next(
+            e for e in payload.edges if e.label.startswith("torso_lift_joint")
+        )
+        assert torso_edge.label == "torso_lift_joint (prismatic)"
 
     def test_kinematics_counts_every_movable_joint(self, fixture_scene):
         """
