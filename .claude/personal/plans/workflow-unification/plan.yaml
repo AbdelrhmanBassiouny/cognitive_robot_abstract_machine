@@ -1927,7 +1927,32 @@ items:
       all four test directories. resolve-personal-notes-config.sh auto-merged exactly as the
       pre-open merge-tree check predicted. 347 tests pass across the four suites, and
       .claude/stack/tests existing on main means the full four-directory command runs for the
-      first time. Textual overlap with #121's and #126's session-start.sh/check-setup.sh
+      first time.
+
+      Handed over 2026-08-09: the user marked #135 ready for review themselves, which by the
+      notes-branch convention is their record of having read and accepted it, and ends this
+      session's job on the pull request. State at handover: head db034e64, 12 commits, 907
+      additions across 13 files, mergeable_state unstable (mergeable, robotics CI red),
+      draft false, no bug label. The item stays in_progress because it has not merged.
+
+      Three things outstanding, none blocking and none this session's to fix after the
+      signal. (1) The needs-resolution label is stale - the branch became mergeable again
+      with db034e64 and the maintenance pass clears the label itself once it does, so it was
+      left rather than raced. (2) One review thread is deliberately open, the run_git
+      duplication question, answered with a recommendation and left for the user to close.
+      (3) The description still says 346 tests and names only semantic_digital_twin under CI;
+      it is one merge behind, and was left alone because the ready-for-review flip is the
+      user's record of having read what was there.
+
+      CI at handover: test_claude_dev_tooling green on every run this branch ever had. Four
+      distinct robotics failures across four runs, none reachable from a .claude/-only diff -
+      semantic_digital_twin's two texture assertions in test_multi_sim.py (proven base-side:
+      main fails identically on its own run, and #124 hit the same pair a day before this
+      branch existed), a coraplex notebook kernel dying before replying to kernel_info, and
+      giskardpy twice on two different tests (test_drive_into_apartment on the last run, an
+      rclpy handle-lifecycle teardown). The semantic_digital_twin pair is the only one that
+      looks like a real defect rather than flakiness, it blocks every pull request in the
+      repository, and it was offered as its own bug-labelled item and not taken up. Textual overlap with #121's and #126's session-start.sh/check-setup.sh
       work is nil; the shared surface is resolve-personal-notes-config.sh (new constants
       appended) and the three plan-*/SKILL.md files, which no other in-flight item on this
       track touches.

@@ -4224,3 +4224,41 @@ The generalizable point is the one #119 already made in a different costume: **a
 whose wrong value is indistinguishable from a legitimate one has to be rejected by the code
 that produces it, not trusted by the reader.** An empty file list is valid-looking. So is a
 conflict flag on a clean tree. Both were believed until they were re-derived from git.
+
+### Handed over 2026-08-09: #135 marked ready by the user
+
+The user flipped #135 out of draft themselves, which by the notes-branch convention ends
+the owning session's job on it — that flip is their record of having read and accepted the
+changes, and it is deliberately distinguished from a session marking its own pull request
+ready to unblock a dependent.
+
+The item stays `in_progress`: it has not merged. What the handover leaves behind, all
+reported before unsubscribing and none of it fixed afterwards, because the same convention
+says report-then-stop rather than stay to tidy:
+
+- **A stale `needs-resolution` label.** The branch became mergeable again with `db034e64`;
+  the maintenance pass clears the label itself on the next run that sees a clean merge, so
+  clearing it by hand would only race a loop that already works. This is the second time on
+  this pull request that leaving the label alone was the right call.
+- **One open review thread**, the `run_git` duplication question — answered with a
+  recommendation and left open on purpose, since the answer was "recorded elsewhere, not
+  changed here" rather than an action taken.
+- **A description one merge behind** (it says 346 tests, and names only
+  `semantic_digital_twin` under CI). Not corrected, because the ready-for-review flip is the
+  user's record of having read the description as it stood; editing it afterwards would
+  change what they just accepted.
+
+**The CI record is worth keeping as a data point about this repository rather than about
+this branch.** `test_claude_dev_tooling` — the only job a `.claude/`-only diff can reach —
+was green on every run this branch ever had. Four *different* robotics jobs went red across
+four runs: `semantic_digital_twin`'s two `test_multi_sim.py` texture assertions, a `coraplex`
+notebook kernel dying before it could answer `kernel_info`, and `giskardpy` twice on two
+*different* tests. Only the first looks like a real defect — proven base-side, since `main`
+fails identically on its own run and #124 hit the same pair a day before this branch existed
+— and it blocks every open pull request in the repository. It was offered as its own
+bug-labelled item and not taken up.
+
+The generalizable part, for the next branch that sits here a while: an all-green matrix was
+never reachable from this branch, so "wait for green" would have been an indefinite block.
+What made the pull request reviewable anyway was having one job that genuinely covers the
+diff, and being able to say precisely why each of the other four failures was not it.
