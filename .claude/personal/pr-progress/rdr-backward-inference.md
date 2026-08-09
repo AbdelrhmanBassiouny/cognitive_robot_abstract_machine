@@ -28,6 +28,21 @@ consumers on `D-ui`.
 - `plan.yaml` + `roadmap.md` §17 saved (`1b29ffbb3`); dashboard republished;
   #94 comment posted.
 
+## Closed (2026-08-09)
+
+Developer marked #41 **ready for review** at 13:20Z → this session's job on it
+is over. CI green **20/20** on `efc8a0679`, `mergeable_state: clean`,
+11 files / +1,946. Unsubscribed; **no check-in armed** (the subscription notice
+asked for one; the personal notes forbid timed checks and override it).
+
+Correction worth keeping: the `total_count: 0` reading right after the push was
+just *too early*, not a repeat of §14's #98 CI-trigger problem. Don't
+generalise §14 from it.
+
+#41 is ready for the steward to merge as the stack bottom; the next pass should
+cascade it through #63–#67/#98. Everything under "Next" below now belongs to
+whoever picks up `d-core-expert` (#98) — start a fresh session for it.
+
 ## Next — belongs on `d-core-expert` (#98) and above, not here
 
 1. **Probe first**: can an unclassified case whose conclusion attribute is
