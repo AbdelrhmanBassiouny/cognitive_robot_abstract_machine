@@ -30,12 +30,22 @@ skill's judgement, since steps 1-4 already hold every signal it would need.
 
 - Item registered in the manifest, roadmap section appended, branch pushed,
   draft PR #149 opened, `branch`/`session`/`pull_request_number` recorded,
-  status `in_progress`.
+  status `in_progress`, dashboard republished.
+- All five implementation steps, pushed as `1dc0a52a`. Verified: the full CI
+  set (382 passed), a mutation check proving the new assertions bite,
+  `check-setup.sh` exit 0, `format_docstrings.py`, and the live `resolve`
+  calls in this clone (`ask`/`committed_default`, `--requested` overriding,
+  a bad mode exiting 3).
+- PR description refreshed to match what actually shipped; PR still draft.
 
 ## Next
 
-- Steps 1-5 above, then the CI test set, `format_docstrings.py`,
-  `check-setup.sh`, and a dashboard republish.
+- Watch #149's CI (`mergeable_state` was `unstable` right after the push) and
+  handle review comments as they arrive.
+- Not done, deliberately: the user's own `.claude/personal/plan-item-modes.toml`
+  is not written. Pinning `kickoff_mode = "auto"` changes their behaviour
+  globally, so it is offered rather than done —
+  `python3 .claude/hooks/plan_item_mode.py set --skill kickoff --mode auto`.
 
 ## Watch
 
