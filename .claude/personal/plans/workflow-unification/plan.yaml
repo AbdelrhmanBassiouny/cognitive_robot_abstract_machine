@@ -2155,3 +2155,95 @@ items:
     status: in_progress
     pull_request_number: 149
     session: https://claude.ai/code/session_015v3RfcEvtzNj47uEMac9p9
+
+  - id: manifest-currency-first
+    title: "Write the manifest and republish the dashboard before anything else, at every transition"
+    branch: claude/plan-manifest-update-priority-ex2zst
+    track: personal-data
+    depends_on: []
+    status: not_started
+    session: https://claude.ai/code/session_01NoxeSgtWJ6PuaHYQhzmw7n
+    notes: >
+      Raised 2026-08-09 by the user: every skill that can affect a plan must treat writing
+      the manifest and republishing the dashboard as its first priority, at every point that
+      makes a recorded field stale - starting work, opening a pull request, a new item, a new
+      plan, a changed description or status. plan-item-bootstrap (#143, merged) already
+      inverted this ordering for exactly one moment, the kickoff whose plan has just been
+      approved; this generalizes the same rule to every transition and to every skill that
+      can reach plan state.
+
+      The premise is recorded rather than asserted: this plan's own roadmap names the manifest
+      "the least accurate source" three separate times in one week - #109 on 2026-08-03, #115
+      on 2026-08-05 and #121 on 2026-08-07 - and each time everything needed to diagnose the
+      item was already on the pull request. Prose alone has now had three chances at this rule.
+
+      Scope settled with the user 2026-08-09. Six surfaces are bound: plan-create,
+      add-plan-item, plan-item-kickoff, plan-item-resolve, plan-dashboard, and
+      stacked-pr-maintenance. The maintenance pass is the one that is not obvious and is
+      deliberately in - it reparents pull requests, promotes branches and moves labels, so it
+      changes a tracked item's real state without ever touching plan.yaml. Its obligation runs
+      the other way from the rest: not "write before you act" but "the items you just moved
+      are now stale".
+
+      Also settled: as much as possible is scripted, and the instructions document keeps only
+      what a script cannot do. What genuinely cannot: calling the Artifact tool (the publish
+      itself, the constraint save-plan.sh and BootstrapReport.dashboard_command both already
+      state); creating the pull request under the user's identity rather than the proxying
+      app's (#143's live finding); knowing its own session URL, which WorkOpenRequest.session_url
+      already records as underivable; and the judgement of what the notes should say and which
+      status a non-mechanical transition means.
+
+      Reuse is a hard constraint, not a preference, and the seams were surveyed rather than
+      guessed. The work extends .claude/hooks/plan_item_bootstrap.py instead of adding a
+      sibling module: that file already owns PlanDocuments.load/save, the ManifestKey
+      vocabulary, ItemStatus, locate_item_block/apply_item_fields and the BootstrapReport
+      shape, so a second module would re-derive the item-block parser. Three gaps are this
+      item's own work. (1) record_item requires roadmap_section_path, so there is no way to
+      write a field without also appending a roadmap section - which most transitions do not
+      warrant. (2) ManifestKey has NOTES and BLOCKERS members but no operation writes either;
+      today only status, branch, pull request number, session, title and track can be set.
+      (3) Nothing compares the manifest against live branch/pull request state at transition
+      time: sync_manifest_status.py corrects one direction (merged to done) and only on a
+      dashboard run, and build_dashboard.py's fuller drift computation needs jinja2 and
+      markdown, which a hook cannot import - the same constraint ItemStatus's own docstring
+      already records. A transition-time check must reuse sync_manifest_status.py rather than
+      become a third drift implementation.
+
+      Four duplications must not be extended. run_git already exists three times
+      (plan_item_bootstrap.py, stack.py, #135's check_scope_overlap.py) and its unification is
+      recorded as dev-tooling-notes-core-python's git_interface.py seam, with the review thread
+      on #135 left open for the user; import it, do not write a fourth. ItemStatus is
+      duplicated with build_dashboard.py's enum and held equal by a test, with the single
+      definition deferred to the package migration. Dashboard URL recording belongs to #150's
+      record_dashboard_url.py and must be called, not re-derived. And the shared document must
+      cross-reference #149's execution-modes.md rather than restate its "auto mode still
+      obliges - write the plan down before implementing" clause, which is the triplication
+      add-plan-item exists to have ended.
+
+      The rule itself lives once, at .claude/skills/plan-dashboard/manifest-currency.md, beside
+      execution-modes.md and plan-schema.md, referenced in one line by each of the six skills -
+      the precedent prerequisite-check.md and scope-decision.md set.
+
+      Basing was checked with add-plan-item's own check_scope_overlap.py against origin/main
+      rather than by feel. Every path this touches already exists on main except the shared
+      document it introduces itself and add-plan-item/SKILL.md, so this is standalone work off
+      fork main with depends_on empty. Textual conflicts to expect, none of them folds, since
+      none of those branches introduces the file it shares: #135 and #149 on
+      plan-item-kickoff/SKILL.md and plan-item-resolve/SKILL.md, #135 on plan-create/SKILL.md,
+      #150 on plan-dashboard/SKILL.md, #139 on stacked-pr-maintenance/SKILL.md, and the usual
+      resolve-personal-notes-config.sh constant append shared with almost everything in flight.
+
+      One line cannot be written from main: the reference into add-plan-item/SKILL.md, a file
+      only #135 introduces. By the prefer-the-change rule it would belong on #135's branch, but
+      the user marked #135 ready for review themselves, which ends a session's job on it. So it
+      lands in this item's own pull request if #135 has merged by implementation time, and
+      otherwise is left for whoever lands #135 - #143's precedent, which put its equivalent
+      line on #135 while that was still an open draft.
+
+      Two things this item deliberately does not own. Enforcement by refusal belongs to
+      plan-item-edit-guard, which already owns the PreToolUse mechanism; if blocking is ever
+      wanted here it extends that item rather than building a second hook. And
+      plan_item_bootstrap.py's name is wrong once it writes more than a bootstrap - the rename
+      is worth raising with the user rather than taken unilaterally, since two skills and
+      resolve-personal-notes-config.sh reference the path and dev-tooling-save-plan-python
+      absorbs the file into the package regardless.
