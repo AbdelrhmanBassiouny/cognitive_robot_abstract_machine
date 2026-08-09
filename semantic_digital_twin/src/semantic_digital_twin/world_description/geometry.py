@@ -5,13 +5,14 @@ import logging
 import math
 import os
 import shutil
-import tempfile
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field, fields
 from functools import cached_property
+from pathlib import Path
 
 import numpy as np
+import numpy.typing as npt
 import trimesh
 import trimesh.exchange.stl
 from PIL import Image
@@ -40,6 +41,7 @@ from semantic_digital_twin.spatial_types import (
     Point3,
     Vector3,
 )
+from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import (
@@ -404,6 +406,18 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         This should be implemented by subclasses.
         """
 
+    def mesh_in_frame(self, target_frame: KinematicStructureEntity) -> trimesh.Trimesh:
+        """
+        :param target_frame: The kinematic structure entity to express the mesh
+            relative to.
+        :return: A copy of :attr:`mesh` transformed from this shape's own frame into
+            *target_frame*.
+        """
+        world = self.origin.reference_frame._world
+        world_mesh = self.mesh.copy()
+        world_mesh.apply_transform(world.transform(self.origin, target_frame).to_np())
+        return world_mesh
+
     def to_json(self) -> Dict[str, Any]:
         return {
             **super().to_json(),
@@ -709,9 +723,28 @@ class Mesh(Shape):
         scale: Optional[Scale] = None,
         uv: Optional[np.ndarray] = None,
         texture_file_path: Optional[str] = None,
-        dirname: str = "/tmp",
+        directory: Optional[Path] = None,
         file_type: str = "obj",
     ) -> "Mesh":
+        """
+        Create a Mesh by exporting a trimesh to a file.
+
+        The mesh is written into a directory of its own, so a material or texture written
+        beside it cannot collide with another export's.
+
+        ..warning:: Without an explicit directory the file lives only as long as this
+            process. Such a path must not be stored in anything that outlives it.
+
+        :param mesh: The mesh to export.
+        :param origin: Origin of the mesh.
+        :param scale: Scale of the mesh.
+        :param uv: UV coordinates to apply before exporting.
+        :param texture_file_path: Path of a texture to apply before exporting.
+        :param directory: Where to place the mesh's own directory inside of /tmp, defaulting to a root
+            that is removed when this process exits.
+        :param file_type: Format to export the mesh in.
+        :return: Mesh reading from the exported file.
+        """
         file_type = file_type.lower()
         if origin is None:
             origin = HomogeneousTransformationMatrix()
@@ -722,37 +755,24 @@ class Mesh(Shape):
         if texture_file_path is not None:
             mesh = cls.add_texture(mesh=mesh, texture_file_path=texture_file_path)
 
-        # Each export gets its own subdir so material.mtl files never collide
-        subdir = tempfile.mkdtemp(dir=dirname)
-        tmp_path = os.path.join(subdir, f"{os.path.basename(subdir)}.{file_type}")
+        mesh_directory = (
+            MeshFileStorage().allocate_directory()
+            if directory is None
+            else MeshFileStorage.create_mesh_directory(Path(directory))
+        )
+        mesh_file_path = mesh_directory / f"{mesh_directory.name}.{file_type}"
 
         try:
-            mesh.export(tmp_path, file_type=file_type)
+            mesh.export(str(mesh_file_path), file_type=file_type)
         except Exception:
-            shutil.rmtree(subdir, ignore_errors=True)
+            shutil.rmtree(mesh_directory, ignore_errors=True)
             raise
 
-        instance = cls(
+        return cls(
             origin=origin,
             scale=scale,
-            filename=tmp_path,
+            filename=str(mesh_file_path),
         )
-
-        # # Tie file lifetime to the Mesh instance TODO luca wants to find a way for this to work with rviz (atexit)
-        # weakref.finalize(instance, cls._cleanup_temp_dir, subdir)
-
-        return instance
-
-    @staticmethod
-    def _cleanup_temp_dir(subdir: str) -> None:
-        """
-        Clean up the temporary subdirectory created for the mesh.
-        """
-        logger.debug(f"Cleaning up temporary directory: {subdir}")
-        try:
-            shutil.rmtree(subdir, ignore_errors=True)
-        except OSError:
-            pass
 
     @classmethod
     def box(
@@ -1114,6 +1134,46 @@ class Bounds(Generic[T], SubClassSafeGeneric):
     The corner with the largest coordinate on every axis.
     """
 
+    def clip_segment(
+        self, start: npt.NDArray[np.float64], direction: npt.NDArray[np.float64]
+    ) -> Optional[SimpleInterval]:
+        """
+        Clip the parametrized segment ``start + t * direction`` (``t`` in ``[0, 1]``)
+        against this region, using the slab method.
+
+        Assumes ``lower``/``upper`` are plain numeric arrays, as returned by
+        :meth:`BoundingBox.to_array_bounds`.
+
+        .. note::
+            ``start``/``direction`` are plain arrays rather than :class:`Point3`/
+            :class:`Vector3` on purpose: this runs once per graph node on every
+            collision check, and :class:`Point3`/:class:`Vector3` arithmetic pays a
+            symbolic (casadi) cost on every access. Callers should convert to arrays
+            once before looping, not per call.
+
+        :param start: The segment's start point.
+        :param direction: The vector from the segment's start to its end.
+        :return: The sub-interval of ``t`` for which the segment lies inside this
+            region, or None if the segment misses it entirely.
+        """
+        t_min, t_max = 0.0, 1.0
+        for coordinate, delta, lower, upper in zip(
+            start, direction, self.lower, self.upper
+        ):
+            if abs(delta) < 1e-12:
+                if coordinate < lower or coordinate > upper:
+                    return None
+                continue
+            t_enter = (lower - coordinate) / delta
+            t_exit = (upper - coordinate) / delta
+            if t_enter > t_exit:
+                t_enter, t_exit = t_exit, t_enter
+            t_min = max(t_min, t_enter)
+            t_max = min(t_max, t_exit)
+            if t_min > t_max:
+                return None
+        return SimpleInterval.from_data(t_min, t_max, Bound.CLOSED, Bound.CLOSED)
+
 
 @dataclass(eq=False)
 class BoundingBox:
@@ -1200,12 +1260,9 @@ class BoundingBox:
 
         :return: The corners, in the same frame as ``origin``.
         """
-        lower = np.array(
-            [self.x_interval.lower, self.y_interval.lower, self.z_interval.lower]
-        )
-        upper = np.array(
-            [self.x_interval.upper, self.y_interval.upper, self.z_interval.upper]
-        )
+        x, y, z = self.x_interval, self.y_interval, self.z_interval
+        lower = np.array([x.lower, y.lower, z.lower])
+        upper = np.array([x.upper, y.upper, z.upper])
         return Bounds(lower, upper)
 
     def to_point3_bounds(self) -> Bounds[Point3]:
@@ -1214,16 +1271,17 @@ class BoundingBox:
 
         :return: The corners, in the same frame as ``origin``.
         """
+        x, y, z = self.x_interval, self.y_interval, self.z_interval
         lower = Point3(
-            self.x_interval.lower,
-            self.y_interval.lower,
-            self.z_interval.lower,
+            x.lower,
+            y.lower,
+            z.lower,
             reference_frame=self.origin.reference_frame,
         )
         upper = Point3(
-            self.x_interval.upper,
-            self.y_interval.upper,
-            self.z_interval.upper,
+            x.upper,
+            y.upper,
+            z.upper,
             reference_frame=self.origin.reference_frame,
         )
         return Bounds(lower, upper)
@@ -1261,11 +1319,30 @@ class BoundingBox:
         )
 
     @property
+    def volume(self) -> float:
+        """
+        :return: The volume the bounding box encloses.
+        """
+        return self.depth * self.width * self.height
+
+    @property
     def dimensions(self) -> List[float]:
         """
         :return: The dimensions of the bounding box as a list [width, depth, height].
         """
         return [self.depth, self.width, self.height]
+
+    @property
+    def center(self) -> Point3:
+        """
+        :return: The center point of the bounding box, in the same frame as ``origin``.
+        """
+        return Point3(
+            self.x_interval.center(),
+            self.y_interval.center(),
+            self.z_interval.center(),
+            reference_frame=self.origin.reference_frame,
+        )
 
     def bloat(
         self, x_amount: float = 0.0, y_amount: float = 0, z_amount: float = 0
