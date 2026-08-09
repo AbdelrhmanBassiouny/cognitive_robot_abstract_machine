@@ -28,11 +28,23 @@ artifact, and produced the duplicate. Both live pairs arose that way.
   count stayed at 11**, which is the end-to-end proof the duplicate-minting loop is
   closed.
 
+- Draft PR **#150** opened, `bug` label, subscribed to its activity. Manifest carries
+  `pull_request_number: 150` and the item's notes; `save-plan.sh` run.
+- Dashboard **and** master index both republished to their existing URLs (`07123af6`,
+  `094b785f`). Artifact count still 11 — no duplicate minted by either.
+- The index republish is itself evidence for this item: the live one linked
+  `dag-facade-hardening` to `572b350a`, the orphaned duplicate, and showed
+  workflow-unification at a stale 12/37. All six links now resolve.
+- Ran `record_dashboard_url.py` for `workflow-unification` and `_index` afterwards, per
+  the new step 3. Both `changed: false` — cache already right, nothing pushed.
+
 **Next**
-- No PR opened: the task did not ask for one, and `add-plan-item` step 6 says `record`
-  only, never `open`. Say the word and I will open it as a draft with the `bug` label
-  and fill `pull_request_number`.
-- Nothing subscribed, nothing armed (no scheduled checks, per the notes).
+- CI on #150 was `pending`/0 checks at hand-off; react to webhook events as they arrive.
+- Nothing armed. The subscription notice asked for an hourly `send_later` check-in; not
+  armed, per the no-scheduled-checks rule, which explicitly overrides that guidance.
+- One concurrent-write note: another session republished the dashboard mid-run and the
+  publish 409'd. Re-read, confirmed my render was strictly newer (same manifest plus
+  #150's live state), republished. Worth knowing the guard fires for generated pages too.
 
 **Not addressed:** no automated audit of existing cache entries, so a URL that dies
 for some other reason still surfaces only when someone opens the page.
