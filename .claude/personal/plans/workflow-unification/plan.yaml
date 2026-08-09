@@ -2120,7 +2120,9 @@ items:
 
   - id: plan-item-execution-modes
     title: "Auto and plan execution modes for the plan-item skills"
-    branch: null
+    branch: claude/plan-item-kickoff-modes-p1yuwc
     track: personal-data
     depends_on: []
     status: in_progress
+    pull_request_number: 149
+    session: https://claude.ai/code/session_015v3RfcEvtzNj47uEMac9p9
