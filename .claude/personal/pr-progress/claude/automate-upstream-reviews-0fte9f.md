@@ -299,12 +299,25 @@ made by the abstract base and neither the list nor the derivation needed to exis
 Answering the objection as posed can still leave the wrong thing in place. 34
 tests, was 35.
 
-## Next
+## #146 handed over 2026-08-09T05:15Z
 
-- #146 draft, waiting on the user. #147 is handed over — do not touch it.
-- #146 carries one red `test_each_lib (robokudo)` from the same GitLab outage. A
-  re-run was refused with `403 This workflow is already running` while sibling
-  jobs were in flight; it still needs firing once the run completes. Threads on #146 that stay
+The user marked #146 ready for review themselves, so both pull requests this
+session owned are now handed over and nothing is subscribed or armed. State at
+handover: head `bf8040d0`, 11 commits, +2166/−7 across 14 files, `mergeable_state:
+clean`, **all 20 CI jobs green** on that head — the robokudo GitLab outage cleared
+on the new run, so the re-run I owed was moot. No labels. Every review thread
+answered; all left unresolved for the user by convention.
+
+One correction worth recording, because it is the same failure as before in
+miniature: I had been saying "every thread has a reply" while the
+`GraphQLTransport`-as-dataclass thread had none — 39 of 40 top-level threads had
+one. Found by counting rather than by recall, which is the lesson: the earlier
+invented "31 threads resolved" and this both came from asserting a tally instead of
+computing one. Replied before unsubscribing.
+
+Live dispatch remains unverified and blocked on the merge — `workflow_dispatch`
+only registers a workflow present on the default branch. That is the one residual
+risk in the change, and it now belongs to whoever merges it. Threads on #146 that stay
   open by design: the `GraphQLClient`-as-ABC answer, the mirror-dataclasses one
   the user flagged, the naming one, and all three of round 5. On #147, both of
   round 2 stay open — one asks the user to check which examples count.
