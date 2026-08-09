@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from typing_extensions import TYPE_CHECKING, List, Optional, Sequence, Tuple
 
+from krrood.class_diagrams.mocking import MockedClass
 from semantic_digital_twin.exceptions import PointOccupiedError
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     SemanticEnvironmentAnnotation,
@@ -33,6 +34,74 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+
+# %% drake fallbacks
+#
+# ConvexSet, HPolyhedron, Iris, IrisOptions, Point, VPolytope, GcsTrajectoryOptimization
+# and Subgraph are used below both as dataclass field types and as real runtime values.
+# Leaving them unbound when drake is missing crashes any code that resolves this
+# module's type hints (e.g. ORM/class-diagram generation), not just code that actually
+# uses GraphOfConvexPolygons. Binding them to these mocks keeps every annotation
+# resolvable; actually instantiating one still fails loudly, via
+# krrood.class_diagrams.mocking.MockedClass.
+
+
+@dataclass
+class _MockedConvexSet(MockedClass):
+    """
+    Mocked class for ConvexSet in pydrake.
+    """
+
+
+@dataclass
+class _MockedHPolyhedron(MockedClass):
+    """
+    Mocked class for HPolyhedron in pydrake.
+    """
+
+
+@dataclass
+class _MockedIris(MockedClass):
+    """
+    Mocked class for the Iris function in pydrake.
+    """
+
+
+@dataclass
+class _MockedIrisOptions(MockedClass):
+    """
+    Mocked class for IrisOptions in pydrake.
+    """
+
+
+@dataclass
+class _MockedPoint(MockedClass):
+    """
+    Mocked class for Point in pydrake.
+    """
+
+
+@dataclass
+class _MockedVPolytope(MockedClass):
+    """
+    Mocked class for VPolytope in pydrake.
+    """
+
+
+@dataclass
+class _MockedGcsTrajectoryOptimization(MockedClass):
+    """
+    Mocked class for GcsTrajectoryOptimization in pydrake.
+    """
+
+
+@dataclass
+class _MockedSubgraph(MockedClass):
+    """
+    Mocked class for GcsTrajectoryOptimization.Subgraph in pydrake.
+    """
+
+
 try:
     from pydrake.geometry.optimization import (
         ConvexSet,
@@ -55,6 +124,14 @@ except ImportError:
         "drake is required for GraphOfConvexPolygons. Please install it using "
         "'pip install drake'."
     )
+    ConvexSet = _MockedConvexSet
+    HPolyhedron = _MockedHPolyhedron
+    Iris = _MockedIris
+    IrisOptions = _MockedIrisOptions
+    Point = _MockedPoint
+    VPolytope = _MockedVPolytope
+    GcsTrajectoryOptimization = _MockedGcsTrajectoryOptimization
+    Subgraph = _MockedSubgraph
 
 
 def _default_iris_options() -> IrisOptions:
@@ -187,9 +264,7 @@ def _shape_to_convex_set(
     :return: A ``VPolytope`` built from the shape's own mesh if it is convex, or an
         ``HPolyhedron`` bounding box otherwise.
     """
-    world = shape.origin.reference_frame._world
-    world_mesh = shape.mesh.copy()
-    world_mesh.apply_transform(world.transform(shape.origin, target_frame).to_np())
+    world_mesh = shape.mesh_in_frame(target_frame)
 
     if world_mesh.is_convex:
         vertices = _bloat_convex_hull_points(world_mesh.vertices, bloat_x, bloat_y)
@@ -317,9 +392,7 @@ class GraphOfConvexPolygons(GraphOfConvexSets):
                 continue
             if any(region.PointInSet(seed) for region in regions):
                 continue
-            regions.append(
-                Iris(result.obstacles, seed, domain, settings.iris_options)
-            )
+            regions.append(Iris(result.obstacles, seed, domain, settings.iris_options))
 
         result.regions = regions
         result._region_subgraph = result._trajectory_optimization.AddRegions(
