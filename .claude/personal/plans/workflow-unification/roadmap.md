@@ -4329,3 +4329,105 @@ not deleted, because a session cannot delete an artifact.
 
 Not addressed here: the pre-existing entries have no automated audit, so a URL that dies
 for some *other* reason still surfaces only when someone opens the page.
+
+## Update 2026-08-09 (new item): the plan-item skills get an execution mode
+
+Raised by the user: *"I want in the plan-item-kickoff skill to first ask the user whether he
+wants to recreate a plan for this item or to go directly for implementation... Also I want the
+user to be able to override this behaviour by a settings in his personal notes so that if he
+does not want to be asked at all you just go ahead and implement directly with an implicit
+planning phase that doesn't require his approval, so you go fully autonomous till you have
+already finished and the draft pr has the implementation that he should review."*
+
+Tracked as `plan-item-execution-modes` on track `personal-data`, wave `immediate`.
+
+### What is actually wrong today
+
+`plan-item-kickoff` and `plan-item-resolve` have exactly one shape. Both gather their context,
+present a plan through `ExitPlanMode`, and stop. That gate is unconditional, so it costs the
+same round trip on an item whose `notes` and roadmap section already settle every design call
+as on one whose premise is in doubt — and the session that produced all that context is
+discarded while waiting, or has to be told to continue.
+
+The gate is worth keeping where a plan genuinely needs a decision. It is the *unconditional*
+part that is wrong.
+
+### Two modes, and a third value that only decides who picks
+
+- **plan** — today's behaviour, unchanged: draft the plan, present it via `ExitPlanMode`, stop.
+- **auto** — draft the same plan, record it, and implement it without asking. The planning
+  phase still happens and is still written down; what it stops doing is blocking.
+- **ask** — gather first, then put the choice to the user with a recommendation and its
+  reasons. This is the built-in default.
+
+`ask` is the default rather than `auto` because the user's opening requirement was the question
+itself, and because a default that implements unasked is the wrong failure for someone who
+inherits this repository having never configured it. Pinning `auto` is one command, and is
+where the user who asked for this is expected to land.
+
+### The recommendation is the skill's, not the script's
+
+Settled with the user before the item was written, against the alternative of computing a
+recommendation from deterministic signals (blockers present, a dependency not ready, an item
+with no notes). Rejected: every one of those signals is already in the skill's hands by the time
+the question is asked — steps 1-4 gather exactly that — so a script that recomputed them would
+duplicate `check_dependency_readiness.py` and still be blind to the half of the judgement that
+matters, which is whether the *gathered material actually settles the design*.
+
+So the script resolves the mode and nothing else. Single responsibility, and the part that is
+genuinely mechanical — precedence, validation, persistence — is the part that gets scripted, per
+the same call `plan-item-bootstrap` recorded for its own split.
+
+### Precedence, and why an invalid value is an error rather than a fallback
+
+Invocation argument > personal-notes setting > committed default. The personal file is
+`.claude/personal/plan-item-modes.toml`, layered over committed defaults at
+`.claude/hooks/plan-item-modes.toml` — the same split `.claude/stack/stack.toml` and
+`.claude/personal/stack.toml` already established, so a reader who has seen one knows the other.
+
+A value outside the enum raises rather than falling back to the default. A silent fallback on a
+typo means the run behaves as though the setting were absent, which is indistinguishable from it
+working — and the whole point of the setting is that the user does not have to watch the run to
+know what it will do.
+
+`set` exists for the same reason: with two keys in one file, a documented raw
+`write-personal-notes-file.sh` call would clobber the key the user was not changing.
+
+### One document, two callers
+
+The mode's meaning, the question, the auto-path obligations and the escalation rule live once,
+in `plan-dashboard/execution-modes.md`, with each skill referencing it in a line — the shape
+`prerequisite-check.md` and `scope-decision.md` already established, and specifically not the
+per-skill copy that `add-plan-item` exists to have ended.
+
+The escalation rule is what keeps auto mode honest: it still stops and asks when a decision
+changes the item's recorded scope or contract, is not easily revertible, or deviates from the
+settled plan in a way a reviewer would not expect. Everything below that bar is decided and
+recorded in the PR-progress note and the pull request description instead of in a question.
+
+One rule needed an explicit carry-over. `cram-notes.md`'s "Plan-mode approval → persistent
+plans" fires on plan-mode approval, which auto mode never reaches. The shared document states
+that the same multi-PR-scope judgement runs at the moment the plan is settled, so the rule does
+not quietly lapse on the new path.
+
+### `record` before `open`, for an item that does not exist yet
+
+Found while bootstrapping this item. `plan-item-kickoff` step 7 prescribes `open` before
+`record`, because the pull request number does not exist until the pull request does. That
+ordering assumes an item the plan already tracks: `open_work` raises `UnknownItemError` for one
+it does not, and `record` is the only operation that creates an entry (`--title`/`--track`).
+
+Not fixed in step 7, which only ever runs against an already-tracked item. Recorded here because
+the next caller creating an item from scratch will hit it, and `add-plan-item` is that caller.
+
+New entries render with `depends_on: []` and no `notes`, so the relationship to
+`plan-item-bootstrap` — this item extends the step that item added — is recorded here rather
+than in the manifest. It is not a readiness dependency: that item is `done` and on `main`.
+
+### Scope
+
+The scope check was run rather than judged, with `git ls-tree origin/main` over the paths this
+touches: all four already exist on the base, so this is standalone work rather than an edit to
+an unlanded pull request. It does overlap `add-plan-item-skill`, which edits both the same
+`SKILL.md` files to add its `scope-decision.md` reference — a merge conflict to expect, not a
+fold, since neither exists to change the other.

@@ -2117,3 +2117,10 @@ items:
     track: dashboards
     depends_on: []
     status: in_progress
+
+  - id: plan-item-execution-modes
+    title: "Auto and plan execution modes for the plan-item skills"
+    branch: null
+    track: personal-data
+    depends_on: []
+    status: in_progress
