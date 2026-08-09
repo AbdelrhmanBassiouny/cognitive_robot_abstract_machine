@@ -128,6 +128,24 @@ Files: `.claude/hooks/plan_item_bootstrap.py`, its test module under
   deps at the bootstrap commit, an `archive.ubuntu.com` mirror-sync mismatch on
   `7352cfb7`); `test_quizzes.sh` passed on the next commit, confirming transient.
 
+## Merged 2026-08-09 — item done, session's job on #143 over
+
+- #143 merged into fork `main`. Verified by content, not the notification:
+  `f77794b0` is an ancestor of `origin/main`; `plan_item_bootstrap.py`, its
+  tests and fixtures are present; `SKILL.md` carries step 6 and the config
+  file carries `PLAN_ITEM_BOOTSTRAP_SCRIPT`.
+- Manifest set to `done` with a landing note, roadmap section added, dashboard
+  republished (38 items: 14 done / 11 in progress / 13 not started, no drift).
+- **Fourth stale-save revert, caught and re-applied.** My save landed at
+  `96d9a47f`, and 5 seconds later another session's `b28375ea` wrote back a
+  manifest loaded before it — reverting this item to `in_progress` and deleting
+  the roadmap section, while legitimately marking #124 done. Re-applied onto
+  their version; both correct now. Verified after writing, which is the only
+  reason it was caught.
+- Teardown done: unsubscribed from #143 (automatic), no subscription held on
+  #102, and no triggers armed by this session (newest in the account is
+  2026-07-29, all `run_once_fired`). Nothing left armed or watching.
+
 ## Next
 
 - **One open thread, waiting on the user**: whether to re-base this item onto
