@@ -2112,7 +2112,8 @@ items:
 
   - id: dashboard-url-cache-integrity
     title: "Record dashboard URLs from the live artifact listing instead of by hand"
-    branch: null
+    branch: claude/plan-dashboard-cache-drift-0g2s1w
+    session: https://claude.ai/code/session_01CtpkhY4uomdaWY2rv25WaY
     track: dashboards
     depends_on: []
     status: in_progress
