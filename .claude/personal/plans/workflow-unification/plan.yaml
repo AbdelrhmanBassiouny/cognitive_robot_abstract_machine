@@ -2113,10 +2113,39 @@ items:
   - id: dashboard-url-cache-integrity
     title: "Record dashboard URLs from the live artifact listing instead of by hand"
     branch: claude/plan-dashboard-cache-drift-0g2s1w
+    pull_request_number: 150
     session: https://claude.ai/code/session_01CtpkhY4uomdaWY2rv25WaY
     track: dashboards
     depends_on: []
     status: in_progress
+    notes: >
+      Raised 2026-08-09: five of six plans plus the master index pointed at artifacts
+      that did not exist, and two plans had duplicate dashboards. Hand-corrected at least
+      six times since 2026-07-26 and drifted again every time, so the question was the
+      mechanism rather than the mapping. Classifying every URL ever written to the cache
+      against the live artifact listing separates by run kind: bulk refresh 0/23 named a
+      real artifact, first publish 10/13, corrections 15/15 - and every correction was
+      made from `Artifact action: "list"`. The cache read was never at fault and `url:`
+      was being passed; SKILL.md step 3 asked the session to hand-write the YAML with
+      "your updated url(s)", but on an in-place update there is no returned URL to copy,
+      so a UUID was invented and nothing checked it. The next run passed that dead URL as
+      `url:`, could not update a missing page, minted a fresh artifact, and produced the
+      duplicate - both live pairs arose that way. Fixed by moving the write into
+      record_dashboard_url.py, which resolves the URL from the listing by title so no
+      UUID passes through the session at all; it refuses an unlisted URL, a title
+      matching nothing, and a title matching several (naming both and demanding --url,
+      which also blocks silently repointing another plan's entry).
+      DASHBOARD_URL_CACHE_PATH and RECORD_DASHBOARD_URL_SCRIPT move into
+      resolve-personal-notes-config.sh. 15 tests written failing first; 291 pass across
+      the two suites CI runs. Cache reconciled with the new script one key at a time -
+      dag-facade-hardening keeps 49053971 by the user's choice, workflow-unification
+      reported changed:false, confirming an entry already fixed by hand. Verified end to
+      end: republishing landed on the same URL and the artifact count stayed at 11.
+      Draft PR #150, bug label, based on fork main and independent of the #101/#106 chain;
+      the SKILL.md overlap with #120's bug-chip work is the usual
+      whichever-lands-second-merges pattern for this track. Not addressed: no automated
+      audit of existing entries, so a URL that dies for another reason still surfaces only
+      when someone opens the page.
 
   - id: plan-item-execution-modes
     title: "Auto and plan execution modes for the plan-item skills"
