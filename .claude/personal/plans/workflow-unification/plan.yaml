@@ -1938,7 +1938,7 @@ items:
     pull_request_number: 143
     track: personal-data
     depends_on: []
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01VoH56TLkH5rA5EFu2xhML9
     notes: >
       Raised 2026-08-04. Today a session that has just had an implementation plan approved
