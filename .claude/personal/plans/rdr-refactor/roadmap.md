@@ -1268,3 +1268,21 @@ all** and neither interpreter could import `numpy`. Installing the workspace req
 `giskardpy_bullet_bindings`, which is not installable from PyPI — so the sweep ran with
 `--confcutdir=test/krrood_test`. §12's note stands and tightens: a local run here shows *no new
 failures* and cannot show *no failures*, and it may not be able to load the root conftest at all.
+
+### Closed (2026-08-09)
+
+The developer marked #41 **ready for review** at 13:20Z, which under the standing convention
+ends this session's job on it. CI green **20/20** on `efc8a0679`; `draft: false`,
+`mergeable_state: clean`, 11 files / +1,946. Unsubscribed from #41 activity; no check-in armed
+(the subscription notice asked for one — the personal notes forbid timed checks and override it).
+
+One correction worth carrying: the `total_count: 0` reading taken minutes after the push was
+simply *too early*, not another instance of §14's #98 CI-trigger problem. The run queued and
+completed normally. §14's finding stands for #98 and should not be generalised from this.
+
+Two threads stay open by design — the branch-semantics family (§16, the developer's to close)
+and `query_graph.pdf` (half-answered: the revert landed, untracking the generated PDFs is a
+`main`-level fix that was offered, not taken).
+
+#41 is ready for the steward to merge as the stack bottom; the next pass should cascade it
+through #63–#67/#98.

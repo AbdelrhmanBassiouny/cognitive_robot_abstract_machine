@@ -259,7 +259,17 @@ items:
     the is UNSET -> is ... substitution, the parameterizer reachability probe, and fixing
     single_class.classify, annotated -> Optional[Any] with "or None if no rule fires" while it
     returns the sentinel (observer.py:132-137) -- the #68 review''s classify()->UNSET decision
-    was implemented in the observer and the signature never followed.'
+    was implemented in the observer and the signature never followed.
+    2026-08-09 (closed): the developer marked #41 ready for review at 13:20Z, which under the
+    standing convention ends the working session''s job on it. CI green 20/20 on efc8a0679
+    (the earlier total_count:0 reading was simply taken before the run queued -- it is NOT
+    another instance of the #98 CI-trigger problem in Sec.14). draft: false, mergeable_state:
+    clean, 11 files / +1,946. Session unsubscribed from #41 activity and armed no check-in.
+    Two review threads remain open by design: the branch-semantics family (Sec.16, the
+    developer''s to close) and query_graph.pdf (half-answered -- the revert is done, untracking
+    the generated PDFs is a main-level fix, offered but not taken). #41 is ready for the
+    steward to merge as the stack bottom; the next pass should cascade it through
+    #63-#67/#98.'
 - id: D-core-aid
   title: 'RDR engine: ConclusionAid (expert-labelling assistance)'
   branch: D-core-aid
