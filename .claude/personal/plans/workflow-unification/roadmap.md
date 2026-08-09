@@ -4162,49 +4162,18 @@ Worth generalizing: **a conditional instruction ("if no harm") is answered by te
 condition, not by weighing it.** Removing python3 from `PATH` took one command and turned a
 judgement call into a demonstration.
 
-## Update 2026-08-05 (merged): plan-item-bootstrap lands, and the executor's false positive
+## Update 2026-08-03 (closed): dashboard-chip-notes-collapse merged
 
-#143 merged into fork `main`. Verified by content rather than from the notification:
-`f77794b0` is an ancestor of `origin/main`, `plan_item_bootstrap.py` with its test module
-and fixtures are present, `plan-item-kickoff/SKILL.md` carries step 6, and
-`resolve-personal-notes-config.sh` carries `PLAN_ITEM_BOOTSTRAP_SCRIPT`. The ordering this
-item exists to invert is therefore the documented procedure on `main` now: a kickoff whose
-plan is approved opens the branch and draft pull request and records the item *before* the
-first edit, rather than leaving the manifest saying `not_started` for the length of the work.
+`dashboard-chip-notes-collapse` (PR #124) merged into fork `main` on 2026-08-03, the same day
+the user marked it ready for review themselves. Three `origin/main` merges landed on the branch
+from outside any session while the pull request was open, each surfacing a CI failure this
+session investigated and none of which had any path back to the template-only diff: a
+`coraplex` pytest-xdist worker crash, `semantic_digital_twin` mesh-material assertion failures
+that cleared once an upstream texture-resolution fix landed, a second worker crash on a ROS
+synchronizer test, and finally a missing-ROS-package error in a newly-merged Gazebo adapter's
+own tests. Each was replied to on the pull request explaining why it wasn't being fixed there,
+matching this plan's established pattern of unrelated robotics CI noise on `.claude/`-only
+changes - see the `setup-personal-notes-pr101` and other entries above for the same pattern.
 
-The item was bootstrapped by hand in the order it prescribes, since the tool did not exist
-yet - so the first genuine run belongs to whichever item is kicked off next, and that run is
-the real test of it.
-
-### The maintenance executor reported a conflict that did not exist
-
-Worth recording here rather than only on #139, because it is the second failure mode this
-plan has seen from a *hand-or-machine-assembled input treated as truth*, after #119.
-
-Two conflict reports arrived on #143 from the maintenance pass, both with an empty
-`Conflicting files:` section. The first (14:10 UTC) named a real conflict -
-`.claude/hooks/README.md`, where `main` had gained #115's `plan-updates-since.sh` bullet in
-the same list this branch extends - so it read as "detection right, naming empty". The
-second (20:37 UTC) disproved that reading: `git merge-tree --write-tree origin/main
-f77794b0` exits 0 and GitHub reports `mergeable_state: clean`, and `main` had not moved
-since 14:27 UTC, so both passes ran on pinned, re-testable inputs. It reported a conflict on
-a clean merge and applied `needs-resolution`.
-
-**A false positive here fails in the dangerous direction.** `needs-resolution` withholds a
-branch from every later pass, so a wrong one silently removes a healthy branch from the
-workflow; and this branch was labelled while already `clean`, meaning the detection and the
-label-clearing check disagreed about the same branch within one pass - the loop #139 exists
-to close, failing open the other way. The label was cleared by hand, re-sending the full set
-so `in-review` survived.
-
-One hypothesis covers both symptoms and is recorded on #139 for its owner to test: an
-integration that fails for *any* reason is classified as a conflict, and the unmerged paths
-are enumerated from a state that has none. That predicts an empty list on every conflict
-report, which #139's own `.gitignore` report contradicts - so the picture is not uniform,
-and that contradiction is the part that would falsify it. Not fixed from here: it is #139's
-module, and the reproduction above is enough to write a failing test from.
-
-The generalizable point is the one #119 already made in a different costume: **a report
-whose wrong value is indistinguishable from a legitimate one has to be rejected by the code
-that produces it, not trusted by the reader.** An empty file list is valid-looking. So is a
-conflict flag on a clean tree. Both were believed until they were re-derived from git.
+Session unsubscribed from the pull request and from this plan's tracking issue #102 (held only
+for this item's sake) on merge, per the "when your PR's job ends" convention.

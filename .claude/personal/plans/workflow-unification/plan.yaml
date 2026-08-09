@@ -1829,7 +1829,7 @@ items:
     pull_request_number: 124
     track: dashboards
     depends_on: []
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01HaU9fwvtLUvFh4k93K6p5C
     notes: >
       Raised 2026-08-01 against a screenshot of this very plan's own dashboard: the
@@ -1851,6 +1851,16 @@ items:
       based on fork main; build_dashboard.py/dashboard.html overlap with #103, #105,
       #111, #119, #120 and #122 is the usual whichever-lands-second-merges pattern for
       this track. Opened as draft pull request #124, subscribed to its activity.
+      CI: two unrelated failures investigated across three origin/main merges that landed
+      on this branch from outside any session (coraplex/semantic_digital_twin worker
+      crashes, a mesh-material assertion cleared by an upstream fix, and a missing-ROS-
+      package error in a newly-merged Gazebo adapter's tests) - none had any path back to
+      this template-only diff; each was replied to on the pull request rather than fixed
+      here, per the established pattern of unrelated robotics CI noise on .claude/-only
+      changes. The user marked the pull request ready for review themselves on 2026-08-03
+      (not reverted to draft, per this plan's own precedent for a user-made draft-to-ready
+      flip) and it merged into fork main the same day. Session unsubscribed from both the
+      pull request and this plan's tracking issue #102 on merge.
 
   - id: add-plan-item-skill
     branch: claude/add-plan-item-skill-e89irj
@@ -1928,7 +1938,7 @@ items:
     pull_request_number: 143
     track: personal-data
     depends_on: []
-    status: done
+    status: in_progress
     session: https://claude.ai/code/session_01VoH56TLkH5rA5EFu2xhML9
     notes: >
       Raised 2026-08-04. Today a session that has just had an implementation plan approved
@@ -2034,21 +2044,6 @@ items:
       names the script's path rather than a ${PLAN_ITEM_BOOTSTRAP_SCRIPT} constant, since
       that constant arrives with this item and a variable reference would expand to nothing
       in the window where #135 has landed and this has not.
-
-      Merged into fork main 2026-08-05. Verified by content rather than from the merge
-      notification: f77794b0 is a git merge-base --is-ancestor of origin/main, and
-      plan_item_bootstrap.py, its test module and its fixtures are all present there, with
-      plan-item-kickoff/SKILL.md carrying step 6 and resolve-personal-notes-config.sh the
-      PLAN_ITEM_BOOTSTRAP_SCRIPT constant. So the ordering this item exists to invert is now
-      the documented procedure on main: a kickoff whose plan is approved opens the branch and
-      draft pull request and records the item before the first edit.
-      Four review rounds (19 + 5 + 1 + 1 comments), every thread replied to and resolved except
-      the ItemStatus/build_dashboard.py unification question, which was answered with a
-      recommendation and left for the user; it belongs to dev-tooling-python-package, the item
-      that actually moves build_dashboard.py.
-      Residue needing out-of-harness deletion: the remote branch
-      claude/plan-item-bootstrap-probe-vocs6b, from the live creation probe (sessions cannot
-      delete branches - the standing constraint recorded 2026-07-29).
 
   - id: upstream-review-reader
     branch: claude/automate-upstream-reviews-0fte9f
