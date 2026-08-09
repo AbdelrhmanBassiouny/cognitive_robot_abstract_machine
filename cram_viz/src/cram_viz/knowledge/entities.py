@@ -8,32 +8,10 @@ from dataclasses import dataclass
 
 from typing_extensions import Optional
 
-from cram_viz.knowledge.enums import ArmSide
+from coraplex.datastructures.enums import Arms
+from semantic_digital_twin.spatial_types import Point3
 
-
-@dataclass(unsafe_hash=True)
-class Position:
-    """
-    A world position in metres.
-    """
-
-    x: float
-    """
-    World x coordinate.
-    """
-
-    y: float
-    """
-    World y coordinate.
-    """
-
-    z: float
-    """
-    World z coordinate.
-    """
-
-    def __repr__(self) -> str:
-        return "(%.2f, %.2f, %.2f)" % (self.x, self.y, self.z)
+from cram_viz.knowledge.enums import JointRegion
 
 
 @dataclass(unsafe_hash=True)
@@ -47,9 +25,9 @@ class Gripper:
     Part name from the scene's robot annotation.
     """
 
-    side: ArmSide
+    side: Optional[Arms]
     """
-    Body side the gripper belongs to.
+    Which arm the gripper belongs to, or None when its name names neither.
     """
 
     opening_m: Optional[float] = None
@@ -70,9 +48,9 @@ class Arm:
     Part name from the scene's robot annotation.
     """
 
-    side: ArmSide
+    side: Optional[Arms]
     """
-    Body side of the arm.
+    Which arm this is, or None when its name names neither.
     """
 
     robot: str
@@ -103,7 +81,7 @@ class Robot:
     """
 
 
-@dataclass(unsafe_hash=True)
+@dataclass(eq=False)
 class BenchObject:
     """
     A loose object (or named location) in the scene.
@@ -130,10 +108,34 @@ class BenchObject:
     not report one (the object's shapes carry no measurable size).
     """
 
-    position: Position
+    position: Point3
     """
     Spawn position recorded at frame 0 of the episode.
     """
+
+    def _comparison_key(self) -> tuple:
+        """
+        Field values, with :attr:`position` reduced to its plain coordinates.
+
+        :class:`Point3` compares by identity and hashes its CasADi expression, neither
+        of which reflects the recorded coordinates, so equality/hashing here must read
+        the coordinates out explicitly instead of deferring to :class:`Point3` itself.
+        """
+        return (
+            self.name,
+            self.kind,
+            self.label,
+            self.height_m,
+            tuple(self.position.to_np().tolist()),
+        )
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, BenchObject):
+            return NotImplemented
+        return self._comparison_key() == other._comparison_key()
+
+    def __hash__(self) -> int:
+        return hash(self._comparison_key())
 
 
 @dataclass(unsafe_hash=True)
@@ -194,9 +196,9 @@ class JointMotion:
     Joint name (without the model prefix).
     """
 
-    arm_side: ArmSide
+    arm_side: JointRegion
     """
-    Body side the joint belongs to.
+    Region of the robot/scene the joint belongs to.
     """
 
     min_rad: float

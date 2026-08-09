@@ -8,6 +8,9 @@ from collections import defaultdict
 
 from typing_extensions import Any, Dict, List, Optional, Tuple
 
+from coraplex.datastructures.enums import Arms
+from semantic_digital_twin.spatial_types import Point3
+
 from cram_viz.knowledge.architecture_entities import PythonClass, SubPackage
 from cram_viz.knowledge.architecture_scan import ArchitectureScanner
 from cram_viz.knowledge.entities import (
@@ -16,24 +19,23 @@ from cram_viz.knowledge.entities import (
     BenchObject,
     Gripper,
     JointMotion,
-    Position,
     Robot,
 )
-from cram_viz.knowledge.enums import ArmSide
+from cram_viz.knowledge.enums import JointRegion
 from cram_viz.knowledge.scene_bundle import load_scene
 
 
-def _side_of_name(name: str) -> Optional[ArmSide]:
+def _side_of_name(name: str) -> Optional[Arms]:
     """
-    Body side encoded in a part/link name, or None when it names neither.
+    Which arm a part/link name encodes, or None when it names neither.
 
     :param name: The part or link name to inspect.
     """
     lowered = name.lower()
     if "left" in lowered or lowered.startswith("l_"):
-        return ArmSide.LEFT
+        return Arms.LEFT
     if "right" in lowered or lowered.startswith("r_"):
-        return ArmSide.RIGHT
+        return Arms.RIGHT
     return None
 
 
@@ -90,9 +92,7 @@ class EpisodeKnowledgeBase:
                     kind="object",
                     label=entry["id"].replace("_", " ").title(),
                     height_m=entry.get("height"),
-                    position=Position(
-                        *[round(value, 3) for value in entry["spawn"][:3]]
-                    ),
+                    position=Point3(*[round(value, 3) for value in entry["spawn"][:3]]),
                 )
             )
         if scene.get("placeTarget"):
@@ -103,7 +103,7 @@ class EpisodeKnowledgeBase:
                     kind="location",
                     label="Place area",
                     height_m=0.0,  # a target area on a surface, not a solid
-                    position=Position(
+                    position=Point3(
                         round(target["pos"][0], 3),
                         round(target["pos"][1], 3),
                         target.get("z", 0),
@@ -140,7 +140,7 @@ class EpisodeKnowledgeBase:
         ]
         grippers, arms = [], []
         for arm_part in sorted(arm_parts):
-            side = _side_of_name(arm_part) or ArmSide.UNKNOWN
+            side = _side_of_name(arm_part)
             gripper_part = next(
                 (part for part in gripper_parts if _side_of_name(part) == side), None
             )
@@ -175,7 +175,7 @@ class EpisodeKnowledgeBase:
             """
             hint = (segment.get("arm") or "").lower()
             for arm in self.arms:
-                if arm.side and arm.side in hint:
+                if arm.side is not None and arm.side.name.lower() in hint:
                     return arm
             return self.arms[0] if self.arms and segment.get("picks") else None
 
@@ -222,10 +222,11 @@ class EpisodeKnowledgeBase:
 
         link_to_part = {link: part for part, links in parts.items() for link in links}
 
-        def side_of(key: str) -> ArmSide:
+        def side_of(key: str) -> JointRegion:
             """
-            Which arm side a prefixed joint key belongs to, or ``ENVIRONMENT``/``BODY``
-            when it isn't part of an arm.
+            Which region a prefixed joint key belongs to: ``LEFT``/``RIGHT`` for an arm
+            joint, ``ENVIRONMENT`` when it isn't the recorded robot's own joint, else
+            ``BODY``.
 
             :param key: The prefixed joint key to classify.
             """
@@ -233,11 +234,16 @@ class EpisodeKnowledgeBase:
             if "/" not in key:
                 prefix, joint_name = "", key
             if robot_prefix and prefix != robot_prefix:
-                return ArmSide.ENVIRONMENT
+                return JointRegion.ENVIRONMENT
             part = link_to_part.get(joint_name.replace("_joint", "_link"))
-            if part and _side_of_name(part):
-                return _side_of_name(part)
-            return _side_of_name(joint_name) or ArmSide.BODY
+            arm_side = _side_of_name(part) if part else None
+            if arm_side is None:
+                arm_side = _side_of_name(joint_name)
+            if arm_side is Arms.LEFT:
+                return JointRegion.LEFT
+            if arm_side is Arms.RIGHT:
+                return JointRegion.RIGHT
+            return JointRegion.BODY
 
         return [
             JointMotion(

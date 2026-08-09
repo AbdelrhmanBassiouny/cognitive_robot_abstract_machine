@@ -7,16 +7,20 @@ from __future__ import annotations
 from enum import Enum
 
 
-class ArmSide(str, Enum):
+class JointRegion(str, Enum):
     """
-    Which body side a joint/part belongs to, as inferred from its name.
+    Which region of the robot/scene a joint belongs to, as inferred from its name.
+
+    Arms and grippers use :class:`coraplex.datastructures.enums.Arms` instead, since
+    they always name a specific arm; a joint can also belong to the robot's body or to
+    the environment, which :class:`~coraplex.datastructures.enums.Arms` has no member
+    for.
     """
 
     LEFT = "left"
     RIGHT = "right"
     BODY = "body"
     ENVIRONMENT = "environment"
-    UNKNOWN = "unknown"
 
 
 class NodeGroup(str, Enum):

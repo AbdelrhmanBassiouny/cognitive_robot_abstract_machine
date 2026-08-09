@@ -184,7 +184,7 @@ Panels.define('eql', function (root, bus) {
   // %% helpers
   const TYPE_GROUP = {
     BenchObject: 'object', ActionEpisode: 'event', Arm: 'robot', Gripper: 'robot',
-    Robot: 'robot', JointMotion: 'robot', Position: 'concept',
+    Robot: 'robot', JointMotion: 'robot', Point3: 'concept',
     Package: 'concept', SubPackage: 'klass', PythonClass: 'klass',
   };
   function groupOfType(t) { return TYPE_GROUP[t] || 'ind'; }

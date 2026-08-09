@@ -10,6 +10,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from coraplex.datastructures.enums import JointType
 from typing_extensions import Any, Dict, List, Optional
 
 from cram_viz import get_logger, paths
@@ -45,9 +46,9 @@ class UrdfJoint:
     Joint name.
     """
 
-    type: str
+    type: JointType
     """
-    URDF joint type, e.g. ``revolute``, ``prismatic``, ``fixed``.
+    URDF joint type, e.g. ``REVOLUTE``, ``PRISMATIC``, ``FIXED``.
     """
 
     parent: str
@@ -160,7 +161,7 @@ def load_urdf() -> ParsedUrdf:
             joints.append(
                 UrdfJoint(
                     name=joint.group(1),
-                    type=joint.group(2),
+                    type=JointType[joint.group(2).upper()],
                     parent=parent.group(1),
                     child=child.group(1),
                 )

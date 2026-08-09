@@ -8,6 +8,9 @@ from dataclasses import asdict, dataclass
 
 from typing_extensions import Any, Dict, List, Optional
 
+from coraplex.datastructures.enums import Arms
+from semantic_digital_twin.spatial_types import Point3
+
 from cram_viz.knowledge.enums import EdgeKind, NodeGroup
 from cram_viz.knowledge.knowledge_base import get_knowledge_base
 from cram_viz.knowledge.presets import Preset, get_presets
@@ -82,11 +85,33 @@ def _measurement_line(
 
     :param label: Label the measurement is shown under.
     :param value: The recorded measurement in metres, or None if it was not recorded.
-    :param number_format: ``%``-style format applied to ``value``.
+    :param number_format:``%``-style format applied to ``value``.
     """
     if value is None:
         return []
     return ["%s: %s m" % (label, number_format % value)]
+
+
+def _side_label(side: Optional[Arms]) -> str:
+    """
+    Lower-case display name of an arm side, or ``unknown`` when it could not be
+    inferred.
+
+    :param side: The arm side to label.
+    """
+    return side.name.lower() if side is not None else "unknown"
+
+
+def _position_label(position: Point3) -> str:
+    """
+    A position's coordinates, formatted to two decimal places.
+
+    :class:`Point3` has no plain-value ``__repr__`` of its own (it is a CasADi-symbolic
+    type), so the coordinates are read out explicitly.
+
+    :param position: The position to format.
+    """
+    return "(%.2f, %.2f, %.2f)" % tuple(position.to_np().tolist()[:3])
 
 
 def _count_plan_nodes(tree: Dict[str, Any]) -> int:
@@ -121,14 +146,18 @@ def graph_payload() -> KnowledgeGraphPayload:
             arm.name,
             arm.name.replace("_", " "),
             NodeGroup.ROBOT,
-            ["an Arm", "side: " + arm.side, "gripper: " + arm.gripper.name],
+            [
+                "an Arm",
+                "side: " + _side_label(arm.side),
+                "gripper: " + arm.gripper.name,
+            ],
         )
         view.edges.append(GraphEdge(rob, arm.name, EdgeKind.PROP, "has part"))
         view.add(
             arm.gripper.name,
             arm.gripper.name.replace("_", " "),
             NodeGroup.ROBOT,
-            ["a Gripper", "side: " + arm.gripper.side]
+            ["a Gripper", "side: " + _side_label(arm.gripper.side)]
             + _measurement_line("opening", arm.gripper.opening_m, "%.3f"),
         )
         view.edges.append(
@@ -143,7 +172,7 @@ def graph_payload() -> KnowledgeGraphPayload:
             [
                 "a BenchObject",
                 "kind: " + bench_object.kind,
-                "position: " + repr(bench_object.position),
+                "position: " + _position_label(bench_object.position),
             ]
             + _measurement_line("height", bench_object.height_m, "%.2f"),
         )
