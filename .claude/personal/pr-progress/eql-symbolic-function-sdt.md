@@ -139,6 +139,21 @@ real blockers; dashboard republished.
   - **Open loop**: `rerun_failed_jobs` keeps returning 403 "workflow is already
     running" (there is nearly always a job in flight). No longer needed for the
     synchronizer flake (it passed), but the same block applies if a re-run is wanted.
+  - *Round 5 (`442d8f06a`, another `main` merge)*: **6 jobs red, all one upstream
+    packaging problem, not ours.** Every demos/notebooks job (`examples_and_demos.yml`)
+    dies in *Install dependencies* within ~2 min:
+    `greenlet==3.5.5` was published with macOS/Windows wheels only — no Linux wheel, no
+    sdist. `uv.lock` pins **3.5.4** (full manylinux coverage), but no workflow passes
+    `--locked`/`--frozen`, so `uv sync` re-resolves and picks 3.5.5. Proof it is not
+    ours: `uv.lock`, root `pyproject.toml` and the krrood/sdt/coraplex pyprojects are all
+    **byte-identical to `main`**, so `main` resolves the same and fails the same.
+    Reported on #33 (5241088681) with three options — wait for upstream wheels, add
+    `--locked` to the `uv sync` calls (the recurrence-proof one), or pin
+    `greenlet != 3.5.5`. All belong on `main`, not in this PR; offered to open a small
+    separate PR for the `--locked` change if the user wants it.
+  - Also verified in round 5 that the merge did **not** disturb our work:
+    `ignored_base_classes` is intact in `ormatic.py` (main independently refactored the
+    surrounding `__module__` lookups to `get_module_of_type`, merged clean).
 - Reacting to webhook events; per these notes, no timed check-in is armed. When a
   base-branch-recovered notice arrives, merge `main` again and let CI re-run.
 - When the type-noun decision lands: if it is "type-level display noun", that is a
