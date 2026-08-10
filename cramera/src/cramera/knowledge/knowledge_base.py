@@ -89,7 +89,7 @@ class EpisodeKnowledgeBase:
         )
         self.joints = self._build_joint_motions(trajectory, parts, robot_prefix)
 
-        architecture_scan = ArchitectureScanner().load()
+        architecture_scan = ArchitectureScanner.of_configured_root().load()
         self.packages = architecture_scan.packages
         self.classes = architecture_scan.classes
         self.package_dependencies = architecture_scan.dependency_edges

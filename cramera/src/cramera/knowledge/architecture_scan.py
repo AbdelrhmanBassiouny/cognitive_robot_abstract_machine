@@ -57,9 +57,14 @@ class ArchitectureScan:
     """
 
 
+@dataclass
 class ArchitectureScanner:
     """
-    Scans the CRAM repository's architecture, cached to disk between runs.
+    Scans one CRAM repository's architecture, cached to disk between runs.
+
+    The repository root is held here rather than read inside each method, so a scan is
+    reproducible and can be pointed at another checkout without touching the
+    environment.
     """
 
     DESCRIPTION_LENGTH_LIMIT = 120
@@ -105,6 +110,18 @@ class ArchitectureScanner:
     """
     Curated one-line descriptions for the well-known workspace packages.
     """
+
+    root: str
+    """
+    Path of the CRAM repository being scanned.
+    """
+
+    @classmethod
+    def of_configured_root(cls) -> "ArchitectureScanner":
+        """
+        A scanner for the repository :func:`cramera.paths.architecture_root` points at.
+        """
+        return cls(root=str(paths.architecture_root()))
 
     def scan(self) -> ArchitectureScan:
         """
@@ -157,7 +174,7 @@ class ArchitectureScanner:
         packages: List[Dict[str, Any]] = []
         classes: List[Dict[str, Any]] = []
         imports: Dict[str, set] = {}
-        cram_root = str(paths.architecture_root())
+        cram_root = self.root
         if not os.path.isdir(cram_root):
             return packages, classes, []
 
@@ -316,7 +333,7 @@ class ArchitectureScanner:
         """
         :meth:`_scan_raw` behind the JSON disk cache.
         """
-        cram_root = str(paths.architecture_root())
+        cram_root = self.root
         cached = self._load_cache(cram_root, require_classes=False)
         if cached is not None:
             return cached

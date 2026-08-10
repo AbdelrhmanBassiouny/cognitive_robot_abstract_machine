@@ -82,7 +82,7 @@ class TestArchitectureScanner:
         ``scan()`` must hand back typed ``Package``/``PythonClass`` instances directly,
         not the raw dicts the on-disk cache stores.
         """
-        result = ArchitectureScanner().scan()
+        result = ArchitectureScanner.of_configured_root().scan()
         assert result.packages and all(
             isinstance(package, Package) for package in result.packages
         )
@@ -92,12 +92,29 @@ class TestArchitectureScanner:
         plan_class = next(c for c in result.classes if c.name == "Plan")
         assert plan_class.subpackage == "coraplex.plans"
 
+    def test_the_scanner_reads_the_root_it_was_given(self, fixture_scene, tmp_path):
+        """
+        The root is a field, not something each method reads from the environment, so a
+        scanner can be pointed at another checkout.
+        """
+        other_root = tmp_path / "other_checkout"
+        (other_root / "solo_package").mkdir(parents=True)
+        (other_root / "solo_package" / "module.py").write_text(
+            "class Alone:\n    pass\n"
+        )
+
+        result = ArchitectureScanner(root=str(other_root)).scan()
+
+        # "root" is the synthetic entry for loose top-level scripts
+        assert [package.name for package in result.packages] == ["root", "solo_package"]
+        assert [python_class.name for python_class in result.classes] == ["Alone"]
+
     def test_load_caches_the_scan_on_disk(self, fixture_scene):
         """
         ``load()`` must return the same entities as ``scan()``, from the cache on a
         second call.
         """
-        scanner = ArchitectureScanner()
+        scanner = ArchitectureScanner.of_configured_root()
         scanned = scanner.scan()
         loaded_once = scanner.load()
         loaded_again = scanner.load()
