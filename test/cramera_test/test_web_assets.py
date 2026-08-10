@@ -139,6 +139,12 @@ class TestJsUnits:
     def test_response_util(self):
         self.run_node("test_response_util.js")
 
+    def test_collada_mesh(self):
+        self.run_node("test_collada_mesh.js")
+
+    def test_environment_theme(self):
+        self.run_node("test_environment_theme.js")
+
 
 class TestQueryPanelHints:
     """
