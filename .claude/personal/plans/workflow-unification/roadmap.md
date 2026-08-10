@@ -4881,3 +4881,113 @@ already correct and is untouched.
 an unsubscribe, or a prohibition. `.claude/hooks/tests` never referenced the changed strings,
 so no test needed updating; pytest is not installed in this container, so the suite was not
 run locally and CI covers it.
+
+## Update 2026-08-10 (new item): a regenerated integration branch, designed but unbuilt
+
+`integration-branch` enters `stack-tooling` as `not_started` with no branch and no pull
+request. Three implementation attempts were blocked in the designing session, so what exists
+is a design and the reasoning behind it — recorded here because that reasoning is the part
+that would otherwise evaporate with the session.
+
+### The constraint is review throughput, not branch hygiene
+
+Every other item in this track improves how branches reach cram2. This one accepts that the
+queue is slow and asks a different question: what do you build *from* while twenty of your own
+features sit unreviewed? The answer is a branch that is upstream main with every in-flight
+stack tip merged on top, regenerated from scratch on demand. It is not history. Nothing merges
+out of it, and a conflict found on it is fixed in the feature branch, never on the branch
+itself.
+
+### Why it must not gate promotion
+
+The tempting design is to let a clean integration build mean "ready for upstream". It cannot,
+and the reason is structural rather than a matter of taste: if A and B conflict, gating
+promotion on a clean build blocks A because of B, with no principled reason A is the one that
+waits. Promotion asks whether a branch is ready for review against upstream main; integration
+asks whether the branches coexist. Two different questions, so integration runs parallel to
+the promotion pipeline and feeds signals into it rather than standing in front of it.
+
+### Three reversals this session made against its own earlier spec
+
+Worth recording as reversals rather than as conclusions, because each was held confidently
+first:
+
+**Stop-on-conflict became skip-and-continue.** A build that halts on the first conflict leaves
+nothing to work from, which is precisely the thing the branch exists to provide. The cost of
+the reversal is that merge order now decides *which* branch gets skipped, so order became an
+explicit, stated property (`stack.order()` within a stack, ascending PR number between stacks)
+and the report names the conflicting pair rather than the casualty — "B skipped" is not
+actionable.
+
+**The CI gate was dropped rather than fixed.** It would have deadlocked against the restack:
+restacking rewrites heads, CI re-runs, every restacked branch reads `pending`, a green filter
+excludes it, and the build comes back near-empty. That was the single most likely way the
+feature disappoints on first use. Dropping it also removed a dependency on a field that does
+not work — see below. What replaces it is one `--test` run on the finished branch, which is
+strictly more informative for less work: it catches semantic conflicts that per-branch CI
+structurally cannot, such as A renaming a method while B adds a caller, both green, merging
+clean and breaking on import.
+
+**rerere was cut, then restored.** The cut rested on a premise that turned out to be false —
+that conflicts are never resolved on the integration branch. They are, constantly, and the
+resolutions are exactly the state these ephemeral containers lose. It is back, persisted to
+personal-notes as a tarball, with the limit stated rather than papered over: it buys a working
+daily driver, not a discharged upstream obligation.
+
+### The sibling conflict is what splits the work between script and skill
+
+"Conflicts are fixed in the feature branch" conflates two situations, and only one has a
+feature-branch fix. A branch conflicting with upstream main is stale — clear owner, clear fix,
+handled by `--restack`. Two siblings conflicting with each other is different: both are based
+on main, both are destined upstream, neither is wrong, and adapting B to an unlanded A makes B
+depend on unmerged work, which is the stacking this workflow exists to avoid.
+
+So there is often no correct branch to fix *today*, and that is what makes the decision a
+judgement rather than a script's. Detecting a collision and attributing it to a pair is
+mechanical (`merge-tree`, non-mutating, cheap). Deciding what the collision *means* is not, and
+it has three real outcomes: **reconcile** when the two are duplicating something and one should
+adopt the other's abstraction — this plan's own history has that case, with #110 and #106
+independently building the same artifact; **stack** when B genuinely depends on A, which the
+existing tooling already models as `base = parent`; and **defer** when they touch the same
+lines incidentally and whoever lands second adapts.
+
+`integration.py` therefore keeps detection, attribution and skipping and makes no judgement;
+`/integration-conflict-triage` makes the call. The skill is deliberately not a comment-bot:
+only *reconcile* and *stack* give an owner something to do, and the comment-routing rule
+already sends pure FYIs to the manifest rather than to a pull request nobody is watching. No
+detection-time reporting is built at all, because the maintenance pass's `needs-resolution`
+label and `IntegrateParent` comment already cover landing time — when the conflict is real and
+its target stable.
+
+### A hole in #139's export, found independently of this design
+
+`stack.PullRequest.ci` is declared, documented (`success`/`failure`/`pending`/None), read by
+`load_board` and copied onto `Branch` by `build_stack` — and never populated.
+`BoardExport._pull_request` sets it from `record.get("ci")` against a `GET /pulls` payload that
+carries no such key, in the one method whose stated contract is that it refuses a missing
+derived field rather than defaulting it. Gating on green would have meant making that field
+real first — a head-SHA export field, a check-runs fetch and a conclusion enum — inside this
+pull request. Dropping the gate removed the dependency, but the hole is real independently of
+whether anything reads it, and telling #139 is left open.
+
+### One naming constraint that is not cosmetic
+
+Builds are `integration-<timestamp>`, hyphen rather than slash, with `integration` as a moving
+pointer. Git stores refs as files, so `refs/heads/integration/<timestamp>` cannot exist while
+`refs/heads/integration` does: the obvious naming is the one git refuses. Recorded because it
+looks like a style choice and is not.
+
+### Basing, checked rather than assumed
+
+The item depends on `stack-maintenance-executor` and would branch from #139's head rather than
+main, because `maintenance.py` exists only there — `git ls-tree main -- .claude/stack/` is
+empty for it. Run against the prefer-the-change test: removing the edits to #139's files would
+still leave a whole new module, its test module and a new skill, so this is real work stacked
+on unlanded work rather than an artifact of the order things were thought of.
+
+### Open at recording time
+
+Whether `--restack` defaults off locally and on in the on-demand Action; whether `--test`
+defaults on; whether to tell #139 about the `ci` field; and whether the script and the skill
+are one pull request or two — recommendation one, since a conflict report nothing consumes is
+half a feature.
