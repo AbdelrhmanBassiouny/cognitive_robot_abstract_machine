@@ -57,6 +57,25 @@ The user reversed the default and asked for a way to set it in passing.
   than quietly editing away the old argument; dashboard republished (drift 0
   after rebuilding `pr_data.json`, which was missing #150/#151/#153).
 
+## Round 3 (2026-08-10), pushed as `ea5c2baa`
+
+Review comment on `plan-item-resolve/SKILL.md:130` asking whether the
+duplication with `plan-item-kickoff` could be defined once and injected.
+
+- Measured: **41 byte-identical non-blank lines**, plus the subscription, the
+  read-roadmap-in-full rule, the conventions cross-check and the
+  already-answered check each identical but for a clause.
+- There is no include mechanism for `SKILL.md` — the repo's answer, used five
+  times already, is state-once-and-cite, which is why `execution-modes.md`
+  made the mode step one of the two places they did *not* duplicate.
+- `plan-dashboard/plan-item-gathering.md` now holds the shared procedure;
+  each skill runs it and adds only its own part. 41 → 10 identical lines;
+  kickoff 263 → 191, resolve 200 → 129. `PLAN_ITEM_GATHERING_DOCUMENT` added.
+- Thread replied to and resolved. Scope flagged on the thread: this was
+  offered as its own item (the prose predates the PR, and #135 is
+  ready-for-review editing both files, so the conflict there is now wide);
+  the user chose to land it here.
+
 ## Next
 
 - Nothing outstanding on the implementation. 384 tests pass; #149 is a draft
