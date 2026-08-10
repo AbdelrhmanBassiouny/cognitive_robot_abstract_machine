@@ -123,3 +123,9 @@ class TestJsUnits:
 
     def test_graph_panel(self):
         self.run_node("test_graph_panel.js")
+
+    def test_collada_mesh(self):
+        self.run_node("test_collada_mesh.js")
+
+    def test_environment_theme(self):
+        self.run_node("test_environment_theme.js")
