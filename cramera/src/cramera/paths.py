@@ -21,8 +21,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-#: the packaged frontend: index.html, panels, vendored libraries
 WEB_ROOT = Path(__file__).resolve().parent / "web"
+"""
+The packaged frontend: index.html, panels, vendored libraries.
+"""
 
 
 def data_directory() -> Path:
@@ -35,8 +37,10 @@ def data_directory() -> Path:
     return Path.home() / ".cramera"
 
 
-#: the optional cram-scenes submodule checkout (``<member dir>/scenes``)
 SCENES_SUBMODULE = WEB_ROOT.parents[2] / "scenes"
+"""
+The optional cram-scenes submodule checkout (``<member dir>/scenes``).
+"""
 
 
 def scenes_directory() -> Path:

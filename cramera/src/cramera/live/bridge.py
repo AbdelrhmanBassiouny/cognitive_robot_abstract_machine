@@ -145,8 +145,10 @@ class LiveHook(Enum):
     """
 
 
-#: key under which the robot's root body is published, instead of as a loose object
 ROBOT_BASE_KEY = "__base__"
+"""
+Key under which the robot's root body is published, instead of as a loose object.
+"""
 
 
 @runtime_checkable
@@ -569,14 +571,20 @@ class Bridge:
     handlers only ever read the finished snapshot dicts under :attr:`_lock`.
     """
 
-    #: how long a world binding stays fresh before bodies are re-discovered
     REBIND_INTERVAL_SECONDS: ClassVar[float] = 3.0
+    """
+    How long a world binding stays fresh before bodies are re-discovered.
+    """
 
-    #: fallback size for an object whose shapes carry no scale, in metres
     DEFAULT_OBJECT_SIZE: ClassVar[Tuple[float, float, float]] = (0.06, 0.06, 0.12)
+    """
+    Fallback size for an object whose shapes carry no scale, in metres.
+    """
 
-    #: decimal places object sizes are rounded to before publishing
     SIZE_PRECISION: ClassVar[int] = 4
+    """
+    Decimal places object sizes are rounded to before publishing.
+    """
 
     world: Optional[World] = None
     """
@@ -1401,5 +1409,7 @@ class Bridge:
         return payload
 
 
-#: the process-wide bridge instance shared by hooks and HTTP handlers
 BRIDGE = Bridge()
+"""
+The process-wide bridge instance shared by hooks and HTTP handlers.
+"""

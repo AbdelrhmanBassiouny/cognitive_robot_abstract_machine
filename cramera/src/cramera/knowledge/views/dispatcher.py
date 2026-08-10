@@ -43,7 +43,6 @@ class UnknownViewPayload:
         return {"ok": self.ok, "error": self.error}
 
 
-#: any payload one of the graph-panel tabs or drill-down subgraphs can return
 ViewPayload = Union[
     KnowledgeGraphPayload,
     ChartViewPayload,
@@ -51,6 +50,9 @@ ViewPayload = Union[
     PlanViewPayload,
     SubgraphViewPayload,
 ]
+"""
+Any payload one of the graph-panel tabs or drill-down subgraphs can return.
+"""
 
 
 def view_payload(name: str) -> Union[ViewPayload, UnknownViewPayload]:

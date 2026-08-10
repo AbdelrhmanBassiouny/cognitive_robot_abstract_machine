@@ -72,11 +72,15 @@ class ArchitectureViews:
     Drill-down views of the CRAM architecture: packages, subpackages and classes.
     """
 
-    #: at most this many classes are drawn in one drill-down view
     MAXIMUM_CLASSES_SHOWN = 150
+    """
+    At most this many classes are drawn in one drill-down view.
+    """
 
-    #: at most this many subclasses are drawn in a class inheritance view
     MAXIMUM_SUBCLASSES_SHOWN = 80
+    """
+    At most this many subclasses are drawn in a class inheritance view.
+    """
 
     @staticmethod
     def _class_lines(python_class: PythonClass, drill_hint: bool = True) -> List[str]:

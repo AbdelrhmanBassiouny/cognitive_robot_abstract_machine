@@ -13,17 +13,25 @@ from pathlib import Path
 
 import pytest
 
-#: real files instead of embedded strings/dicts, so they stay valid URDF/JSON and Python
 DATASET_DIR = Path(__file__).parent / "dataset"
+"""
+Real files instead of embedded strings/dicts, so they stay valid URDF/JSON and Python.
+"""
 
-#: the scene's robot description
 ROBOT_URDF_PATH = DATASET_DIR / "fixture_robot.urdf"
+"""
+The scene's robot description.
+"""
 
-#: a miniature CRAM repository, so the knowledge base's scan is fast and deterministic
 ARCHITECTURE_DIR = DATASET_DIR / "architecture"
+"""
+A miniature CRAM repository, so the knowledge base's scan is fast and deterministic.
+"""
 
-#: the fixture scene bundle's scene.json and trajectory.json content
 SCENE = json.loads((DATASET_DIR / "scene.json").read_text())
+"""
+The fixture scene bundle's scene.json and trajectory.json content.
+"""
 TRAJECTORY = json.loads((DATASET_DIR / "trajectory.json").read_text())
 
 

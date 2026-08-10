@@ -11,8 +11,10 @@ from __future__ import annotations
 from semantic_digital_twin.world_description.geometry import Scale
 from typing_extensions import List, Optional, TYPE_CHECKING
 
-#: decimal places a pose is rounded to before it is published or recorded
 POSE_PRECISION = 5
+"""
+Decimal places a pose is rounded to before it is published or recorded.
+"""
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import Body

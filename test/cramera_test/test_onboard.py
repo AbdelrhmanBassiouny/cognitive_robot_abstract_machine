@@ -17,10 +17,11 @@ from typing_extensions import Any, Dict, List, Optional
 from cramera.onboard import bundle_urdf as bundler
 from cramera.onboard.demo import Recorder, RecordingAnalysis
 
-#: a pose that stays put, used wherever a frame's value must not matter
 RESTING = [0.0, 0.0, 1.0, 0, 0, 0, 1]
+"""
+A pose that stays put, used wherever a frame's value must not matter.
+"""
 
-#: a URDF referencing exactly one mesh, shared by the URDF- and xacro-source bundling tests
 ONE_MESH_URDF_TEXT = (
     '<robot name="demo">\n'
     '  <link name="base_link"/>\n'
@@ -34,6 +35,10 @@ ONE_MESH_URDF_TEXT = (
     "  </joint>\n"
     "</robot>\n"
 )
+"""
+A URDF referencing exactly one mesh, shared by the URDF- and xacro-source bundling
+tests.
+"""
 
 
 def pose_at(x: float, y: float, z: float = 1.0) -> List[float]:

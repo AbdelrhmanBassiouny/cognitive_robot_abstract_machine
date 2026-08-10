@@ -29,7 +29,6 @@ class Preset:
     """
 
 
-#: static presets for the architecture side of the graph
 ARCHITECTURE_PRESETS: Tuple[Preset, ...] = (
     Preset(
         "CRAM packages by size",
@@ -54,6 +53,9 @@ ARCHITECTURE_PRESETS: Tuple[Preset, ...] = (
         "an(entity(subpackage).where(subpackage.package == 'coraplex'))",
     ),
 )
+"""
+Static presets for the architecture side of the graph.
+"""
 
 
 def get_presets() -> List[Preset]:

@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import logging
 
-#: the package's root logger, the common ancestor of every module logger
 PACKAGE_LOGGER_NAME = "cramera"
+"""
+The package's root logger, the common ancestor of every module logger.
+"""
 
 
 def get_logger(name: str) -> logging.Logger:

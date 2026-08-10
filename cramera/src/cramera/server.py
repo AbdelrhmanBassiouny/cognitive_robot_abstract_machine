@@ -61,8 +61,10 @@ except (
     traceback.print_exc()
 
 
-#: krrood's SymbolGraph singleton is not threadsafe; queries are serialized
 _EQL_LOCK = threading.Lock()
+"""
+Krrood's SymbolGraph singleton is not threadsafe; queries are serialized.
+"""
 
 
 def _no_eql_error() -> Dict[str, Any]:

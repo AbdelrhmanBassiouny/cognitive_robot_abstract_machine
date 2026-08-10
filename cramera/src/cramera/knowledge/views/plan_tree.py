@@ -22,7 +22,6 @@ from cramera.knowledge.subgraph import (
     SubgraphAccumulator,
 )
 
-#: plan-node kind → node colour group of the graph panel
 PLAN_GROUPS: Dict[str, NodeGroup] = {
     "ActionNode": NodeGroup.EVENT,
     "MotionNode": NodeGroup.ROBOT,
@@ -30,8 +29,10 @@ PLAN_GROUPS: Dict[str, NodeGroup] = {
     "AttachNode": NodeGroup.OBJECT,
     "DetachNode": NodeGroup.OBJECT,
 }
+"""
+Plan-node kind → node colour group of the graph panel.
+"""
 
-#: legend rows of the plan view
 PLAN_LEGEND: Tuple[LegendEntry, ...] = (
     LegendEntry(NodeGroup.EVENT, "Action"),
     LegendEntry(NodeGroup.ROBOT, "Motion"),
@@ -39,6 +40,9 @@ PLAN_LEGEND: Tuple[LegendEntry, ...] = (
     LegendEntry(NodeGroup.OBJECT, "Attach / detach"),
     LegendEntry(NodeGroup.OTHER, "Other plan node"),
 )
+"""
+Legend rows of the plan view.
+"""
 
 
 @dataclass

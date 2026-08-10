@@ -13,7 +13,6 @@ from dataclasses import dataclass, field
 from semantic_digital_twin.world_description.geometry import Color
 from typing_extensions import List
 
-#: distinct, muted colours that read well against the viewer's dark stage
 OBJECT_COLORS = (
     "#f3f0ea",
     "#cf5b3a",
@@ -26,6 +25,9 @@ OBJECT_COLORS = (
     "#6bd0c0",
     "#d0c86b",
 )
+"""
+Distinct, muted colours that read well against the viewer's dark stage.
+"""
 
 
 def _color_from_hex(hex_value: str) -> Color:

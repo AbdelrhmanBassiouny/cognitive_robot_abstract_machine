@@ -37,22 +37,32 @@ from cramera.mesh_format import MeshFormat
 
 logger = get_logger(__name__)
 
-#: how many unresolved assets ``main`` lists before truncating
 MISSING_ASSETS_LOGGED = 20
+"""
+How many unresolved assets ``main`` lists before truncating.
+"""
 
-#: the one URDF joint type that cannot move
 FIXED_JOINT_TYPE = "fixed"
+"""
+The one URDF joint type that cannot move.
+"""
 
-#: stands in for a reference the bundler could not resolve to any file
 UNRESOLVED_REFERENCE = "<unresolved>"
+"""
+Stands in for a reference the bundler could not resolve to any file.
+"""
 
-#: what the bundler reads out of a URDF
 MESH_REFERENCE_PATTERN = re.compile(r'filename="([^"]+)"')
+"""
+What the bundler reads out of a URDF.
+"""
 LINK_PATTERN = re.compile(r'<link\s+name="([^"]+)"')
 JOINT_PATTERN = re.compile(r'<joint\s+name="([^"]+)"\s+type="([^"]+)"')
 
-#: side assets a mesh file itself references
 TEXTURE_PATTERN = re.compile(r"[\w./\-]+\.(?:png|jpg|jpeg|tga|tif)", re.IGNORECASE)
+"""
+Side assets a mesh file itself references.
+"""
 MATERIAL_LIBRARY_PATTERN = re.compile(r"mtllib\s+(.+)")
 TEXTURE_MAP_PATTERN = re.compile(r"map_\w+\s+(.+)")
 
@@ -60,8 +70,10 @@ TEXTURE_MAP_PATTERN = re.compile(r"map_\w+\s+(.+)")
 PACKAGE_SCHEME = "package://"
 FILE_SCHEME = "file://"
 
-#: directory bundled meshes land in when their reference names no ROS package
 LOCAL_MESH_DIRECTORY = "_local"
+"""
+Directory bundled meshes land in when their reference names no ROS package.
+"""
 
 
 # %% reference resolution

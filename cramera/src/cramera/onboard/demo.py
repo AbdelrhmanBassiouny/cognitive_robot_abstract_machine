@@ -72,14 +72,20 @@ if TYPE_CHECKING:
 
 logger = get_logger(__name__)
 
-#: when this process started, so progress lines can show elapsed recording time
 _STARTED_AT = time.time()
+"""
+When this process started, so progress lines can show elapsed recording time.
+"""
 
-#: frame count a bundle is downsampled towards when no explicit step is given
 TARGET_BUNDLE_FRAMES = 1500
+"""
+Frame count a bundle is downsampled towards when no explicit step is given.
+"""
 
-#: how many unresolved assets the summary lists before truncating
 MISSING_ASSETS_LOGGED = 10
+"""
+How many unresolved assets the summary lists before truncating.
+"""
 
 
 @runtime_checkable
@@ -127,11 +133,15 @@ class Recorder:
        them. This is one of the documented exceptions to the imports-at-top rule.
     """
 
-    #: how many recorded frames pass between progress lines
     FRAME_LOG_INTERVAL: ClassVar[int] = 2000
+    """
+    How many recorded frames pass between progress lines.
+    """
 
-    #: upper bound on the plan nodes written into a bundle
     MAX_SERIALIZED_PLAN_NODES: ClassVar[int] = 400
+    """
+    Upper bound on the plan nodes written into a bundle.
+    """
 
     resolutions: Dict[str, str] = field(default_factory=dict)
     """
@@ -494,15 +504,20 @@ class RecordingAnalysis:
     the robot drove, and the plan segments the viewer scrubs through.
     """
 
-    #: how far a pose must travel to count as moved at all, in metres
     MOVEMENT_TOLERANCE: ClassVar[float] = 0.02
+    """
+    How far a pose must travel to count as moved at all, in metres.
+    """
 
-    #: how far an object must travel over the whole run to count as transported, in
-    #: metres
     TRANSPORT_TOLERANCE: ClassVar[float] = 0.03
+    """
+    How far an object must travel over the whole run to count as transported, in metres.
+    """
 
-    #: how far the robot base must travel to count as having driven off, in metres
     BASE_MOTION_TOLERANCE: ClassVar[float] = 0.05
+    """
+    How far the robot base must travel to count as having driven off, in metres.
+    """
 
     recorder: Recorder
     """
@@ -715,30 +730,41 @@ class SceneBuilder:
     Assembles one finished recording into a scene bundle on disk.
     """
 
-    #: frame rate assumed when the controller does not report its timestep
     FALLBACK_FRAMES_PER_SECOND: ClassVar[float] = 50.0
+    """
+    Frame rate assumed when the controller does not report its timestep.
+    """
 
-    #: the slowest playback the viewer is given, however hard the recording is
-    #: downsampled
     MINIMUM_FRAMES_PER_SECOND: ClassVar[int] = 10
+    """
+    The slowest playback the viewer is given, however hard the recording is downsampled.
+    """
 
-    #: how far below the lowest recorded place pose the place marker is drawn, in metres
     PLACE_TARGET_DROP: ClassVar[float] = 0.02
+    """
+    How far below the lowest recorded place pose the place marker is drawn, in metres.
+    """
 
-    #: half-extent of the draggable place area around the recorded place poses, in
-    #: metres
     PLACE_BOUNDS_MARGIN: ClassVar[float] = 0.55
+    """
+    Half-extent of the draggable place area around the recorded place poses, in metres.
+    """
 
-    #: extra room in front of the place area, so a target can be dragged towards the
-    #: robot
     PLACE_BOUNDS_FRONT_MARGIN: ClassVar[float] = 0.65
+    """
+    Extra room in front of the place area, so a target can be dragged towards the robot.
+    """
 
-    #: how far beyond the objects' spawn poses they may be dragged, in metres
     DRAG_BOUNDS_MARGIN_X: ClassVar[float] = 0.35
+    """
+    How far beyond the objects' spawn poses they may be dragged, in metres.
+    """
     DRAG_BOUNDS_MARGIN_Y: ClassVar[float] = 0.6
 
-    #: how many of a model's links are probed to find its prefix in the composed world
     PREFIX_PROBE_LINKS: ClassVar[int] = 12
+    """
+    How many of a model's links are probed to find its prefix in the composed world.
+    """
 
     recorder: Recorder
     """

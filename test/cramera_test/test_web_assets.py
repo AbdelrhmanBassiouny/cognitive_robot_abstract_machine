@@ -18,8 +18,10 @@ from cramera.paths import WEB_ROOT
 
 JS_DIR = Path(__file__).parent / "js"
 
-#: how the shell references the assets that must ship with it
 SCRIPT_PATTERN = re.compile(r'<script src="([^"]+)"')
+"""
+How the shell references the assets that must ship with it.
+"""
 STYLESHEET_PATTERN = re.compile(r'<link rel="stylesheet" href="([^"]+)"')
 IMAGE_PATTERN = re.compile(r'<img[^>]+src="([^"]+)"')
 CSS_URL_PATTERN = re.compile(r"url\(['\"]?([^)'\"]+)['\"]?\)")

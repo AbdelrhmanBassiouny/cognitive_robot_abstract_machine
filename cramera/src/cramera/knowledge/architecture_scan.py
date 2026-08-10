@@ -62,13 +62,16 @@ class ArchitectureScanner:
     Scans the CRAM repository's architecture, cached to disk between runs.
     """
 
-    #: how much of a README's first line is kept as a package description
     DESCRIPTION_LENGTH_LIMIT = 120
+    """
+    How much of a README's first line is kept as a package description.
+    """
 
-    #: bumped whenever the cached scan's shape changes, so old caches are discarded
     ARCHITECTURE_CACHE_VERSION = 3
+    """
+    Bumped whenever the cached scan's shape changes, so old caches are discarded.
+    """
 
-    #: directories never descended into during the architecture scan
     SKIPPED_DIRECTORIES = {
         "__pycache__",
         "node_modules",
@@ -79,8 +82,10 @@ class ArchitectureScanner:
         "dist",
         "plugins",
     }
+    """
+    Directories never descended into during the architecture scan.
+    """
 
-    #: curated one-line descriptions for the well-known workspace packages
     PACKAGE_DESCRIPTIONS = {
         "krrood": "knowledge representation & reasoning through OO design (home of EQL)",
         "coraplex": "the plan executive: designators, plans, locations",
@@ -97,6 +102,9 @@ class ArchitectureScanner:
         "scripts": "maintenance scripts",
         "root": "top-level demo scripts (sterility test, wind turbine…)",
     }
+    """
+    Curated one-line descriptions for the well-known workspace packages.
+    """
 
     def scan(self) -> ArchitectureScan:
         """
