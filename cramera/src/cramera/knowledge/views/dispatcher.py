@@ -14,7 +14,6 @@ from cramera.knowledge.knowledge_base import get_knowledge_base
 from cramera.knowledge.views.architecture import (
     ArchitectureViews,
     SubgraphViewPayload,
-    _class_id,
 )
 from cramera.knowledge.views.chart import ChartViewPayload, _chart_view
 from cramera.knowledge.views.kinematics import UrdfViewPayload, _urdf_view
@@ -98,7 +97,8 @@ def expand_node(node_id: str) -> Optional[ViewPayload]:
     if subpackage:
         return ArchitectureViews.subpackage_view(knowledge_base, subpackage)
     python_class = next(
-        (entry for entry in knowledge_base.classes if _class_id(entry) == node_id), None
+        (entry for entry in knowledge_base.classes if entry.qualified_name == node_id),
+        None,
     )
     if python_class:
         return ArchitectureViews.class_view(knowledge_base, python_class)

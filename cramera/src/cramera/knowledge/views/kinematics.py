@@ -146,13 +146,11 @@ def _urdf_view(knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
         if ("urdf:" + joint.parent) in view.details and (
             "urdf:" + joint.child
         ) in view.details:
-            view.edges.append(
-                GraphEdge(
-                    "urdf:" + joint.parent,
-                    "urdf:" + joint.child,
-                    EdgeKind.PROPERTY if _is_movable(joint) else EdgeKind.TYPE,
-                    "%s (%s)" % (joint.name, joint.type.name.lower()),
-                )
+            view.add_edge(
+                "urdf:" + joint.parent,
+                "urdf:" + joint.child,
+                EdgeKind.PROPERTY if _is_movable(joint) else EdgeKind.TYPE,
+                "%s (%s)" % (joint.name, joint.type.name.lower()),
             )
     movable_count = sum(1 for joint in joints if _is_movable(joint))
     view.details["urdf:" + links[0]].lines.append(

@@ -156,9 +156,7 @@ def graph_payload() -> KnowledgeGraphPayload:
                 "gripper: " + arm.gripper.name,
             ],
         )
-        view.edges.append(
-            GraphEdge(robot_name, arm.name, EdgeKind.PROPERTY, "has part")
-        )
+        view.add_edge(robot_name, arm.name, EdgeKind.PROPERTY, "has part")
         view.add(
             arm.gripper.name,
             arm.gripper.name.replace("_", " "),
@@ -166,9 +164,7 @@ def graph_payload() -> KnowledgeGraphPayload:
             ["a Gripper", "side: " + _side_label(arm.gripper.side)]
             + _measurement_line("opening", arm.gripper.opening_metres, "%.3f"),
         )
-        view.edges.append(
-            GraphEdge(arm.name, arm.gripper.name, EdgeKind.PROPERTY, "has part")
-        )
+        view.add_edge(arm.name, arm.gripper.name, EdgeKind.PROPERTY, "has part")
 
     for bench_object in knowledge_base.objects:
         view.add(
@@ -198,31 +194,23 @@ def graph_payload() -> KnowledgeGraphPayload:
             + (["places at: " + episode.places_at.name] if episode.places_at else []),
         )
         if previous:
-            view.edges.append(
-                GraphEdge(previous, episode.name, EdgeKind.TYPE, "precedes")
-            )
+            view.add_edge(previous, episode.name, EdgeKind.TYPE, "precedes")
         previous = episode.name
         # the robot performs the episode (with its arm); don't wire the episode
         # straight to the arm — the arm hangs off the robot, so the chain reads
         # transport_milk → pr2 → left_arm → left_gripper
         if episode.performed_by:
-            view.edges.append(
-                GraphEdge(
-                    episode.name,
-                    episode.performed_by.robot,
-                    EdgeKind.PROPERTY,
-                    "performed by",
-                )
+            view.add_edge(
+                episode.name,
+                episode.performed_by.robot,
+                EdgeKind.PROPERTY,
+                "performed by",
             )
         if episode.picks:
-            view.edges.append(
-                GraphEdge(episode.name, episode.picks.name, EdgeKind.PROPERTY, "picks")
-            )
+            view.add_edge(episode.name, episode.picks.name, EdgeKind.PROPERTY, "picks")
         if episode.places_at:
-            view.edges.append(
-                GraphEdge(
-                    episode.name, episode.places_at.name, EdgeKind.PROPERTY, "places at"
-                )
+            view.add_edge(
+                episode.name, episode.places_at.name, EdgeKind.PROPERTY, "places at"
             )
 
     # the CRAM architecture cluster: repo root → packages, plus import edges
@@ -250,9 +238,7 @@ def graph_payload() -> KnowledgeGraphPayload:
                     "double-click to open",
                 ],
             )
-            view.edges.append(
-                GraphEdge("cram", package.name, EdgeKind.PROPERTY, "contains")
-            )
+            view.add_edge("cram", package.name, EdgeKind.PROPERTY, "contains")
         for subpackage in knowledge_base.subpackages:
             view.add(
                 subpackage.name,
@@ -265,16 +251,12 @@ def graph_payload() -> KnowledgeGraphPayload:
                     "double-click to open",
                 ],
             )
-            view.edges.append(
-                GraphEdge(
-                    subpackage.package, subpackage.name, EdgeKind.PROPERTY, "contains"
-                )
+            view.add_edge(
+                subpackage.package, subpackage.name, EdgeKind.PROPERTY, "contains"
             )
         for dependency in knowledge_base.package_dependencies:
-            view.edges.append(
-                GraphEdge(
-                    dependency.source, dependency.target, EdgeKind.TYPE, "imports"
-                )
+            view.add_edge(
+                dependency.source, dependency.target, EdgeKind.TYPE, "imports"
             )
 
         # ground the demo in the architecture at the SUBPACKAGE that actually
@@ -289,7 +271,7 @@ def graph_payload() -> KnowledgeGraphPayload:
             :param label: Label shown on the edge.
             """
             if any(node.id == target for node in view.nodes):
-                view.edges.append(GraphEdge(source, target, EdgeKind.TYPE, label))
+                view.add_edge(source, target, EdgeKind.TYPE, label)
 
         # anchor one representative manipulation episode (they share the stack)
         anchor = next(
@@ -317,11 +299,9 @@ def graph_payload() -> KnowledgeGraphPayload:
                 "double-click to open",
             ],
         )
-        view.edges.append(
-            GraphEdge("plan", robot_name, EdgeKind.PROPERTY, "executed by")
-        )
+        view.add_edge("plan", robot_name, EdgeKind.PROPERTY, "executed by")
         for episode in knowledge_base.episodes:
-            view.edges.append(GraphEdge("plan", episode.name, EdgeKind.TYPE, "spans"))
+            view.add_edge("plan", episode.name, EdgeKind.TYPE, "spans")
 
     status = "EQL ready · %d graph nodes · %d joints · %d CRAM classes" % (
         len(view.nodes),

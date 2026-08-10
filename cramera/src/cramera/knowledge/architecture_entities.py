@@ -103,3 +103,12 @@ class PythonClass:
     """
     First docstring line, or ``''``.
     """
+
+    @property
+    def qualified_name(self) -> str:
+        """
+        The class name prefixed with the module it is defined in.
+
+        Unique across the scan, which is what the graph uses as the class's node id.
+        """
+        return self.module + "." + self.name

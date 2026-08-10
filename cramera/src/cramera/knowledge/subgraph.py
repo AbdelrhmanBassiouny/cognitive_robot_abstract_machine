@@ -179,3 +179,14 @@ class SubgraphAccumulator:
         title = "\n".join([label] + lines)
         self.nodes.append(GraphNode(node_id, label, group, title, status=status))
         self.details[node_id] = DetailEntry(label, group, lines)
+
+    def add_edge(self, source: str, target: str, kind: EdgeKind, label: str) -> None:
+        """
+        Append one edge between two nodes of this subgraph.
+
+        :param source: Id of the edge's source node.
+        :param target: Id of the edge's target node.
+        :param kind: Rendering kind of the edge.
+        :param label: Edge label shown on hover.
+        """
+        self.edges.append(GraphEdge(source, target, kind, label))

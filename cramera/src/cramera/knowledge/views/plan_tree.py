@@ -139,7 +139,7 @@ def _plan_view() -> PlanViewPayload:
             status=status,
         )
         if parent:
-            view.edges.append(GraphEdge(parent, node_id, EdgeKind.PROPERTY, "has step"))
+            view.add_edge(parent, node_id, EdgeKind.PROPERTY, "has step")
         for child in tree.get("children", []):
             walk(child, node_id)
 
