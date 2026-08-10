@@ -35,36 +35,55 @@ class EpisodeKnowledgeBase:
     over.
     """
 
-    _instance: ClassVar[Optional[EpisodeKnowledgeBase]] = None
+    _instances: ClassVar[Dict[Optional[str], EpisodeKnowledgeBase]] = {}
     """
-    The process-wide instance, built on first use by :meth:`of_active_scene`.
+    One built knowledge base per scene name, keyed by :meth:`of_scene`'s argument, so
+    the viewer can hold several onboarded scenes open at once.
     """
 
     @classmethod
     def of_active_scene(cls) -> EpisodeKnowledgeBase:
         """
-        The process-wide knowledge base of the active scene, built on first use.
+        The knowledge base of the active scene, built on first use.
         """
-        if cls._instance is None:
-            cls._instance = cls()
-        return cls._instance
+        return cls.of_scene(None)
+
+    @classmethod
+    def of_scene(cls, scene: Optional[str]) -> EpisodeKnowledgeBase:
+        """
+        The knowledge base of one scene, built on first use and cached per scene.
+
+        :param scene: Name of the scene to build against, or None for the active one.
+        """
+        if scene not in cls._instances:
+            cls._instances[scene] = cls(scene)
+        return cls._instances[scene]
 
     @classmethod
     def reset(cls) -> None:
         """
-        Drop the cached instance so the next access rebuilds it.
+        Drop every cached knowledge base so the next access rebuilds it.
 
-        Needed whenever the active scene changes, which is what tests do when they
+        Needed whenever the scenes directory changes, which is what tests do when they
         point ``CRAMERA_SCENES`` at a fixture.
         """
-        cls._instance = None
+        cls._instances = {}
 
-    def __init__(self) -> None:
+    scene_name: Optional[str]
+    """
+    Name of the scene this knowledge base was built from, or None for the active one.
+    """
+
+    def __init__(self, scene_name: Optional[str] = None) -> None:
         """
-        Build every entity list from the active scene bundle and a static scan of the
-        CRAM architecture.
+        Build every entity list from a scene bundle and a static scan of the CRAM
+        architecture.
+
+        :param scene_name: Name of the scene to build against, or None for the active
+            one.
         """
-        bundle = SceneBundle.of_active_scene()
+        self.scene_name = scene_name
+        bundle = SceneBundle.of_scene(scene_name)
         scene, trajectory = bundle.scene, bundle.trajectory
         frames_per_second = scene.get("framesPerSecond", 30)
         parts = (scene.get("robot") or {}).get("parts") or {}

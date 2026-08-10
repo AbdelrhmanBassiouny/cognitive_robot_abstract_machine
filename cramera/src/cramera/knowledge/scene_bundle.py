@@ -51,11 +51,13 @@ class SceneBundle:
         return index.get("default") if isinstance(index, dict) else None
 
     @classmethod
-    def active_directory(cls) -> Optional[Path]:
+    def directory_of(cls, scene: Optional[str] = None) -> Optional[Path]:
         """
-        Directory of the active scene bundle, or None without one.
+        Directory of a scene bundle, or None when no scene is named or active.
+
+        :param scene: Name of the scene, or None for the active one.
         """
-        name = cls.active_name()
+        name = scene or cls.active_name()
         return paths.scenes_directory() / name if name else None
 
     @classmethod
@@ -63,7 +65,16 @@ class SceneBundle:
         """
         The active scene's scene/trajectory bundle, or an empty one without a scene.
         """
-        directory = cls.active_directory()
+        return cls.of_scene(None)
+
+    @classmethod
+    def of_scene(cls, scene: Optional[str]) -> SceneBundle:
+        """
+        One scene's scene/trajectory bundle, or an empty one when it has none.
+
+        :param scene: Name of the scene to read, or None for the active one.
+        """
+        directory = cls.directory_of(scene)
         if not directory:
             return cls({}, {})
         scene = GeneratedJson(directory / "scene.json").read()
@@ -119,18 +130,19 @@ class ParsedUrdf:
     """
 
     @classmethod
-    def of_active_scene(cls) -> ParsedUrdf:
+    def of_scene(cls, scene_name: Optional[str] = None) -> ParsedUrdf:
         """
-        Parse the active scene's robot URDF into its kinematic tree.
+        Parse a scene's robot URDF into its kinematic tree.
 
-        Used by the kinematic-tree view; a regex parse suffices because the bundled
-        URDFs are flat.
+        A regex parse suffices because the bundled URDFs are flat.
+
+        :param scene_name: Name of the scene to parse, or None for the active one.
         """
-        scene = SceneBundle.of_active_scene().scene
+        scene = SceneBundle.of_scene(scene_name).scene
         robot_model = next(
             (model for model in scene.get("models", []) if model.get("robot")), None
         )
-        directory = SceneBundle.active_directory()
+        directory = SceneBundle.directory_of(scene_name)
         if not robot_model or not directory:
             return cls([], [])
         urdf_path = directory / robot_model["urdf"]

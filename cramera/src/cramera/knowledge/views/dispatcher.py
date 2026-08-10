@@ -59,7 +59,16 @@ class GraphPanelViews:
         """
         The views of the scene bundle the server currently serves.
         """
-        return cls(knowledge_base=EpisodeKnowledgeBase.of_active_scene())
+        return cls.of_scene(None)
+
+    @classmethod
+    def of_scene(cls, scene: Optional[str]) -> GraphPanelViews:
+        """
+        The views of one named scene bundle.
+
+        :param scene: Name of the scene to build views for, or None for the active one.
+        """
+        return cls(knowledge_base=EpisodeKnowledgeBase.of_scene(scene))
 
     def for_tab(self, name: str) -> GraphPanelPayload:
         """

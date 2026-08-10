@@ -12,6 +12,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import inspect
+import json
 from pathlib import Path
 
 import pytest
@@ -28,6 +29,7 @@ from cramera.onboard import bundle_urdf as bundler
 from cramera.onboard.bundle_world import BundledWorld
 from cramera.onboard.demo import (
     BundledModel,
+    SceneIndexEntry,
     Recorder,
     RecordingAnalysis,
     SpawnedBox,
@@ -362,6 +364,54 @@ class TestBundledModel:
             "links": len(report.links),
             "movableJoints": report.movable_joints,
         }
+
+
+class TestSceneIndexEntry:
+    def test_a_bundle_is_indexed_with_its_robot_and_environment(self, tmp_path):
+        """
+        The viewer's pickers resolve a (robot, environment) pair back to a bundle, so
+        the index has to carry both per scene.
+        """
+        bundle = tmp_path / "lab_scene"
+        bundle.mkdir()
+        (bundle / "scene.json").write_text(
+            json.dumps(
+                {
+                    "robot": {"name": "pr2"},
+                    "models": [
+                        {"name": "pr2", "robot": True},
+                        {"name": "kitchen", "robot": False},
+                        {"name": "table", "robot": False},
+                    ],
+                }
+            )
+        )
+
+        [entry] = SceneIndexEntry.of_directory(tmp_path)
+
+        assert entry.to_payload() == {
+            "name": "lab_scene",
+            "robot": "pr2",
+            "environment": "kitchen+table",
+        }
+
+    def test_a_bench_only_bundle_has_no_environment(self, tmp_path):
+        bundle = tmp_path / "bench"
+        bundle.mkdir()
+        (bundle / "scene.json").write_text(
+            json.dumps(
+                {"robot": {"name": "tracy"}, "models": [{"name": "tracy", "robot": True}]}
+            )
+        )
+
+        [entry] = SceneIndexEntry.of_directory(tmp_path)
+
+        assert entry.environment is None
+
+    def test_a_directory_without_a_scene_file_is_skipped(self, tmp_path):
+        (tmp_path / "not_a_bundle").mkdir()
+
+        assert SceneIndexEntry.of_directory(tmp_path) == []
 
 
 # %% bundling a parsed world

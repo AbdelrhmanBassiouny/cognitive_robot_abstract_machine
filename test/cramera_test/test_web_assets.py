@@ -138,6 +138,12 @@ class TestJsUnits:
     def test_response_util(self):
         self.run_node("test_response_util.js")
 
+    def test_scene_context(self):
+        self.run_node("test_scene_context.js")
+
+    def test_scene_picker(self):
+        self.run_node("test_scene_picker.js")
+
     def test_collada_mesh(self):
         self.run_node("test_collada_mesh.js")
 

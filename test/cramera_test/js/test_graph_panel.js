@@ -21,6 +21,14 @@ function loadResponseUtil() {
   return scope.ResponseUtil;
 }
 
+// the real core/scene.js too: it decides whether a ?scene= parameter is appended to
+// every API url the panel requests, so stubbing it would hide a wrong url
+function loadSceneContext(search) {
+  const scope = { location: { search: search || '' } };
+  new Function('window', fs.readFileSync(path.join(WEB, 'core/scene.js'), 'utf8'))(scope);
+  return scope.SceneContext;
+}
+
 function flush() {
   return new Promise(function (resolve) { setTimeout(resolve, 0); });
 }
@@ -74,8 +82,9 @@ function makeBus() {
   };
 }
 
-function makeFetch(responses) {
+function makeFetch(responses, requested) {
   return async function fetch(url) {
+    if (requested) requested.push(url);
     const body = responses[url];
     if (!body) throw new Error('unexpected fetch: ' + url);
     if (typeof body === 'number') return errorPage(body);
@@ -94,19 +103,24 @@ function errorPage(status) {
   };
 }
 
-function loadPanel(responses) {
+function loadPanel(responses, search) {
   let factory = null;
   let lastBuild = null;
+  const requested = [];
   const Panels = { define(id, f) { factory = f; } };
   const Graph = {
     attach() {}, build(payload) { lastBuild = payload; },
     onSelect() {}, onDoubleSelect() {}, highlight() {}, reset() {},
     setStatuses() { return false; },
   };
-  new Function('Panels', 'Graph', 'fetch', 'ResponseUtil', SOURCE)(
-    Panels, Graph, makeFetch(responses), loadResponseUtil()
+  new Function('Panels', 'Graph', 'fetch', 'ResponseUtil', 'SceneContext', SOURCE)(
+    Panels, Graph, makeFetch(responses, requested), loadResponseUtil(), loadSceneContext(search)
   );
-  return { factory: factory, lastBuild: function () { return lastBuild; } };
+  return {
+    factory: factory,
+    lastBuild: function () { return lastBuild; },
+    requested: requested,
+  };
 }
 
 // %% live plan colour groups
@@ -208,6 +222,29 @@ test('a view whose route has no backend reports the status, not a JSON.parse err
     const reported = root.querySelector('#graph-empty').textContent;
     assert.match(reported, /HTTP 502/);
     assert.doesNotMatch(reported, /JSON\.parse/);
+  } finally {
+    instance.destroy();
+  }
+});
+
+// %% the active scene reaches the api
+test('every api request carries the scene the url names', async function () {
+  const requested = [];
+  const panel = loadPanel({
+    '/api/knowledge?scene=lab': { ok: true, nodes: [], edges: [], details: {} },
+    '/api/knowledge/view?name=kinematics&scene=lab': { ok: true, nodes: [], edges: [], details: {} },
+  }, '?scene=lab');
+  const root = makeRoot();
+  const instance = panel.factory(root, makeBus());
+  try {
+    await flush();
+    root.buttons.find(function (b) { return b.dataset.view === 'kinematics'; }).click();
+    await flush();
+
+    assert.deepStrictEqual(panel.requested, [
+      '/api/knowledge?scene=lab',
+      '/api/knowledge/view?name=kinematics&scene=lab',
+    ]);
   } finally {
     instance.destroy();
   }

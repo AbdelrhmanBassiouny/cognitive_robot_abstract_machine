@@ -2,6 +2,8 @@
 Tests for the scene-driven knowledge base and its graph-panel payloads.
 """
 
+import json
+
 import pytest
 
 krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
@@ -153,7 +155,9 @@ class TestArmsFromRecordedAnnotations:
             ).to_payload(),
         ]
         monkeypatch.setattr(
-            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle,
+            "of_scene",
+            lambda scene_name=None: SceneBundle(scene, trajectory),
         )
         EpisodeKnowledgeBase.reset()
         knowledge_base_instance = EpisodeKnowledgeBase.of_active_scene()
@@ -178,7 +182,9 @@ class TestArmSideInference:
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["robot"]["parts"]["center_arm"] = ["center_link"]
         monkeypatch.setattr(
-            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle,
+            "of_scene",
+            lambda scene_name=None: SceneBundle(scene, trajectory),
         )
         EpisodeKnowledgeBase.reset()
         center_arm = next(
@@ -265,7 +271,9 @@ class TestRecordedMeasurements:
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["objects"][0]["height"] = 0.23
         monkeypatch.setattr(
-            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle,
+            "of_scene",
+            lambda scene_name=None: SceneBundle(scene, trajectory),
         )
         EpisodeKnowledgeBase.reset()
         milk = next(
@@ -416,7 +424,9 @@ class TestPlanGroups:
             }
         )
         monkeypatch.setattr(
-            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle,
+            "of_scene",
+            lambda scene_name=None: SceneBundle(scene, trajectory),
         )
         EpisodeKnowledgeBase.reset()
         node = next(
@@ -443,7 +453,9 @@ class TestPlanGroups:
             }
         )
         monkeypatch.setattr(
-            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle,
+            "of_scene",
+            lambda scene_name=None: SceneBundle(scene, trajectory),
         )
         EpisodeKnowledgeBase.reset()
         node = next(
@@ -460,7 +472,7 @@ class TestPresetSafety:
         self, fixture_scene, monkeypatch
     ):
         """
-        ``Preset.of_active_scene()`` must escape object names, not splice them raw into
+        ``Preset.of_scene()`` must escape object names, not splice them raw into
         EQL source.
         """
         bundle = SceneBundle.of_active_scene()
@@ -468,11 +480,13 @@ class TestPresetSafety:
         scene["objects"][0]["id"] = "o'brien"
         scene["segments"][1]["picks"] = "o'brien"
         monkeypatch.setattr(
-            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle,
+            "of_scene",
+            lambda scene_name=None: SceneBundle(scene, trajectory),
         )
         EpisodeKnowledgeBase.reset()
         preset = next(
-            p for p in Preset.of_active_scene() if "scene_object.name" in p.code
+            p for p in Preset.of_scene() if "scene_object.name" in p.code
         )
         result = EqlSession.of_active_scene().run(preset.code)
         assert result.ok and result.rows[0]["__entity__"] == "o'brien"
@@ -488,10 +502,12 @@ class TestPresetSafety:
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["segments"][1]["step"] = "transport_o'brien"
         monkeypatch.setattr(
-            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle,
+            "of_scene",
+            lambda scene_name=None: SceneBundle(scene, trajectory),
         )
         EpisodeKnowledgeBase.reset()
-        for preset in Preset.of_active_scene():
+        for preset in Preset.of_scene():
             assert EqlSession.of_active_scene().run(preset.code).ok
 
 
@@ -823,16 +839,64 @@ class TestExpandNode:
 
 
 # %% smoke test: every generated preset must run without raising
+class TestSceneSelection:
+    """
+    The viewer keeps several onboarded bundles open at once by naming one per request,
+    so a named scene must build its own knowledge base rather than the active one's.
+    """
+
+    def _second_scene(self, data_directory) -> str:
+        """
+        Write a second bundle next to the fixture, with a differently named robot.
+
+        :param data_directory: The fixture's data directory.
+        """
+        source = data_directory / "scenes" / "fixture"
+        other = data_directory / "scenes" / "second"
+        other.mkdir()
+        scene = json.loads((source / "scene.json").read_text())
+        scene["robot"]["name"] = "second_robot"
+        (other / "scene.json").write_text(json.dumps(scene))
+        (other / "trajectory.json").write_text(
+            (source / "trajectory.json").read_text()
+        )
+        EpisodeKnowledgeBase.reset()
+        return "second"
+
+    def test_a_named_scene_builds_its_own_knowledge_base(self, fixture_scene):
+        name = self._second_scene(fixture_scene)
+
+        assert EpisodeKnowledgeBase.of_scene(name).robot.name == "second_robot"
+        assert EpisodeKnowledgeBase.of_active_scene().robot.name == "pr2"
+
+    def test_each_scene_is_built_once_and_kept(self, fixture_scene):
+        name = self._second_scene(fixture_scene)
+
+        assert EpisodeKnowledgeBase.of_scene(name) is EpisodeKnowledgeBase.of_scene(
+            name
+        )
+        assert EpisodeKnowledgeBase.of_scene(name) is not (
+            EpisodeKnowledgeBase.of_active_scene()
+        )
+
+    def test_the_views_of_a_named_scene_describe_that_scene(self, fixture_scene):
+        name = self._second_scene(fixture_scene)
+
+        payload = GraphPanelViews.of_scene(name).for_tab("knowledge").to_payload()
+
+        assert any(node["id"] == "second_robot" for node in payload["nodes"])
+
+
 class TestPresetSmoke:
     def test_every_preset_runs_and_returns_rows(self, fixture_scene):
         """
-        Every preset ``Preset.of_active_scene()`` hands to the EQL panel must actually
+        Every preset ``Preset.of_scene()`` hands to the EQL panel must actually
         run.
 
         Replaces the module's former ``if __name__ == "__main__":`` smoke script, which
         logged OK/FAIL per preset instead of asserting anything.
         """
-        for preset in Preset.of_active_scene():
+        for preset in Preset.of_scene():
             result = EqlSession.of_active_scene().run(preset.code)
             assert result.ok, "%s: %s" % (preset.text, result)
             assert result.count == len(result.rows)

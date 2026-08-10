@@ -225,7 +225,7 @@ class KnowledgeGraphPayload(GraphPanelPayload):
                 )
 
         # the executed plan tree (captured from the real PlanNode graph)
-        scene = SceneBundle.of_active_scene().scene
+        scene = SceneBundle.of_scene(knowledge_base.scene_name).scene
         if scene.get("planTrees"):
             node_count = PlanViewPayload.count_nodes(scene["planTrees"])
             view.add(
@@ -252,7 +252,7 @@ class KnowledgeGraphPayload(GraphPanelPayload):
             nodes=view.nodes,
             edges=view.edges,
             details=view.details,
-            presets=Preset.of_active_scene(),
+            presets=Preset.of_scene(knowledge_base.scene_name),
         )
 
     @staticmethod

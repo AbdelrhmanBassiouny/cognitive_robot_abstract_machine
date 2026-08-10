@@ -1282,8 +1282,10 @@ class SceneBuilder:
         """
         Register a freshly written scene in the index the viewer reads.
 
-        A missing or unreadable index is rebuilt from scratch; an index that exists but
-        lacks the keys is filled in rather than crashing on them.
+        The ``scenes`` list is rebuilt from the bundles actually on disk, each carrying
+        its robot/environment identity for the viewer's pickers, so a bundle that was
+        removed or renamed since it was indexed cannot leave a stale entry behind.
+        ``default`` is filled in on the first scene onboarded and left alone after that.
 
         :param path: Path of the scene index file.
         :param name: Name of the scene to register.
@@ -1293,11 +1295,79 @@ class SceneBuilder:
             index = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(index, dict):
             index = {}
-        index.setdefault("scenes", [])
+        index["scenes"] = [
+            entry.to_payload() for entry in SceneIndexEntry.of_directory(path.parent)
+        ]
         index.setdefault("default", name)
-        if name not in index["scenes"]:
-            index["scenes"].append(name)
         cls._write_json(path, index, indent=1)
+
+
+@dataclass
+class SceneIndexEntry:
+    """
+    One onboarded scene bundle, as ``index.json`` advertises it to the viewer.
+
+    The viewer's header offers a robot and an environment separately, but only ever
+    resolves the pair back to a bundle that was actually recorded — these entries are
+    what it looks that up in.
+    """
+
+    name: str
+    """
+    Directory name of the bundle, which is also its ``?scene=`` value.
+    """
+
+    robot: str
+    """
+    Name of the robot the scene was recorded with.
+    """
+
+    environment: Optional[str]
+    """
+    The scene's environment models joined by ``+``, or None for a bench-only scene.
+    """
+
+    @classmethod
+    def of_directory(cls, scenes_directory: Path) -> List[SceneIndexEntry]:
+        """
+        Every onboarded bundle under a scenes directory, in name order.
+
+        :param scenes_directory: Directory holding the scene bundles.
+        """
+        entries = []
+        for bundle_directory in sorted(scenes_directory.iterdir()):
+            scene_path = bundle_directory / "scene.json"
+            if not scene_path.is_file():
+                continue
+            scene = json.loads(scene_path.read_text(encoding="utf-8"))
+            entries.append(
+                cls(
+                    name=bundle_directory.name,
+                    robot=scene["robot"]["name"],
+                    environment=cls._environment_of(scene["models"]),
+                )
+            )
+        return entries
+
+    @staticmethod
+    def _environment_of(models: List[Dict[str, Any]]) -> Optional[str]:
+        """
+        The name of a scene's environment, or None for a bench-only scene.
+
+        :param models: The scene's ``models`` entries.
+        """
+        environments = [model["name"] for model in models if not model["robot"]]
+        return "+".join(environments) if environments else None
+
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The JSON-serializable shape ``index.json`` carries.
+        """
+        return {
+            "name": self.name,
+            "robot": self.robot,
+            "environment": self.environment,
+        }
 
 
 # %% the cramera-onboard entry point

@@ -148,7 +148,7 @@ class PlanViewPayload(GraphPanelPayload):
 
         :param knowledge_base: Unused — the plan tree is read from the scene bundle.
         """
-        scene = SceneBundle.of_active_scene().scene
+        scene = SceneBundle.of_scene(knowledge_base.scene_name).scene
         trees = scene.get("planTrees") or []
         view = SubgraphAccumulator()
         node_ids = itertools.count()

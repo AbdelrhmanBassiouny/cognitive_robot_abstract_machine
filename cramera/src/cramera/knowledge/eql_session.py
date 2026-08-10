@@ -235,7 +235,16 @@ class EqlSession:
         """
         A session against the scene bundle the server currently serves.
         """
-        return cls(knowledge_base=EpisodeKnowledgeBase.of_active_scene())
+        return cls.of_scene(None)
+
+    @classmethod
+    def of_scene(cls, scene: Optional[str]) -> "EqlSession":
+        """
+        A session against one named scene bundle.
+
+        :param scene: Name of the scene to query, or None for the active one.
+        """
+        return cls(knowledge_base=EpisodeKnowledgeBase.of_scene(scene))
 
     def namespace(self) -> Dict[str, Any]:
         """

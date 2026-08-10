@@ -19,7 +19,14 @@ Panels.define('robot-scene', function (root, bus) {
   root.innerHTML =
     '<div class="panel-head">' +
     '  <h2>Semantic Digital Twin Scene</h2>' +
-    '  <select id="scene-select" class="scene-select" style="display:none"></select>' +
+    '  <div class="scene-pickers">' +
+    '    <label id="robot-picker" class="scene-picker" style="display:none">Robot:' +
+    '      <select id="robot-select" class="scene-select"></select>' +
+    '    </label>' +
+    '    <label id="environment-picker" class="scene-picker" style="display:none">Environment:' +
+    '      <select id="environment-select" class="scene-select"></select>' +
+    '    </label>' +
+    '  </div>' +
     '</div>' +
     '<div class="stage">' +
     '  <div id="stage-bg" class="stage-bg"></div>' +
@@ -321,27 +328,12 @@ Panels.define('robot-scene', function (root, bus) {
     return loader;
   }
 
-  function sceneNameFromUrl() {
-    const m = /[?&]scene=([\w-]+)/.exec(window.location.search);
-    return m ? m[1] : null;
-  }
-
   fetch(SCENES + 'index.json')
     .then(function (r) { return r.ok ? r.json() : { default: null, scenes: [] }; })
     .catch(function () { return { default: null, scenes: [] }; })
     .then(function (index) {
-      const name = sceneNameFromUrl() || index.default;
-      // header dropdown: switch between all onboarded scenes
-      const sel = $('scene-select');
-      if (sel && index.scenes && index.scenes.length > 1) {
-        sel.innerHTML = index.scenes.map(function (s) {
-          return '<option value="' + s + '"' + (s === name ? ' selected' : '') + '>' + s + '</option>';
-        }).join('');
-        sel.style.display = '';
-        sel.addEventListener('change', function () {
-          window.location.search = '?scene=' + encodeURIComponent(sel.value);
-        });
-      }
+      const name = SceneContext.name() || index.default;
+      wireScenePickers(index.scenes || [], name);
       if (!name) {
         if (statusEl) statusEl.textContent = 'No scene found — run cramera-onboard first.';
         return;
@@ -352,6 +344,50 @@ Panels.define('robot-scene', function (root, bus) {
     .catch(function (e) {
       if (statusEl) statusEl.textContent = 'Scene failed to load: ' + e;
     });
+
+  // header dropdowns: a robot and an environment jointly resolve to the one
+  // onboarded scene bundle recorded for that pair (ScenePicker) — there is no
+  // independent robot/environment mixing, only a lookup among what was actually
+  // recorded, so picking either one narrows the other to valid combinations and
+  // always lands on a real scene.
+  function wireScenePickers(scenes, activeName) {
+    const robotSel = $('robot-select'), envSel = $('environment-select');
+    const robotPicker = $('robot-picker'), envPicker = $('environment-picker');
+    if (!robotSel || !envSel) return;
+    const robots = ScenePicker.robots(scenes);
+    if (robots.length < 2 && ScenePicker.environments(scenes, robots[0]).length < 2) return;
+    const active = ScenePicker.describe(scenes, activeName) || {};
+    let robot = active.robot || robots[0];
+
+    // a picker with nothing to choose (one option, or none) stays visible but
+    // disabled — it disappearing/reappearing as the other picker changes would
+    // shift the header layout around under the user's cursor
+    function fillSelect(sel, values, selected) {
+      sel.innerHTML = values.map(function (v) {
+        const value = v || '';
+        const label = v || '(bench only)';
+        return '<option value="' + value + '"' + (value === (selected || '') ? ' selected' : '') + '>' + label + '</option>';
+      }).join('');
+      sel.disabled = values.length <= 1;
+    }
+
+    function navigateTo(environment) {
+      const target = ScenePicker.sceneFor(scenes, robot, environment || null);
+      if (target) window.location.search = '?scene=' + encodeURIComponent(target);
+    }
+
+    if (robotPicker) robotPicker.style.display = '';
+    if (envPicker) envPicker.style.display = '';
+    fillSelect(robotSel, robots, robot);
+    fillSelect(envSel, ScenePicker.environments(scenes, robot), active.environment);
+
+    robotSel.addEventListener('change', function () {
+      robot = robotSel.value;
+      fillSelect(envSel, ScenePicker.environments(scenes, robot), null);
+      navigateTo(envSel.value);
+    });
+    envSel.addEventListener('change', function () { navigateTo(envSel.value); });
+  }
 
   function loadScene(sc) {
     SCENE = sc;

@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Tuple
 
-from typing_extensions import List
+from typing_extensions import List, Optional
 
 from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
 
@@ -29,14 +29,17 @@ class Preset:
     """
 
     @classmethod
-    def of_active_scene(cls) -> List[Preset]:
+    def of_scene(cls, scene: Optional[str] = None) -> List[Preset]:
         """
         Ready-made queries for the EQL panel.
 
         Scene presets are generated from the loaded scene, so they stay valid for any
         onboarded robot/environment; the architecture presets are static.
+
+        :param scene: Name of the scene to build presets for, or None for the active
+            one.
         """
-        knowledge_base = EpisodeKnowledgeBase.of_active_scene()
+        knowledge_base = EpisodeKnowledgeBase.of_scene(scene)
         presets = [
             cls("which robot is this?", "the(entity(robot))"),
             cls("which arms does it have?", "an(entity(arm))"),

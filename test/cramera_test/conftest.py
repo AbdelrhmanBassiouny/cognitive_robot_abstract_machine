@@ -61,7 +61,14 @@ def fixture_scene(tmp_path, monkeypatch):
     (scenes / "robot.urdf").write_text(ROBOT_URDF_PATH.read_text())
     (scenes / "milk.stl").write_bytes(b"solid milk\nendsolid milk\n")
     (tmp_path / "scenes" / "index.json").write_text(
-        json.dumps({"default": "fixture", "scenes": ["fixture"]})
+        json.dumps(
+            {
+                "default": "fixture",
+                "scenes": [
+                    {"name": "fixture", "robot": "pr2", "environment": None}
+                ],
+            }
+        )
     )
 
     monkeypatch.setenv("CRAMERA_DATA", str(tmp_path))

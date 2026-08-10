@@ -128,6 +128,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         """
         return parse_qs(urlparse(self.path).query)
 
+    def _requested_scene(self) -> Optional[str]:
+        """
+        The scene the request targets, or None to let the server pick the active one.
+
+        The frontend switches scenes by reloading with a ``?scene=`` parameter, so every
+        API route has to honour it or the panels would disagree about what is on screen.
+        """
+        requested = self._query_parameters().get("scene")
+        return requested[0] if requested else None
+
     def _guarded(self, handler: Callable[[], Any]) -> None:
         """
         Run an API handler; report exceptions as a JSON error payload.
@@ -177,28 +187,30 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         route = self.path.split("?")[0]
         if route.startswith("/scenes/"):
             return self._serve_scene_file(route)
+        scene = self._requested_scene()
         if route == "/api/knowledge":
             return self._guarded(
-                lambda: GraphPanelViews.of_active_scene().for_tab("knowledge")
+                lambda: GraphPanelViews.of_scene(scene).for_tab("knowledge")
             )
         if route == "/api/knowledge/view":
             name = (self._query_parameters().get("name") or ["knowledge"])[0]
             return self._guarded(
-                lambda: GraphPanelViews.of_active_scene().for_tab(name)
+                lambda: GraphPanelViews.of_scene(scene).for_tab(name)
             )
         if route == "/api/knowledge/expand":
             node = (self._query_parameters().get("node") or [""])[0]
-            return self._guarded(lambda: self._expanded_node(node))
+            return self._guarded(lambda: self._expanded_node(node, scene))
         return super().do_GET()
 
     @staticmethod
-    def _expanded_node(node: str) -> Any:
+    def _expanded_node(node: str, scene: Optional[str]) -> Any:
         """
         The node's subgraph, or a "not drillable" error if it has none.
 
         :param node: Id of the double-clicked node to expand.
+        :param scene: Name of the scene the node belongs to, or None for the active one.
         """
-        payload = GraphPanelViews.of_active_scene().for_node(node)
+        payload = GraphPanelViews.of_scene(scene).for_node(node)
         return payload if payload else {"ok": False, "error": "not drillable"}
 
     def do_POST(self) -> None:
@@ -216,7 +228,8 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if not code:
                 return self._send_error("empty query")
             with _EQL_LOCK:
-                return self._send_json(EqlSession.of_active_scene().run(code))
+                session = EqlSession.of_scene(self._requested_scene())
+                return self._send_json(session.run(code))
         except Exception as error:
             # a SyntaxError from the query is named by its own type, like any other
             return self._send_exception(error)

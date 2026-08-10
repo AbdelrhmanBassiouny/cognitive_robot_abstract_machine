@@ -62,13 +62,13 @@ class UrdfViewPayload(GraphPanelPayload):
 
         :param knowledge_base: The knowledge base whose robot's URDF is rendered.
         """
-        parsed_urdf = ParsedUrdf.of_active_scene()
+        parsed_urdf = ParsedUrdf.of_scene(knowledge_base.scene_name)
         links, joints = parsed_urdf.links, parsed_urdf.joints
         view = SubgraphAccumulator()
         if not links:
             return cls(breadcrumb=knowledge_base.robot.name + " · URDF (not found)")
 
-        scene = SceneBundle.of_active_scene().scene
+        scene = SceneBundle.of_scene(knowledge_base.scene_name).scene
         parts = (scene.get("robot") or {}).get("parts") or {}
         link_to_part = {
             link: part for part, part_links in parts.items() for link in part_links
