@@ -79,6 +79,17 @@ class PlanViewPayload(GraphPanelPayload):
         return label.removesuffix("Action") or label
 
     @classmethod
+    def count_nodes(cls, trees: List[Dict[str, Any]]) -> int:
+        """
+        How many nodes a bundle's recorded plan trees hold in total.
+
+        :param trees: The serialized plan trees, as ``scene.json`` records them.
+        """
+        return sum(
+            1 + cls.count_nodes(tree.get("children", []) or []) for tree in trees
+        )
+
+    @classmethod
     def of_tab(cls, knowledge_base: EpisodeKnowledgeBase) -> PlanViewPayload:
         """
         The executed plan as a tree, one node per plan node the demo ran.

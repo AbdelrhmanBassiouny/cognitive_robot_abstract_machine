@@ -11,9 +11,9 @@ from typing_extensions import Any, ClassVar, Dict, List, Optional
 from coraplex.datastructures.enums import Arms
 from semantic_digital_twin.spatial_types import Point3
 
+from cramera.body_geometry import position_label
 from cramera.knowledge.enums import EdgeKind, NodeGroup
 from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
-from cramera.body_geometry import position_label
 from cramera.knowledge.presets import Preset
 from cramera.knowledge.scene_bundle import SceneBundle
 from cramera.knowledge.subgraph import (
@@ -23,6 +23,7 @@ from cramera.knowledge.subgraph import (
     GraphPanelPayload,
     SubgraphAccumulator,
 )
+from cramera.knowledge.views.plan_tree import PlanViewPayload
 
 
 @dataclass(kw_only=True)
@@ -226,7 +227,7 @@ class KnowledgeGraphPayload(GraphPanelPayload):
         # the executed plan tree (captured from the real PlanNode graph)
         scene = SceneBundle.of_active_scene().scene
         if scene.get("planTrees"):
-            node_count = sum(cls._count_plan_nodes(tree) for tree in scene["planTrees"])
+            node_count = PlanViewPayload.count_nodes(scene["planTrees"])
             view.add(
                 "plan",
                 "executed plan",
@@ -282,13 +283,3 @@ class KnowledgeGraphPayload(GraphPanelPayload):
         """
         return side.name.lower() if side is not None else "unknown"
 
-    @classmethod
-    def _count_plan_nodes(cls, tree: Dict[str, Any]) -> int:
-        """
-        Number of nodes in a serialized plan tree.
-
-        :param tree: The serialized plan tree to count.
-        """
-        return 1 + sum(
-            cls._count_plan_nodes(child) for child in tree.get("children", [])
-        )
