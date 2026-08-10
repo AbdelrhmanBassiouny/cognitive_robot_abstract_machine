@@ -36,7 +36,7 @@ include = ["cramera*"]
 cramera = ["web/**/*"]
 
 [tool.setuptools.dynamic]
-version = { attr = "cramera.version.__version__" }
+version = { attr = "cramera._version.__version__" }
 dependencies = { file = "requirements.txt" }
 
 [project.optional-dependencies]
