@@ -20,7 +20,7 @@ Panels.define('eql', function (root, bus) {
     '</div>' +
     '<div class="query-box">' +
     '  <div class="query-row">' +
-    '    <textarea id="query-input" rows="2" spellcheck="false" placeholder="the(entity(obj).where(obj.name == \'milk\'))   —  vars: obj, ep, arm, j, rob"></textarea>' +
+    '    <textarea id="query-input" rows="2" spellcheck="false" placeholder="the(entity(scene_object).where(scene_object.name == \'milk\'))   —  vars: scene_object, episode, arm, joint, robot"></textarea>' +
     '    <button id="query-run">Run</button>' +
     '  </div>' +
     '  <div id="presets" class="presets"></div>' +
@@ -62,10 +62,11 @@ Panels.define('eql', function (root, bus) {
       '<b>rules</b> and <b>description-logic axioms / predicates</b>, and made explorable as a ' +
       '<b>graph</b> — queried with <b>EQL</b>, krrood’s pythonic entity query language from the ' +
       'CRAM architecture.</p>' +
-      '<p class="hint-txt">Ready-made variables: <code>obj</code> (bench objects), <code>ep</code> ' +
-      '(action episodes), <code>arm</code>, <code>j</code> (joint motion), <code>rob</code>, ' +
-      '<code>pkg</code> / <code>sub</code> / <code>cls</code> (CRAM packages, subpackages, classes). ' +
-      'Build queries like <code>the(entity(obj).where(obj.name == \'milk\'))</code> — ' +
+      '<p class="hint-txt">Ready-made variables: <code>scene_object</code> (bench objects), ' +
+      '<code>episode</code> (action episodes), <code>arm</code>, <code>joint</code> (joint motion), ' +
+      '<code>robot</code>, <code>package</code> / <code>subpackage</code> / <code>python_class</code> ' +
+      '(CRAM packages, subpackages, classes). ' +
+      'Build queries like <code>the(entity(scene_object).where(scene_object.name == \'milk\'))</code> — ' +
       'or click a preset below, or a node in the graph.</p>';
   }
 
