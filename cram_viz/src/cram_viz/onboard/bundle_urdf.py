@@ -22,10 +22,10 @@ import os
 import re
 import shutil
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from typing_extensions import Dict, List, Optional
+from typing_extensions import Dict, List, Optional, Set
 
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -130,81 +130,109 @@ def _bundled_relative_path(uri: str) -> str:
 
 
 # %% copying assets into the bundle
-def _copy_file(
-    source: Optional[str],
-    destination: str,
-    copied: Dict[str, str],
-    missing: List[str],
-) -> bool:
+@dataclass
+class BundledAssets:
     """
-    Copy one asset into the bundle, at most once.
+    The files copied into a bundle, and the references that resolved to no file.
 
-    :param source: The resolved path, or None when the reference could not be resolved.
-    :param destination: Where the asset belongs inside the bundle.
-    :param copied: Source path to bundled path, doubling as the already-copied memo.
-    :param missing: Collects references that could not be copied.
-    :return: Whether the asset is present in the bundle afterwards.
+    Owns the already-copied memo, so a mesh referenced by several links, and a texture
+    shared by several meshes, are each copied exactly once.
     """
-    if source in copied:
+
+    copied: Dict[str, str] = field(default_factory=dict)
+    """
+    Source path to the path it was copied to inside the bundle.
+    """
+
+    missing: List[str] = field(default_factory=list)
+    """
+    References that could not be resolved to any file.
+    """
+
+    @property
+    def mesh_suffixes(self) -> List[str]:
+        """
+        Sorted, deduplicated file suffixes of everything copied.
+        """
+        return sorted({os.path.splitext(path)[1].lower() for path in self.copied})
+
+    def copy(self, source: Optional[str], destination: str) -> bool:
+        """
+        Copy one asset into the bundle, at most once.
+
+        :param source: The resolved path, or None when the reference could not be
+            resolved.
+        :param destination: Where the asset belongs inside the bundle.
+        :return: Whether the asset is present in the bundle afterwards.
+        """
+        if source in self.copied:
+            return True
+        if not source or not os.path.isfile(source):
+            self.missing.append(source or UNRESOLVED_REFERENCE)
+            return False
+        os.makedirs(os.path.dirname(destination), exist_ok=True)
+        shutil.copy2(source, destination)
+        self.copied[source] = destination
         return True
-    if not source or not os.path.isfile(source):
-        missing.append(source or UNRESOLVED_REFERENCE)
-        return False
-    os.makedirs(os.path.dirname(destination), exist_ok=True)
-    shutil.copy2(source, destination)
-    copied[source] = destination
-    return True
 
+    def copy_side_assets(self, source_mesh: str, bundled_mesh: str) -> None:
+        """
+        Copy the textures a ``.dae`` references, or the ``.mtl`` plus its textures for
+        an ``.obj``.
 
-def _copy_side_assets(
-    source_mesh: str, bundled_mesh: str, copied: Dict[str, str], missing: List[str]
-) -> None:
-    """
-    Copy the textures a ``.dae`` references, or the ``.mtl`` plus its textures for an
-    ``.obj``.
+        :param source_mesh: Path of the resolved source mesh.
+        :param bundled_mesh: Path the mesh was copied to inside the bundle.
+        """
+        if not os.path.isfile(source_mesh):
+            return
+        source_directory = os.path.dirname(source_mesh)
+        bundled_directory = os.path.dirname(bundled_mesh)
+        mesh_text = Path(source_mesh).read_bytes().decode("utf-8", "replace")
+        mesh_format = MeshFormat.of_path(source_mesh)
+        if mesh_format is MeshFormat.DAE:
+            references = set(TEXTURE_PATTERN.findall(mesh_text))
+        elif mesh_format is MeshFormat.OBJ:
+            references = self._object_side_references(
+                mesh_text, source_directory, bundled_directory
+            )
+        else:
+            return
+        for reference in references:
+            relative_reference = reference.strip().lstrip("./")
+            source = os.path.join(source_directory, relative_reference)
+            if os.path.isfile(source):
+                self.copy(source, os.path.join(bundled_directory, relative_reference))
 
-    :param source_mesh: Path of the resolved source mesh.
-    :param bundled_mesh: Path the mesh was copied to inside the bundle.
-    :param copied: Source path to bundled path, doubling as the already-copied memo.
-    :param missing: Collects references that could not be copied.
-    """
-    source_directory = os.path.dirname(source_mesh)
-    bundled_directory = os.path.dirname(bundled_mesh)
-    suffix = source_mesh.lower().rsplit(".", 1)[-1]
-    if not os.path.isfile(source_mesh):
-        return
-    mesh_text = Path(source_mesh).read_bytes().decode("utf-8", "replace")
-    references = set()
-    if suffix == "dae":
-        references |= set(TEXTURE_PATTERN.findall(mesh_text))
-    elif suffix == "obj":
-        for material_library in MATERIAL_LIBRARY_PATTERN.findall(mesh_text):
-            references.add(material_library.strip())
+    def _object_side_references(
+        self, mesh_text: str, source_directory: str, bundled_directory: str
+    ) -> Set[str]:
+        """
+        The material libraries an ``.obj`` names, copied on the way, plus the textures
+        those libraries name.
+
+        :param mesh_text: The decoded contents of the ``.obj``.
+        :param source_directory: Directory the source mesh lives in.
+        :param bundled_directory: Directory the mesh was copied to inside the bundle.
+        """
+        references = {
+            material_library.strip()
+            for material_library in MATERIAL_LIBRARY_PATTERN.findall(mesh_text)
+        }
         for material_library in list(references):
             material_source = os.path.join(source_directory, material_library)
             if not os.path.isfile(material_source):
                 continue
-            _copy_file(
-                material_source,
-                os.path.join(bundled_directory, material_library),
-                copied,
-                missing,
+            self.copy(
+                material_source, os.path.join(bundled_directory, material_library)
             )
             material_text = (
                 Path(material_source).read_bytes().decode("utf-8", "replace")
             )
-            for texture in TEXTURE_MAP_PATTERN.findall(material_text):
-                references.add(texture.strip())
-    for reference in references:
-        relative_reference = reference.strip().lstrip("./")
-        source = os.path.join(source_directory, relative_reference)
-        if os.path.isfile(source):
-            _copy_file(
-                source,
-                os.path.join(bundled_directory, relative_reference),
-                copied,
-                missing,
-            )
+            references |= {
+                texture.strip()
+                for texture in TEXTURE_MAP_PATTERN.findall(material_text)
+            }
+        return references
 
 
 # %% xacro
@@ -303,8 +331,7 @@ def bundle_urdf(
     base_directory = os.path.dirname(source_path)
 
     os.makedirs(output_directory, exist_ok=True)
-    copied: Dict[str, str] = {}
-    missing: List[str] = []
+    assets = BundledAssets()
     rewritten = 0
     for reference in sorted(set(MESH_REFERENCE_PATTERN.findall(urdf_text))):
         if MeshFormat.of_path(reference) is None:
@@ -312,8 +339,8 @@ def bundle_urdf(
         resolved = resolve_uri(reference, hints=hints, base_directory=base_directory)
         relative_path = _bundled_relative_path(reference)
         bundled = os.path.join(output_directory, "meshes", relative_path)
-        if _copy_file(resolved, bundled, copied, missing):
-            _copy_side_assets(resolved, bundled, copied, missing)
+        if assets.copy(resolved, bundled):
+            assets.copy_side_assets(resolved, bundled)
         urdf_text = urdf_text.replace(
             '"%s"' % reference,
             '"meshes/%s"' % relative_path.replace(os.sep, "/"),
@@ -324,7 +351,6 @@ def bundle_urdf(
     Path(urdf_out).write_text(urdf_text, encoding="utf-8")
     links = LINK_PATTERN.findall(urdf_text)
     joints = JOINT_PATTERN.findall(urdf_text)
-    suffixes = sorted({os.path.splitext(path)[1].lower() for path in copied})
     return BundleReport(
         name=name,
         urdf=urdf_out,
@@ -336,10 +362,10 @@ def bundle_urdf(
             for joint_name, joint_type in joints
             if joint_type != FIXED_JOINT_TYPE
         ],
-        meshes_copied=len(copied),
-        mesh_suffixes=suffixes,
+        meshes_copied=len(assets.copied),
+        mesh_suffixes=assets.mesh_suffixes,
         references_rewritten=rewritten,
-        missing=missing,
+        missing=assets.missing,
     )
 
 

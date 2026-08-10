@@ -324,6 +324,85 @@ class TestReferenceLayout:
         assert bundler._bundled_relative_path("../far/away/cup.stl") == "_local/cup.stl"
 
 
+# %% copying assets into the bundle
+class TestBundledAssets:
+    def test_an_asset_is_copied_once_however_often_it_is_referenced(self, tmp_path):
+        source = tmp_path / "cup.stl"
+        source.write_text("solid cup endsolid")
+        assets = bundler.BundledAssets()
+
+        assert assets.copy(str(source), str(tmp_path / "out" / "cup.stl")) is True
+        assert assets.copy(str(source), str(tmp_path / "elsewhere" / "cup.stl")) is True
+
+        assert assets.copied == {str(source): str(tmp_path / "out" / "cup.stl")}
+        assert not (tmp_path / "elsewhere").exists()
+
+    def test_an_unresolved_reference_is_recorded_as_missing(self, tmp_path):
+        assets = bundler.BundledAssets()
+        assert assets.copy(None, str(tmp_path / "out" / "cup.stl")) is False
+        assert assets.missing == [bundler.UNRESOLVED_REFERENCE]
+
+    def test_a_resolved_path_that_is_not_a_file_is_recorded_as_missing(self, tmp_path):
+        assets = bundler.BundledAssets()
+        gone = str(tmp_path / "gone.stl")
+        assert assets.copy(gone, str(tmp_path / "out" / "gone.stl")) is False
+        assert assets.missing == [gone]
+
+    def test_the_textures_a_collada_mesh_names_are_copied_beside_it(self, tmp_path):
+        source_directory = tmp_path / "src"
+        source_directory.mkdir()
+        (source_directory / "wood.png").write_bytes(b"png")
+        mesh = source_directory / "table.dae"
+        mesh.write_text(
+            "<library_images><init_from>wood.png</init_from></library_images>"
+        )
+        bundled = tmp_path / "out" / "table.dae"
+
+        assets = bundler.BundledAssets()
+        assets.copy(str(mesh), str(bundled))
+        assets.copy_side_assets(str(mesh), str(bundled))
+
+        assert (tmp_path / "out" / "wood.png").read_bytes() == b"png"
+        assert assets.missing == []
+
+    def test_an_object_meshs_material_library_and_its_textures_are_copied(
+        self, tmp_path
+    ):
+        source_directory = tmp_path / "src"
+        source_directory.mkdir()
+        (source_directory / "cup.mtl").write_text("newmtl body\nmap_Kd glaze.jpg\n")
+        (source_directory / "glaze.jpg").write_bytes(b"jpg")
+        mesh = source_directory / "cup.obj"
+        mesh.write_text("mtllib cup.mtl\nv 0 0 0\n")
+        bundled = tmp_path / "out" / "cup.obj"
+
+        assets = bundler.BundledAssets()
+        assets.copy(str(mesh), str(bundled))
+        assets.copy_side_assets(str(mesh), str(bundled))
+
+        assert (tmp_path / "out" / "cup.mtl").exists()
+        assert (tmp_path / "out" / "glaze.jpg").read_bytes() == b"jpg"
+
+    def test_a_stereolithography_mesh_has_no_side_assets(self, tmp_path):
+        mesh = tmp_path / "cup.stl"
+        mesh.write_text("solid cup endsolid")
+        bundled = tmp_path / "out" / "cup.stl"
+
+        assets = bundler.BundledAssets()
+        assets.copy(str(mesh), str(bundled))
+        assets.copy_side_assets(str(mesh), str(bundled))
+
+        assert list(assets.copied) == [str(mesh)]
+
+    def test_the_mesh_suffixes_are_sorted_and_deduplicated(self, tmp_path):
+        assets = bundler.BundledAssets()
+        for name in ("b.STL", "a.stl", "c.dae"):
+            source = tmp_path / name
+            source.write_text("x")
+            assets.copy(str(source), str(tmp_path / "out" / name))
+        assert assets.mesh_suffixes == [".dae", ".stl"]
+
+
 # %% xacro expansion
 class TestXacroToUrdfText:
     def test_a_xacro_file_expands_to_urdf_text(self, tmp_path):
