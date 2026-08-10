@@ -4569,3 +4569,102 @@ is ever wanted here, it extends that item rather than building a second hook.
 bootstrap, but two skills and `resolve-personal-notes-config.sh` reference the path, and
 `dev-tooling-save-plan-python` absorbs the file into the package regardless. Worth raising
 with the user rather than taken unilaterally.
+
+## Update 2026-08-10 (kickoff): manifest-currency-first opens as #151, and two premises corrected
+
+`/plan-item-kickoff workflow-unification manifest-currency-first`, session
+https://claude.ai/code/session_01NoxeSgtWJ6PuaHYQhzmw7n, as draft pull request **#151** on
+`claude/plan-manifest-update-priority-ex2zst`, based on fork `main`. Bootstrapped in the
+order `plan-item-bootstrap` prescribes — branch, draft pull request, manifest, roadmap,
+dashboard, and only then the implementation.
+
+### The item's own notes were wrong about the reuse seam
+
+Recorded a day earlier: *"A transition-time check must reuse `sync_manifest_status.py`
+rather than become a third drift implementation."* Reading the code rather than the
+docstring disproved it, and following it would have been worse than not.
+
+`sync_manifest_status.py` imports `build_dashboard`, which imports `render_common`, which
+imports `jinja2`, `markdown` and `nh3` at module level. So a `.claude/hooks/` module
+cannot import it at all — the exact constraint `plan_item_bootstrap.ItemStatus`'s own
+docstring already records about its duplicated enum, met from the other side. It also
+answers a *different* question: post-hoc, GitHub-side, one direction (merged → done), on a
+dashboard run.
+
+The correct split is by **what each can see**, and it is genuinely non-overlapping rather
+than a compromise:
+
+- the **dashboard run** compares the manifest against GitHub, after the fact;
+- the **transition check** compares it against *this session's local git state* — the
+  branch you are on, whether it is published, whether the item names it — which the
+  dashboard can never see, because it happens before a push.
+
+That keeps the hook tier stdlib-only (decision 12), needs no GitHub call, and leaves the
+check importable by `plan-item-edit-guard`, whose hook must also be dependency-free.
+
+Worth carrying, because this plan keeps producing both directions of it: an item's notes
+can name a reuse seam that does not exist, exactly as a docstring can invent a
+relationship (#143's third review round) or miss one (#135's `run_git` question). All
+three are fixed the same way — by reading the other file rather than reasoning about it.
+
+### Writing `notes` today silently corrupts the manifest
+
+`ManifestKey.NOTES` is `ValueStyle.BLOCK`, its `pattern` matches the `notes: >` line, and
+`render` emits a single line — so `apply_item_fields` replaces the `>` and orphans the
+indented body, which YAML then reads as a continuation of the new value. Verified against
+the module's own fixture:
+
+```
+BEFORE: 'A folded note whose wrapping must survive untouched...'
+AFTER : 'a new note A folded note whose wrapping must survive untouched...'
+```
+
+The result still validates, so nothing catches it. That is worse than a parse error, and
+it is why block-value writing is real work rather than a flag on the existing setter.
+`ManifestKey.NOTES`/`BLOCKERS` have had members since #143 and no writer, so the hazard
+has been latent rather than live.
+
+### What the item builds
+
+Three operations on `plan_item_bootstrap.py` — chosen over a sibling module because that
+file already owns `PlanDocuments`, `ManifestKey`, `ItemStatus`,
+`locate_item_block`/`apply_item_fields`, `BootstrapReport` and `run_git`, so a second
+module would re-derive the item-block parser: block-styled field writing; an `update`
+operation that writes any tracked field without the roadmap section `record_item` demands
+unconditionally today; and a `check` operation reporting which recorded fields local git
+contradicts, with its own non-zero status per #139's name-the-status-for-a-caller
+precedent.
+
+Plus `.claude/skills/plan-dashboard/manifest-currency.md` and a
+`MANIFEST_CURRENCY_DOCUMENT` constant, referenced in one short subsection by each of the
+six bound skills — the `SCOPE_DECISION_DOCUMENT` shape #135 established.
+
+### Two scope calls settled at kickoff
+
+**`plan-item-resolve` is the largest skill-side gap**, which the item's notes had not
+singled out: it writes the manifest *nowhere*. It is a research-and-planning skill by
+design, yet its own `blockers`/`notes` are precisely the fields that went stale on #109,
+#115 and #121 — the three entries this item's premise rests on. It gains a step that
+records what it found before proposing anything.
+
+**`stacked-pr-maintenance` reports rather than writes.** Its obligation already ran the
+other way from the rest — "the items you just moved are now stale" — and it runs
+unattended under `--non-interactive`, where opening a discussion is forbidden by its own
+doctrine and *why* a status changed is exactly the judgement the shared document keeps
+with a session. So it maps the branches it moved to items through the generated branch
+index and reports them in its finish summary. This is the one place the rule is
+deliberately weaker, and the document states that with its reason rather than leaving a
+reader to notice the asymmetry.
+
+### Deferred, with the reasoning
+
+`plan_item_bootstrap.py`'s name stops being true once it carries `update` and `check`.
+Not renamed here, on the user's call: two skills and `resolve-personal-notes-config.sh`
+reference the path, and `dev-tooling-save-plan-python` absorbs the file into the package
+regardless — so the migration that already moves it renames it once, rather than twice
+with three branches rebasing across the first attempt. Same call #106 made for splitting
+`stack.py`.
+
+The one line into `add-plan-item/SKILL.md` still cannot be written from `main`, and #135
+is marked ready for review, which ends a session's job on it. It lands in this pull
+request if #135 merges first; otherwise it is left for whoever lands #135.
