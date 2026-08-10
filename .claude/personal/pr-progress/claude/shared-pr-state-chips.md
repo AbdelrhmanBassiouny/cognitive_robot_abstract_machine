@@ -68,4 +68,9 @@ headless site build also pushes merged→done manifest corrections).
   required-environments fix offered as its own bug PR; not fixed here (repo-wide,
   outside this PR's scope). Reruns pointless until greenlet ships Linux wheels or a
   pin lands - skip further events for this failure class as duplicates.
+- 2026-08-10 (later): run 31393448822 (prebuilt-container leg, no uv install, so not
+  greenlet-blocked) red on coraplex/scripts/test_notebook_examples.sh with the known
+  "Kernel died before replying to kernel_info" notebook-kernel flake (same class #135
+  hit; unrelated to this diff). Noted once on the thread (comment 5241177836); skip
+  further events of this class as duplicates too.
 - Keep the PR draft until told otherwise; self-review pass before undrafting, when asked.
