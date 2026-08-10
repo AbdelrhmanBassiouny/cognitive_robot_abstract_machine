@@ -60,6 +60,30 @@ Python dependency set rather than to a URL-cache PR. Offered to open a separate
 `bug` PR for the pin. The later `experiments` event was the same error byte for byte,
 so it was skipped rather than answered twice.
 
+**Review round 1 (7 comments / 5 threads), applied in `74adb826`, pushed as `9f4c1ee6`.**
+- Docstring: incident history out, what-it-does in (50 lines to 30).
+- Every refusal is a dataclass with typed context fields and abstract
+  `error_message()`/`suggest_correction()` composed at construction — `DataclassException`
+  mirrored, not imported (stdlib-only tier). 4 protocol tests.
+- `apply_url_record` returns `PatchedCache`; body is two guard clauses over
+  `find_cache_entry_line` (returns `CacheEntryLine`) and `append_position`. No tuple
+  returns left in the module.
+- **Behaviour change on the user's instruction:** a duplicated title no longer asks.
+  `ArtifactListingEntry` gains `updated`; most-recently-updated wins, ties keep listing
+  order. `AmbiguousArtifactTitleError` deleted; `--url` demoted to an override.
+  Validated against the two real pairs — recency reproduces both choices made by hand
+  (`49053971`, and `07123af6` via the tie-break). Cost, stated on the thread: a newly
+  minted duplicate no longer announces itself here.
+- `AskUserQuestion` kept in `allowed-tools` — step 0's `prerequisite-check.md` still
+  uses it. Checked before removing rather than assuming.
+- 393 tests pass (was 291; difference is main's own plus 10 new here). Re-ran the whole
+  suite *after* merging main, per the #110 lesson that a clean merge says nothing about
+  whether the result still works.
+- 4 of 5 threads replied-then-resolved. One left open deliberately: `suggest_correction()`
+  is abstract here (as in `DataclassException`) but has a concrete `""` default in the
+  sibling `ValidationProblem` on main — asked which the directory should follow.
+- Description rewritten; PR still a draft.
+
 **Next**
 - Nothing to push. React to further events; a new *kind* of failure would be worth a
   reply, another `greenlet` one would not.
