@@ -2322,13 +2322,13 @@ items:
       in the owning session. That skill's own NEVER-subscribe hard rule was already right.
   - id: integration-branch
     title: "Regenerated personal integration branch: build, check, resolve, report"
-    branch: null
+    branch: claude/plan-item-kickoff-workflow-ixbvxl
     track: stack-tooling
     depends_on:
       - stack-maintenance-executor
-    status: not_started
-    pull_request_number: null
-    session: https://claude.ai/code/session_01GoTVfGUTXfmR3TDpAmVyUE
+    status: in_progress
+    pull_request_number: 154
+    session: https://claude.ai/code/session_01Ue4PvfV5LDxHGRRS5BZB4g
     notes: >
       Designed 2026-08-10; no code exists. Three implementation attempts were blocked in the
       designing session, so this enters the plan as a design with nothing behind it.
