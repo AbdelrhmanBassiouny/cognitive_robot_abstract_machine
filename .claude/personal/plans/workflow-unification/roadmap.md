@@ -4358,12 +4358,40 @@ part that is wrong.
 - **auto** — draft the same plan, record it, and implement it without asking. The planning
   phase still happens and is still written down; what it stops doing is blocking.
 - **ask** — gather first, then put the choice to the user with a recommendation and its
-  reasons. This is the built-in default.
+  reasons.
 
-`ask` is the default rather than `auto` because the user's opening requirement was the question
-itself, and because a default that implements unasked is the wrong failure for someone who
-inherits this repository having never configured it. Pinning `auto` is one command, and is
-where the user who asked for this is expected to land.
+**`auto` is the built-in default, and the reasoning that first put `ask` there was wrong.**
+The first round shipped `ask`, on the grounds that the user's opening requirement was the
+question itself and that a default which implements unasked is the wrong failure for someone
+who inherits this repository having never configured it. The user reversed it the same day
+with the argument that actually settles it: auto mode is not unsupervised. By the time the
+mode applies, the skill has already read the item's recorded state and the progress on its
+plan and pull request, and `execution-modes.md`'s escalation rule already sends anything that
+genuinely changes the settled plan back as a question. So `ask` was buying a round trip on
+exactly the items the gathered material already settles - ceremony, not a safeguard.
+
+The inherited-clone objection survives as a consequence rather than a counter-argument, and is
+recorded here so nobody has to rediscover it: `.claude/` is committed, so every contributor who
+inherits this repository inherits `auto` too. If that ever bites, the fix is to flip the
+committed default back to `ask` and pin `auto` in `.claude/personal/plan-item-modes.toml`,
+which reaches the same outcome for one person without changing anyone else's.
+
+Worth carrying past this item: a default chosen to protect a hypothetical inheritor cost the
+actual user a round trip on every run. The test is whether the safety it buys is already
+bought elsewhere - and here the escalation rule had already bought it.
+
+### Setting it is a skill, because a script nobody can invoke is half a feature
+
+`plan_item_mode.py set` existed from the first round and nothing could reach it except a
+session that had been told the command. `/plan-item-mode <mode> [kickoff|resolve|both]` is the
+other half: its description triggers on how the preference actually gets said - "stop asking
+me, just implement", "always show me a plan first" - so it works mid-conversation rather than
+only as a slash command. The skill maps the phrasing, calls `set`, and then reports what
+`resolve` reads back rather than assuming the write landed.
+
+`--skill` became repeatable at the same time. The settings file is rewritten whole on every
+write, so pinning both skills as two calls was two pushes to the notes branch for one
+decision; a test now counts commits on the branch and pins that naming both is one.
 
 ### The recommendation is the skill's, not the script's
 
