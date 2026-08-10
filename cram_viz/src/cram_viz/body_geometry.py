@@ -1,9 +1,9 @@
 """
-The measurable size of a world body's geometry.
+The publishable size and pose of a world body.
 
 Both the live bridge (which sizes placeholder boxes for objects the viewer has no mesh
 for) and the onboarder (which records each object's height into a bundle) need the same
-measurement, taken the same way.
+measurement, taken the same way, and both publish body poses rounded the same way.
 """
 
 from __future__ import annotations
@@ -46,4 +46,17 @@ def rounded_scale(scale: Scale, precision: int) -> List[float]:
         round(scale.x, precision),
         round(scale.y, precision),
         round(scale.z, precision),
+    ]
+
+
+def rounded_pose(body: Body, precision: int) -> List[float]:
+    """
+    A body's world pose as ``[x, y, z, qx, qy, qz, qw]``, rounded for publication.
+
+    :param body: The body whose world pose is read.
+    :param precision: Number of decimal places to round each value to.
+    """
+    return [
+        round(value, precision)
+        for value in body.global_pose.to_position_quaternion_list()
     ]

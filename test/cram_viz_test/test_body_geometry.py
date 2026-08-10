@@ -12,6 +12,8 @@ from __future__ import annotations
 import pytest
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import Connection6DoF
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.geometry import (
     Box,
     Cylinder,
@@ -23,7 +25,7 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Optional
 
-from cram_viz.body_geometry import measure_body, rounded_scale
+from cram_viz.body_geometry import measure_body, rounded_pose, rounded_scale
 
 
 # %% fixtures
@@ -110,3 +112,35 @@ def test_of_prefers_visual_over_collision():
 # %% rounded_scale
 def test_rounded_scale_rounds_each_axis():
     assert rounded_scale(Scale(x=0.123456, y=1.0, z=2.987654), 3) == [0.123, 1.0, 2.988]
+
+
+# %% rounded_pose
+def test_rounded_pose_reports_position_then_quaternion():
+    """
+    The pose is published in the ``[x, y, z, qx, qy, qz, qw]`` order the viewer reads,
+    which is the order semantic_digital_twin's own conversion produces.
+    """
+    body = _body_with_shapes()
+    assert rounded_pose(body, 5) == pytest.approx(
+        body.global_pose.to_position_quaternion_list()
+    )
+
+
+def test_rounded_pose_rounds_every_value():
+    world = World()
+    root = Body(name=PrefixedName("world"))
+    body = Body(name=PrefixedName("object"))
+    with world.modify_world():
+        degrees_of_freedom = {
+            component: DegreeOfFreedom(name=PrefixedName(component))
+            for component in ("x", "y", "z", "qx", "qy", "qz", "qw")
+        }
+        for degree_of_freedom in degrees_of_freedom.values():
+            world.add_degree_of_freedom(degree_of_freedom)
+        world.add_connection(
+            Connection6DoF(parent=root, child=body, **degrees_of_freedom)
+        )
+        world.state[degrees_of_freedom["qw"].id].position = 1.0
+        world.state[degrees_of_freedom["x"].id].position = 0.123456789
+
+    assert rounded_pose(body, 3)[0] == 0.123

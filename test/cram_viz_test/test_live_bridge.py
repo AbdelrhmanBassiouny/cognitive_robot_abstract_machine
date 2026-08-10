@@ -399,8 +399,8 @@ class TestApplyMove:
     def test_orientation_is_kept_exact_when_the_drag_omits_it(self):
         """
         A position-only drag must not round-trip the object's orientation through the
-        5-decimal-place floats ``_pose_as_position_quaternion`` produces for the viewer
-        feed; that would nudge the true orientation on every such drag.
+        5-decimal-place floats ``rounded_pose`` produces for the viewer feed; that would
+        nudge the true orientation on every such drag.
         """
         world, connection, body = make_free_floating_object()
         half_angle = 0.123456789 / 2

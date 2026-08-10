@@ -47,7 +47,7 @@ from semantic_digital_twin.spatial_types import (
     RotationMatrix,
 )
 from cram_viz.logging_setup import get_logger
-from cram_viz.body_geometry import measure_body, rounded_scale
+from cram_viz.body_geometry import measure_body, rounded_pose, rounded_scale
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
     Connection6DoF,
@@ -939,18 +939,6 @@ class Bridge:
                 bodies.setdefault(key, body)
         self.publish_bodies(bodies)
 
-    @classmethod
-    def _pose_as_position_quaternion(cls, body: Body) -> List[float]:
-        """
-        A body's world pose as ``[x, y, z, qx, qy, qz, qw]``.
-
-        :param body: The body whose world pose is read.
-        """
-        return [
-            round(value, cls.POSE_PRECISION)
-            for value in body.global_pose.to_position_quaternion_list()
-        ]
-
     @staticmethod
     def _actuated_connections(world: World) -> List[ActiveConnection1DOF]:
         """
@@ -1038,9 +1026,9 @@ class Bridge:
         object_poses: Dict[str, List[float]] = {}
         for name, body in self._bodies.items():
             if name == ROBOT_BASE_KEY:
-                base_pose = self._pose_as_position_quaternion(body)
+                base_pose = rounded_pose(body, self.POSE_PRECISION)
             else:
-                object_poses[name] = self._pose_as_position_quaternion(body)
+                object_poses[name] = rounded_pose(body, self.POSE_PRECISION)
         with self._lock:
             self.seq += 1
             self.state = WorldStateSnapshot(

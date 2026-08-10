@@ -56,7 +56,7 @@ from typing_extensions import (
 
 from cram_viz import paths
 from cram_viz.logging_setup import get_logger
-from cram_viz.body_geometry import measure_body
+from cram_viz.body_geometry import measure_body, rounded_pose
 from cram_viz.live.bridge import ROBOT_BASE_KEY
 from cram_viz.monkey_patch import MethodPatch
 from cram_viz.robot_parts import describe_robot_parts
@@ -378,18 +378,6 @@ class Recorder:
             )
         )
 
-    @staticmethod
-    def _pose_as_position_quaternion(body: Body) -> List[float]:
-        """
-        A body's world pose as ``[x, y, z, qx, qy, qz, qw]``.
-
-        :param body: The body whose world pose is read.
-        """
-        return [
-            round(value, POSE_PRECISION)
-            for value in body.global_pose.to_position_quaternion_list()
-        ]
-
     def record_frame(self, executor: Executor) -> None:
         """
         Append one frame: every movable connection's position, the robot base pose and
@@ -406,13 +394,13 @@ class Recorder:
             }
         )
         self.base_frames.append(
-            self._pose_as_position_quaternion(self._bodies[ROBOT_BASE_KEY])
+            rounded_pose(self._bodies[ROBOT_BASE_KEY], POSE_PRECISION)
             if ROBOT_BASE_KEY in self._bodies
             else None
         )
         self.object_frames.append(
             {
-                name: self._pose_as_position_quaternion(body)
+                name: rounded_pose(body, POSE_PRECISION)
                 for name, body in self._bodies.items()
                 if name != ROBOT_BASE_KEY
             }
