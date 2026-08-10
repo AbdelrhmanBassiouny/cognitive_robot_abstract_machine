@@ -57,7 +57,15 @@ headless site build also pushes merged→done manifest corrections).
   the semantic_digital_twin job (fails on main too - already noted once on the thread).
 - 2026-08-05 (later): the pass merged main again (2b316dc5, clean - #492 gripper
   params); run 31044969651's robokudo job red on infrastructure only (uni GitLab
-  unreachable while downloading test data; noted on the thread). rerun_failed_jobs was
-  refused while the run's other jobs still execute - retry it on the next event for
-  this run once it has completed.
+  unreachable while downloading test data; noted on the thread). That run is superseded
+  by later heads; its rerun cue no longer applies.
+- 2026-08-10: maintenance merges continued (head now 8fad3a1b, local fast-forwarded).
+  Run 31393449301: test_claude_dev_tooling green; semantic_digital_twin and segmind
+  jobs red on a new repo-wide infra break - the just-published greenlet 3.5.5 has no
+  manylinux wheel, and greenlet is an unpinned transitive dep (nowhere in the repo, no
+  lock file), so every job installing the robotics stack fails at env install on every
+  branch. Reported once on the thread (comment 5241109619) with the pin-below-3.5.5 /
+  required-environments fix offered as its own bug PR; not fixed here (repo-wide,
+  outside this PR's scope). Reruns pointless until greenlet ships Linux wheels or a
+  pin lands - skip further events for this failure class as duplicates.
 - Keep the PR draft until told otherwise; self-review pass before undrafting, when asked.
