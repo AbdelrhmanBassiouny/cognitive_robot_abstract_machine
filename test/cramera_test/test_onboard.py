@@ -461,6 +461,48 @@ class TestBundledAssets:
 
         assert list(assets.copied) == [str(mesh)]
 
+    def test_a_texture_beside_the_mesh_keeps_its_relative_location(self, tmp_path):
+        """
+        Gazebo model trees reference textures from a sibling directory, e.g.
+        ``../materials/textures/wall.png``. The reference has to be resolved against the
+        mesh and mirrored at the same relative place next to the bundled copy, or the
+        browser asks for a file that is not there.
+        """
+        model = tmp_path / "model"
+        (model / "meshes").mkdir(parents=True)
+        (model / "materials" / "textures").mkdir(parents=True)
+        (model / "materials" / "textures" / "wall.png").write_bytes(b"png")
+        mesh = model / "meshes" / "wall.dae"
+        mesh.write_text(
+            "<init_from>../materials/textures/wall.png</init_from>"
+        )
+        bundled = tmp_path / "bundle" / "meshes" / "model" / "wall.dae"
+
+        assets = bundler.BundledAssets(bundle_root=str(tmp_path / "bundle"))
+        assets.copy(str(mesh), str(bundled))
+        assets.copy_side_assets(str(mesh), str(bundled))
+
+        texture = tmp_path / "bundle" / "meshes" / "materials" / "textures" / "wall.png"
+        assert texture.read_bytes() == b"png"
+
+    def test_a_reference_escaping_the_bundle_is_skipped(self, tmp_path):
+        """
+        A mesh sitting at the top of the bundle's mesh tree could otherwise write
+        outside the bundle entirely.
+        """
+        source_directory = tmp_path / "src"
+        source_directory.mkdir()
+        (tmp_path / "outside.png").write_bytes(b"png")
+        mesh = source_directory / "wall.dae"
+        mesh.write_text("<init_from>../outside.png</init_from>")
+        bundled = tmp_path / "bundle" / "wall.dae"
+
+        assets = bundler.BundledAssets(bundle_root=str(tmp_path / "bundle"))
+        assets.copy(str(mesh), str(bundled))
+        assets.copy_side_assets(str(mesh), str(bundled))
+
+        assert list(assets.copied) == [str(mesh)]
+
     def test_the_mesh_suffixes_are_sorted_and_deduplicated(self, tmp_path):
         assets = bundler.BundledAssets()
         for name in ("b.STL", "a.stl", "c.dae"):
