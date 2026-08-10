@@ -14,6 +14,8 @@ from pathlib import Path
 import pytest
 from typing_extensions import List
 
+from cramera import knowledge
+from cramera.knowledge.eql_session import fresh_namespace
 from cramera.paths import WEB_ROOT
 
 JS_DIR = Path(__file__).parent / "js"
@@ -25,6 +27,14 @@ How the shell references the assets that must ship with it.
 STYLESHEET_PATTERN = re.compile(r'<link rel="stylesheet" href="([^"]+)"')
 IMAGE_PATTERN = re.compile(r'<img[^>]+src="([^"]+)"')
 CSS_URL_PATTERN = re.compile(r"url\(['\"]?([^)'\"]+)['\"]?\)")
+
+#: the EQL variables the query panel advertises: the ``vars:`` list in its placeholder,
+#: and every bare identifier it marks up as ``<code>``
+ADVERTISED_VARIABLES_PATTERN = re.compile(r"vars: ([a-z_, ]+)")
+MARKED_UP_IDENTIFIER_PATTERN = re.compile(r"<code>([a-z_]+)</code>")
+
+#: the ready-to-run query the panel shows in its empty input box
+PLACEHOLDER_QUERY_PATTERN = re.compile(r'placeholder="(the\(entity.*?\)\))')
 
 
 def read(relative_path: str) -> str:
@@ -125,3 +135,35 @@ class TestJsUnits:
 
     def test_graph_panel(self):
         self.run_node("test_graph_panel.js")
+
+
+class TestQueryPanelHints:
+    """
+    The EQL panel hard-codes the variable names it tells users to type, so a rename in
+    :func:`fresh_namespace` silently leaves the panel advertising names that no longer
+    resolve.
+    """
+
+    def advertised_variables(self) -> List[str]:
+        """
+        Every EQL variable name the query panel offers the user.
+        """
+        panel = read("panels/eql/panel.js")
+        [listed] = ADVERTISED_VARIABLES_PATTERN.findall(panel)
+        names = [name.strip() for name in listed.split(",")]
+        return sorted(set(names) | set(MARKED_UP_IDENTIFIER_PATTERN.findall(panel)))
+
+    def test_every_advertised_variable_exists_in_the_namespace(self, fixture_scene):
+        namespace = fresh_namespace()
+        assert self.advertised_variables()
+        for name in self.advertised_variables():
+            assert name in namespace, name
+
+    def test_the_placeholder_query_runs(self, fixture_scene):
+        """
+        The query shown in the empty input box must be one a user can actually run.
+        """
+        placeholder = PLACEHOLDER_QUERY_PATTERN.search(read("panels/eql/panel.js"))
+        assert placeholder is not None
+        result = knowledge.run_query(placeholder.group(1).replace("\\'", "'"))
+        assert result.ok
