@@ -20,15 +20,17 @@ from segmind.detectors.atomic_event_detectors_nodes import RotationDetector, Sto
 from segmind.detectors.base import SegmindContext
 from segmind.detectors.coarse_event_detector_nodes import PickUpDetector, PlacingDetector
 from segmind.detectors.spatial_relation_detector_nodes import SupportDetector, LossOfSupportDetector, \
-    ContainmentDetector, LossOfContainmentDetector, InsertionDetector
+    ContainmentDetector, LossOfContainmentDetector, InsertionDetector, HoleContactDetector, \
+    LossOfHoleContactDetector
 from segmind.episode_segmenter import EpisodeSegmenterExecutor
 from segmind.statecharts.segmind_statechart import SegmindStatechart
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import Body, Region
 
 
 # ---------------------------------------------------------------------------
@@ -280,36 +282,86 @@ def test_stop_translation(_simple_apartment_setup):
 def test_insertion(_simple_apartment_setup):
     segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
     statechart = SegmindStatechart().build_statechart(
-        [ContactDetector(), InsertionDetector(), LossOfContactDetector(), ContainmentDetector()])
+        [HoleContactDetector(), LossOfHoleContactDetector(), ContainmentDetector(), InsertionDetector()])
 
     with segmind_executor.context.world.modify_world():
-        hole = Body(
-            name=PrefixedName("box_hole"),
-            collision=ShapeCollection([Box(scale=Scale(1, 1, 1))]),
-            visual=ShapeCollection([Box(scale=Scale(1, 1, 1))]),
+        hole_region = Region(
+            name=PrefixedName("box_hole_region"),
+            area=ShapeCollection([Box(scale=Scale(1, 1, 1))]),
         )
+        hole = Aperture(name=PrefixedName("box_hole"), root=hole_region)
         hole_connection = FixedConnection(
             parent=segmind_executor.context.world.root,
-            child=hole,
+            child=hole_region,
             parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
                 2, 2, 2, reference_frame=segmind_executor.context.world.root
             ),
         )
         segmind_executor.context.world.add_connection(hole_connection)
+        segmind_executor.context.world.add_semantic_annotation(hole)
     segmind_executor.compile(statechart)
     segmind_executor.tick()
 
     assert len(events_of(segmind_context, InsertionEvent)) == 0
-    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(hole.global_pose.x, hole.global_pose.y,
-                                                                                 hole.global_pose.z)
+    milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(hole_region.global_pose.x, hole_region.global_pose.y,
+                                                                                 hole_region.global_pose.z)
 
     segmind_executor.tick()
 
     milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(box2.global_pose.x,box2.global_pose.y,box2.global_pose.z)
     segmind_executor.tick()
 
-    assert len(events_of(segmind_context, InsertionEvent)) == 1
+    insertion_events = events_of(segmind_context, InsertionEvent)
+    assert len(insertion_events) == 1
+    assert insertion_events[0].through_hole is hole
     milk.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(-1.7, 0, 1.07, yaw=np.pi)
+
+
+def test_detect_holes_uses_apertures_not_body_names(_simple_apartment_setup):
+    """
+    ``detect_holes`` must collect real ``Aperture`` semantic annotations, not bodies
+    whose name happens to contain "hole": a body named that way with no ``Aperture``
+    annotation is not a hole, and an ``Aperture`` annotated on a body whose name does
+    not mention "hole" at all is still one.
+    """
+    segmind_executor, segmind_context, milk, box1, box2 = _build_executor(_simple_apartment_setup)
+
+    with segmind_executor.context.world.modify_world():
+        decoy_body = Body(name=PrefixedName("decoy_hole"))
+        segmind_executor.context.world.add_connection(
+            FixedConnection(
+                parent=segmind_executor.context.world.root,
+                child=decoy_body,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    4, 4, 4, reference_frame=segmind_executor.context.world.root
+                ),
+            )
+        )
+
+        hole_region = Region(
+            name=PrefixedName("unrelated_opening_region"),
+            area=ShapeCollection([Box(scale=Scale(1, 1, 1))]),
+        )
+        aperture = Aperture(name=PrefixedName("unrelated_opening"), root=hole_region)
+        segmind_executor.context.world.add_connection(
+            FixedConnection(
+                parent=segmind_executor.context.world.root,
+                child=hole_region,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    3, 3, 3, reference_frame=segmind_executor.context.world.root
+                ),
+            )
+        )
+        segmind_executor.context.world.add_semantic_annotation(aperture)
+
+    segmind_executor.detect_holes()
+
+    # The apartment fixture is session-scoped and reused by other tests in this file
+    # (e.g. test_insertion), which may leave their own holes registered in the world,
+    # so this checks the two behaviours under test directly rather than asserting the
+    # full list, which other tests' state would make order-dependent.
+    assert aperture in segmind_context.holes
+    assert decoy_body not in [hole.root for hole in segmind_context.holes]
 
 
 def test_rotation(_simple_apartment_setup):

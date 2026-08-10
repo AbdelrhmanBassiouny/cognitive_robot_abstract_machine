@@ -167,9 +167,9 @@ class EventWithTrackedObjectsDAO(
         sqlalchemy.sql.sqltypes.JSON, nullable=False, use_existing_column=True
     )
     with_object: Mapped[
-        typing.Optional[semantic_digital_twin.world_description.world_entity.Body]
+        semantic_digital_twin.world_description.world_entity.KinematicStructureEntity
     ] = mapped_column(
-        sqlalchemy.sql.sqltypes.JSON, nullable=True, use_existing_column=True
+        sqlalchemy.sql.sqltypes.JSON, nullable=False, use_existing_column=True
     )
 
     __mapper_args__ = {
@@ -251,6 +251,13 @@ class InsertionEventDAO(
     inserted_into_objects: Mapped[
         typing.List[semantic_digital_twin.world_description.world_entity.Body]
     ] = mapped_column(JSON, nullable=False, use_existing_column=True)
+    through_hole: Mapped[
+        typing.Optional[
+            semantic_digital_twin.semantic_annotations.semantic_annotations.Aperture
+        ]
+    ] = mapped_column(
+        sqlalchemy.sql.sqltypes.JSON, nullable=True, use_existing_column=True
+    )
 
     __mapper_args__ = {
         "polymorphic_identity": "InsertionEventDAO",
@@ -818,6 +825,12 @@ class BaseContainmentDetectorDAO(
         use_existing_column=True
     )
 
+    additional_candidates: Mapped[
+        typing.List[
+            semantic_digital_twin.world_description.world_entity.KinematicStructureEntity
+        ]
+    ] = mapped_column(JSON, nullable=False, use_existing_column=True)
+
     __mapper_args__ = {
         "polymorphic_identity": "BaseContainmentDetectorDAO",
         "inherit_condition": database_id == AbstractDetectorDAO.database_id,
@@ -842,6 +855,29 @@ class ContainmentDetectorDAO(
     __mapper_args__ = {
         "polymorphic_identity": "ContainmentDetectorDAO",
         "inherit_condition": database_id == BaseContainmentDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class HoleContactDetectorDAO(
+    AbstractDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.spatial_relation_detector_nodes.HoleContactDetector
+    ],
+):
+    __tablename__ = "HoleContactDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    overlap_threshold: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "HoleContactDetectorDAO",
+        "inherit_condition": database_id == AbstractDetectorDAO.database_id,
         "polymorphic_load": "selectin",
     }
 
@@ -884,6 +920,29 @@ class LossOfContainmentDetectorDAO(
     __mapper_args__ = {
         "polymorphic_identity": "LossOfContainmentDetectorDAO",
         "inherit_condition": database_id == BaseContainmentDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class LossOfHoleContactDetectorDAO(
+    AbstractDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.spatial_relation_detector_nodes.LossOfHoleContactDetector
+    ],
+):
+    __tablename__ = "LossOfHoleContactDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    overlap_threshold: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "LossOfHoleContactDetectorDAO",
+        "inherit_condition": database_id == AbstractDetectorDAO.database_id,
         "polymorphic_load": "selectin",
     }
 

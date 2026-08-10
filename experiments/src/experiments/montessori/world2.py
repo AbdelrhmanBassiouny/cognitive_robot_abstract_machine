@@ -56,6 +56,9 @@ from experiments.montessori.world import (
     _body_with_visual_only_shape,
     _drawer_body,
     _hole_marker_shape,
+    _landing_region,
+    _landing_region_height,
+    _landing_region_position,
     _name,
     _shape_body,
     _table_shapes,
@@ -278,6 +281,9 @@ class MontessoriWorld2(MontessoriWorld):
         )
         self._spawn(board, BOARD_POSITION_2)
 
+        table_top_z = float(BOARD_TABLE_POSITION.z) + BOARD_TABLE_SCALE.z / 2
+        board_top_z = float(BOARD_POSITION_2.z) + BOARD_SCALE.z / 2
+        landing_region_height = _landing_region_height(table_top_z, board_top_z)
         for hole_spec in _HOLES_2:
             hole = ShapeSortingHole(
                 name=_name(hole_spec.key),
@@ -295,6 +301,19 @@ class MontessoriWorld2(MontessoriWorld):
             )
             self._spawn(hole, hole_spec.position)
             board.add(hole)
+
+            landing_region = _landing_region(
+                _name(f"{hole_spec.key}_landing_region"),
+                hole_spec.shape,
+                landing_region_height,
+            )
+            self._spawn_region(
+                landing_region,
+                _landing_region_position(
+                    hole_spec.position, table_top_z, landing_region_height
+                ),
+            )
+            self.landing_regions[hole_spec.key] = landing_region
 
         for index, drawer_position in enumerate(_DRAWER_POSITIONS_2, start=1):
             drawer = Drawer(

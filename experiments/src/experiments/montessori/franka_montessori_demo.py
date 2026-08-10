@@ -42,6 +42,10 @@ from krrood.ormatic.utils import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from typing_extensions import Optional
 
+from experiments.montessori.event_monitoring import (
+    MontessoriEventMonitor,
+    build_shape_monitor,
+)
 from experiments.montessori.franka_panda_equipment import (
     BOARD_FRICTION,
     apply_contact_friction,
@@ -60,6 +64,7 @@ from experiments.montessori.sorting_results import (
     SortingIterationResult,
 )
 from experiments.montessori.world import MontessoriWorld
+from segmind.datastructures.events import InsertionEvent, PickUpEvent
 from semantic_digital_twin.robots.panda import Panda
 from semantic_digital_twin.spatial_types.spatial_types import Point3
 from semantic_digital_twin.utils import rclpy_installed
@@ -143,6 +148,15 @@ MAX_INSERTION_ATTEMPTS = 3
 """
 Number of times a single shape's insertion is repeated while the attempt never gets as
 far as releasing the shape, before giving up on it and logging a warning.
+"""
+
+MONITORED_SHAPE_KEY = "square_hole"
+"""
+The one shape key (see :func:`_insert_all_shapes`) segmind live-monitors during a run.
+
+Scoping every detector to a single shape keeps a tick around 0.2s on this scene (see
+:mod:`experiments.montessori.event_monitoring`); widening to every shape needs a
+broader collision-broad-phase optimization not yet done.
 """
 
 SHAPE_SETTLE_DURATION = 2.0
@@ -416,6 +430,44 @@ def _insert_shape_or_none(
         return None, action
 
 
+def _log_segmind_verdict(
+    shape: MontessoriShape, ground_truth_fell_through: Optional[bool], monitor: MontessoriEventMonitor
+) -> None:
+    """
+    Log segmind's own pick-up/insertion verdict for ``shape`` next to the ground truth
+    :meth:`~experiments.montessori.insert_shape_action.InsertMontessoriShapeAction.has_fallen_through_hole`
+    already computed for it, for comparison while segmind's detectors are still new to
+    this scene.
+
+    :param shape: The shape ``monitor`` was tracking.
+    :param ground_truth_fell_through: What :func:`_insert_shape` determined by direct
+        geometry, or ``None`` if the attempt never got far enough to check.
+    :param monitor: The stopped event monitor that tracked ``shape``.
+    """
+    events = monitor.events
+    pick_up_detected = any(
+        isinstance(event, PickUpEvent) and event.tracked_object is shape.root
+        for event in events
+    )
+    insertion_detected = any(
+        isinstance(event, InsertionEvent) and event.tracked_object is shape.root
+        for event in events
+    )
+    logger.info(
+        "DEBUG segmind raw events for %s: %s",
+        shape.name,
+        [(type(e).__name__, getattr(e, "with_object", None), e.timestamp) for e in events],
+    )
+    logger.info(
+        "segmind for %s: pick-up detected=%s, insertion detected=%s "
+        "(ground truth fell_through=%s).",
+        shape.name,
+        pick_up_detected,
+        insertion_detected,
+        ground_truth_fell_through,
+    )
+
+
 def _insert_all_shapes(
     montessori: MontessoriWorld,
     context,
@@ -474,6 +526,11 @@ def _insert_all_shapes(
             break
         attempted += 1
 
+        event_monitor = None
+        if shape_key == MONITORED_SHAPE_KEY:
+            event_monitor = build_shape_monitor(montessori, shape)
+            event_monitor.start()
+
         fell_through = None
         for attempt in range(1, MAX_INSERTION_ATTEMPTS + 1):
             logger.info(
@@ -487,6 +544,10 @@ def _insert_all_shapes(
             )
             if fell_through is not None:
                 break
+
+        if event_monitor is not None:
+            event_monitor.stop()
+            _log_segmind_verdict(shape, fell_through, event_monitor)
 
         if fell_through is None:
             logger.warning(
@@ -793,7 +854,7 @@ def main() -> None:
     multi_sim = None
     tf_publisher = None
     viz_marker_publisher = None
-    results_session = _open_results_session(arguments.database_uri)
+#    results_session = _open_results_session(arguments.database_uri)
     logger.info("Recording results to '%s'.", arguments.database_uri)
     try:
         for iteration in range(1, arguments.iterations + 1):
@@ -808,8 +869,8 @@ def main() -> None:
                 iteration=iteration, shape_results=shape_results
             )
             iteration_results.append(iteration_result)
-            results_session.add(to_dao(iteration_result))
-            results_session.commit()
+            #results_session.add(to_dao(iteration_result))
+            #results_session.commit()
 
             if keep_simulation_running:
                 break
@@ -831,7 +892,7 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
-        results_session.close()
+        #results_session.close()
         if multi_sim is not None:
             multi_sim.stop_simulation()
         if viz_marker_publisher is not None:
