@@ -70,7 +70,7 @@ def view_payload(name: str) -> Union[ViewPayload, UnknownViewPayload]:
     if name == "plan":
         return PlanViewPayload.of_recorded_plan()
     if name == "chart":
-        return ChartViewPayload.live_only()
+        return ChartViewPayload()
     return UnknownViewPayload(False, "unknown view: %s" % name)
 
 

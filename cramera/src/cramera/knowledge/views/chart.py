@@ -36,13 +36,6 @@ class ChartViewPayload(GraphPanelPayload):
     What the panel shows until a live bridge is attached.
     """
 
-    @classmethod
-    def live_only(cls) -> ChartViewPayload:
-        """
-        The statechart tab, which only ever has content while a demo is running.
-        """
-        return cls()
-
     def panel_options(self) -> Dict[str, Any]:
         """
         The breadcrumb and the live/layout flags the statechart tab is rendered with.
