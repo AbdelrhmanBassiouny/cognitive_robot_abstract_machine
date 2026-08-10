@@ -74,27 +74,6 @@ class UrdfViewPayload(GraphPanelPayload):
             link: part for part, part_links in parts.items() for link in part_links
         }
 
-        def chain_group(link_name: str) -> NodeGroup:
-            """
-            The visual group (colour) a kinematic-chain link is bucketed into.
-
-            :param link_name: Name of the link to classify.
-            """
-            part = link_to_part.get(link_name, "").lower()
-            if "gripper" in part or "hand" in part or "effector" in part:
-                return NodeGroup.OBJECT  # grippers (teal)
-            if "left" in part:
-                return NodeGroup.ROBOT  # left arm (pink)
-            if "right" in part:
-                return NodeGroup.EVENT  # right arm (purple)
-            lowered = link_name.lower()
-            if any(
-                keyword in lowered
-                for keyword in ("head", "stereo", "sensor", "kinect", "camera", "laser")
-            ):
-                return NodeGroup.GOAL  # head / sensors (amber)
-            return NodeGroup.CONCEPT  # base, torso, casters (green)
-
         # which joint drives each link (child link → its parent joint), for tooltips
         parent_joint = {joint.child: joint for joint in joints}
         for link in links:
@@ -105,7 +84,12 @@ class UrdfViewPayload(GraphPanelPayload):
                 lines.append("parent link: " + joint.parent)
             else:
                 lines.append("root link")
-            view.add("urdf:" + link, link, chain_group(link), lines)
+            view.add(
+                "urdf:" + link,
+                link,
+                cls._chain_group(link, link_to_part.get(link, "")),
+                lines,
+            )
         for joint in joints:
             if ("urdf:" + joint.parent) in view.details and (
                 "urdf:" + joint.child
@@ -141,3 +125,27 @@ class UrdfViewPayload(GraphPanelPayload):
             details=view.details,
             legend=legend,
         )
+
+    @staticmethod
+    def _chain_group(link_name: str, part: str) -> NodeGroup:
+        """
+        The colour group a kinematic-chain link is drawn in.
+
+        :param link_name: Name of the link to classify.
+        :param part: Name of the robot part the link belongs to, or ``""`` when the
+            recorded annotation assigns it to none.
+        """
+        part = part.lower()
+        if "gripper" in part or "hand" in part or "effector" in part:
+            return NodeGroup.OBJECT  # grippers (teal)
+        if "left" in part:
+            return NodeGroup.ROBOT  # left arm (pink)
+        if "right" in part:
+            return NodeGroup.EVENT  # right arm (purple)
+        lowered = link_name.lower()
+        if any(
+            keyword in lowered
+            for keyword in ("head", "stereo", "sensor", "kinect", "camera", "laser")
+        ):
+            return NodeGroup.GOAL  # head / sensors (amber)
+        return NodeGroup.CONCEPT  # base, torso, casters (green)
