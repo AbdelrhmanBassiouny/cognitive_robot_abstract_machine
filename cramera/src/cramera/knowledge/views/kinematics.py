@@ -10,7 +10,7 @@ from coraplex.datastructures.enums import JointType
 from typing_extensions import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING
 
 from cramera.knowledge.enums import EdgeKind, NodeGroup
-from cramera.knowledge.scene_bundle import UrdfJoint, load_scene, load_urdf
+from cramera.knowledge.scene_bundle import load_scene, load_urdf
 from cramera.knowledge.subgraph import (
     DetailEntry,
     GraphEdge,
@@ -113,10 +113,14 @@ class UrdfViewPayload(GraphPanelPayload):
                 view.add_edge(
                     "urdf:" + joint.parent,
                     "urdf:" + joint.child,
-                    EdgeKind.PROPERTY if cls._is_movable(joint) else EdgeKind.TYPE,
+                    (
+                        EdgeKind.PROPERTY
+                        if joint.type != JointType.FIXED
+                        else EdgeKind.TYPE
+                    ),
                     "%s (%s)" % (joint.name, joint.type.name.lower()),
                 )
-        movable_count = sum(1 for joint in joints if cls._is_movable(joint))
+        movable_count = sum(1 for joint in joints if joint.type != JointType.FIXED)
         view.details["urdf:" + links[0]].lines.append(
             "%d links · %d joints (%d movable)"
             % (len(links), len(joints), movable_count)
@@ -137,12 +141,3 @@ class UrdfViewPayload(GraphPanelPayload):
             details=view.details,
             legend=legend,
         )
-
-    @staticmethod
-    def _is_movable(joint: UrdfJoint) -> bool:
-        """
-        Whether a URDF joint can move (every type except ``fixed``).
-
-        :param joint: The URDF joint to check.
-        """
-        return joint.type != JointType.FIXED
