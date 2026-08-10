@@ -12,7 +12,7 @@ from coraplex.datastructures.enums import Arms
 from semantic_digital_twin.spatial_types import Point3
 
 from cramera.knowledge.enums import EdgeKind, NodeGroup
-from cramera.knowledge.knowledge_base import get_knowledge_base
+from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
 from cramera.knowledge.presets import Preset, get_presets
 from cramera.knowledge.scene_bundle import load_scene
 from cramera.knowledge.subgraph import (
@@ -52,11 +52,10 @@ class KnowledgeGraphPayload(GraphPanelPayload):
         }
 
     @classmethod
-    def of_tab(cls) -> KnowledgeGraphPayload:
+    def of_tab(cls, knowledge_base: EpisodeKnowledgeBase) -> KnowledgeGraphPayload:
         """
         The knowledge-graph overview: nodes, edges, details and presets.
         """
-        knowledge_base = get_knowledge_base()
         view = SubgraphAccumulator()
 
         robot_name = knowledge_base.robot.name

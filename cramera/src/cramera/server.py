@@ -46,9 +46,8 @@ try:
     import krrood  # noqa: F401  (the EQL engine)
 
     from cramera.knowledge.eql_session import run_query
-    from cramera.knowledge.graph_payload import KnowledgeGraphPayload
     from cramera.knowledge.knowledge_base import get_knowledge_base
-    from cramera.knowledge.views.dispatcher import expand_node, view_payload
+    from cramera.knowledge.views.dispatcher import GraphPanelViews
 
     EQL_AVAILABLE = True
 except ImportError:  # pragma: no cover - depends on the environment
@@ -182,10 +181,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if route.startswith("/scenes/"):
             return self._serve_scene_file(route)
         if route == "/api/knowledge":
-            return self._guarded(KnowledgeGraphPayload.of_tab)
+            return self._guarded(
+                lambda: GraphPanelViews.of_active_scene().for_tab("knowledge")
+            )
         if route == "/api/knowledge/view":
             name = (self._query_parameters().get("name") or ["knowledge"])[0]
-            return self._guarded(lambda: view_payload(name))
+            return self._guarded(
+                lambda: GraphPanelViews.of_active_scene().for_tab(name)
+            )
         if route == "/api/knowledge/expand":
             node = (self._query_parameters().get("node") or [""])[0]
 
@@ -193,7 +196,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 """
                 The node's subgraph, or a "not drillable" error if it has none.
                 """
-                payload = expand_node(node)
+                payload = GraphPanelViews.of_active_scene().for_node(node)
                 return payload if payload else {"ok": False, "error": "not drillable"}
 
             return self._guarded(expand)

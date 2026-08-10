@@ -10,10 +10,14 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from typing_extensions import Any, ClassVar, Dict, List, Optional, Tuple
+from typing_extensions import Any, ClassVar, Dict, List, TYPE_CHECKING, Optional, Tuple
 
 from cramera.knowledge.enums import EdgeKind, NodeGroup
 from cramera.knowledge.scene_bundle import load_scene
+
+if TYPE_CHECKING:
+    from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
+
 from cramera.knowledge.subgraph import (
     DetailEntry,
     GraphEdge,
@@ -78,7 +82,7 @@ class PlanViewPayload(GraphPanelPayload):
         }
 
     @classmethod
-    def of_tab(cls) -> PlanViewPayload:
+    def of_tab(cls, knowledge_base: EpisodeKnowledgeBase) -> PlanViewPayload:
         """
         The executed plan as a tree, one node per plan node the demo ran.
 
@@ -88,6 +92,8 @@ class PlanViewPayload(GraphPanelPayload):
         statechart. So every inner node of a recorded tree reads ``CREATED``, and
         real per-step progress only shows up while the live bridge is attached
         (it derives it from the statechart life cycle).
+
+        :param knowledge_base: Unused — the plan tree is read from the scene bundle.
         """
         scene = load_scene().scene
         trees = scene.get("planTrees") or []

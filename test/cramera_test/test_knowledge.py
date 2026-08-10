@@ -17,10 +17,7 @@ from cramera.knowledge.knowledge_base import (  # noqa: E402
 from cramera.knowledge.presets import get_presets  # noqa: E402
 from cramera.knowledge.scene_bundle import load_scene  # noqa: E402
 from cramera.knowledge.views.architecture import SubgraphViewPayload  # noqa: E402
-from cramera.knowledge.views.dispatcher import (  # noqa: E402
-    expand_node,
-    view_payload,
-)
+from cramera.knowledge.views.dispatcher import GraphPanelViews  # noqa: E402
 from cramera.knowledge.views.plan_tree import shorten_action_label  # noqa: E402
 from cramera.knowledge import knowledge_base  # noqa: E402
 from cramera.knowledge.architecture_entities import (  # noqa: E402
@@ -222,7 +219,7 @@ class TestRecordedMeasurements:
         """
         A tooltip must not show a height the bundle never recorded.
         """
-        payload = view_payload("knowledge")
+        payload = GraphPanelViews.of_active_scene().for_tab("knowledge")
         milk = payload.details["milk"]
         assert not any(line.startswith("height:") for line in milk.lines)
 
@@ -243,14 +240,14 @@ class TestActionLabelShortening:
 
 class TestViewPayloads:
     def test_knowledge_view(self, fixture_scene):
-        payload = view_payload("knowledge")
+        payload = GraphPanelViews.of_active_scene().for_tab("knowledge")
         assert payload.ok
         ids = {n.id for n in payload.nodes}
         assert {"pr2", "milk", "transport_milk", "plan"} <= ids
         assert payload.presets
 
     def test_kinematics_view(self, fixture_scene):
-        payload = view_payload("kinematics")
+        payload = GraphPanelViews.of_active_scene().for_tab("kinematics")
         assert payload.ok
         ids = {n.id for n in payload.nodes}
         assert "urdf:base_link" in ids and "urdf:l_gripper_link" in ids
@@ -265,7 +262,7 @@ class TestViewPayloads:
         but the tooltip must still read the plain URDF word (``prismatic``), not the
         enum member's own text (``JointType.PRISMATIC``).
         """
-        payload = view_payload("kinematics")
+        payload = GraphPanelViews.of_active_scene().for_tab("kinematics")
         torso_edge = next(
             e for e in payload.edges if e.label.startswith("torso_lift_joint")
         )
@@ -277,7 +274,7 @@ class TestViewPayloads:
 
         The fixture's ``torso_lift_joint`` is prismatic: movable, but not revolute.
         """
-        payload = view_payload("kinematics")
+        payload = GraphPanelViews.of_active_scene().for_tab("kinematics")
         movable_edges = [
             edge for edge in payload.edges if edge.kind == EdgeKind.PROPERTY
         ]
@@ -286,7 +283,7 @@ class TestViewPayloads:
         assert summary.endswith("(%d movable)" % len(movable_edges))
 
     def test_plan_view_carries_status(self, fixture_scene):
-        payload = view_payload("plan")
+        payload = GraphPanelViews.of_active_scene().for_tab("plan")
         rendered = payload.to_payload()
         assert payload.ok and rendered["layout"] == "hier"
         assert rendered["live"] == "plan" and rendered["statusLegend"]
@@ -297,7 +294,7 @@ class TestViewPayloads:
         assert len(payload.edges) == len(payload.nodes) - 1
 
     def test_plan_view_legend(self, fixture_scene):
-        payload = view_payload("plan")
+        payload = GraphPanelViews.of_active_scene().for_tab("plan")
         expected = [
             {"group": entry.group, "label": entry.label}
             for entry in plan_view.PLAN_LEGEND
@@ -305,13 +302,13 @@ class TestViewPayloads:
         assert payload.to_payload()["legend"] == expected
 
     def test_chart_view_is_live_only(self, fixture_scene):
-        payload = view_payload("chart")
+        payload = GraphPanelViews.of_active_scene().for_tab("chart")
         rendered = payload.to_payload()
         assert payload.ok and rendered["nodes"] == []
         assert rendered["live"] == "chart" and rendered["empty"]
 
     def test_unknown_view(self, fixture_scene):
-        payload = view_payload("bogus")
+        payload = GraphPanelViews.of_active_scene().for_tab("bogus")
         assert not payload.ok
 
 
@@ -335,7 +332,11 @@ class TestPlanGroups:
             plan_view, "load_scene", lambda: SceneBundle(scene, trajectory)
         )
         reset_knowledge_base()
-        node = next(n for n in view_payload("plan").nodes if n.label == "AttachNode")
+        node = next(
+            n
+            for n in GraphPanelViews.of_active_scene().for_tab("plan").nodes
+            if n.label == "AttachNode"
+        )
         assert node.group == NodeGroup.OBJECT
 
     def test_detach_node_renders_in_the_object_group(self, fixture_scene, monkeypatch):
@@ -356,7 +357,11 @@ class TestPlanGroups:
             plan_view, "load_scene", lambda: SceneBundle(scene, trajectory)
         )
         reset_knowledge_base()
-        node = next(n for n in view_payload("plan").nodes if n.label == "DetachNode")
+        node = next(
+            n
+            for n in GraphPanelViews.of_active_scene().for_tab("plan").nodes
+            if n.label == "DetachNode"
+        )
         assert node.group == NodeGroup.OBJECT
 
 
@@ -398,10 +403,10 @@ class TestPresetSafety:
             assert run_query(preset.code).ok
 
 
-# %% characterization: KnowledgeGraphPayload.of_tab() structure
+# %% characterization: GraphPanelViews.of_active_scene().for_tab("knowledge") structure
 class TestGraphPayloadStructure:
     def test_robot_arm_gripper_chain(self, fixture_scene):
-        payload = KnowledgeGraphPayload.of_tab()
+        payload = GraphPanelViews.of_active_scene().for_tab("knowledge")
         by_id = {n.id: n for n in payload.nodes}
         assert by_id["pr2"].label == "pr2" and by_id["pr2"].group == NodeGroup.ROBOT
         assert by_id["left_arm"].label == "left arm"
@@ -418,7 +423,7 @@ class TestGraphPayloadStructure:
         )
 
     def test_episode_chain(self, fixture_scene):
-        payload = KnowledgeGraphPayload.of_tab()
+        payload = GraphPanelViews.of_active_scene().for_tab("knowledge")
         episode_edges = [
             e
             for e in payload.edges
@@ -432,7 +437,7 @@ class TestGraphPayloadStructure:
         ]
 
     def test_object_detail_lines(self, fixture_scene):
-        payload = KnowledgeGraphPayload.of_tab()
+        payload = GraphPanelViews.of_active_scene().for_tab("knowledge")
         assert payload.details["milk"] == DetailEntry(
             "Milk",
             NodeGroup.OBJECT,
@@ -456,7 +461,7 @@ class TestGraphPayloadStructure:
         )
 
     def test_architecture_cluster(self, fixture_scene):
-        payload = KnowledgeGraphPayload.of_tab()
+        payload = GraphPanelViews.of_active_scene().for_tab("knowledge")
         ids = {n.id for n in payload.nodes}
         assert {"cram", "root", "coraplex", "krrood", "coraplex.plans"} <= ids
         assert payload.details["cram"] == DetailEntry(
@@ -503,7 +508,7 @@ class TestGraphPayloadStructure:
         ``link()`` wires the anchor episode to ``coraplex.plans``, which exists as a
         node in the fixture architecture.
         """
-        payload = KnowledgeGraphPayload.of_tab()
+        payload = GraphPanelViews.of_active_scene().for_tab("knowledge")
         assert (
             GraphEdge("transport_milk", "coraplex.plans", EdgeKind.TYPE, "planned by")
             in payload.edges
@@ -515,13 +520,13 @@ class TestGraphPayloadStructure:
         ``giskardpy.motion_statechart`` nor ``semantic_digital_twin`` exists in the
         fixture architecture, so no edge may target them.
         """
-        payload = KnowledgeGraphPayload.of_tab()
+        payload = GraphPanelViews.of_active_scene().for_tab("knowledge")
         targets = {e.target for e in payload.edges}
         assert "giskardpy.motion_statechart" not in targets
         assert "semantic_digital_twin" not in targets
 
     def test_plan_tree_cluster(self, fixture_scene):
-        payload = KnowledgeGraphPayload.of_tab()
+        payload = GraphPanelViews.of_active_scene().for_tab("knowledge")
         assert payload.details["plan"] == DetailEntry(
             "executed plan",
             NodeGroup.GOAL,
@@ -543,7 +548,7 @@ class TestGraphPayloadStructure:
         The status line's numbers must track the live payload/knowledge base, not a
         second hardcoded copy of them.
         """
-        payload = KnowledgeGraphPayload.of_tab()
+        payload = GraphPanelViews.of_active_scene().for_tab("knowledge")
         knowledge_base = get_knowledge_base()
         assert payload.status == (
             "EQL ready · %d graph nodes · %d joints · %d CRAM classes"
@@ -555,29 +560,29 @@ class TestGraphPayloadStructure:
         )
 
 
-# %% characterization: expand_node() dispatch
+# %% characterization: GraphPanelViews.of_active_scene().for_node() dispatch
 class TestExpandNode:
     def test_robot_dispatches_to_urdf_view(self, fixture_scene):
-        payload = expand_node("pr2")
+        payload = GraphPanelViews.of_active_scene().for_node("pr2")
         assert payload.breadcrumb == "pr2 · URDF"
         ids = {n.id for n in payload.nodes}
         assert "urdf:base_link" in ids
 
     def test_plan_dispatches_to_plan_view(self, fixture_scene):
-        payload = expand_node("plan")
+        payload = GraphPanelViews.of_active_scene().for_node("plan")
         assert payload.to_payload()["breadcrumb"] == "executed plan"
         assert len(payload.nodes) == 4
         assert len(payload.edges) == 3
 
     def test_package_dispatches_to_package_view(self, fixture_scene):
-        payload = expand_node("coraplex")
+        payload = GraphPanelViews.of_active_scene().for_node("coraplex")
         assert {n.id for n in payload.nodes} == {"coraplex", "coraplex.plans"}
         assert payload.edges == [
             GraphEdge("coraplex", "coraplex.plans", EdgeKind.PROPERTY, "contains")
         ]
 
     def test_subpackage_dispatches_to_subpackage_view(self, fixture_scene):
-        payload = expand_node("coraplex.plans")
+        payload = GraphPanelViews.of_active_scene().for_node("coraplex.plans")
         assert {n.id for n in payload.nodes} == {
             "coraplex.plans",
             "coraplex.src.coraplex.plans.plan.Plan",
@@ -585,7 +590,9 @@ class TestExpandNode:
         }
 
     def test_class_dispatches_to_class_view(self, fixture_scene):
-        payload = expand_node("coraplex.src.coraplex.plans.plan.Plan")
+        payload = GraphPanelViews.of_active_scene().for_node(
+            "coraplex.src.coraplex.plans.plan.Plan"
+        )
         assert payload.breadcrumb == "Plan"
         assert {n.id for n in payload.nodes} == {
             "coraplex.src.coraplex.plans.plan.Plan",
@@ -593,14 +600,16 @@ class TestExpandNode:
         }
 
     def test_unknown_node_is_not_drillable(self, fixture_scene):
-        assert expand_node("does-not-exist") is None
+        assert GraphPanelViews.of_active_scene().for_node("does-not-exist") is None
 
     def test_class_view_resolves_an_internal_base(self, fixture_scene):
         """
         ``TypedPlan``'s base ``Plan`` is scanned from the same fixture repository, so it
         resolves to the real class node rather than an external stub.
         """
-        payload = expand_node("coraplex.src.coraplex.plans.typed_plan.TypedPlan")
+        payload = GraphPanelViews.of_active_scene().for_node(
+            "coraplex.src.coraplex.plans.typed_plan.TypedPlan"
+        )
         assert (
             GraphEdge(
                 "coraplex.src.coraplex.plans.typed_plan.TypedPlan",
@@ -620,7 +629,9 @@ class TestExpandNode:
         ``EqlError``'s base ``Exception`` is not defined anywhere in the scanned
         repository, so it renders as an external stub instead of a real class node.
         """
-        payload = expand_node("krrood.src.krrood.errors.EqlError")
+        payload = GraphPanelViews.of_active_scene().for_node(
+            "krrood.src.krrood.errors.EqlError"
+        )
         assert payload.details["external:Exception"] == DetailEntry(
             "Exception",
             NodeGroup.EXTERNAL_CLASS,
@@ -641,7 +652,9 @@ class TestExpandNode:
         ``Plan`` has no declared bases, but ``TypedPlan`` names it as a base — so
         ``Plan``'s inheritance view must list ``TypedPlan`` as a subclass.
         """
-        payload = expand_node("coraplex.src.coraplex.plans.plan.Plan")
+        payload = GraphPanelViews.of_active_scene().for_node(
+            "coraplex.src.coraplex.plans.plan.Plan"
+        )
         assert (
             GraphEdge(
                 "coraplex.src.coraplex.plans.typed_plan.TypedPlan",
@@ -670,7 +683,7 @@ class TestExpandNode:
             Package(name="synthetic_pkg", description="", module_count=0, class_count=0)
         ]
         knowledge_base.classes = knowledge_base.classes + synthetic_classes
-        payload = expand_node("synthetic_pkg")
+        payload = GraphPanelViews.of_active_scene().for_node("synthetic_pkg")
         assert payload.details["synthetic_pkg"].lines[-1] == (
             "showing the %d largest of %d classes (by method count)"
             % (
@@ -705,7 +718,9 @@ class TestExpandNode:
         knowledge_base.classes = (
             knowledge_base.classes + [base_class] + synthetic_subclasses
         )
-        payload = expand_node("synthetic_pkg.base.SyntheticBase")
+        payload = GraphPanelViews.of_active_scene().for_node(
+            "synthetic_pkg.base.SyntheticBase"
+        )
         assert payload.details["synthetic_pkg.base.SyntheticBase"].lines[-1] == (
             "showing %d of %d subclasses"
             % (

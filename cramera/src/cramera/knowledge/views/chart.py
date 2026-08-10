@@ -6,9 +6,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, ClassVar, Dict, Optional
+from typing_extensions import Any, ClassVar, Dict, Optional, TYPE_CHECKING
 
 from cramera.knowledge.subgraph import GraphPanelPayload
+
+if TYPE_CHECKING:
+    from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
 
 
 @dataclass(kw_only=True)
@@ -39,9 +42,11 @@ class ChartViewPayload(GraphPanelPayload):
     """
 
     @classmethod
-    def of_tab(cls) -> ChartViewPayload:
+    def of_tab(cls, knowledge_base: EpisodeKnowledgeBase) -> ChartViewPayload:
         """
         The statechart tab, which only ever has content while a demo is running.
+
+        :param knowledge_base: Unused — the bridge fills this view at run time.
         """
         return cls()
 

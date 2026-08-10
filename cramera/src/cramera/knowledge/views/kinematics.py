@@ -10,7 +10,6 @@ from coraplex.datastructures.enums import JointType
 from typing_extensions import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING
 
 from cramera.knowledge.enums import EdgeKind, NodeGroup
-from cramera.knowledge.knowledge_base import get_knowledge_base
 from cramera.knowledge.scene_bundle import UrdfJoint, load_scene, load_urdf
 from cramera.knowledge.subgraph import (
     DetailEntry,
@@ -53,14 +52,7 @@ class UrdfViewPayload(GraphPanelPayload):
         return options
 
     @classmethod
-    def of_tab(cls) -> UrdfViewPayload:
-        """
-        The kinematics tab, built from the active knowledge base.
-        """
-        return cls.of_knowledge_base(get_knowledge_base())
-
-    @classmethod
-    def of_knowledge_base(cls, knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
+    def of_tab(cls, knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
         """
         The scene robot's URDF as a kinematic tree.
 

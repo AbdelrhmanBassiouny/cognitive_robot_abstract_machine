@@ -8,9 +8,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 
-from typing_extensions import Any, ClassVar, Dict, List, Optional
+from typing_extensions import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING
 
 from cramera.knowledge.enums import EdgeKind, NodeGroup
+
+if TYPE_CHECKING:
+    from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
 
 
 @dataclass
@@ -230,10 +233,11 @@ class GraphPanelPayload(ABC):
     """
 
     @classmethod
-    def of_tab(cls) -> GraphPanelPayload:
+    def of_tab(cls, knowledge_base: EpisodeKnowledgeBase) -> GraphPanelPayload:
         """
         Build this view as a whole graph-panel tab.
 
+        :param knowledge_base: The recorded episode the view is built from.
         :raises NotImplementedError: For a drill-down-only view, which has no tab of its
             own and is built from the node that was double-clicked instead.
         """
