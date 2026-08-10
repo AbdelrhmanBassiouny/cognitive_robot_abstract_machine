@@ -106,6 +106,18 @@ class InsertMontessoriShapeAction(ActionDescription):
     the board's surface on approach.
     """
 
+    placing_linear_velocity: float = 0.05
+    """
+    Linear velocity (m/s) of :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`'s
+    own final descent onto the release pose, passed straight through to it.
+    """
+
+    grasp_closing_velocity: float = 0.2
+    """
+    Velocity (m/s) :class:`~coraplex.robot_plans.actions.core.pick_up.PickUpAction`'s
+    fingers close at, passed straight through to it.
+    """
+
     target_horizontal_offset: Optional[Point3] = None
     """
     Offset added to the target hole's own (x, y) position before releasing the shape
@@ -397,7 +409,7 @@ class InsertMontessoriShapeAction(ActionDescription):
                 object_designator=self.montessori_shape.root,
                 arm=self.arm,
                 grasp_description=self._grasp_description_query(),
-                grasp_closing_velocity=0.2,
+                grasp_closing_velocity=self.grasp_closing_velocity,
                 lift_linear_velocity=0.12,
                 grasp_stall_minimum_time=0.3,
                 final_approach_linear_velocity=0.115,
@@ -407,7 +419,7 @@ class InsertMontessoriShapeAction(ActionDescription):
                 object_designator=self.montessori_shape.root,
                 target_location=target_location,
                 arm=self.arm,
-                placing_linear_velocity=0.05,
+                placing_linear_velocity=self.placing_linear_velocity,
                 transport_linear_velocity=0.08,
                 release_opening_velocity=0.07,
                 retract_linear_velocity=0.08,
@@ -419,7 +431,7 @@ class InsertMontessoriShapeAction(ActionDescription):
                 object_designator=self.montessori_shape.root,
                 arm=self.arm,
                 grasp_description=self.grasp_description,
-                grasp_closing_velocity=0.2,
+                grasp_closing_velocity=self.grasp_closing_velocity,
                 lift_linear_velocity=0.12,
                 grasp_stall_minimum_time=0.3,
                 final_approach_linear_velocity=0.05,
@@ -429,7 +441,7 @@ class InsertMontessoriShapeAction(ActionDescription):
                 object_designator=self.montessori_shape.root,
                 target_location=target_location,
                 arm=self.arm,
-                placing_linear_velocity=0.05,
+                placing_linear_velocity=self.placing_linear_velocity,
                 transport_linear_velocity=0.08,
                 release_opening_velocity=0.07,
                 # retract_linear_velocity=0.08,

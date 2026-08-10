@@ -165,7 +165,11 @@ class CylinderShape(MontessoriShape):
         after pickup; the one paired with ``circular_hole_1`` reaches for its
         place pose safely without parking first.
         """
+        # EXPERIMENT (circular_hole_1_tuning_log.md #4): forced True for circular_hole_1
+        # too, combined with the row-position experiment. Revert to the line below if
+        # this doesn't stick as part of the final configuration:
         return self.name.name.removesuffix("_shape") == "circular_hole_2"
+        #return True
 
 
 @dataclass(eq=False)

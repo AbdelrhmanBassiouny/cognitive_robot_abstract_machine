@@ -11,6 +11,17 @@ Run with (the ``experiments`` package must be importable)::
 
     python -m experiments.montessori.franka_montessori_demo
     python -m experiments.montessori.franka_montessori_demo --viewer
+    python -m experiments.montessori.franka_montessori_demo --iterations 100
+
+Every run's per-shape results are recorded, one :class:`~experiments.montessori.sorting_results.SortingIterationResult` (with
+its :class:`~experiments.montessori.sorting_results.ShapeInsertionResult` rows) per iteration, to a local SQLite database via
+ORMatic; see ``--database-uri`` and :data:`DEFAULT_DATABASE_URI`.
+
+.. note::
+    :class:`~experiments.montessori.sorting_results.ShapeInsertionResult` and :class:`~experiments.montessori.sorting_results.SortingIterationResult` must be included
+    in ``experiments.orm.ormatic_interface`` before a run can persist anything;
+    regenerate it with ``python scripts/regenerate_all_orm.py`` (from the repository
+    root, in an environment with ROS 2 installed) if they are not already there.
 """
 
 from __future__ import annotations
@@ -18,11 +29,17 @@ from __future__ import annotations
 import argparse
 import logging
 import math
+import os
 import threading
 import time
+from collections import Counter, defaultdict
+from typing import TYPE_CHECKING
 
 import mujoco
 import numpy as np
+from krrood.ormatic.data_access_objects.helper import to_dao
+from krrood.ormatic.utils import create_engine
+from sqlalchemy.orm import Session, sessionmaker
 from typing_extensions import Optional
 
 from experiments.montessori.franka_panda_equipment import (
@@ -37,12 +54,35 @@ from experiments.montessori.semantics import (
     MontessoriShapeCategory,
     NoMatchingHoleError,
 )
+from experiments.montessori.sorting_results import (
+    InsertionOutcome,
+    ShapeInsertionResult,
+    SortingIterationResult,
+)
 from experiments.montessori.world import MontessoriWorld
 from semantic_digital_twin.robots.panda import Panda
 from semantic_digital_twin.spatial_types.spatial_types import Point3
 from semantic_digital_twin.utils import rclpy_installed
 
+if TYPE_CHECKING:
+    # coraplex.datastructures.dataclasses and the ROS adapters below all pull in
+    # rclpy at module level (see main), so these are only ever imported for type
+    # hints, never at runtime.
+    from semantic_digital_twin.adapters.multi_sim import MujocoSim
+    from semantic_digital_twin.adapters.ros.tf_publisher import TFPublisher
+    from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
+        VizMarkerPublisher,
+    )
+
 logger = logging.getLogger(__name__)
+
+DEFAULT_DATABASE_URI = "sqlite:///franka_montessori_sorting_results.db"
+"""
+Database URI used when neither ``--database-uri`` nor
+``FRANKA_MONTESSORI_SORTING_DATABASE_URI`` is given: a local SQLite file in the
+current directory, matching :mod:`experiments.montessori.generate_insertion_experience`'s
+own default.
+"""
 
 NODE_NAME = "franka_montessori_demo"
 """
@@ -337,11 +377,17 @@ def _insert_shape_or_none(
     """
     from coraplex.plans.failures import PlanFailure
     from giskardpy.motion_statechart.exceptions import CollisionViolatedError
+    from giskardpy.qp.exceptions import QPSolverException
     from semantic_digital_twin.exceptions import PointOccupiedError
 
     try:
         return _insert_shape(shape, montessori, context)
-    except (PointOccupiedError, PlanFailure, CollisionViolatedError) as error:
+    except (
+        PointOccupiedError,
+        PlanFailure,
+        CollisionViolatedError,
+        QPSolverException,
+    ) as error:
         logger.warning(
             "%s's insertion attempt %d/%d failed (%s); retrying.",
             shape.name,
@@ -357,7 +403,7 @@ def _insert_all_shapes(
     context,
     max_shapes: Optional[int] = None,
     only_shape: Optional[str] = None,
-) -> None:
+) -> list[ShapeInsertionResult]:
     """
     Have the Panda pick up and insert every loose shape that has a matching hole into
     the shape-sorting board, skipping any that don't (e.g. the sphere) and any whose
@@ -382,7 +428,10 @@ def _insert_all_shapes(
         never even reaches them), so the scene matches a full run; only the robot's
         insertion attempts are limited, for isolating one shape's own tuning without a
         full run's time cost.
+    :return: One :class:`~experiments.montessori.sorting_results.ShapeInsertionResult` per actually attempted shape, in
+        attempt order; a skipped shape has no entry.
     """
+    results: list[ShapeInsertionResult] = []
     attempted = 0
     for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape):
         if shape.shape_category in SKIPPED_SHAPE_CATEGORIES:
@@ -425,12 +474,19 @@ def _insert_all_shapes(
                 shape.name,
                 MAX_INSERTION_ATTEMPTS,
             )
+            outcome = InsertionOutcome.ATTEMPTS_EXHAUSTED
         elif not fell_through:
             logger.warning(
                 "%s did not fall through its hole; it may be resting on the board or "
                 "wedged in the opening. Moving on to the next shape.",
                 shape.name,
             )
+            outcome = InsertionOutcome.DID_NOT_FALL_THROUGH
+        else:
+            outcome = InsertionOutcome.FELL_THROUGH
+        results.append(ShapeInsertionResult(shape_key=shape_key, outcome=outcome))
+
+    return results
 
 
 def _parse_arguments() -> argparse.Namespace:
@@ -478,41 +534,83 @@ def _parse_arguments() -> argparse.Namespace:
             "default single-table layout."
         ),
     )
+    parser.add_argument(
+        "--iterations",
+        type=int,
+        default=1,
+        help=(
+            "Repeat the whole build-world-and-sort cycle this many times, rebuilding "
+            "the world and its simulation fresh each time, then log a per-shape "
+            "success-rate summary and exit instead of idling. Runs once and keeps the "
+            "simulation running afterwards (the original behavior) by default."
+        ),
+    )
+    parser.add_argument(
+        "--exit-after-sorting",
+        action="store_true",
+        help=(
+            "Exit as soon as sorting finishes instead of idling afterwards, even with "
+            "--iterations 1. Useful for scripted/batched single-iteration runs (e.g. "
+            "under an external timeout) that have no --viewer to inspect; idles by "
+            "default so a single-iteration run stays inspectable."
+        ),
+    )
+    parser.add_argument(
+        "--database-uri",
+        default=os.getenv(
+            "FRANKA_MONTESSORI_SORTING_DATABASE_URI", DEFAULT_DATABASE_URI
+        ),
+        help=(
+            "Database URI every iteration's SortingIterationResult (with its "
+            "per-shape ShapeInsertionResult rows) is recorded to via ORMatic, one "
+            "commit per iteration. Defaults to a local SQLite file (see "
+            "DEFAULT_DATABASE_URI), overridable via FRANKA_MONTESSORI_SORTING_DATABASE_URI."
+        ),
+    )
     return parser.parse_args()
 
 
-def main() -> None:
+def _open_results_session(database_uri: str) -> Session:
     """
-    Build the Montessori world, bolt the Panda next to it, visualize it in RViz, have
-    it sort the loose shapes into the board, and keep the live simulation running until
-    interrupted.
+    Open a SQLAlchemy session against ``database_uri``, creating
+    :class:`~experiments.montessori.sorting_results.SortingIterationResult` and :class:`~experiments.montessori.sorting_results.ShapeInsertionResult`'s tables
+    first if they don't already exist.
+
+    :param database_uri: Database to write recorded results to; see
+        :data:`DEFAULT_DATABASE_URI`.
     """
-    # force: the CRAM/Giskard stack configures the root logger on import, which would
-    # otherwise swallow this script's own reporting.
-    logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
-    arguments = _parse_arguments()
+    import experiments.orm.ormatic_interface as ormatic_interface
 
-    if not rclpy_installed():
-        logger.error("rclpy is not installed; this needs the CRAM/Giskard stack.")
-        return
+    engine = create_engine(database_uri)
+    ormatic_interface.Base.metadata.create_all(engine)
+    return sessionmaker(engine)()
 
-    import rclpy
-    from rclpy.executors import SingleThreadedExecutor
 
+def _build_world_and_sort(
+    node, arguments: argparse.Namespace
+) -> tuple[
+    list[ShapeInsertionResult],
+    MujocoSim,
+    Optional[TFPublisher],
+    Optional[VizMarkerPublisher],
+]:
+    """
+    Build a fresh Montessori world, bolt and equip the Panda next to it, start its
+    physics simulation, and have it sort every loose shape into the board once.
+
+    :param node: The ROS 2 node TF/marker publishing runs against.
+    :param arguments: Parsed command-line arguments selecting the world layout,
+        viewer, RViz publishing, and shape-attempt limits.
+    :return: This run's per-shape results (see :func:`_insert_all_shapes`), and
+        the live simulation and publishers, left running for the caller to stop
+        once it is done with them.
+    """
     from coraplex.datastructures.dataclasses import Context, MotionToleranceConfig
     from semantic_digital_twin.adapters.multi_sim import MujocoSim
     from semantic_digital_twin.adapters.ros.tf_publisher import TFPublisher
     from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
         VizMarkerPublisher,
     )
-
-    if not rclpy.ok():
-        rclpy.init()
-    node = rclpy.create_node(NODE_NAME)
-    executor = SingleThreadedExecutor()
-    executor.add_node(node)
-    spinner = threading.Thread(target=executor.spin, daemon=True, name="rclpy-executor")
-    spinner.start()
 
     if arguments.world2:
         from experiments.montessori.world2 import MontessoriWorld2, ROBOT_MOUNT_POSITION
@@ -577,21 +675,143 @@ def main() -> None:
     context.simulation_clock = lambda: multi_sim.simulator.current_simulation_time
 
     multi_sim.start_simulation()
-    try:
-        _insert_all_shapes(
-            montessori,
-            context,
-            max_shapes=arguments.max_shapes,
-            only_shape=arguments.only_shape,
+    results = _insert_all_shapes(
+        montessori,
+        context,
+        max_shapes=arguments.max_shapes,
+        only_shape=arguments.only_shape,
+    )
+    return results, multi_sim, tf_publisher, viz_marker_publisher
+
+
+def _log_iteration_summary(iteration_results: list[SortingIterationResult]) -> None:
+    """
+    Log a per-shape success-rate summary across every :class:`~experiments.montessori.sorting_results.SortingIterationResult`
+    :func:`main` collected, once its :attr:`~argparse.Namespace.iterations` finish.
+
+    :param iteration_results: One entry per iteration :func:`main` ran.
+    """
+    tallies: dict[str, Counter[InsertionOutcome]] = defaultdict(Counter)
+    for iteration_result in iteration_results:
+        for shape_result in iteration_result.shape_results:
+            tallies[shape_result.shape_key][shape_result.outcome] += 1
+
+    logger.info("=== Summary across %d iteration(s) ===", len(iteration_results))
+    total_fell_through = 0
+    total_attempted = 0
+    for shape_key in sorted(tallies):
+        tally = tallies[shape_key]
+        attempted = sum(tally.values())
+        fell_through = tally[InsertionOutcome.FELL_THROUGH]
+        total_fell_through += fell_through
+        total_attempted += attempted
+        logger.info(
+            "%s: %d/%d fell through (%d did not, %d exhausted attempts).",
+            shape_key,
+            fell_through,
+            attempted,
+            tally[InsertionOutcome.DID_NOT_FALL_THROUGH],
+            tally[InsertionOutcome.ATTEMPTS_EXHAUSTED],
         )
-        logger.info("Sorting done; the simulation keeps running.")
-        logger.info("Done. Press Ctrl+C to stop.")
-        while True:
-            time.sleep(0.1)
+
+    if total_attempted:
+        logger.info(
+            "Overall: %d/%d (%.1f%%) fell through across %d iteration(s).",
+            total_fell_through,
+            total_attempted,
+            100.0 * total_fell_through / total_attempted,
+            len(iteration_results),
+        )
+
+
+def main() -> None:
+    """
+    Build the Montessori world, bolt the Panda next to it, visualize it in RViz, and
+    have it sort the loose shapes into the board.
+
+    Runs once and keeps the live simulation running until interrupted by default; with
+    :attr:`~argparse.Namespace.iterations` greater than one, or with
+    :attr:`~argparse.Namespace.exit_after_sorting` set, instead exits as soon as
+    sorting finishes (rebuilding the whole world and rerunning the sort between
+    iterations, then logging a per-shape success-rate summary, if there is more than
+    one). Every iteration's :class:`~experiments.montessori.sorting_results.SortingIterationResult` is recorded to
+    :attr:`~argparse.Namespace.database_uri` as it finishes (see
+    :func:`_open_results_session`), one commit per iteration, so a run interrupted
+    partway through still leaves every completed iteration persisted.
+    """
+    # force: the CRAM/Giskard stack configures the root logger on import, which would
+    # otherwise swallow this script's own reporting.
+    logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
+    arguments = _parse_arguments()
+
+    if not rclpy_installed():
+        logger.error("rclpy is not installed; this needs the CRAM/Giskard stack.")
+        return
+
+    import rclpy
+    from rclpy.executors import SingleThreadedExecutor
+
+    if not rclpy.ok():
+        rclpy.init()
+    node = rclpy.create_node(NODE_NAME)
+    executor = SingleThreadedExecutor()
+    executor.add_node(node)
+    spinner = threading.Thread(target=executor.spin, daemon=True, name="rclpy-executor")
+    spinner.start()
+
+    # keep_simulation_running: matches the original single-run behavior of leaving the
+    # simulation live for inspection (e.g. via --viewer) once sorting finishes, rather
+    # than immediately tearing it down to rebuild for a next iteration; only sensible
+    # when there is no next iteration to rebuild for, and skipped outright by
+    # --exit-after-sorting for scripted single-iteration runs.
+    keep_simulation_running = (
+        arguments.iterations == 1 and not arguments.exit_after_sorting
+    )
+    iteration_results: list[SortingIterationResult] = []
+    multi_sim = None
+    tf_publisher = None
+    viz_marker_publisher = None
+    results_session = _open_results_session(arguments.database_uri)
+    logger.info("Recording results to '%s'.", arguments.database_uri)
+    try:
+        for iteration in range(1, arguments.iterations + 1):
+            if arguments.iterations > 1:
+                logger.info(
+                    "=== Starting iteration %d/%d ===", iteration, arguments.iterations
+                )
+            shape_results, multi_sim, tf_publisher, viz_marker_publisher = (
+                _build_world_and_sort(node, arguments)
+            )
+            iteration_result = SortingIterationResult(
+                iteration=iteration, shape_results=shape_results
+            )
+            iteration_results.append(iteration_result)
+            results_session.add(to_dao(iteration_result))
+            results_session.commit()
+
+            if keep_simulation_running:
+                break
+
+            multi_sim.stop_simulation()
+            if viz_marker_publisher is not None:
+                viz_marker_publisher.stop()
+            if tf_publisher is not None:
+                tf_publisher.stop()
+            multi_sim = tf_publisher = viz_marker_publisher = None
+
+        if keep_simulation_running:
+            logger.info("Sorting done; the simulation keeps running.")
+            logger.info("Done. Press Ctrl+C to stop.")
+            while True:
+                time.sleep(0.1)
+        else:
+            _log_iteration_summary(iteration_results)
     except KeyboardInterrupt:
         pass
     finally:
-        multi_sim.stop_simulation()
+        results_session.close()
+        if multi_sim is not None:
+            multi_sim.stop_simulation()
         if viz_marker_publisher is not None:
             viz_marker_publisher.stop()
         if tf_publisher is not None:

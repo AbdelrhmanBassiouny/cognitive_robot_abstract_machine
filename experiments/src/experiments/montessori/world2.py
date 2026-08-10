@@ -86,7 +86,7 @@ Center of the board's stand, directly ahead of :const:`ROBOT_MOUNT_POSITION` (sa
 the reach envelope than the other.
 """
 
-BOARD_POSITION_2 = Point3(-0.50, 0.0, 0.553)
+BOARD_POSITION_2 = Point3(-0.4225, 0.0, 0.553)
 """
 Where the board itself sits on :const:`BOARD_TABLE_POSITION`, preserving the same
 height-above-its-stand offset (0.053m) as
