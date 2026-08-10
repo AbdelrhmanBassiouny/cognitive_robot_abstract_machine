@@ -44,6 +44,8 @@ from cram_viz.live.bridge import (
     TaskStatusName,
 )
 
+from .test_robot_parts import ArmPart, EndEffectorPart, NamedBody, OneArmedRobot
+
 
 # %% mimics of the interfaces the bridge reads
 @dataclass
@@ -492,6 +494,29 @@ class TestViewerAccessors:
         assert status["running"] is False
         assert status["robot"] is None
         assert status["seq"] == 0
+
+    def test_the_robot_parts_are_read_off_the_live_annotations_when_asked(self):
+        """
+        The bridge keeps the robot's sem_dt annotations, not a snapshot of them, so a
+        part attached after the last bind is still published.
+        """
+        arm = ArmPart(bodies=[NamedBody("pr2/l_upper_arm_link")])
+        bridge = Bridge()
+        bridge.robot = OneArmedRobot(arm=arm)
+        assert bridge.status()["partAnnotations"] == [
+            {
+                "name": "ArmPart",
+                "role": "arm",
+                "side": None,
+                "links": ["l_upper_arm_link"],
+                "attachedTo": None,
+            }
+        ]
+
+        arm.end_effector = EndEffectorPart(bodies=[NamedBody("pr2/l_gripper_link")])
+        assert [
+            annotation["name"] for annotation in bridge.status()["partAnnotations"]
+        ] == ["ArmPart", "EndEffectorPart"]
 
 
 # %% motion statechart

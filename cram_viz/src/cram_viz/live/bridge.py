@@ -567,11 +567,6 @@ class Bridge:
     The robot annotation of :attr:`world`, re-discovered on every bind.
     """
 
-    robot_parts: List[RobotPartAnnotation] = field(default_factory=list)
-    """
-    The arms and end effectors of :attr:`robot`, re-read on every bind.
-    """
-
     seq: int = 0
     """
     Monotonic snapshot counter so the viewer can skip unchanged states.
@@ -809,7 +804,9 @@ class Bridge:
                 plan=bool(self.plan_state.nodes),
                 chart=bool(self.chart_state.nodes),
                 seq=self.seq,
-                robot_parts=list(self.robot_parts),
+                robot_parts=(
+                    describe_robot_parts(self.robot) if self.robot is not None else []
+                ),
             ).to_payload()
 
     # %% viewer -> world
@@ -912,9 +909,6 @@ class Bridge:
         self._last_bind = time.time()
         robots = world.get_semantic_annotations_by_type(AbstractRobot)
         self.robot = robots[0] if robots else None
-        self.robot_parts = (
-            describe_robot_parts(self.robot) if self.robot is not None else []
-        )
         self._connections = self._actuated_connections(world)
         bodies: Dict[str, Body] = {}
         if self.robot is not None:
