@@ -45,14 +45,19 @@ DEFAULT_PORT = 8711
 try:
     import krrood  # noqa: F401  (the EQL engine)
 
-    from cramera import knowledge as knowledge_module
+    from cramera.knowledge.eql_session import run_query
+    from cramera.knowledge.graph_payload import graph_payload
+    from cramera.knowledge.knowledge_base import get_knowledge_base
+    from cramera.knowledge.views.dispatcher import expand_node, view_payload
+
+    EQL_AVAILABLE = True
 except ImportError:  # pragma: no cover - depends on the environment
-    knowledge_module = None
+    EQL_AVAILABLE = False
     logger.warning("krrood not importable — serving the viewer without the EQL API")
 except (
     Exception
 ):  # pragma: no cover - a broken knowledge base should not kill the viewer
-    knowledge_module = None
+    EQL_AVAILABLE = False
     traceback.print_exc()
 
 
@@ -129,7 +134,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         :param handler: The handler to run, returning the payload to send on success.
         """
-        if knowledge_module is None:
+        if not EQL_AVAILABLE:
             return self._send_json(_no_eql_error())
         try:
             return self._send_json(handler())
@@ -175,10 +180,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if route.startswith("/scenes/"):
             return self._serve_scene_file(route)
         if route == "/api/knowledge":
-            return self._guarded(lambda: knowledge_module.graph_payload())
+            return self._guarded(graph_payload)
         if route == "/api/knowledge/view":
             name = (self._query_parameters().get("name") or ["knowledge"])[0]
-            return self._guarded(lambda: knowledge_module.view_payload(name))
+            return self._guarded(lambda: view_payload(name))
         if route == "/api/knowledge/expand":
             node = (self._query_parameters().get("node") or [""])[0]
 
@@ -186,7 +191,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 """
                 The node's subgraph, or a "not drillable" error if it has none.
                 """
-                payload = knowledge_module.expand_node(node)
+                payload = expand_node(node)
                 return payload if payload else {"ok": False, "error": "not drillable"}
 
             return self._guarded(expand)
@@ -198,7 +203,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         """
         if self.path.split("?")[0] != "/api/eql":
             return self._send_json({"ok": False, "error": "unknown endpoint"}, 404)
-        if knowledge_module is None:
+        if not EQL_AVAILABLE:
             return self._send_json(_no_eql_error())
         try:
             length = int(self.headers.get("Content-Length") or 0)
@@ -207,7 +212,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if not code:
                 return self._send_json({"ok": False, "error": "empty query"})
             with _EQL_LOCK:
-                return self._send_json(knowledge_module.run_query(code))
+                return self._send_json(run_query(code))
         except SyntaxError as error:
             return self._send_json({"ok": False, "error": "SyntaxError: %s" % error})
         except Exception as error:
@@ -237,16 +242,10 @@ def main(arguments: Optional[List[str]] = None) -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
     arguments = sys.argv[1:] if arguments is None else arguments
     port = int(arguments[0]) if arguments else DEFAULT_PORT
-    if (
-        knowledge_module is not None
-    ):  # build the knowledge base once, before the first query
-        knowledge_module.get_knowledge_base()
+    if EQL_AVAILABLE:  # build the knowledge base once, before the first query
+        get_knowledge_base()
     with make_server(port) as server:
-        eql = (
-            "EQL ready (krrood)"
-            if knowledge_module is not None
-            else "EQL unavailable — static only"
-        )
+        eql = "EQL ready (krrood)" if EQL_AVAILABLE else "EQL unavailable — static only"
         scenes = paths.scenes_directory()
         logger.info("cramera running at http://localhost:%d/ (%s)", port, eql)
         logger.info(

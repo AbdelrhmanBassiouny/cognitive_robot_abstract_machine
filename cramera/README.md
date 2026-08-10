@@ -122,15 +122,20 @@ live-only.
 
 ```
 src/cramera/
-  server.py        static frontend + JSON API (/api/kb, /api/eql, /scenes/)
-  knowledge/       scene-driven EQL knowledge base + graph payloads (package)
+  server.py        static frontend + JSON API (/api/knowledge, /api/eql, /scenes/)
   paths.py         all filesystem locations (env-overridable)
-  live/
+  knowledge/       the recorded scene as an EQL knowledge base
+    knowledge_base.py  the entity lists one scene bundle yields
+    eql_session.py     evaluating one EQL query string
+    graph_payload.py   the knowledge graph the UI draws
+    presets.py         the ready-made queries the panel offers
+    views/             the graph-panel tabs and their drill-downs
+  live/            stream a running coraplex demo into the viewer
     bridge.py      bridge state + serializers (runs on the sim thread)
     hooks.py       Executor/Plan/GiskardExecutable/mesh hooks
     http.py        the bridge's HTTP endpoints (port 8765)
     __main__.py    cramera-live entry point
-  onboard/
+  onboard/         turn a demo run into a scene bundle
     demo.py        demo -> scene bundle (record + bundle, one command)
     bundle_urdf.py standalone URDF/xacro asset bundler
   web/

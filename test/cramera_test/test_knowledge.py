@@ -8,7 +8,20 @@ krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
 from coraplex.datastructures.enums import Arms  # noqa: E402
 
-from cramera import knowledge  # noqa: E402  (importable once krrood is present)
+from cramera.knowledge.eql_session import run_query  # noqa: E402
+from cramera.knowledge.graph_payload import graph_payload  # noqa: E402
+from cramera.knowledge.knowledge_base import (  # noqa: E402
+    get_knowledge_base,
+    reset_knowledge_base,
+)
+from cramera.knowledge.presets import get_presets  # noqa: E402
+from cramera.knowledge.scene_bundle import load_scene  # noqa: E402
+from cramera.knowledge.views.architecture import ArchitectureViews  # noqa: E402
+from cramera.knowledge.views.dispatcher import (  # noqa: E402
+    expand_node,
+    view_payload,
+)
+from cramera.knowledge.views.plan_tree import shorten_action_label  # noqa: E402
 from cramera.knowledge import knowledge_base  # noqa: E402
 from cramera.knowledge.architecture_entities import (  # noqa: E402
     Package,
@@ -28,8 +41,8 @@ from cramera.robot_parts import (  # noqa: E402
 
 @pytest.fixture()
 def fresh_knowledge_base(fixture_scene):
-    knowledge.reset_knowledge_base()
-    return knowledge.get_knowledge_base()
+    reset_knowledge_base()
+    return get_knowledge_base()
 
 
 class TestEpisodeKnowledgeBase:
@@ -100,7 +113,7 @@ class TestArmsFromRecordedAnnotations:
         A bundle carrying sem_dt robot-part annotations is read straight off them, so an
         arm whose name spells no side still gets the side its robot annotated it with.
         """
-        bundle = knowledge.load_scene()
+        bundle = load_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["robot"]["partAnnotations"] = [
             RobotPartAnnotation(
@@ -120,8 +133,8 @@ class TestArmsFromRecordedAnnotations:
         monkeypatch.setattr(
             knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
         )
-        knowledge.reset_knowledge_base()
-        knowledge_base_instance = knowledge.get_knowledge_base()
+        reset_knowledge_base()
+        knowledge_base_instance = get_knowledge_base()
 
         [arm] = knowledge_base_instance.arms
         assert arm.name == "ManipulatorOne"
@@ -139,24 +152,22 @@ class TestArmSideInference:
         An arm part name that names neither `left` nor `right` cannot be assigned a side
         by name inspection, and must not silently masquerade as one.
         """
-        bundle = knowledge.load_scene()
+        bundle = load_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["robot"]["parts"]["center_arm"] = ["center_link"]
         monkeypatch.setattr(
             knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
         )
-        knowledge.reset_knowledge_base()
+        reset_knowledge_base()
         center_arm = next(
-            arm
-            for arm in knowledge.get_knowledge_base().arms
-            if arm.name == "center_arm"
+            arm for arm in get_knowledge_base().arms if arm.name == "center_arm"
         )
         assert center_arm.side is None
 
 
 class TestQueries:
     def test_entity_query(self, fixture_scene):
-        result = knowledge.run_query(
+        result = run_query(
             "the(entity(scene_object).where(scene_object.name == 'milk'))"
         )
         assert result.ok and result.count == 1
@@ -171,11 +182,11 @@ class TestQueries:
         not swallow it.
         """
         with pytest.raises(NameError):
-            knowledge.run_query("this is not python")
+            run_query("this is not python")
 
     def test_a_syntactically_invalid_query_raises(self, fixture_scene):
         with pytest.raises(SyntaxError):
-            knowledge.run_query("definitely not python (((")
+            run_query("definitely not python (((")
 
 
 class TestRecordedMeasurements:
@@ -195,17 +206,15 @@ class TestRecordedMeasurements:
         """
         A bundle that reports a height must be taken at its word.
         """
-        bundle = knowledge.load_scene()
+        bundle = load_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["objects"][0]["height"] = 0.23
         monkeypatch.setattr(
             knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
         )
-        knowledge.reset_knowledge_base()
+        reset_knowledge_base()
         milk = next(
-            entry
-            for entry in knowledge.get_knowledge_base().objects
-            if entry.name == "milk"
+            entry for entry in get_knowledge_base().objects if entry.name == "milk"
         )
         assert milk.height_metres == 0.23
 
@@ -213,37 +222,35 @@ class TestRecordedMeasurements:
         """
         A tooltip must not show a height the bundle never recorded.
         """
-        payload = knowledge.view_payload("knowledge")
+        payload = view_payload("knowledge")
         milk = payload.details["milk"]
         assert not any(line.startswith("height:") for line in milk.lines)
 
 
 class TestActionLabelShortening:
     def test_action_suffix_is_dropped(self):
-        assert knowledge.shorten_action_label("TransportAction") == "Transport"
+        assert shorten_action_label("TransportAction") == "Transport"
 
     def test_the_word_action_inside_a_label_is_kept(self):
-        assert knowledge.shorten_action_label("ActionNode") == "ActionNode"
+        assert shorten_action_label("ActionNode") == "ActionNode"
 
     def test_only_the_trailing_occurrence_is_dropped(self):
-        assert (
-            knowledge.shorten_action_label("ActionSequenceAction") == "ActionSequence"
-        )
+        assert shorten_action_label("ActionSequenceAction") == "ActionSequence"
 
     def test_a_label_that_is_only_the_suffix_is_kept(self):
-        assert knowledge.shorten_action_label("Action") == "Action"
+        assert shorten_action_label("Action") == "Action"
 
 
 class TestViewPayloads:
     def test_knowledge_view(self, fixture_scene):
-        payload = knowledge.view_payload("knowledge")
+        payload = view_payload("knowledge")
         assert payload.ok
         ids = {n.id for n in payload.nodes}
         assert {"pr2", "milk", "transport_milk", "plan"} <= ids
         assert payload.presets
 
     def test_kinematics_view(self, fixture_scene):
-        payload = knowledge.view_payload("kinematics")
+        payload = view_payload("kinematics")
         assert payload.ok
         ids = {n.id for n in payload.nodes}
         assert "urdf:base_link" in ids and "urdf:l_gripper_link" in ids
@@ -258,7 +265,7 @@ class TestViewPayloads:
         but the tooltip must still read the plain URDF word (``prismatic``), not the
         enum member's own text (``JointType.PRISMATIC``).
         """
-        payload = knowledge.view_payload("kinematics")
+        payload = view_payload("kinematics")
         torso_edge = next(
             e for e in payload.edges if e.label.startswith("torso_lift_joint")
         )
@@ -270,7 +277,7 @@ class TestViewPayloads:
 
         The fixture's ``torso_lift_joint`` is prismatic: movable, but not revolute.
         """
-        payload = knowledge.view_payload("kinematics")
+        payload = view_payload("kinematics")
         movable_edges = [
             edge for edge in payload.edges if edge.kind == EdgeKind.PROPERTY
         ]
@@ -279,7 +286,7 @@ class TestViewPayloads:
         assert summary.endswith("(%d movable)" % len(movable_edges))
 
     def test_plan_view_carries_status(self, fixture_scene):
-        payload = knowledge.view_payload("plan")
+        payload = view_payload("plan")
         rendered = payload.to_payload()
         assert payload.ok and rendered["layout"] == "hier"
         assert rendered["live"] == "plan" and rendered["statusLegend"]
@@ -290,7 +297,7 @@ class TestViewPayloads:
         assert len(payload.edges) == len(payload.nodes) - 1
 
     def test_plan_view_legend(self, fixture_scene):
-        payload = knowledge.view_payload("plan")
+        payload = view_payload("plan")
         expected = [
             {"group": entry.group, "label": entry.label}
             for entry in plan_view.PLAN_LEGEND
@@ -298,13 +305,13 @@ class TestViewPayloads:
         assert payload.to_payload()["legend"] == expected
 
     def test_chart_view_is_live_only(self, fixture_scene):
-        payload = knowledge.view_payload("chart")
+        payload = view_payload("chart")
         rendered = payload.to_payload()
         assert payload.ok and rendered["nodes"] == []
         assert rendered["live"] == "chart" and rendered["empty"]
 
     def test_unknown_view(self, fixture_scene):
-        payload = knowledge.view_payload("bogus")
+        payload = view_payload("bogus")
         assert not payload.ok
 
 
@@ -314,7 +321,7 @@ class TestPlanGroups:
         """
         Coraplex's real class is ``AttachNode``, not ``AttachmentNode``.
         """
-        bundle = knowledge.load_scene()
+        bundle = load_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["planTrees"][0]["children"].append(
             {
@@ -327,17 +334,15 @@ class TestPlanGroups:
         monkeypatch.setattr(
             plan_view, "load_scene", lambda: SceneBundle(scene, trajectory)
         )
-        knowledge.reset_knowledge_base()
-        node = next(
-            n for n in knowledge.view_payload("plan").nodes if n.label == "AttachNode"
-        )
+        reset_knowledge_base()
+        node = next(n for n in view_payload("plan").nodes if n.label == "AttachNode")
         assert node.group == NodeGroup.OBJECT
 
     def test_detach_node_renders_in_the_object_group(self, fixture_scene, monkeypatch):
         """
         Coraplex's real class is ``DetachNode``, not ``DetachmentNode``.
         """
-        bundle = knowledge.load_scene()
+        bundle = load_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["planTrees"][0]["children"].append(
             {
@@ -350,10 +355,8 @@ class TestPlanGroups:
         monkeypatch.setattr(
             plan_view, "load_scene", lambda: SceneBundle(scene, trajectory)
         )
-        knowledge.reset_knowledge_base()
-        node = next(
-            n for n in knowledge.view_payload("plan").nodes if n.label == "DetachNode"
-        )
+        reset_knowledge_base()
+        node = next(n for n in view_payload("plan").nodes if n.label == "DetachNode")
         assert node.group == NodeGroup.OBJECT
 
 
@@ -365,18 +368,16 @@ class TestPresetSafety:
         """
         ``get_presets()`` must escape object names, not splice them raw into EQL source.
         """
-        bundle = knowledge.load_scene()
+        bundle = load_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["objects"][0]["id"] = "o'brien"
         scene["segments"][1]["picks"] = "o'brien"
         monkeypatch.setattr(
             knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
         )
-        knowledge.reset_knowledge_base()
-        preset = next(
-            p for p in knowledge.get_presets() if "scene_object.name" in p.code
-        )
-        result = knowledge.run_query(preset.code)
+        reset_knowledge_base()
+        preset = next(p for p in get_presets() if "scene_object.name" in p.code)
+        result = run_query(preset.code)
         assert result.ok and result.rows[0]["__entity__"] == "o'brien"
 
     def test_an_apostrophe_in_an_episode_name_does_not_break_its_presets(
@@ -386,21 +387,21 @@ class TestPresetSafety:
         Covers both the ``places_at`` and ``performed_by`` presets, which splice the
         same episode name.
         """
-        bundle = knowledge.load_scene()
+        bundle = load_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["segments"][1]["step"] = "transport_o'brien"
         monkeypatch.setattr(
             knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
         )
-        knowledge.reset_knowledge_base()
-        for preset in knowledge.get_presets():
-            assert knowledge.run_query(preset.code).ok
+        reset_knowledge_base()
+        for preset in get_presets():
+            assert run_query(preset.code).ok
 
 
 # %% characterization: graph_payload() structure
 class TestGraphPayloadStructure:
     def test_robot_arm_gripper_chain(self, fixture_scene):
-        payload = knowledge.graph_payload()
+        payload = graph_payload()
         by_id = {n.id: n for n in payload.nodes}
         assert by_id["pr2"].label == "pr2" and by_id["pr2"].group == NodeGroup.ROBOT
         assert by_id["left_arm"].label == "left arm"
@@ -417,7 +418,7 @@ class TestGraphPayloadStructure:
         )
 
     def test_episode_chain(self, fixture_scene):
-        payload = knowledge.graph_payload()
+        payload = graph_payload()
         episode_edges = [
             e
             for e in payload.edges
@@ -431,7 +432,7 @@ class TestGraphPayloadStructure:
         ]
 
     def test_object_detail_lines(self, fixture_scene):
-        payload = knowledge.graph_payload()
+        payload = graph_payload()
         assert payload.details["milk"] == DetailEntry(
             "Milk",
             NodeGroup.OBJECT,
@@ -455,7 +456,7 @@ class TestGraphPayloadStructure:
         )
 
     def test_architecture_cluster(self, fixture_scene):
-        payload = knowledge.graph_payload()
+        payload = graph_payload()
         ids = {n.id for n in payload.nodes}
         assert {"cram", "root", "coraplex", "krrood", "coraplex.plans"} <= ids
         assert payload.details["cram"] == DetailEntry(
@@ -502,7 +503,7 @@ class TestGraphPayloadStructure:
         ``link()`` wires the anchor episode to ``coraplex.plans``, which exists as a
         node in the fixture architecture.
         """
-        payload = knowledge.graph_payload()
+        payload = graph_payload()
         assert (
             GraphEdge("transport_milk", "coraplex.plans", EdgeKind.TYPE, "planned by")
             in payload.edges
@@ -514,13 +515,13 @@ class TestGraphPayloadStructure:
         ``giskardpy.motion_statechart`` nor ``semantic_digital_twin`` exists in the
         fixture architecture, so no edge may target them.
         """
-        payload = knowledge.graph_payload()
+        payload = graph_payload()
         targets = {e.target for e in payload.edges}
         assert "giskardpy.motion_statechart" not in targets
         assert "semantic_digital_twin" not in targets
 
     def test_plan_tree_cluster(self, fixture_scene):
-        payload = knowledge.graph_payload()
+        payload = graph_payload()
         assert payload.details["plan"] == DetailEntry(
             "executed plan",
             NodeGroup.GOAL,
@@ -542,8 +543,8 @@ class TestGraphPayloadStructure:
         The status line's numbers must track the live payload/knowledge base, not a
         second hardcoded copy of them.
         """
-        payload = knowledge.graph_payload()
-        knowledge_base = knowledge.get_knowledge_base()
+        payload = graph_payload()
+        knowledge_base = get_knowledge_base()
         assert payload.status == (
             "EQL ready · %d graph nodes · %d joints · %d CRAM classes"
             % (
@@ -557,26 +558,26 @@ class TestGraphPayloadStructure:
 # %% characterization: expand_node() dispatch
 class TestExpandNode:
     def test_robot_dispatches_to_urdf_view(self, fixture_scene):
-        payload = knowledge.expand_node("pr2")
+        payload = expand_node("pr2")
         assert payload.breadcrumb == "pr2 · URDF"
         ids = {n.id for n in payload.nodes}
         assert "urdf:base_link" in ids
 
     def test_plan_dispatches_to_plan_view(self, fixture_scene):
-        payload = knowledge.expand_node("plan")
+        payload = expand_node("plan")
         assert payload.to_payload()["breadcrumb"] == "executed plan"
         assert len(payload.nodes) == 4
         assert len(payload.edges) == 3
 
     def test_package_dispatches_to_package_view(self, fixture_scene):
-        payload = knowledge.expand_node("coraplex")
+        payload = expand_node("coraplex")
         assert {n.id for n in payload.nodes} == {"coraplex", "coraplex.plans"}
         assert payload.edges == [
             GraphEdge("coraplex", "coraplex.plans", EdgeKind.PROPERTY, "contains")
         ]
 
     def test_subpackage_dispatches_to_subpackage_view(self, fixture_scene):
-        payload = knowledge.expand_node("coraplex.plans")
+        payload = expand_node("coraplex.plans")
         assert {n.id for n in payload.nodes} == {
             "coraplex.plans",
             "coraplex.src.coraplex.plans.plan.Plan",
@@ -584,7 +585,7 @@ class TestExpandNode:
         }
 
     def test_class_dispatches_to_class_view(self, fixture_scene):
-        payload = knowledge.expand_node("coraplex.src.coraplex.plans.plan.Plan")
+        payload = expand_node("coraplex.src.coraplex.plans.plan.Plan")
         assert payload.breadcrumb == "Plan"
         assert {n.id for n in payload.nodes} == {
             "coraplex.src.coraplex.plans.plan.Plan",
@@ -592,16 +593,14 @@ class TestExpandNode:
         }
 
     def test_unknown_node_is_not_drillable(self, fixture_scene):
-        assert knowledge.expand_node("does-not-exist") is None
+        assert expand_node("does-not-exist") is None
 
     def test_class_view_resolves_an_internal_base(self, fixture_scene):
         """
         ``TypedPlan``'s base ``Plan`` is scanned from the same fixture repository, so it
         resolves to the real class node rather than an external stub.
         """
-        payload = knowledge.expand_node(
-            "coraplex.src.coraplex.plans.typed_plan.TypedPlan"
-        )
+        payload = expand_node("coraplex.src.coraplex.plans.typed_plan.TypedPlan")
         assert (
             GraphEdge(
                 "coraplex.src.coraplex.plans.typed_plan.TypedPlan",
@@ -621,7 +620,7 @@ class TestExpandNode:
         ``EqlError``'s base ``Exception`` is not defined anywhere in the scanned
         repository, so it renders as an external stub instead of a real class node.
         """
-        payload = knowledge.expand_node("krrood.src.krrood.errors.EqlError")
+        payload = expand_node("krrood.src.krrood.errors.EqlError")
         assert payload.details["external:Exception"] == DetailEntry(
             "Exception",
             NodeGroup.EXTERNAL_CLASS,
@@ -642,7 +641,7 @@ class TestExpandNode:
         ``Plan`` has no declared bases, but ``TypedPlan`` names it as a base — so
         ``Plan``'s inheritance view must list ``TypedPlan`` as a subclass.
         """
-        payload = knowledge.expand_node("coraplex.src.coraplex.plans.plan.Plan")
+        payload = expand_node("coraplex.src.coraplex.plans.plan.Plan")
         assert (
             GraphEdge(
                 "coraplex.src.coraplex.plans.typed_plan.TypedPlan",
@@ -654,9 +653,9 @@ class TestExpandNode:
         )
 
     def test_package_view_truncates_to_the_maximum_classes_shown(self, fixture_scene):
-        knowledge_base = knowledge.get_knowledge_base()
+        knowledge_base = get_knowledge_base()
         synthetic_classes = [
-            knowledge.PythonClass(
+            PythonClass(
                 name="Synthetic%d" % index,
                 package="synthetic_pkg",
                 subpackage="synthetic_pkg",
@@ -665,26 +664,24 @@ class TestExpandNode:
                 methods=index,
                 docstring_summary="",
             )
-            for index in range(knowledge.ArchitectureViews.MAXIMUM_CLASSES_SHOWN + 1)
+            for index in range(ArchitectureViews.MAXIMUM_CLASSES_SHOWN + 1)
         ]
         knowledge_base.packages = knowledge_base.packages + [
-            knowledge.Package(
-                name="synthetic_pkg", description="", module_count=0, class_count=0
-            )
+            Package(name="synthetic_pkg", description="", module_count=0, class_count=0)
         ]
         knowledge_base.classes = knowledge_base.classes + synthetic_classes
-        payload = knowledge.expand_node("synthetic_pkg")
+        payload = expand_node("synthetic_pkg")
         assert payload.details["synthetic_pkg"].lines[-1] == (
             "showing the %d largest of %d classes (by method count)"
             % (
-                knowledge.ArchitectureViews.MAXIMUM_CLASSES_SHOWN,
-                knowledge.ArchitectureViews.MAXIMUM_CLASSES_SHOWN + 1,
+                ArchitectureViews.MAXIMUM_CLASSES_SHOWN,
+                ArchitectureViews.MAXIMUM_CLASSES_SHOWN + 1,
             )
         )
 
     def test_class_view_truncates_to_the_maximum_subclasses_shown(self, fixture_scene):
-        knowledge_base = knowledge.get_knowledge_base()
-        base_class = knowledge.PythonClass(
+        knowledge_base = get_knowledge_base()
+        base_class = PythonClass(
             name="SyntheticBase",
             package="synthetic_pkg",
             subpackage="synthetic_pkg",
@@ -694,7 +691,7 @@ class TestExpandNode:
             docstring_summary="",
         )
         synthetic_subclasses = [
-            knowledge.PythonClass(
+            PythonClass(
                 name="SyntheticSubclass%d" % index,
                 package="synthetic_pkg",
                 subpackage="synthetic_pkg",
@@ -703,17 +700,17 @@ class TestExpandNode:
                 methods=0,
                 docstring_summary="",
             )
-            for index in range(knowledge.ArchitectureViews.MAXIMUM_SUBCLASSES_SHOWN + 1)
+            for index in range(ArchitectureViews.MAXIMUM_SUBCLASSES_SHOWN + 1)
         ]
         knowledge_base.classes = (
             knowledge_base.classes + [base_class] + synthetic_subclasses
         )
-        payload = knowledge.expand_node("synthetic_pkg.base.SyntheticBase")
+        payload = expand_node("synthetic_pkg.base.SyntheticBase")
         assert payload.details["synthetic_pkg.base.SyntheticBase"].lines[-1] == (
             "showing %d of %d subclasses"
             % (
-                knowledge.ArchitectureViews.MAXIMUM_SUBCLASSES_SHOWN,
-                knowledge.ArchitectureViews.MAXIMUM_SUBCLASSES_SHOWN + 1,
+                ArchitectureViews.MAXIMUM_SUBCLASSES_SHOWN,
+                ArchitectureViews.MAXIMUM_SUBCLASSES_SHOWN + 1,
             )
         )
 
@@ -727,7 +724,7 @@ class TestPresetSmoke:
         Replaces the module's former ``if __name__ == "__main__":`` smoke script, which
         logged OK/FAIL per preset instead of asserting anything.
         """
-        for preset in knowledge.get_presets():
-            result = knowledge.run_query(preset.code)
+        for preset in get_presets():
+            result = run_query(preset.code)
             assert result.ok, "%s: %s" % (preset.text, result)
             assert result.count == len(result.rows)
