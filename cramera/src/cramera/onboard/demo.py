@@ -37,7 +37,9 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from semantic_digital_twin.adapters.gazebo import GazeboParser
 from semantic_digital_twin.adapters.mesh import STLParser
+from semantic_digital_twin.adapters.mjcf import MJCFParser
 from semantic_digital_twin.api import BodySpecification
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -65,6 +67,7 @@ from cramera.live.bridge import ROBOT_BASE_KEY
 from cramera.monkey_patch import MethodPatch
 from cramera.robot_parts import RobotPartAnnotation
 from cramera.onboard.bundle_urdf import BundleReport
+from cramera.onboard.bundle_world import BundledWorld
 from cramera.palette import ObjectPalette
 
 if TYPE_CHECKING:
@@ -204,6 +207,16 @@ class Recorder:
     URDF/xacro files the world was built from, in load order.
     """
 
+    gazebo_sources: List[str] = field(default_factory=list)
+    """
+    Gazebo/SDF worlds and models the demo loaded, in load order.
+    """
+
+    mjcf_sources: List[str] = field(default_factory=list)
+    """
+    MJCF robots and scenes the demo loaded, in load order.
+    """
+
     mesh_sources: List[str] = field(default_factory=list)
     """
     Mesh files of the loose objects, in load order.
@@ -259,6 +272,11 @@ class Recorder:
     Connections whose position is recorded; None until the first tick binds.
     """
 
+    _asset_hook_uninstallers: List[Callable[[], None]] = field(default_factory=list)
+    """
+    Restores the methods :meth:`install_asset_hooks` last replaced.
+    """
+
     _bodies: Optional[Dict[str, Any]] = field(default=None)
     """
     Recorded bodies by mesh basename, plus :data:`ROBOT_BASE_KEY`.
@@ -269,12 +287,31 @@ class Recorder:
         """
         Record every asset resolution so the bundler can copy the files.
         """
-        MethodPatch(PackageUriResolver, "resolve").install(self._remember_resolution)
-        MethodPatch(URDFParser, "from_file").install(self._remember_urdf_source)
-        MethodPatch(STLParser, "__init__").install(self._remember_mesh_source)
-        MethodPatch(BodySpecification, "to_domain_object").install(
-            self._remember_spawned_box
-        )
+        self._asset_hook_uninstallers = [
+            MethodPatch(PackageUriResolver, "resolve").install(
+                self._remember_resolution
+            ),
+            MethodPatch(URDFParser, "from_file").install(self._remember_urdf_source),
+            MethodPatch(GazeboParser, "from_file").install(
+                self._remember_gazebo_source
+            ),
+            MethodPatch(MJCFParser, "__init__").install(self._remember_mjcf_source),
+            MethodPatch(STLParser, "__init__").install(self._remember_mesh_source),
+            MethodPatch(BodySpecification, "to_domain_object").install(
+                self._remember_spawned_box
+            ),
+        ]
+
+    def uninstall_asset_hooks(self) -> None:
+        """
+        Restore the methods :meth:`install_asset_hooks` replaced.
+
+        Bundling re-parses a recorded Gazebo or MJCF source to build a clean URDF for
+        it, which the hooks would otherwise mistake for another source to record.
+        """
+        for uninstall in self._asset_hook_uninstallers:
+            uninstall()
+        self._asset_hook_uninstallers = []
 
     def _remember_resolution(
         self,
@@ -312,6 +349,46 @@ class Recorder:
         if file_path not in self.urdf_sources:
             self.urdf_sources.append(file_path)
         return original(cls, file_path, **kwargs)
+
+    def _remember_gazebo_source(
+        self,
+        original: Callable[..., GazeboParser],
+        cls: type,
+        file_path: str,
+        **kwargs: Any,
+    ) -> GazeboParser:
+        """
+        Parse as usual, but remember this Gazebo/SDF world or model source file.
+
+        :param original: The real, unpatched ``GazeboParser.from_file``.
+        :param cls: The parser class the classmethod was called on.
+        :param file_path: Path of the source file.
+        :param kwargs: Keyword arguments forwarded to the wrapped call.
+        """
+        if file_path not in self.gazebo_sources:
+            self.gazebo_sources.append(file_path)
+        return original(cls, file_path, **kwargs)
+
+    def _remember_mjcf_source(
+        self,
+        original: Callable[..., None],
+        mjcf_parser: MJCFParser,
+        file_path: str,
+        *args: Any,
+        **kwargs: Any,
+    ) -> None:
+        """
+        Initialize as usual, but remember this MJCF source file.
+
+        :param original: The real, unpatched ``MJCFParser.__init__`` bound method.
+        :param mjcf_parser: The parser being initialized.
+        :param file_path: Path of the source file.
+        :param args: Positional arguments forwarded to the wrapped call.
+        :param kwargs: Keyword arguments forwarded to the wrapped call.
+        """
+        if file_path not in self.mjcf_sources:
+            self.mjcf_sources.append(file_path)
+        return original(mjcf_parser, file_path, *args, **kwargs)
 
     def _remember_mesh_source(
         self,
@@ -890,6 +967,7 @@ class SceneBuilder:
     Downsampling step; every ``step``-th frame is kept.
     """
 
+
     @staticmethod
     def _nearest_kept_frame(
         downsampled_index: Dict[int, int], raw_index: int
@@ -907,6 +985,66 @@ class SceneBuilder:
                 min(downsampled_index, key=lambda kept: abs(kept - raw_index))
             ],
         )
+
+    def _bundle_model(
+        self,
+        source: str,
+        bundler: Callable[..., BundleReport],
+        world_body_names: List[str],
+        base_body: str,
+    ) -> tuple:
+        """
+        Bundle one model source and turn its report into a ``models`` scene entry.
+
+        :param source: Path or URI of the model's source file.
+        :param bundler: Bundles the source into :attr:`output_directory`.
+        :param world_body_names: Every body name in the composed world, used to find the
+            model's prefix.
+        :param base_body: The robot's base link name, used to tell a robot model apart
+            from an environment model.
+        :return: The model's ``models`` scene entry, and the bundler's report.
+        """
+        base_name = os.path.splitext(os.path.basename(source))[0]
+        report = bundler(
+            source, base_name, self.output_directory, hints=self.recorder.resolutions
+        )
+        # find this model's prefix in the composed world via one of its links
+        model_prefix = ""
+        for link in report.links[: self.PREFIX_PROBE_LINKS]:
+            prefixed = next(
+                (
+                    body_name
+                    for body_name in world_body_names
+                    if body_name.endswith("/" + link)
+                ),
+                None,
+            )
+            if prefixed:
+                model_prefix = prefixed.split("/", 1)[0]
+                break
+        is_robot = base_body in report.links
+        log(
+            "bundled %-28s prefix=%-12s robot=%s meshes=%d missing=%d"
+            % (
+                base_name,
+                model_prefix or "-",
+                is_robot,
+                report.meshes_copied,
+                len(report.missing),
+            )
+        )
+        return (
+            {
+                "name": base_name,
+                "urdf": "%s.urdf" % base_name,
+                "prefix": model_prefix,
+                "robot": is_robot,
+                "links": len(report.links),
+                "movableJoints": report.movable_joints,
+            },
+            report,
+        )
+
 
     def build(self) -> Dict[str, Any]:
         """
@@ -1029,54 +1167,30 @@ class SceneBuilder:
                 "maxY": round(max(spawn_y) + self.DRAG_BOUNDS_MARGIN_Y, 2),
             }
 
-        # %% bundle the URDF models
+        # %% bundle every model source the demo loaded
         world_body_names = [str(body.name) for body in self.recorder.world.bodies]
         models = []
         missing: List[str] = []
-        for source in self.recorder.urdf_sources:
-            base_name = os.path.splitext(os.path.basename(source))[0]
-            report = BundleReport.of_source(
-                source,
-                base_name,
-                self.output_directory,
-                hints=self.recorder.resolutions,
+        bundled_sources = (
+            [
+                (source, BundleReport.of_source)
+                for source in self.recorder.urdf_sources
+            ]
+            + [
+                (source, BundledWorld.of_gazebo_source)
+                for source in self.recorder.gazebo_sources
+            ]
+            + [
+                (source, BundledWorld.of_mjcf_source)
+                for source in self.recorder.mjcf_sources
+            ]
+        )
+        for source, bundler in bundled_sources:
+            model, report = self._bundle_model(
+                source, bundler, world_body_names, base_body
             )
+            models.append(model)
             missing += report.missing
-            # find this model's prefix in the composed world via one of its links
-            model_prefix = ""
-            for link in report.links[: self.PREFIX_PROBE_LINKS]:
-                prefixed = next(
-                    (
-                        body_name
-                        for body_name in world_body_names
-                        if body_name.endswith("/" + link)
-                    ),
-                    None,
-                )
-                if prefixed:
-                    model_prefix = prefixed.split("/", 1)[0]
-                    break
-            is_robot = base_body in report.links
-            models.append(
-                {
-                    "name": base_name,
-                    "urdf": "%s.urdf" % base_name,
-                    "prefix": model_prefix,
-                    "robot": is_robot,
-                    "links": len(report.links),
-                    "movableJoints": report.movable_joints,
-                }
-            )
-            log(
-                "bundled %-28s prefix=%-12s robot=%s meshes=%d missing=%d"
-                % (
-                    base_name,
-                    model_prefix or "-",
-                    is_robot,
-                    report.meshes_copied,
-                    len(report.missing),
-                )
-            )
 
         scene = {
             "name": self.scene_name,
@@ -1214,6 +1328,9 @@ def main() -> None:
     step = args.step or max(1, len(recorder.frames) // TARGET_BUNDLE_FRAMES)
     output_directory = os.path.join(args.out, args.name)
     os.makedirs(output_directory, exist_ok=True)
+    # bundling re-parses the recorded Gazebo/MJCF sources, which the still-installed
+    # hooks would record as further sources
+    recorder.uninstall_asset_hooks()
     scene = SceneBuilder(recorder, args.name, output_directory, step).build()
     SceneBuilder._update_scene_index(Path(args.out) / "index.json", args.name)
 

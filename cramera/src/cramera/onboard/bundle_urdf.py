@@ -168,6 +168,22 @@ class BundledAssets:
     References that could not be resolved to any file.
     """
 
+    bundle_root: Optional[str] = None
+    """
+    Directory nothing may be written outside of, or None to allow any destination.
+    """
+
+    def _is_within_bundle(self, path: str) -> bool:
+        """
+        Whether a destination stays inside :attr:`bundle_root`.
+
+        :param path: The destination path to test.
+        """
+        if self.bundle_root is None:
+            return True
+        root = os.path.abspath(self.bundle_root)
+        return os.path.commonpath([os.path.abspath(path), root]) == root
+
     @property
     def mesh_suffixes(self) -> List[str]:
         """
@@ -217,10 +233,18 @@ class BundledAssets:
         else:
             return
         for reference in references:
-            relative_reference = reference.strip().lstrip("./")
-            source = os.path.join(source_directory, relative_reference)
-            if os.path.isfile(source):
-                self.copy(source, os.path.join(bundled_directory, relative_reference))
+            relative_reference = reference.strip()
+            source = os.path.normpath(
+                os.path.join(source_directory, relative_reference)
+            )
+            destination = os.path.normpath(
+                os.path.join(bundled_directory, relative_reference)
+            )
+            # the reference is mirrored at the same relative place next to the bundled
+            # mesh, so a parent-relative one (``../materials/…``, the Gazebo model
+            # layout) resolves in the browser exactly as it did on disk
+            if os.path.isfile(source) and self._is_within_bundle(destination):
+                self.copy(source, destination)
 
     def _object_side_references(
         self, mesh_text: str, source_directory: str, bundled_directory: str

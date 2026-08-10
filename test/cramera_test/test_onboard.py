@@ -11,11 +11,21 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+import inspect
+from pathlib import Path
+
 import pytest
+from semantic_digital_twin.adapters.gazebo import GazeboParser
+from semantic_digital_twin.adapters.mesh import STLParser
+from semantic_digital_twin.adapters.mjcf import MJCFParser
+from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
+from semantic_digital_twin.adapters.urdf import URDFParser
+from semantic_digital_twin.api import BodySpecification
 from semantic_digital_twin.world_description.geometry import Box, Color, Scale
 from typing_extensions import Any, Dict, List, Optional
 
 from cramera.onboard import bundle_urdf as bundler
+from cramera.onboard.bundle_world import BundledWorld
 from cramera.onboard.demo import Recorder, RecordingAnalysis, SpawnedBox
 
 RESTING = [0.0, 0.0, 1.0, 0, 0, 0, 1]
@@ -140,6 +150,7 @@ class TestAssetHookMethods:
 
 
 # %% movement detection
+
 # %% spawned primitive boxes
 @dataclass
 class ShapeSpecification:
@@ -250,6 +261,131 @@ class TestRememberSpawnedBox:
         )
 
         assert recorder.spawned_boxes == []
+
+# %% remembering non-URDF model sources
+class TestModelSourceHooks:
+    def test_a_gazebo_source_is_recorded_once(self):
+        recorder = Recorder()
+        original = lambda cls, file_path, **kwargs: "parsed"
+
+        first = recorder._remember_gazebo_source(original, "the-cls", "world.sdf")
+        recorder._remember_gazebo_source(original, "the-cls", "world.sdf")
+
+        assert first == "parsed"
+        assert recorder.gazebo_sources == ["world.sdf"]
+
+    def test_an_mjcf_source_is_recorded_once(self):
+        recorder = Recorder()
+        original = lambda parser, file_path, *args, **kwargs: None
+
+        recorder._remember_mjcf_source(original, "the-parser", "lab.xml")
+        recorder._remember_mjcf_source(original, "the-parser", "lab.xml")
+
+        assert recorder.mjcf_sources == ["lab.xml"]
+
+
+PATCHED_METHODS = (
+    (PackageUriResolver, "resolve"),
+    (URDFParser, "from_file"),
+    (GazeboParser, "from_file"),
+    (MJCFParser, "__init__"),
+    (STLParser, "__init__"),
+    (BodySpecification, "to_domain_object"),
+)
+"""
+Every method ``install_asset_hooks`` replaces, as ``(owner, name)``.
+"""
+
+
+def patched_methods_now() -> dict:
+    """
+    The methods currently installed on the patched classes.
+
+    Read statically, since ``getattr`` on a classmethod builds a fresh bound method
+    every time and would never compare equal to itself.
+    """
+    return {
+        (owner, name): inspect.getattr_static(owner, name)
+        for owner, name in PATCHED_METHODS
+    }
+
+
+class TestAssetHookLifecycle:
+    def test_uninstalling_restores_every_patched_method(self):
+        """
+        Bundling re-parses the recorded sources, so the hooks must be gone by then or
+        the re-parse is recorded as another source to bundle.
+        """
+        before = patched_methods_now()
+        recorder = Recorder()
+        recorder.install_asset_hooks()
+        try:
+            assert patched_methods_now() != before
+        finally:
+            recorder.uninstall_asset_hooks()
+
+        assert patched_methods_now() == before
+
+    def test_uninstalling_twice_is_harmless(self):
+        recorder = Recorder()
+        recorder.install_asset_hooks()
+        recorder.uninstall_asset_hooks()
+        recorder.uninstall_asset_hooks()
+
+        assert recorder._asset_hook_uninstallers == []
+
+
+# %% bundling a parsed world
+MJCF_SOURCE = """<mujoco model="lab">
+  <worldbody>
+    <body name="table" pos="1 0 0">
+      <geom name="top" type="box" size="0.5 0.3 0.02"/>
+      <body name="lid" pos="0 0 0.1">
+        <joint name="hinge" type="hinge" axis="0 0 1" range="0 1.57"/>
+        <geom name="lid_geom" type="box" size="0.1 0.1 0.01"/>
+      </body>
+    </body>
+  </worldbody>
+</mujoco>"""
+"""
+An MJCF scene with one fixed and one hinged body, and no mesh references.
+"""
+
+
+class TestBundleParsedWorld:
+    @pytest.fixture()
+    def mjcf_source(self, tmp_path) -> str:
+        source = tmp_path / "lab.xml"
+        source.write_text(MJCF_SOURCE)
+        return str(source)
+
+    def test_an_mjcf_scene_becomes_a_loadable_urdf(self, mjcf_source, tmp_path):
+        """
+        The viewer only knows how to load URDF, so an MJCF source has to come out the
+        other side as one, with its kinematics preserved.
+        """
+        report = BundledWorld.of_mjcf_source(mjcf_source, "lab", str(tmp_path / "bundle"))
+
+        assert report.links == ["world", "table", "lid"]
+        assert report.movable_joints == ["hinge"]
+        urdf = Path(report.urdf).read_text()
+        assert bundler.BundleReport.LINK_PATTERN.findall(urdf) == report.links
+        assert dict(bundler.BundleReport.JOINT_PATTERN.findall(urdf))["hinge"] == "revolute"
+
+    def test_the_report_names_the_source_it_was_built_from(self, mjcf_source, tmp_path):
+        report = BundledWorld.of_mjcf_source(mjcf_source, "lab", str(tmp_path / "bundle"))
+
+        assert report.source == mjcf_source
+
+    def test_a_missing_source_is_reported_as_such(self, tmp_path):
+        with pytest.raises(FileNotFoundError, match="MJCF source not found"):
+            BundledWorld.of_mjcf_source(str(tmp_path / "gone.xml"), "lab", str(tmp_path / "bundle"))
+
+    def test_a_missing_gazebo_source_names_its_own_format(self, tmp_path):
+        with pytest.raises(FileNotFoundError, match="Gazebo source not found"):
+            BundledWorld.of_gazebo_source(
+                str(tmp_path / "gone.sdf"), "world", str(tmp_path / "bundle")
+            )
 
 
 # %% the executed plan tree
@@ -582,6 +718,48 @@ class TestBundledAssets:
         bundled = tmp_path / "out" / "cup.stl"
 
         assets = bundler.BundledAssets()
+        assets.copy(str(mesh), str(bundled))
+        assets.copy_side_assets(str(mesh), str(bundled))
+
+        assert list(assets.copied) == [str(mesh)]
+
+    def test_a_texture_beside_the_mesh_keeps_its_relative_location(self, tmp_path):
+        """
+        Gazebo model trees reference textures from a sibling directory, e.g.
+        ``../materials/textures/wall.png``.
+
+        The reference has to be resolved against the mesh and mirrored at the same
+        relative place next to the bundled copy, or the browser asks for a file that is
+        not there.
+        """
+        model = tmp_path / "model"
+        (model / "meshes").mkdir(parents=True)
+        (model / "materials" / "textures").mkdir(parents=True)
+        (model / "materials" / "textures" / "wall.png").write_bytes(b"png")
+        mesh = model / "meshes" / "wall.dae"
+        mesh.write_text("<init_from>../materials/textures/wall.png</init_from>")
+        bundled = tmp_path / "bundle" / "meshes" / "model" / "wall.dae"
+
+        assets = bundler.BundledAssets(bundle_root=str(tmp_path / "bundle"))
+        assets.copy(str(mesh), str(bundled))
+        assets.copy_side_assets(str(mesh), str(bundled))
+
+        texture = tmp_path / "bundle" / "meshes" / "materials" / "textures" / "wall.png"
+        assert texture.read_bytes() == b"png"
+
+    def test_a_reference_escaping_the_bundle_is_skipped(self, tmp_path):
+        """
+        A mesh sitting at the top of the bundle's mesh tree could otherwise write
+        outside the bundle entirely.
+        """
+        source_directory = tmp_path / "src"
+        source_directory.mkdir()
+        (tmp_path / "outside.png").write_bytes(b"png")
+        mesh = source_directory / "wall.dae"
+        mesh.write_text("<init_from>../outside.png</init_from>")
+        bundled = tmp_path / "bundle" / "wall.dae"
+
+        assets = bundler.BundledAssets(bundle_root=str(tmp_path / "bundle"))
         assets.copy(str(mesh), str(bundled))
         assets.copy_side_assets(str(mesh), str(bundled))
 
