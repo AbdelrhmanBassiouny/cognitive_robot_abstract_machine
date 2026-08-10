@@ -33,6 +33,7 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Any, Dict, List, Optional, Tuple
 
+from cramera.knowledge.enums import PlanNodeGroup
 from cramera.live.bridge import (
     Bridge,
     ChartEdgeEntry,
@@ -204,6 +205,26 @@ class TestPlanSnapshot:
         assert nodes["MotionNode"]["status"] == TaskStatusName.RUNNING
         assert nodes["MotionNode"]["derived"] is True
         assert nodes["ActionNode"]["status"] == TaskStatusName.RUNNING
+
+    def test_each_node_carries_the_colour_group_of_its_kind(self, plan_bridge):
+        """
+        The bridge classifies plan nodes, so the viewer does not keep its own copy of
+        the kind-to-group table.
+        """
+        bridge, *_ = plan_bridge
+        by_kind = {node["kind"]: node["group"] for node in bridge.get_plan()["nodes"]}
+
+        assert by_kind["ActionNode"] == PlanNodeGroup.ACTION
+        assert by_kind["MotionNode"] == PlanNodeGroup.MOTION
+        assert by_kind["ConditionNode"] == PlanNodeGroup.CONDITION
+        assert by_kind["SequentialNode"] == PlanNodeGroup.OTHER
+
+    def test_the_plan_payload_carries_the_legend_of_every_group(self, plan_bridge):
+        bridge, *_ = plan_bridge
+
+        assert bridge.get_plan()["legend"] == [
+            {"group": group.value, "label": group.label} for group in PlanNodeGroup
+        ]
 
     def test_designator_metadata_is_serialized(self, plan_bridge):
         bridge, *_ = plan_bridge

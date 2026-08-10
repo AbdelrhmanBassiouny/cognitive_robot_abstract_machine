@@ -110,11 +110,7 @@ class UrdfViewPayload(GraphPanelPayload):
             % (len(links), len(joints), movable_count)
         )
         legend = [
-            LegendEntry(KinematicChainGroup.BASE, "Base / torso"),
-            LegendEntry(KinematicChainGroup.LEFT_ARM, "Left arm"),
-            LegendEntry(KinematicChainGroup.RIGHT_ARM, "Right arm"),
-            LegendEntry(KinematicChainGroup.GRIPPER, "Grippers"),
-            LegendEntry(KinematicChainGroup.SENSOR, "Head / sensors"),
+            LegendEntry(group, group.label) for group in KinematicChainGroup.legend()
         ]
         # force-directed, not hierarchical: the chains read better when the arms and
         # the sensor head spread out around the base than as one wide LR tree

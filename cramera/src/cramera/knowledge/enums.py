@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from enum import Enum
 
-from typing_extensions import Union
+from typing_extensions import Optional, Tuple, Union
 
 
 class JointRegion(str, Enum):
@@ -51,7 +51,29 @@ class EdgeKind(str, Enum):
     TYPE = "type"
 
 
-class KinematicChainGroup(str, Enum):
+class LabelledGroup(str, Enum):
+    """
+    A colour group that carries the text its legend row shows.
+
+    Keeping both on the member is what stops a view from listing its groups twice: once
+    to classify nodes and once to build the legend.
+    """
+
+    def __new__(cls, value: str, label: str) -> "LabelledGroup":
+        member = str.__new__(cls, value)
+        member._value_ = value
+        member.label = label
+        return member
+
+    @classmethod
+    def legend(cls) -> Tuple["LabelledGroup", ...]:
+        """
+        Every group of this kind, in declaration order, for a view's legend.
+        """
+        return tuple(cls)
+
+
+class KinematicChainGroup(LabelledGroup):
     """
     Colour group of a link in the robot's kinematic tree.
 
@@ -59,14 +81,14 @@ class KinematicChainGroup(str, Enum):
     knowledge graph: a right arm is not an "event", it just needs a colour of its own.
     """
 
-    BASE = "base"
-    LEFT_ARM = "left_arm"
-    RIGHT_ARM = "right_arm"
-    GRIPPER = "gripper"
-    SENSOR = "sensor"
+    BASE = ("base", "Base / torso")
+    LEFT_ARM = ("left_arm", "Left arm")
+    RIGHT_ARM = ("right_arm", "Right arm")
+    GRIPPER = ("gripper", "Grippers")
+    SENSOR = ("sensor", "Head / sensors")
 
 
-class PlanNodeGroup(str, Enum):
+class PlanNodeGroup(LabelledGroup):
     """
     Colour group of a node in the executed plan tree.
 
@@ -75,11 +97,26 @@ class PlanNodeGroup(str, Enum):
     they are kinds of plan node that each need a colour of their own.
     """
 
-    ACTION = "action"
-    MOTION = "motion"
-    CONDITION = "condition"
-    ATTACHMENT = "attachment"
-    OTHER = "other_plan_node"
+    ACTION = ("action", "Action")
+    MOTION = ("motion", "Motion")
+    CONDITION = ("condition", "Condition")
+    ATTACHMENT = ("attachment", "Attach / detach")
+    OTHER = ("other_plan_node", "Other plan node")
+
+    @classmethod
+    def of_plan_node_kind(cls, kind: Optional[str]) -> "PlanNodeGroup":
+        """
+        The group a coraplex plan-node class belongs to.
+
+        :param kind: The plan node's own class name, as recorded or observed live.
+        """
+        return {
+            "ActionNode": cls.ACTION,
+            "MotionNode": cls.MOTION,
+            "ConditionNode": cls.CONDITION,
+            "AttachNode": cls.ATTACHMENT,
+            "DetachNode": cls.ATTACHMENT,
+        }.get(kind or "", cls.OTHER)
 
 
 ColourGroup = Union[NodeGroup, KinematicChainGroup, PlanNodeGroup]

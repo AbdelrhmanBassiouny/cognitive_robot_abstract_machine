@@ -89,16 +89,19 @@ function loadPanel(responses) {
 }
 
 // %% live plan colour groups
-test('AttachNode and DetachNode plan nodes render in the attachment colour group', async function () {
+// the bridge classifies plan nodes now (knowledge/enums.py's PlanNodeGroup); the panel
+// only has to pass the group through, legend included
+test('a live plan is drawn with the groups and legend the bridge sent', async function () {
   const panel = loadPanel({
     '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} },
     '/api/knowledge/view?name=plan': { ok: true, nodes: [], edges: [], details: {}, live: 'plan' },
     'http://bridge/plan': {
       signature: 's1',
       nodes: [
-        { id: 'a1', kind: 'AttachNode', label: 'AttachNode', status: 'CREATED' },
-        { id: 'd1', kind: 'DetachNode', label: 'DetachNode', status: 'CREATED' },
+        { id: 'a1', kind: 'AttachNode', label: 'AttachNode', status: 'CREATED', group: 'attachment' },
+        { id: 'm1', kind: 'MotionNode', label: 'MotionNode', status: 'CREATED', group: 'motion' },
       ],
+      legend: [{ group: 'attachment', label: 'Attach / detach' }],
     },
   });
   const root = makeRoot();
@@ -116,7 +119,10 @@ test('AttachNode and DetachNode plan nodes render in the attachment colour group
     const byId = {};
     panel.lastBuild().nodes.forEach(function (n) { byId[n.id] = n; });
     assert.strictEqual(byId.a1.group, 'attachment');
-    assert.strictEqual(byId.d1.group, 'attachment');
+    assert.strictEqual(byId.m1.group, 'motion');
+    assert.deepStrictEqual(panel.lastBuild().legend, [
+      { group: 'attachment', label: 'Attach / detach' },
+    ]);
   } finally {
     instance.destroy();       // clears the live-poll setInterval even if an assertion above throws
   }

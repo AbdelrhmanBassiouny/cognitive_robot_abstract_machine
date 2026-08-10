@@ -58,6 +58,7 @@ from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
 )
 
+from cramera.knowledge.enums import PlanNodeGroup
 from cramera.mesh_format import MeshFormat
 from cramera.palette import ObjectPalette
 from cramera.robot_parts import RobotPartAnnotation, describe_robot_parts
@@ -350,6 +351,11 @@ class PlanNodeEntry:
     The plan node's own class name.
     """
 
+    group: PlanNodeGroup
+    """
+    Colour group the viewer draws this node in, from :attr:`kind`.
+    """
+
     label: str
     """
     Designator class name if this node describes an action, else :attr:`kind`.
@@ -395,6 +401,18 @@ class PlanSnapshot:
     """
     Every node in the tree, flattened with parent references.
     """
+
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The snapshot plus the legend its groups are drawn with, so the viewer does not
+        keep its own copy of the plan-node colour table.
+        """
+        payload = asdict(self)
+        payload["legend"] = [
+            {"group": group.value, "label": group.label}
+            for group in PlanNodeGroup.legend()
+        ]
+        return payload
 
 
 @dataclass(frozen=True)
@@ -1196,6 +1214,7 @@ class Bridge:
             id=node_id,
             parent=parent_id,
             kind=type(node).__name__,
+            group=PlanNodeGroup.of_plan_node_kind(type(node).__name__),
             label=(
                 type(designator).__name__
                 if designator is not None
@@ -1277,7 +1296,7 @@ class Bridge:
         The newest plan snapshot (safe to call from HTTP threads).
         """
         with self._lock:
-            return asdict(self.plan_state)
+            return self.plan_state.to_payload()
 
     # %% motion statechart
     def observe_chart(self, chart: Optional[MotionStatechart]) -> None:

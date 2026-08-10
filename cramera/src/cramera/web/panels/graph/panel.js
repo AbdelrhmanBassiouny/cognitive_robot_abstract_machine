@@ -177,20 +177,6 @@ Panels.define('graph', function (root, bus) {
   // per-node status. Structure changes (the plan grows as actions expand, a new
   // statechart is compiled per motion group) rebuild the graph; a pure status
   // change only re-colours the rings, so the layout never jumps.
-  // mirrors knowledge/views/plan_tree.py's PLAN_GROUPS/PLAN_LEGEND, so a live plan
-  // is coloured exactly like the recorded one
-  const PLAN_GROUP = {
-    ActionNode: 'action', MotionNode: 'motion', ConditionNode: 'condition',
-    AttachNode: 'attachment', DetachNode: 'attachment',
-  };
-  const PLAN_LEGEND = [
-    { group: 'action', label: 'Action' }, { group: 'motion', label: 'Motion' },
-    { group: 'condition', label: 'Condition' },
-    { group: 'attachment', label: 'Attach / detach' },
-    { group: 'other_plan_node', label: 'Other plan node' },
-  ];
-  // statechart nodes are bucketed by the kind of node giskardpy compiled, not by the
-  // knowledge graph's ontological categories
   const CHART_LEGEND = [
     { group: 'task', label: 'Task (motion constraint)' },
     { group: 'monitor', label: 'Monitor / observation' },
@@ -221,13 +207,13 @@ Panels.define('graph', function (root, bus) {
                      'status: ' + n.status + (n.derived ? ' (derived from the motion statechart)' : '')];
       if (n.arm) lines.push('arm: ' + n.arm);
       if (n.target) lines.push('target: ' + n.target);
-      nodes.push({ id: n.id, label: label, group: PLAN_GROUP[n.kind] || 'other_plan_node',
+      nodes.push({ id: n.id, label: label, group: n.group,
                    title: [label].concat(lines).join('\n'), status: n.status });
-      details[n.id] = { label: label, group: PLAN_GROUP[n.kind] || 'other_plan_node', lines: lines };
+      details[n.id] = { label: label, group: n.group, lines: lines };
       if (n.parent) edges.push({ from: n.parent, to: n.id, kind: 'property', label: 'has step' });
     });
     return { ok: true, breadcrumb: 'live plan', nodes: nodes, edges: edges, details: details,
-             legend: PLAN_LEGEND, layout: 'hier', arrows: true, statusLegend: true,
+             legend: live.legend || [], layout: 'hier', arrows: true, statusLegend: true,
              live: 'plan', key: 'plan-live',
              empty: 'The bridge is attached but the demo has not started its plan yet.' };
   }

@@ -27,26 +27,11 @@ from cramera.knowledge.subgraph import (
     SubgraphAccumulator,
 )
 
-PLAN_GROUPS: Dict[str, PlanNodeGroup] = {
-    "ActionNode": PlanNodeGroup.ACTION,
-    "MotionNode": PlanNodeGroup.MOTION,
-    "ConditionNode": PlanNodeGroup.CONDITION,
-    "AttachNode": PlanNodeGroup.ATTACHMENT,
-    "DetachNode": PlanNodeGroup.ATTACHMENT,
-}
-"""
-Plan-node kind → node colour group of the graph panel.
-"""
-
-PLAN_LEGEND: Tuple[LegendEntry, ...] = (
-    LegendEntry(PlanNodeGroup.ACTION, "Action"),
-    LegendEntry(PlanNodeGroup.MOTION, "Motion"),
-    LegendEntry(PlanNodeGroup.CONDITION, "Condition"),
-    LegendEntry(PlanNodeGroup.ATTACHMENT, "Attach / detach"),
-    LegendEntry(PlanNodeGroup.OTHER, "Other plan node"),
+PLAN_LEGEND: Tuple[LegendEntry, ...] = tuple(
+    LegendEntry(group, group.label) for group in PlanNodeGroup.legend()
 )
 """
-Legend rows of the plan view.
+Legend rows of the plan view, one per :class:`PlanNodeGroup`.
 """
 
 
@@ -119,7 +104,7 @@ class PlanViewPayload(GraphPanelPayload):
             view.add(
                 node_id,
                 label,
-                PLAN_GROUPS.get(tree.get("kind"), PlanNodeGroup.OTHER),
+                PlanNodeGroup.of_plan_node_kind(tree.get("kind")),
                 lines,
                 status=status,
             )
