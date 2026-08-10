@@ -2297,3 +2297,26 @@ items:
     status: in_progress
     pull_request_number: 153
     session: https://claude.ai/code/session_012yfsn1ZZBsUcfKK1zDW1zh
+    notes: >
+      Raised 2026-08-10. The workflow's standing rule was that a session subscribes to every
+      pull request it opens and handles each event until that PR's job ends. The user's
+      decision inverts it rather than tuning it: a session never subscribes to a pull
+      request's activity, and opening one is terminal for the session that opened it - push,
+      report what is outstanding in the chat, stop. A CI failure or review comment gets
+      handled when the user asks, in a session started for it.
+      Two halves, because the rule lived in two places. The personal-notes half (not in the
+      diff) replaced the bullet in cram-notes.md and fixed the three sections written around
+      the old assumption: "Scheduled checks" called event subscriptions wanted, "Comment
+      routing" justified its action-only rule by saying PR comments wake subscribed sessions,
+      and "When your PR's job ends" was largely teardown for subscriptions that no longer
+      exist. The repository half is #153: starter-notes.md ships the never-subscribe default
+      to any new user of /setup-personal-notes, and plan-schema.md and session-start.sh drop
+      "(in addition to your own item's PR)".
+      Scope call: pull requests only. A plan's tracking issue is subscribed with the same tool
+      but is a coordination mailbox several sessions read, not a PR one session owns, so
+      /plan-create, /plan-item-kickoff and /plan-item-resolve keep theirs untouched.
+      Two passages a grep for the tool name would have missed were also reworded, since they
+      explained behaviour by the old rule rather than stating it: stack/README.md's exception
+      leaving subscription "to an interactive session babysitting that one PR", and
+      stacked-pr-maintenance's needs-resolution comment claiming it may arrive as a live event
+      in the owning session. That skill's own NEVER-subscribe hard rule was already right.
