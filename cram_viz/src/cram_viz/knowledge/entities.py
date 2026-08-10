@@ -27,7 +27,8 @@ class Gripper:
 
     side: Optional[Arms]
     """
-    Which arm the gripper belongs to, or None when its name names neither.
+    Which arm the gripper belongs to, or None for a robot that does not specify a left
+    and a right arm.
     """
 
     opening_m: Optional[float] = None
@@ -50,7 +51,7 @@ class Arm:
 
     side: Optional[Arms]
     """
-    Which arm this is, or None when its name names neither.
+    Which arm this is, or None for a robot that does not specify a left and a right arm.
     """
 
     robot: str

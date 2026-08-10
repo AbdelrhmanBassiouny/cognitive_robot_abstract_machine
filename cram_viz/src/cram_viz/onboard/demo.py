@@ -40,6 +40,7 @@ from pathlib import Path
 from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 from typing_extensions import (
     Any,
@@ -58,6 +59,7 @@ from cram_viz.logging_setup import get_logger
 from cram_viz.body_geometry import measure_body
 from cram_viz.live.bridge import ROBOT_BASE_KEY
 from cram_viz.monkey_patch import MethodPatch
+from cram_viz.robot_parts import describe_robot_parts
 from cram_viz.onboard.bundle_urdf import bundle_urdf
 from cram_viz.palette import ObjectPalette
 
@@ -155,24 +157,6 @@ class HasAParent(Protocol):
     parent: Any
 
 
-@runtime_checkable
-class HasBodies(Protocol):
-    """
-    A robot part exposing the bodies it is made of.
-    """
-
-    bodies: Any
-
-
-@runtime_checkable
-class HasAnEndEffector(Protocol):
-    """
-    A manipulator carrying an end effector, which not every arm annotation does.
-    """
-
-    end_effector: Any
-
-
 def log(*parts: object) -> None:
     """
     Emit a progress line prefixed with the elapsed recording time.
@@ -245,7 +229,7 @@ class Recorder:
     The executing world, captured on the first tick.
     """
 
-    robot: Optional[Any] = None
+    robot: Optional[AbstractRobot] = None
     """
     The robot annotation of :attr:`world`.
     """
@@ -368,8 +352,6 @@ class Recorder:
 
         :param executor: The executor whose world is bound to.
         """
-        from semantic_digital_twin.robots.robot_parts import AbstractRobot
-
         self.world = executor.context.world
         self.control_dt = executor.context.qp_controller_config.control_dt
         robots = self.world.get_semantic_annotations_by_type(AbstractRobot)
@@ -771,21 +753,6 @@ def derive_segments(recorder: Recorder) -> List[Dict[str, Any]]:
     return segments
 
 
-def link_set(part: Any) -> List[str]:
-    """
-    A robot part's link names, stripped of their model-name prefix.
-
-    :param part: The robot part whose link names are read.
-    """
-    if not isinstance(part, HasBodies):
-        return []
-    link_names = []
-    for body in part.bodies or []:
-        name = str(body.name) if isinstance(body, NamesAWorldEntity) else str(body)
-        link_names.append(name.split("/", 1)[1] if "/" in name else name)
-    return link_names
-
-
 def build_scene(
     recorder: Recorder, name: str, out_dir: str, step: int
 ) -> Dict[str, Any]:
@@ -833,14 +800,8 @@ def build_scene(
     root_name = str(robot.root.name)
     prefix = root_name.split("/", 1)[0] if "/" in root_name else ""
     base_body = root_name.split("/", 1)[1] if "/" in root_name else root_name
-    parts = {}
-    for arm in robot.get_arms():
-        arm_links = link_set(arm)
-        end_effector = arm.end_effector if isinstance(arm, HasAnEndEffector) else None
-        end_effector_links = link_set(end_effector) if end_effector is not None else []
-        parts[type(arm).__name__] = sorted(set(arm_links) - set(end_effector_links))
-        if end_effector is not None:
-            parts[type(end_effector).__name__] = sorted(set(end_effector_links))
+    part_annotations = describe_robot_parts(robot)
+    parts = {annotation.name: annotation.links for annotation in part_annotations}
 
     # %% segments: data-derived windows, labelled from the parsed actions
     segments = []
@@ -973,6 +934,9 @@ def build_scene(
             "prefix": prefix,
             "baseBody": base_body,
             "parts": parts,
+            "partAnnotations": [
+                annotation.to_payload() for annotation in part_annotations
+            ],
         },
         "objects": objects,
         "segments": segments,

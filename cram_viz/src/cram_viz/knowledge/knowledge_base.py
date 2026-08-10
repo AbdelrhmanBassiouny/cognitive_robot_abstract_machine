@@ -23,6 +23,7 @@ from cram_viz.knowledge.entities import (
 )
 from cram_viz.knowledge.enums import JointRegion
 from cram_viz.knowledge.scene_bundle import load_scene
+from cram_viz.robot_parts import RobotPartAnnotation, RobotPartRole
 
 
 def _side_of_name(name: str) -> Optional[Arms]:
@@ -64,7 +65,12 @@ class EpisodeKnowledgeBase:
         objects_by_id = {entity.name: entity for entity in self.objects}
         place_area = objects_by_id.get("place_area")
 
-        self.grippers, self.arms = self._build_arms(parts, robot_name)
+        part_annotations = [
+            RobotPartAnnotation.from_payload(payload)
+            for payload in (scene.get("robot") or {}).get("partAnnotations") or []
+        ]
+
+        self.grippers, self.arms = self._build_arms(parts, part_annotations, robot_name)
         self.robot = Robot(robot_name, arm_count=len(self.arms))
         self.episodes = self._build_episodes(
             scene, frames_per_second, objects_by_id, place_area
@@ -112,12 +118,61 @@ class EpisodeKnowledgeBase:
             )
         return objects
 
-    @staticmethod
+    @classmethod
     def _build_arms(
+        cls,
+        parts: Dict[str, Any],
+        part_annotations: List[RobotPartAnnotation],
+        robot_name: str,
+    ) -> Tuple[List[Gripper], List[Arm]]:
+        """
+        Arms and grippers of the recorded robot.
+
+        :param parts: Robot part names to link names, from the recorded robot
+            annotation.
+        :param part_annotations: The recorded sem_dt robot-part annotations, empty for a
+            bundle recorded before they were written.
+        :param robot_name: Name of the recorded robot, used to build each :class:`Arm`.
+        """
+        if part_annotations:
+            return cls._build_annotated_arms(part_annotations, robot_name)
+        return cls._build_arms_by_name(parts, robot_name)
+
+    @staticmethod
+    def _build_annotated_arms(
+        part_annotations: List[RobotPartAnnotation], robot_name: str
+    ) -> Tuple[List[Gripper], List[Arm]]:
+        """
+        Arms and grippers read straight off the recorded sem_dt annotations.
+
+        :param part_annotations: The recorded sem_dt robot-part annotations.
+        :param robot_name: Name of the recorded robot, used to build each :class:`Arm`.
+        """
+        end_effectors = {
+            annotation.attached_to: annotation
+            for annotation in part_annotations
+            if annotation.role is RobotPartRole.END_EFFECTOR
+        }
+        grippers, arms = [], []
+        for annotation in part_annotations:
+            if annotation.role is not RobotPartRole.ARM:
+                continue
+            end_effector = end_effectors.get(annotation.name)
+            gripper = Gripper(
+                end_effector.name if end_effector else annotation.name + "_ee",
+                annotation.side,
+            )
+            grippers.append(gripper)
+            arms.append(Arm(annotation.name, annotation.side, robot_name, gripper))
+        return grippers, arms
+
+    @staticmethod
+    def _build_arms_by_name(
         parts: Dict[str, Any], robot_name: str
     ) -> Tuple[List[Gripper], List[Arm]]:
         """
-        Arms and grippers from the recorded robot annotation parts.
+        Arms and grippers inferred from part names, for bundles recorded before the
+        sem_dt annotations were written into them.
 
         Gripper keywords take precedence — robot names can contain 'arm' themselves, so
         'arm' alone must not decide.

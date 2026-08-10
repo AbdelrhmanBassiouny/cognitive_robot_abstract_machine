@@ -82,6 +82,7 @@ class TestReadOnlyEndpoints:
             "plan": False,
             "chart": False,
             "seq": 0,
+            "partAnnotations": [],
         }
 
     def test_unknown_get_path_is_404(self, server):

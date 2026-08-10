@@ -19,7 +19,6 @@ from cram_viz.onboard.demo import (
     Recorder,
     derive_segments,
     first_base_motion,
-    link_set,
     moved,
     object_windows,
 )
@@ -268,38 +267,6 @@ class TestDeriveSegments:
         assert len(segments) == 2
         for earlier, later in zip(segments, segments[1:]):
             assert earlier["end"] == later["start"]
-
-
-# %% robot parts
-@dataclass
-class RobotPartWithBodies:
-    """
-    A robot part exposing the bodies whose link names the onboarder records.
-    """
-
-    bodies: List[Any] = field(default_factory=list)
-
-
-@dataclass
-class NamedBody:
-    """
-    A world body carrying a model-prefixed name.
-    """
-
-    name: str
-
-
-class TestLinkSet:
-    def test_the_model_prefix_is_stripped(self):
-        part = RobotPartWithBodies(bodies=[NamedBody("pr2/l_wrist_link")])
-        assert link_set(part) == ["l_wrist_link"]
-
-    def test_an_unprefixed_name_is_kept(self):
-        part = RobotPartWithBodies(bodies=[NamedBody("l_wrist_link")])
-        assert link_set(part) == ["l_wrist_link"]
-
-    def test_a_part_without_bodies_has_no_links(self):
-        assert link_set(RobotPartWithBodies()) == []
 
 
 # %% URDF reference resolution

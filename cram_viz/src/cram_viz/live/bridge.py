@@ -53,6 +53,7 @@ from semantic_digital_twin.world_description.connections import (
 )
 
 from cram_viz.palette import ObjectPalette
+from cram_viz.robot_parts import RobotPartAnnotation, describe_robot_parts
 
 if TYPE_CHECKING:
     from coraplex.plans.executables import GiskardExecutable
@@ -529,6 +530,22 @@ class BridgeStatus:
     plan: bool
     chart: bool
     seq: int
+    robot_parts: List[RobotPartAnnotation] = field(default_factory=list)
+    """
+    The arms and end effectors of the live robot, as sem_dt annotates them.
+    """
+
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The status in the JSON shape the viewer polls, with the robot parts in the same
+        ``partAnnotations`` shape a recorded scene bundle carries.
+        """
+        payload = asdict(self)
+        payload.pop("robot_parts")
+        payload["partAnnotations"] = [
+            annotation.to_payload() for annotation in self.robot_parts
+        ]
+        return payload
 
 
 @dataclass
@@ -548,6 +565,11 @@ class Bridge:
     robot: Optional[AbstractRobot] = None
     """
     The robot annotation of :attr:`world`, re-discovered on every bind.
+    """
+
+    robot_parts: List[RobotPartAnnotation] = field(default_factory=list)
+    """
+    The arms and end effectors of :attr:`robot`, re-read on every bind.
     """
 
     seq: int = 0
@@ -779,17 +801,16 @@ class Bridge:
         What the viewer polls to decide whether a live demo is reachable.
         """
         with self._lock:
-            return asdict(
-                BridgeStatus(
-                    running=self.world is not None,
-                    robot=type(self.robot).__name__ if self.robot else None,
-                    objects=[key for key in self._bodies if key != ROBOT_BASE_KEY],
-                    movable=True,
-                    plan=bool(self.plan_state.nodes),
-                    chart=bool(self.chart_state.nodes),
-                    seq=self.seq,
-                )
-            )
+            return BridgeStatus(
+                running=self.world is not None,
+                robot=type(self.robot).__name__ if self.robot else None,
+                objects=[key for key in self._bodies if key != ROBOT_BASE_KEY],
+                movable=True,
+                plan=bool(self.plan_state.nodes),
+                chart=bool(self.chart_state.nodes),
+                seq=self.seq,
+                robot_parts=list(self.robot_parts),
+            ).to_payload()
 
     # %% viewer -> world
     def queue_move(self, request: MoveRequest) -> None:
@@ -891,6 +912,9 @@ class Bridge:
         self._last_bind = time.time()
         robots = world.get_semantic_annotations_by_type(AbstractRobot)
         self.robot = robots[0] if robots else None
+        self.robot_parts = (
+            describe_robot_parts(self.robot) if self.robot is not None else []
+        )
         self._connections = self._actuated_connections(world)
         bodies: Dict[str, Body] = {}
         if self.robot is not None:

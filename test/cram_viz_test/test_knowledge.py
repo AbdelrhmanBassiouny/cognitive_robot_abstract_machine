@@ -19,6 +19,7 @@ from cram_viz.knowledge.enums import EdgeKind, NodeGroup  # noqa: E402
 from cram_viz.knowledge.scene_bundle import SceneBundle  # noqa: E402
 from cram_viz.knowledge.subgraph import DetailEntry, GraphEdge  # noqa: E402
 from cram_viz.knowledge.views import plan_tree as plan_view  # noqa: E402
+from cram_viz.robot_parts import RobotPartAnnotation, RobotPartRole  # noqa: E402
 
 
 @pytest.fixture()
@@ -85,6 +86,45 @@ class TestArchitectureScanner:
             p.name for p in scanned.packages
         }
         assert loaded_once.classes == loaded_again.classes
+
+
+class TestArmsFromRecordedAnnotations:
+    def test_the_recorded_annotations_decide_the_arms_and_their_sides(
+        self, fixture_scene, monkeypatch
+    ):
+        """
+        A bundle carrying sem_dt robot-part annotations is read straight off them, so an
+        arm whose name spells no side still gets the side its robot annotated it with.
+        """
+        bundle = knowledge.load_scene()
+        scene, trajectory = bundle.scene, bundle.trajectory
+        scene["robot"]["partAnnotations"] = [
+            RobotPartAnnotation(
+                name="ManipulatorOne",
+                role=RobotPartRole.ARM,
+                side=Arms.RIGHT,
+                links=["upper_link"],
+            ).to_payload(),
+            RobotPartAnnotation(
+                name="HandOne",
+                role=RobotPartRole.END_EFFECTOR,
+                side=Arms.RIGHT,
+                links=["hand_link"],
+                attached_to="ManipulatorOne",
+            ).to_payload(),
+        ]
+        monkeypatch.setattr(
+            knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
+        )
+        knowledge.reset_knowledge_base()
+        knowledge_base_instance = knowledge.get_knowledge_base()
+
+        [arm] = knowledge_base_instance.arms
+        assert arm.name == "ManipulatorOne"
+        assert arm.side == Arms.RIGHT
+        assert arm.gripper.name == "HandOne"
+        assert arm.gripper.side == Arms.RIGHT
+        assert knowledge_base_instance.grippers == [arm.gripper]
 
 
 class TestArmSideInference:
