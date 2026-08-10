@@ -4720,3 +4720,109 @@ is `main`'s own new tests. `check-stack-setup.sh`'s `stack_tooling_files` row st
 whether the result still works. Ancestry answers "did I lose anything"; only running the
 suite answers "does it still pass", and on this branch those two questions have already had
 different answers once.
+
+## Update 2026-08-10 (implemented): manifest-currency-first ships as #151
+
+Implemented the same session as the kickoff, on `claude/plan-manifest-update-priority-ex2zst`.
+389 tests pass across the three directories CI runs, against 367 on `main`; every new test was
+mutation-checked, each failing only for its own reason.
+
+### The corruption was latent, not hypothetical
+
+`ManifestKey.NOTES` and `BLOCKERS` have had members since #143 and no writer, which is the
+only reason nobody had hit this. `NOTES` is block-styled, its `pattern` matches the `notes: >`
+line, and `render` emitted a single line — so `apply_item_fields` replaced the `>` and left
+the indented body behind, where YAML reads it as a continuation of whatever replaced it:
+
+```
+BEFORE: 'A folded note whose wrapping must survive untouched...'
+AFTER : 'a new note A folded note whose wrapping must survive untouched...'
+```
+
+The manifest still validates afterwards, so no schema check would ever have caught it. Worth
+recording as a shape rather than an incident: **a member that exists with no writer is
+untested by construction**, and the bug is waiting for whoever writes the first one.
+
+Fixing it needed one modelling change. `ValueStyle.BLOCK`'s docstring said "a folded scalar
+*or a sequence*" — true of the layout, and wrong as a rendering instruction, since `notes` is
+prose and `blockers` is a list. `SEQUENCE` is now its own style, with the shared property
+(`spans_lines_beneath`) deriving `BLOCK_STYLED_KEYS` so the insertion-point logic keeps
+meaning what it meant.
+
+A second detail only a round-trip test finds: a folded scalar (`>`) appends a trailing
+newline. That is right for a note — every note already in these manifests ends in one — and
+wrong for a list entry, which has to parse back as exactly the string it was given. Sequence
+entries use `>-`.
+
+### The reuse seam the item's own notes named does not exist
+
+Recorded a day earlier: *"a transition-time check must reuse `sync_manifest_status.py`."*
+Reading it disproved that. It imports `build_dashboard` → `render_common` → jinja2, markdown,
+nh3 at module level, so a hook cannot import it — the constraint `ItemStatus`'s docstring
+already records from the other side. It also answers a different question: post-hoc,
+GitHub-side, one direction only.
+
+The split that replaced it is by **what each can see**, which is why it is non-overlapping
+rather than a compromise: the dashboard compares the manifest against GitHub after the fact;
+`check` compares it against local git *before a push*, which the dashboard can never see. The
+side effect worth keeping is that `check` stays stdlib-only, so `plan-item-edit-guard` — whose
+`PreToolUse` hook has the same constraint — can import it when it is built.
+
+### What `plan-item-resolve` was missing, which the item had not spotted
+
+The notes named six bound skills without ranking them. In practice one gap dwarfed the rest:
+`plan-item-resolve` wrote the manifest **nowhere at all**. It is research-and-planning by
+design, and its own `blockers`/`notes` are exactly the fields that were stale on #109, #115
+and #121 — the three entries this item's premise rests on. So the skill that exists to
+diagnose a stalled item was the one guaranteed not to record the diagnosis. It now writes what
+it found before proposing anything.
+
+### Reporting rather than writing, and why that is not a weakening
+
+`stacked-pr-maintenance` maps the branches it moved to items through the generated branch
+index and names them in its finish summary. It does not write. Two independent reasons, both
+already load-bearing elsewhere: it runs unattended under `--non-interactive`, where its own
+doctrine forbids opening a discussion, and *which* status a reparent or a promotion implies is
+judgement rather than mechanics. A pass that guessed would write a manifest nobody decided.
+
+### The contract test derives its own scope
+
+Which skills are bound is computed from what they do — a skill invoking a plan-writing script
+is bound by that fact — rather than listed, so a skill added later is covered without the test
+being edited. Only the maintenance pass is named, because it is bound for the opposite reason,
+and its test asserts the asymmetry directly: it cites the rule *and* invokes no plan-writing
+script.
+
+### Verified live, not only in the harness
+
+`check` was run against all 41 items of this plan. One true positive:
+`dependency-chips-blocked-fix` records a published branch with no `session`, exit 9. The other
+40 came back clean. `update` then wrote this item's own notes — the tool used on the manifest
+it was built for, and the produced block is indistinguishable from a hand-wrapped one.
+
+### An incidental fix, and what it says about the suite
+
+The scratch repository fixture now disables commit signing. This environment signs by default,
+so every scratch commit depended on a reachable signing service; the suite failed on a
+*different* test each run with `signing server returned status 520`. It also halved the
+runtime, 75s to 35s. The general point is the same one #139 recorded twice: **a test that
+depends on ambient state fails for reasons that have nothing to do with it**, and the fix is
+to control the state rather than to retry.
+
+### Deferred, with the reasoning rather than silently
+
+`plan_item_bootstrap.py` keeps its name though it now carries `update` and `check`, on the
+user's call: `dev-tooling-save-plan-python` absorbs the file into the package regardless, so
+that migration renames it once rather than twice with three branches rebasing across the first
+attempt. The one line into `add-plan-item/SKILL.md` still cannot be written from `main`, and
+#135 is marked ready for review, so it lands here only if #135 merges first.
+
+### CI, and a base-side breakage worth knowing about
+
+`test_each_lib` is red across the matrix and it is not this branch's: `greenlet` 3.5.5 was
+published with no Linux wheel, so `uv` fails to resolve before any test runs. `main`'s own push
+run failed 11 jobs three minutes before this branch's, the previous `main` run was green, and
+`test_claude_dev_tooling` — the only job reaching a `.claude/`-only diff — passes. It blocks
+every pull request in the repository until `greenlet` is constrained or
+`tool.uv.required-environments` is set; reported on #151 rather than fixed here, since it is
+neither this item's scope nor a one-branch problem.
