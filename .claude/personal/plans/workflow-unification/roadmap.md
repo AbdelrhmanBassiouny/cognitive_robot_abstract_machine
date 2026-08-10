@@ -4393,6 +4393,40 @@ only as a slash command. The skill maps the phrasing, calls `set`, and then repo
 write, so pinning both skills as two calls was two pushes to the notes branch for one
 decision; a test now counts commits on the branch and pins that naming both is one.
 
+### The gathering procedure moves out of both skills, from a review comment
+
+Review round on #149: *"i see duplication of instructions in this skill with the
+plan-item-kickoff, can this duplication be defined somwhere once and injected in both
+somehow?"* Measured rather than eyeballed - a line diff of the two skills returned **41
+byte-identical non-blank lines**, plus the tracking-issue subscription (identical but for one
+justification sentence), the read-the-roadmap-in-full rule (12 of 13 lines), the
+standing-conventions cross-check and the already-answered check (each identical but for a
+clause).
+
+On *injected*: there is no include mechanism. `SKILL.md` files are plain markdown with
+frontmatter - no templating of any kind, grepped across every skill. The repository's answer,
+used five times before this, is to state the procedure once and have each caller cite it in a
+line, which is exactly why `execution-modes.md` made the mode step and the auto-path step the
+two places these skills did *not* duplicate each other.
+
+So `plan-dashboard/plan-item-gathering.md` now holds the setup check, resolving the item off
+the notes branch, the tracking-issue subscription, its recorded state, the full roadmap read,
+the dependency chain, the conventions cross-check and the already-answered check. Each skill
+runs it end to end and adds only what its own situation needs - landed siblings and any
+partial branch for kickoff; the pull request's mergeable state, CI, review threads and
+comments plus the tracking issue's discussion for resolve. Identical lines fell 41 to 10, all
+of them headings and citations; kickoff went 263 to 191 lines and resolve 200 to 129.
+
+Scope, recorded because it went against the recommendation: this was offered as its own item,
+since the duplicated prose predates the execution-modes work entirely and #135 is
+ready-for-review editing both the same files, so rewriting them widens that conflict from a
+few lines to most of both files. The user chose to do it in #149, and it is there.
+
+Worth carrying: the duplication was invisible to everyone who had read either skill on its own,
+and a single line diff between two sibling documents surfaced it in seconds. Sibling skills that
+were written by copying one another are worth diffing periodically, not only when a reader
+happens to notice.
+
 ### The recommendation is the skill's, not the script's
 
 Settled with the user before the item was written, against the alternative of computing a
