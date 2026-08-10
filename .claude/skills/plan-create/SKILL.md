@@ -211,6 +211,14 @@ unprompted — to replace that old doc with a short pointer stub at its
 original location, so anyone still reading the old path finds the new one
 immediately.
 
+## 8b. From here on, the manifest leads
+
+The plan now exists, so every later change to it is a transition rather than a
+draft. Follow `${MANIFEST_CURRENCY_DOCUMENT}` for all of them: write the manifest
+and republish the dashboard before the work that follows, not after it. That
+applies to this skill's own remaining steps too — publish before reporting back,
+so what you report is what a reader will actually see.
+
 ## 9. Report back
 
 Plan id, item/wave/track counts, the dashboard URL, the tracking issue link

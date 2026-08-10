@@ -121,7 +121,7 @@ changes" section governs. Either way the proposal ends with `${SAVE_PLAN_SCRIPT}
 and republishing the dashboard via `/plan-dashboard <plan-id>` in the same turn,
 so no published dashboard is older than the manifest behind it.
 
-**If the outcome is a new item**, `${PLAN_ITEM_BOOTSTRAP_SCRIPT}`'s `record`
+**If the outcome is a new item**, `${PLAN_ITEM_BOOTSTRAP_MODULE}`'s `record`
 operation writes its `plan.yaml` entry and `roadmap.md` section and runs the save
 for you — `record` only, never `open`, which creates the branch and pull request
 this skill does not.

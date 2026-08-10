@@ -224,6 +224,24 @@ yourself.
   react then; do not sit idle waiting on a long run.
 - **It never adds `in-review`.** That is the developer's, once they have clicked Create.
 
+## Report the plan items this pass made stale
+
+Reparenting a pull request, promoting a branch and moving a label all change what a
+tracked item's manifest should say, and this pass writes no manifest. Follow
+`${MANIFEST_CURRENCY_DOCUMENT}`'s section for a pass that changes state without
+owning it.
+
+For every branch you moved, look it up in the generated branch index on the
+personal-notes branch (`${PLAN_BRANCH_INDEX_PATH}`, branch to plan id) and name the
+ones it resolves in the finish summary, with what changed about them. A branch the
+index does not name belongs to no plan; say that too, since every fork pull request
+is supposed to.
+
+**Report them, do not write them.** This pass runs unattended and, under
+`--non-interactive`, must not open a discussion — and which status a move implies is
+judgement rather than mechanics. Writing the manifest is the owning session's, off
+this report.
+
 ## Finish
 
 Record every branch reported on this run - the summary must list it, since a comment is not

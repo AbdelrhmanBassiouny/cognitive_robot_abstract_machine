@@ -171,6 +171,15 @@ rather than pretending it ran. Do not skip it: a published dashboard that is
 older than the manifest behind it is the exact staleness this step exists to
 close.
 
+### Keep it current for the rest of the work
+
+This step is one instance of a rule that holds for every later transition too —
+a pull request number arriving, a blocker appearing, a status changing, a
+description that stops matching. Follow `${MANIFEST_CURRENCY_DOCUMENT}`: write
+the manifest and republish before carrying on, not at the end. `update` is the
+operation for a field that changes without deserving a roadmap section, and
+`check` reports what local git already contradicts.
+
 In `plan` mode the skill ends here. Whether to implement the approved plan
 in this session or a fresh one is the user's call, made after they see it.
 
