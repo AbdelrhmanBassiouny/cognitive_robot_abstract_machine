@@ -683,7 +683,12 @@ class Bridge:
 
     _motion_nodes: Dict[int, MotionNodeProgress] = field(default_factory=dict)
     """
-    Execution progress per plan node, keyed by :meth:`Bridge._node_key`.
+    Execution progress per plan node, keyed by the node's :func:`id`.
+
+    Identity, not equality: coraplex's ``DesignatorNode`` compares by field value, so
+    two structurally identical steps of one plan would otherwise share a status. The
+    :class:`MotionNodeProgress` entry pins the node itself, which keeps CPython from
+    handing its ``id`` to a later object.
 
     Reset whenever a new plan starts performing, which bounds it to one plan's nodes.
     """
@@ -1069,20 +1074,6 @@ class Bridge:
             return self.state.to_payload()
 
     # %% plan tree
-    @staticmethod
-    def _node_key(node: PlanNode) -> int:
-        """
-        Identity key of a plan node.
-
-        Identity, not equality: coraplex's ``DesignatorNode`` compares by field value,
-        so two structurally identical steps of one plan would otherwise share a status.
-        The :class:`MotionNodeProgress` entry pins the node itself, which keeps CPython
-        from handing its ``id`` to a later object.
-
-        :param node: The plan node to key.
-        """
-        return id(node)
-
     def bind_motion_group(self, executable: GiskardExecutable) -> None:
         """
         Remember which plan motion node maps to which statechart task.
@@ -1093,9 +1084,7 @@ class Bridge:
         :param executable: The executable about to run.
         """
         for node, task in (executable.motion_mappings or {}).items():
-            self._motion_nodes[self._node_key(node)] = MotionNodeProgress(
-                node=node, task=task
-            )
+            self._motion_nodes[id(node)] = MotionNodeProgress(node=node, task=task)
         self._chart_title = self._motion_group_title(executable)
 
     @staticmethod
@@ -1133,9 +1122,7 @@ class Bridge:
             if condition is not None
         ]
         for node in frozen_nodes:
-            self._motion_nodes[self._node_key(node)] = MotionNodeProgress(
-                node=node, status=status
-            )
+            self._motion_nodes[id(node)] = MotionNodeProgress(node=node, status=status)
         self.snapshot_plan()
 
     def _live_motion_status(self, node: PlanNode) -> Optional[str]:
@@ -1147,7 +1134,7 @@ class Bridge:
 
         :param node: The plan node whose live status is looked up.
         """
-        progress = self._motion_nodes.get(self._node_key(node))
+        progress = self._motion_nodes.get(id(node))
         if progress is None:
             return None
         if progress.task is None:

@@ -123,12 +123,6 @@ class ArchitectureScanner:
         """
         return self._typed(*self._load_raw())
 
-    def _cram_root(self) -> str:
-        """
-        The CRAM repository the architecture graph is scanned from.
-        """
-        return str(paths.architecture_root())
-
     def _architecture_cache(self) -> str:
         """
         Path of the scan cache — always in the writable data directory, because the
@@ -163,7 +157,7 @@ class ArchitectureScanner:
         packages: List[Dict[str, Any]] = []
         classes: List[Dict[str, Any]] = []
         imports: Dict[str, set] = {}
-        cram_root = self._cram_root()
+        cram_root = str(paths.architecture_root())
         if not os.path.isdir(cram_root):
             return packages, classes, []
 
@@ -322,7 +316,7 @@ class ArchitectureScanner:
         """
         :meth:`_scan_raw` behind the JSON disk cache.
         """
-        cram_root = self._cram_root()
+        cram_root = str(paths.architecture_root())
         cached = self._load_cache(cram_root, require_classes=False)
         if cached is not None:
             return cached
