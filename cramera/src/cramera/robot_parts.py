@@ -6,7 +6,7 @@ scene bundles and the live bridge both publish them.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from typing_extensions import Any, Dict, List, Optional
 
@@ -15,7 +15,7 @@ from semantic_digital_twin.robots.robot_parts import AbstractRobot, AbstractRobo
 # %% the published shape of a robot part
 
 
-class ArmSide(str, Enum):
+class ArmSide(StrEnum):
     """
     Which of a robot's two arms a part belongs to.
 
@@ -30,7 +30,7 @@ class ArmSide(str, Enum):
     RIGHT = "right"
 
 
-class RobotPartRole(str, Enum):
+class RobotPartRole(StrEnum):
     """
     What a robot part is, as far as the viewer and the knowledge base care.
     """

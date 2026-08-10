@@ -4,12 +4,12 @@ The mesh file formats the viewer can load.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from typing_extensions import Optional, Tuple
 
 
-class MeshFormat(str, Enum):
+class MeshFormat(StrEnum):
     """
     A mesh format, identified by the file suffix its files carry.
     """

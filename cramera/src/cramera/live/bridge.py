@@ -279,7 +279,7 @@ class MotionNodeProgress:
 
 
 # %% viewer payload shapes
-class ObjectKind(str, Enum):
+class ObjectKind(StrEnum):
     """
     How a loose object's geometry is served to the viewer.
     """
@@ -466,7 +466,7 @@ class _ChartStructure:
     """
 
 
-class ObservationName(str, Enum):
+class ObservationName(StrEnum):
     """
     A statechart node's trinary observation value, by name.
     """

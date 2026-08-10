@@ -4,12 +4,12 @@ Enums shared across the knowledge package.
 
 from __future__ import annotations
 
-from enum import Enum
+from enum import StrEnum
 
 from typing_extensions import Optional, Tuple, Union
 
 
-class JointRegion(str, Enum):
+class JointRegion(StrEnum):
     """
     Which region of the robot/scene a joint belongs to, as inferred from its name.
 
@@ -25,7 +25,7 @@ class JointRegion(str, Enum):
     ENVIRONMENT = "environment"
 
 
-class NodeGroup(str, Enum):
+class NodeGroup(StrEnum):
     """
     Colour group of a graph-panel node.
     """
@@ -42,7 +42,7 @@ class NodeGroup(str, Enum):
     OTHER = "other"
 
 
-class EdgeKind(str, Enum):
+class EdgeKind(StrEnum):
     """
     Rendering kind of a graph-panel edge.
     """
@@ -51,7 +51,7 @@ class EdgeKind(str, Enum):
     TYPE = "type"
 
 
-class LabelledGroup(str, Enum):
+class LabelledGroup(StrEnum):
     """
     A colour group that carries the text its legend row shows.
 
