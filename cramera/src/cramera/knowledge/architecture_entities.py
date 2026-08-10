@@ -10,56 +10,54 @@ from typing_extensions import Tuple
 
 
 @dataclass(unsafe_hash=True)
-class Package:
+class ModuleGrouping:
     """
-    A top-level package of the CRAM repository.
+    A named group of Python modules found by the architecture scan.
+
+    Both levels the scan distinguishes share this: a workspace member and a subpackage
+    inside one are each a name with modules and classes counted under it.
     """
 
     name: str
     """
-    Directory name, e.g. ``coraplex``.
-    """
-
-    description: str
-    """
-    One-line description (curated, or the first README line).
+    Name of the grouping, as the graph shows it.
     """
 
     module_count: int
     """
-    Number of Python modules in the package.
+    Number of Python modules in the grouping.
     """
 
     class_count: int
     """
-    Number of classes defined in the package.
+    Number of classes defined in the grouping.
     """
 
 
 @dataclass(unsafe_hash=True)
-class SubPackage:
+class Package(ModuleGrouping):
+    """
+    A top-level package of the CRAM repository, i.e. one workspace member.
+
+    Not every importable package is one of these: ``coraplex`` is, ``coraplex.plans``
+    is a :class:`SubPackage`. Only a workspace member carries a description.
+    """
+
+    description: str = ""
+    """
+    One-line description (curated, or the first README line).
+    """
+
+
+@dataclass(unsafe_hash=True)
+class SubPackage(ModuleGrouping):
     """
     A qualified subpackage, e.g. ``coraplex.plans``.
     """
 
-    name: str
-    """
-    Qualified name, e.g. ``coraplex.plans``.
-    """
-
-    package: str
+    package: str = ""
     """
     The top-level package this subpackage belongs to.
-    """
-
-    module_count: int
-    """
-    Number of modules in the subpackage.
-    """
-
-    class_count: int
-    """
-    Number of classes defined in the subpackage.
     """
 
 
