@@ -46,7 +46,7 @@ try:
     import krrood  # noqa: F401  (the EQL engine)
 
     from cramera.knowledge.eql_session import run_query
-    from cramera.knowledge.graph_payload import graph_payload
+    from cramera.knowledge.graph_payload import KnowledgeGraphPayload
     from cramera.knowledge.knowledge_base import get_knowledge_base
     from cramera.knowledge.views.dispatcher import expand_node, view_payload
 
@@ -182,7 +182,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if route.startswith("/scenes/"):
             return self._serve_scene_file(route)
         if route == "/api/knowledge":
-            return self._guarded(graph_payload)
+            return self._guarded(KnowledgeGraphPayload.of_tab)
         if route == "/api/knowledge/view":
             name = (self._query_parameters().get("name") or ["knowledge"])[0]
             return self._guarded(lambda: view_payload(name))

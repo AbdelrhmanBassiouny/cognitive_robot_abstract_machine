@@ -9,7 +9,7 @@ krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 from coraplex.datastructures.enums import Arms  # noqa: E402
 
 from cramera.knowledge.eql_session import run_query  # noqa: E402
-from cramera.knowledge.graph_payload import graph_payload  # noqa: E402
+from cramera.knowledge.graph_payload import KnowledgeGraphPayload  # noqa: E402
 from cramera.knowledge.knowledge_base import (  # noqa: E402
     get_knowledge_base,
     reset_knowledge_base,
@@ -398,10 +398,10 @@ class TestPresetSafety:
             assert run_query(preset.code).ok
 
 
-# %% characterization: graph_payload() structure
+# %% characterization: KnowledgeGraphPayload.of_tab() structure
 class TestGraphPayloadStructure:
     def test_robot_arm_gripper_chain(self, fixture_scene):
-        payload = graph_payload()
+        payload = KnowledgeGraphPayload.of_tab()
         by_id = {n.id: n for n in payload.nodes}
         assert by_id["pr2"].label == "pr2" and by_id["pr2"].group == NodeGroup.ROBOT
         assert by_id["left_arm"].label == "left arm"
@@ -418,7 +418,7 @@ class TestGraphPayloadStructure:
         )
 
     def test_episode_chain(self, fixture_scene):
-        payload = graph_payload()
+        payload = KnowledgeGraphPayload.of_tab()
         episode_edges = [
             e
             for e in payload.edges
@@ -432,7 +432,7 @@ class TestGraphPayloadStructure:
         ]
 
     def test_object_detail_lines(self, fixture_scene):
-        payload = graph_payload()
+        payload = KnowledgeGraphPayload.of_tab()
         assert payload.details["milk"] == DetailEntry(
             "Milk",
             NodeGroup.OBJECT,
@@ -456,7 +456,7 @@ class TestGraphPayloadStructure:
         )
 
     def test_architecture_cluster(self, fixture_scene):
-        payload = graph_payload()
+        payload = KnowledgeGraphPayload.of_tab()
         ids = {n.id for n in payload.nodes}
         assert {"cram", "root", "coraplex", "krrood", "coraplex.plans"} <= ids
         assert payload.details["cram"] == DetailEntry(
@@ -503,7 +503,7 @@ class TestGraphPayloadStructure:
         ``link()`` wires the anchor episode to ``coraplex.plans``, which exists as a
         node in the fixture architecture.
         """
-        payload = graph_payload()
+        payload = KnowledgeGraphPayload.of_tab()
         assert (
             GraphEdge("transport_milk", "coraplex.plans", EdgeKind.TYPE, "planned by")
             in payload.edges
@@ -515,13 +515,13 @@ class TestGraphPayloadStructure:
         ``giskardpy.motion_statechart`` nor ``semantic_digital_twin`` exists in the
         fixture architecture, so no edge may target them.
         """
-        payload = graph_payload()
+        payload = KnowledgeGraphPayload.of_tab()
         targets = {e.target for e in payload.edges}
         assert "giskardpy.motion_statechart" not in targets
         assert "semantic_digital_twin" not in targets
 
     def test_plan_tree_cluster(self, fixture_scene):
-        payload = graph_payload()
+        payload = KnowledgeGraphPayload.of_tab()
         assert payload.details["plan"] == DetailEntry(
             "executed plan",
             NodeGroup.GOAL,
@@ -543,7 +543,7 @@ class TestGraphPayloadStructure:
         The status line's numbers must track the live payload/knowledge base, not a
         second hardcoded copy of them.
         """
-        payload = graph_payload()
+        payload = KnowledgeGraphPayload.of_tab()
         knowledge_base = get_knowledge_base()
         assert payload.status == (
             "EQL ready · %d graph nodes · %d joints · %d CRAM classes"

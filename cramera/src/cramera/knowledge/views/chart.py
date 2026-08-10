@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, Dict
+from typing_extensions import Any, ClassVar, Dict, Optional
 
 from cramera.knowledge.subgraph import GraphPanelPayload
 
@@ -20,6 +20,8 @@ class ChartViewPayload(GraphPanelPayload):
     merged motion group and thrown away afterwards, and nothing of it is recorded into
     the bundle — the UI fills this view from the bridge's ``/chart`` while attached.
     """
+
+    TAB: ClassVar[Optional[str]] = "chart"
 
     breadcrumb: str = "motion statechart"
     """
@@ -35,6 +37,13 @@ class ChartViewPayload(GraphPanelPayload):
     """
     What the panel shows until a live bridge is attached.
     """
+
+    @classmethod
+    def of_tab(cls) -> ChartViewPayload:
+        """
+        The statechart tab, which only ever has content while a demo is running.
+        """
+        return cls()
 
     def panel_options(self) -> Dict[str, Any]:
         """

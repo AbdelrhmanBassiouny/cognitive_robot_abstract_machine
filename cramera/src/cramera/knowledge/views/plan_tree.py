@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from typing_extensions import Any, Dict, List, Optional, Tuple
+from typing_extensions import Any, ClassVar, Dict, List, Optional, Tuple
 
 from cramera.knowledge.enums import EdgeKind, NodeGroup
 from cramera.knowledge.scene_bundle import load_scene
@@ -52,6 +52,8 @@ class PlanViewPayload(GraphPanelPayload):
     The executed plan as a tree, one node per plan node the demo ran.
     """
 
+    TAB: ClassVar[Optional[str]] = "plan"
+
     breadcrumb: str = "executed plan"
     """
     Breadcrumb label shown above the tree.
@@ -76,7 +78,7 @@ class PlanViewPayload(GraphPanelPayload):
         }
 
     @classmethod
-    def of_recorded_plan(cls) -> PlanViewPayload:
+    def of_tab(cls) -> PlanViewPayload:
         """
         The executed plan as a tree, one node per plan node the demo ran.
 

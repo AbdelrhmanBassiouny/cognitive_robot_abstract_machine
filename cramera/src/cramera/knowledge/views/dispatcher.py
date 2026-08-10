@@ -5,54 +5,41 @@ Dispatch a graph-panel tab name or a double-clicked node id to its view.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Union
-
 from typing_extensions import Any, Dict, Optional
 
-from cramera.knowledge.graph_payload import KnowledgeGraphPayload, graph_payload
+from cramera.knowledge.graph_payload import KnowledgeGraphPayload
 from cramera.knowledge.knowledge_base import get_knowledge_base
+from cramera.knowledge.subgraph import GraphPanelPayload
 from cramera.knowledge.views.architecture import SubgraphViewPayload
 from cramera.knowledge.views.chart import ChartViewPayload
 from cramera.knowledge.views.kinematics import UrdfViewPayload
 from cramera.knowledge.views.plan_tree import PlanViewPayload
 
 
-@dataclass
-class UnknownViewPayload:
+@dataclass(kw_only=True)
+class UnknownViewPayload(GraphPanelPayload):
     """
     The error payload returned for a graph-panel tab name that does not exist.
     """
 
-    ok: bool
+    ok: bool = False
     """
     Always ``False``.
     """
 
-    error: str
+    error: str = ""
     """
     Human-readable description of the unknown tab name.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def panel_options(self) -> Dict[str, Any]:
         """
-        The JSON-serializable shape the frontend expects.
+        The error message; there is no graph to describe.
         """
-        return {"ok": self.ok, "error": self.error}
+        return {"error": self.error}
 
 
-ViewPayload = Union[
-    KnowledgeGraphPayload,
-    ChartViewPayload,
-    UrdfViewPayload,
-    PlanViewPayload,
-    SubgraphViewPayload,
-]
-"""
-Any payload one of the graph-panel tabs or drill-down subgraphs can return.
-"""
-
-
-def view_payload(name: str) -> Union[ViewPayload, UnknownViewPayload]:
+def view_payload(name: str) -> GraphPanelPayload:
     """
     One tab of the graph panel.
 
@@ -60,21 +47,18 @@ def view_payload(name: str) -> Union[ViewPayload, UnknownViewPayload]:
     structural views of the same demo that the UI can overlay with live status from the
     bridge (see :mod:`cramera.live.http`, ``/plan`` and ``/chart``).
 
+    Every view declares the tab it serves as :attr:`GraphPanelPayload.TAB`, so adding
+    one is a matter of subclassing rather than of extending this function.
+
     :param name: Name of the requested tab.
     """
-    knowledge_base = get_knowledge_base()
-    if name == "knowledge":
-        return graph_payload()
-    if name == "kinematics":
-        return UrdfViewPayload.of_knowledge_base(knowledge_base)
-    if name == "plan":
-        return PlanViewPayload.of_recorded_plan()
-    if name == "chart":
-        return ChartViewPayload()
-    return UnknownViewPayload(False, "unknown view: %s" % name)
+    for payload_type in GraphPanelPayload.__subclasses__():
+        if payload_type.TAB == name:
+            return payload_type.of_tab()
+    return UnknownViewPayload(error="unknown view: %s" % name)
 
 
-def expand_node(node_id: str) -> Optional[ViewPayload]:
+def expand_node(node_id: str) -> Optional[GraphPanelPayload]:
     """
     The inside view of a double-clicked node, or None if not drillable.
 
@@ -84,7 +68,7 @@ def expand_node(node_id: str) -> Optional[ViewPayload]:
     if node_id == knowledge_base.robot.name:  # robot → full URDF kinematic tree
         return UrdfViewPayload.of_knowledge_base(knowledge_base)
     if node_id == "plan":  # → the executed plan tree
-        return PlanViewPayload.of_recorded_plan()
+        return PlanViewPayload.of_tab()
     package = next(
         (entry for entry in knowledge_base.packages if entry.name == node_id), None
     )

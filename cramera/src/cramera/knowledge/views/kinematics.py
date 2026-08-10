@@ -7,9 +7,10 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 from coraplex.datastructures.enums import JointType
-from typing_extensions import Any, Dict, List, Optional, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING
 
 from cramera.knowledge.enums import EdgeKind, NodeGroup
+from cramera.knowledge.knowledge_base import get_knowledge_base
 from cramera.knowledge.scene_bundle import UrdfJoint, load_scene, load_urdf
 from cramera.knowledge.subgraph import (
     DetailEntry,
@@ -30,6 +31,8 @@ class UrdfViewPayload(GraphPanelPayload):
     The scene robot's URDF as a kinematic tree.
     """
 
+    TAB: ClassVar[Optional[str]] = "kinematics"
+
     breadcrumb: str
     """
     Breadcrumb label shown above the tree.
@@ -48,6 +51,13 @@ class UrdfViewPayload(GraphPanelPayload):
         if self.legend is not None:
             options["legend"] = [asdict(entry) for entry in self.legend]
         return options
+
+    @classmethod
+    def of_tab(cls) -> UrdfViewPayload:
+        """
+        The kinematics tab, built from the active knowledge base.
+        """
+        return cls.of_knowledge_base(get_knowledge_base())
 
     @classmethod
     def of_knowledge_base(cls, knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:

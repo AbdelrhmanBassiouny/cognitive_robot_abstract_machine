@@ -8,7 +8,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any, ClassVar, Dict, List, Optional
 
 from cramera.knowledge.enums import EdgeKind, NodeGroup
 
@@ -222,6 +222,22 @@ class GraphPanelPayload(ABC):
     """
     Detail-panel entry per node id.
     """
+
+    TAB: ClassVar[Optional[str]] = None
+    """
+    Name of the graph-panel tab this view serves, or None for a view that is only ever
+    reached by drilling into a node.
+    """
+
+    @classmethod
+    def of_tab(cls) -> GraphPanelPayload:
+        """
+        Build this view as a whole graph-panel tab.
+
+        :raises NotImplementedError: For a drill-down-only view, which has no tab of its
+            own and is built from the node that was double-clicked instead.
+        """
+        raise NotImplementedError("%s serves no graph-panel tab" % cls.__name__)
 
     @abstractmethod
     def panel_options(self) -> Dict[str, Any]:
