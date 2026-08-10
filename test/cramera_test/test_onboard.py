@@ -12,10 +12,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import pytest
+from semantic_digital_twin.world_description.geometry import Box, Color, Scale
 from typing_extensions import Any, Dict, List, Optional
 
 from cramera.onboard import bundle_urdf as bundler
-from cramera.onboard.demo import Recorder, RecordingAnalysis
+from cramera.onboard.demo import Recorder, RecordingAnalysis, SpawnedBox
 
 RESTING = [0.0, 0.0, 1.0, 0, 0, 0, 1]
 """
@@ -139,6 +140,118 @@ class TestAssetHookMethods:
 
 
 # %% movement detection
+# %% spawned primitive boxes
+@dataclass
+class ShapeSpecification:
+    """
+    The shape collection a body specification carries.
+    """
+
+    shapes: List[Any] = field(default_factory=list)
+
+
+@dataclass
+class BodyBlueprint:
+    """
+    A body specification, of which the recorder reads only name and shapes.
+    """
+
+    name: str
+    shapes: ShapeSpecification
+
+
+def box_specification(name: str = "crate", scale=(0.4, 0.3, 0.2)) -> BodyBlueprint:
+    """
+    A specification describing exactly one box shape.
+
+    :param name: The specification's name.
+    :param scale: The box extents in metres.
+    """
+    return BodyBlueprint(
+        name=name,
+        shapes=ShapeSpecification(
+            shapes=[Box(scale=Scale(*scale), color=Color(R=1.0, G=0.5, B=0.0))]
+        ),
+    )
+
+
+class TestSpawnedBox:
+    def test_a_single_box_shape_is_recordable(self):
+        spawned = SpawnedBox.of_specification(box_specification())
+
+        assert spawned == SpawnedBox(
+            name="crate", scale=[0.4, 0.3, 0.2], color="#ff8000"
+        )
+
+    def test_the_spawn_time_name_override_wins(self):
+        spawned = SpawnedBox.of_specification(box_specification(), name="crate_2")
+
+        assert spawned.name == "crate_2"
+
+    def test_a_specification_that_is_not_one_box_is_not_recordable(self):
+        """
+        Only a lone box has a geometry the bundle can describe with three numbers.
+        """
+        two_boxes = box_specification()
+        two_boxes.shapes.shapes.append(
+            Box(scale=Scale(1, 1, 1), color=Color(R=0.0, G=0.0, B=0.0))
+        )
+
+        assert SpawnedBox.of_specification(two_boxes) is None
+        assert (
+            SpawnedBox.of_specification(BodyBlueprint("empty", ShapeSpecification()))
+            is None
+        )
+
+
+class TestRememberSpawnedBox:
+    def test_a_spawned_box_is_remembered_and_materialized(self):
+        recorder = Recorder()
+        materialized = object()
+
+        result = recorder._remember_spawned_box(
+            lambda specification, name: materialized, box_specification()
+        )
+
+        assert result is materialized
+        assert [spawned.name for spawned in recorder.spawned_boxes] == ["crate"]
+
+    def test_the_same_box_spawned_twice_is_recorded_once(self):
+        recorder = Recorder()
+        original = lambda specification, name: None
+
+        recorder._remember_spawned_box(original, box_specification())
+        recorder._remember_spawned_box(original, box_specification())
+
+        assert len(recorder.spawned_boxes) == 1
+
+    def test_two_boxes_spawned_from_one_specification_are_both_recorded(self):
+        """
+        The same specification is routinely materialized several times under different
+        names, and each body needs its own recorded pose.
+        """
+        recorder = Recorder()
+        original = lambda specification, name: None
+
+        recorder._remember_spawned_box(original, box_specification(), "crate_a")
+        recorder._remember_spawned_box(original, box_specification(), "crate_b")
+
+        assert [spawned.name for spawned in recorder.spawned_boxes] == [
+            "crate_a",
+            "crate_b",
+        ]
+
+    def test_a_mesh_body_is_not_recorded_as_a_box(self):
+        recorder = Recorder()
+
+        recorder._remember_spawned_box(
+            lambda specification, name: None,
+            BodyBlueprint("milk", ShapeSpecification()),
+        )
+
+        assert recorder.spawned_boxes == []
+
+
 # %% the executed plan tree
 @dataclass
 class RecordedStatus:

@@ -14,8 +14,7 @@ from pathlib import Path
 import pytest
 from typing_extensions import List
 
-from cramera import knowledge
-from cramera.knowledge.eql_session import fresh_namespace
+from cramera.knowledge.eql_session import EqlSession
 from cramera.paths import WEB_ROOT
 
 JS_DIR = Path(__file__).parent / "js"
@@ -149,7 +148,7 @@ class TestJsUnits:
 class TestQueryPanelHints:
     """
     The EQL panel hard-codes the variable names it tells users to type, so a rename in
-    :func:`fresh_namespace` silently leaves the panel advertising names that no longer
+    the EQL namespace silently leaves the panel advertising names that no longer
     resolve.
     """
 
@@ -163,7 +162,7 @@ class TestQueryPanelHints:
         return sorted(set(names) | set(MARKED_UP_IDENTIFIER_PATTERN.findall(panel)))
 
     def test_every_advertised_variable_exists_in_the_namespace(self, fixture_scene):
-        namespace = fresh_namespace()
+        namespace = EqlSession.of_active_scene().namespace()
         assert self.advertised_variables()
         for name in self.advertised_variables():
             assert name in namespace, name
@@ -174,5 +173,7 @@ class TestQueryPanelHints:
         """
         placeholder = PLACEHOLDER_QUERY_PATTERN.search(read("panels/eql/panel.js"))
         assert placeholder is not None
-        result = knowledge.run_query(placeholder.group(1).replace("\\'", "'"))
+        result = EqlSession.of_active_scene().run(
+            placeholder.group(1).replace("\\'", "'")
+        )
         assert result.ok

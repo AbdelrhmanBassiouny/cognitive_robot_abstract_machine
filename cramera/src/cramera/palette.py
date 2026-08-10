@@ -51,7 +51,7 @@ class ObjectPalette:
         """
         The colour of the object at the given position in the scene, as ``#rrggbb``.
         """
-        return self._hex_from_color(self.colors[index % len(self.colors)])
+        return self.css_color(self.colors[index % len(self.colors)])
 
     @staticmethod
     def _color_from_hex(hex_value: str) -> Color:
@@ -67,9 +67,9 @@ class ObjectPalette:
         return Color(R=red, G=green, B=blue)
 
     @staticmethod
-    def _hex_from_color(color: Color) -> str:
+    def css_color(color: Color) -> str:
         """
-        Render a :class:`Color` as a ``#rrggbb`` string.
+        Render a :class:`Color` as the ``#rrggbb`` string the viewer uses directly.
 
         :param color: The colour to render.
         """
