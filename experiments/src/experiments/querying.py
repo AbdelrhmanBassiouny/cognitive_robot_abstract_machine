@@ -27,7 +27,6 @@ from pathlib import Path
 from typing import Any, List
 
 import coraplex as _coraplex_pkg
-import coraplex.orm.ormatic_interface  # type: ignore  # noqa: F401
 import krrood.entity_query_language.factories as eql
 from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import (
@@ -38,7 +37,6 @@ from coraplex.datastructures.enums import (
 )
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.execution_environment import simulated_robot
-from coraplex.orm.ormatic_interface import Base, PlanMappingDAO  # type: ignore
 from coraplex.plans.factories import sequential, try_in_order, code
 from coraplex.plans.failures import PlanFailure
 from coraplex.plans.plan import Plan
@@ -504,6 +502,16 @@ def persist_plan(plan: Plan) -> tuple[Session, Engine]:
     :param plan: The fully executed plan to persist.
     :return: Tuple of ``(session, engine)`` pointing at the populated database.
     """
+    # Local import: experiments.orm.ormatic_interface (imported by every other
+    # module in this package, including experiments.montessori.franka_montessori_demo)
+    # pulls this whole module in just to discover its dataclasses, and a module-level
+    # import here would register coraplex.orm.ormatic_interface's DAO classes
+    # (e.g. BodyDAO) alongside experiments.orm.ormatic_interface's own separately
+    # generated DAOs for the same domain classes -- krrood.ormatic.data_access_objects
+    # .helper.get_dao_class resolves ambiguously between the two, breaking any
+    # unrelated to_dao() call whose object graph reaches those domain classes.
+    from coraplex.orm.ormatic_interface import Base
+
     engine = create_engine(f"sqlite:///{_DATABASE_PATH}")
     drop_database(engine)
     Base.metadata.create_all(bind=engine)

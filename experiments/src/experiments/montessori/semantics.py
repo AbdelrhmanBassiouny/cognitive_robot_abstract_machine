@@ -118,21 +118,6 @@ class MontessoriShape(HasRootBody):
             and self.cross_section_size <= hole.cross_section_size
         )
 
-    @classproperty
-    def requires_intermediate_arm_parking(self) -> bool:
-        """
-        Whether the arm must be fully parked between picking this shape up and
-        placing it, rather than moving from the pick pose straight towards the
-        place pose while still holding it.
-
-        Default ``False``: an extra park (see
-        :class:`~experiments.montessori.franka_panda_equipment`'s per-motion tick
-        budget) meaningfully slows down sorting a whole board's worth of shapes, so
-        it is only worth paying for where skipping it actually breaks something
-        (see :class:`RectangularPrismShape`).
-        """
-        return False
-
 
 @dataclass(eq=False)
 class CubeShape(MontessoriShape):
@@ -154,22 +139,6 @@ class CylinderShape(MontessoriShape):
     @classproperty
     def shape_category(self) -> MontessoriShapeCategory:
         return MontessoriShapeCategory.CYLINDER
-
-    @property
-    def requires_intermediate_arm_parking(self) -> bool:
-        """
-        Overrides :meth:`MontessoriShape.requires_intermediate_arm_parking`: both
-        of the board's circular holes are built as this one class (see
-        :attr:`shape_category`), but only the cylinder paired with the second one
-        (``circular_hole_2``) leaves the arm in a self-colliding configuration
-        after pickup; the one paired with ``circular_hole_1`` reaches for its
-        place pose safely without parking first.
-        """
-        # EXPERIMENT (circular_hole_1_tuning_log.md #4): forced True for circular_hole_1
-        # too, combined with the row-position experiment. Revert to the line below if
-        # this doesn't stick as part of the final configuration:
-        return self.name.name.removesuffix("_shape") == "circular_hole_2"
-        #return True
 
 
 @dataclass(eq=False)
@@ -237,17 +206,6 @@ class RectangularPrismShape(MontessoriShape):
     @classproperty
     def shape_category(self) -> MontessoriShapeCategory:
         return MontessoriShapeCategory.RECTANGULAR_PRISM
-
-    @classproperty
-    def requires_intermediate_arm_parking(self) -> bool:
-        """
-        Overrides :meth:`MontessoriShape.requires_intermediate_arm_parking`:
-        ``True``, since picking this shape up otherwise leaves the arm in a joint
-        configuration from which reaching straight for the place pose makes it
-        collide with itself; parking first resets to a configuration that reach
-        can safely proceed from.
-        """
-        return True
 
 
 MONTESSORI_SHAPE_CLASSES: Dict[MontessoriShapeCategory, Type[MontessoriShape]] = {

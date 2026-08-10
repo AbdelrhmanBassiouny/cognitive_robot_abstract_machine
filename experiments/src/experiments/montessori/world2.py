@@ -100,13 +100,14 @@ Size of the stand carrying the row of loose shapes, wide enough (x) to fit
 :const:`SHAPE_ROW_START_X`/:const:`SHAPE_ROW_SPACING`).
 """
 
-SHAPE_STAND_POSITION = Point3(0.0, 0.5, 0.5)
+SHAPE_STAND_POSITION = Point3(0.0, -0.5, 0.553)
 """
-Center of the loose shapes' stand, off to :const:`ROBOT_MOUNT_POSITION`'s side (+y)
-rather than ahead of it, 0.5m away -- see :const:`BOARD_TABLE_POSITION`.
+Center of the loose shapes' stand, off to :const:`ROBOT_MOUNT_POSITION`'s side (-y,
+mirrored from the +y side this layout originally used) rather than ahead of it, 0.5m
+away -- see :const:`BOARD_TABLE_POSITION`.
 """
 
-SHAPE_ROW_Y = 0.4
+SHAPE_ROW_Y = -0.4
 """
 Y-coordinate, in the world frame, of the row of loose shapes -- matching
 :const:`SHAPE_STAND_POSITION`'s own y so every shape sits the same distance from the

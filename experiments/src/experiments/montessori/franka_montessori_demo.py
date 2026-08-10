@@ -73,6 +73,7 @@ if TYPE_CHECKING:
     from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
         VizMarkerPublisher,
     )
+    from experiments.montessori.insert_shape_action import InsertMontessoriShapeAction
 
 logger = logging.getLogger(__name__)
 
@@ -209,30 +210,70 @@ def _mount_position(montessori: MontessoriWorld) -> Point3:
     )
 
 
-def _insert_shape(
+def _build_insert_action(
     shape: MontessoriShape,
     montessori: MontessoriWorld,
-    context,
     target_horizontal_offset: Optional[Point3] = None,
+) -> InsertMontessoriShapeAction:
+    """
+    Build (without executing) the plan that inserts ``shape`` into its matching hole.
+
+    Built once per attempt, before :func:`_insert_shape` runs it, so a caller keeps a
+    reference to the attempted plan even if that run raises (see
+    :func:`_insert_shape_or_none`).
+
+    :param shape: The shape to insert; must have a matching hole.
+    :param montessori: The Montessori scene, with the Panda already mounted and
+        equipped (see :func:`~experiments.montessori.franka_panda_equipment.equip_panda_for_physical_simulation`),
+        inside a running simulation.
+    :param target_horizontal_offset: Horizontal offset to release the shape at; the
+        hole's exact center is used if not given.
+    """
+    from coraplex.datastructures.enums import ApproachDirection, Arms, VerticalAlignment
+    from coraplex.datastructures.grasp import GraspDescription
+    from coraplex.view_manager import ViewManager
+    from experiments.montessori.insert_shape_action import InsertMontessoriShapeAction
+
+    offset = target_horizontal_offset or Point3(0.0, 0.0, 0.0)
+    return InsertMontessoriShapeAction(
+        montessori_shape=shape,
+        board=montessori.board,
+        arm=Arms.RIGHT,
+        # rotate_gripper: the Panda's wrist otherwise resolves the top-down grasp to a
+        # 45-degree orientation from which its Cartesian descent never converges;
+        # rotating it a quarter turn lines the fingers up with the shape (unnecessary
+        # for the HSR, whose gripper geometry differs, so the action does not do this by
+        # default).
+        grasp_description=GraspDescription(
+            ApproachDirection.FRONT,
+            VerticalAlignment.TOP,
+            ViewManager.get_end_effector_view(Arms.RIGHT, montessori.robot),
+            rotate_gripper=True,
+        ),
+        target_horizontal_offset=offset,
+    )
+
+
+def _insert_shape(
+    action: InsertMontessoriShapeAction,
+    montessori: MontessoriWorld,
+    context,
 ) -> bool:
     """
-    Have the Panda pick up and insert a single loose shape into its matching hole once,
-    then let it physically settle under gravity and contacts before checking whether it
-    made it through.
+    Run ``action``, then let the shape physically settle under gravity and contacts
+    before checking whether it made it through.
 
     Runs with Giskard's collision avoidance off, matching
     :func:`~experiments.montessori.montessori_demo._insert_shape`'s own reasoning for
     the HSRB: the board's CoACD collision decomposition gives the QP solver far more
     simultaneous distance constraints than this pick-and-place needs.
 
-    :param shape: The shape to insert; must have a matching hole.
+    :param action: The insertion plan to run, built by :func:`_build_insert_action`.
     :param montessori: The Montessori scene, with the Panda already mounted and
         equipped (see :func:`~experiments.montessori.franka_panda_equipment.equip_panda_for_physical_simulation`),
         inside a running simulation.
     :param context: The CRAM execution context to run the insertion action in.
-    :param target_horizontal_offset: Horizontal offset to release the shape at; the
-        hole's exact center is used if not given.
-    :raises BodyUnfetchable: If ``shape`` moved less than :data:`MINIMUM_PICKUP_DISPLACEMENT`
+    :raises BodyUnfetchable: If the shape moved less than :data:`MINIMUM_PICKUP_DISPLACEMENT`
         over the whole insertion, i.e. the grasp silently failed to pick it up at all.
 
         ``is_body_gripped`` can't be checked directly after pickup instead: doing so needs
@@ -250,38 +291,13 @@ def _insert_shape(
         along with it, which hung for 5+ minutes on the very first pickup.
     :return: Whether the shape actually fell through its hole after settling.
     """
-    from coraplex.datastructures.enums import (
-        ApproachDirection,
-        Arms,
-        ExecutionType,
-        VerticalAlignment,
-    )
-    from coraplex.datastructures.grasp import GraspDescription
+    from coraplex.datastructures.enums import ExecutionType
     from coraplex.execution_environment import ExecutionEnvironment
     from coraplex.plans.factories import execute_single
     from coraplex.plans.failures import BodyUnfetchable
-    from coraplex.view_manager import ViewManager
-    from experiments.montessori.insert_shape_action import InsertMontessoriShapeAction
 
+    shape = action.montessori_shape
     spawn_position = shape.root.global_transform.to_position()
-    offset = target_horizontal_offset or Point3(0.0, 0.0, 0.0)
-    action = InsertMontessoriShapeAction(
-        montessori_shape=shape,
-        board=montessori.board,
-        arm=Arms.RIGHT,
-        # rotate_gripper: the Panda's wrist otherwise resolves the top-down grasp to a
-        # 45-degree orientation from which its Cartesian descent never converges;
-        # rotating it a quarter turn lines the fingers up with the shape (unnecessary
-        # for the HSR, whose gripper geometry differs, so the action does not do this by
-        # default).
-        grasp_description=GraspDescription(
-            ApproachDirection.FRONT,
-            VerticalAlignment.TOP,
-            ViewManager.get_end_effector_view(Arms.RIGHT, montessori.robot),
-            rotate_gripper=True,
-        ),
-        target_horizontal_offset=offset,
-    )
     with ExecutionEnvironment(
         execution_type=ExecutionType.SIMULATED,
         collision_avoidance=False,
@@ -316,7 +332,7 @@ def _insert_shape(
         ),
     )
     if displacement < MINIMUM_PICKUP_DISPLACEMENT:
-        raise BodyUnfetchable(body=shape.root, arm=Arms.RIGHT)
+        raise BodyUnfetchable(body=shape.root, arm=action.arm)
 
     # Temporary diagnostic: where the shape actually is right after physical
     # release, before settling has a chance to slide/tip it further.
@@ -362,7 +378,7 @@ def _insert_shape_or_none(
     montessori: MontessoriWorld,
     context,
     attempt: int,
-) -> Optional[bool]:
+) -> tuple[Optional[bool], InsertMontessoriShapeAction]:
     """
     Attempt one insertion via :func:`_insert_shape`, returning ``None`` instead of
     letting a retryable failure propagate.
@@ -372,16 +388,18 @@ def _insert_shape_or_none(
         equipped, inside a running simulation.
     :param context: The CRAM execution context to run the insertion action in.
     :param attempt: This attempt's 1-based index, used only for the log message.
-    :return: Whether the shape fell through its hole, or ``None`` if this attempt
-        failed in a retryable way.
+    :return: Whether the shape fell through its hole (``None`` if this attempt failed
+        in a retryable way), and the plan this attempt ran, for the caller to record
+        regardless of outcome.
     """
     from coraplex.plans.failures import PlanFailure
     from giskardpy.motion_statechart.exceptions import CollisionViolatedError
     from giskardpy.qp.exceptions import QPSolverException
     from semantic_digital_twin.exceptions import PointOccupiedError
 
+    action = _build_insert_action(shape, montessori)
     try:
-        return _insert_shape(shape, montessori, context)
+        return _insert_shape(action, montessori, context), action
     except (
         PointOccupiedError,
         PlanFailure,
@@ -395,7 +413,7 @@ def _insert_shape_or_none(
             MAX_INSERTION_ATTEMPTS,
             error,
         )
-        return None
+        return None, action
 
 
 def _insert_all_shapes(
@@ -464,7 +482,9 @@ def _insert_all_shapes(
                 attempt,
                 MAX_INSERTION_ATTEMPTS,
             )
-            fell_through = _insert_shape_or_none(shape, montessori, context, attempt)
+            fell_through, action = _insert_shape_or_none(
+                shape, montessori, context, attempt
+            )
             if fell_through is not None:
                 break
 
@@ -484,7 +504,9 @@ def _insert_all_shapes(
             outcome = InsertionOutcome.DID_NOT_FALL_THROUGH
         else:
             outcome = InsertionOutcome.FELL_THROUGH
-        results.append(ShapeInsertionResult(shape_key=shape_key, outcome=outcome))
+        results.append(
+            ShapeInsertionResult(shape_key=shape_key, outcome=outcome, plan=action.plan)
+        )
 
     return results
 

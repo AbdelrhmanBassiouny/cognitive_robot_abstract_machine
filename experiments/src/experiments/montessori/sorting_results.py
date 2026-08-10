@@ -17,6 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
+from coraplex.plans.plan import Plan
+
 
 class InsertionOutcome(StrEnum):
     """
@@ -47,6 +49,16 @@ class ShapeInsertionResult:
     outcome: InsertionOutcome
     """
     How this shape's insertion attempts ended.
+    """
+
+    plan: Plan
+    """
+    The entire realized plan tree of the last insertion attempt made for this shape --
+    every sub-action and motion :func:`~coraplex.plans.factories.execute_single` and
+    :meth:`~coraplex.plans.plan_node.PlanNode.perform` expanded it into, not just its
+    top-level :class:`~experiments.montessori.insert_shape_action.InsertMontessoriShapeAction`
+    node -- that produced :attr:`outcome`, whether or not it raised (see
+    :func:`~experiments.montessori.franka_montessori_demo._insert_shape_or_none`).
     """
 
 

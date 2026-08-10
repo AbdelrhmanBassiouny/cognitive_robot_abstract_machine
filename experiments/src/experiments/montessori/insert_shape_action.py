@@ -57,16 +57,6 @@ hover point (and, transitively, the base stance :meth:`_move_to_reach` resolves 
 it) far enough from the target to put the actual grasp out of comfortable arm reach.
 """
 
-PARKING_WHILE_HOLDING_MAX_JOINT_VELOCITY = 0.4
-"""
-Joint velocity cap (in rad/s) for the arm's park motion between picking a shape up and
-placing it, while the shape is held by gripper friction alone --
-:class:`~coraplex.robot_plans.actions.core.pick_up.PickUpAction` never kinematically
-attaches it. Parking at :class:`~coraplex.robot_plans.actions.core.robot_body.ParkArmsAction`'s
-default unconstrained speed was observed to slip or fling the shape out of the grasp
-before the place motion even starts.
-"""
-
 
 @dataclass
 class InsertMontessoriShapeAction(ActionDescription):
@@ -112,10 +102,58 @@ class InsertMontessoriShapeAction(ActionDescription):
     own final descent onto the release pose, passed straight through to it.
     """
 
+    transport_linear_velocity: float = 0.08
+    """
+    Linear velocity (m/s) :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`
+    carries the held shape at, above the target location and before its final descent,
+    passed straight through to it.
+    """
+
+    release_opening_velocity: float = 0.07
+    """
+    Finger joint velocity (m/s) :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`
+    opens the gripper at to release the shape, passed straight through to it.
+    """
+
+    retract_linear_velocity: Optional[float] = None
+    """
+    Linear velocity (m/s) :class:`~coraplex.robot_plans.actions.core.placing.PlaceAction`
+    retracts the end effector away from the placed shape at, passed straight through to
+    it. ``None`` leaves the speed unconstrained.
+    """
+
     grasp_closing_velocity: float = 0.2
     """
     Velocity (m/s) :class:`~coraplex.robot_plans.actions.core.pick_up.PickUpAction`'s
     fingers close at, passed straight through to it.
+    """
+
+    lift_linear_velocity: float = 0.12
+    """
+    Linear velocity (m/s) :class:`~coraplex.robot_plans.actions.core.pick_up.PickUpAction`
+    lifts the shape clear of the table at after grasping, passed straight through to it.
+    """
+
+    grasp_stall_minimum_time: float = 0.3
+    """
+    Minimum stall dwell time (s, see
+    :attr:`~coraplex.robot_plans.motions.gripper.MoveGripperMotion.stall_minimum_time`)
+    :class:`~coraplex.robot_plans.actions.core.pick_up.PickUpAction`'s CLOSE motion
+    waits before considering the grasp stalled, passed straight through to it.
+    """
+
+    final_approach_linear_velocity: float = 0.05
+    """
+    Linear velocity (m/s) :class:`~coraplex.robot_plans.actions.core.pick_up.PickUpAction`
+    approaches the shape at during its final Cartesian descent, passed straight through
+    to it.
+    """
+
+    object_friction: float = 1.5
+    """
+    Sliding friction coefficient applied to the shape's geom before this pick, overriding
+    the world's default, passed straight through to
+    :class:`~coraplex.robot_plans.actions.core.pick_up.PickUpAction`.
     """
 
     target_horizontal_offset: Optional[Point3] = None
@@ -410,19 +448,19 @@ class InsertMontessoriShapeAction(ActionDescription):
                 arm=self.arm,
                 grasp_description=self._grasp_description_query(),
                 grasp_closing_velocity=self.grasp_closing_velocity,
-                lift_linear_velocity=0.12,
-                grasp_stall_minimum_time=0.3,
-                final_approach_linear_velocity=0.115,
-                object_friction=1.5,
+                lift_linear_velocity=self.lift_linear_velocity,
+                grasp_stall_minimum_time=self.grasp_stall_minimum_time,
+                final_approach_linear_velocity=self.final_approach_linear_velocity,
+                object_friction=self.object_friction,
             )
             place_shape: PlanNode = a(PlaceAction)(
                 object_designator=self.montessori_shape.root,
                 target_location=target_location,
                 arm=self.arm,
                 placing_linear_velocity=self.placing_linear_velocity,
-                transport_linear_velocity=0.08,
-                release_opening_velocity=0.07,
-                retract_linear_velocity=0.08,
+                transport_linear_velocity=self.transport_linear_velocity,
+                release_opening_velocity=self.release_opening_velocity,
+                retract_linear_velocity=self.retract_linear_velocity,
             )
         else:
             navigate_to_shape = [self._rotate_base_towards_shape_plan()]
@@ -432,37 +470,26 @@ class InsertMontessoriShapeAction(ActionDescription):
                 arm=self.arm,
                 grasp_description=self.grasp_description,
                 grasp_closing_velocity=self.grasp_closing_velocity,
-                lift_linear_velocity=0.12,
-                grasp_stall_minimum_time=0.3,
-                final_approach_linear_velocity=0.05,
-                object_friction=1.5,
+                lift_linear_velocity=self.lift_linear_velocity,
+                grasp_stall_minimum_time=self.grasp_stall_minimum_time,
+                final_approach_linear_velocity=self.final_approach_linear_velocity,
+                object_friction=self.object_friction,
             )
             place_shape = PlaceAction(
                 object_designator=self.montessori_shape.root,
                 target_location=target_location,
                 arm=self.arm,
                 placing_linear_velocity=self.placing_linear_velocity,
-                transport_linear_velocity=0.08,
-                release_opening_velocity=0.07,
-                # retract_linear_velocity=0.08,
+                transport_linear_velocity=self.transport_linear_velocity,
+                release_opening_velocity=self.release_opening_velocity,
+                retract_linear_velocity=self.retract_linear_velocity,
             )
 
-        intermediate_park_arms: list[PlanNode] = (
-            [
-                ParkArmsAction(
-                    Arms.BOTH,
-                    max_joint_velocity=PARKING_WHILE_HOLDING_MAX_JOINT_VELOCITY,
-                )
-            ]
-            if self.montessori_shape.requires_intermediate_arm_parking
-            else []
-        )
         return sequential(
             [
                 ParkArmsAction(Arms.BOTH),
                 *navigate_to_shape,
                 pick_up_shape,
-                *intermediate_park_arms,
                 *navigate_to_hole,
                 place_shape,
                 ParkArmsAction(Arms.BOTH),

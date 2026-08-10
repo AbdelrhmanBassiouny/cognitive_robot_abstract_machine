@@ -241,6 +241,13 @@ def _insert_shape(
         board=montessori.board,
         arm=Arms.RIGHT,
         target_horizontal_offset=offset,
+        # This call site's own previously-hardcoded values, now that
+        # InsertMontessoriShapeAction.final_approach_linear_velocity/
+        # retract_linear_velocity are shared fields with a different (Panda-tuned)
+        # default -- kept explicit here rather than adopting that default, since
+        # the reason these two diverge from the Panda's own values is unknown.
+        final_approach_linear_velocity=0.115,
+        retract_linear_velocity=0.08,
     )
     with simulated_robot():
         node = execute_single(action, context=context)
