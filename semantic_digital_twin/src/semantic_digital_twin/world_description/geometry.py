@@ -5,11 +5,11 @@ import logging
 import math
 import os
 import shutil
-import tempfile
 from abc import ABC, abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field, fields
 from functools import cached_property
+from pathlib import Path
 
 import numpy as np
 import numpy.typing as npt
@@ -41,6 +41,7 @@ from semantic_digital_twin.spatial_types import (
     Point3,
     Vector3,
 )
+from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import (
@@ -722,9 +723,28 @@ class Mesh(Shape):
         scale: Optional[Scale] = None,
         uv: Optional[np.ndarray] = None,
         texture_file_path: Optional[str] = None,
-        dirname: str = "/tmp",
+        directory: Optional[Path] = None,
         file_type: str = "obj",
     ) -> "Mesh":
+        """
+        Create a Mesh by exporting a trimesh to a file.
+
+        The mesh is written into a directory of its own, so a material or texture written
+        beside it cannot collide with another export's.
+
+        ..warning:: Without an explicit directory the file lives only as long as this
+            process. Such a path must not be stored in anything that outlives it.
+
+        :param mesh: The mesh to export.
+        :param origin: Origin of the mesh.
+        :param scale: Scale of the mesh.
+        :param uv: UV coordinates to apply before exporting.
+        :param texture_file_path: Path of a texture to apply before exporting.
+        :param directory: Where to place the mesh's own directory inside of /tmp, defaulting to a root
+            that is removed when this process exits.
+        :param file_type: Format to export the mesh in.
+        :return: Mesh reading from the exported file.
+        """
         file_type = file_type.lower()
         if origin is None:
             origin = HomogeneousTransformationMatrix()
@@ -735,37 +755,24 @@ class Mesh(Shape):
         if texture_file_path is not None:
             mesh = cls.add_texture(mesh=mesh, texture_file_path=texture_file_path)
 
-        # Each export gets its own subdir so material.mtl files never collide
-        subdir = tempfile.mkdtemp(dir=dirname)
-        tmp_path = os.path.join(subdir, f"{os.path.basename(subdir)}.{file_type}")
+        mesh_directory = (
+            MeshFileStorage().allocate_directory()
+            if directory is None
+            else MeshFileStorage.create_mesh_directory(Path(directory))
+        )
+        mesh_file_path = mesh_directory / f"{mesh_directory.name}.{file_type}"
 
         try:
-            mesh.export(tmp_path, file_type=file_type)
+            mesh.export(str(mesh_file_path), file_type=file_type)
         except Exception:
-            shutil.rmtree(subdir, ignore_errors=True)
+            shutil.rmtree(mesh_directory, ignore_errors=True)
             raise
 
-        instance = cls(
+        return cls(
             origin=origin,
             scale=scale,
-            filename=tmp_path,
+            filename=str(mesh_file_path),
         )
-
-        # # Tie file lifetime to the Mesh instance TODO luca wants to find a way for this to work with rviz (atexit)
-        # weakref.finalize(instance, cls._cleanup_temp_dir, subdir)
-
-        return instance
-
-    @staticmethod
-    def _cleanup_temp_dir(subdir: str) -> None:
-        """
-        Clean up the temporary subdirectory created for the mesh.
-        """
-        logger.debug(f"Cleaning up temporary directory: {subdir}")
-        try:
-            shutil.rmtree(subdir, ignore_errors=True)
-        except OSError:
-            pass
 
     @classmethod
     def box(
@@ -841,9 +848,9 @@ class Mesh(Shape):
         """
         points = np.asarray([point.to_np()[:3] for point in points_3d], dtype=float)
         points = np.unique(points, axis=0)
-        assert len(points) >= 3, (
-            "At least 4 unique points are required to define a 3D region."
-        )
+        assert (
+            len(points) >= 3
+        ), "At least 4 unique points are required to define a 3D region."
 
         centered_points = points - points.mean(axis=0, keepdims=True)
         assert np.any(centered_points), "Points must not be all identical."
@@ -1312,6 +1319,13 @@ class BoundingBox:
         )
 
     @property
+    def volume(self) -> float:
+        """
+        :return: The volume the bounding box encloses.
+        """
+        return self.depth * self.width * self.height
+
+    @property
     def dimensions(self) -> List[float]:
         """
         :return: The dimensions of the bounding box as a list [width, depth, height].
@@ -1482,9 +1496,9 @@ class BoundingBox:
         :param min_point: The minimum point
         :param max_point: The maximum point
         """
-        assert min_point.reference_frame == max_point.reference_frame, (
-            "The reference frames of the minimum and maximum points must be the same."
-        )
+        assert (
+            min_point.reference_frame == max_point.reference_frame
+        ), "The reference frames of the minimum and maximum points must be the same."
         return cls(*min_point.to_np()[:3], *max_point.to_np()[:3], origin=origin)
 
     def as_shape(self) -> Box:
