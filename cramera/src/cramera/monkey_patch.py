@@ -30,7 +30,7 @@ class MethodPatch:
     Name of the method being replaced.
     """
 
-    def install(self, replacement: Callable[..., Any]) -> None:
+    def install(self, replacement: Callable[..., Any]) -> Callable[[], None]:
         """
         Replace :attr:`owner`'s :attr:`name` method with a call into ``replacement``.
 
@@ -40,6 +40,7 @@ class MethodPatch:
         :param replacement: Called as ``replacement(original, *args, **kwargs)`` on
             every invocation of the patched method; ``original`` is the method being
             replaced, already unwrapped from any ``classmethod`` descriptor.
+        :return: Restores the method this call replaced.
         """
         attribute = inspect.getattr_static(self.owner, self.name)
         is_classmethod = isinstance(attribute, classmethod)
@@ -53,3 +54,8 @@ class MethodPatch:
             self.name,
             classmethod(trampoline) if is_classmethod else trampoline,
         )
+
+        def uninstall() -> None:
+            setattr(self.owner, self.name, attribute)
+
+        return uninstall
