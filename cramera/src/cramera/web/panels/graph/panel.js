@@ -91,7 +91,7 @@ Panels.define('graph', function (root, bus) {
     if (!view.details[id]) return;
     try {
       const r = await fetch('/api/knowledge/expand?node=' + encodeURIComponent(id));
-      const p = await r.json();
+      const p = await ResponseUtil.parseJson(r);
       if (!p.ok) return;                       // node has no inside view
       stacks[tab].push(view);
       setView(p);
@@ -119,7 +119,7 @@ Panels.define('graph', function (root, bus) {
       try {
         const r = await fetch(TABS[name].url);
         if (r.status === 404) throw new Error('this build needs the /api/knowledge/view route — restart the server');
-        const p = await r.json();
+        const p = await ResponseUtil.parseJson(r);
         if (!p.ok) {
           emptyEl.textContent = p.error || 'view unavailable';
           return;
@@ -258,7 +258,7 @@ Panels.define('graph', function (root, bus) {
     let live;
     try {
       live = await fetch(liveState.url + (src === 'plan' ? '/plan' : '/chart'))
-        .then(function (r) { return r.json(); });
+        .then(ResponseUtil.parseJson);
     } catch (err) { return; }                    // bridge gone — the 3D side handles it
     if (!live || !live.nodes) return;
     const payload = src === 'plan' ? planPayload(live) : chartPayload(live);
