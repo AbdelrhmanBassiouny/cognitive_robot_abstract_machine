@@ -2168,6 +2168,23 @@ items:
       audit of existing entries, so a URL that dies for another reason still surfaces only
       when someone opens the page.
 
+      That unaddressed gap fired 2026-08-10, five days later, and is worth carrying as
+      evidence rather than an anticipated risk. workflow-unification's reconciled entry -
+      the one this item's own notes record as verified with changed:false - had since gone
+      dead: WebFetch on af60607f returned "artifact not found", so the URL was correct when
+      recorded and stopped resolving afterwards. That is the failure mode the recording fix
+      cannot reach, since it validates at write time and nothing re-checks later. Recovery
+      was this item's own prescription applied by hand: resolve from the live listing, which
+      showed two artifacts sharing the plan's title - the ambiguous case the script refuses
+      and demands --url for. Decided by recency rather than by the script, since a
+      concurrent session had published to 07123af6 that same day, so updating it kept one
+      live page instead of minting a twelfth; 36572776 (2026-08-09) is the stale half of
+      that pair. Cache repointed at 07123af6. Two things this argues for when the item is
+      picked back up: the audit is worth having, because a stale entry costs a duplicate
+      artifact rather than an error, and the refusal on an ambiguous title is right but
+      leaves the caller with no recorded rule for choosing - most-recently-updated is what
+      both corrections have used.
+
   - id: plan-item-execution-modes
     title: "Auto and plan execution modes for the plan-item skills"
     branch: claude/plan-item-kickoff-modes-p1yuwc
