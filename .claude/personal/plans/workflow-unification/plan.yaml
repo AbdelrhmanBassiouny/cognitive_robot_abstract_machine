@@ -2291,7 +2291,9 @@ items:
 
   - id: no-pr-subscriptions
     title: "Stop sessions from subscribing to their own pull requests"
-    branch: null
+    branch: claude/remove-auto-subscribe-pr-oowwkp
     track: personal-data
     depends_on: []
     status: in_progress
+    pull_request_number: 153
+    session: https://claude.ai/code/session_012yfsn1ZZBsUcfKK1zDW1zh
