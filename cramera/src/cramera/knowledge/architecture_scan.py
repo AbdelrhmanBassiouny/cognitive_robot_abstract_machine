@@ -8,10 +8,10 @@ import ast
 import json
 import os
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from typing_extensions import Any, Dict, List, Optional, Tuple
+from typing_extensions import Any, ClassVar, Dict, List, Optional, Set, Tuple
 
 from cramera import paths
 from cramera.knowledge.architecture_entities import Package, PythonClass
@@ -58,6 +58,32 @@ class ArchitectureScan:
 
 
 @dataclass
+class RawArchitectureScan:
+    """
+    One architecture scan in the flat, JSON-able shape the disk cache stores.
+
+    :class:`ArchitectureScan` is the same content as real entities;
+    :meth:`ArchitectureScanner._typed` converts between them. The raw form exists
+    because the cache is plain JSON and a full scan takes seconds.
+    """
+
+    packages: List[Dict[str, Any]] = field(default_factory=list)
+    """
+    One dict per workspace member: name, description and its two counts.
+    """
+
+    classes: List[Dict[str, Any]] = field(default_factory=list)
+    """
+    One dict per scanned class, without its subpackage — that is derived on typing.
+    """
+
+    dependency_edges: List[Tuple[str, str]] = field(default_factory=list)
+    """
+    Sorted ``(importing package, imported package)`` pairs.
+    """
+
+
+@dataclass
 class ArchitectureScanner:
     """
     Scans one CRAM repository's architecture, cached to disk between runs.
@@ -67,17 +93,17 @@ class ArchitectureScanner:
     environment.
     """
 
-    DESCRIPTION_LENGTH_LIMIT = 120
+    DESCRIPTION_LENGTH_LIMIT: ClassVar[int] = 120
     """
     How much of a README's first line is kept as a package description.
     """
 
-    ARCHITECTURE_CACHE_VERSION = 3
+    ARCHITECTURE_CACHE_VERSION: ClassVar[int] = 3
     """
     Bumped whenever the cached scan's shape changes, so old caches are discarded.
     """
 
-    SKIPPED_DIRECTORIES = {
+    SKIPPED_DIRECTORIES: ClassVar[Set[str]] = {
         "__pycache__",
         "node_modules",
         "doc",
@@ -91,7 +117,7 @@ class ArchitectureScanner:
     Directories never descended into during the architecture scan.
     """
 
-    PACKAGE_DESCRIPTIONS = {
+    PACKAGE_DESCRIPTIONS: ClassVar[Dict[str, str]] = {
         "krrood": "knowledge representation & reasoning through OO design (home of EQL)",
         "coraplex": "the plan executive: designators, plans, locations",
         "pycram": "legacy plan executive (resources/demos)",
@@ -129,7 +155,7 @@ class ArchitectureScanner:
 
         A pure ``ast`` parse — nothing is imported.
         """
-        return self._typed(*self._scan_raw())
+        return self._typed(self._scan_raw())
 
     def load(self) -> ArchitectureScan:
         """
@@ -138,7 +164,7 @@ class ArchitectureScanner:
         A full scan takes seconds, so results are cached in the data directory, keyed by
         the scanned root; a cache from another root is rescanned.
         """
-        return self._typed(*self._load_raw())
+        return self._typed(self._load_raw())
 
     def _architecture_cache(self) -> str:
         """
@@ -164,80 +190,114 @@ class ArchitectureScanner:
                     return stripped[: self.DESCRIPTION_LENGTH_LIMIT]
         return ""
 
-    def _scan_raw(
-        self,
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Tuple[str, str]]]:
+    def _scan_raw(self) -> RawArchitectureScan:
         """
-        Statically scan the CRAM repository, as plain JSON-able dicts/tuples — the shape
-        the disk cache stores, converted to real types by :meth:`_typed`.
+        Statically scan the CRAM repository into the shape the disk cache stores.
         """
-        packages: List[Dict[str, Any]] = []
-        classes: List[Dict[str, Any]] = []
-        imports: Dict[str, set] = {}
-        cram_root = self.root
-        if not os.path.isdir(cram_root):
-            return packages, classes, []
+        raw = RawArchitectureScan()
+        if not os.path.isdir(self.root):
+            return raw
 
-        package_directories = {"root": cram_root}
-        for entry in sorted(os.listdir(cram_root)):
-            directory = os.path.join(cram_root, entry)
+        package_directories = self._package_directories()
+        package_names = set(package_directories)
+        imports: Dict[str, Set[str]] = {}
+        modules_per_package = {
+            package: self._scan_package_modules(
+                package, base, package_names, raw.classes, imports
+            )
+            for package, base in package_directories.items()
+        }
+
+        class_counts = Counter(entry["package"] for entry in raw.classes)
+        raw.packages = [
+            dict(
+                name=package,
+                description=self.PACKAGE_DESCRIPTIONS.get(package)
+                or self._first_readme_line(directory),
+                module_count=modules_per_package.get(package, 0),
+                class_count=class_counts.get(package, 0),
+            )
+            for package, directory in package_directories.items()
+        ]
+        raw.dependency_edges = sorted(
+            (source, target)
+            for source, targets in imports.items()
+            for target in targets
+        )
+        return raw
+
+    def _package_directories(self) -> Dict[str, str]:
+        """
+        Every workspace member of the repository, plus ``root`` for its loose scripts.
+        """
+        directories = {"root": self.root}
+        for entry in sorted(os.listdir(self.root)):
+            directory = os.path.join(self.root, entry)
             if (
                 os.path.isdir(directory)
                 and not entry.startswith(".")
                 and entry not in self.SKIPPED_DIRECTORIES
                 and "egg-info" not in entry
             ):
-                package_directories[entry] = directory
-        package_names = set(package_directories)
+                directories[entry] = directory
+        return directories
 
-        modules_per_package: Dict[str, int] = {}
-        for package, base in package_directories.items():
-            module_count = 0
-            for directory_path, directory_names, filenames in os.walk(base):
-                directory_names[:] = [
-                    name
-                    for name in directory_names
-                    if not name.startswith(".") and name not in self.SKIPPED_DIRECTORIES
-                ]
-                if package == "root":
-                    directory_names[:] = []  # root package = top-level scripts only
-                for filename in filenames:
-                    if not filename.endswith(".py"):
-                        continue
-                    path = os.path.join(directory_path, filename)
-                    source = Path(path).read_text(encoding="utf-8", errors="replace")
-                    try:
-                        tree = ast.parse(source)
-                    except SyntaxError:
-                        # a module the running interpreter cannot parse (a newer
-                        # syntax, or a template) contributes nothing to the graph
-                        continue
-                    module_count += 1
-                    module = os.path.relpath(path, cram_root)[:-3].replace(os.sep, ".")
-                    self._collect_classes_and_imports(
-                        tree, package, module, package_names, classes, imports
-                    )
-            modules_per_package[package] = module_count
+    def _scan_package_modules(
+        self,
+        package: str,
+        base: str,
+        package_names: Set[str],
+        classes: List[Dict[str, Any]],
+        imports: Dict[str, Set[str]],
+    ) -> int:
+        """
+        Parse every module of one package, collecting its classes and imports.
 
-        class_counts = Counter(entry["package"] for entry in classes)
-        for package in package_directories:
-            description = self.PACKAGE_DESCRIPTIONS.get(
-                package
-            ) or self._first_readme_line(package_directories[package])
-            packages.append(
-                dict(
-                    name=package,
-                    description=description,
-                    module_count=modules_per_package.get(package, 0),
-                    class_count=class_counts.get(package, 0),
+        :param package: Name of the package being scanned.
+        :param base: Directory the package lives in.
+        :param package_names: Every known package, so imports of other ones are edges.
+        :param classes: Collects one dict per class found.
+        :param imports: Collects the packages each package imports from.
+        :return: How many modules were parsed.
+        """
+        module_count = 0
+        for directory_path, directory_names, filenames in os.walk(base):
+            directory_names[:] = [
+                name
+                for name in directory_names
+                if not name.startswith(".") and name not in self.SKIPPED_DIRECTORIES
+            ]
+            if package == "root":
+                directory_names[:] = []  # root package = top-level scripts only
+            for filename in filenames:
+                if not filename.endswith(".py"):
+                    continue
+                path = os.path.join(directory_path, filename)
+                tree = self._parsed_module(path)
+                if tree is None:
+                    continue
+                module_count += 1
+                module = os.path.relpath(path, self.root)[:-3].replace(os.sep, ".")
+                self._collect_classes_and_imports(
+                    tree, package, module, package_names, classes, imports
                 )
-            )
-        dependency_edges = sorted(
-            (source, target)
-            for source, targets in imports.items()
-            for target in targets
-        )
-        return packages, classes, dependency_edges
+        return module_count
+
+    @staticmethod
+    def _parsed_module(path: str) -> Optional[ast.Module]:
+        """
+        One module's syntax tree, or None when it cannot be parsed.
+
+        A module the running interpreter cannot read (newer syntax, or a template)
+        contributes nothing to the graph.
+
+        :param path: Path of the module to parse.
+        """
+        source = Path(path).read_text(encoding="utf-8", errors="replace")
+        try:
+            return ast.parse(source)
+        except SyntaxError:
+            return None
 
     @staticmethod
     def _collect_classes_and_imports(
@@ -321,15 +381,13 @@ class ArchitectureScanner:
             return None
         if require_classes and not cached.get("classes"):
             return None
-        return (
-            cached["packages"],
-            cached["classes"],
-            [tuple(edge) for edge in cached["dependency_edges"]],
+        return RawArchitectureScan(
+            packages=cached["packages"],
+            classes=cached["classes"],
+            dependency_edges=[tuple(edge) for edge in cached["dependency_edges"]],
         )
 
-    def _load_raw(
-        self,
-    ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Tuple[str, str]]]:
+    def _load_raw(self) -> RawArchitectureScan:
         """
         :meth:`_scan_raw` behind the JSON disk cache.
         """
@@ -338,16 +396,12 @@ class ArchitectureScanner:
         if cached is not None:
             return cached
         if not os.path.isdir(cram_root):
-            return [], [], []
-        packages, classes, dependency_edges = self._scan_raw()
-        if not classes:
+            return RawArchitectureScan()
+        raw = self._scan_raw()
+        if not raw.classes:
             # a checkout exists but yielded nothing (empty or partial clone) —
             # fall back to the cache rather than losing the architecture graph
-            return self._load_cache(cram_root, require_classes=True) or (
-                packages,
-                classes,
-                dependency_edges,
-            )
+            return self._load_cache(cram_root, require_classes=True) or raw
         cache_path = Path(self._architecture_cache())
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         # written via a temporary file: a half-written cache would be read back as
@@ -358,15 +412,15 @@ class ArchitectureScanner:
                 {
                     "version": self.ARCHITECTURE_CACHE_VERSION,
                     "cram_root": cram_root,
-                    "packages": packages,
-                    "classes": classes,
-                    "dependency_edges": dependency_edges,
+                    "packages": raw.packages,
+                    "classes": raw.classes,
+                    "dependency_edges": raw.dependency_edges,
                 }
             ),
             encoding="utf-8",
         )
         temporary.replace(cache_path)
-        return packages, classes, dependency_edges
+        return raw
 
     @staticmethod
     def _subpackage_of(package: str, module: str) -> str:
@@ -386,21 +440,14 @@ class ArchitectureScanner:
             segments = segments[1:]
         return package + "." + segments[0] if len(segments) >= 2 else package
 
-    def _typed(
-        self,
-        packages: List[Dict[str, Any]],
-        classes: List[Dict[str, Any]],
-        dependency_edges: List[Tuple[str, str]],
-    ) -> ArchitectureScan:
+    def _typed(self, raw: RawArchitectureScan) -> ArchitectureScan:
         """
-        The raw scan's dicts/tuples, converted into real entities.
+        The cached, flat scan converted into real entities.
 
-        :param packages: Raw scanned packages, as plain dicts.
-        :param classes: Raw scanned classes, as plain dicts.
-        :param dependency_edges: Raw scanned package-to-package import edges.
+        :param raw: The scan as the cache stores it.
         """
         return ArchitectureScan(
-            packages=[Package(**entry) for entry in packages],
+            packages=[Package(**entry) for entry in raw.packages],
             classes=[
                 PythonClass(
                     name=entry["name"],
@@ -411,9 +458,10 @@ class ArchitectureScanner:
                     methods=entry["methods"],
                     docstring_summary=entry["docstring_summary"],
                 )
-                for entry in classes
+                for entry in raw.classes
             ],
             dependency_edges=[
-                PackageDependency(source, target) for source, target in dependency_edges
+                PackageDependency(source, target)
+                for source, target in raw.dependency_edges
             ],
         )
