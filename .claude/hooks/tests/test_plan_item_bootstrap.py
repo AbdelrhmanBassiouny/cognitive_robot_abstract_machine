@@ -32,6 +32,7 @@ from plan_item_bootstrap import (
     HookScript,
     ItemRecordRequest,
     ItemStatus,
+    ItemUpdateRequest,
     KeySpecification,
     ManifestKey,
     PlanDocument,
@@ -40,8 +41,10 @@ from plan_item_bootstrap import (
     UnknownPlanError,
     ValueStyle,
     WorkOpenRequest,
+    check_item,
     open_work,
     record_item,
+    update_item,
 )
 from scratch_repository import WORK_BRANCH, ScratchRepository
 
@@ -67,6 +70,18 @@ The fixture item the plan already tracks, with no branch of its own yet.
 NEW_ITEM = "a-brand-new-item"
 """
 An item the fixture plan does not track, for the entry-creating path.
+"""
+
+SECOND_ITEM = "a-second-item"
+"""
+The fixture item that follows the one under test, for asserting a write left the items
+after it untouched.
+"""
+
+WORK_REMOTE = "origin"
+"""
+The remote :meth:`ScratchRepository.add_work_remote` registers, and the one the module's
+own operations default to.
 """
 
 NEW_BRANCH = "claude/a-new-branch"
@@ -226,6 +241,42 @@ def record_request(repository: ScratchRepository, **overrides: object):
     )
     defaults.update(overrides)
     return ItemRecordRequest(**defaults)
+
+
+def update_request(**overrides: object) -> ItemUpdateRequest:
+    """
+    Build an update request, overriding only what a test cares about.
+
+    :param overrides: Fields to replace on the default request.
+    :return: The request.
+    """
+    defaults = dict(
+        plan_identifier=PLAN_IDENTIFIER,
+        item_identifier=EXISTING_ITEM,
+        values_by_key={},
+    )
+    defaults.update(overrides)
+    return ItemUpdateRequest(**defaults)
+
+
+def published_item(repository: ScratchRepository) -> dict[str, object]:
+    """
+    The item under test as YAML actually parses it off the notes branch.
+
+    Parsing rather than matching text is what catches a write that leaves the manifest
+    valid but means something other than it says.
+
+    :param repository: The scratch repository whose notes remote to read.
+    :return: The item's parsed mapping.
+    """
+    manifest = yaml.safe_load(
+        published_plan(repository)[PlanDocument.MANIFEST],
+    )
+    return next(
+        item
+        for item in manifest[ManifestKey.ITEMS.key]
+        if item[ManifestKey.IDENTIFIER.key] == EXISTING_ITEM
+    )
 
 
 def open_request(**overrides: object) -> WorkOpenRequest:
@@ -542,6 +593,211 @@ def test_a_supplied_pull_request_number_adopts_the_branch_its_caller_published(
     assert result.pull_request_number == 57
 
 
+# %% updating an item's recorded fields
+
+
+def test_writing_a_note_replaces_the_folded_block_rather_than_its_first_line(
+    bootstrap_repository: ScratchRepository,
+):
+    update_item(
+        update_request(values_by_key={ManifestKey.NOTES: "What this run found."}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert published_item(bootstrap_repository)[ManifestKey.NOTES.key] == (
+        "What this run found.\n"
+    )
+
+
+def test_writing_a_note_leaves_the_other_items_byte_identical(
+    bootstrap_repository: ScratchRepository,
+):
+    update_item(
+        update_request(values_by_key={ManifestKey.NOTES: "What this run found."}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    published = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
+    second_item_start = published.index(
+        f"- {ManifestKey.IDENTIFIER.key}: {SECOND_ITEM}"
+    )
+    original_start = PLAN_MANIFEST.index(
+        f"- {ManifestKey.IDENTIFIER.key}: {SECOND_ITEM}"
+    )
+    assert published[second_item_start:] == PLAN_MANIFEST[original_start:]
+
+
+def test_writing_blockers_renders_them_as_a_sequence(
+    bootstrap_repository: ScratchRepository,
+):
+    blockers = [
+        "A short one.",
+        "A blocker long enough that it has to fold over more than a single line of "
+        "the manifest, which is what the sequence rendering has to get right.",
+    ]
+    update_item(
+        update_request(values_by_key={ManifestKey.BLOCKERS: blockers}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert published_item(bootstrap_repository)[ManifestKey.BLOCKERS.key] == blockers
+
+
+def test_updating_sets_every_plain_field_it_is_given(
+    bootstrap_repository: ScratchRepository,
+):
+    update_item(
+        update_request(
+            values_by_key={
+                ManifestKey.STATUS: ItemStatus.BLOCKED,
+                ManifestKey.BRANCH: NEW_BRANCH,
+                ManifestKey.PULL_REQUEST_NUMBER: 57,
+                ManifestKey.SESSION: SESSION_URL,
+            }
+        ),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    item = published_item(bootstrap_repository)
+    assert item[ManifestKey.STATUS.key] == ItemStatus.BLOCKED.value
+    assert item[ManifestKey.BRANCH.key] == NEW_BRANCH
+    assert item[ManifestKey.PULL_REQUEST_NUMBER.key] == 57
+    assert item[ManifestKey.SESSION.key] == SESSION_URL
+
+
+def test_updating_needs_no_roadmap_section(bootstrap_repository: ScratchRepository):
+    update_item(
+        update_request(values_by_key={ManifestKey.STATUS: ItemStatus.BLOCKED}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    published = published_plan(bootstrap_repository)
+    assert published[PlanDocument.ROADMAP] == PLAN_ROADMAP
+
+
+def test_updating_an_unknown_item_is_refused(bootstrap_repository: ScratchRepository):
+    with pytest.raises(UnknownItemError) as refusal:
+        update_item(
+            update_request(
+                item_identifier=NEW_ITEM,
+                values_by_key={ManifestKey.STATUS: ItemStatus.BLOCKED},
+            ),
+            project_root=bootstrap_repository.project_root,
+        )
+
+    assert refusal.value.exit_code is ExitCode.UNKNOWN_ITEM
+    assert published_plan(bootstrap_repository)[PlanDocument.MANIFEST] == PLAN_MANIFEST
+
+
+def test_updating_hands_the_dashboard_republish_back(
+    bootstrap_repository: ScratchRepository,
+):
+    report = update_item(
+        update_request(values_by_key={ManifestKey.STATUS: ItemStatus.BLOCKED}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert report.dashboard_command == f"/plan-dashboard {PLAN_IDENTIFIER}"
+
+
+# %% checking what the manifest claims against local git
+
+
+def test_a_recorded_branch_that_was_never_published_is_reported_stale(
+    bootstrap_repository: ScratchRepository,
+):
+    update_item(
+        update_request(values_by_key={ManifestKey.BRANCH: NEW_BRANCH}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    report = check_item(
+        PLAN_IDENTIFIER, EXISTING_ITEM, project_root=bootstrap_repository.project_root
+    )
+
+    assert [finding.manifest_key for finding in report.findings] == [ManifestKey.BRANCH]
+    assert report.findings[0].recorded == NEW_BRANCH
+    assert report.exit_code is ExitCode.MANIFEST_IS_STALE
+
+
+def test_an_item_recording_a_published_branch_reports_nothing_stale(
+    bootstrap_repository: ScratchRepository,
+):
+    bootstrap_repository.run_git("checkout", "-b", NEW_BRANCH)
+    bootstrap_repository.run_git("push", "--quiet", WORK_REMOTE, NEW_BRANCH)
+    update_item(
+        update_request(
+            values_by_key={
+                ManifestKey.BRANCH: NEW_BRANCH,
+                ManifestKey.STATUS: ItemStatus.IN_PROGRESS,
+                ManifestKey.SESSION: SESSION_URL,
+                ManifestKey.PULL_REQUEST_NUMBER: 57,
+            }
+        ),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    report = check_item(
+        PLAN_IDENTIFIER, EXISTING_ITEM, project_root=bootstrap_repository.project_root
+    )
+
+    assert report.findings == []
+    assert report.exit_code is ExitCode.SUCCESS
+
+
+def test_a_published_branch_with_no_session_recorded_is_reported_stale(
+    bootstrap_repository: ScratchRepository,
+):
+    bootstrap_repository.run_git("checkout", "-b", NEW_BRANCH)
+    bootstrap_repository.run_git("push", "--quiet", WORK_REMOTE, NEW_BRANCH)
+    update_item(
+        update_request(
+            values_by_key={
+                ManifestKey.BRANCH: NEW_BRANCH,
+                ManifestKey.STATUS: ItemStatus.IN_PROGRESS,
+            }
+        ),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    report = check_item(
+        PLAN_IDENTIFIER, EXISTING_ITEM, project_root=bootstrap_repository.project_root
+    )
+
+    assert ManifestKey.SESSION in [finding.manifest_key for finding in report.findings]
+
+
+def test_a_branch_exists_while_the_item_is_still_not_started(
+    bootstrap_repository: ScratchRepository,
+):
+    bootstrap_repository.run_git("checkout", "-b", NEW_BRANCH)
+    bootstrap_repository.run_git("push", "--quiet", WORK_REMOTE, NEW_BRANCH)
+    update_item(
+        update_request(values_by_key={ManifestKey.BRANCH: NEW_BRANCH}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    report = check_item(
+        PLAN_IDENTIFIER, EXISTING_ITEM, project_root=bootstrap_repository.project_root
+    )
+
+    status_finding = next(
+        finding
+        for finding in report.findings
+        if finding.manifest_key is ManifestKey.STATUS
+    )
+    assert status_finding.recorded == ItemStatus.NOT_STARTED.value
+
+
+def test_checking_an_unknown_item_is_refused(bootstrap_repository: ScratchRepository):
+    with pytest.raises(UnknownItemError) as refusal:
+        check_item(
+            PLAN_IDENTIFIER, NEW_ITEM, project_root=bootstrap_repository.project_root
+        )
+
+    assert refusal.value.exit_code is ExitCode.UNKNOWN_ITEM
+
+
 # %% the vocabulary the manifest is written in
 
 
@@ -725,6 +981,56 @@ def test_the_record_subcommand_reports_status_and_exit_code_first(
     assert list(report)[:2] == ["status", "exit_code"]
     assert report["status"] == ExitCode.SUCCESS.name_for_a_caller
     assert report["exit_code"] == 0
+
+
+def test_the_update_subcommand_writes_a_note_from_a_file(
+    bootstrap_repository: ScratchRepository,
+):
+    note = bootstrap_repository.write("note.md", "What the run found.\n")
+
+    result = run_bootstrap(
+        bootstrap_repository,
+        "update",
+        "--plan",
+        PLAN_IDENTIFIER,
+        "--item",
+        EXISTING_ITEM,
+        "--status",
+        ItemStatus.BLOCKED.value,
+        "--notes",
+        str(note),
+    )
+
+    assert result.returncode == 0, result.stderr
+    item = published_item(bootstrap_repository)
+    assert item[ManifestKey.NOTES.key] == "What the run found.\n"
+    assert item[ManifestKey.STATUS.key] == ItemStatus.BLOCKED.value
+
+
+def test_the_check_subcommand_exits_stale_and_names_the_field(
+    bootstrap_repository: ScratchRepository,
+):
+    update_item(
+        update_request(values_by_key={ManifestKey.BRANCH: NEW_BRANCH}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    result = run_bootstrap(
+        bootstrap_repository,
+        "check",
+        "--plan",
+        PLAN_IDENTIFIER,
+        "--item",
+        EXISTING_ITEM,
+    )
+
+    assert result.returncode == ExitCode.MANIFEST_IS_STALE
+    report = json.loads(result.stdout)
+    assert list(report)[:2] == ["status", "exit_code"]
+    assert report["status"] == ExitCode.MANIFEST_IS_STALE.name_for_a_caller
+    assert [finding["field"] for finding in report["findings"]] == [
+        ManifestKey.BRANCH.key
+    ]
 
 
 def test_the_command_line_names_the_status_it_failed_with(

@@ -239,6 +239,15 @@ is in the cache), mention that it wasn't refreshed automatically and the
 user can run `/plan-dashboard` with no argument to update it too — don't do
 it unprompted, since that republishes a second, separate page.
 
+## Republishing is half of every transition, not a step of its own
+
+This skill is what every other plan skill ends on, because only a live session can
+call the `Artifact` tool. `${MANIFEST_CURRENCY_DOCUMENT}` states the rule they all
+follow: the manifest is written and the dashboard republished at every point that
+makes a recorded field stale, before the work that follows. When something asks you
+to run `/plan-dashboard`, that is this rule finishing — a published dashboard older
+than the manifest behind it is the staleness the whole system exists to catch.
+
 ## Refreshing after a manifest edit
 
 This skill is the second half of the refresh loop

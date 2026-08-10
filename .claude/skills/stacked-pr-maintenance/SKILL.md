@@ -273,6 +273,24 @@ Then, for that branch:
 - Do **not** add `in-review`: the upstream pull request is not open until the developer clicks
   Create, and they add the label then.
 
+## Report the plan items this pass made stale
+
+Reparenting a pull request, promoting a branch and moving a label all change what a
+tracked item's manifest should say, and this pass writes no manifest. Follow
+`${MANIFEST_CURRENCY_DOCUMENT}`'s section for a pass that changes state without
+owning it.
+
+For every branch you moved, look it up in the generated branch index on the
+personal-notes branch (`${PLAN_BRANCH_INDEX_PATH}`, branch to plan id) and name the
+ones it resolves in the finish summary, with what changed about them. A branch the
+index does not name belongs to no plan; say that too, since every fork pull request
+is supposed to.
+
+**Report them, do not write them.** This pass runs unattended and, under
+`--non-interactive`, must not open a discussion — and which status a move implies is
+judgement rather than mechanics. Writing the manifest is the owning session's, off
+this report.
+
 ## Finish
 
 The **top** of the finish summary must list all pending upstream create-links: any built this run,

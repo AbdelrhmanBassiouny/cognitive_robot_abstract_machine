@@ -275,6 +275,11 @@ DEPENDENCY_READINESS_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/dependency-readiness.
 # every plan-*/SKILL.md that assembles pr_data.json, instead of each
 # restating the GitHub API calls involved.
 PULL_REQUEST_DATA_FETCHING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/pr-data-fetching.md"
+# manifest-currency.md: the shared "write the manifest and republish the
+# dashboard first, at every transition that makes a recorded field stale"
+# rule, referenced by every skill that can change what a plan records
+# instead of each restating it.
+MANIFEST_CURRENCY_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/manifest-currency.md"
 # write-personal-notes-file.sh: generic commit-and-push-one-file-to-the
 # personal-notes-branch helper, used by refresh_dashboard.sh (the manifest
 # auto-sync correction) and plan-dashboard/SKILL.md (the dashboard-URL

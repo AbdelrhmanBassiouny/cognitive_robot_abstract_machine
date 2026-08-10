@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Bootstrap a plan item before its implementation, rather than after it.
+Keep a plan item's recorded state current, from before its implementation onward.
 
 Everything a session knows the moment an implementation plan is approved - the branch,
 the draft pull request, the item's manifest fields, its roadmap section - is derivable
@@ -9,7 +9,12 @@ For that whole window ``plan.yaml`` says the item is ``not_started`` with no bra
 a branch exists and is being worked, which every dashboard, kickoff and resolve run
 downstream reads as truth.
 
-Two operations, so each caller depends only on the surface it uses:
+The same holds for every later transition - a blocker appearing, a status changing, a
+conclusion that changes what the item means - so writing the entry is not a bootstrap
+step but a standing obligation. ``manifest-currency.md``, beside the plan-dashboard
+skill, is the rule these operations serve.
+
+Four operations, so each caller depends only on the surface it uses:
 
 ``record``
     Write or update the item's ``plan.yaml`` entry and append its ``roadmap.md``
@@ -21,6 +26,17 @@ Two operations, so each caller depends only on the surface it uses:
     ``in_progress``. A caller that has already created the pull request passes
     ``--pull-request-number`` and only the recording happens.
 
+``update``
+    Set any of the item's recorded fields without appending a roadmap section, which
+    ``record`` cannot do - it reads the section unconditionally. Most transitions change
+    a field without warranting a section, and ``notes`` and ``blockers`` had no writer
+    at all before this.
+
+``check``
+    Report which recorded fields local git contradicts, exiting non-zero when any do.
+    Deliberately local-only: the dashboard already compares the manifest against GitHub
+    after the fact, so what nothing covered was the window before a push.
+
 ``open`` runs before ``record`` when both are wanted: the pull request number does not
 exist until the pull request does.
 
@@ -31,13 +47,18 @@ Usage:
         --branch <branch> --base <branch> --session <url> \\
         (--pull-request-number <number> | --pull-request-title <title> \\
          --pull-request-body <file>)
+    python3 plan_item_bootstrap.py update --plan <plan-id> --item <item-id> \\
+        [--status <status>] [--branch <branch>] [--pull-request-number <number>] \\
+        [--session <url>] [--notes <file>] [--blockers <file> ...]
+    python3 plan_item_bootstrap.py check --plan <plan-id> --item <item-id> \\
+        [--remote <remote>]
 
 Prints a one-line JSON report led by ``status`` and ``exit_code``, so a caller acting on
 the document never has to decode an integer back into a meaning.
 
 .. note::
    Republishing the dashboard is deliberately not done here. Only a live session can
-   call the ``Artifact`` tool, so both operations hand back the ``/plan-dashboard``
+   call the ``Artifact`` tool, so every operation hands back the ``/plan-dashboard``
    command to run instead, exactly as ``save-plan.sh`` already does.
 
 .. note::
@@ -59,9 +80,11 @@ import re
 import subprocess
 import sys
 import tempfile
+import textwrap
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
@@ -96,6 +119,67 @@ ITEM_MARKER = "  - "
 """
 What opens an item block, the list marker its first field sits behind.
 """
+
+BLOCK_BODY_INDENT = "      "
+"""
+The indentation a block-styled value's body carries, one level inside its own key.
+"""
+
+SEQUENCE_ENTRY_INDENT = "      "
+"""
+The indentation a sequence entry's dash carries, one level inside its own key.
+"""
+
+MANIFEST_LINE_WIDTH = 100
+"""
+The column a wrapped body line is kept under.
+
+Measured from the manifests this writes rather than chosen: their hand-wrapped body
+lines cluster at 96-99 columns, so a script-written note is indistinguishable from one
+a person wrapped.
+"""
+
+
+def fold(text: str, indent: str) -> str:
+    """
+    Wrap *text* as the body of a folded scalar, newline-terminated.
+
+    :param text: The value to wrap, whose own paragraph breaks are preserved.
+    :param indent: The indentation every body line carries.
+    :return: The body's lines.
+    """
+    paragraphs = [
+        textwrap.fill(
+            paragraph.strip(),
+            width=MANIFEST_LINE_WIDTH,
+            initial_indent=indent,
+            subsequent_indent=indent,
+        )
+        for paragraph in re.split(r"\n\s*\n", text.strip())
+    ]
+    return "\n\n".join(paragraphs) + "\n"
+
+
+def render_sequence_entry(entry: str) -> str:
+    """
+    One entry of a sequence-styled value, newline-terminated.
+
+    An entry that fits on its own line is written as a quoted scalar and a longer one as
+    a folded block, which is how the manifests this writes already read.
+
+    The folded form strips its trailing newline (``>-``), unlike a block-styled *value*,
+    which keeps it: an entry is one item of a list and has to parse back as exactly the
+    string it was given, where a note is a paragraph and every note already in these
+    manifests ends in a newline.
+
+    :param entry: The entry's text.
+    :return: The entry's lines.
+    """
+    quoted = f'{SEQUENCE_ENTRY_INDENT}- "{entry}"'
+    if "\n" not in entry and len(quoted) <= MANIFEST_LINE_WIDTH and '"' not in entry:
+        return f"{quoted}\n"
+    body = fold(entry, SEQUENCE_ENTRY_INDENT + ITEM_FIELD_INDENT)
+    return f"{SEQUENCE_ENTRY_INDENT}- >-\n{body}"
 
 
 # %% the vocabulary a plan manifest is written in
@@ -175,11 +259,29 @@ class ValueStyle(StrEnum):
 
     BLOCK = "block"
     """
-    A value written across the lines beneath the key - a folded scalar or a sequence.
+    A folded scalar, written across the lines beneath the key.
 
     Anything inserted after such a key would be swallowed by its value, so a new key
     goes before the first block-styled one in an item rather than at the end.
     """
+
+    SEQUENCE = "sequence"
+    """
+    A list, one entry per dash beneath the key.
+
+    Spans the lines beneath the key exactly as :attr:`BLOCK` does; they differ only in
+    what those lines say, which is why writing one is not writing the other.
+    """
+
+    @property
+    def spans_lines_beneath(self) -> bool:
+        """
+        Whether this style's value continues below the key's own line.
+
+        The property the insertion point and the replaced span both key on, so neither
+        has to list the styles it means.
+        """
+        return self in {ValueStyle.BLOCK, ValueStyle.SEQUENCE}
 
 
 @dataclass(frozen=True)
@@ -276,7 +378,7 @@ class ManifestKey(KeySpecification, Enum):
     Freeform detail, routinely folded over many lines.
     """
 
-    BLOCKERS = ("blockers", ValueStyle.BLOCK)
+    BLOCKERS = ("blockers", ValueStyle.SEQUENCE)
     """
     Why the item is stuck, written as a sequence.
     """
@@ -286,18 +388,25 @@ class ManifestKey(KeySpecification, Enum):
     The manifest's top-level list of items.
     """
 
-    def render(self, value: str, opening_the_item: bool = False) -> str:
+    def render(self, value: str | Sequence[str], opening_the_item: bool = False) -> str:
         """
-        The manifest line setting this key to *value*, newline included.
+        The manifest text setting this key to *value*, newline-terminated.
 
-        Quoting comes from the key's own style rather than from the caller.
+        How the value is written comes from the key's own style rather than from the
+        caller, so a style that spans the lines beneath the key returns those lines too
+        rather than a single one.
 
-        :param value: The value to write.
+        :param value: The value to write - a sequence only for a sequence-styled key.
         :param opening_the_item: Whether this is the item block's first line, which
             carries the list marker instead of the key indent.
-        :return: The rendered line.
+        :return: The rendered text.
         """
         prefix = ITEM_MARKER if opening_the_item else ITEM_FIELD_INDENT
+        if self.style is ValueStyle.SEQUENCE:
+            entries = "".join(render_sequence_entry(entry) for entry in value)
+            return f"{prefix}{self.key}:\n{entries}"
+        if self.style is ValueStyle.BLOCK:
+            return f"{prefix}{self.key}: >\n{fold(str(value), BLOCK_BODY_INDENT)}"
         written = f'"{value}"' if self.style is ValueStyle.DOUBLE_QUOTED else value
         return f"{prefix}{self.key}: {written}\n"
 
@@ -312,7 +421,7 @@ class ManifestKey(KeySpecification, Enum):
 BLOCK_STYLED_KEYS = frozenset(
     manifest_key
     for manifest_key in ManifestKey
-    if manifest_key.style is ValueStyle.BLOCK
+    if manifest_key.style.spans_lines_beneath
 )
 """
 The keys whose values run over the lines beneath them, derived from the keys themselves
@@ -418,6 +527,11 @@ class ExitCode(IntEnum):
     PULL_REQUEST_REFUSED = 8
     """
     GitHub rejected the creation; its own message says why.
+    """
+
+    MANIFEST_IS_STALE = 9
+    """
+    The check found recorded fields that local git contradicts.
     """
 
     @property
@@ -691,6 +805,19 @@ def run_git(*arguments: str, project_root: Path) -> str:
     return result.stdout.rstrip("\n")
 
 
+def branch_is_published(branch: str, remote: str, project_root: Path) -> bool:
+    """
+    Whether *branch* already exists on *remote*.
+
+    :param branch: The branch to look for.
+    :param remote: The remote to ask.
+    :param project_root: The repository to run within.
+    :return: True when the remote already carries it.
+    """
+    listing = run_git("ls-remote", "--heads", remote, branch, project_root=project_root)
+    return bool(listing.strip())
+
+
 def fetch_notes_branch(project_root: Path) -> None:
     """
     Fetch the personal-notes branch, leaving ``FETCH_HEAD`` pointing at it.
@@ -934,7 +1061,7 @@ def apply_item_fields(
     lines = manifest_text.split("\n")
     start, end = locate_item_block(lines, plan_identifier, item_identifier)
     for manifest_key, value in values_by_key.items():
-        rendered = manifest_key.render(value).rstrip("\n")
+        rendered = manifest_key.render(value).rstrip("\n").split("\n")
         existing = next(
             (
                 index
@@ -944,7 +1071,9 @@ def apply_item_fields(
             None,
         )
         if existing is not None:
-            lines[existing] = rendered
+            replaced = value_span(lines, existing, end, manifest_key)
+            lines[existing:replaced] = rendered
+            end += len(rendered) - (replaced - existing)
             continue
         insertion = next(
             (
@@ -954,9 +1083,49 @@ def apply_item_fields(
             ),
             last_populated_line(lines, start, end) + 1,
         )
-        lines.insert(insertion, rendered)
-        end += 1
+        lines[insertion:insertion] = rendered
+        end += len(rendered)
     return "\n".join(lines)
+
+
+def value_span(
+    manifest_lines: list[str], key_line: int, end: int, manifest_key: ManifestKey
+) -> int:
+    """
+    One past the last line a key's value occupies.
+
+    A value written across the lines beneath its key owns every following line indented
+    past the key itself; replacing only the key's own line would leave that body behind,
+    where YAML reads it as a continuation of whatever replaced it.
+
+    :param manifest_lines: The manifest, split into lines.
+    :param key_line: The line the key sits on.
+    :param end: One past the item block's last line.
+    :param manifest_key: The key whose value is being measured.
+    :return: One past the value's last line.
+    """
+    if not manifest_key.style.spans_lines_beneath:
+        return key_line + 1
+    key_indent = indentation_of(manifest_lines[key_line])
+    last_value_line = key_line
+    for index in range(key_line + 1, end):
+        line = manifest_lines[index]
+        if not line.strip():
+            continue
+        if indentation_of(line) <= key_indent:
+            break
+        last_value_line = index
+    return last_value_line + 1
+
+
+def indentation_of(line: str) -> int:
+    """
+    How many columns a line is indented by.
+
+    :param line: The line to measure.
+    :return: The width of its leading whitespace.
+    """
+    return len(line) - len(line.lstrip())
 
 
 def last_populated_line(manifest_lines: list[str], start: int, end: int) -> int:
@@ -1160,6 +1329,228 @@ def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapRepo
         item_identifier=request.item_identifier,
         created_item=created_item,
     )
+
+
+@dataclass(frozen=True)
+class ItemUpdateRequest:
+    """
+    What updating one item needs: which item, and which fields to set on it.
+
+    Separate from :class:`ItemRecordRequest` because most transitions change a field
+    without warranting a roadmap section, and ``record`` cannot express that - it reads
+    the section unconditionally.
+    """
+
+    plan_identifier: str
+    """
+    The plan the item belongs to.
+    """
+
+    item_identifier: str
+    """
+    The item being updated, which must already be tracked.
+    """
+
+    values_by_key: dict[ManifestKey, Any]
+    """
+    The value to write to each key, in the order they should be applied.
+    """
+
+
+def update_item(request: ItemUpdateRequest, project_root: Path) -> BootstrapReport:
+    """
+    Set one item's recorded fields and push the manifest, leaving the roadmap alone.
+
+    :param request: The item and the fields to set on it.
+    :param project_root: The repository to run within.
+    :raises UnknownPlanError: If the plan has no manifest on the notes branch.
+    :raises UnknownItemError: If the plan tracks no item of that id.
+    :return: What was written.
+    """
+    documents = PlanDocuments.load(request.plan_identifier, project_root)
+    manifest_text = apply_item_fields(
+        documents.manifest_text,
+        request.plan_identifier,
+        request.item_identifier,
+        {key: written_value(value) for key, value in request.values_by_key.items()},
+    )
+    documents.save(manifest_text, documents.roadmap_text, project_root)
+    return BootstrapReport(
+        exit_code=ExitCode.SUCCESS,
+        plan_identifier=request.plan_identifier,
+        item_identifier=request.item_identifier,
+    )
+
+
+def written_value(value: Any) -> str | Sequence[str]:
+    """
+    A caller's value in the form a key renders, so callers can pass what they hold.
+
+    :param value: The value to write - a status, a number, prose, or a sequence.
+    :return: The value a :class:`ManifestKey` renders.
+    """
+    if isinstance(value, str) or not isinstance(value, Sequence):
+        return str(value)
+    return [str(entry) for entry in value]
+
+
+# %% checking what the manifest claims against local git
+
+
+@dataclass(frozen=True)
+class StalenessFinding:
+    """
+    One recorded field that local git contradicts.
+    """
+
+    manifest_key: ManifestKey
+    """
+    The field whose recorded value is stale.
+    """
+
+    recorded: str | None
+    """
+    What the manifest says, or ``None`` where it says nothing.
+    """
+
+    observed: str
+    """
+    What git shows instead, in the terms a reader acts on.
+    """
+
+    def as_document(self) -> dict[str, Any]:
+        """
+        Render the finding as the JSON a caller reads.
+        """
+        return {
+            "field": self.manifest_key.key,
+            "recorded": self.recorded,
+            "observed": self.observed,
+        }
+
+
+@dataclass(frozen=True)
+class CurrencyReport:
+    """
+    Which of an item's recorded fields local git contradicts, if any.
+    """
+
+    plan_identifier: str
+    """
+    The plan the item belongs to.
+    """
+
+    item_identifier: str
+    """
+    The item that was checked.
+    """
+
+    findings: list[StalenessFinding]
+    """
+    Every stale field, in the order the fields are checked.
+    """
+
+    @property
+    def exit_code(self) -> ExitCode:
+        """
+        The status the process exits with, so a caller acting on the status alone reads
+        a stale manifest as something to fix rather than as a clean run.
+        """
+        return ExitCode.MANIFEST_IS_STALE if self.findings else ExitCode.SUCCESS
+
+    def as_document(self) -> dict[str, Any]:
+        """
+        Render the report as the JSON a caller reads, led by what it means.
+        """
+        return {
+            "status": self.exit_code.name_for_a_caller,
+            "exit_code": int(self.exit_code),
+            "plan": self.plan_identifier,
+            "item": self.item_identifier,
+            "findings": [finding.as_document() for finding in self.findings],
+            "dashboard_command": f"/plan-dashboard {self.plan_identifier}",
+        }
+
+
+def check_item(
+    plan_identifier: str,
+    item_identifier: str,
+    project_root: Path,
+    remote: str = "origin",
+) -> CurrencyReport:
+    """
+    Compare one item's recorded fields against what local git actually shows.
+
+    Deliberately local-only. The dashboard already compares the manifest against GitHub
+    after the fact; what nothing covers is the window before a push, where a session
+    knows the branch exists and every other reader still sees ``not_started``. Answering
+    it from git alone also keeps this importable by a hook, which cannot reach
+    ``sync_manifest_status.py`` - that module imports ``build_dashboard``, and so needs
+    jinja2 and markdown.
+
+    :param plan_identifier: The plan the item belongs to.
+    :param item_identifier: The item to check.
+    :param project_root: The repository to run within.
+    :param remote: The remote a branch would be published to.
+    :raises UnknownPlanError: If the plan has no manifest on the notes branch.
+    :raises UnknownItemError: If the plan tracks no item of that id.
+    :return: What is stale, if anything.
+    """
+    documents = PlanDocuments.load(plan_identifier, project_root)
+    item = documents.item(item_identifier)
+    recorded_branch = item.get(ManifestKey.BRANCH.key)
+    findings: list[StalenessFinding] = []
+
+    if recorded_branch and not branch_is_published(
+        recorded_branch, remote=remote, project_root=project_root
+    ):
+        findings.append(
+            StalenessFinding(
+                manifest_key=ManifestKey.BRANCH,
+                recorded=recorded_branch,
+                observed=f"no branch of that name on {remote}",
+            )
+        )
+        return CurrencyReport(plan_identifier, item_identifier, findings)
+
+    if not recorded_branch:
+        return CurrencyReport(plan_identifier, item_identifier, findings)
+
+    findings.extend(fields_a_published_branch_requires(item, recorded_branch))
+    return CurrencyReport(plan_identifier, item_identifier, findings)
+
+
+def fields_a_published_branch_requires(
+    item: dict[str, Any], branch: str
+) -> list[StalenessFinding]:
+    """
+    The fields an item whose branch is published should already carry.
+
+    :param item: The item's parsed manifest mapping.
+    :param branch: The published branch it records.
+    :return: One finding per field the item still leaves unset or contradicts.
+    """
+    observed = f"{branch} is published"
+    findings = [
+        StalenessFinding(
+            manifest_key=manifest_key,
+            recorded=None,
+            observed=observed,
+        )
+        for manifest_key in (ManifestKey.SESSION, ManifestKey.PULL_REQUEST_NUMBER)
+        if item.get(manifest_key.key) is None
+    ]
+    recorded_status = item.get(ManifestKey.STATUS.key)
+    if recorded_status == ItemStatus.NOT_STARTED.value:
+        findings.insert(
+            0,
+            StalenessFinding(
+                manifest_key=ManifestKey.STATUS,
+                recorded=recorded_status,
+                observed=observed,
+            ),
+        )
+    return findings
 
 
 def append_roadmap_section(roadmap_text: str, section: str) -> str:
@@ -1396,10 +1787,9 @@ class WorkOpener:
         :param branch: The branch to look for.
         :return: True when the remote already carries it.
         """
-        listing = run_git(
-            "ls-remote", "--heads", self.remote, branch, project_root=self.project_root
+        return branch_is_published(
+            branch, remote=self.remote, project_root=self.project_root
         )
-        return bool(listing.strip())
 
     def publish(self, request: WorkOpenRequest) -> None:
         """
@@ -1533,6 +1923,32 @@ def build_parser() -> argparse.ArgumentParser:
     record.add_argument("--title")
     record.add_argument("--track")
 
+    update = subcommands.add_parser(
+        "update", help="Set an item's recorded fields, without a roadmap section"
+    )
+    update.add_argument("--plan", required=True)
+    update.add_argument("--item", required=True)
+    update.add_argument("--status", type=ItemStatus)
+    update.add_argument("--branch")
+    update.add_argument("--pull-request-number", type=int)
+    update.add_argument("--session")
+    update.add_argument(
+        "--notes", type=Path, help="A file whose text becomes the item's notes"
+    )
+    update.add_argument(
+        "--blockers",
+        type=Path,
+        action="append",
+        help="A file whose text becomes one blocker; repeat for each",
+    )
+
+    check = subcommands.add_parser(
+        "check", help="Report which recorded fields local git contradicts"
+    )
+    check.add_argument("--plan", required=True)
+    check.add_argument("--item", required=True)
+    check.add_argument("--remote", default="origin")
+
     open_command = subcommands.add_parser(
         "open", help="Create the item's branch and draft pull request"
     )
@@ -1559,6 +1975,121 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def run_record(arguments: argparse.Namespace, project_root: Path) -> BootstrapReport:
+    """
+    Run the ``record`` subcommand from its parsed arguments.
+
+    :param arguments: The parsed command line.
+    :param project_root: The repository to run within.
+    :return: What was recorded.
+    """
+    return record_item(
+        ItemRecordRequest(
+            plan_identifier=arguments.plan,
+            item_identifier=arguments.item,
+            status=arguments.status,
+            roadmap_section_path=arguments.roadmap_section,
+            title=arguments.title,
+            track=arguments.track,
+        ),
+        project_root=project_root,
+    )
+
+
+def run_update(arguments: argparse.Namespace, project_root: Path) -> BootstrapReport:
+    """
+    Run the ``update`` subcommand from its parsed arguments.
+
+    Prose comes from files rather than the command line, the same way
+    ``--pull-request-body`` already does: a note is routinely longer than a shell
+    invocation should carry.
+
+    :param arguments: The parsed command line.
+    :param project_root: The repository to run within.
+    :return: What was written.
+    """
+    values_by_key: dict[ManifestKey, Any] = {
+        manifest_key: value
+        for manifest_key, value in (
+            (ManifestKey.STATUS, arguments.status),
+            (ManifestKey.BRANCH, arguments.branch),
+            (ManifestKey.PULL_REQUEST_NUMBER, arguments.pull_request_number),
+            (ManifestKey.SESSION, arguments.session),
+        )
+        if value is not None
+    }
+    if arguments.notes:
+        values_by_key[ManifestKey.NOTES] = arguments.notes.read_text()
+    if arguments.blockers:
+        values_by_key[ManifestKey.BLOCKERS] = [
+            blocker.read_text().strip() for blocker in arguments.blockers
+        ]
+    return update_item(
+        ItemUpdateRequest(
+            plan_identifier=arguments.plan,
+            item_identifier=arguments.item,
+            values_by_key=values_by_key,
+        ),
+        project_root=project_root,
+    )
+
+
+def run_check(arguments: argparse.Namespace, project_root: Path) -> CurrencyReport:
+    """
+    Run the ``check`` subcommand from its parsed arguments.
+
+    :param arguments: The parsed command line.
+    :param project_root: The repository to run within.
+    :return: What is stale, if anything.
+    """
+    return check_item(
+        arguments.plan,
+        arguments.item,
+        project_root=project_root,
+        remote=arguments.remote,
+    )
+
+
+def run_open(arguments: argparse.Namespace, project_root: Path) -> BootstrapReport:
+    """
+    Run the ``open`` subcommand from its parsed arguments.
+
+    :param arguments: The parsed command line.
+    :param project_root: The repository to run within.
+    :return: What was opened.
+    """
+    return open_work(
+        WorkOpenRequest(
+            plan_identifier=arguments.plan,
+            item_identifier=arguments.item,
+            branch=arguments.branch,
+            base_branch=arguments.base,
+            session_url=arguments.session,
+            pull_request_title=arguments.pull_request_title,
+            pull_request_body=(
+                arguments.pull_request_body.read_text()
+                if arguments.pull_request_body
+                else None
+            ),
+            pull_request_number=arguments.pull_request_number,
+        ),
+        project_root=project_root,
+        remote=arguments.remote,
+    )
+
+
+SUBCOMMAND_HANDLERS = {
+    "record": run_record,
+    "update": run_update,
+    "check": run_check,
+    "open": run_open,
+}
+"""
+What each subcommand runs, so adding one is a parser entry and a handler rather than
+another branch in :func:`main`.
+"""
+
+
 def main() -> int:
     """
     Parse arguments, run the requested operation, and print its report.
@@ -1569,37 +2100,7 @@ def main() -> int:
     project_root = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd()))
 
     try:
-        if arguments.subcommand == "record":
-            report = record_item(
-                ItemRecordRequest(
-                    plan_identifier=arguments.plan,
-                    item_identifier=arguments.item,
-                    status=arguments.status,
-                    roadmap_section_path=arguments.roadmap_section,
-                    title=arguments.title,
-                    track=arguments.track,
-                ),
-                project_root=project_root,
-            )
-        else:
-            report = open_work(
-                WorkOpenRequest(
-                    plan_identifier=arguments.plan,
-                    item_identifier=arguments.item,
-                    branch=arguments.branch,
-                    base_branch=arguments.base,
-                    session_url=arguments.session,
-                    pull_request_title=arguments.pull_request_title,
-                    pull_request_body=(
-                        arguments.pull_request_body.read_text()
-                        if arguments.pull_request_body
-                        else None
-                    ),
-                    pull_request_number=arguments.pull_request_number,
-                ),
-                project_root=project_root,
-                remote=arguments.remote,
-            )
+        report = SUBCOMMAND_HANDLERS[arguments.subcommand](arguments, project_root)
     except BootstrapError as error:
         print(f"{error.exit_code.name_for_a_caller}: {error}", file=sys.stderr)
         return int(error.exit_code)

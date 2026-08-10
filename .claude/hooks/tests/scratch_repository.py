@@ -93,6 +93,11 @@ class ScratchRepository:
         # committing here doesn't depend on the environment already having one.
         repository.run_git("config", "user.name", "Scratch Repo")
         repository.run_git("config", "user.email", "scratch-repo@example.com")
+        # A throwaway repository has no reason to sign, and an environment that signs
+        # by default makes every commit here depend on a reachable signing service -
+        # observed failing mid-suite with "signing server returned status 520", on a
+        # different test each run.
+        repository.run_git("config", "commit.gpgsign", "false")
         return repository
 
     def run_git(
