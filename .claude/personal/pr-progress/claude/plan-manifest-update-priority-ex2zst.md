@@ -1,58 +1,52 @@
 # manifest-currency-first (workflow-unification)
 
 Branch `claude/plan-manifest-update-priority-ex2zst` off fork `main`, draft PR
-**#151**. Item is `in_progress`; manifest, roadmap and dashboard all written
-before the first edit, per the ordering this item exists to generalize.
+**#151**, item `in_progress`. Implemented; awaiting your review.
 
-## The item
+## What shipped
 
-Every skill that can affect a plan writes the manifest and republishes the
-dashboard first, at every transition that makes a recorded field stale.
-Generalizes what `plan-item-bootstrap` (#143) did for the single kickoff moment.
-Six bound surfaces: `plan-create`, `add-plan-item`, `plan-item-kickoff`,
-`plan-item-resolve`, `plan-dashboard`, `stacked-pr-maintenance`.
+Three operations on `.claude/hooks/plan_item_bootstrap.py` — block-styled field
+writing, `update` (any field, no roadmap section), `check` (recorded fields vs
+local git, exits `manifest_is_stale`) — plus
+`.claude/skills/plan-dashboard/manifest-currency.md` and its constant, cited by
+each bound skill.
 
-## Approved plan
+389 tests across the three CI directories, against 367 on `main`. Every new test
+mutation-checked.
 
-All three operations extend `.claude/hooks/plan_item_bootstrap.py` (it already
-owns `PlanDocuments`, `ManifestKey`, `ItemStatus`, `apply_item_fields`,
-`BootstrapReport`, `run_git`):
+## Two premises corrected during the work
 
-1. Block-styled field writing — fixes the silent `notes` corruption below.
-2. `update` — write any tracked field, no mandatory roadmap section.
-3. `check` — recorded fields vs local git state; own non-zero exit status.
-4. `manifest-currency.md` + `MANIFEST_CURRENCY_DOCUMENT` constant, referenced in
-   one subsection by each of the six skills.
+- **`sync_manifest_status.py` cannot be the reuse seam** the item's notes named:
+  it reaches `build_dashboard` → jinja2/markdown/nh3, so a hook cannot import it,
+  and it answers a post-hoc GitHub-side question. The split is by what each can
+  see — dashboard vs GitHub after the fact, `check` vs local git before a push.
+- **Writing `notes` silently concatenated** onto the old note and still validated.
+  Latent since #143 gave `NOTES`/`BLOCKERS` members and no writer.
 
-## Two premises corrected at kickoff — both changed the plan
+## Where the real gap was
 
-- **`sync_manifest_status.py` cannot be the reuse seam.** It imports
-  `build_dashboard` → `render_common` → jinja2/markdown/nh3, so a hook cannot
-  import it, and it answers a different question (post-hoc, GitHub-side, one
-  direction). The split is by what each can see: dashboard vs GitHub after the
-  fact; `check` vs local git before a push. Keeps the hook tier stdlib-only and
-  leaves `check` importable by `plan-item-edit-guard`.
-- **Writing `notes` today silently concatenates** the new note onto the old one
-  and still validates. Verified against the module's own fixture.
+`plan-item-resolve` wrote the manifest nowhere at all — the skill that exists to
+diagnose a stalled item was the one guaranteed not to record the diagnosis. It now
+records what it found before proposing anything.
 
-## Progress
+## Verified live
 
-- [x] Branch, draft PR #151, `open` + `record`, roadmap section, dashboard
-      republished, subscribed to #151 and to tracking issue #102.
-- [ ] Block-styled writing (failing test first: writing `notes` preserves the
-      existing note).
-- [ ] `update` operation + tests.
-- [ ] `check` operation + tests.
-- [ ] `manifest-currency.md`, the constant, six skill references, contract test.
-- [ ] Mutation-check every new test; full suite from a clean clone.
+`check` across all 41 items of this plan: one true positive
+(`dependency-chips-blocked-fix`, published branch with no `session`, exit 9), 40
+clean. `update` wrote this item's own notes.
 
-## Deferred, with reasons
+## Open for you
 
-- **No rename of `plan_item_bootstrap.py`** (user's call): the package migration
-  that already moves it renames it once, rather than twice with three branches
-  rebasing across the first attempt. Same call #106 made for splitting `stack.py`.
-- **`stacked-pr-maintenance` reports, does not write** — it runs unattended under
-  `--non-interactive`, and why a status changed is judgement the shared document
-  keeps with a session. The one place the rule is deliberately weaker.
-- **The `add-plan-item/SKILL.md` reference line** can only land here if #135
-  merges first; #135 is marked ready, so it is not a session's to push to.
+- **CI is red base-side**, not this branch's: `greenlet` 3.5.5 has no Linux wheel,
+  so `uv` fails to resolve before any test runs; `main`'s own run failed 11 jobs
+  three minutes earlier. Blocks every PR in the repo. Reported on #151, offered as
+  its own bug-labelled item — your call whether to take it.
+- **No rename of `plan_item_bootstrap.py`**, per your earlier call; the package
+  migration renames it once.
+- **The `add-plan-item/SKILL.md` reference line** lands here only if #135 merges
+  first.
+
+## Incidental
+
+Scratch fixture disables commit signing — the suite was failing on a different
+test each run against this environment's signing service, and it halved runtime.
