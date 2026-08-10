@@ -92,10 +92,16 @@
   amended to gmail author (session env had GIT_AUTHOR_EMAIL=uni address).
 - Replied on the PR; left needs-resolution label for the routine to auto-clear.
 
+## 2026-08-10 (later): known sdt flake on b6769dd73's run
+- Run 31393956085 sdt job: `test_world_sim_state_sync` "Box did not settle at
+  target" — the exact multi-sim physics flake from 07-30 (parts 2/3), 1 failed /
+  1172 passed. Predicted duplicate, no new PR comment.
+- rerun_failed_jobs refused (workflow still running). Needs a rerun once the
+  run completes — user click or next event wake.
+
 ## Next
-- Await CI on b6769dd73; also still outstanding from earlier heads: robokudo
-  network-outage rerun (superseded if this head's run is green). Act via events
-  or user ping — no timed polling.
+- Await rest of run 31393956085 on b6769dd73; rerun failed sdt job when the run
+  completes (event wake or user ping — no timed polling).
 - Once a head goes fully green: PR ready for user review/mark-ready. The restack
   routine handles #54/#14/#15.
 - Candidate separate bug-fix PR (needs user approval to open): guard the coraplex
