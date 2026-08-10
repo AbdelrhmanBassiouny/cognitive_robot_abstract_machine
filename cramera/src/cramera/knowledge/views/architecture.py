@@ -66,17 +66,10 @@ class SubgraphViewPayload:
             },
         }
 
-
-class ArchitectureViews:
-    """
-    Drill-down views of the CRAM architecture: packages, subpackages and classes.
-    """
-
     MAXIMUM_CLASSES_SHOWN = 150
     """
     At most this many classes are drawn in one drill-down view.
     """
-
     MAXIMUM_SUBCLASSES_SHOWN = 80
     """
     At most this many subclasses are drawn in a class inheritance view.
@@ -153,7 +146,7 @@ class ArchitectureViews:
         return []
 
     @classmethod
-    def package_view(
+    def for_package(
         cls, knowledge_base: EpisodeKnowledgeBase, package: Package
     ) -> SubgraphViewPayload:
         """
@@ -204,12 +197,10 @@ class ArchitectureViews:
         )
         if note:
             view.details[package.name].lines += note
-        return SubgraphViewPayload(
-            True, package.name, view.nodes, view.edges, view.details
-        )
+        return cls(True, package.name, view.nodes, view.edges, view.details)
 
     @classmethod
-    def subpackage_view(
+    def for_subpackage(
         cls, knowledge_base: EpisodeKnowledgeBase, subpackage: SubPackage
     ) -> SubgraphViewPayload:
         """
@@ -243,12 +234,12 @@ class ArchitectureViews:
         )
         if note:
             view.details[subpackage.name].lines += note
-        return SubgraphViewPayload(
+        return cls(
             True, subpackage.name.split(".", 1)[1], view.nodes, view.edges, view.details
         )
 
     @classmethod
-    def class_view(
+    def for_class(
         cls, knowledge_base: EpisodeKnowledgeBase, python_class: PythonClass
     ) -> SubgraphViewPayload:
         """
@@ -320,6 +311,4 @@ class ArchitectureViews:
                 "showing %d of %d subclasses"
                 % (cls.MAXIMUM_SUBCLASSES_SHOWN, len(subclasses))
             )
-        return SubgraphViewPayload(
-            True, python_class.name, view.nodes, view.edges, view.details
-        )
+        return cls(True, python_class.name, view.nodes, view.edges, view.details)

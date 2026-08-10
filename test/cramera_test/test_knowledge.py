@@ -16,7 +16,7 @@ from cramera.knowledge.knowledge_base import (  # noqa: E402
 )
 from cramera.knowledge.presets import get_presets  # noqa: E402
 from cramera.knowledge.scene_bundle import load_scene  # noqa: E402
-from cramera.knowledge.views.architecture import ArchitectureViews  # noqa: E402
+from cramera.knowledge.views.architecture import SubgraphViewPayload  # noqa: E402
 from cramera.knowledge.views.dispatcher import (  # noqa: E402
     expand_node,
     view_payload,
@@ -664,7 +664,7 @@ class TestExpandNode:
                 methods=index,
                 docstring_summary="",
             )
-            for index in range(ArchitectureViews.MAXIMUM_CLASSES_SHOWN + 1)
+            for index in range(SubgraphViewPayload.MAXIMUM_CLASSES_SHOWN + 1)
         ]
         knowledge_base.packages = knowledge_base.packages + [
             Package(name="synthetic_pkg", description="", module_count=0, class_count=0)
@@ -674,8 +674,8 @@ class TestExpandNode:
         assert payload.details["synthetic_pkg"].lines[-1] == (
             "showing the %d largest of %d classes (by method count)"
             % (
-                ArchitectureViews.MAXIMUM_CLASSES_SHOWN,
-                ArchitectureViews.MAXIMUM_CLASSES_SHOWN + 1,
+                SubgraphViewPayload.MAXIMUM_CLASSES_SHOWN,
+                SubgraphViewPayload.MAXIMUM_CLASSES_SHOWN + 1,
             )
         )
 
@@ -700,7 +700,7 @@ class TestExpandNode:
                 methods=0,
                 docstring_summary="",
             )
-            for index in range(ArchitectureViews.MAXIMUM_SUBCLASSES_SHOWN + 1)
+            for index in range(SubgraphViewPayload.MAXIMUM_SUBCLASSES_SHOWN + 1)
         ]
         knowledge_base.classes = (
             knowledge_base.classes + [base_class] + synthetic_subclasses
@@ -709,8 +709,8 @@ class TestExpandNode:
         assert payload.details["synthetic_pkg.base.SyntheticBase"].lines[-1] == (
             "showing %d of %d subclasses"
             % (
-                ArchitectureViews.MAXIMUM_SUBCLASSES_SHOWN,
-                ArchitectureViews.MAXIMUM_SUBCLASSES_SHOWN + 1,
+                SubgraphViewPayload.MAXIMUM_SUBCLASSES_SHOWN,
+                SubgraphViewPayload.MAXIMUM_SUBCLASSES_SHOWN + 1,
             )
         )
 

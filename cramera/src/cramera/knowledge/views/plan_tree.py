@@ -90,6 +90,55 @@ class PlanViewPayload:
             "empty": "No plan tree in this bundle — re-run cramera-onboard.",
         }
 
+    @classmethod
+    def of_recorded_plan(cls) -> PlanViewPayload:
+        """
+        The executed plan as a tree, one node per plan node the demo ran.
+
+        The recorded statuses are thin on purpose: coraplex performs only the
+        plan *root* (``Plan.perform`` → ``root.perform``), while
+        ``ActionNode.notify`` merely expands its children into the merged motion
+        statechart. So every inner node of a recorded tree reads ``CREATED``, and
+        real per-step progress only shows up while the live bridge is attached
+        (it derives it from the statechart life cycle).
+        """
+        scene = load_scene().scene
+        trees = scene.get("planTrees") or []
+        view = SubgraphAccumulator()
+        counter = [0]
+
+        def walk(tree: Dict[str, Any], parent: Optional[str]) -> None:
+            """
+            Add this plan node (with a freshly assigned id) and recurse into its children.
+
+            :param tree: The serialized plan node to add.
+            :param parent: Id of the node's parent entry, or None for the root.
+            """
+            node_id = "plan_tree_node_%d" % counter[0]
+            counter[0] += 1
+            status = tree.get("status") or "CREATED"
+            lines = ["a " + tree.get("kind", "PlanNode"), "status: " + status]
+            if tree.get("arm"):
+                lines.append("arm: " + tree["arm"])
+            if tree.get("target"):
+                lines.append("target: " + tree["target"])
+            label = shorten_action_label(tree.get("label", "?"))
+            view.add(
+                node_id,
+                label,
+                PLAN_GROUPS.get(tree.get("kind"), NodeGroup.OTHER),
+                lines,
+                status=status,
+            )
+            if parent:
+                view.add_edge(parent, node_id, EdgeKind.PROPERTY, "has step")
+            for child in tree.get("children", []):
+                walk(child, node_id)
+
+        for tree in trees:
+            walk(tree, None)
+        return cls(True, view.nodes, view.edges, view.details)
+
 
 def shorten_action_label(label: str) -> str:
     """
@@ -101,52 +150,3 @@ def shorten_action_label(label: str) -> str:
     :param label: The plan-node label to shorten.
     """
     return label.removesuffix("Action") or label
-
-
-def _plan_view() -> PlanViewPayload:
-    """
-    The executed plan as a tree, one node per plan node the demo ran.
-
-    The recorded statuses are thin on purpose: coraplex performs only the
-    plan *root* (``Plan.perform`` → ``root.perform``), while
-    ``ActionNode.notify`` merely expands its children into the merged motion
-    statechart. So every inner node of a recorded tree reads ``CREATED``, and
-    real per-step progress only shows up while the live bridge is attached
-    (it derives it from the statechart life cycle).
-    """
-    scene = load_scene().scene
-    trees = scene.get("planTrees") or []
-    view = SubgraphAccumulator()
-    counter = [0]
-
-    def walk(tree: Dict[str, Any], parent: Optional[str]) -> None:
-        """
-        Add this plan node (with a freshly assigned id) and recurse into its children.
-
-        :param tree: The serialized plan node to add.
-        :param parent: Id of the node's parent entry, or None for the root.
-        """
-        node_id = "plan_tree_node_%d" % counter[0]
-        counter[0] += 1
-        status = tree.get("status") or "CREATED"
-        lines = ["a " + tree.get("kind", "PlanNode"), "status: " + status]
-        if tree.get("arm"):
-            lines.append("arm: " + tree["arm"])
-        if tree.get("target"):
-            lines.append("target: " + tree["target"])
-        label = shorten_action_label(tree.get("label", "?"))
-        view.add(
-            node_id,
-            label,
-            PLAN_GROUPS.get(tree.get("kind"), NodeGroup.OTHER),
-            lines,
-            status=status,
-        )
-        if parent:
-            view.add_edge(parent, node_id, EdgeKind.PROPERTY, "has step")
-        for child in tree.get("children", []):
-            walk(child, node_id)
-
-    for tree in trees:
-        walk(tree, None)
-    return PlanViewPayload(True, view.nodes, view.edges, view.details)

@@ -24,6 +24,13 @@ class ChartViewPayload:
     Always ``True`` — this view has no failure mode.
     """
 
+    @classmethod
+    def live_only(cls) -> ChartViewPayload:
+        """
+        The statechart tab, which only ever has content while a demo is running.
+        """
+        return cls(True)
+
     def to_payload(self) -> Dict[str, Any]:
         """
         The JSON-serializable shape the frontend expects.
@@ -41,10 +48,3 @@ class ChartViewPayload:
             "the statechart of the running motion group appears here, "
             "coloured by its node life cycle.",
         }
-
-
-def _chart_view() -> ChartViewPayload:
-    """
-    The (live-only) statechart tab.
-    """
-    return ChartViewPayload(True)

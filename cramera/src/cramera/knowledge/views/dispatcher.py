@@ -11,13 +11,10 @@ from typing_extensions import Any, Dict, Optional
 
 from cramera.knowledge.graph_payload import KnowledgeGraphPayload, graph_payload
 from cramera.knowledge.knowledge_base import get_knowledge_base
-from cramera.knowledge.views.architecture import (
-    ArchitectureViews,
-    SubgraphViewPayload,
-)
-from cramera.knowledge.views.chart import ChartViewPayload, _chart_view
-from cramera.knowledge.views.kinematics import UrdfViewPayload, _urdf_view
-from cramera.knowledge.views.plan_tree import PlanViewPayload, _plan_view
+from cramera.knowledge.views.architecture import SubgraphViewPayload
+from cramera.knowledge.views.chart import ChartViewPayload
+from cramera.knowledge.views.kinematics import UrdfViewPayload
+from cramera.knowledge.views.plan_tree import PlanViewPayload
 
 
 @dataclass
@@ -69,11 +66,11 @@ def view_payload(name: str) -> Union[ViewPayload, UnknownViewPayload]:
     if name == "knowledge":
         return graph_payload()
     if name == "kinematics":
-        return _urdf_view(knowledge_base)
+        return UrdfViewPayload.of_knowledge_base(knowledge_base)
     if name == "plan":
-        return _plan_view()
+        return PlanViewPayload.of_recorded_plan()
     if name == "chart":
-        return _chart_view()
+        return ChartViewPayload.live_only()
     return UnknownViewPayload(False, "unknown view: %s" % name)
 
 
@@ -85,23 +82,23 @@ def expand_node(node_id: str) -> Optional[ViewPayload]:
     """
     knowledge_base = get_knowledge_base()
     if node_id == knowledge_base.robot.name:  # robot → full URDF kinematic tree
-        return _urdf_view(knowledge_base)
+        return UrdfViewPayload.of_knowledge_base(knowledge_base)
     if node_id == "plan":  # → the executed plan tree
-        return _plan_view()
+        return PlanViewPayload.of_recorded_plan()
     package = next(
         (entry for entry in knowledge_base.packages if entry.name == node_id), None
     )
     if package:
-        return ArchitectureViews.package_view(knowledge_base, package)
+        return SubgraphViewPayload.for_package(knowledge_base, package)
     subpackage = next(
         (entry for entry in knowledge_base.subpackages if entry.name == node_id), None
     )
     if subpackage:
-        return ArchitectureViews.subpackage_view(knowledge_base, subpackage)
+        return SubgraphViewPayload.for_subpackage(knowledge_base, subpackage)
     python_class = next(
         (entry for entry in knowledge_base.classes if entry.qualified_name == node_id),
         None,
     )
     if python_class:
-        return ArchitectureViews.class_view(knowledge_base, python_class)
+        return SubgraphViewPayload.for_class(knowledge_base, python_class)
     return None

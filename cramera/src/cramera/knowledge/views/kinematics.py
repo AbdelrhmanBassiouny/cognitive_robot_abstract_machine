@@ -76,100 +76,101 @@ class UrdfViewPayload:
             payload["legend"] = [asdict(entry) for entry in self.legend]
         return payload
 
+    @classmethod
+    def of_knowledge_base(cls, knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
+        """
+        The scene robot's URDF as a kinematic tree.
 
-def _is_movable(joint: UrdfJoint) -> bool:
-    """
-    Whether a URDF joint can move (every type except ``fixed``).
+        Every link is a node, every joint an edge (parent → child); movable joints are
+        solid edges, fixed ones dashed. Links are coloured by robot part from the
+        recorded annotation.
 
-    :param joint: The URDF joint to check.
-    """
-    return joint.type != JointType.FIXED
+        :param knowledge_base: The knowledge base whose robot's URDF is rendered.
+        """
+        parsed_urdf = load_urdf()
+        links, joints = parsed_urdf.links, parsed_urdf.joints
+        view = SubgraphAccumulator()
+        if not links:
+            return cls(
+                True, knowledge_base.robot.name + " · URDF (not found)", [], [], {}
+            )
 
+        scene = load_scene().scene
+        parts = (scene.get("robot") or {}).get("parts") or {}
+        link_to_part = {
+            link: part for part, part_links in parts.items() for link in part_links
+        }
 
-def _urdf_view(knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
-    """
-    The scene robot's URDF as a kinematic tree.
+        def chain_group(link_name: str) -> NodeGroup:
+            """
+            The visual group (colour) a kinematic-chain link is bucketed into.
 
-    Every link is a node, every joint an edge (parent → child); movable joints are solid
-    edges, fixed ones dashed. Links are coloured by robot part from the recorded
-    annotation.
+            :param link_name: Name of the link to classify.
+            """
+            part = link_to_part.get(link_name, "").lower()
+            if "gripper" in part or "hand" in part or "effector" in part:
+                return NodeGroup.OBJECT  # grippers (teal)
+            if "left" in part:
+                return NodeGroup.ROBOT  # left arm (pink)
+            if "right" in part:
+                return NodeGroup.EVENT  # right arm (purple)
+            lowered = link_name.lower()
+            if any(
+                keyword in lowered
+                for keyword in ("head", "stereo", "sensor", "kinect", "camera", "laser")
+            ):
+                return NodeGroup.GOAL  # head / sensors (amber)
+            return NodeGroup.CONCEPT  # base, torso, casters (green)
 
-    :param knowledge_base: The knowledge base whose robot's URDF is rendered.
-    """
-    parsed_urdf = load_urdf()
-    links, joints = parsed_urdf.links, parsed_urdf.joints
-    view = SubgraphAccumulator()
-    if not links:
-        return UrdfViewPayload(
-            True, knowledge_base.robot.name + " · URDF (not found)", [], [], {}
+        # which joint drives each link (child link → its parent joint), for tooltips
+        parent_joint = {joint.child: joint for joint in joints}
+        for link in links:
+            joint = parent_joint.get(link)
+            lines = ["a URDF Link"]
+            if joint:
+                lines.append("joint: %s (%s)" % (joint.name, joint.type.name.lower()))
+                lines.append("parent link: " + joint.parent)
+            else:
+                lines.append("root link")
+            view.add("urdf:" + link, link, chain_group(link), lines)
+        for joint in joints:
+            if ("urdf:" + joint.parent) in view.details and (
+                "urdf:" + joint.child
+            ) in view.details:
+                view.add_edge(
+                    "urdf:" + joint.parent,
+                    "urdf:" + joint.child,
+                    EdgeKind.PROPERTY if cls._is_movable(joint) else EdgeKind.TYPE,
+                    "%s (%s)" % (joint.name, joint.type.name.lower()),
+                )
+        movable_count = sum(1 for joint in joints if cls._is_movable(joint))
+        view.details["urdf:" + links[0]].lines.append(
+            "%d links · %d joints (%d movable)"
+            % (len(links), len(joints), movable_count)
+        )
+        legend = [
+            LegendEntry(NodeGroup.CONCEPT, "Base / torso"),
+            LegendEntry(NodeGroup.ROBOT, "Left arm"),
+            LegendEntry(NodeGroup.EVENT, "Right arm"),
+            LegendEntry(NodeGroup.OBJECT, "Grippers"),
+            LegendEntry(NodeGroup.GOAL, "Head / sensors"),
+        ]
+        # force-directed, not hierarchical: the chains read better when the arms and
+        # the sensor head spread out around the base than as one wide LR tree
+        return cls(
+            True,
+            knowledge_base.robot.name + " · URDF",
+            view.nodes,
+            view.edges,
+            view.details,
+            legend,
         )
 
-    scene = load_scene().scene
-    parts = (scene.get("robot") or {}).get("parts") or {}
-    link_to_part = {
-        link: part for part, part_links in parts.items() for link in part_links
-    }
-
-    def chain_group(link_name: str) -> NodeGroup:
+    @staticmethod
+    def _is_movable(joint: UrdfJoint) -> bool:
         """
-        The visual group (colour) a kinematic-chain link is bucketed into.
+        Whether a URDF joint can move (every type except ``fixed``).
 
-        :param link_name: Name of the link to classify.
+        :param joint: The URDF joint to check.
         """
-        part = link_to_part.get(link_name, "").lower()
-        if "gripper" in part or "hand" in part or "effector" in part:
-            return NodeGroup.OBJECT  # grippers (teal)
-        if "left" in part:
-            return NodeGroup.ROBOT  # left arm (pink)
-        if "right" in part:
-            return NodeGroup.EVENT  # right arm (purple)
-        lowered = link_name.lower()
-        if any(
-            keyword in lowered
-            for keyword in ("head", "stereo", "sensor", "kinect", "camera", "laser")
-        ):
-            return NodeGroup.GOAL  # head / sensors (amber)
-        return NodeGroup.CONCEPT  # base, torso, casters (green)
-
-    # which joint drives each link (child link → its parent joint), for tooltips
-    parent_joint = {joint.child: joint for joint in joints}
-    for link in links:
-        joint = parent_joint.get(link)
-        lines = ["a URDF Link"]
-        if joint:
-            lines.append("joint: %s (%s)" % (joint.name, joint.type.name.lower()))
-            lines.append("parent link: " + joint.parent)
-        else:
-            lines.append("root link")
-        view.add("urdf:" + link, link, chain_group(link), lines)
-    for joint in joints:
-        if ("urdf:" + joint.parent) in view.details and (
-            "urdf:" + joint.child
-        ) in view.details:
-            view.add_edge(
-                "urdf:" + joint.parent,
-                "urdf:" + joint.child,
-                EdgeKind.PROPERTY if _is_movable(joint) else EdgeKind.TYPE,
-                "%s (%s)" % (joint.name, joint.type.name.lower()),
-            )
-    movable_count = sum(1 for joint in joints if _is_movable(joint))
-    view.details["urdf:" + links[0]].lines.append(
-        "%d links · %d joints (%d movable)" % (len(links), len(joints), movable_count)
-    )
-    legend = [
-        LegendEntry(NodeGroup.CONCEPT, "Base / torso"),
-        LegendEntry(NodeGroup.ROBOT, "Left arm"),
-        LegendEntry(NodeGroup.EVENT, "Right arm"),
-        LegendEntry(NodeGroup.OBJECT, "Grippers"),
-        LegendEntry(NodeGroup.GOAL, "Head / sensors"),
-    ]
-    # force-directed, not hierarchical: the chains read better when the arms and
-    # the sensor head spread out around the base than as one wide LR tree
-    return UrdfViewPayload(
-        True,
-        knowledge_base.robot.name + " · URDF",
-        view.nodes,
-        view.edges,
-        view.details,
-        legend,
-    )
+        return joint.type != JointType.FIXED
