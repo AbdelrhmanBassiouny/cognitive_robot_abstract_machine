@@ -79,6 +79,17 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   It takes `fork=` / `upstream=` arguments, falls back to `configuration`, and asks (or, with
   `--non-interactive`, stops) when neither answers. Its `routine-prompt.md` is the template to
   register when you want the pass to run unattended.
+- **`integration.py`** - builds the branch you *work from* while the review queue lags: the
+  upstream base with every in-flight stack tip merged on top, regenerated from scratch each time.
+  It writes to no branch and pushes nothing.
+  - `python .claude/stack/integration.py build` - assemble it, then run the suite on the result.
+    `--restack` brings stale tips forward first, which pushes to other people's branches and is
+    why it is opt-in; `--no-test` skips the suite; `--json` emits the whole build as one document.
+  - `stage-conflict` / `record-resolution` - reproduce one collision, and record what was chosen
+    so later builds replay it instead of skipping the tip again.
+- **`.claude/skills/integration-conflict-triage/SKILL.md`** - what a collision between two
+  in-flight branches *means*, which the build deliberately does not decide. Invocable as
+  `/integration-conflict-triage`.
 
 ## The state machine (your approval gate)
 
@@ -119,6 +130,21 @@ never asks twice. Pass them explicitly to skip resolution entirely:
 
 To run it unattended, register it as a scheduled Routine; the prompt to paste is in
 [`routine-prompt.md`](../skills/stacked-pr-maintenance/routine-prompt.md).
+
+## Working from an integration branch
+
+The loop above gets branches *reviewed*; it does nothing for the fact that you cannot use two
+unlanded features at once. `integration.py build` assembles them into one branch to work from,
+and moves `integration` to whatever it just built:
+
+```bash
+python .claude/stack/integration.py build
+```
+
+It gates nothing. Promotion asks whether one branch is ready for review; integration asks whether
+the branches coexist, and a collision between two of yours is not a reason to hold either back.
+A tip that collides is skipped so the rest still builds, and the report names the **pair** - which
+of the two should change is a judgement, and `/integration-conflict-triage` is where it is made.
 
 ## Rules of hygiene
 

@@ -105,6 +105,7 @@ def make_configuration() -> Configuration:
         upstream_remote="cram2",
         upstream_base=UPSTREAM_BASE,
         upstream_setup_command=None,
+        integration_test_command="true",
     )
 
 

@@ -181,14 +181,25 @@ class GitCommandRunner:
     working_directory: Path
     """The checkout every command runs in."""
 
+    configuration_overrides: tuple[tuple[str, str], ...] = ()
+    """Settings passed to every command as ``-c <key>=<value>``, so a run can turn a
+    git feature on for itself without writing it into the repository's own
+    configuration - which is shared with the developer who invoked it."""
+
     def attempt(self, *arguments: str) -> GitCommandResult:
         """Run a command whose failure is an expected outcome.
 
         :param arguments: The git subcommand and its arguments.
-        :return: The finished command.
+        :return: The finished command, named by the arguments it was asked for rather
+            than by the ones git was handed, so a caller reads back what it requested.
         """
+        overrides = [
+            part
+            for key, value in self.configuration_overrides
+            for part in ("-c", f"{key}={value}")
+        ]
         completed = subprocess.run(
-            ["git", *arguments],
+            ["git", *overrides, *arguments],
             cwd=self.working_directory,
             capture_output=True,
             text=True,
@@ -270,6 +281,26 @@ class GitCommandRunner:
         return self.attempt(
             "push", "--quiet", *lease, proposed.remote, proposed.refspec
         )
+
+    def merges_cleanly(self, one: str, other: str) -> bool:
+        """Ask whether two references would merge, without merging them.
+
+        ``merge-tree`` performs the whole three-way merge against a tree it writes and
+        throws away, so this can be asked of a checkout that is mid-build without
+        disturbing what it is holding.
+
+        :param one: A reference to merge.
+        :param other: The reference to merge it with.
+        :return: Whether the merge would conflict.
+        """
+        return self.attempt("merge-tree", "--write-tree", one, other).succeeded
+
+    def conclude_merge(self) -> GitCommandResult:
+        """Commit a merge whose conflicts are already resolved and staged.
+
+        :return: The finished commit.
+        """
+        return self.attempt("commit", "--no-edit")
 
     def contains(self, candidate: str, descendant: str) -> bool:
         """:param candidate: The reference that may be contained.

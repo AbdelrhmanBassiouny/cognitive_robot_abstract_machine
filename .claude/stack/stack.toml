@@ -27,3 +27,9 @@ fork_remote = "origin"
 upstream_repository = "cram2/cognitive_robot_abstract_machine"  # constant for every contributor; the fork is whichever remote is not this
 upstream_remote = "cram2"        # name to give the upstream remote when one has to be added
 upstream_base = "main"
+# integration_test_command: run by `integration.py build` on the finished integration branch.
+# The integration branch merges every in-flight stack tip, so it is the only place a semantic
+# conflict between two branches that each pass their own checks can show up. Which suite is
+# worth running is a property of the repository rather than of the tool, so it is configurable;
+# this default is the tooling suite CI's own `test_claude_dev_tooling` job runs.
+integration_test_command = "python3 -m pytest .claude/skills/plan-dashboard/tests .claude/hooks/tests .claude/stack/tests"

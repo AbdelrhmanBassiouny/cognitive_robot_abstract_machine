@@ -318,6 +318,12 @@ class Configuration:
     upstream_setup_command: str | None
     """The command adding the upstream remote, or ``None`` once this checkout has one."""
 
+    integration_test_command: str = ""
+    """The command run against a finished integration branch, as a shell-style word list.
+
+    Empty when this checkout's configuration names none, which the integration build
+    refuses rather than reading as a suite that passed."""
+
 
 def load_configuration(
     path: Path = CONFIGURATION_PATH,
@@ -352,6 +358,7 @@ def load_configuration(
         upstream_remote=resolution.upstream_name,
         upstream_base=values.get("upstream_base", "main"),
         upstream_setup_command=resolution.upstream_setup_command,
+        integration_test_command=values.get("integration_test_command", ""),
     )
 
 
@@ -1351,12 +1358,14 @@ def print_configuration(configuration: Configuration) -> None:
 
     Keys are :class:`Configuration`'s own field names, so a caller reading one by name cannot
     be reading a name this module never prints. A setting with no value is omitted rather than
-    printed empty, which is what keeps ``upstream_setup_command`` readable as "run this".
+    printed empty - whether it carries no value by being unset (``upstream_setup_command``,
+    which is readable as "run this" precisely because it is absent otherwise) or by being
+    empty (``integration_test_command``, which a checkout need not name at all).
 
     :param configuration: The configuration to report.
     """
     for name, value in vars(configuration).items():
-        if value is None:
+        if not value:
             continue
         print(f"{name}\t{value}")
 
