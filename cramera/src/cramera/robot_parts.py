@@ -111,74 +111,74 @@ class RobotPartAnnotation:
             attached_to=payload.get("attachedTo"),
         )
 
+    @staticmethod
+    def link_names(part: AbstractRobotPart) -> List[str]:
+        """
+        A robot part's link names, stripped of their model-name prefix.
 
-# %% reading them off a world's robot
+        :param part: The robot part whose link names are read.
+        """
+        names = []
+        for body in part.bodies or []:
+            name = str(body.name)
+            names.append(name.split("/", 1)[1] if "/" in name else name)
+        return names
 
+    @staticmethod
+    def _arm_sides(robot: AbstractRobot) -> Dict[int, ArmSide]:
+        """
+        The side of every arm the robot names as its left or its right one, keyed by arm
+        identity.
 
-def link_names(part: AbstractRobotPart) -> List[str]:
-    """
-    A robot part's link names, stripped of their model-name prefix.
+        Robots that do not specify a left and a right arm contribute nothing, which is what
+        leaves a one-armed robot's arm sideless.
 
-    :param part: The robot part whose link names are read.
-    """
-    names = []
-    for body in part.bodies or []:
-        name = str(body.name)
-        names.append(name.split("/", 1)[1] if "/" in name else name)
-    return names
+        :param robot: The robot whose arm annotations are read.
+        """
+        sides = {}
+        left_arm = robot.get_left_arm_if_specified()
+        if left_arm is not None:
+            sides[id(left_arm)] = ArmSide.LEFT
+        right_arm = robot.get_right_arm_if_specified()
+        if right_arm is not None:
+            sides[id(right_arm)] = ArmSide.RIGHT
+        return sides
 
+    @classmethod
+    def of_robot(cls, robot: AbstractRobot) -> List[RobotPartAnnotation]:
+        """
+        Every arm of a robot and the end effector it carries, in publication order.
 
-def _arm_sides(robot: AbstractRobot) -> Dict[int, ArmSide]:
-    """
-    The side of every arm the robot names as its left or its right one, keyed by arm
-    identity.
-
-    Robots that do not specify a left and a right arm contribute nothing, which is what
-    leaves a one-armed robot's arm sideless.
-
-    :param robot: The robot whose arm annotations are read.
-    """
-    sides = {}
-    left_arm = robot.get_left_arm_if_specified()
-    if left_arm is not None:
-        sides[id(left_arm)] = ArmSide.LEFT
-    right_arm = robot.get_right_arm_if_specified()
-    if right_arm is not None:
-        sides[id(right_arm)] = ArmSide.RIGHT
-    return sides
-
-
-def describe_robot_parts(robot: AbstractRobot) -> List[RobotPartAnnotation]:
-    """
-    Every arm of a robot and the end effector it carries, in publication order.
-
-    :param robot: The robot annotation of the world being recorded or served.
-    """
-    sides = _arm_sides(robot)
-    annotations = []
-    for arm in robot.get_arms():
-        arm_name = type(arm).__name__
-        side = sides.get(id(arm))
-        end_effector = arm.end_effector
-        end_effector_links = (
-            link_names(end_effector) if end_effector is not None else []
-        )
-        annotations.append(
-            RobotPartAnnotation(
-                name=arm_name,
-                role=RobotPartRole.ARM,
-                side=side,
-                links=sorted(set(link_names(arm)) - set(end_effector_links)),
+        :param robot: The robot annotation of the world being recorded or served.
+        """
+        sides = cls._arm_sides(robot)
+        annotations = []
+        for arm in robot.get_arms():
+            arm_name = type(arm).__name__
+            side = sides.get(id(arm))
+            end_effector = arm.end_effector
+            end_effector_links = (
+                cls.link_names(end_effector) if end_effector is not None else []
             )
-        )
-        if end_effector is not None:
             annotations.append(
-                RobotPartAnnotation(
-                    name=type(end_effector).__name__,
-                    role=RobotPartRole.END_EFFECTOR,
+                cls(
+                    name=arm_name,
+                    role=RobotPartRole.ARM,
                     side=side,
-                    links=sorted(set(end_effector_links)),
-                    attached_to=arm_name,
+                    links=sorted(set(cls.link_names(arm)) - set(end_effector_links)),
                 )
             )
-    return annotations
+            if end_effector is not None:
+                annotations.append(
+                    cls(
+                        name=type(end_effector).__name__,
+                        role=RobotPartRole.END_EFFECTOR,
+                        side=side,
+                        links=sorted(set(end_effector_links)),
+                        attached_to=arm_name,
+                    )
+                )
+        return annotations
+
+
+# %% reading them off a world's robot

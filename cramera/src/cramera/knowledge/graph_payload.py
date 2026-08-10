@@ -13,8 +13,8 @@ from semantic_digital_twin.spatial_types import Point3
 
 from cramera.knowledge.enums import EdgeKind, NodeGroup
 from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
-from cramera.knowledge.presets import Preset, get_presets
-from cramera.knowledge.scene_bundle import load_scene
+from cramera.knowledge.presets import Preset
+from cramera.knowledge.scene_bundle import SceneBundle
 from cramera.knowledge.subgraph import (
     DetailEntry,
     GraphEdge,
@@ -80,7 +80,7 @@ class KnowledgeGraphPayload(GraphPanelPayload):
                 NodeGroup.ROBOT,
                 [
                     "an Arm",
-                    "side: " + _side_label(arm.side),
+                    "side: " + cls._side_label(arm.side),
                     "gripper: " + arm.gripper.name,
                 ],
             )
@@ -89,8 +89,8 @@ class KnowledgeGraphPayload(GraphPanelPayload):
                 arm.gripper.name,
                 arm.gripper.name.replace("_", " "),
                 NodeGroup.ROBOT,
-                ["a Gripper", "side: " + _side_label(arm.gripper.side)]
-                + _measurement_line("opening", arm.gripper.opening_metres, "%.3f"),
+                ["a Gripper", "side: " + cls._side_label(arm.gripper.side)]
+                + cls._measurement_line("opening", arm.gripper.opening_metres, "%.3f"),
             )
             view.add_edge(arm.name, arm.gripper.name, EdgeKind.PROPERTY, "has part")
 
@@ -102,9 +102,9 @@ class KnowledgeGraphPayload(GraphPanelPayload):
                 [
                     "a BenchObject",
                     "kind: " + bench_object.kind,
-                    "position: " + _position_label(bench_object.position),
+                    "position: " + cls._position_label(bench_object.position),
                 ]
-                + _measurement_line("height", bench_object.height_metres, "%.2f"),
+                + cls._measurement_line("height", bench_object.height_metres, "%.2f"),
             )
 
         previous = None
@@ -223,9 +223,9 @@ class KnowledgeGraphPayload(GraphPanelPayload):
                 link(bench_object.name, "semantic_digital_twin", "modelled in")
 
         # the executed plan tree (captured from the real PlanNode graph)
-        scene = load_scene().scene
+        scene = SceneBundle.of_active_scene().scene
         if scene.get("planTrees"):
-            node_count = sum(_count_plan_nodes(tree) for tree in scene["planTrees"])
+            node_count = sum(cls._count_plan_nodes(tree) for tree in scene["planTrees"])
             view.add(
                 "plan",
                 "executed plan",
@@ -250,53 +250,56 @@ class KnowledgeGraphPayload(GraphPanelPayload):
             nodes=view.nodes,
             edges=view.edges,
             details=view.details,
-            presets=get_presets(),
+            presets=Preset.of_active_scene(),
         )
 
+    @staticmethod
+    def _measurement_line(
+        label: str, value: Optional[float], number_format: str
+    ) -> List[str]:
+        """
+        A detail line for a measurement in metres, or nothing when it was not recorded.
 
-def _measurement_line(
-    label: str, value: Optional[float], number_format: str
-) -> List[str]:
-    """
-    A detail line for a measurement in metres, or nothing when it was not recorded.
+        Showing a fabricated number would read as a fact about the scene.
 
-    Showing a fabricated number would read as a fact about the scene.
+        :param label: Label the measurement is shown under.
+        :param value: The recorded measurement in metres, or None if it was not
+            recorded.
+        :param number_format:``%``-style format applied to ``value``.
+        """
+        if value is None:
+            return []
+        return ["%s: %s m" % (label, number_format % value)]
 
-    :param label: Label the measurement is shown under.
-    :param value: The recorded measurement in metres, or None if it was not recorded.
-    :param number_format:``%``-style format applied to ``value``.
-    """
-    if value is None:
-        return []
-    return ["%s: %s m" % (label, number_format % value)]
+    @staticmethod
+    def _side_label(side: Optional[Arms]) -> str:
+        """
+        Lower-case display name of an arm side, or ``unknown`` when it could not be
+        inferred.
 
+        :param side: The arm side to label.
+        """
+        return side.name.lower() if side is not None else "unknown"
 
-def _side_label(side: Optional[Arms]) -> str:
-    """
-    Lower-case display name of an arm side, or ``unknown`` when it could not be
-    inferred.
+    @staticmethod
+    def _position_label(position: Point3) -> str:
+        """
+        A position's coordinates, formatted to two decimal places.
 
-    :param side: The arm side to label.
-    """
-    return side.name.lower() if side is not None else "unknown"
+        :class:`Point3` has no plain-value ``__repr__`` of its own (it is a CasADi-
+        symbolic type), so the coordinates are read out explicitly.
 
+        :param position: The position to format.
+        """
+        return "(%.2f, %.2f, %.2f)" % tuple(position.to_np().tolist()[:3])
 
-def _position_label(position: Point3) -> str:
-    """
-    A position's coordinates, formatted to two decimal places.
+    @classmethod
+    def _count_plan_nodes(cls, tree: Dict[str, Any]) -> int:
+        """
+        Number of nodes in a serialized plan tree.
 
-    :class:`Point3` has no plain-value ``__repr__`` of its own (it is a CasADi-symbolic
-    type), so the coordinates are read out explicitly.
-
-    :param position: The position to format.
-    """
-    return "(%.2f, %.2f, %.2f)" % tuple(position.to_np().tolist()[:3])
-
-
-def _count_plan_nodes(tree: Dict[str, Any]) -> int:
-    """
-    Number of nodes in a serialized plan tree.
-
-    :param tree: The serialized plan tree to count.
-    """
-    return 1 + sum(_count_plan_nodes(child) for child in tree.get("children", []))
+        :param tree: The serialized plan tree to count.
+        """
+        return 1 + sum(
+            cls._count_plan_nodes(child) for child in tree.get("children", [])
+        )

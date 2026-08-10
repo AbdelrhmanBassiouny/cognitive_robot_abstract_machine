@@ -346,8 +346,8 @@ class TestResolveUri:
     def test_a_recorded_resolution_wins(self, tmp_path):
         target = tmp_path / "cup.stl"
         target.write_text("solid cup\nendsolid cup\n")
-        resolved = bundler.resolve_uri(
-            "package://demo/cup.stl", hints={"package://demo/cup.stl": str(target)}
+        resolved = bundler.MeshReference("package://demo/cup.stl").resolve(
+            hints={"package://demo/cup.stl": str(target)}
         )
         assert resolved == str(target)
 
@@ -355,24 +355,27 @@ class TestResolveUri:
         mesh = tmp_path / "meshes" / "cup.stl"
         mesh.parent.mkdir()
         mesh.write_text("solid cup\nendsolid cup\n")
-        assert bundler.resolve_uri(
-            "meshes/cup.stl", base_directory=str(tmp_path)
+        assert bundler.MeshReference("meshes/cup.stl").resolve(
+            base_directory=str(tmp_path)
         ) == str(mesh)
 
     def test_a_missing_relative_reference_is_unresolved(self, tmp_path):
         assert (
-            bundler.resolve_uri("meshes/gone.stl", base_directory=str(tmp_path)) is None
+            bundler.MeshReference("meshes/gone.stl").resolve(
+                base_directory=str(tmp_path)
+            )
+            is None
         )
 
     def test_a_file_uri_resolves_to_its_path(self, tmp_path):
         mesh = tmp_path / "cup.stl"
         mesh.write_text("solid cup\nendsolid cup\n")
-        assert bundler.resolve_uri("file://" + str(mesh)) == str(mesh)
+        assert bundler.MeshReference("file://" + str(mesh)).resolve() == str(mesh)
 
     def test_an_absolute_path_that_exists_resolves_to_itself(self, tmp_path):
         mesh = tmp_path / "cup.stl"
         mesh.write_text("solid cup\nendsolid cup\n")
-        assert bundler.resolve_uri(str(mesh)) == str(mesh)
+        assert bundler.MeshReference(str(mesh)).resolve() == str(mesh)
 
     def test_an_unresolvable_package_uri_is_unresolved(self, monkeypatch):
         """
@@ -383,17 +386,22 @@ class TestResolveUri:
         monkeypatch.delenv("AMENT_PREFIX_PATH", raising=False)
         monkeypatch.delenv("ROS_PACKAGE_PATH", raising=False)
         monkeypatch.delenv("CMAKE_PREFIX_PATH", raising=False)
-        assert bundler.resolve_uri("package://no_such_package/cup.stl") is None
+        assert (
+            bundler.MeshReference("package://no_such_package/cup.stl").resolve() is None
+        )
 
 
 class TestReferenceLayout:
     def test_a_package_reference_keeps_its_package_directory(self):
-        assert bundler._bundled_relative_path("package://demo/meshes/cup.stl") == (
-            "demo/meshes/cup.stl"
-        )
+        assert bundler.MeshReference(
+            "package://demo/meshes/cup.stl"
+        ).bundled_relative_path() == ("demo/meshes/cup.stl")
 
     def test_a_local_reference_lands_in_one_flat_directory(self):
-        assert bundler._bundled_relative_path("../far/away/cup.stl") == "_local/cup.stl"
+        assert (
+            bundler.MeshReference("../far/away/cup.stl").bundled_relative_path()
+            == "_local/cup.stl"
+        )
 
 
 # %% copying assets into the bundle
@@ -412,7 +420,7 @@ class TestBundledAssets:
     def test_an_unresolved_reference_is_recorded_as_missing(self, tmp_path):
         assets = bundler.BundledAssets()
         assert assets.copy(None, str(tmp_path / "out" / "cup.stl")) is False
-        assert assets.missing == [bundler.UNRESOLVED_REFERENCE]
+        assert assets.missing == [bundler.BundledAssets.UNRESOLVED_REFERENCE]
 
     def test_a_resolved_path_that_is_not_a_file_is_recorded_as_missing(self, tmp_path):
         assets = bundler.BundledAssets()
@@ -501,7 +509,9 @@ class TestBundleUrdf:
 
     def test_the_mesh_is_copied_next_to_the_rewritten_urdf(self, source_tree, tmp_path):
         output_directory = tmp_path / "bundle"
-        report = bundler.bundle_urdf(str(source_tree), "demo", str(output_directory))
+        report = bundler.BundleReport.of_source(
+            str(source_tree), "demo", str(output_directory)
+        )
         assert (output_directory / "demo.urdf").is_file()
         assert (output_directory / "meshes" / "_local" / "cup.stl").is_file()
         assert report.meshes_copied == 1
@@ -511,13 +521,15 @@ class TestBundleUrdf:
         self, source_tree, tmp_path
     ):
         output_directory = tmp_path / "bundle"
-        bundler.bundle_urdf(str(source_tree), "demo", str(output_directory))
+        bundler.BundleReport.of_source(str(source_tree), "demo", str(output_directory))
         rewritten = (output_directory / "demo.urdf").read_text()
         assert 'filename="meshes/_local/cup.stl"' in rewritten
         assert 'filename="meshes/cup.stl"' not in rewritten
 
     def test_links_and_joints_are_reported(self, source_tree, tmp_path):
-        report = bundler.bundle_urdf(str(source_tree), "demo", str(tmp_path / "bundle"))
+        report = bundler.BundleReport.of_source(
+            str(source_tree), "demo", str(tmp_path / "bundle")
+        )
         assert report.links == ["base_link", "cup_link"]
         assert report.joints == ["cup_joint"]
         assert report.movable_joints == []
@@ -531,7 +543,7 @@ class TestBundleUrdf:
         :meth:`URDFParser.from_xacro` performs does not break the regex-based mesh
         rewriting.
         """
-        report = bundler.bundle_urdf(
+        report = bundler.BundleReport.of_source(
             str(xacro_source_tree), "demo", str(tmp_path / "bundle")
         )
         assert report.links == ["base_link", "cup_link"]
@@ -548,10 +560,14 @@ class TestBundleUrdf:
             "  </link>\n"
             "</robot>\n"
         )
-        report = bundler.bundle_urdf(str(urdf), "demo", str(tmp_path / "bundle"))
-        assert report.missing == [bundler.UNRESOLVED_REFERENCE]
+        report = bundler.BundleReport.of_source(
+            str(urdf), "demo", str(tmp_path / "bundle")
+        )
+        assert report.missing == [bundler.BundledAssets.UNRESOLVED_REFERENCE]
         assert report.meshes_copied == 0
 
     def test_a_missing_source_is_refused(self, tmp_path):
         with pytest.raises(FileNotFoundError):
-            bundler.bundle_urdf(str(tmp_path / "gone.urdf"), "demo", str(tmp_path))
+            bundler.BundleReport.of_source(
+                str(tmp_path / "gone.urdf"), "demo", str(tmp_path)
+            )

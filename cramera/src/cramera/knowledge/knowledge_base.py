@@ -22,34 +22,8 @@ from cramera.knowledge.entities import (
     Robot,
 )
 from cramera.knowledge.enums import JointRegion
-from cramera.knowledge.scene_bundle import load_scene
+from cramera.knowledge.scene_bundle import SceneBundle
 from cramera.robot_parts import ArmSide, RobotPartAnnotation, RobotPartRole
-
-
-def _arm_of_side(side: Optional[ArmSide]) -> Optional[Arms]:
-    """
-    The coraplex arm a recorded robot-part side names.
-
-    :param side: The side a recorded annotation carries, or None for a robot that
-        specifies no left and right arm.
-    """
-    if side is None:
-        return None
-    return Arms[side.name]
-
-
-def _side_of_name(name: str) -> Optional[Arms]:
-    """
-    Which arm a part/link name encodes, or None when it names neither.
-
-    :param name: The part or link name to inspect.
-    """
-    lowered = name.lower()
-    if "left" in lowered or lowered.startswith("l_"):
-        return Arms.LEFT
-    if "right" in lowered or lowered.startswith("r_"):
-        return Arms.RIGHT
-    return None
 
 
 class EpisodeKnowledgeBase:
@@ -66,7 +40,7 @@ class EpisodeKnowledgeBase:
         Build every entity list from the active scene bundle and a static scan of the
         CRAM architecture.
         """
-        bundle = load_scene()
+        bundle = SceneBundle.of_active_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         frames_per_second = scene.get("framesPerSecond", 30)
         parts = (scene.get("robot") or {}).get("parts") or {}
@@ -150,9 +124,9 @@ class EpisodeKnowledgeBase:
             return cls._build_annotated_arms(part_annotations, robot_name)
         return cls._build_arms_by_name(parts, robot_name)
 
-    @staticmethod
+    @classmethod
     def _build_annotated_arms(
-        part_annotations: List[RobotPartAnnotation], robot_name: str
+        cls, part_annotations: List[RobotPartAnnotation], robot_name: str
     ) -> Tuple[List[Gripper], List[Arm]]:
         """
         Arms and grippers read straight off the recorded sem_dt annotations.
@@ -170,7 +144,7 @@ class EpisodeKnowledgeBase:
             if annotation.role is not RobotPartRole.ARM:
                 continue
             end_effector = end_effectors.get(annotation.name)
-            side = _arm_of_side(annotation.side)
+            side = cls._arm_of_side(annotation.side)
             gripper = Gripper(
                 end_effector.name if end_effector else annotation.name + "_ee",
                 side,
@@ -179,9 +153,9 @@ class EpisodeKnowledgeBase:
             arms.append(Arm(annotation.name, side, robot_name, gripper))
         return grippers, arms
 
-    @staticmethod
+    @classmethod
     def _build_arms_by_name(
-        parts: Dict[str, Any], robot_name: str
+        cls, parts: Dict[str, Any], robot_name: str
     ) -> Tuple[List[Gripper], List[Arm]]:
         """
         Arms and grippers inferred from part names, for bundles recorded before the
@@ -208,9 +182,10 @@ class EpisodeKnowledgeBase:
         ]
         grippers, arms = [], []
         for arm_part in sorted(arm_parts):
-            side = _side_of_name(arm_part)
+            side = cls._side_of_name(arm_part)
             gripper_part = next(
-                (part for part in gripper_parts if _side_of_name(part) == side), None
+                (part for part in gripper_parts if cls._side_of_name(part) == side),
+                None,
             )
             gripper = Gripper(gripper_part or (arm_part + "_ee"), side)
             grippers.append(gripper)
@@ -267,9 +242,9 @@ class EpisodeKnowledgeBase:
             )
         return episodes
 
-    @staticmethod
+    @classmethod
     def _build_joint_motions(
-        trajectory: Dict[str, Any], parts: Dict[str, Any], robot_prefix: str
+        cls, trajectory: Dict[str, Any], parts: Dict[str, Any], robot_prefix: str
     ) -> List[JointMotion]:
         """
         Per-joint motion statistics over the whole recorded trajectory.
@@ -304,9 +279,9 @@ class EpisodeKnowledgeBase:
             if robot_prefix and prefix != robot_prefix:
                 return JointRegion.ENVIRONMENT
             part = link_to_part.get(joint_name.replace("_joint", "_link"))
-            region = _side_of_name(part) if part else None
+            region = cls._side_of_name(part) if part else None
             if region is None:
-                region = _side_of_name(joint_name)
+                region = cls._side_of_name(joint_name)
             if region is Arms.LEFT:
                 return JointRegion.LEFT
             if region is Arms.RIGHT:
@@ -346,6 +321,32 @@ class EpisodeKnowledgeBase:
             )
             for (package, subpackage) in sorted(modules)
         ]
+
+    @staticmethod
+    def _arm_of_side(side: Optional[ArmSide]) -> Optional[Arms]:
+        """
+        The coraplex arm a recorded robot-part side names.
+
+        :param side: The side a recorded annotation carries, or None for a robot that
+            specifies no left and right arm.
+        """
+        if side is None:
+            return None
+        return Arms[side.name]
+
+    @staticmethod
+    def _side_of_name(name: str) -> Optional[Arms]:
+        """
+        Which arm a part/link name encodes, or None when it names neither.
+
+        :param name: The part or link name to inspect.
+        """
+        lowered = name.lower()
+        if "left" in lowered or lowered.startswith("l_"):
+            return Arms.LEFT
+        if "right" in lowered or lowered.startswith("r_"):
+            return Arms.RIGHT
+        return None
 
 
 _knowledge_base: Optional[EpisodeKnowledgeBase] = None

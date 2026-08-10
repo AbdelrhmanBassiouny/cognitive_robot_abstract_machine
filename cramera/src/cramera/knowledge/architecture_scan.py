@@ -15,7 +15,7 @@ from typing_extensions import Any, ClassVar, Dict, List, Optional, Set, Tuple
 
 from cramera import paths
 from cramera.knowledge.architecture_entities import Package, PythonClass
-from cramera.knowledge.scene_bundle import _read_json
+from cramera.generated_json import GeneratedJson
 
 
 @dataclass
@@ -372,7 +372,7 @@ class ArchitectureScanner:
         cache_path = Path(self._architecture_cache())
         if not cache_path.is_file():
             return None
-        cached = _read_json(cache_path)
+        cached = GeneratedJson(cache_path).read()
         if not isinstance(cached, dict):
             return None
         if cached.get("version") != self.ARCHITECTURE_CACHE_VERSION:

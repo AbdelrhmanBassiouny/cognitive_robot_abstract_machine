@@ -61,7 +61,7 @@ from semantic_digital_twin.world_description.connections import (
 from cramera.knowledge.enums import PlanNodeGroup
 from cramera.mesh_format import MeshFormat
 from cramera.palette import ObjectPalette
-from cramera.robot_parts import RobotPartAnnotation, describe_robot_parts
+from cramera.robot_parts import RobotPartAnnotation
 
 if TYPE_CHECKING:
     from coraplex.plans.executables import GiskardExecutable
@@ -857,7 +857,9 @@ class Bridge:
                 chart=bool(self.chart_state.nodes),
                 sequence_number=self.sequence_number,
                 robot_parts=(
-                    describe_robot_parts(self.robot) if self.robot is not None else []
+                    RobotPartAnnotation.of_robot(self.robot)
+                    if self.robot is not None
+                    else []
                 ),
             ).to_payload()
 

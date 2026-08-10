@@ -28,6 +28,58 @@ class Preset:
     EQL source the panel runs when this preset is picked.
     """
 
+    @classmethod
+    def of_active_scene(cls) -> List[Preset]:
+        """
+        Ready-made queries for the EQL panel.
+
+        Scene presets are generated from the loaded scene, so they stay valid for any
+        onboarded robot/environment; the architecture presets are static.
+        """
+        knowledge_base = get_knowledge_base()
+        presets = [
+            cls("which robot is this?", "the(entity(robot))"),
+            cls("which arms does it have?", "an(entity(arm))"),
+            cls("each arm and its gripper", "set_of(arm.side, arm.gripper)"),
+            cls("what is in the scene?", "an(entity(scene_object))"),
+            cls(
+                "what gets moved?",
+                "an(entity(episode.picks).where(episode.picks != None))",
+            ),
+        ]
+        first_object = next(
+            (entry for entry in knowledge_base.objects if entry.kind == "object"), None
+        )
+        if first_object:
+            presets.append(
+                cls(
+                    "the %s" % first_object.label.lower(),
+                    "the(entity(scene_object).where(scene_object.name == %s))"
+                    % repr(first_object.name),
+                )
+            )
+        manipulation = next(
+            (episode for episode in knowledge_base.episodes if episode.picks), None
+        )
+        if manipulation:
+            if manipulation.places_at:
+                presets.append(
+                    cls(
+                        "where does it place them?",
+                        "the(entity(episode.places_at).where(episode.name == %s))"
+                        % repr(manipulation.name),
+                    )
+                )
+            if manipulation.performed_by:
+                presets.append(
+                    cls(
+                        "which arm does '%s'?" % manipulation.name,
+                        "the(entity(episode.performed_by).where(episode.name == %s))"
+                        % repr(manipulation.name),
+                    )
+                )
+        return presets + list(ARCHITECTURE_PRESETS)
+
 
 ARCHITECTURE_PRESETS: Tuple[Preset, ...] = (
     Preset(
@@ -56,54 +108,3 @@ ARCHITECTURE_PRESETS: Tuple[Preset, ...] = (
 """
 Static presets for the architecture side of the graph.
 """
-
-
-def get_presets() -> List[Preset]:
-    """
-    Ready-made queries for the EQL panel.
-
-    Scene presets are generated from the loaded scene, so they stay valid for any
-    onboarded robot/environment; the architecture presets are static.
-    """
-    knowledge_base = get_knowledge_base()
-    presets = [
-        Preset("which robot is this?", "the(entity(robot))"),
-        Preset("which arms does it have?", "an(entity(arm))"),
-        Preset("each arm and its gripper", "set_of(arm.side, arm.gripper)"),
-        Preset("what is in the scene?", "an(entity(scene_object))"),
-        Preset(
-            "what gets moved?", "an(entity(episode.picks).where(episode.picks != None))"
-        ),
-    ]
-    first_object = next(
-        (entry for entry in knowledge_base.objects if entry.kind == "object"), None
-    )
-    if first_object:
-        presets.append(
-            Preset(
-                "the %s" % first_object.label.lower(),
-                "the(entity(scene_object).where(scene_object.name == %s))"
-                % repr(first_object.name),
-            )
-        )
-    manipulation = next(
-        (episode for episode in knowledge_base.episodes if episode.picks), None
-    )
-    if manipulation:
-        if manipulation.places_at:
-            presets.append(
-                Preset(
-                    "where does it place them?",
-                    "the(entity(episode.places_at).where(episode.name == %s))"
-                    % repr(manipulation.name),
-                )
-            )
-        if manipulation.performed_by:
-            presets.append(
-                Preset(
-                    "which arm does '%s'?" % manipulation.name,
-                    "the(entity(episode.performed_by).where(episode.name == %s))"
-                    % repr(manipulation.name),
-                )
-            )
-    return presets + list(ARCHITECTURE_PRESETS)

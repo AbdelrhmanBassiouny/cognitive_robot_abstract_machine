@@ -25,7 +25,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from typing_extensions import Dict, List, Optional, Set
+from typing_extensions import ClassVar, Dict, List, Optional, Pattern, Set
 
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -42,103 +42,94 @@ MISSING_ASSETS_LOGGED = 20
 How many unresolved assets ``main`` lists before truncating.
 """
 
-FIXED_JOINT_TYPE = "fixed"
-"""
-The one URDF joint type that cannot move.
-"""
-
-UNRESOLVED_REFERENCE = "<unresolved>"
-"""
-Stands in for a reference the bundler could not resolve to any file.
-"""
-
-MESH_REFERENCE_PATTERN = re.compile(r'filename="([^"]+)"')
-"""
-What the bundler reads out of a URDF.
-"""
-LINK_PATTERN = re.compile(r'<link\s+name="([^"]+)"')
-JOINT_PATTERN = re.compile(r'<joint\s+name="([^"]+)"\s+type="([^"]+)"')
-
-TEXTURE_PATTERN = re.compile(r"[\w./\-]+\.(?:png|jpg|jpeg|tga|tif)", re.IGNORECASE)
-"""
-Side assets a mesh file itself references.
-"""
-MATERIAL_LIBRARY_PATTERN = re.compile(r"mtllib\s+(.+)")
-TEXTURE_MAP_PATTERN = re.compile(r"map_\w+\s+(.+)")
-
-
-PACKAGE_SCHEME = "package://"
-FILE_SCHEME = "file://"
-
-LOCAL_MESH_DIRECTORY = "_local"
-"""
-Directory bundled meshes land in when their reference names no ROS package.
-"""
-
 
 # %% reference resolution
-def _resolve_package_uri(uri: str) -> Optional[str]:
+@dataclass(frozen=True)
+class MeshReference:
     """
-    Resolve a ``package://`` URI via :class:`PackageUriResolver`.
+    One ``filename="..."`` reference as a URDF writes it, and where it resolves to.
 
-    This module has to work on a machine with no ROS installed at all, which is the
-    whole point of bundling - :class:`PackageUriResolver`'s default locator chain
-    already covers that case (an ament index, ``ROS_PACKAGE_PATH``, and a plain
-    filesystem search of common install prefixes), so failure to resolve is reported
-    rather than raised.
-
-    :param uri: The ``package://`` URI to resolve.
+    A reference may be a ``package://`` URI, a ``file://`` one, an absolute path or one
+    relative to the URDF — resolving it is this class's job, and so is deciding where
+    its file lands inside the bundle.
     """
-    try:
-        resolved = PackageUriResolver().resolve(uri)
-    except (ParsingError, OSError) as error:
-        logger.debug("the CRAM package resolver could not resolve %s: %s", uri, error)
+
+    PACKAGE_SCHEME: ClassVar[str] = "package://"
+
+    FILE_SCHEME: ClassVar[str] = "file://"
+
+    LOCAL_MESH_DIRECTORY: ClassVar[str] = "_local"
+    """
+    Directory bundled meshes land in when their reference names no ROS package.
+    """
+
+    uri: str
+    """
+    The reference exactly as written in the URDF.
+    """
+
+    def resolve(
+        self,
+        hints: Optional[Dict[str, str]] = None,
+        base_directory: Optional[str] = None,
+    ) -> Optional[str]:
+        """
+        The existing file this reference points at, or None if nothing matched.
+
+        :param hints: Resolutions recorded while a demo ran, which win over any search.
+        :param base_directory: Directory a relative reference is resolved against.
+        """
+        if hints and self.uri in hints:
+            return hints[self.uri]
+        if self.uri.startswith(self.PACKAGE_SCHEME):
+            return self._resolved_package_path()
+        if self.uri.startswith(self.FILE_SCHEME):
+            path = self.uri[len(self.FILE_SCHEME) :]
+            return path if os.path.isfile(path) else None
+        if os.path.isabs(self.uri):
+            return self.uri if os.path.isfile(self.uri) else None
+        if base_directory:
+            path = os.path.join(base_directory, self.uri)
+            return path if os.path.isfile(path) else None
         return None
-    return resolved if os.path.isfile(resolved) else None
 
+    def bundled_relative_path(self) -> str:
+        """
+        Where this reference's file lands inside ``<out>/meshes/``.
 
-def resolve_uri(
-    uri: str,
-    hints: Optional[Dict[str, str]] = None,
-    base_directory: Optional[str] = None,
-) -> Optional[str]:
-    """
-    Resolve a mesh or URDF reference to an existing absolute file path.
+        Package references keep their package directory so same-named meshes from
+        different packages cannot collide; everything else is flattened.
+        """
+        if self.uri.startswith(self.PACKAGE_SCHEME):
+            package, _, relative_path = self.uri[len(self.PACKAGE_SCHEME) :].partition(
+                "/"
+            )
+            return os.path.join(package, relative_path)
+        name = (
+            self.uri[len(self.FILE_SCHEME) :]
+            if self.uri.startswith(self.FILE_SCHEME)
+            else self.uri
+        )
+        return os.path.join(self.LOCAL_MESH_DIRECTORY, os.path.basename(name))
 
-    :param uri: The reference as written in the URDF.
-    :param hints: Resolutions recorded while a demo ran, which win over any search.
-    :param base_directory: Directory a relative reference is resolved against.
-    :return: The file's path, or None if nothing matched.
-    """
-    if hints and uri in hints:
-        return hints[uri]
-    if uri.startswith(PACKAGE_SCHEME):
-        return _resolve_package_uri(uri)
-    if uri.startswith(FILE_SCHEME):
-        path = uri[len(FILE_SCHEME) :]
-        return path if os.path.isfile(path) else None
-    if os.path.isabs(uri):
-        return uri if os.path.isfile(uri) else None
-    if base_directory:
-        path = os.path.join(base_directory, uri)
-        return path if os.path.isfile(path) else None
-    return None
+    def _resolved_package_path(self) -> Optional[str]:
+        """
+        Resolve a ``package://`` URI via :class:`PackageUriResolver`.
 
-
-def _bundled_relative_path(uri: str) -> str:
-    """
-    Where a reference lands inside ``<out>/meshes/``.
-
-    Package references keep their package directory so same-named meshes from different
-    packages cannot collide; everything else is flattened.
-
-    :param uri: The reference as written in the URDF.
-    """
-    if uri.startswith(PACKAGE_SCHEME):
-        package, _, relative_path = uri[len(PACKAGE_SCHEME) :].partition("/")
-        return os.path.join(package, relative_path)
-    name = uri[len(FILE_SCHEME) :] if uri.startswith(FILE_SCHEME) else uri
-    return os.path.join(LOCAL_MESH_DIRECTORY, os.path.basename(name))
+        This module has to work on a machine with no ROS installed at all, which is the
+        whole point of bundling - :class:`PackageUriResolver`'s default locator chain
+        already covers that case (an ament index, ``ROS_PACKAGE_PATH``, and a plain
+        filesystem search of common install prefixes), so failure to resolve is
+        reported rather than raised.
+        """
+        try:
+            resolved = PackageUriResolver().resolve(self.uri)
+        except (ParsingError, OSError) as error:
+            logger.debug(
+                "the CRAM package resolver could not resolve %s: %s", self.uri, error
+            )
+            return None
+        return resolved if os.path.isfile(resolved) else None
 
 
 # %% copying assets into the bundle
@@ -150,6 +141,22 @@ class BundledAssets:
     Owns the already-copied memo, so a mesh referenced by several links, and a texture
     shared by several meshes, are each copied exactly once.
     """
+
+    UNRESOLVED_REFERENCE: ClassVar[str] = "<unresolved>"
+    """
+    Stands in for a reference the bundler could not resolve to any file.
+    """
+
+    TEXTURE_PATTERN: ClassVar[Pattern[str]] = re.compile(
+        r"[\w./\-]+\.(?:png|jpg|jpeg|tga|tif)", re.IGNORECASE
+    )
+    """
+    Side assets a mesh file itself references.
+    """
+
+    MATERIAL_LIBRARY_PATTERN: ClassVar[Pattern[str]] = re.compile(r"mtllib\s+(.+)")
+
+    TEXTURE_MAP_PATTERN: ClassVar[Pattern[str]] = re.compile(r"map_\w+\s+(.+)")
 
     copied: Dict[str, str] = field(default_factory=dict)
     """
@@ -180,7 +187,7 @@ class BundledAssets:
         if source in self.copied:
             return True
         if not source or not os.path.isfile(source):
-            self.missing.append(source or UNRESOLVED_REFERENCE)
+            self.missing.append(source or self.UNRESOLVED_REFERENCE)
             return False
         os.makedirs(os.path.dirname(destination), exist_ok=True)
         shutil.copy2(source, destination)
@@ -202,7 +209,7 @@ class BundledAssets:
         mesh_text = Path(source_mesh).read_bytes().decode("utf-8", "replace")
         mesh_format = MeshFormat.of_path(source_mesh)
         if mesh_format is MeshFormat.DAE:
-            references = set(TEXTURE_PATTERN.findall(mesh_text))
+            references = set(self.TEXTURE_PATTERN.findall(mesh_text))
         elif mesh_format is MeshFormat.OBJ:
             references = self._object_side_references(
                 mesh_text, source_directory, bundled_directory
@@ -228,7 +235,7 @@ class BundledAssets:
         """
         references = {
             material_library.strip()
-            for material_library in MATERIAL_LIBRARY_PATTERN.findall(mesh_text)
+            for material_library in self.MATERIAL_LIBRARY_PATTERN.findall(mesh_text)
         }
         for material_library in list(references):
             material_source = os.path.join(source_directory, material_library)
@@ -242,7 +249,7 @@ class BundledAssets:
             )
             references |= {
                 texture.strip()
-                for texture in TEXTURE_MAP_PATTERN.findall(material_text)
+                for texture in self.TEXTURE_MAP_PATTERN.findall(material_text)
             }
         return references
 
@@ -253,6 +260,22 @@ class BundleReport:
     """
     What :func:`bundle_urdf` wrote for one URDF or xacro model.
     """
+
+    FIXED_JOINT_TYPE: ClassVar[str] = "fixed"
+    """
+    The one URDF joint type that cannot move.
+    """
+
+    MESH_REFERENCE_PATTERN: ClassVar[Pattern[str]] = re.compile(r'filename="([^"]+)"')
+    """
+    What the bundler reads out of a URDF.
+    """
+
+    LINK_PATTERN: ClassVar[Pattern[str]] = re.compile(r'<link\s+name="([^"]+)"')
+
+    JOINT_PATTERN: ClassVar[Pattern[str]] = re.compile(
+        r'<joint\s+name="([^"]+)"\s+type="([^"]+)"'
+    )
 
     name: str
     """
@@ -304,72 +327,76 @@ class BundleReport:
     References that could not be resolved to any file.
     """
 
+    @classmethod
+    def of_source(
+        cls,
+        source: str,
+        name: str,
+        output_directory: str,
+        hints: Optional[Dict[str, str]] = None,
+    ) -> "BundleReport":
+        """
+        Bundle one URDF or xacro with every mesh it references.
 
-def bundle_urdf(
-    source: str,
-    name: str,
-    output_directory: str,
-    hints: Optional[Dict[str, str]] = None,
-) -> BundleReport:
-    """
-    Bundle one URDF or xacro with every mesh it references.
+        :param source: Path or ``package://`` URI of the URDF/xacro to bundle.
+        :param name: Output model name, used for ``<output_directory>/<name>.urdf``.
+        :param output_directory: Directory the URDF and its ``meshes/`` tree are written to.
+        :param hints: Resolutions recorded while a demo ran.
+        :return: A report of what was written, including any unresolved references.
+        :raises FileNotFoundError: If the source itself cannot be found.
+        """
+        source_path = MeshReference(source).resolve(hints=hints) or source
+        if not os.path.isfile(source_path):
+            raise FileNotFoundError(
+                "URDF source not found: %s (from %s)" % (source_path, source)
+            )
+        if source_path.endswith(".xacro"):
+            # expanded in-process, so no ROS installation is needed to bundle
+            urdf_text = URDFParser.from_xacro(source_path).urdf
+        else:
+            urdf_text = Path(source_path).read_text(encoding="utf-8", errors="replace")
+        base_directory = os.path.dirname(source_path)
 
-    :param source: Path or ``package://`` URI of the URDF/xacro to bundle.
-    :param name: Output model name, used for ``<output_directory>/<name>.urdf``.
-    :param output_directory: Directory the URDF and its ``meshes/`` tree are written to.
-    :param hints: Resolutions recorded while a demo ran.
-    :return: A report of what was written, including any unresolved references.
-    :raises FileNotFoundError: If the source itself cannot be found.
-    """
-    source_path = resolve_uri(source, hints=hints) or source
-    if not os.path.isfile(source_path):
-        raise FileNotFoundError(
-            "URDF source not found: %s (from %s)" % (source_path, source)
+        os.makedirs(output_directory, exist_ok=True)
+        assets = BundledAssets()
+        rewritten = 0
+        for reference in sorted(set(cls.MESH_REFERENCE_PATTERN.findall(urdf_text))):
+            if MeshFormat.of_path(reference) is None:
+                continue  # plugins (.so) and other non-geometry references
+            mesh_reference = MeshReference(reference)
+            resolved = mesh_reference.resolve(
+                hints=hints, base_directory=base_directory
+            )
+            relative_path = mesh_reference.bundled_relative_path()
+            bundled = os.path.join(output_directory, "meshes", relative_path)
+            if assets.copy(resolved, bundled):
+                assets.copy_side_assets(resolved, bundled)
+            urdf_text = urdf_text.replace(
+                '"%s"' % reference,
+                '"meshes/%s"' % relative_path.replace(os.sep, "/"),
+            )
+            rewritten += 1
+
+        urdf_out = os.path.join(output_directory, "%s.urdf" % name)
+        Path(urdf_out).write_text(urdf_text, encoding="utf-8")
+        links = cls.LINK_PATTERN.findall(urdf_text)
+        joints = cls.JOINT_PATTERN.findall(urdf_text)
+        return cls(
+            name=name,
+            urdf=urdf_out,
+            source=source_path,
+            links=links,
+            joints=[joint_name for joint_name, _ in joints],
+            movable_joints=[
+                joint_name
+                for joint_name, joint_type in joints
+                if joint_type != cls.FIXED_JOINT_TYPE
+            ],
+            meshes_copied=len(assets.copied),
+            mesh_suffixes=assets.mesh_suffixes,
+            references_rewritten=rewritten,
+            missing=assets.missing,
         )
-    if source_path.endswith(".xacro"):
-        # expanded in-process, so no ROS installation is needed to bundle
-        urdf_text = URDFParser.from_xacro(source_path).urdf
-    else:
-        urdf_text = Path(source_path).read_text(encoding="utf-8", errors="replace")
-    base_directory = os.path.dirname(source_path)
-
-    os.makedirs(output_directory, exist_ok=True)
-    assets = BundledAssets()
-    rewritten = 0
-    for reference in sorted(set(MESH_REFERENCE_PATTERN.findall(urdf_text))):
-        if MeshFormat.of_path(reference) is None:
-            continue  # plugins (.so) and other non-geometry references
-        resolved = resolve_uri(reference, hints=hints, base_directory=base_directory)
-        relative_path = _bundled_relative_path(reference)
-        bundled = os.path.join(output_directory, "meshes", relative_path)
-        if assets.copy(resolved, bundled):
-            assets.copy_side_assets(resolved, bundled)
-        urdf_text = urdf_text.replace(
-            '"%s"' % reference,
-            '"meshes/%s"' % relative_path.replace(os.sep, "/"),
-        )
-        rewritten += 1
-
-    urdf_out = os.path.join(output_directory, "%s.urdf" % name)
-    Path(urdf_out).write_text(urdf_text, encoding="utf-8")
-    links = LINK_PATTERN.findall(urdf_text)
-    joints = JOINT_PATTERN.findall(urdf_text)
-    return BundleReport(
-        name=name,
-        urdf=urdf_out,
-        source=source_path,
-        links=links,
-        joints=[joint_name for joint_name, _ in joints],
-        movable_joints=[
-            joint_name
-            for joint_name, joint_type in joints
-            if joint_type != FIXED_JOINT_TYPE
-        ],
-        meshes_copied=len(assets.copied),
-        mesh_suffixes=assets.mesh_suffixes,
-        references_rewritten=rewritten,
-        missing=assets.missing,
-    )
 
 
 def main() -> None:
@@ -391,7 +418,7 @@ def main() -> None:
     )
     arguments = parser.parse_args()
     name = arguments.name or os.path.splitext(os.path.basename(arguments.source))[0]
-    report = bundle_urdf(arguments.source, name, arguments.out)
+    report = BundleReport.of_source(arguments.source, name, arguments.out)
     logger.info(
         "wrote %s  (%d links, %d joints, %d meshes %s)",
         report.urdf,

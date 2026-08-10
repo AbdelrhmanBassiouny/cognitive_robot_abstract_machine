@@ -10,7 +10,7 @@ from coraplex.datastructures.enums import JointType
 from typing_extensions import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING
 
 from cramera.knowledge.enums import EdgeKind, KinematicChainGroup
-from cramera.knowledge.scene_bundle import load_scene, load_urdf
+from cramera.knowledge.scene_bundle import ParsedUrdf, SceneBundle
 from cramera.knowledge.subgraph import (
     DetailEntry,
     GraphEdge,
@@ -62,13 +62,13 @@ class UrdfViewPayload(GraphPanelPayload):
 
         :param knowledge_base: The knowledge base whose robot's URDF is rendered.
         """
-        parsed_urdf = load_urdf()
+        parsed_urdf = ParsedUrdf.of_active_scene()
         links, joints = parsed_urdf.links, parsed_urdf.joints
         view = SubgraphAccumulator()
         if not links:
             return cls(breadcrumb=knowledge_base.robot.name + " · URDF (not found)")
 
-        scene = load_scene().scene
+        scene = SceneBundle.of_active_scene().scene
         parts = (scene.get("robot") or {}).get("parts") or {}
         link_to_part = {
             link: part for part, part_links in parts.items() for link in part_links

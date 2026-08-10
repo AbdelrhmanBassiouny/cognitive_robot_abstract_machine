@@ -21,8 +21,7 @@ from cramera.knowledge.knowledge_base import (  # noqa: E402
     get_knowledge_base,
     reset_knowledge_base,
 )
-from cramera.knowledge.presets import get_presets  # noqa: E402
-from cramera.knowledge.scene_bundle import load_scene  # noqa: E402
+from cramera.knowledge.presets import Preset  # noqa: E402
 from cramera.knowledge.views.architecture import SubgraphViewPayload  # noqa: E402
 from cramera.knowledge.views.dispatcher import GraphPanelViews  # noqa: E402
 from cramera.knowledge.views.plan_tree import PlanViewPayload  # noqa: E402
@@ -139,7 +138,7 @@ class TestArmsFromRecordedAnnotations:
         A bundle carrying sem_dt robot-part annotations is read straight off them, so an
         arm whose name spells no side still gets the side its robot annotated it with.
         """
-        bundle = load_scene()
+        bundle = SceneBundle.of_active_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["robot"]["partAnnotations"] = [
             RobotPartAnnotation(
@@ -157,7 +156,7 @@ class TestArmsFromRecordedAnnotations:
             ).to_payload(),
         ]
         monkeypatch.setattr(
-            knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
         reset_knowledge_base()
         knowledge_base_instance = get_knowledge_base()
@@ -178,11 +177,11 @@ class TestArmSideInference:
         An arm part name that names neither `left` nor `right` cannot be assigned a side
         by name inspection, and must not silently masquerade as one.
         """
-        bundle = load_scene()
+        bundle = SceneBundle.of_active_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["robot"]["parts"]["center_arm"] = ["center_link"]
         monkeypatch.setattr(
-            knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
         reset_knowledge_base()
         center_arm = next(
@@ -265,11 +264,11 @@ class TestRecordedMeasurements:
         """
         A bundle that reports a height must be taken at its word.
         """
-        bundle = load_scene()
+        bundle = SceneBundle.of_active_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["objects"][0]["height"] = 0.23
         monkeypatch.setattr(
-            knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
         reset_knowledge_base()
         milk = next(
@@ -409,7 +408,7 @@ class TestPlanGroups:
         """
         Coraplex's real class is ``AttachNode``, not ``AttachmentNode``.
         """
-        bundle = load_scene()
+        bundle = SceneBundle.of_active_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["planTrees"][0]["children"].append(
             {
@@ -420,7 +419,7 @@ class TestPlanGroups:
             }
         )
         monkeypatch.setattr(
-            plan_view, "load_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
         reset_knowledge_base()
         node = next(
@@ -436,7 +435,7 @@ class TestPlanGroups:
         """
         Coraplex's real class is ``DetachNode``, not ``DetachmentNode``.
         """
-        bundle = load_scene()
+        bundle = SceneBundle.of_active_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["planTrees"][0]["children"].append(
             {
@@ -447,7 +446,7 @@ class TestPlanGroups:
             }
         )
         monkeypatch.setattr(
-            plan_view, "load_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
         reset_knowledge_base()
         node = next(
@@ -464,17 +463,20 @@ class TestPresetSafety:
         self, fixture_scene, monkeypatch
     ):
         """
-        ``get_presets()`` must escape object names, not splice them raw into EQL source.
+        ``Preset.of_active_scene()`` must escape object names, not splice them raw into
+        EQL source.
         """
-        bundle = load_scene()
+        bundle = SceneBundle.of_active_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["objects"][0]["id"] = "o'brien"
         scene["segments"][1]["picks"] = "o'brien"
         monkeypatch.setattr(
-            knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
         reset_knowledge_base()
-        preset = next(p for p in get_presets() if "scene_object.name" in p.code)
+        preset = next(
+            p for p in Preset.of_active_scene() if "scene_object.name" in p.code
+        )
         result = EqlSession.of_active_scene().run(preset.code)
         assert result.ok and result.rows[0]["__entity__"] == "o'brien"
 
@@ -485,14 +487,14 @@ class TestPresetSafety:
         Covers both the ``places_at`` and ``performed_by`` presets, which splice the
         same episode name.
         """
-        bundle = load_scene()
+        bundle = SceneBundle.of_active_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
         scene["segments"][1]["step"] = "transport_o'brien"
         monkeypatch.setattr(
-            knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
+            SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
         reset_knowledge_base()
-        for preset in get_presets():
+        for preset in Preset.of_active_scene():
             assert EqlSession.of_active_scene().run(preset.code).ok
 
 
@@ -827,12 +829,13 @@ class TestExpandNode:
 class TestPresetSmoke:
     def test_every_preset_runs_and_returns_rows(self, fixture_scene):
         """
-        Every preset ``get_presets()`` hands to the EQL panel must actually run.
+        Every preset ``Preset.of_active_scene()`` hands to the EQL panel must actually
+        run.
 
         Replaces the module's former ``if __name__ == "__main__":`` smoke script, which
         logged OK/FAIL per preset instead of asserting anything.
         """
-        for preset in get_presets():
+        for preset in Preset.of_active_scene():
             result = EqlSession.of_active_scene().run(preset.code)
             assert result.ok, "%s: %s" % (preset.text, result)
             assert result.count == len(result.rows)

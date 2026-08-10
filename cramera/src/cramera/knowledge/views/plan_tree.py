@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass
 from typing_extensions import Any, ClassVar, Dict, List, TYPE_CHECKING, Optional, Tuple
 
 from cramera.knowledge.enums import EdgeKind, PlanNodeGroup
-from cramera.knowledge.scene_bundle import load_scene
+from cramera.knowledge.scene_bundle import SceneBundle
 
 if TYPE_CHECKING:
     from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
@@ -92,7 +92,7 @@ class PlanViewPayload(GraphPanelPayload):
 
         :param knowledge_base: Unused — the plan tree is read from the scene bundle.
         """
-        scene = load_scene().scene
+        scene = SceneBundle.of_active_scene().scene
         trees = scene.get("planTrees") or []
         view = SubgraphAccumulator()
         counter = [0]

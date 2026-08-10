@@ -60,8 +60,8 @@ from cramera.logging_setup import get_logger
 from cramera.body_geometry import measure_body, POSE_PRECISION, rounded_pose
 from cramera.live.bridge import ROBOT_BASE_KEY
 from cramera.monkey_patch import MethodPatch
-from cramera.robot_parts import describe_robot_parts
-from cramera.onboard.bundle_urdf import bundle_urdf
+from cramera.robot_parts import RobotPartAnnotation
+from cramera.onboard.bundle_urdf import BundleReport
 from cramera.palette import ObjectPalette
 
 if TYPE_CHECKING:
@@ -830,7 +830,7 @@ class SceneBuilder:
         root_name = str(robot.root.name)
         prefix = root_name.split("/", 1)[0] if "/" in root_name else ""
         base_body = root_name.split("/", 1)[1] if "/" in root_name else root_name
-        part_annotations = describe_robot_parts(robot)
+        part_annotations = RobotPartAnnotation.of_robot(robot)
         parts = {annotation.name: annotation.links for annotation in part_annotations}
 
         # %% segments: data-derived windows, labelled from the parsed actions
@@ -913,7 +913,7 @@ class SceneBuilder:
         missing: List[str] = []
         for source in self.recorder.urdf_sources:
             base_name = os.path.splitext(os.path.basename(source))[0]
-            report = bundle_urdf(
+            report = BundleReport.of_source(
                 source,
                 base_name,
                 self.output_directory,
@@ -978,8 +978,8 @@ class SceneBuilder:
             "dragBounds": drag_bounds,
             "missingAssets": sorted(set(missing)),
         }
-        _write_json(Path(self.output_directory) / "scene.json", scene, indent=1)
-        _write_json(
+        self._write_json(Path(self.output_directory) / "scene.json", scene, indent=1)
+        self._write_json(
             Path(self.output_directory) / "trajectory.json",
             {
                 "framesPerSecond": frames_per_second,
@@ -990,43 +990,43 @@ class SceneBuilder:
         )
         return scene
 
+    @staticmethod
+    def _write_json(path: Path, payload: Any, indent: Optional[int] = None) -> None:
+        """
+        Write a bundle file, replacing it only once it is complete.
 
-def _update_scene_index(path: Path, name: str) -> None:
-    """
-    Register a freshly written scene in the index the viewer reads.
+        A bundle is the artifact of a long recording, so a failure part-way through a write
+        must not leave a truncated file behind.
 
-    A missing or unreadable index is rebuilt from scratch; an index that exists but
-    lacks the keys is filled in rather than crashing on them.
+        :param path: Destination path of the file.
+        :param payload: JSON-serializable content to write.
+        :param indent: Indentation passed to :func:`json.dumps`, or None to compact it.
+        """
+        temporary = path.with_suffix(path.suffix + ".part")
+        temporary.write_text(json.dumps(payload, indent=indent), encoding="utf-8")
+        temporary.replace(path)
 
-    :param path: Path of the scene index file.
-    :param name: Name of the scene to register.
-    """
-    index: Dict[str, Any] = {}
-    if path.is_file():
-        index = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(index, dict):
-        index = {}
-    index.setdefault("scenes", [])
-    index.setdefault("default", name)
-    if name not in index["scenes"]:
-        index["scenes"].append(name)
-    _write_json(path, index, indent=1)
+    @classmethod
+    def _update_scene_index(cls, path: Path, name: str) -> None:
+        """
+        Register a freshly written scene in the index the viewer reads.
 
+        A missing or unreadable index is rebuilt from scratch; an index that exists but
+        lacks the keys is filled in rather than crashing on them.
 
-def _write_json(path: Path, payload: Any, indent: Optional[int] = None) -> None:
-    """
-    Write a bundle file, replacing it only once it is complete.
-
-    A bundle is the artifact of a long recording, so a failure part-way through a write
-    must not leave a truncated file behind.
-
-    :param path: Destination path of the file.
-    :param payload: JSON-serializable content to write.
-    :param indent: Indentation passed to :func:`json.dumps`, or None to compact it.
-    """
-    temporary = path.with_suffix(path.suffix + ".part")
-    temporary.write_text(json.dumps(payload, indent=indent), encoding="utf-8")
-    temporary.replace(path)
+        :param path: Path of the scene index file.
+        :param name: Name of the scene to register.
+        """
+        index: Dict[str, Any] = {}
+        if path.is_file():
+            index = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(index, dict):
+            index = {}
+        index.setdefault("scenes", [])
+        index.setdefault("default", name)
+        if name not in index["scenes"]:
+            index["scenes"].append(name)
+        cls._write_json(path, index, indent=1)
 
 
 # %% the cramera-onboard entry point
@@ -1093,7 +1093,7 @@ def main() -> None:
     output_directory = os.path.join(args.out, args.name)
     os.makedirs(output_directory, exist_ok=True)
     scene = SceneBuilder(recorder, args.name, output_directory, step).build()
-    _update_scene_index(Path(args.out) / "index.json", args.name)
+    SceneBuilder._update_scene_index(Path(args.out) / "index.json", args.name)
 
     log("scene '%s' written to %s" % (args.name, output_directory))
     log(

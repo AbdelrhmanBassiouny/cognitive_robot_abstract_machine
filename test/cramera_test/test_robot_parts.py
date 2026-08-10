@@ -6,13 +6,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Any, List, Optional
 
-from cramera.robot_parts import (
-    ArmSide,
-    RobotPartAnnotation,
-    RobotPartRole,
-    describe_robot_parts,
-    link_names,
-)
+from cramera.robot_parts import ArmSide, RobotPartAnnotation, RobotPartRole
 
 # %% mimics standing in for the sem_dt annotations of a world
 
@@ -94,14 +88,14 @@ class OneArmedRobot:
 class TestLinkNames:
     def test_the_model_prefix_is_stripped(self):
         part = PartWithBodies(bodies=[NamedBody("pr2/l_wrist_link")])
-        assert link_names(part) == ["l_wrist_link"]
+        assert RobotPartAnnotation.link_names(part) == ["l_wrist_link"]
 
     def test_an_unprefixed_name_is_kept(self):
         part = PartWithBodies(bodies=[NamedBody("l_wrist_link")])
-        assert link_names(part) == ["l_wrist_link"]
+        assert RobotPartAnnotation.link_names(part) == ["l_wrist_link"]
 
     def test_a_part_without_bodies_has_no_links(self):
-        assert link_names(PartWithBodies()) == []
+        assert RobotPartAnnotation.link_names(PartWithBodies()) == []
 
 
 # %% reading the annotations off a robot
@@ -120,7 +114,7 @@ class TestDescribeRobotParts:
         )
         robot = OneArmedRobot(arm=arm)
 
-        assert describe_robot_parts(robot) == [
+        assert RobotPartAnnotation.of_robot(robot) == [
             RobotPartAnnotation(
                 name="ArmPart",
                 role=RobotPartRole.ARM,
@@ -145,12 +139,12 @@ class TestDescribeRobotParts:
             left=ArmPart(bodies=[NamedBody("pr2/first_link")]),
             right=ArmPart(bodies=[NamedBody("pr2/second_link")]),
         )
-        sides = [annotation.side for annotation in describe_robot_parts(robot)]
+        sides = [annotation.side for annotation in RobotPartAnnotation.of_robot(robot)]
         assert sides == [ArmSide.LEFT, ArmSide.RIGHT]
 
     def test_an_arm_of_a_robot_without_a_left_and_a_right_arm_has_no_side(self):
         robot = OneArmedRobot(arm=ArmPart(bodies=[NamedBody("stretch/arm_link")]))
-        [annotation] = describe_robot_parts(robot)
+        [annotation] = RobotPartAnnotation.of_robot(robot)
         assert annotation.side is None
 
 

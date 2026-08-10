@@ -67,13 +67,6 @@ Krrood's SymbolGraph singleton is not threadsafe; queries are serialized.
 """
 
 
-def _no_eql_error() -> Dict[str, Any]:
-    """
-    The standard error payload for any API route when krrood isn't importable.
-    """
-    return {"ok": False, "error": "krrood/EQL not available in this environment"}
-
-
 class Handler(http.server.SimpleHTTPRequestHandler):
     """
     Static files from the packaged web root, plus the JSON API routes.
@@ -137,7 +130,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         :param handler: The handler to run, returning the payload to send on success.
         """
         if not EQL_AVAILABLE:
-            return self._send_json(_no_eql_error())
+            return self._send_json(self._no_eql_error())
         try:
             return self._send_json(handler())
         except Exception as error:
@@ -210,7 +203,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if self.path.split("?")[0] != "/api/eql":
             return self._send_json({"ok": False, "error": "unknown endpoint"}, 404)
         if not EQL_AVAILABLE:
-            return self._send_json(_no_eql_error())
+            return self._send_json(self._no_eql_error())
         try:
             length = int(self.headers.get("Content-Length") or 0)
             request_body = json.loads(self.rfile.read(length) or b"{}")
@@ -225,6 +218,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             return self._send_json(
                 {"ok": False, "error": "%s: %s" % (type(error).__name__, error)}
             )
+
+    @staticmethod
+    def _no_eql_error() -> Dict[str, Any]:
+        """
+        The standard error payload for any API route when krrood isn't importable.
+        """
+        return {"ok": False, "error": "krrood/EQL not available in this environment"}
 
 
 def make_server(port: int = 0) -> socketserver.ThreadingTCPServer:
