@@ -29,7 +29,6 @@ body{
 .brand{display:flex;align-items:center;gap:14px}
 /* AICOR logo — inverted (light) artwork, sits directly on the dark bar */
 .logo-img{height:38px;width:auto;display:block}
-.brand-text h1{margin:0;font-size:18px;font-weight:700;letter-spacing:.2px}
 
 /* %% split */
 .split{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px;min-height:0}

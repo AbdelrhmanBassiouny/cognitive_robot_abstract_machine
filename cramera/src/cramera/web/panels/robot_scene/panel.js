@@ -18,7 +18,7 @@
 Panels.define('robot-scene', function (root, bus) {
   root.innerHTML =
     '<div class="panel-head">' +
-    '  <h2>Robot · scene</h2>' +
+    '  <h2>Semantic Digital Twin Scene</h2>' +
     '  <select id="scene-select" class="scene-select" style="display:none"></select>' +
     '</div>' +
     '<div class="stage">' +
