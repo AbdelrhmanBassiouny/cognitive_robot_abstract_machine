@@ -677,6 +677,46 @@ class Recorder:
 
 
 
+@dataclass
+class BundledModel:
+    """
+    One bundled model source, as the ``models`` list of ``scene.json`` records it.
+    """
+
+    name: str
+    """
+    Model name, which is also its URDF's basename inside the bundle.
+    """
+
+    prefix: str
+    """
+    The model's world-name prefix in the composed world, or ``""`` when none was found.
+    """
+
+    is_robot: bool
+    """
+    Whether this model is the recorded robot rather than an environment model.
+    """
+
+    report: BundleReport
+    """
+    What the bundler wrote for this model.
+    """
+
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The JSON-serializable shape the viewer's model list expects.
+        """
+        return {
+            "name": self.name,
+            "urdf": "%s.urdf" % self.name,
+            "prefix": self.prefix,
+            "robot": self.is_robot,
+            "links": len(self.report.links),
+            "movableJoints": self.report.movable_joints,
+        }
+
+
 # %% post-processing the recording
 @dataclass
 class RecordingAnalysis:
@@ -992,7 +1032,7 @@ class SceneBuilder:
         bundler: Callable[..., BundleReport],
         world_body_names: List[str],
         base_body: str,
-    ) -> tuple:
+    ) -> BundledModel:
         """
         Bundle one model source and turn its report into a ``models`` scene entry.
 
@@ -1033,16 +1073,11 @@ class SceneBuilder:
                 len(report.missing),
             )
         )
-        return (
-            {
-                "name": base_name,
-                "urdf": "%s.urdf" % base_name,
-                "prefix": model_prefix,
-                "robot": is_robot,
-                "links": len(report.links),
-                "movableJoints": report.movable_joints,
-            },
-            report,
+        return BundledModel(
+            name=base_name,
+            prefix=model_prefix,
+            is_robot=is_robot,
+            report=report,
         )
 
 
@@ -1186,11 +1221,11 @@ class SceneBuilder:
             ]
         )
         for source, bundler in bundled_sources:
-            model, report = self._bundle_model(
+            bundled = self._bundle_model(
                 source, bundler, world_body_names, base_body
             )
-            models.append(model)
-            missing += report.missing
+            models.append(bundled.to_payload())
+            missing += bundled.report.missing
 
         scene = {
             "name": self.scene_name,

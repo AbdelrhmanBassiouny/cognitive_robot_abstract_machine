@@ -26,7 +26,12 @@ from typing_extensions import Any, Dict, List, Optional
 
 from cramera.onboard import bundle_urdf as bundler
 from cramera.onboard.bundle_world import BundledWorld
-from cramera.onboard.demo import Recorder, RecordingAnalysis, SpawnedBox
+from cramera.onboard.demo import (
+    BundledModel,
+    Recorder,
+    RecordingAnalysis,
+    SpawnedBox,
+)
 
 RESTING = [0.0, 0.0, 1.0, 0, 0, 0, 1]
 """
@@ -335,7 +340,42 @@ class TestAssetHookLifecycle:
         assert recorder._asset_hook_uninstallers == []
 
 
+class TestBundledModel:
+    def test_a_bundled_model_becomes_a_scene_model_entry(self, tmp_path):
+        """
+        The ``models`` entry a bundled model contributes to ``scene.json``.
+        """
+        report = BundledWorld.of_mjcf_source(
+            str(_written(tmp_path / "lab.xml", MJCF_SOURCE)),
+            "lab",
+            str(tmp_path / "bundle"),
+        )
+        bundled = BundledModel(
+            name="lab", prefix="lab_1", is_robot=False, report=report
+        )
+
+        assert bundled.to_payload() == {
+            "name": "lab",
+            "urdf": "lab.urdf",
+            "prefix": "lab_1",
+            "robot": False,
+            "links": len(report.links),
+            "movableJoints": report.movable_joints,
+        }
+
+
 # %% bundling a parsed world
+def _written(path: Path, text: str) -> Path:
+    """
+    Write a source file and return its path.
+
+    :param path: Where the file goes.
+    :param text: Its content.
+    """
+    path.write_text(text)
+    return path
+
+
 MJCF_SOURCE = """<mujoco model="lab">
   <worldbody>
     <body name="table" pos="1 0 0">
