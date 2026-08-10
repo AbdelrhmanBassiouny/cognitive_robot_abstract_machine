@@ -32,7 +32,7 @@ class SubgraphViewPayload:
     Always ``True`` — these views have no failure mode.
     """
 
-    crumb: str
+    breadcrumb: str
     """
     Breadcrumb label shown above the subgraph.
     """
@@ -58,7 +58,7 @@ class SubgraphViewPayload:
         """
         return {
             "ok": self.ok,
-            "crumb": self.crumb,
+            "breadcrumb": self.breadcrumb,
             "nodes": [node.to_payload() for node in self.nodes],
             "edges": [edge.to_payload() for edge in self.edges],
             "details": {
@@ -91,8 +91,8 @@ def _class_lines(python_class: PythonClass, drill_hint: bool = True) -> List[str
     ]
     if python_class.bases:
         lines.append("bases: " + ", ".join(python_class.bases))
-    if python_class.doc:
-        lines.append(python_class.doc)
+    if python_class.docstring_summary:
+        lines.append(python_class.docstring_summary)
     if drill_hint:
         lines.append("double-click: inheritance view")
     return lines
@@ -117,9 +117,12 @@ def _add_classes(
     for python_class in shown:
         class_id = _class_id(python_class)
         view.add(
-            class_id, python_class.name, NodeGroup.PYCLASS, _class_lines(python_class)
+            class_id,
+            python_class.name,
+            NodeGroup.PYTHON_CLASS,
+            _class_lines(python_class),
         )
-        view.edges.append(GraphEdge(parent_id, class_id, EdgeKind.PROP, "defines"))
+        view.edges.append(GraphEdge(parent_id, class_id, EdgeKind.PROPERTY, "defines"))
         name_to_id.setdefault(python_class.name, class_id)
     for python_class in shown:
         for base in python_class.bases:
@@ -146,10 +149,10 @@ class ArchitectureViews:
     """
 
     #: at most this many classes are drawn in one drill-down view
-    CLASS_CAP = 150
+    MAXIMUM_CLASSES_SHOWN = 150
 
     #: at most this many subclasses are drawn in a class inheritance view
-    SUBCLASS_CAP = 80
+    MAXIMUM_SUBCLASSES_SHOWN = 80
 
     @classmethod
     def package_view(
@@ -189,7 +192,7 @@ class ArchitectureViews:
             view.add(
                 subpackage.name,
                 subpackage.name.split(".", 1)[1],
-                NodeGroup.KLASS,
+                NodeGroup.SUBPACKAGE,
                 [
                     "a SubPackage of " + subpackage.package,
                     "%d modules · %d classes"
@@ -198,10 +201,10 @@ class ArchitectureViews:
                 ],
             )
             view.edges.append(
-                GraphEdge(package.name, subpackage.name, EdgeKind.PROP, "contains")
+                GraphEdge(package.name, subpackage.name, EdgeKind.PROPERTY, "contains")
             )
         note = _add_classes(
-            view, package.name, top_level[: cls.CLASS_CAP], len(top_level)
+            view, package.name, top_level[: cls.MAXIMUM_CLASSES_SHOWN], len(top_level)
         )
         if note:
             view.details[package.name].lines += note
@@ -232,7 +235,7 @@ class ArchitectureViews:
         view.add(
             subpackage.name,
             subpackage.name.split(".", 1)[1],
-            NodeGroup.KLASS,
+            NodeGroup.SUBPACKAGE,
             [
                 "a SubPackage of " + subpackage.package,
                 "%d modules · %d classes"
@@ -240,7 +243,7 @@ class ArchitectureViews:
             ],
         )
         note = _add_classes(
-            view, subpackage.name, classes[: cls.CLASS_CAP], len(classes)
+            view, subpackage.name, classes[: cls.MAXIMUM_CLASSES_SHOWN], len(classes)
         )
         if note:
             view.details[subpackage.name].lines += note
@@ -264,7 +267,7 @@ class ArchitectureViews:
         view.add(
             class_id,
             python_class.name,
-            NodeGroup.PYCLASS,
+            NodeGroup.PYTHON_CLASS,
             _class_lines(python_class, drill_hint=False),
         )
         # direct base classes: resolve inside the repo (same package preferred),
@@ -273,7 +276,7 @@ class ArchitectureViews:
             candidates = [
                 entry for entry in knowledge_base.classes if entry.name == base
             ]
-            pick = next(
+            resolved_base = next(
                 (
                     entry
                     for entry in candidates
@@ -281,17 +284,22 @@ class ArchitectureViews:
                 ),
                 candidates[0] if candidates else None,
             )
-            if pick:
-                base_id = _class_id(pick)
+            if resolved_base:
+                base_id = _class_id(resolved_base)
                 if base_id not in view.details:
-                    view.add(base_id, pick.name, NodeGroup.PYCLASS, _class_lines(pick))
+                    view.add(
+                        base_id,
+                        resolved_base.name,
+                        NodeGroup.PYTHON_CLASS,
+                        _class_lines(resolved_base),
+                    )
             else:
-                base_id = "ext:" + base
+                base_id = "external:" + base
                 if base_id not in view.details:
                     view.add(
                         base_id,
                         base,
-                        NodeGroup.UPPER,
+                        NodeGroup.EXTERNAL_CLASS,
                         ["external base class (outside the repo)"],
                     )
             view.edges.append(GraphEdge(class_id, base_id, EdgeKind.TYPE, "inherits"))
@@ -301,21 +309,22 @@ class ArchitectureViews:
             for entry in knowledge_base.classes
             if python_class.name in entry.bases and _class_id(entry) != class_id
         ]
-        for subclass in subclasses[: cls.SUBCLASS_CAP]:
+        for subclass in subclasses[: cls.MAXIMUM_SUBCLASSES_SHOWN]:
             subclass_id = _class_id(subclass)
             if subclass_id not in view.details:
                 view.add(
                     subclass_id,
                     subclass.name,
-                    NodeGroup.PYCLASS,
+                    NodeGroup.PYTHON_CLASS,
                     _class_lines(subclass),
                 )
             view.edges.append(
                 GraphEdge(subclass_id, class_id, EdgeKind.TYPE, "inherits")
             )
-        if len(subclasses) > cls.SUBCLASS_CAP:
+        if len(subclasses) > cls.MAXIMUM_SUBCLASSES_SHOWN:
             view.details[class_id].lines.append(
-                "showing %d of %d subclasses" % (cls.SUBCLASS_CAP, len(subclasses))
+                "showing %d of %d subclasses"
+                % (cls.MAXIMUM_SUBCLASSES_SHOWN, len(subclasses))
             )
         return SubgraphViewPayload(
             True, python_class.name, view.nodes, view.edges, view.details

@@ -127,21 +127,25 @@ def graph_payload() -> KnowledgeGraphPayload:
     """
     The knowledge-graph overview: nodes, edges, details and presets.
     """
-    kb = get_knowledge_base()
+    knowledge_base = get_knowledge_base()
     view = SubgraphAccumulator()
 
-    rob = kb.robot.name
+    robot_name = knowledge_base.robot.name
     view.add(
-        rob,
-        rob,
+        robot_name,
+        robot_name,
         NodeGroup.ROBOT,
         [
             "a Robot",
-            "%d arm%s" % (kb.robot.arm_count, "" if kb.robot.arm_count == 1 else "s"),
+            "%d arm%s"
+            % (
+                knowledge_base.robot.arm_count,
+                "" if knowledge_base.robot.arm_count == 1 else "s",
+            ),
             "double-click: full URDF tree",
         ],
     )
-    for arm in kb.arms:
+    for arm in knowledge_base.arms:
         view.add(
             arm.name,
             arm.name.replace("_", " "),
@@ -152,19 +156,21 @@ def graph_payload() -> KnowledgeGraphPayload:
                 "gripper: " + arm.gripper.name,
             ],
         )
-        view.edges.append(GraphEdge(rob, arm.name, EdgeKind.PROP, "has part"))
+        view.edges.append(
+            GraphEdge(robot_name, arm.name, EdgeKind.PROPERTY, "has part")
+        )
         view.add(
             arm.gripper.name,
             arm.gripper.name.replace("_", " "),
             NodeGroup.ROBOT,
             ["a Gripper", "side: " + _side_label(arm.gripper.side)]
-            + _measurement_line("opening", arm.gripper.opening_m, "%.3f"),
+            + _measurement_line("opening", arm.gripper.opening_metres, "%.3f"),
         )
         view.edges.append(
-            GraphEdge(arm.name, arm.gripper.name, EdgeKind.PROP, "has part")
+            GraphEdge(arm.name, arm.gripper.name, EdgeKind.PROPERTY, "has part")
         )
 
-    for bench_object in kb.objects:
+    for bench_object in knowledge_base.objects:
         view.add(
             bench_object.name,
             bench_object.label,
@@ -174,11 +180,11 @@ def graph_payload() -> KnowledgeGraphPayload:
                 "kind: " + bench_object.kind,
                 "position: " + _position_label(bench_object.position),
             ]
-            + _measurement_line("height", bench_object.height_m, "%.2f"),
+            + _measurement_line("height", bench_object.height_metres, "%.2f"),
         )
 
     previous = None
-    for episode in kb.episodes:
+    for episode in knowledge_base.episodes:
         view.add(
             episode.name,
             episode.name,
@@ -186,7 +192,7 @@ def graph_payload() -> KnowledgeGraphPayload:
             [
                 "an ActionEpisode",
                 "frames %d–%d" % (episode.start_frame, episode.end_frame),
-                "duration: %.1f s" % episode.duration_s,
+                "duration: %.1f s" % episode.duration_seconds,
             ]
             + (["picks: " + episode.picks.name] if episode.picks else [])
             + (["places at: " + episode.places_at.name] if episode.places_at else []),
@@ -204,33 +210,34 @@ def graph_payload() -> KnowledgeGraphPayload:
                 GraphEdge(
                     episode.name,
                     episode.performed_by.robot,
-                    EdgeKind.PROP,
+                    EdgeKind.PROPERTY,
                     "performed by",
                 )
             )
         if episode.picks:
             view.edges.append(
-                GraphEdge(episode.name, episode.picks.name, EdgeKind.PROP, "picks")
+                GraphEdge(episode.name, episode.picks.name, EdgeKind.PROPERTY, "picks")
             )
         if episode.places_at:
             view.edges.append(
                 GraphEdge(
-                    episode.name, episode.places_at.name, EdgeKind.PROP, "places at"
+                    episode.name, episode.places_at.name, EdgeKind.PROPERTY, "places at"
                 )
             )
 
     # the CRAM architecture cluster: repo root → packages, plus import edges
-    if kb.packages:
+    if knowledge_base.packages:
         view.add(
             "cram",
             "CRAM architecture",
             NodeGroup.ROOT,
             [
                 "~/cognitive_robot_abstract_machine",
-                "%d packages · %d Python classes" % (len(kb.packages), len(kb.classes)),
+                "%d packages · %d Python classes"
+                % (len(knowledge_base.packages), len(knowledge_base.classes)),
             ],
         )
-        for package in kb.packages:
+        for package in knowledge_base.packages:
             view.add(
                 package.name,
                 package.name,
@@ -244,13 +251,13 @@ def graph_payload() -> KnowledgeGraphPayload:
                 ],
             )
             view.edges.append(
-                GraphEdge("cram", package.name, EdgeKind.PROP, "contains")
+                GraphEdge("cram", package.name, EdgeKind.PROPERTY, "contains")
             )
-        for subpackage in kb.subpackages:
+        for subpackage in knowledge_base.subpackages:
             view.add(
                 subpackage.name,
                 subpackage.name.split(".", 1)[1],
-                NodeGroup.KLASS,
+                NodeGroup.SUBPACKAGE,
                 [
                     "a SubPackage of " + subpackage.package,
                     "%d modules · %d classes"
@@ -260,10 +267,10 @@ def graph_payload() -> KnowledgeGraphPayload:
             )
             view.edges.append(
                 GraphEdge(
-                    subpackage.package, subpackage.name, EdgeKind.PROP, "contains"
+                    subpackage.package, subpackage.name, EdgeKind.PROPERTY, "contains"
                 )
             )
-        for dependency in kb.package_deps:
+        for dependency in knowledge_base.package_dependencies:
             view.edges.append(
                 GraphEdge(
                     dependency.source, dependency.target, EdgeKind.TYPE, "imports"
@@ -285,13 +292,15 @@ def graph_payload() -> KnowledgeGraphPayload:
                 view.edges.append(GraphEdge(source, target, EdgeKind.TYPE, label))
 
         # anchor one representative manipulation episode (they share the stack)
-        anchor = next((episode.name for episode in kb.episodes if episode.picks), None)
+        anchor = next(
+            (episode.name for episode in knowledge_base.episodes if episode.picks), None
+        )
         if anchor:
             link(anchor, "coraplex.plans", "planned by")  # plan / designator layer
             link(anchor, "giskardpy.motion_statechart", "motion by")  # motion execution
         # every physical thing in the scene is modelled in the semantic digital twin
-        link(rob, "semantic_digital_twin", "modelled in")
-        for bench_object in kb.objects:
+        link(robot_name, "semantic_digital_twin", "modelled in")
+        for bench_object in knowledge_base.objects:
             link(bench_object.name, "semantic_digital_twin", "modelled in")
 
     # the executed plan tree (captured from the real PlanNode graph)
@@ -308,14 +317,16 @@ def graph_payload() -> KnowledgeGraphPayload:
                 "double-click to open",
             ],
         )
-        view.edges.append(GraphEdge("plan", rob, EdgeKind.PROP, "executed by"))
-        for episode in kb.episodes:
+        view.edges.append(
+            GraphEdge("plan", robot_name, EdgeKind.PROPERTY, "executed by")
+        )
+        for episode in knowledge_base.episodes:
             view.edges.append(GraphEdge("plan", episode.name, EdgeKind.TYPE, "spans"))
 
     status = "EQL ready · %d graph nodes · %d joints · %d CRAM classes" % (
         len(view.nodes),
-        len(kb.joints),
-        len(kb.classes),
+        len(knowledge_base.joints),
+        len(knowledge_base.classes),
     )
     return KnowledgeGraphPayload(
         True, status, view.nodes, view.edges, view.details, get_presets()

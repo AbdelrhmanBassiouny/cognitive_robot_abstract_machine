@@ -12,7 +12,7 @@ view_payload(name) -> one of the graph-panel tabs (knowledge / kinematics / plan
 chart)
 
 krrood is imported lazily: without it the static viewer still works, only the EQL panel
-is unavailable. Scene bundles are read from paths.scenes_dir().
+is unavailable. Scene bundles are read from paths.scenes_directory().
 """
 
 from __future__ import annotations

@@ -3,7 +3,7 @@ Fixtures for the cram_viz tests.
 
 ``fixture_scene`` builds a tiny but complete scene bundle (scene.json + trajectory.json
 + a minimal URDF) in a tmp directory and points cram_viz at it via the CRAM_VIZ_*
-environment variables, so the KB and the server tests run against deterministic data
+environment variables, so the knowledge base and the server tests run against deterministic data
 instead of a real (huge, generated) bundle.
 """
 

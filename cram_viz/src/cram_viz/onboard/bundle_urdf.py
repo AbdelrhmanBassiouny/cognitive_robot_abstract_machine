@@ -86,14 +86,16 @@ def _resolve_package_uri(uri: str) -> Optional[str]:
 
 
 def resolve_uri(
-    uri: str, hints: Optional[Dict[str, str]] = None, base_dir: Optional[str] = None
+    uri: str,
+    hints: Optional[Dict[str, str]] = None,
+    base_directory: Optional[str] = None,
 ) -> Optional[str]:
     """
     Resolve a mesh or URDF reference to an existing absolute file path.
 
     :param uri: The reference as written in the URDF.
     :param hints: Resolutions recorded while a demo ran, which win over any search.
-    :param base_dir: Directory a relative reference is resolved against.
+    :param base_directory: Directory a relative reference is resolved against.
     :return: The file's path, or None if nothing matched.
     """
     if hints and uri in hints:
@@ -105,8 +107,8 @@ def resolve_uri(
         return path if os.path.isfile(path) else None
     if os.path.isabs(uri):
         return uri if os.path.isfile(uri) else None
-    if base_dir:
-        path = os.path.join(base_dir, uri)
+    if base_directory:
+        path = os.path.join(base_directory, uri)
         return path if os.path.isfile(path) else None
     return None
 
@@ -257,12 +259,12 @@ class BundleReport:
     Count of distinct mesh files copied into the bundle.
     """
 
-    mesh_exts: List[str]
+    mesh_suffixes: List[str]
     """
     Sorted, deduplicated file extensions of the copied meshes.
     """
 
-    refs_rewritten: int
+    references_rewritten: int
     """
     Count of mesh references rewritten to their bundled, relative path.
     """
@@ -274,14 +276,17 @@ class BundleReport:
 
 
 def bundle_urdf(
-    source: str, name: str, out_dir: str, hints: Optional[Dict[str, str]] = None
+    source: str,
+    name: str,
+    output_directory: str,
+    hints: Optional[Dict[str, str]] = None,
 ) -> BundleReport:
     """
     Bundle one URDF or xacro with every mesh it references.
 
     :param source: Path or ``package://`` URI of the URDF/xacro to bundle.
-    :param name: Output model name, used for ``<out_dir>/<name>.urdf``.
-    :param out_dir: Directory the URDF and its ``meshes/`` tree are written to.
+    :param name: Output model name, used for ``<output_directory>/<name>.urdf``.
+    :param output_directory: Directory the URDF and its ``meshes/`` tree are written to.
     :param hints: Resolutions recorded while a demo ran.
     :return: A report of what was written, including any unresolved references.
     :raises FileNotFoundError: If the source itself cannot be found.
@@ -295,18 +300,18 @@ def bundle_urdf(
         urdf_text = xacro_to_urdf_text(source_path)
     else:
         urdf_text = Path(source_path).read_text(encoding="utf-8", errors="replace")
-    base_dir = os.path.dirname(source_path)
+    base_directory = os.path.dirname(source_path)
 
-    os.makedirs(out_dir, exist_ok=True)
+    os.makedirs(output_directory, exist_ok=True)
     copied: Dict[str, str] = {}
     missing: List[str] = []
     rewritten = 0
     for reference in sorted(set(MESH_REFERENCE_PATTERN.findall(urdf_text))):
         if MeshFormat.of_path(reference) is None:
             continue  # plugins (.so) and other non-geometry references
-        resolved = resolve_uri(reference, hints=hints, base_dir=base_dir)
+        resolved = resolve_uri(reference, hints=hints, base_directory=base_directory)
         relative_path = _bundled_relative_path(reference)
-        bundled = os.path.join(out_dir, "meshes", relative_path)
+        bundled = os.path.join(output_directory, "meshes", relative_path)
         if _copy_file(resolved, bundled, copied, missing):
             _copy_side_assets(resolved, bundled, copied, missing)
         urdf_text = urdf_text.replace(
@@ -315,7 +320,7 @@ def bundle_urdf(
         )
         rewritten += 1
 
-    urdf_out = os.path.join(out_dir, "%s.urdf" % name)
+    urdf_out = os.path.join(output_directory, "%s.urdf" % name)
     Path(urdf_out).write_text(urdf_text, encoding="utf-8")
     links = LINK_PATTERN.findall(urdf_text)
     joints = JOINT_PATTERN.findall(urdf_text)
@@ -332,8 +337,8 @@ def bundle_urdf(
             if joint_type != FIXED_JOINT_TYPE
         ],
         meshes_copied=len(copied),
-        mesh_exts=suffixes,
-        refs_rewritten=rewritten,
+        mesh_suffixes=suffixes,
+        references_rewritten=rewritten,
         missing=missing,
     )
 
@@ -352,7 +357,7 @@ def main() -> None:
     parser.add_argument("--name", help="output model name (default: source basename)")
     parser.add_argument(
         "--out",
-        default=str(paths.scenes_dir()),
+        default=str(paths.scenes_directory()),
         help="output directory (default: CRAM_VIZ_SCENES or ~/.cram_viz/scenes)",
     )
     arguments = parser.parse_args()
@@ -364,7 +369,7 @@ def main() -> None:
         len(report.links),
         len(report.joints),
         report.meshes_copied,
-        report.mesh_exts,
+        report.mesh_suffixes,
     )
     if report.missing:
         logger.warning("missing %d assets:", len(report.missing))

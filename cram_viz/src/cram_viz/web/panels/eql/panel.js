@@ -2,11 +2,11 @@
  * panels/eql/panel.js — the EQL (Entity Query Language) console.
  *
  * Query box + presets + answer panel. Queries are executed server-side
- * (POST /api/eql) against the episode knowledge base; the KB overview
- * (GET /api/kb) provides presets and per-entity details.
+ * (POST /api/eql) against the episode knowledge base; the knowledge-base overview
+ * (GET /api/knowledge) provides presets and per-entity details.
  *
  * Bus events:
- *   emits    kb:ready {payload}          the /api/kb overview, once loaded
+ *   emits    knowledge:ready {payload}          the /api/knowledge overview, once loaded
  *   emits    entity:highlight {ids, focus?}   results / described entity
  *   listens  scene:part-clicked {id}     describe the clicked part
  *   listens  scene:step {step}           describe the running episode
@@ -16,7 +16,7 @@ Panels.define('eql', function (root, bus) {
   root.innerHTML =
     '<div class="panel-head">' +
     '  <h2>EQL · entity query language</h2>' +
-    '  <span id="kb-status" class="kb-status">loading knowledge base…</span>' +
+    '  <span id="knowledge-status" class="knowledge-status">loading knowledge base…</span>' +
     '</div>' +
     '<div class="query-box">' +
     '  <div class="query-row">' +
@@ -27,32 +27,32 @@ Panels.define('eql', function (root, bus) {
     '</div>' +
     '<div id="answer" class="answer"><div class="answer-empty">Loading the episode knowledge base…</div></div>';
 
-  const kbStatus = root.querySelector('#kb-status');
+  const knowledgeStatus = root.querySelector('#knowledge-status');
   const answerEl = root.querySelector('#answer');
   const input = root.querySelector('#query-input');
   const runBtn = root.querySelector('#query-run');
   const presetsEl = root.querySelector('#presets');
 
-  let kb = null;   // /api/kb overview (presets + entity details)
+  let knowledge = null;   // /api/knowledge overview (presets + entity details)
 
   // %% boot
-  fetch('/api/kb').then(function (r) { return r.json(); }).then(boot).catch(function (err) {
-    kbStatus.textContent = 'KB error';
+  fetch('/api/knowledge').then(function (r) { return r.json(); }).then(boot).catch(function (err) {
+    knowledgeStatus.textContent = 'knowledge base error';
     answerEl.innerHTML = '<div class="qerr">Failed to reach the EQL server:\n' + esc(String(err)) + '</div>';
   });
 
   function boot(payload) {
     if (!payload.ok) {
-      kbStatus.textContent = 'EQL unavailable';
+      knowledgeStatus.textContent = 'EQL unavailable';
       answerEl.innerHTML = '<div class="qerr">' + esc(payload.error || 'unknown error') + '</div>';
       return;
     }
-    kb = payload;
-    kbStatus.textContent = payload.status;
-    kbStatus.classList.add('ready');
+    knowledge = payload;
+    knowledgeStatus.textContent = payload.status;
+    knowledgeStatus.classList.add('ready');
     buildPresets(payload.presets || []);
     welcome();
-    bus.emit('kb:ready', { payload: payload });
+    bus.emit('knowledge:ready', { payload: payload });
   }
 
   function welcome() {
@@ -70,10 +70,10 @@ Panels.define('eql', function (root, bus) {
   }
 
   // %% describe an entity in the answer panel
-  // Two sources: our own kb.details (scene clicks) and graph panels, which send
+  // Two sources: our own knowledge.details (scene clicks) and graph panels, which send
   // the full detail payload of the node the user clicked (entity:select).
   function describe(id, detail, relations) {
-    const d = detail || (kb && kb.details && kb.details[id]);
+    const d = detail || (knowledge && knowledge.details && knowledge.details[id]);
     if (!d) return;
     let html = '<div class="goal">entity · ' + esc(id) + '</div>';
     html += '<div class="ansrow"><span class="tag" style="background:' + groupColor(d.group) + '">' +
@@ -98,7 +98,7 @@ Panels.define('eql', function (root, bus) {
   bus.on('scene:part-clicked', function (p) { describe(p.id); });
   bus.on('entity:select', function (p) { describe(p.id, p.detail, p.relations); });
   bus.on('scene:step', function (p) {
-    if (p.step !== '__done__' && kb && kb.details && kb.details[p.step]) describe(p.step);
+    if (p.step !== '__done__' && knowledge && knowledge.details && knowledge.details[p.step]) describe(p.step);
   });
 
   // %% presets
@@ -185,12 +185,12 @@ Panels.define('eql', function (root, bus) {
   const TYPE_GROUP = {
     BenchObject: 'object', ActionEpisode: 'event', Arm: 'robot', Gripper: 'robot',
     Robot: 'robot', JointMotion: 'robot', Point3: 'concept',
-    Package: 'concept', SubPackage: 'klass', PythonClass: 'klass',
+    Package: 'concept', SubPackage: 'subpackage', PythonClass: 'subpackage',
   };
-  function groupOfType(t) { return TYPE_GROUP[t] || 'ind'; }
+  function groupOfType(t) { return TYPE_GROUP[t] || 'other'; }
   const GROUP_COLOR = {
-    root: '#e8eefb', klass: '#5b8cff', upper: '#8c9bbd',
-    robot: '#ff7a9c', object: '#39d5c8', event: '#b98cff', goal: '#ffb648', concept: '#4bd38a', ind: '#7f8db0',
+    root: '#e8eefb', subpackage: '#5b8cff', external_class: '#8c9bbd',
+    robot: '#ff7a9c', object: '#39d5c8', event: '#b98cff', goal: '#ffb648', concept: '#4bd38a', other: '#7f8db0',
   };
   function groupColor(g) { return GROUP_COLOR[g] || '#5b8cff'; }
   function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }

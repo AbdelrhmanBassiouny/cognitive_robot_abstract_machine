@@ -283,12 +283,14 @@ class TestResolveUri:
         mesh = tmp_path / "meshes" / "cup.stl"
         mesh.parent.mkdir()
         mesh.write_text("solid cup\nendsolid cup\n")
-        assert bundler.resolve_uri("meshes/cup.stl", base_dir=str(tmp_path)) == str(
-            mesh
-        )
+        assert bundler.resolve_uri(
+            "meshes/cup.stl", base_directory=str(tmp_path)
+        ) == str(mesh)
 
     def test_a_missing_relative_reference_is_unresolved(self, tmp_path):
-        assert bundler.resolve_uri("meshes/gone.stl", base_dir=str(tmp_path)) is None
+        assert (
+            bundler.resolve_uri("meshes/gone.stl", base_directory=str(tmp_path)) is None
+        )
 
     def test_a_file_uri_resolves_to_its_path(self, tmp_path):
         mesh = tmp_path / "cup.stl"
@@ -376,19 +378,19 @@ class TestBundleUrdf:
         return xacro
 
     def test_the_mesh_is_copied_next_to_the_rewritten_urdf(self, source_tree, tmp_path):
-        out_dir = tmp_path / "bundle"
-        report = bundler.bundle_urdf(str(source_tree), "demo", str(out_dir))
-        assert (out_dir / "demo.urdf").is_file()
-        assert (out_dir / "meshes" / "_local" / "cup.stl").is_file()
+        output_directory = tmp_path / "bundle"
+        report = bundler.bundle_urdf(str(source_tree), "demo", str(output_directory))
+        assert (output_directory / "demo.urdf").is_file()
+        assert (output_directory / "meshes" / "_local" / "cup.stl").is_file()
         assert report.meshes_copied == 1
         assert report.missing == []
 
     def test_the_reference_is_rewritten_to_the_bundled_copy(
         self, source_tree, tmp_path
     ):
-        out_dir = tmp_path / "bundle"
-        bundler.bundle_urdf(str(source_tree), "demo", str(out_dir))
-        rewritten = (out_dir / "demo.urdf").read_text()
+        output_directory = tmp_path / "bundle"
+        bundler.bundle_urdf(str(source_tree), "demo", str(output_directory))
+        rewritten = (output_directory / "demo.urdf").read_text()
         assert 'filename="meshes/_local/cup.stl"' in rewritten
         assert 'filename="meshes/cup.stl"' not in rewritten
 

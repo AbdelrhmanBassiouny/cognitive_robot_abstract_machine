@@ -79,16 +79,16 @@ function planFixture(Graph) {
     arrows: true,
     statusLegend: true,
     nodes: [
-      { id: 'p0', label: 'Sequential', group: 'ind', status: 'SUCCEEDED' },
+      { id: 'p0', label: 'Sequential', group: 'other', status: 'SUCCEEDED' },
       { id: 'p1', label: 'Transport', group: 'event', status: 'RUNNING' },
       { id: 'p2', label: 'MoveTCP', group: 'robot', status: 'CREATED' },
       { id: 'p3', label: 'Place', group: 'event', status: 'FAILED' },
       { id: 'p4', label: 'plain', group: 'goal' },
     ],
     edges: [
-      { from: 'p0', to: 'p1', kind: 'prop' },
-      { from: 'p1', to: 'p2', kind: 'prop' },
-      { from: 'p0', to: 'p3', kind: 'prop' },
+      { from: 'p0', to: 'p1', kind: 'property' },
+      { from: 'p1', to: 'p2', kind: 'property' },
+      { from: 'p0', to: 'p3', kind: 'property' },
     ],
   });
 }
@@ -184,7 +184,7 @@ test('statechart transition kinds get distinct edge styles', function () {
   Graph.build({
     key: 'chart', layout: 'hier', arrows: true,
     nodes: [
-      { id: 's0', label: 'Goal', group: 'klass', status: 'RUNNING' },
+      { id: 's0', label: 'Goal', group: 'subpackage', status: 'RUNNING' },
       { id: 's1', label: 'Move', group: 'robot', status: 'DONE' },
     ],
     edges: [

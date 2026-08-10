@@ -120,8 +120,8 @@ body{
 .workflow-head span{font-size:13px;font-weight:600;color:var(--ink)}
 
 /* %% query box */
-.kb-status{font-size:12px;color:var(--faint)}
-.kb-status.ready{color:var(--accent)}
+.knowledge-status{font-size:12px;color:var(--faint)}
+.knowledge-status.ready{color:var(--accent)}
 .query-box{padding:14px 16px;border-bottom:1px solid var(--line);background:var(--panel2)}
 .query-row{display:flex;gap:8px}
 #query-input{

@@ -3,12 +3,13 @@ HTTP endpoints of the live bridge (default port 8765).
 
 ::
 
-    GET /info    {running, robot, objects, plan, chart, seq}
-    GET /state   {seq, frames: {prefixed_joint: pos}, base: pose7,
+    GET /info    {running, robot, objects, plan, chart, sequenceNumber,
+                  partAnnotations}
+    GET /state   {sequenceNumber, frames: {prefixed_joint: position}, base: pose7,
                   objects: {mesh_key: pose7}}
     GET /objects geometry catalog (mesh served via /mesh?key=)
     GET /plan    {signature, nodes: [{id, parent, kind, label, status, derived}]}
-    GET /chart   {signature, title, nodes: [{id, parent, name, cls, life, obs}],
+    GET /chart   {signature, title, nodes: [{id, parent, name, class_name, life_cycle, observation}],
                   edges: [{from, to, kind}]}
     POST /move   queue an object move (applied on the simulation thread)
 
@@ -170,7 +171,7 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         """
         Route the per-request access log to debug (15 Hz polling is noisy).
 
-        :param format: ``printf``-style log message format.
+        :param format:``printf``-style log message format.
         :param args: Values to interpolate into ``format``.
         """
         logger.debug(format, *args)

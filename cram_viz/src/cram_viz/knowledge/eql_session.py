@@ -130,7 +130,7 @@ def fresh_namespace() -> Dict[str, Any]:
     """
     A namespace for evaluating one EQL query (fresh variables each time).
     """
-    kb = get_knowledge_base()
+    knowledge_base = get_knowledge_base()
     namespace: Dict[str, Any] = eql_factory_namespace()
     namespace.update(
         Point3=Point3,
@@ -143,25 +143,37 @@ def fresh_namespace() -> Dict[str, Any]:
         Package=Package,
         SubPackage=SubPackage,
         PythonClass=PythonClass,
-        objects=kb.objects,
-        episodes=kb.episodes,
-        arms=kb.arms,
-        grippers=kb.grippers,
-        joints=kb.joints,
-        robots=[kb.robot],
-        packages=kb.packages,
-        subpackages=kb.subpackages,
-        classes=kb.classes,
+        objects=knowledge_base.objects,
+        episodes=knowledge_base.episodes,
+        arms=knowledge_base.arms,
+        grippers=knowledge_base.grippers,
+        joints=knowledge_base.joints,
+        robots=[knowledge_base.robot],
+        packages=knowledge_base.packages,
+        subpackages=knowledge_base.subpackages,
+        classes=knowledge_base.classes,
     )
-    # ready-made query variables so one-liners stay short
-    namespace["obj"] = eql_factories.variable(BenchObject, domain=kb.objects)
-    namespace["ep"] = eql_factories.variable(ActionEpisode, domain=kb.episodes)
-    namespace["arm"] = eql_factories.variable(Arm, domain=kb.arms)
-    namespace["j"] = eql_factories.variable(JointMotion, domain=kb.joints)
-    namespace["rob"] = eql_factories.variable(Robot, domain=[kb.robot])
-    namespace["pkg"] = eql_factories.variable(Package, domain=kb.packages)
-    namespace["sub"] = eql_factories.variable(SubPackage, domain=kb.subpackages)
-    namespace["cls"] = eql_factories.variable(PythonClass, domain=kb.classes)
+    # ready-made query variables, one per entity type
+    namespace["scene_object"] = eql_factories.variable(
+        BenchObject, domain=knowledge_base.objects
+    )
+    namespace["episode"] = eql_factories.variable(
+        ActionEpisode, domain=knowledge_base.episodes
+    )
+    namespace["arm"] = eql_factories.variable(Arm, domain=knowledge_base.arms)
+    namespace["joint"] = eql_factories.variable(
+        JointMotion, domain=knowledge_base.joints
+    )
+    namespace["robot"] = eql_factories.variable(Robot, domain=[knowledge_base.robot])
+    namespace["package"] = eql_factories.variable(
+        Package, domain=knowledge_base.packages
+    )
+    namespace["subpackage"] = eql_factories.variable(
+        SubPackage, domain=knowledge_base.subpackages
+    )
+    namespace["python_class"] = eql_factories.variable(
+        PythonClass, domain=knowledge_base.classes
+    )
     return namespace
 
 

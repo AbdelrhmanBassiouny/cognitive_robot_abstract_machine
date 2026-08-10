@@ -635,7 +635,7 @@ Panels.define('robot-scene', function (root, bus) {
       new THREE.MeshBasicMaterial({ color: blue, transparent: true, opacity: 0.08, depthWrite: false })
     );
     marker.add(fill);
-    PLACE0 = { x: pt.pos[0], y: pt.pos[1] };
+    PLACE0 = { x: pt.position[0], y: pt.position[1] };
     MARKER_LIMIT = pt.bounds;
     marker.position.set(PLACE0.x, PLACE0.y, pt.z);
     worldRoot.add(marker);
@@ -862,7 +862,7 @@ Panels.define('robot-scene', function (root, bus) {
         }
       });
     }
-    // direct link references: KB joint entities (l_shoulder_pan_joint → its
+    // direct link references: knowledge-base joint entities (l_shoulder_pan_joint → its
     // child link) and URDF-tree nodes ('urdf:<link>') resolve to link names
     const linkSet = {};
     (ids || []).forEach(function (id) {
@@ -924,7 +924,7 @@ Panels.define('robot-scene', function (root, bus) {
     lastMovePost = now;
     fetch(liveUrl() + '/move', {
       method: 'POST',
-      body: JSON.stringify({ object: key, pos: [round3(x), round3(y), round3(z)], final: !!final }),
+      body: JSON.stringify({ object: key, position: [round3(x), round3(y), round3(z)], final: !!final }),
     }).catch(function () {});
   }
   function round3(v) { return Math.round(v * 1000) / 1000; }
@@ -972,7 +972,7 @@ Panels.define('robot-scene', function (root, bus) {
     fetch(liveUrl() + '/state').then(function (r) { return r.json(); })
       .then(function (st) {
         liveFails = 0;
-        if (st.seq !== lastSeq) { lastSeq = st.seq; applyLive(st); }
+        if (st.sequenceNumber !== lastSeq) { lastSeq = st.sequenceNumber; applyLive(st); }
       })
       .catch(function () { if (++liveFails > 30) setLive(false); });
   }
@@ -1081,7 +1081,7 @@ Panels.define('robot-scene', function (root, bus) {
     }
     const moved = controls.update();
     if (playing && traj && !liveOn) {
-      playhead += ((traj.fps || 30) / 60) * 1.6;
+      playhead += ((traj.framesPerSecond || 30) / 60) * 1.6;
       if (playhead >= traj.frames.length - 1) { playhead = traj.frames.length - 1; playing = false; stepCb('__done__'); }
       applyFrame(playhead);
       if (follow && robotCenter(_target)) controls.target.lerp(_target, 0.06);

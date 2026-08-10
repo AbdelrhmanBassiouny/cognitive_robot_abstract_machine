@@ -99,7 +99,7 @@ class PythonClass:
     Number of methods defined on the class.
     """
 
-    doc: str
+    docstring_summary: str
     """
     First docstring line, or ``''``.
     """

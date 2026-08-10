@@ -30,7 +30,7 @@ class ChartViewPayload:
         """
         return {
             "ok": self.ok,
-            "crumb": "motion statechart",
+            "breadcrumb": "motion statechart",
             "nodes": [],
             "edges": [],
             "details": {},

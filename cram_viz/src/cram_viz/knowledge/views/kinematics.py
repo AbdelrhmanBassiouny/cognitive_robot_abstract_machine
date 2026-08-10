@@ -34,7 +34,7 @@ class UrdfViewPayload:
     Always ``True`` — this view has no failure mode.
     """
 
-    crumb: str
+    breadcrumb: str
     """
     Breadcrumb label shown above the subgraph.
     """
@@ -65,7 +65,7 @@ class UrdfViewPayload:
         """
         payload = {
             "ok": self.ok,
-            "crumb": self.crumb,
+            "breadcrumb": self.breadcrumb,
             "nodes": [node.to_payload() for node in self.nodes],
             "edges": [edge.to_payload() for edge in self.edges],
             "details": {
@@ -150,7 +150,7 @@ def _urdf_view(knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
                 GraphEdge(
                     "urdf:" + joint.parent,
                     "urdf:" + joint.child,
-                    EdgeKind.PROP if _is_movable(joint) else EdgeKind.TYPE,
+                    EdgeKind.PROPERTY if _is_movable(joint) else EdgeKind.TYPE,
                     "%s (%s)" % (joint.name, joint.type.name.lower()),
                 )
             )

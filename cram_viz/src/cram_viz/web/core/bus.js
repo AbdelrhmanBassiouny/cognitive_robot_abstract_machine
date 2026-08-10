@@ -14,7 +14,7 @@
  *   live:changed         {on, url}                      robot-scene → graph
  *   entity:highlight     {ids, focus?}                  eql → robot-scene, graph
  *   entity:select        {id, detail, relations}        graph → eql
- *   kb:ready             {payload}                      eql → anyone
+ *   knowledge:ready             {payload}                      eql → anyone
  *
  * A new panel is free to define further events; document them in its header.
  * ==========================================================================*/

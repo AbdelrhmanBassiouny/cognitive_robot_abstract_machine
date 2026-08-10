@@ -52,7 +52,7 @@ def publish_mesh_object(
 class TestReadOnlyEndpoints:
     def test_state_reflects_a_fresh_bridge(self, server):
         assert get_json(server + "/state") == {
-            "seq": 0,
+            "sequenceNumber": 0,
             "frames": {},
             "base": None,
             "objects": {},
@@ -81,7 +81,7 @@ class TestReadOnlyEndpoints:
             "movable": True,
             "plan": False,
             "chart": False,
-            "seq": 0,
+            "sequenceNumber": 0,
             "partAnnotations": [],
         }
 
@@ -109,7 +109,9 @@ class TestMove:
         request = urllib.request.Request(
             server + "/move",
             method="POST",
-            data=json.dumps({"object": "milk.stl", "pos": [1.0, 2.0, 3.0]}).encode(),
+            data=json.dumps(
+                {"object": "milk.stl", "position": [1.0, 2.0, 3.0]}
+            ).encode(),
         )
         with urllib.request.urlopen(request, timeout=10) as response:
             assert response.status == 200

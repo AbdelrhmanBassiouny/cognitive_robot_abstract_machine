@@ -30,26 +30,28 @@ class Preset:
 
 
 #: static presets for the architecture side of the graph
-ARCH_PRESETS: Tuple[Preset, ...] = (
+ARCHITECTURE_PRESETS: Tuple[Preset, ...] = (
     Preset(
         "CRAM packages by size",
-        "set_of(pkg.name, pkg.class_count).ordered_by(pkg.class_count, descending=True)",
+        "set_of(package.name, package.class_count)"
+        ".ordered_by(package.class_count, descending=True)",
     ),
     Preset(
         "all Designator classes",
-        "an(entity(cls).where(cls.name.endswith('Designator')))",
+        "an(entity(python_class).where(python_class.name.endswith('Designator')))",
     ),
     Preset(
         "where does EQL live?",
-        "set_of(cls.name, cls.module).where(in_('entity_query_language', cls.module)).limit(15)",
+        "set_of(python_class.name, python_class.module)"
+        ".where(in_('entity_query_language', python_class.module)).limit(15)",
     ),
     Preset(
         "subclasses of Symbol",
-        "an(entity(cls).where(in_('Symbol', cls.bases)))",
+        "an(entity(python_class).where(in_('Symbol', python_class.bases)))",
     ),
     Preset(
         "inside coraplex",
-        "an(entity(sub).where(sub.package == 'coraplex'))",
+        "an(entity(subpackage).where(subpackage.package == 'coraplex'))",
     ),
 )
 
@@ -61,29 +63,36 @@ def get_presets() -> List[Preset]:
     Scene presets are generated from the loaded scene, so they stay valid for any
     onboarded robot/environment; the architecture presets are static.
     """
-    kb = get_knowledge_base()
+    knowledge_base = get_knowledge_base()
     presets = [
-        Preset("which robot is this?", "the(entity(rob))"),
+        Preset("which robot is this?", "the(entity(robot))"),
         Preset("which arms does it have?", "an(entity(arm))"),
         Preset("each arm and its gripper", "set_of(arm.side, arm.gripper)"),
-        Preset("what is in the scene?", "an(entity(obj))"),
-        Preset("what gets moved?", "an(entity(ep.picks).where(ep.picks != None))"),
+        Preset("what is in the scene?", "an(entity(scene_object))"),
+        Preset(
+            "what gets moved?", "an(entity(episode.picks).where(episode.picks != None))"
+        ),
     ]
-    first_object = next((entry for entry in kb.objects if entry.kind == "object"), None)
+    first_object = next(
+        (entry for entry in knowledge_base.objects if entry.kind == "object"), None
+    )
     if first_object:
         presets.append(
             Preset(
                 "the %s" % first_object.label.lower(),
-                "the(entity(obj).where(obj.name == %s))" % repr(first_object.name),
+                "the(entity(scene_object).where(scene_object.name == %s))"
+                % repr(first_object.name),
             )
         )
-    manipulation = next((episode for episode in kb.episodes if episode.picks), None)
+    manipulation = next(
+        (episode for episode in knowledge_base.episodes if episode.picks), None
+    )
     if manipulation:
         if manipulation.places_at:
             presets.append(
                 Preset(
                     "where does it place them?",
-                    "the(entity(ep.places_at).where(ep.name == %s))"
+                    "the(entity(episode.places_at).where(episode.name == %s))"
                     % repr(manipulation.name),
                 )
             )
@@ -91,8 +100,8 @@ def get_presets() -> List[Preset]:
             presets.append(
                 Preset(
                     "which arm does '%s'?" % manipulation.name,
-                    "the(entity(ep.performed_by).where(ep.name == %s))"
+                    "the(entity(episode.performed_by).where(episode.name == %s))"
                     % repr(manipulation.name),
                 )
             )
-    return presets + list(ARCH_PRESETS)
+    return presets + list(ARCHITECTURE_PRESETS)

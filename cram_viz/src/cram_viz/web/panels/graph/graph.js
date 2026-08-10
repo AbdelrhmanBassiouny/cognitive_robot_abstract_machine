@@ -20,16 +20,16 @@
   const GROUP_STYLE = {
     // %% TBox
     root:    { color: '#e8eefb', ring: '#ffffff', size: 24, label: 'Root concept' },
-    klass:   { color: '#5b8cff', ring: '#a9c2ff', size: 15, label: 'Subpackage' },
-    pyclass: { color: '#ffb648', ring: '#ffd89a', size: 13, label: 'Python class' },
-    upper:   { color: '#8c9bbd', ring: '#c3ccdf', size: 14, label: 'Upper ontology (DUL)' },
+    subpackage:   { color: '#5b8cff', ring: '#a9c2ff', size: 15, label: 'Subpackage' },
+    python_class: { color: '#ffb648', ring: '#ffd89a', size: 13, label: 'Python class' },
+    external_class:   { color: '#8c9bbd', ring: '#c3ccdf', size: 14, label: 'Upper ontology (DUL)' },
     // %% ABox individuals, bucketed by their asserted type
     robot:   { color: '#ff7a9c', ring: '#ffb3c6', size: 20, label: 'Robot / body' },
     object:  { color: '#39d5c8', ring: '#8ff0e7', size: 15, label: 'Object / substance' },
     event:   { color: '#b98cff', ring: '#d9c2ff', size: 16, label: 'Event / episode' },
     goal:    { color: '#ffb648', ring: '#ffd89a', size: 15, label: 'Goal' },
     concept: { color: '#4bd38a', ring: '#a6ecc6', size: 14, label: 'Problem / phase / fluent' },
-    ind:     { color: '#7f8db0', ring: '#b6c0d8', size: 13, label: 'Individual' },
+    other:   { color: '#7f8db0', ring: '#b6c0d8', size: 13, label: 'Individual' },
   };
 
   // %% execution status → node ring
@@ -264,7 +264,7 @@
     }
     const present = {};
     data.nodes.forEach(function (n) { present[n.group] = 1; });
-    ['root', 'klass', 'pyclass', 'upper', 'robot', 'object', 'event', 'goal', 'concept', 'ind']
+    ['root', 'subpackage', 'python_class', 'external_class', 'robot', 'object', 'event', 'goal', 'concept', 'other']
       .filter(function (g) { return present[g]; })
       .forEach(function (g) {
         const st = GROUP_STYLE[g];

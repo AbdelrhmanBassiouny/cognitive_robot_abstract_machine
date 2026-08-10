@@ -2,7 +2,7 @@
 Turn a coraplex demo into a self-contained web-viewer scene.
 
 Runs the demo file *unmodified* under instrumentation and emits a scene bundle
-into :func:`cram_viz.paths.scenes_dir`::
+into :func:`cram_viz.paths.scenes_directory`::
 
     <scenes dir>/<name>/
         scene.json         models, robot parts, objects, segments, targets
@@ -234,7 +234,7 @@ class Recorder:
     The robot annotation of :attr:`world`.
     """
 
-    control_dt: Optional[float] = None
+    control_timestep: Optional[float] = None
     """
     The controller's timestep, from which the recording's frame rate follows.
     """
@@ -353,7 +353,7 @@ class Recorder:
         :param executor: The executor whose world is bound to.
         """
         self.world = executor.context.world
-        self.control_dt = executor.context.qp_controller_config.control_dt
+        self.control_timestep = executor.context.qp_controller_config.control_dt
         robots = self.world.get_semantic_annotations_by_type(AbstractRobot)
         self.robot = robots[0] if robots else None
         self._bodies = {}
@@ -742,7 +742,7 @@ def derive_segments(recorder: Recorder) -> List[Dict[str, Any]]:
 
 
 def build_scene(
-    recorder: Recorder, name: str, out_dir: str, step: int
+    recorder: Recorder, name: str, output_directory: str, step: int
 ) -> Dict[str, Any]:
     """
     Downsample the recording to every step-th frame (always keeping the last) and
@@ -750,7 +750,7 @@ def build_scene(
 
     :param recorder: The finished recording to build a scene from.
     :param name: Scene name, used as the output folder and in the scene metadata.
-    :param out_dir: Directory the scene bundle is written into.
+    :param output_directory: Directory the scene bundle is written into.
     :param step: Downsampling step; every ``step``-th frame is kept.
     """
     frame_count = len(recorder.frames)
@@ -777,7 +777,9 @@ def build_scene(
     object_poses = [recorder.object_frames[index] for index in kept_indices]
 
     raw_frames_per_second = (
-        1.0 / recorder.control_dt if recorder.control_dt else FALLBACK_FRAMES_PER_SECOND
+        1.0 / recorder.control_timestep
+        if recorder.control_timestep
+        else FALLBACK_FRAMES_PER_SECOND
     )
     frames_per_second = max(
         MINIMUM_FRAMES_PER_SECOND, round(raw_frames_per_second / step)
@@ -819,7 +821,7 @@ def build_scene(
         mesh = os.path.basename(source)
         if mesh not in recorder.object_frames[0]:
             continue
-        destination = os.path.join(out_dir, "meshes", "objects", mesh)
+        destination = os.path.join(output_directory, "meshes", "objects", mesh)
         os.makedirs(os.path.dirname(destination), exist_ok=True)
         shutil.copy2(source, destination)
         entry = {
@@ -845,7 +847,7 @@ def build_scene(
         center_y = sum(place[1] for place in places) / len(places)
         lowest_z = min(place[2] for place in places)
         place_target = {
-            "pos": [round(center_x, 3), round(center_y, 3)],
+            "position": [round(center_x, 3), round(center_y, 3)],
             "z": round(lowest_z - PLACE_TARGET_DROP, 3),
             "bounds": {
                 "minX": round(center_x - PLACE_BOUNDS_MARGIN, 2),
@@ -874,7 +876,9 @@ def build_scene(
     missing: List[str] = []
     for source in recorder.urdf_sources:
         base_name = os.path.splitext(os.path.basename(source))[0]
-        report = bundle_urdf(source, base_name, out_dir, hints=recorder.resolutions)
+        report = bundle_urdf(
+            source, base_name, output_directory, hints=recorder.resolutions
+        )
         missing += report.missing
         # find this model's prefix in the composed world via one of its links
         model_prefix = ""
@@ -914,7 +918,7 @@ def build_scene(
 
     scene = {
         "name": name,
-        "fps": frames_per_second,
+        "framesPerSecond": frames_per_second,
         "trajectory": "trajectory.json",
         "models": models,
         "robot": {
@@ -934,11 +938,11 @@ def build_scene(
         "dragBounds": drag_bounds,
         "missingAssets": sorted(set(missing)),
     }
-    _write_json(Path(out_dir) / "scene.json", scene, indent=1)
+    _write_json(Path(output_directory) / "scene.json", scene, indent=1)
     _write_json(
-        Path(out_dir) / "trajectory.json",
+        Path(output_directory) / "trajectory.json",
         {
-            "fps": frames_per_second,
+            "framesPerSecond": frames_per_second,
             "frames": frames,
             "base": base,
             "objects": object_poses,
@@ -999,7 +1003,7 @@ def main() -> None:
     parser.add_argument("--name", required=True, help="scene name (output folder)")
     parser.add_argument(
         "--out",
-        default=str(paths.scenes_dir()),
+        default=str(paths.scenes_directory()),
         help="scenes directory (default: CRAM_VIZ_SCENES or ~/.cram_viz/scenes)",
     )
     parser.add_argument(
@@ -1046,12 +1050,12 @@ def main() -> None:
         sys.exit("No AbstractRobot semantic annotation found in the world.")
 
     step = args.step or max(1, len(recorder.frames) // TARGET_BUNDLE_FRAMES)
-    out_dir = os.path.join(args.out, args.name)
-    os.makedirs(out_dir, exist_ok=True)
-    scene = build_scene(recorder, args.name, out_dir, step)
+    output_directory = os.path.join(args.out, args.name)
+    os.makedirs(output_directory, exist_ok=True)
+    scene = build_scene(recorder, args.name, output_directory, step)
     _update_scene_index(Path(args.out) / "index.json", args.name)
 
-    log("scene '%s' written to %s" % (args.name, out_dir))
+    log("scene '%s' written to %s" % (args.name, output_directory))
     log(
         "  models:  %s"
         % ", ".join(

@@ -73,20 +73,20 @@ class TestStatic:
 
 
 class TestApi:
-    def test_kb_overview(self, server):
+    def test_knowledge_overview(self, server):
         pytest.importorskip("krrood")
-        payload = get_json(server + "/api/kb")
+        payload = get_json(server + "/api/knowledge")
         assert payload["ok"]
         assert any(n["id"] == "milk" for n in payload["nodes"])
 
-    def test_kb_views(self, server):
+    def test_knowledge_views(self, server):
         pytest.importorskip("krrood")
         for name, expect_live in (
             ("kinematics", None),
             ("plan", "plan"),
             ("chart", "chart"),
         ):
-            payload = get_json(server + "/api/kb/view?name=" + name)
+            payload = get_json(server + "/api/knowledge/view?name=" + name)
             assert payload["ok"], name
             assert payload.get("live") == expect_live
 
@@ -95,7 +95,7 @@ class TestApi:
         request = urllib.request.Request(
             server + "/api/eql",
             data=json.dumps(
-                {"code": "the(entity(obj).where(obj.name == 'milk'))"}
+                {"code": "the(entity(scene_object).where(scene_object.name == 'milk'))"}
             ).encode(),
             headers={"Content-Type": "application/json"},
         )

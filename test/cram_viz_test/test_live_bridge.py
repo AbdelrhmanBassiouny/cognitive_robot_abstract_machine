@@ -306,8 +306,8 @@ class TestMoveRequestValidation:
         move = MoveRequest.from_payload(
             {
                 "object": "milk.stl",
-                "pos": [1.0, 2.0, 3.0],
-                "quat": [0.0, 0.0, 0.0, 1.0],
+                "position": [1.0, 2.0, 3.0],
+                "quaternion": [0.0, 0.0, 0.0, 1.0],
                 "final": True,
             }
         )
@@ -317,28 +317,28 @@ class TestMoveRequestValidation:
         assert move.is_final is True
 
     def test_orientation_is_optional(self):
-        move = MoveRequest.from_payload({"object": "milk.stl", "pos": [0, 0, 0]})
+        move = MoveRequest.from_payload({"object": "milk.stl", "position": [0, 0, 0]})
         assert move.quaternion is None
         assert move.is_final is False
 
     def test_integers_are_accepted_as_coordinates(self):
-        move = MoveRequest.from_payload({"object": "milk.stl", "pos": [1, 2, 3]})
+        move = MoveRequest.from_payload({"object": "milk.stl", "position": [1, 2, 3]})
         assert move.position == [1.0, 2.0, 3.0]
 
     @pytest.mark.parametrize(
         "payload",
         [
-            {"pos": [0, 0, 0]},
-            {"object": "", "pos": [0, 0, 0]},
-            {"object": 5, "pos": [0, 0, 0]},
+            {"position": [0, 0, 0]},
+            {"object": "", "position": [0, 0, 0]},
+            {"object": 5, "position": [0, 0, 0]},
             {"object": "milk.stl"},
-            {"object": "milk.stl", "pos": [0, 0]},
-            {"object": "milk.stl", "pos": "here"},
-            {"object": "milk.stl", "pos": [0, 0, "up"]},
-            {"object": "milk.stl", "pos": [0, 0, True]},
-            {"object": "milk.stl", "pos": [0, 0, float("nan")]},
-            {"object": "milk.stl", "pos": [0, 0, float("inf")]},
-            {"object": "milk.stl", "pos": [0, 0, 0], "quat": [0, 0, 1]},
+            {"object": "milk.stl", "position": [0, 0]},
+            {"object": "milk.stl", "position": "here"},
+            {"object": "milk.stl", "position": [0, 0, "up"]},
+            {"object": "milk.stl", "position": [0, 0, True]},
+            {"object": "milk.stl", "position": [0, 0, float("nan")]},
+            {"object": "milk.stl", "position": [0, 0, float("inf")]},
+            {"object": "milk.stl", "position": [0, 0, 0], "quaternion": [0, 0, 1]},
         ],
     )
     def test_unusable_payloads_are_rejected(self, payload):
@@ -492,7 +492,7 @@ class TestViewerAccessors:
         status = Bridge().status()
         assert status["running"] is False
         assert status["robot"] is None
-        assert status["seq"] == 0
+        assert status["sequenceNumber"] == 0
 
     def test_the_robot_parts_are_read_off_the_live_annotations_when_asked(self):
         """
@@ -585,7 +585,7 @@ class ObservedStatechart:
     observation_state: NodeStateVector
 
 
-def make_chart(life=(1, 1, 0), obs=(0.5, 0.5, 0.0)) -> ObservedStatechart:
+def make_chart(life_cycle=(1, 1, 0), observation=(0.5, 0.5, 0.0)) -> ObservedStatechart:
     """
     A three-node statechart: a goal containing a motion, plus a monitor.
     """
@@ -603,15 +603,21 @@ def make_chart(life=(1, 1, 0), obs=(0.5, 0.5, 0.0)) -> ObservedStatechart:
                 (1, 2, ChartTransition(kind=TransitionKind("END"))),
             ],
         ),
-        life_cycle_state=NodeStateVector(data=list(life)),
-        observation_state=NodeStateVector(data=list(obs)),
+        life_cycle_state=NodeStateVector(data=list(life_cycle)),
+        observation_state=NodeStateVector(data=list(observation)),
     )
 
 
 class TestChartEdgeEntry:
     def test_to_payload_renames_source_and_target_to_from_and_to(self):
-        edge = ChartEdgeEntry(source="s0", target="s1", kind="START")
-        assert edge.to_payload() == {"from": "s0", "to": "s1", "kind": "START"}
+        edge = ChartEdgeEntry(
+            source="chart_node_0", target="chart_node_1", kind="START"
+        )
+        assert edge.to_payload() == {
+            "from": "chart_node_0",
+            "to": "chart_node_1",
+            "kind": "START",
+        }
 
 
 class TestChartSnapshot:
@@ -620,20 +626,20 @@ class TestChartSnapshot:
         bridge.bind_motion_group(MotionGroup())
         bridge.observe_chart(make_chart())
         chart = bridge.get_chart()
-        assert [node["life"] for node in chart["nodes"]] == [
+        assert [node["life_cycle"] for node in chart["nodes"]] == [
             "RUNNING",
             "RUNNING",
             "NOT_STARTED",
         ]
-        assert [node["obs"] for node in chart["nodes"]] == [
+        assert [node["observation"] for node in chart["nodes"]] == [
             "UNKNOWN",
             "UNKNOWN",
             "FALSE",
         ]
-        assert chart["nodes"][1]["parent"] == "s0"
+        assert chart["nodes"][1]["parent"] == "chart_node_0"
         assert chart["edges"] == [
-            {"from": "s0", "to": "s1", "kind": "START"},
-            {"from": "s1", "to": "s2", "kind": "END"},
+            {"from": "chart_node_0", "to": "chart_node_1", "kind": "START"},
+            {"from": "chart_node_1", "to": "chart_node_2", "kind": "END"},
         ]
 
     def test_lifecycle_update_keeps_signature(self):
@@ -644,7 +650,9 @@ class TestChartSnapshot:
         chart.life_cycle_state.data = [3, 3, 3]
         bridge.observe_chart(chart)
         assert bridge.get_chart()["signature"] == signature
-        assert [node["life"] for node in bridge.get_chart()["nodes"]] == ["DONE"] * 3
+        assert [node["life_cycle"] for node in bridge.get_chart()["nodes"]] == [
+            "DONE"
+        ] * 3
 
     def test_new_chart_replaces_structure(self):
         bridge = Bridge()
@@ -662,12 +670,12 @@ class TestChartSnapshot:
         chart = bridge.get_chart()
         assert chart["signature"] != signature
         assert len(chart["nodes"]) == 1
-        assert chart["nodes"][0]["obs"] == "TRUE"
+        assert chart["nodes"][0]["observation"] == "TRUE"
 
     def test_trinary_observation_thresholds(self):
         bridge = Bridge()
-        bridge.observe_chart(make_chart(obs=(0.0, 0.5, 1.0)))
-        assert [node["obs"] for node in bridge.get_chart()["nodes"]] == [
+        bridge.observe_chart(make_chart(observation=(0.0, 0.5, 1.0)))
+        assert [node["observation"] for node in bridge.get_chart()["nodes"]] == [
             "FALSE",
             "UNKNOWN",
             "TRUE",
@@ -679,11 +687,11 @@ class TestChartSnapshot:
         life cycle stays the same.
         """
         bridge = Bridge()
-        chart = make_chart(life=(1, 1, 1), obs=(0.5, 0.5, 0.5))
+        chart = make_chart(life_cycle=(1, 1, 1), observation=(0.5, 0.5, 0.5))
         bridge.observe_chart(chart)
         chart.observation_state.data = [0.5, 0.5, 1.0]
         bridge.observe_chart(chart)
-        assert [node["obs"] for node in bridge.get_chart()["nodes"]] == [
+        assert [node["observation"] for node in bridge.get_chart()["nodes"]] == [
             "UNKNOWN",
             "UNKNOWN",
             "TRUE",

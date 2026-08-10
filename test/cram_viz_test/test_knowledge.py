@@ -51,7 +51,7 @@ class TestEpisodeKnowledgeBase:
         torso = next(
             j for j in fresh_knowledge_base.joints if j.name == "torso_lift_joint"
         )
-        assert torso.min_rad == 0.0 and torso.max_rad == 0.3
+        assert torso.minimum_radians == 0.0 and torso.maximum_radians == 0.3
 
     def test_architecture_scan(self, fresh_knowledge_base):
         names = {p.name for p in fresh_knowledge_base.packages}
@@ -156,7 +156,9 @@ class TestArmSideInference:
 
 class TestQueries:
     def test_entity_query(self, fixture_scene):
-        result = knowledge.run_query("the(entity(obj).where(obj.name == 'milk'))")
+        result = knowledge.run_query(
+            "the(entity(scene_object).where(scene_object.name == 'milk'))"
+        )
         assert result.ok and result.count == 1
         assert result.rows[0]["__entity__"] == "milk"
         assert "milk" in result.highlight
@@ -184,10 +186,10 @@ class TestRecordedMeasurements:
         milk = next(
             entry for entry in fresh_knowledge_base.objects if entry.name == "milk"
         )
-        assert milk.height_m is None
+        assert milk.height_metres is None
 
     def test_an_unrecorded_gripper_opening_stays_unknown(self, fresh_knowledge_base):
-        assert fresh_knowledge_base.arms[0].gripper.opening_m is None
+        assert fresh_knowledge_base.arms[0].gripper.opening_metres is None
 
     def test_a_recorded_height_is_used(self, fixture_scene, monkeypatch):
         """
@@ -205,7 +207,7 @@ class TestRecordedMeasurements:
             for entry in knowledge.get_knowledge_base().objects
             if entry.name == "milk"
         )
-        assert milk.height_m == 0.23
+        assert milk.height_metres == 0.23
 
     def test_unknown_measurements_are_left_out_of_the_graph(self, fixture_scene):
         """
@@ -247,7 +249,7 @@ class TestViewPayloads:
         assert "urdf:base_link" in ids and "urdf:l_gripper_link" in ids
         # fixed joints render dashed ('type'), movable solid ('prop')
         kinds = {e.label.split(" ")[0]: e.kind for e in payload.edges}
-        assert kinds["torso_lift_joint"] == EdgeKind.PROP
+        assert kinds["torso_lift_joint"] == EdgeKind.PROPERTY
         assert kinds["l_gripper_joint"] == EdgeKind.TYPE
 
     def test_kinematics_edge_label_shows_the_urdf_joint_type(self, fixture_scene):
@@ -269,7 +271,9 @@ class TestViewPayloads:
         The fixture's ``torso_lift_joint`` is prismatic: movable, but not revolute.
         """
         payload = knowledge.view_payload("kinematics")
-        movable_edges = [edge for edge in payload.edges if edge.kind == EdgeKind.PROP]
+        movable_edges = [
+            edge for edge in payload.edges if edge.kind == EdgeKind.PROPERTY
+        ]
         root_lines = payload.details["urdf:base_link"].lines
         summary = next(line for line in root_lines if "movable" in line)
         assert summary.endswith("(%d movable)" % len(movable_edges))
@@ -369,7 +373,9 @@ class TestPresetSafety:
             knowledge_base, "load_scene", lambda: SceneBundle(scene, trajectory)
         )
         knowledge.reset_knowledge_base()
-        preset = next(p for p in knowledge.get_presets() if "obj.name" in p.code)
+        preset = next(
+            p for p in knowledge.get_presets() if "scene_object.name" in p.code
+        )
         result = knowledge.run_query(preset.code)
         assert result.ok and result.rows[0]["__entity__"] == "o'brien"
 
@@ -401,8 +407,8 @@ class TestGraphPayloadStructure:
         assert by_id["left_gripper"].label == "left gripper"
         chain_edges = [e for e in payload.edges if e.label == "has part"]
         assert chain_edges == [
-            GraphEdge("pr2", "left_arm", EdgeKind.PROP, "has part"),
-            GraphEdge("left_arm", "left_gripper", EdgeKind.PROP, "has part"),
+            GraphEdge("pr2", "left_arm", EdgeKind.PROPERTY, "has part"),
+            GraphEdge("left_arm", "left_gripper", EdgeKind.PROPERTY, "has part"),
         ]
         assert payload.details["pr2"] == DetailEntry(
             "pr2",
@@ -419,9 +425,9 @@ class TestGraphPayloadStructure:
         ]
         assert episode_edges == [
             GraphEdge("prepare", "transport_milk", EdgeKind.TYPE, "precedes"),
-            GraphEdge("transport_milk", "pr2", EdgeKind.PROP, "performed by"),
-            GraphEdge("transport_milk", "milk", EdgeKind.PROP, "picks"),
-            GraphEdge("transport_milk", "place_area", EdgeKind.PROP, "places at"),
+            GraphEdge("transport_milk", "pr2", EdgeKind.PROPERTY, "performed by"),
+            GraphEdge("transport_milk", "milk", EdgeKind.PROPERTY, "picks"),
+            GraphEdge("transport_milk", "place_area", EdgeKind.PROPERTY, "places at"),
         ]
 
     def test_object_detail_lines(self, fixture_scene):
@@ -472,7 +478,7 @@ class TestGraphPayloadStructure:
         )
         assert payload.details["coraplex.plans"] == DetailEntry(
             "plans",
-            NodeGroup.KLASS,
+            NodeGroup.SUBPACKAGE,
             [
                 "a SubPackage of coraplex",
                 "2 modules · 2 classes",
@@ -481,10 +487,10 @@ class TestGraphPayloadStructure:
         )
         contains_edges = [e for e in payload.edges if e.label == "contains"]
         assert contains_edges == [
-            GraphEdge("cram", "root", EdgeKind.PROP, "contains"),
-            GraphEdge("cram", "coraplex", EdgeKind.PROP, "contains"),
-            GraphEdge("cram", "krrood", EdgeKind.PROP, "contains"),
-            GraphEdge("coraplex", "coraplex.plans", EdgeKind.PROP, "contains"),
+            GraphEdge("cram", "root", EdgeKind.PROPERTY, "contains"),
+            GraphEdge("cram", "coraplex", EdgeKind.PROPERTY, "contains"),
+            GraphEdge("cram", "krrood", EdgeKind.PROPERTY, "contains"),
+            GraphEdge("coraplex", "coraplex.plans", EdgeKind.PROPERTY, "contains"),
         ]
         import_edges = [e for e in payload.edges if e.label == "imports"]
         assert import_edges == [
@@ -526,7 +532,7 @@ class TestGraphPayloadStructure:
         )
         plan_edges = [e for e in payload.edges if e.source == "plan"]
         assert plan_edges == [
-            GraphEdge("plan", "pr2", EdgeKind.PROP, "executed by"),
+            GraphEdge("plan", "pr2", EdgeKind.PROPERTY, "executed by"),
             GraphEdge("plan", "prepare", EdgeKind.TYPE, "spans"),
             GraphEdge("plan", "transport_milk", EdgeKind.TYPE, "spans"),
         ]
@@ -552,13 +558,13 @@ class TestGraphPayloadStructure:
 class TestExpandNode:
     def test_robot_dispatches_to_urdf_view(self, fixture_scene):
         payload = knowledge.expand_node("pr2")
-        assert payload.crumb == "pr2 · URDF"
+        assert payload.breadcrumb == "pr2 · URDF"
         ids = {n.id for n in payload.nodes}
         assert "urdf:base_link" in ids
 
     def test_plan_dispatches_to_plan_view(self, fixture_scene):
         payload = knowledge.expand_node("plan")
-        assert payload.to_payload()["crumb"] == "executed plan"
+        assert payload.to_payload()["breadcrumb"] == "executed plan"
         assert len(payload.nodes) == 4
         assert len(payload.edges) == 3
 
@@ -566,7 +572,7 @@ class TestExpandNode:
         payload = knowledge.expand_node("coraplex")
         assert {n.id for n in payload.nodes} == {"coraplex", "coraplex.plans"}
         assert payload.edges == [
-            GraphEdge("coraplex", "coraplex.plans", EdgeKind.PROP, "contains")
+            GraphEdge("coraplex", "coraplex.plans", EdgeKind.PROPERTY, "contains")
         ]
 
     def test_subpackage_dispatches_to_subpackage_view(self, fixture_scene):
@@ -579,7 +585,7 @@ class TestExpandNode:
 
     def test_class_dispatches_to_class_view(self, fixture_scene):
         payload = knowledge.expand_node("coraplex.src.coraplex.plans.plan.Plan")
-        assert payload.crumb == "Plan"
+        assert payload.breadcrumb == "Plan"
         assert {n.id for n in payload.nodes} == {
             "coraplex.src.coraplex.plans.plan.Plan",
             "coraplex.src.coraplex.plans.typed_plan.TypedPlan",
@@ -607,7 +613,7 @@ class TestExpandNode:
         )
         assert (
             payload.details["coraplex.src.coraplex.plans.plan.Plan"].group
-            == NodeGroup.PYCLASS
+            == NodeGroup.PYTHON_CLASS
         )
 
     def test_class_view_falls_back_to_an_external_base(self, fixture_scene):
@@ -616,15 +622,15 @@ class TestExpandNode:
         repository, so it renders as an external stub instead of a real class node.
         """
         payload = knowledge.expand_node("krrood.src.krrood.errors.EqlError")
-        assert payload.details["ext:Exception"] == DetailEntry(
+        assert payload.details["external:Exception"] == DetailEntry(
             "Exception",
-            NodeGroup.UPPER,
+            NodeGroup.EXTERNAL_CLASS,
             ["external base class (outside the repo)"],
         )
         assert (
             GraphEdge(
                 "krrood.src.krrood.errors.EqlError",
-                "ext:Exception",
+                "external:Exception",
                 EdgeKind.TYPE,
                 "inherits",
             )
@@ -647,7 +653,7 @@ class TestExpandNode:
             in payload.edges
         )
 
-    def test_package_view_truncates_to_class_cap(self, fixture_scene):
+    def test_package_view_truncates_to_the_maximum_classes_shown(self, fixture_scene):
         knowledge_base = knowledge.get_knowledge_base()
         synthetic_classes = [
             knowledge.PythonClass(
@@ -657,9 +663,9 @@ class TestExpandNode:
                 module="synthetic_pkg.synthetic%d" % index,
                 bases=(),
                 methods=index,
-                doc="",
+                docstring_summary="",
             )
-            for index in range(knowledge.ArchitectureViews.CLASS_CAP + 1)
+            for index in range(knowledge.ArchitectureViews.MAXIMUM_CLASSES_SHOWN + 1)
         ]
         knowledge_base.packages = knowledge_base.packages + [
             knowledge.Package(
@@ -671,12 +677,12 @@ class TestExpandNode:
         assert payload.details["synthetic_pkg"].lines[-1] == (
             "showing the %d largest of %d classes (by method count)"
             % (
-                knowledge.ArchitectureViews.CLASS_CAP,
-                knowledge.ArchitectureViews.CLASS_CAP + 1,
+                knowledge.ArchitectureViews.MAXIMUM_CLASSES_SHOWN,
+                knowledge.ArchitectureViews.MAXIMUM_CLASSES_SHOWN + 1,
             )
         )
 
-    def test_class_view_truncates_to_subclass_cap(self, fixture_scene):
+    def test_class_view_truncates_to_the_maximum_subclasses_shown(self, fixture_scene):
         knowledge_base = knowledge.get_knowledge_base()
         base_class = knowledge.PythonClass(
             name="SyntheticBase",
@@ -685,7 +691,7 @@ class TestExpandNode:
             module="synthetic_pkg.base",
             bases=(),
             methods=0,
-            doc="",
+            docstring_summary="",
         )
         synthetic_subclasses = [
             knowledge.PythonClass(
@@ -695,9 +701,9 @@ class TestExpandNode:
                 module="synthetic_pkg.sub%d" % index,
                 bases=("SyntheticBase",),
                 methods=0,
-                doc="",
+                docstring_summary="",
             )
-            for index in range(knowledge.ArchitectureViews.SUBCLASS_CAP + 1)
+            for index in range(knowledge.ArchitectureViews.MAXIMUM_SUBCLASSES_SHOWN + 1)
         ]
         knowledge_base.classes = (
             knowledge_base.classes + [base_class] + synthetic_subclasses
@@ -706,8 +712,8 @@ class TestExpandNode:
         assert payload.details["synthetic_pkg.base.SyntheticBase"].lines[-1] == (
             "showing %d of %d subclasses"
             % (
-                knowledge.ArchitectureViews.SUBCLASS_CAP,
-                knowledge.ArchitectureViews.SUBCLASS_CAP + 1,
+                knowledge.ArchitectureViews.MAXIMUM_SUBCLASSES_SHOWN,
+                knowledge.ArchitectureViews.MAXIMUM_SUBCLASSES_SHOWN + 1,
             )
         )
 

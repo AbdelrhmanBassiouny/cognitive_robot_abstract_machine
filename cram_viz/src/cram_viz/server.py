@@ -4,12 +4,12 @@ The cram_viz HTTP server: static frontend + JSON API.
 Serves three things from one port (default 8711):
 
   * the packaged web frontend (``cram_viz/web`` — panels, vendored libs)
-  * scene bundles from :func:`cram_viz.paths.scenes_dir` under ``/scenes/``
+  * scene bundles from :func:`cram_viz.paths.scenes_directory` under ``/scenes/``
   * the JSON API the panels talk to:
 
-      GET  /api/kb              the knowledge-graph overview payload
-      GET  /api/kb/view?name=   one graph tab (knowledge/kinematics/plan/chart)
-      GET  /api/kb/expand?node= drill-down subgraph for one node
+      GET  /api/knowledge              the knowledge-graph overview payload
+      GET  /api/knowledge/view?name=   one graph tab (knowledge/kinematics/plan/chart)
+      GET  /api/knowledge/expand?node= drill-down subgraph for one node
       POST /api/eql             run an EQL query string
 
 The API needs krrood (EQL). Without it the server still serves the viewer and
@@ -49,7 +49,9 @@ try:
 except ImportError:  # pragma: no cover - depends on the environment
     knowledge_module = None
     logger.warning("krrood not importable — serving the viewer without the EQL API")
-except Exception:  # pragma: no cover - a broken KB should not kill the viewer
+except (
+    Exception
+):  # pragma: no cover - a broken knowledge base should not kill the viewer
     knowledge_module = None
     traceback.print_exc()
 
@@ -90,13 +92,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         """
         Route the per-request access log through logging.
 
-        :param format: ``printf``-style log message format.
+        :param format:``printf``-style log message format.
         :param args: Values to interpolate into ``format``.
         """
         logger.info("  " + format, *args)
 
     # %% helpers
-    def _json(self, payload: Any, code: int = 200) -> None:
+    def _send_json(self, payload: Any, code: int = 200) -> None:
         """
         Send a payload as JSON with the given status code.
 
@@ -115,25 +117,25 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
-    def _query(self) -> Dict[str, List[str]]:
+    def _query_parameters(self) -> Dict[str, List[str]]:
         """
         The parsed query-string parameters of the current request.
         """
         return parse_qs(urlparse(self.path).query)
 
-    def _guarded(self, fn: Callable[[], Any]) -> None:
+    def _guarded(self, handler: Callable[[], Any]) -> None:
         """
         Run an API handler; report exceptions as a JSON error payload.
 
-        :param fn: The handler to run, returning the payload to send on success.
+        :param handler: The handler to run, returning the payload to send on success.
         """
         if knowledge_module is None:
-            return self._json(_no_eql_error())
+            return self._send_json(_no_eql_error())
         try:
-            return self._json(fn())
-        except Exception as ex:
-            return self._json(
-                {"ok": False, "error": "%s: %s" % (type(ex).__name__, ex)}
+            return self._send_json(handler())
+        except Exception as error:
+            return self._send_json(
+                {"ok": False, "error": "%s: %s" % (type(error).__name__, error)}
             )
 
     # %% scene bundles (generated data, lives outside the package)
@@ -143,9 +145,9 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
         :param url_path: The request path, starting with ``/scenes/``.
         """
-        rel = url_path[len("/scenes/") :]
-        base = paths.scenes_dir().resolve()
-        target = (base / rel).resolve()
+        relative_path = url_path[len("/scenes/") :]
+        base = paths.scenes_directory().resolve()
+        target = (base / relative_path).resolve()
         if not str(target).startswith(str(base) + os.sep) and target != base:
             self.send_response(403)
             self.end_headers()
@@ -154,10 +156,12 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
             return
-        ctype = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        content_type = (
+            mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+        )
         data = target.read_bytes()
         self.send_response(200)
-        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Type", content_type)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)
@@ -170,13 +174,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         route = self.path.split("?")[0]
         if route.startswith("/scenes/"):
             return self._serve_scene_file(route)
-        if route == "/api/kb":
+        if route == "/api/knowledge":
             return self._guarded(lambda: knowledge_module.graph_payload())
-        if route == "/api/kb/view":
-            name = (self._query().get("name") or ["knowledge"])[0]
+        if route == "/api/knowledge/view":
+            name = (self._query_parameters().get("name") or ["knowledge"])[0]
             return self._guarded(lambda: knowledge_module.view_payload(name))
-        if route == "/api/kb/expand":
-            node = (self._query().get("node") or [""])[0]
+        if route == "/api/knowledge/expand":
+            node = (self._query_parameters().get("node") or [""])[0]
 
             def expand() -> Dict[str, Any]:
                 """
@@ -193,22 +197,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         Execute an EQL query (the only write-ish endpoint).
         """
         if self.path.split("?")[0] != "/api/eql":
-            return self._json({"ok": False, "error": "unknown endpoint"}, 404)
+            return self._send_json({"ok": False, "error": "unknown endpoint"}, 404)
         if knowledge_module is None:
-            return self._json(_no_eql_error())
+            return self._send_json(_no_eql_error())
         try:
             length = int(self.headers.get("Content-Length") or 0)
-            req = json.loads(self.rfile.read(length) or b"{}")
-            code = (req.get("code") or "").strip()
+            request_body = json.loads(self.rfile.read(length) or b"{}")
+            code = (request_body.get("code") or "").strip()
             if not code:
-                return self._json({"ok": False, "error": "empty query"})
+                return self._send_json({"ok": False, "error": "empty query"})
             with _EQL_LOCK:
-                return self._json(knowledge_module.run_query(code))
-        except SyntaxError as ex:
-            return self._json({"ok": False, "error": "SyntaxError: %s" % ex})
-        except Exception as ex:
-            return self._json(
-                {"ok": False, "error": "%s: %s" % (type(ex).__name__, ex)}
+                return self._send_json(knowledge_module.run_query(code))
+        except SyntaxError as error:
+            return self._send_json({"ok": False, "error": "SyntaxError: %s" % error})
+        except Exception as error:
+            return self._send_json(
+                {"ok": False, "error": "%s: %s" % (type(error).__name__, error)}
             )
 
 
@@ -222,28 +226,28 @@ def make_server(port: int = 0) -> socketserver.ThreadingTCPServer:
     return socketserver.ThreadingTCPServer(("127.0.0.1", port), Handler)
 
 
-def main(argv: Optional[List[str]] = None) -> None:
+def main(arguments: Optional[List[str]] = None) -> None:
     """
     ``cram-viz`` — serve the viewer, the scenes and the JSON API.
 
-    :param argv: Command-line arguments, or None to use ``sys.argv``.
+    :param arguments: Command-line arguments, or None to use ``sys.arguments``.
     """
     # force: an imported CRAM package may already have configured the root logger,
     # which would otherwise make this call a no-op and swallow the startup output
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
-    argv = sys.argv[1:] if argv is None else argv
-    port = int(argv[0]) if argv else DEFAULT_PORT
+    arguments = sys.arguments[1:] if arguments is None else arguments
+    port = int(arguments[0]) if arguments else DEFAULT_PORT
     if (
         knowledge_module is not None
     ):  # build the knowledge base once, before the first query
         knowledge_module.get_knowledge_base()
-    with make_server(port) as httpd:
+    with make_server(port) as server:
         eql = (
             "EQL ready (krrood)"
             if knowledge_module is not None
             else "EQL unavailable — static only"
         )
-        scenes = paths.scenes_dir()
+        scenes = paths.scenes_directory()
         logger.info("cram_viz running at http://localhost:%d/ (%s)", port, eql)
         logger.info(
             "scene bundles: %s%s",
@@ -251,7 +255,7 @@ def main(argv: Optional[List[str]] = None) -> None:
             "" if Path(scenes).is_dir() else "  (missing — run cram-viz-onboard)",
         )
         try:
-            httpd.serve_forever()
+            server.serve_forever()
         except KeyboardInterrupt:
             pass
 

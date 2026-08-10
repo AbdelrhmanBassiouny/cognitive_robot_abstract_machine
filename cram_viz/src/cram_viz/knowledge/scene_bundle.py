@@ -87,7 +87,7 @@ def scene_name() -> Optional[str]:
     environment_override = os.environ.get("CRAM_VIZ_SCENE")
     if environment_override:
         return environment_override
-    index_path = paths.scenes_dir() / "index.json"
+    index_path = paths.scenes_directory() / "index.json"
     if not index_path.is_file():
         return None
     index = _read_json(index_path)
@@ -110,19 +110,19 @@ def _read_json(path: Path) -> Any:
         return None
 
 
-def scene_dir() -> Optional[Path]:
+def scene_directory() -> Optional[Path]:
     """
     Directory of the active scene bundle, or None without one.
     """
     name = scene_name()
-    return paths.scenes_dir() / name if name else None
+    return paths.scenes_directory() / name if name else None
 
 
 def load_scene() -> SceneBundle:
     """
     The active scene's scene/trajectory bundle, or an empty one without a scene.
     """
-    directory = scene_dir()
+    directory = scene_directory()
     if not directory:
         return SceneBundle({}, {})
     scene = _read_json(directory / "scene.json")
@@ -143,7 +143,7 @@ def load_urdf() -> ParsedUrdf:
     robot_model = next(
         (model for model in scene.get("models", []) if model.get("robot")), None
     )
-    directory = scene_dir()
+    directory = scene_directory()
     if not robot_model or not directory:
         return ParsedUrdf([], [])
     urdf_path = directory / robot_model["urdf"]

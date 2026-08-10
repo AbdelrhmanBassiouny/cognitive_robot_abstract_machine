@@ -66,10 +66,10 @@ class ArchitectureScanner:
     DESCRIPTION_LENGTH_LIMIT = 120
 
     #: bumped whenever the cached scan's shape changes, so old caches are discarded
-    ARCHITECTURE_CACHE_VERSION = 2
+    ARCHITECTURE_CACHE_VERSION = 3
 
     #: directories never descended into during the architecture scan
-    SKIP_DIRS = {
+    SKIPPED_DIRECTORIES = {
         "__pycache__",
         "node_modules",
         "doc",
@@ -81,7 +81,7 @@ class ArchitectureScanner:
     }
 
     #: curated one-line descriptions for the well-known workspace packages
-    PKG_DESCRIPTIONS = {
+    PACKAGE_DESCRIPTIONS = {
         "krrood": "knowledge representation & reasoning through OO design (home of EQL)",
         "coraplex": "the plan executive: designators, plans, locations",
         "pycram": "legacy plan executive (resources/demos)",
@@ -126,7 +126,7 @@ class ArchitectureScanner:
         Path of the scan cache — always in the writable data directory, because the
         scenes checkout may be read-only.
         """
-        return os.path.join(str(paths.data_dir()), "arch_cache.json")
+        return os.path.join(str(paths.data_directory()), "architecture_cache.json")
 
     def _first_readme_line(self, directory: str) -> str:
         """
@@ -159,33 +159,33 @@ class ArchitectureScanner:
         if not os.path.isdir(cram_root):
             return packages, classes, []
 
-        package_dirs = {"root": cram_root}
+        package_directories = {"root": cram_root}
         for entry in sorted(os.listdir(cram_root)):
             directory = os.path.join(cram_root, entry)
             if (
                 os.path.isdir(directory)
                 and not entry.startswith(".")
-                and entry not in self.SKIP_DIRS
+                and entry not in self.SKIPPED_DIRECTORIES
                 and "egg-info" not in entry
             ):
-                package_dirs[entry] = directory
-        package_names = set(package_dirs)
+                package_directories[entry] = directory
+        package_names = set(package_directories)
 
         modules_per_package: Dict[str, int] = {}
-        for package, base in package_dirs.items():
+        for package, base in package_directories.items():
             module_count = 0
-            for dirpath, dirnames, filenames in os.walk(base):
-                dirnames[:] = [
+            for directory_path, directory_names, filenames in os.walk(base):
+                directory_names[:] = [
                     name
-                    for name in dirnames
-                    if not name.startswith(".") and name not in self.SKIP_DIRS
+                    for name in directory_names
+                    if not name.startswith(".") and name not in self.SKIPPED_DIRECTORIES
                 ]
                 if package == "root":
-                    dirnames[:] = []  # root package = top-level scripts only
+                    directory_names[:] = []  # root package = top-level scripts only
                 for filename in filenames:
                     if not filename.endswith(".py"):
                         continue
-                    path = os.path.join(dirpath, filename)
+                    path = os.path.join(directory_path, filename)
                     source = Path(path).read_text(encoding="utf-8", errors="replace")
                     try:
                         tree = ast.parse(source)
@@ -201,10 +201,10 @@ class ArchitectureScanner:
             modules_per_package[package] = module_count
 
         class_counts = Counter(entry["package"] for entry in classes)
-        for package in package_dirs:
-            description = self.PKG_DESCRIPTIONS.get(package) or self._first_readme_line(
-                package_dirs[package]
-            )
+        for package in package_directories:
+            description = self.PACKAGE_DESCRIPTIONS.get(
+                package
+            ) or self._first_readme_line(package_directories[package])
             packages.append(
                 dict(
                     name=package,
@@ -250,7 +250,9 @@ class ArchitectureScanner:
                     )
                     for base in node.bases
                 )
-                doc = (ast.get_docstring(node) or "").strip().split("\n")[0][:140]
+                docstring_summary = (
+                    (ast.get_docstring(node) or "").strip().split("\n")[0][:140]
+                )
                 methods = sum(
                     1
                     for member in node.body
@@ -263,7 +265,7 @@ class ArchitectureScanner:
                         module=module,
                         bases=list(bases),
                         methods=methods,
-                        doc=doc,
+                        docstring_summary=docstring_summary,
                     )
                 )
             elif isinstance(node, (ast.Import, ast.ImportFrom)):
@@ -303,7 +305,7 @@ class ArchitectureScanner:
         return (
             cached["packages"],
             cached["classes"],
-            [tuple(edge) for edge in cached["deps"]],
+            [tuple(edge) for edge in cached["dependency_edges"]],
         )
 
     def _load_raw(
@@ -339,7 +341,7 @@ class ArchitectureScanner:
                     "cram_root": cram_root,
                     "packages": packages,
                     "classes": classes,
-                    "deps": dependency_edges,
+                    "dependency_edges": dependency_edges,
                 }
             ),
             encoding="utf-8",
@@ -388,7 +390,7 @@ class ArchitectureScanner:
                     module=entry["module"],
                     bases=tuple(entry["bases"]),
                     methods=entry["methods"],
-                    doc=entry["doc"],
+                    docstring_summary=entry["docstring_summary"],
                 )
                 for entry in classes
             ],

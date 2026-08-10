@@ -64,11 +64,11 @@ def view_payload(name: str) -> Union[ViewPayload, UnknownViewPayload]:
 
     :param name: Name of the requested tab.
     """
-    kb = get_knowledge_base()
+    knowledge_base = get_knowledge_base()
     if name == "knowledge":
         return graph_payload()
     if name == "kinematics":
-        return _urdf_view(kb)
+        return _urdf_view(knowledge_base)
     if name == "plan":
         return _plan_view()
     if name == "chart":
@@ -82,22 +82,24 @@ def expand_node(node_id: str) -> Optional[ViewPayload]:
 
     :param node_id: Id of the double-clicked node.
     """
-    kb = get_knowledge_base()
-    if node_id == kb.robot.name:  # robot → full URDF kinematic tree
-        return _urdf_view(kb)
+    knowledge_base = get_knowledge_base()
+    if node_id == knowledge_base.robot.name:  # robot → full URDF kinematic tree
+        return _urdf_view(knowledge_base)
     if node_id == "plan":  # → the executed plan tree
         return _plan_view()
-    package = next((entry for entry in kb.packages if entry.name == node_id), None)
+    package = next(
+        (entry for entry in knowledge_base.packages if entry.name == node_id), None
+    )
     if package:
-        return ArchitectureViews.package_view(kb, package)
+        return ArchitectureViews.package_view(knowledge_base, package)
     subpackage = next(
-        (entry for entry in kb.subpackages if entry.name == node_id), None
+        (entry for entry in knowledge_base.subpackages if entry.name == node_id), None
     )
     if subpackage:
-        return ArchitectureViews.subpackage_view(kb, subpackage)
+        return ArchitectureViews.subpackage_view(knowledge_base, subpackage)
     python_class = next(
-        (entry for entry in kb.classes if _class_id(entry) == node_id), None
+        (entry for entry in knowledge_base.classes if _class_id(entry) == node_id), None
     )
     if python_class:
-        return ArchitectureViews.class_view(kb, python_class)
+        return ArchitectureViews.class_view(knowledge_base, python_class)
     return None

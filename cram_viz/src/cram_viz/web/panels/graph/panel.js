@@ -49,10 +49,10 @@ Panels.define('graph', function (root, bus) {
 
   // %% tabs
   const TABS = {
-    knowledge:  { url: '/api/kb' },
-    kinematics: { url: '/api/kb/view?name=kinematics' },
-    plan:       { url: '/api/kb/view?name=plan' },
-    chart:      { url: '/api/kb/view?name=chart' },
+    knowledge:  { url: '/api/knowledge' },
+    kinematics: { url: '/api/knowledge/view?name=kinematics' },
+    plan:       { url: '/api/knowledge/view?name=plan' },
+    chart:      { url: '/api/knowledge/view?name=chart' },
   };
   let tab = 'knowledge';
   let view = null;            // the currently rendered payload
@@ -83,14 +83,14 @@ Panels.define('graph', function (root, bus) {
     const inside = stacks[tab].length > 0;
     navEl.style.display = inside ? '' : 'none';
     if (inside) {
-      const path = stacks[tab].slice(1).map(function (v) { return v.crumb; }).concat([view.crumb]);
+      const path = stacks[tab].slice(1).map(function (v) { return v.breadcrumb; }).concat([view.breadcrumb]);
       navPath.textContent = path.join(' / ');
     }
   }
   async function drill(id) {
     if (!view.details[id]) return;
     try {
-      const r = await fetch('/api/kb/expand?node=' + encodeURIComponent(id));
+      const r = await fetch('/api/knowledge/expand?node=' + encodeURIComponent(id));
       const p = await r.json();
       if (!p.ok) return;                       // node has no inside view
       stacks[tab].push(view);
@@ -118,7 +118,7 @@ Panels.define('graph', function (root, bus) {
       emptyEl.textContent = 'loading…';
       try {
         const r = await fetch(TABS[name].url);
-        if (r.status === 404) throw new Error('this build needs the /api/kb/view route — restart the server');
+        if (r.status === 404) throw new Error('this build needs the /api/knowledge/view route — restart the server');
         const p = await r.json();
         if (!p.ok) {
           emptyEl.textContent = p.error || 'view unavailable';
@@ -184,12 +184,12 @@ Panels.define('graph', function (root, bus) {
   const PLAN_LEGEND = [
     { group: 'event', label: 'Action' }, { group: 'robot', label: 'Motion' },
     { group: 'goal', label: 'Condition' }, { group: 'object', label: 'Attach / detach' },
-    { group: 'ind', label: 'Other plan node' },
+    { group: 'other', label: 'Other plan node' },
   ];
   const CHART_LEGEND = [
     { group: 'robot', label: 'Task (motion constraint)' },
     { group: 'concept', label: 'Monitor / observation' },
-    { group: 'klass', label: 'Goal (contains nodes)' },
+    { group: 'subpackage', label: 'Goal (contains nodes)' },
     { group: 'event', label: 'End / cancel motion' },
   ];
   const liveSig = { plan: '', chart: '' };
@@ -202,7 +202,7 @@ Panels.define('graph', function (root, bus) {
   }
 
   // drop the redundant 'Action' suffix only — a label that merely contains the
-  // word, such as 'ActionNode', must survive intact (mirrors kb.shorten_action_label)
+  // word, such as 'ActionNode', must survive intact (mirrors knowledge.shorten_action_label)
   function shortenActionLabel(label) {
     const shortened = label.replace(/Action$/, '');
     return shortened || label;
@@ -216,12 +216,12 @@ Panels.define('graph', function (root, bus) {
                      'status: ' + n.status + (n.derived ? ' (derived from the motion statechart)' : '')];
       if (n.arm) lines.push('arm: ' + n.arm);
       if (n.target) lines.push('target: ' + n.target);
-      nodes.push({ id: n.id, label: label, group: PLAN_GROUP[n.kind] || 'ind',
+      nodes.push({ id: n.id, label: label, group: PLAN_GROUP[n.kind] || 'other',
                    title: [label].concat(lines).join('\n'), status: n.status });
-      details[n.id] = { label: label, group: PLAN_GROUP[n.kind] || 'ind', lines: lines };
-      if (n.parent) edges.push({ from: n.parent, to: n.id, kind: 'prop', label: 'has step' });
+      details[n.id] = { label: label, group: PLAN_GROUP[n.kind] || 'other', lines: lines };
+      if (n.parent) edges.push({ from: n.parent, to: n.id, kind: 'property', label: 'has step' });
     });
-    return { ok: true, crumb: 'live plan', nodes: nodes, edges: edges, details: details,
+    return { ok: true, breadcrumb: 'live plan', nodes: nodes, edges: edges, details: details,
              legend: PLAN_LEGEND, layout: 'hier', arrows: true, statusLegend: true,
              live: 'plan', key: 'plan-live',
              empty: 'The bridge is attached but the demo has not started its plan yet.' };
@@ -231,19 +231,19 @@ Panels.define('graph', function (root, bus) {
     const nodes = [], edges = [], details = {}, isParent = {};
     (live.nodes || []).forEach(function (n) { if (n.parent) isParent[n.parent] = 1; });
     (live.nodes || []).forEach(function (n) {
-      const group = isParent[n.id] ? 'klass'
-        : /EndMotion|CancelMotion/.test(n.cls) ? 'event'
-        : /Monitor|Reached|Observation|Condition/.test(n.cls + n.name) ? 'concept' : 'robot';
-      const lines = ['a ' + n.cls, 'life cycle: ' + n.life, 'observation: ' + n.obs];
+      const group = isParent[n.id] ? 'subpackage'
+        : /EndMotion|CancelMotion/.test(n.class_name) ? 'event'
+        : /Monitor|Reached|Observation|Condition/.test(n.class_name + n.name) ? 'concept' : 'robot';
+      const lines = ['a ' + n.class_name, 'life cycle: ' + n.life_cycle, 'observation: ' + n.observation];
       nodes.push({ id: n.id, label: n.name, group: group,
-                   title: [n.name].concat(lines).join('\n'), status: n.life });
+                   title: [n.name].concat(lines).join('\n'), status: n.life_cycle });
       details[n.id] = { label: n.name, group: group, lines: lines };
       if (n.parent) edges.push({ from: n.parent, to: n.id, kind: 'type', label: 'contains' });
     });
     (live.edges || []).forEach(function (e) {
       edges.push({ from: e.from, to: e.to, kind: e.kind, label: (e.kind || '').toLowerCase() + ' transition' });
     });
-    return { ok: true, crumb: 'statechart' + (live.title ? ' · ' + live.title : ''),
+    return { ok: true, breadcrumb: 'statechart' + (live.title ? ' · ' + live.title : ''),
              nodes: nodes, edges: edges, details: details, legend: CHART_LEGEND,
              layout: 'hier', arrows: true, statusLegend: true, live: 'chart', key: 'chart-live',
              empty: 'Attached, but no motion statechart is executing right now.' };

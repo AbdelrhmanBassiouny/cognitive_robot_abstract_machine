@@ -1,6 +1,6 @@
 {
   "name": "fixture",
-  "fps": 30,
+  "framesPerSecond": 30,
   "trajectory": "trajectory.json",
   "models": [
     {"name": "pr2", "urdf": "robot.urdf", "prefix": "pr2", "robot": true}
@@ -70,7 +70,7 @@
     }
   ],
   "placeTarget": {
-    "pos": [4.9, 3.3],
+    "position": [4.9, 3.3],
     "z": 0.72,
     "bounds": {"minX": 4.4, "maxX": 5.5, "minY": 2.7, "maxY": 3.9}
   },

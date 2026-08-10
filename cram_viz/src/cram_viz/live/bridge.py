@@ -209,10 +209,10 @@ class MoveRequest:
         object_key = payload.get("object")
         if not isinstance(object_key, str) or not object_key:
             raise MalformedMoveRequest("'object' must be a non-empty string")
-        position = cls._coordinates(payload.get("pos"), "pos", 3)
+        position = cls._coordinates(payload.get("position"), "position", 3)
         quaternion = (
-            cls._coordinates(payload.get("quat"), "quat", 4)
-            if payload.get("quat")
+            cls._coordinates(payload.get("quaternion"), "quaternion", 4)
+            if payload.get("quaternion")
             else None
         )
         return cls(
@@ -398,7 +398,7 @@ class ChartNodeStructure:
 
     id: str
     name: str
-    cls: str
+    class_name: str
     parent: Optional[str]
 
 
@@ -430,7 +430,7 @@ class _ChartStructure:
 
     nodes: List[ChartNodeStructure] = field(default_factory=list)
     edges: List[ChartEdgeEntry] = field(default_factory=list)
-    indices: List[int] = field(default_factory=list)
+    node_state_indices: List[int] = field(default_factory=list)
     """
     Each node's index into the chart's life-cycle/observation state vectors.
     """
@@ -459,14 +459,14 @@ class ChartNodeEntry:
 
     id: str
     name: str
-    cls: str
+    class_name: str
     parent: Optional[str]
-    life: str
+    life_cycle: str
     """
     The node's ``LifeCycleValues`` name (e.g. ``RUNNING``).
     """
 
-    obs: ObservationName
+    observation: ObservationName
     """
     The node's trinary observation name.
     """
@@ -494,7 +494,7 @@ class WorldStateSnapshot:
     The world's joints, base pose and object poses at one simulation tick.
     """
 
-    seq: int = 0
+    sequence_number: int = 0
     """
     Monotonic snapshot counter so the viewer can skip unchanged states.
     """
@@ -514,6 +514,14 @@ class WorldStateSnapshot:
     Loose-object pose by mesh key, in the same 7-element form as :attr:`base`.
     """
 
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The snapshot in the camel-cased JSON shape the viewer reads.
+        """
+        payload = asdict(self)
+        payload["sequenceNumber"] = payload.pop("sequence_number")
+        return payload
+
 
 @dataclass(frozen=True)
 class BridgeStatus:
@@ -527,7 +535,7 @@ class BridgeStatus:
     movable: bool
     plan: bool
     chart: bool
-    seq: int
+    sequence_number: int
     robot_parts: List[RobotPartAnnotation] = field(default_factory=list)
     """
     The arms and end effectors of the live robot, as sem_dt annotates them.
@@ -539,6 +547,7 @@ class BridgeStatus:
         ``partAnnotations`` shape a recorded scene bundle carries.
         """
         payload = asdict(self)
+        payload["sequenceNumber"] = payload.pop("sequence_number")
         payload.pop("robot_parts")
         payload["partAnnotations"] = [
             annotation.to_payload() for annotation in self.robot_parts
@@ -577,7 +586,7 @@ class Bridge:
     The robot annotation of :attr:`world`, re-discovered on every bind.
     """
 
-    seq: int = 0
+    sequence_number: int = 0
     """
     Monotonic snapshot counter so the viewer can skip unchanged states.
     """
@@ -612,7 +621,7 @@ class Bridge:
     Published bodies by mesh key; :data:`ROBOT_BASE_KEY` is the robot root.
     """
 
-    _last_bind: float = 0.0
+    _last_bind_time: float = 0.0
     """
     Timestamp of the last world discovery (see :attr:`REBIND_INTERVAL_SECONDS`).
     """
@@ -669,7 +678,7 @@ class Bridge:
     Reset whenever a new plan starts performing, which bounds it to one plan's nodes.
     """
 
-    _ticks: int = 0
+    _tick_count: int = 0
     """
     Tick counter used to throttle the plan snapshot.
     """
@@ -740,8 +749,8 @@ class Bridge:
         self.apply_moves()
         self.snapshot()
         self.observe_chart(chart)
-        self._ticks += 1
-        if self._ticks % self.plan_snapshot_tick_interval == 0:
+        self._tick_count += 1
+        if self._tick_count % self.plan_snapshot_tick_interval == 0:
             self.snapshot_plan()
 
     def begin_plan(self, plan: Plan) -> None:
@@ -813,7 +822,7 @@ class Bridge:
                 movable=True,
                 plan=bool(self.plan_state.nodes),
                 chart=bool(self.chart_state.nodes),
-                seq=self.seq,
+                sequence_number=self.sequence_number,
                 robot_parts=(
                     describe_robot_parts(self.robot) if self.robot is not None else []
                 ),
@@ -916,7 +925,7 @@ class Bridge:
         world = self.world
         if world is None:
             return
-        self._last_bind = time.time()
+        self._last_bind_time = time.time()
         robots = world.get_semantic_annotations_by_type(AbstractRobot)
         self.robot = robots[0] if robots else None
         self._connections = self._actuated_connections(world)
@@ -1016,7 +1025,7 @@ class Bridge:
         """
         if self.world is None:
             return
-        if time.time() - self._last_bind > self.REBIND_INTERVAL_SECONDS:
+        if time.time() - self._last_bind_time > self.REBIND_INTERVAL_SECONDS:
             self.bind()
         frames = {
             str(connection.name): round(float(connection.position), self.POSE_PRECISION)
@@ -1030,9 +1039,9 @@ class Bridge:
             else:
                 object_poses[name] = rounded_pose(body, self.POSE_PRECISION)
         with self._lock:
-            self.seq += 1
+            self.sequence_number += 1
             self.state = WorldStateSnapshot(
-                seq=self.seq,
+                sequence_number=self.sequence_number,
                 frames=frames,
                 base=base_pose,
                 objects=object_poses,
@@ -1043,7 +1052,7 @@ class Bridge:
         The newest world snapshot (safe to call from HTTP threads).
         """
         with self._lock:
-            return asdict(self.state)
+            return self.state.to_payload()
 
     # %% plan tree
     @staticmethod
@@ -1179,7 +1188,7 @@ class Bridge:
         :param order: Output list every serialized node id is appended to, in
             traversal order, to build the tree's signature.
         """
-        node_id = "p%d" % id(node)
+        node_id = "plan_node_%d" % id(node)
         designator = node.designator if isinstance(node, DescribesAnAction) else None
         own_status = node.status.name
         entry = PlanNodeEntry(
@@ -1292,10 +1301,12 @@ class Bridge:
         from giskardpy.motion_statechart.data_types import LifeCycleValues
 
         life_cycle = [
-            int(chart.life_cycle_state.data[index]) for index in structure.indices
+            int(chart.life_cycle_state.data[index])
+            for index in structure.node_state_indices
         ]
         observations = [
-            float(chart.observation_state.data[index]) for index in structure.indices
+            float(chart.observation_state.data[index])
+            for index in structure.node_state_indices
         ]
         if (life_cycle, observations) == self._last_node_states:
             return
@@ -1304,10 +1315,10 @@ class Bridge:
             ChartNodeEntry(
                 id=node.id,
                 name=node.name,
-                cls=node.cls,
+                class_name=node.class_name,
                 parent=node.parent,
-                life=LifeCycleValues(life_cycle[position]).name,
-                obs=self._observation_name(observations[position]),
+                life_cycle=LifeCycleValues(life_cycle[position]).name,
+                observation=self._observation_name(observations[position]),
             )
             for position, node in enumerate(structure.nodes)
         ]
@@ -1340,32 +1351,37 @@ class Bridge:
         :param chart: The statechart to serialize.
         """
         nodes: List[ChartNodeStructure] = []
-        indices: List[int] = []
+        node_state_indices: List[int] = []
         for node in chart.nodes:
             parent_index = node.parent_node_index
             nodes.append(
                 ChartNodeStructure(
-                    id="s%d" % node.index,
+                    id="chart_node_%d" % node.index,
                     name=node.name,
-                    cls=type(node).__name__,
+                    class_name=type(node).__name__,
                     parent=(
-                        ("s%d" % parent_index) if parent_index is not None else None
+                        ("chart_node_%d" % parent_index)
+                        if parent_index is not None
+                        else None
                     ),
                 )
             )
-            indices.append(node.index)
+            node_state_indices.append(node.index)
         edges = []
         for source, target, transition in chart.rx_graph.edge_index_map().values():
             edges.append(
                 ChartEdgeEntry(
-                    source="s%d" % chart.rx_graph.get_node_data(source).index,
-                    target="s%d" % chart.rx_graph.get_node_data(target).index,
+                    source="chart_node_%d" % chart.rx_graph.get_node_data(source).index,
+                    target="chart_node_%d" % chart.rx_graph.get_node_data(target).index,
                     kind=transition.kind.name,
                 )
             )
         signature = "|".join(node.id + ":" + node.name for node in nodes)
         return _ChartStructure(
-            nodes=nodes, edges=edges, indices=indices, signature=signature
+            nodes=nodes,
+            edges=edges,
+            node_state_indices=node_state_indices,
+            signature=signature,
         )
 
     def get_chart(self) -> Dict[str, Any]:

@@ -33,11 +33,11 @@ class NodeGroup(str, Enum):
     EVENT = "event"
     ROOT = "root"
     CONCEPT = "concept"
-    KLASS = "klass"
+    SUBPACKAGE = "subpackage"
     GOAL = "goal"
-    PYCLASS = "pyclass"
-    UPPER = "upper"
-    OTHER = "ind"
+    PYTHON_CLASS = "python_class"
+    EXTERNAL_CLASS = "external_class"
+    OTHER = "other"
 
 
 class EdgeKind(str, Enum):
@@ -45,5 +45,5 @@ class EdgeKind(str, Enum):
     Rendering kind of a graph-panel edge.
     """
 
-    PROP = "prop"
+    PROPERTY = "property"
     TYPE = "type"

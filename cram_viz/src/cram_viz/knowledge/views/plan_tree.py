@@ -73,7 +73,7 @@ class PlanViewPayload:
         """
         return {
             "ok": self.ok,
-            "crumb": "executed plan",
+            "breadcrumb": "executed plan",
             "nodes": [node.to_payload() for node in self.nodes],
             "edges": [edge.to_payload() for edge in self.edges],
             "details": {
@@ -122,7 +122,7 @@ def _plan_view() -> PlanViewPayload:
         :param tree: The serialized plan node to add.
         :param parent: Id of the node's parent entry, or None for the root.
         """
-        node_id = "pn%d" % counter[0]
+        node_id = "plan_tree_node_%d" % counter[0]
         counter[0] += 1
         status = tree.get("status") or "CREATED"
         lines = ["a " + tree.get("kind", "PlanNode"), "status: " + status]
@@ -139,7 +139,7 @@ def _plan_view() -> PlanViewPayload:
             status=status,
         )
         if parent:
-            view.edges.append(GraphEdge(parent, node_id, EdgeKind.PROP, "has step"))
+            view.edges.append(GraphEdge(parent, node_id, EdgeKind.PROPERTY, "has step"))
         for child in tree.get("children", []):
             walk(child, node_id)
 

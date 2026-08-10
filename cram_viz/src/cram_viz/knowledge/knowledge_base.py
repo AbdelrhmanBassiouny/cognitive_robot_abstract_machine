@@ -68,7 +68,7 @@ class EpisodeKnowledgeBase:
         """
         bundle = load_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
-        frames_per_second = scene.get("fps", 30)
+        frames_per_second = scene.get("framesPerSecond", 30)
         parts = (scene.get("robot") or {}).get("parts") or {}
         robot_name = (scene.get("robot") or {}).get("name", "robot")
         robot_prefix = (scene.get("robot") or {}).get("prefix", "")
@@ -92,7 +92,7 @@ class EpisodeKnowledgeBase:
         architecture_scan = ArchitectureScanner().load()
         self.packages = architecture_scan.packages
         self.classes = architecture_scan.classes
-        self.package_deps = architecture_scan.dependency_edges
+        self.package_dependencies = architecture_scan.dependency_edges
         self.subpackages = self._build_subpackages(self.classes)
 
     @staticmethod
@@ -109,7 +109,7 @@ class EpisodeKnowledgeBase:
                     name=entry["id"],
                     kind="object",
                     label=entry["id"].replace("_", " ").title(),
-                    height_m=entry.get("height"),
+                    height_metres=entry.get("height"),
                     position=Point3(*[round(value, 3) for value in entry["spawn"][:3]]),
                 )
             )
@@ -120,10 +120,10 @@ class EpisodeKnowledgeBase:
                     name="place_area",
                     kind="location",
                     label="Place area",
-                    height_m=0.0,  # a target area on a surface, not a solid
+                    height_metres=0.0,  # a target area on a surface, not a solid
                     position=Point3(
-                        round(target["pos"][0], 3),
-                        round(target["pos"][1], 3),
+                        round(target["position"][0], 3),
+                        round(target["position"][1], 3),
                         target.get("z", 0),
                     ),
                 )
@@ -256,7 +256,7 @@ class EpisodeKnowledgeBase:
                     index=index,
                     start_frame=segment["start"],
                     end_frame=segment["end"],
-                    duration_s=round(
+                    duration_seconds=round(
                         (segment["end"] - segment["start"]) / max(1, frames_per_second),
                         1,
                     ),
@@ -304,22 +304,22 @@ class EpisodeKnowledgeBase:
             if robot_prefix and prefix != robot_prefix:
                 return JointRegion.ENVIRONMENT
             part = link_to_part.get(joint_name.replace("_joint", "_link"))
-            arm_side = _side_of_name(part) if part else None
-            if arm_side is None:
-                arm_side = _side_of_name(joint_name)
-            if arm_side is Arms.LEFT:
+            region = _side_of_name(part) if part else None
+            if region is None:
+                region = _side_of_name(joint_name)
+            if region is Arms.LEFT:
                 return JointRegion.LEFT
-            if arm_side is Arms.RIGHT:
+            if region is Arms.RIGHT:
                 return JointRegion.RIGHT
             return JointRegion.BODY
 
         return [
             JointMotion(
                 name=key.partition("/")[2] or key,
-                arm_side=side_of(key),
-                min_rad=round(minimum[key], 3),
-                max_rad=round(maximum[key], 3),
-                range_rad=round(maximum[key] - minimum[key], 3),
+                region=side_of(key),
+                minimum_radians=round(minimum[key], 3),
+                maximum_radians=round(maximum[key], 3),
+                range_radians=round(maximum[key] - minimum[key], 3),
             )
             for key in sorted(minimum)
         ]

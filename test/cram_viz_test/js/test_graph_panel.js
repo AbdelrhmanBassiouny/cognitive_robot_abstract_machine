@@ -91,8 +91,8 @@ function loadPanel(responses) {
 // %% live plan colour groups
 test('AttachNode and DetachNode plan nodes render in the object colour group', async function () {
   const panel = loadPanel({
-    '/api/kb': { ok: true, nodes: [], edges: [], details: {} },
-    '/api/kb/view?name=plan': { ok: true, nodes: [], edges: [], details: {}, live: 'plan' },
+    '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} },
+    '/api/knowledge/view?name=plan': { ok: true, nodes: [], edges: [], details: {}, live: 'plan' },
     'http://bridge/plan': {
       signature: 's1',
       nodes: [

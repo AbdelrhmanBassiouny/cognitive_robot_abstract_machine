@@ -31,7 +31,7 @@ class Gripper:
     and a right arm.
     """
 
-    opening_m: Optional[float] = None
+    opening_metres: Optional[float] = None
     """
     Maximum opening width in metres as recorded by the onboarder, or None when the
     bundle does not report one.
@@ -103,7 +103,7 @@ class BenchObject:
     Human-readable display name.
     """
 
-    height_m: Optional[float]
+    height_metres: Optional[float]
     """
     Object height in metres as recorded by the onboarder, or None when the bundle does
     not report one (the object's shapes carry no measurable size).
@@ -126,7 +126,7 @@ class BenchObject:
             self.name,
             self.kind,
             self.label,
-            self.height_m,
+            self.height_metres,
             tuple(self.position.to_np().tolist()),
         )
 
@@ -165,7 +165,7 @@ class ActionEpisode:
     Frame after the last trajectory frame of the episode.
     """
 
-    duration_s: float
+    duration_seconds: float
     """
     Episode duration in seconds.
     """
@@ -197,20 +197,20 @@ class JointMotion:
     Joint name (without the model prefix).
     """
 
-    arm_side: JointRegion
+    region: JointRegion
     """
     Region of the robot/scene the joint belongs to.
     """
 
-    min_rad: float
+    minimum_radians: float
     """
     Smallest recorded joint position (radians or metres).
     """
 
-    max_rad: float
+    maximum_radians: float
     """
     Largest recorded joint position (radians or metres).
     """
 
-    range_rad: float
-    """Travelled range, ``max_rad - min_rad``."""
+    range_radians: float
+    """Travelled range, ``maximum_radians - minimum_radians``."""
