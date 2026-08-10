@@ -38,14 +38,36 @@ skill's judgement, since steps 1-4 already hold every signal it would need.
   a bad mode exiting 3).
 - PR description refreshed to match what actually shipped; PR still draft.
 
+## Round 2 (2026-08-10), pushed as `99732801`
+
+The user reversed the default and asked for a way to set it in passing.
+
+- **Committed default is now `auto` for both skills.** Their argument settles
+  it: auto mode already reads the item's state and the plan/PR progress, and
+  the escalation rule already returns anything that changes the settled plan —
+  so `ask` was ceremony on items the gathered material had already settled.
+  Every test that pins a personal setting now pins a mode the default is *not*,
+  so a fall-through to the default fails instead of coinciding.
+- **`/plan-item-mode <auto|plan|ask> [kickoff|resolve|both]`** — the script
+  could already write the setting; nothing let the user say it in passing. The
+  skill maps the phrasing, calls `set`, then reports what `resolve` reads back.
+- **`--skill` is repeatable**, so pinning both is one rewrite and one push; a
+  test counts commits on the notes branch to pin that.
+- Roadmap section rewritten to record the reversal and its reasoning rather
+  than quietly editing away the old argument; dashboard republished (drift 0
+  after rebuilding `pr_data.json`, which was missing #150/#151/#153).
+
 ## Next
 
-- Watch #149's CI (`mergeable_state` was `unstable` right after the push) and
-  handle review comments as they arrive.
-- Not done, deliberately: the user's own `.claude/personal/plan-item-modes.toml`
-  is not written. Pinning `kickoff_mode = "auto"` changes their behaviour
-  globally, so it is offered rather than done —
-  `python3 .claude/hooks/plan_item_mode.py set --skill kickoff --mode auto`.
+- Nothing outstanding on the implementation. 384 tests pass; #149 is a draft
+  with its description current.
+- CI red on #149 is base-side: `greenlet` 3.5.5 shipped no Linux wheel, `main`
+  fails the same 7 jobs identically, and `1dc0a52a` was 20/20 green before the
+  base merge. Reported once on the PR; the fix (pin `greenlet!=3.5.5` in three
+  requirements files) is offered as its own bug-labelled change, not folded in.
+- Still not done deliberately: the user's own
+  `.claude/personal/plan-item-modes.toml` is unwritten. With the committed
+  default now `auto`, they need no pin to get the behaviour they asked for.
 
 ## Watch
 
