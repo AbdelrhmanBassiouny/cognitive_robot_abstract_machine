@@ -36,9 +36,9 @@ Panels.define('eql', function (root, bus) {
   let knowledge = null;   // /api/knowledge overview (presets + entity details)
 
   // %% boot
-  fetch('/api/knowledge').then(function (r) { return r.json(); }).then(boot).catch(function (err) {
-    knowledgeStatus.textContent = 'knowledge base error';
-    answerEl.innerHTML = '<div class="qerr">Failed to reach the EQL server:\n' + esc(String(err)) + '</div>';
+  fetch('/api/knowledge').then(ResponseUtil.parseJson).then(boot).catch(function (err) {
+    knowledgeStatus.textContent = 'EQL unavailable';
+    answerEl.innerHTML = '<div class="qerr">EQL unavailable: ' + esc(errorText(err)) + '</div>';
   });
 
   function boot(payload) {
@@ -129,9 +129,9 @@ Panels.define('eql', function (root, bus) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: code }),
       });
-      render(code, await r.json());
+      render(code, await ResponseUtil.parseJson(r));
     } catch (err) {
-      render(code, { ok: false, error: String(err) });
+      render(code, { ok: false, error: errorText(err) });
     }
     running = false;
     runBtn.textContent = 'Run';
@@ -197,5 +197,7 @@ Panels.define('eql', function (root, bus) {
     task: '#ff7a9c', monitor: '#4bd38a', motion_goal: '#5b8cff', motion_end: '#b98cff',
   };
   function groupColor(g) { return GROUP_COLOR[g] || '#5b8cff'; }
+  // an Error carries the useful text on .message; anything else is shown as-is
+  function errorText(err) { return String((err && err.message) || err); }
   function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }
 });

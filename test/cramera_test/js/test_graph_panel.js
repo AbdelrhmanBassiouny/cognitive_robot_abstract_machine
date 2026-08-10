@@ -1,9 +1,10 @@
 // Unit tests for panels/graph/panel.js (node:test): the live-plan colour-group mapping.
 //
-// panel.js is loaded with its free variables (Panels, Graph, fetch) bound as explicit
-// function parameters rather than through global/window stubs, since the file itself
-// never touches `window` or `document` directly (it only reaches DOM elements handed to
-// it via its own `root` parameter).
+// panel.js is loaded with its free variables (Panels, Graph, fetch, ResponseUtil)
+// bound as explicit function parameters rather than through global/window stubs, since
+// the file itself never touches `window` or `document` directly (it only reaches DOM
+// elements handed to it via its own `root` parameter). ResponseUtil is the real
+// core/response.js, so the panel's error handling is exercised, not a stub of it.
 'use strict';
 
 const test = require('node:test');
@@ -13,6 +14,12 @@ const path = require('path');
 
 const WEB = path.join(__dirname, '..', '..', '..', 'cramera', 'src', 'cramera', 'web');
 const SOURCE = fs.readFileSync(path.join(WEB, 'panels/graph/panel.js'), 'utf8');
+
+function loadResponseUtil() {
+  const scope = {};
+  new Function('window', fs.readFileSync(path.join(WEB, 'core/response.js'), 'utf8'))(scope);
+  return scope.ResponseUtil;
+}
 
 function flush() {
   return new Promise(function (resolve) { setTimeout(resolve, 0); });
@@ -71,7 +78,19 @@ function makeFetch(responses) {
   return async function fetch(url) {
     const body = responses[url];
     if (!body) throw new Error('unexpected fetch: ' + url);
-    return { status: 200, json: async function () { return body; } };
+    if (typeof body === 'number') return errorPage(body);
+    return { ok: true, status: 200, json: async function () { return body; } };
+  };
+}
+
+// what a host with no matching backend route answers: an HTML page, not JSON
+function errorPage(status) {
+  return {
+    ok: false,
+    status: status,
+    json: async function () {
+      throw new SyntaxError('JSON.parse: unexpected character at line 1 column 1');
+    },
   };
 }
 
@@ -84,7 +103,9 @@ function loadPanel(responses) {
     onSelect() {}, onDoubleSelect() {}, highlight() {}, reset() {},
     setStatuses() { return false; },
   };
-  new Function('Panels', 'Graph', 'fetch', SOURCE)(Panels, Graph, makeFetch(responses));
+  new Function('Panels', 'Graph', 'fetch', 'ResponseUtil', SOURCE)(
+    Panels, Graph, makeFetch(responses), loadResponseUtil()
+  );
   return { factory: factory, lastBuild: function () { return lastBuild; } };
 }
 
@@ -128,6 +149,7 @@ test('a live plan is drawn with the groups and legend the bridge sent', async fu
   }
 });
 
+
 // %% live statechart colour groups
 test('statechart nodes are grouped by the kind of node giskardpy compiled', async function () {
   const panel = loadPanel({
@@ -163,6 +185,29 @@ test('statechart nodes are grouped by the kind of node giskardpy compiled', asyn
     assert.strictEqual(byId.t1.group, 'task');
     assert.strictEqual(byId.m1.group, 'monitor');       // name matches Reached
     assert.strictEqual(byId.e1.group, 'motion_end');
+  } finally {
+    instance.destroy();
+  }
+});
+
+
+// %% a route with no backend
+test('a view whose route has no backend reports the status, not a JSON.parse error', async function () {
+  const panel = loadPanel({
+    '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} },
+    '/api/knowledge/view?name=kinematics': 502,
+  });
+  const root = makeRoot();
+  const instance = panel.factory(root, makeBus());
+  try {
+    await flush();
+
+    root.buttons.find(function (b) { return b.dataset.view === 'kinematics'; }).click();
+    await flush();
+
+    const reported = root.querySelector('#graph-empty').textContent;
+    assert.match(reported, /HTTP 502/);
+    assert.doesNotMatch(reported, /JSON\.parse/);
   } finally {
     instance.destroy();
   }
