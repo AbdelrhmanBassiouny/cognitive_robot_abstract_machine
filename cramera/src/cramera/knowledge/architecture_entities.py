@@ -6,21 +6,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from cramera.knowledge.entity import NamedEntity
+
 from typing_extensions import Tuple
 
 
 @dataclass(unsafe_hash=True)
-class ModuleGrouping:
+class ModuleGrouping(NamedEntity):
     """
     A named group of Python modules found by the architecture scan.
 
     Both levels the scan distinguishes share this: a workspace member and a subpackage
     inside one are each a name with modules and classes counted under it.
-    """
-
-    name: str
-    """
-    Name of the grouping, as the graph shows it.
     """
 
     module_count: int
@@ -62,14 +59,9 @@ class SubPackage(ModuleGrouping):
 
 
 @dataclass(unsafe_hash=True)
-class PythonClass:
+class PythonClass(NamedEntity):
     """
     A class found by the static scan of the CRAM repository.
-    """
-
-    name: str
-    """
-    Class name.
     """
 
     package: str

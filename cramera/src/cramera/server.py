@@ -37,6 +37,7 @@ from urllib.parse import parse_qs, urlparse
 
 from cramera import paths
 from cramera.logging_setup import get_logger
+from cramera.payload import CrameraPayload
 
 logger = get_logger(__name__)
 
@@ -45,7 +46,7 @@ DEFAULT_PORT = 8711
 try:
     import krrood  # noqa: F401  (the EQL engine)
 
-    from cramera.knowledge.eql_session import run_query
+    from cramera.knowledge.eql_session import EqlSession
     from cramera.knowledge.knowledge_base import get_knowledge_base
     from cramera.knowledge.views.dispatcher import GraphPanelViews
 
@@ -108,13 +109,13 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         """
         Send a payload as JSON with the given status code.
 
-        ``payload`` may be a plain JSON-able dict, or a knowledge-package payload
-        dataclass exposing ``to_payload()`` — either is serialized the same way.
+        ``payload`` may be a plain JSON-able dict or a :class:`CrameraPayload` — either
+        is serialized the same way.
 
         :param payload: The payload to serialize and send.
         :param code: HTTP status code to respond with.
         """
-        if hasattr(payload, "to_payload"):
+        if isinstance(payload, CrameraPayload):
             payload = payload.to_payload()
         body = json.dumps(payload).encode("utf-8")
         self.send_response(code)
@@ -217,7 +218,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             if not code:
                 return self._send_json({"ok": False, "error": "empty query"})
             with _EQL_LOCK:
-                return self._send_json(run_query(code))
+                return self._send_json(EqlSession.of_active_scene().run(code))
         except SyntaxError as error:
             return self._send_json({"ok": False, "error": "SyntaxError: %s" % error})
         except Exception as error:

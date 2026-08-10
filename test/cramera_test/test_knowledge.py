@@ -8,7 +8,14 @@ krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
 from coraplex.datastructures.enums import Arms  # noqa: E402
 
-from cramera.knowledge.eql_session import run_query  # noqa: E402
+from semantic_digital_twin.datastructures.prefixed_name import (
+    PrefixedName,
+)  # noqa: E402
+from semantic_digital_twin.spatial_types import Point3  # noqa: E402
+from semantic_digital_twin.world_description.world_entity import Body  # noqa: E402
+
+from cramera.knowledge.entities import BenchObject  # noqa: E402
+from cramera.knowledge.eql_session import EqlSession, RowRenderer  # noqa: E402
 from cramera.knowledge.graph_payload import KnowledgeGraphPayload  # noqa: E402
 from cramera.knowledge.knowledge_base import (  # noqa: E402
     get_knowledge_base,
@@ -186,12 +193,45 @@ class TestArmSideInference:
 
 class TestQueries:
     def test_entity_query(self, fixture_scene):
-        result = run_query(
+        result = EqlSession.of_active_scene().run(
             "the(entity(scene_object).where(scene_object.name == 'milk'))"
         )
         assert result.ok and result.count == 1
         assert result.rows[0]["__entity__"] == "milk"
         assert "milk" in result.highlight
+
+    def test_a_set_of_query_returns_its_unification_rows(self, fixture_scene):
+        """
+        ``set_of`` answers with a mapping per row rather than an entity, and that path
+        is only reached at query time — an import missing from it survives collection.
+        """
+        result = EqlSession.of_active_scene().run(
+            "set_of(scene_object.name, scene_object.kind)"
+        )
+
+        assert result.ok
+        assert result.rows == [
+            {"BenchObject.name": "milk", "BenchObject.kind": "object"},
+            {"BenchObject.name": "place_area", "BenchObject.kind": "location"},
+        ]
+
+    def test_only_a_real_entity_is_treated_as_one(self):
+        """
+        A result value is an entity because of its type, not because it happens to carry
+        a ``name``: semantic_digital_twin's ``Body`` is a dataclass with one and must
+        not be reported as an entity to highlight.
+        """
+        milk = BenchObject(
+            name="milk",
+            kind="object",
+            label="Milk",
+            height_metres=None,
+            position=Point3(0.0, 0.0, 0.0),
+        )
+        body = Body(name=PrefixedName("milk"))
+
+        assert RowRenderer._entity_name(milk) == "milk"
+        assert RowRenderer._entity_name(body) is None
 
     def test_an_unknown_name_raises(self, fixture_scene):
         """
@@ -201,11 +241,11 @@ class TestQueries:
         not swallow it.
         """
         with pytest.raises(NameError):
-            run_query("this is not python")
+            EqlSession.of_active_scene().run("this is not python")
 
     def test_a_syntactically_invalid_query_raises(self, fixture_scene):
         with pytest.raises(SyntaxError):
-            run_query("definitely not python (((")
+            EqlSession.of_active_scene().run("definitely not python (((")
 
 
 class TestRecordedMeasurements:
@@ -435,7 +475,7 @@ class TestPresetSafety:
         )
         reset_knowledge_base()
         preset = next(p for p in get_presets() if "scene_object.name" in p.code)
-        result = run_query(preset.code)
+        result = EqlSession.of_active_scene().run(preset.code)
         assert result.ok and result.rows[0]["__entity__"] == "o'brien"
 
     def test_an_apostrophe_in_an_episode_name_does_not_break_its_presets(
@@ -453,7 +493,7 @@ class TestPresetSafety:
         )
         reset_knowledge_base()
         for preset in get_presets():
-            assert run_query(preset.code).ok
+            assert EqlSession.of_active_scene().run(preset.code).ok
 
 
 # %% characterization: GraphPanelViews.of_active_scene().for_tab("knowledge") structure
@@ -793,6 +833,6 @@ class TestPresetSmoke:
         logged OK/FAIL per preset instead of asserting anything.
         """
         for preset in get_presets():
-            result = run_query(preset.code)
+            result = EqlSession.of_active_scene().run(preset.code)
             assert result.ok, "%s: %s" % (preset.text, result)
             assert result.count == len(result.rows)

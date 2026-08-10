@@ -11,6 +11,7 @@ from dataclasses import asdict, dataclass, field
 from typing_extensions import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING
 
 from cramera.knowledge.enums import ColourGroup, EdgeKind
+from cramera.payload import CrameraPayload
 
 if TYPE_CHECKING:
     from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
@@ -198,17 +199,12 @@ class SubgraphAccumulator:
 
 # %% what a graph-panel tab sends to the frontend
 @dataclass(kw_only=True)
-class GraphPanelPayload(ABC):
+class GraphPanelPayload(CrameraPayload):
     """
     One tab or drill-down of the graph panel, in the shape the frontend reads.
 
     Every view sends the same four keys; :meth:`panel_options` adds the ones only that
     view knows about, so no subclass repeats the serialization of nodes and edges.
-    """
-
-    ok: bool = True
-    """
-    Whether the view could be built.
     """
 
     nodes: List[GraphNode] = field(default_factory=list)

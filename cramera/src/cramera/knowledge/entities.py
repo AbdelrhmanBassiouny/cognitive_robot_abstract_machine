@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from cramera.knowledge.entity import NamedEntity
+
 from typing_extensions import Optional
 
 from coraplex.datastructures.enums import Arms
@@ -15,14 +17,9 @@ from cramera.knowledge.enums import JointRegion
 
 
 @dataclass(unsafe_hash=True)
-class Gripper:
+class Gripper(NamedEntity):
     """
     An end effector of the recorded robot.
-    """
-
-    name: str
-    """
-    Part name from the scene's robot annotation.
     """
 
     side: Optional[Arms]
@@ -39,14 +36,9 @@ class Gripper:
 
 
 @dataclass(unsafe_hash=True)
-class Arm:
+class Arm(NamedEntity):
     """
     A manipulator of the recorded robot.
-    """
-
-    name: str
-    """
-    Part name from the scene's robot annotation.
     """
 
     side: Optional[Arms]
@@ -66,14 +58,9 @@ class Arm:
 
 
 @dataclass(unsafe_hash=True)
-class Robot:
+class Robot(NamedEntity):
     """
     The robot that executed the recorded episode.
-    """
-
-    name: str
-    """
-    Robot name from the scene bundle.
     """
 
     arm_count: int
@@ -83,14 +70,9 @@ class Robot:
 
 
 @dataclass(eq=False)
-class BenchObject:
+class BenchObject(NamedEntity):
     """
     A loose object (or named location) in the scene.
-    """
-
-    name: str
-    """
-    Object identifier, e.g. ``milk``.
     """
 
     kind: str
@@ -140,14 +122,9 @@ class BenchObject:
 
 
 @dataclass(unsafe_hash=True)
-class ActionEpisode:
+class ActionEpisode(NamedEntity):
     """
     One executed plan segment of the recording.
-    """
-
-    name: str
-    """
-    Segment step name, e.g. ``transport_milk``.
     """
 
     index: int
@@ -187,14 +164,9 @@ class ActionEpisode:
 
 
 @dataclass(unsafe_hash=True)
-class JointMotion:
+class JointMotion(NamedEntity):
     """
     Per-joint motion statistics over the whole recorded trajectory.
-    """
-
-    name: str
-    """
-    Joint name (without the model prefix).
     """
 
     region: JointRegion
