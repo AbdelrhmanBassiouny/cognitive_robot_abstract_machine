@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 
-from typing_extensions import Any, Dict, List, TYPE_CHECKING
+from typing_extensions import Any, ClassVar, Dict, List, TYPE_CHECKING
 
 from cramera.knowledge.architecture_entities import Package, PythonClass, SubPackage
 from cramera.knowledge.enums import EdgeKind, NodeGroup
@@ -14,6 +14,7 @@ from cramera.knowledge.subgraph import (
     DetailEntry,
     GraphEdge,
     GraphNode,
+    GraphPanelPayload,
     SubgraphAccumulator,
 )
 
@@ -21,15 +22,10 @@ if TYPE_CHECKING:
     from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
 
 
-@dataclass
-class SubgraphViewPayload:
+@dataclass(kw_only=True)
+class SubgraphViewPayload(GraphPanelPayload):
     """
     A drill-down view of one package, subpackage or class.
-    """
-
-    ok: bool
-    """
-    Always ``True`` — these views have no failure mode.
     """
 
     breadcrumb: str
@@ -37,40 +33,18 @@ class SubgraphViewPayload:
     Breadcrumb label shown above the subgraph.
     """
 
-    nodes: List[GraphNode]
-    """
-    Every node in this view.
-    """
-
-    edges: List[GraphEdge]
-    """
-    Every edge in this view.
-    """
-
-    details: Dict[str, DetailEntry]
-    """
-    Detail-panel entry per node id.
-    """
-
-    def to_payload(self) -> Dict[str, Any]:
+    def panel_options(self) -> Dict[str, Any]:
         """
-        The JSON-serializable shape the frontend's graph panel expects.
+        The breadcrumb; a drill-down view sends nothing else of its own.
         """
-        return {
-            "ok": self.ok,
-            "breadcrumb": self.breadcrumb,
-            "nodes": [node.to_payload() for node in self.nodes],
-            "edges": [edge.to_payload() for edge in self.edges],
-            "details": {
-                node_id: asdict(entry) for node_id, entry in self.details.items()
-            },
-        }
+        return {"breadcrumb": self.breadcrumb}
 
-    MAXIMUM_CLASSES_SHOWN = 150
+    MAXIMUM_CLASSES_SHOWN: ClassVar[int] = 150
     """
     At most this many classes are drawn in one drill-down view.
     """
-    MAXIMUM_SUBCLASSES_SHOWN = 80
+
+    MAXIMUM_SUBCLASSES_SHOWN: ClassVar[int] = 80
     """
     At most this many subclasses are drawn in a class inheritance view.
     """
@@ -197,7 +171,12 @@ class SubgraphViewPayload:
         )
         if note:
             view.details[package.name].lines += note
-        return cls(True, package.name, view.nodes, view.edges, view.details)
+        return cls(
+            breadcrumb=package.name,
+            nodes=view.nodes,
+            edges=view.edges,
+            details=view.details,
+        )
 
     @classmethod
     def for_subpackage(
@@ -235,7 +214,10 @@ class SubgraphViewPayload:
         if note:
             view.details[subpackage.name].lines += note
         return cls(
-            True, subpackage.name.split(".", 1)[1], view.nodes, view.edges, view.details
+            breadcrumb=subpackage.name.split(".", 1)[1],
+            nodes=view.nodes,
+            edges=view.edges,
+            details=view.details,
         )
 
     @classmethod
@@ -311,4 +293,9 @@ class SubgraphViewPayload:
                 "showing %d of %d subclasses"
                 % (cls.MAXIMUM_SUBCLASSES_SHOWN, len(subclasses))
             )
-        return cls(True, python_class.name, view.nodes, view.edges, view.details)
+        return cls(
+            breadcrumb=python_class.name,
+            nodes=view.nodes,
+            edges=view.edges,
+            details=view.details,
+        )

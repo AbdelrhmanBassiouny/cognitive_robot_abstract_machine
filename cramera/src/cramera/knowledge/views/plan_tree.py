@@ -18,6 +18,7 @@ from cramera.knowledge.subgraph import (
     DetailEntry,
     GraphEdge,
     GraphNode,
+    GraphPanelPayload,
     LegendEntry,
     SubgraphAccumulator,
 )
@@ -45,49 +46,33 @@ Legend rows of the plan view.
 """
 
 
-@dataclass
-class PlanViewPayload:
+@dataclass(kw_only=True)
+class PlanViewPayload(GraphPanelPayload):
     """
     The executed plan as a tree, one node per plan node the demo ran.
     """
 
-    ok: bool
+    breadcrumb: str = "executed plan"
     """
-    Always ``True`` — this view has no failure mode.
-    """
-
-    nodes: List[GraphNode]
-    """
-    Every node in this view.
+    Breadcrumb label shown above the tree.
     """
 
-    edges: List[GraphEdge]
+    empty_message: str = "No plan tree in this bundle — re-run cramera-onboard."
     """
-    Every edge in this view.
-    """
-
-    details: Dict[str, DetailEntry]
-    """
-    Detail-panel entry per node id.
+    What the panel shows when the bundle recorded no plan at all.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def panel_options(self) -> Dict[str, Any]:
         """
-        The JSON-serializable shape the frontend's graph panel expects.
+        The plan legend and the live/status flags the plan tab is rendered with.
         """
         return {
-            "ok": self.ok,
-            "breadcrumb": "executed plan",
-            "nodes": [node.to_payload() for node in self.nodes],
-            "edges": [edge.to_payload() for edge in self.edges],
-            "details": {
-                node_id: asdict(entry) for node_id, entry in self.details.items()
-            },
+            "breadcrumb": self.breadcrumb,
             "legend": [asdict(entry) for entry in PLAN_LEGEND],
             "layout": "hier",
             "live": "plan",
             "statusLegend": True,
-            "empty": "No plan tree in this bundle — re-run cramera-onboard.",
+            "empty": self.empty_message,
         }
 
     @classmethod
@@ -137,7 +122,7 @@ class PlanViewPayload:
 
         for tree in trees:
             walk(tree, None)
-        return cls(True, view.nodes, view.edges, view.details)
+        return cls(nodes=view.nodes, edges=view.edges, details=view.details)
 
 
 def shorten_action_label(label: str) -> str:

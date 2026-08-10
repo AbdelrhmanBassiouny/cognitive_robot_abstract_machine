@@ -15,6 +15,7 @@ from cramera.knowledge.subgraph import (
     DetailEntry,
     GraphEdge,
     GraphNode,
+    GraphPanelPayload,
     LegendEntry,
     SubgraphAccumulator,
 )
@@ -23,58 +24,30 @@ if TYPE_CHECKING:
     from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
 
 
-@dataclass
-class UrdfViewPayload:
+@dataclass(kw_only=True)
+class UrdfViewPayload(GraphPanelPayload):
     """
     The scene robot's URDF as a kinematic tree.
     """
 
-    ok: bool
-    """
-    Always ``True`` — this view has no failure mode.
-    """
-
     breadcrumb: str
     """
-    Breadcrumb label shown above the subgraph.
-    """
-
-    nodes: List[GraphNode]
-    """
-    Every node in this view.
-    """
-
-    edges: List[GraphEdge]
-    """
-    Every edge in this view.
-    """
-
-    details: Dict[str, DetailEntry]
-    """
-    Detail-panel entry per node id.
+    Breadcrumb label shown above the tree.
     """
 
     legend: Optional[List[LegendEntry]] = None
     """
-    Colour legend rows, absent when the scene's URDF could not be found.
+    Robot-part colour legend, or None when the URDF could not be read.
     """
 
-    def to_payload(self) -> Dict[str, Any]:
+    def panel_options(self) -> Dict[str, Any]:
         """
-        The JSON-serializable shape the frontend's graph panel expects.
+        The breadcrumb, plus the part legend once the URDF has been read.
         """
-        payload = {
-            "ok": self.ok,
-            "breadcrumb": self.breadcrumb,
-            "nodes": [node.to_payload() for node in self.nodes],
-            "edges": [edge.to_payload() for edge in self.edges],
-            "details": {
-                node_id: asdict(entry) for node_id, entry in self.details.items()
-            },
-        }
+        options: Dict[str, Any] = {"breadcrumb": self.breadcrumb}
         if self.legend is not None:
-            payload["legend"] = [asdict(entry) for entry in self.legend]
-        return payload
+            options["legend"] = [asdict(entry) for entry in self.legend]
+        return options
 
     @classmethod
     def of_knowledge_base(cls, knowledge_base: EpisodeKnowledgeBase) -> UrdfViewPayload:
@@ -91,9 +64,7 @@ class UrdfViewPayload:
         links, joints = parsed_urdf.links, parsed_urdf.joints
         view = SubgraphAccumulator()
         if not links:
-            return cls(
-                True, knowledge_base.robot.name + " · URDF (not found)", [], [], {}
-            )
+            return cls(breadcrumb=knowledge_base.robot.name + " · URDF (not found)")
 
         scene = load_scene().scene
         parts = (scene.get("robot") or {}).get("parts") or {}
@@ -158,12 +129,11 @@ class UrdfViewPayload:
         # force-directed, not hierarchical: the chains read better when the arms and
         # the sensor head spread out around the base than as one wide LR tree
         return cls(
-            True,
-            knowledge_base.robot.name + " · URDF",
-            view.nodes,
-            view.edges,
-            view.details,
-            legend,
+            breadcrumb=knowledge_base.robot.name + " · URDF",
+            nodes=view.nodes,
+            edges=view.edges,
+            details=view.details,
+            legend=legend,
         )
 
     @staticmethod

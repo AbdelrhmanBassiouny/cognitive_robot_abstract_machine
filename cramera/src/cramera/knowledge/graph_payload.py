@@ -4,7 +4,7 @@ The knowledge-graph overview: nodes, edges, details and presets for the UI.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 
 from typing_extensions import Any, Dict, List, Optional
 
@@ -19,58 +19,33 @@ from cramera.knowledge.subgraph import (
     DetailEntry,
     GraphEdge,
     GraphNode,
+    GraphPanelPayload,
     SubgraphAccumulator,
 )
 
 
-@dataclass
-class KnowledgeGraphPayload:
+@dataclass(kw_only=True)
+class KnowledgeGraphPayload(GraphPanelPayload):
     """
-    The knowledge-graph overview: nodes, edges, details and presets.
-    """
-
-    ok: bool
-    """
-    Always ``True`` — this view has no failure mode.
+    The knowledge-graph overview: the whole recorded episode in one graph.
     """
 
-    status: str
+    status: str = ""
     """
-    Human-readable summary line shown above the graph panel.
-    """
-
-    nodes: List[GraphNode]
-    """
-    Every node in this view.
+    One-line summary shown above the graph.
     """
 
-    edges: List[GraphEdge]
+    presets: List[Preset] = field(default_factory=list)
     """
-    Every edge in this view.
-    """
-
-    details: Dict[str, DetailEntry]
-    """
-    Detail-panel entry per node id.
+    Ready-made EQL queries the query panel offers.
     """
 
-    presets: List[Preset]
-    """
-    Ready-made EQL queries for the EQL panel.
-    """
-
-    def to_payload(self) -> Dict[str, Any]:
+    def panel_options(self) -> Dict[str, Any]:
         """
-        The JSON-serializable shape the frontend's graph panel expects.
+        The status line and the query presets, which only the overview sends.
         """
         return {
-            "ok": self.ok,
             "status": self.status,
-            "nodes": [node.to_payload() for node in self.nodes],
-            "edges": [edge.to_payload() for edge in self.edges],
-            "details": {
-                node_id: asdict(entry) for node_id, entry in self.details.items()
-            },
             "presets": [asdict(preset) for preset in self.presets],
         }
 
@@ -309,5 +284,9 @@ def graph_payload() -> KnowledgeGraphPayload:
         len(knowledge_base.classes),
     )
     return KnowledgeGraphPayload(
-        True, status, view.nodes, view.edges, view.details, get_presets()
+        status=status,
+        nodes=view.nodes,
+        edges=view.edges,
+        details=view.details,
+        presets=get_presets(),
     )

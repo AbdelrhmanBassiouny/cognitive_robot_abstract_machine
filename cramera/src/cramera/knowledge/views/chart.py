@@ -8,9 +8,11 @@ from dataclasses import dataclass
 
 from typing_extensions import Any, Dict
 
+from cramera.knowledge.subgraph import GraphPanelPayload
 
-@dataclass
-class ChartViewPayload:
+
+@dataclass(kw_only=True)
+class ChartViewPayload(GraphPanelPayload):
     """
     The (live-only) statechart tab.
 
@@ -19,9 +21,19 @@ class ChartViewPayload:
     the bundle — the UI fills this view from the bridge's ``/chart`` while attached.
     """
 
-    ok: bool
+    breadcrumb: str = "motion statechart"
     """
-    Always ``True`` — this view has no failure mode.
+    Breadcrumb label shown above the (initially empty) chart.
+    """
+
+    empty_message: str = (
+        "Motion statecharts are built and ticked at execution time. "
+        "Start the demo with cramera-live and press ◉ Live — "
+        "the statechart of the running motion group appears here, "
+        "coloured by its node life cycle."
+    )
+    """
+    What the panel shows until a live bridge is attached.
     """
 
     @classmethod
@@ -29,22 +41,15 @@ class ChartViewPayload:
         """
         The statechart tab, which only ever has content while a demo is running.
         """
-        return cls(True)
+        return cls()
 
-    def to_payload(self) -> Dict[str, Any]:
+    def panel_options(self) -> Dict[str, Any]:
         """
-        The JSON-serializable shape the frontend expects.
+        The breadcrumb and the live/layout flags the statechart tab is rendered with.
         """
         return {
-            "ok": self.ok,
-            "breadcrumb": "motion statechart",
-            "nodes": [],
-            "edges": [],
-            "details": {},
+            "breadcrumb": self.breadcrumb,
             "layout": "hier",
             "live": "chart",
-            "empty": "Motion statecharts are built and ticked at execution time. "
-            "Start the demo with cramera-live and press ◉ Live — "
-            "the statechart of the running motion group appears here, "
-            "coloured by its node life cycle.",
+            "empty": self.empty_message,
         }

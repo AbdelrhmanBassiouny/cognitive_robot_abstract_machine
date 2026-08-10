@@ -5,7 +5,8 @@ subgraph view.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from abc import ABC, abstractmethod
+from dataclasses import asdict, dataclass, field
 
 from typing_extensions import Any, Dict, List, Optional
 
@@ -190,3 +191,54 @@ class SubgraphAccumulator:
         :param label: Edge label shown on hover.
         """
         self.edges.append(GraphEdge(source, target, kind, label))
+
+
+# %% what a graph-panel tab sends to the frontend
+@dataclass(kw_only=True)
+class GraphPanelPayload(ABC):
+    """
+    One tab or drill-down of the graph panel, in the shape the frontend reads.
+
+    Every view sends the same four keys; :meth:`panel_options` adds the ones only that
+    view knows about, so no subclass repeats the serialization of nodes and edges.
+    """
+
+    ok: bool = True
+    """
+    Whether the view could be built.
+    """
+
+    nodes: List[GraphNode] = field(default_factory=list)
+    """
+    Every node in this view.
+    """
+
+    edges: List[GraphEdge] = field(default_factory=list)
+    """
+    Every edge in this view.
+    """
+
+    details: Dict[str, DetailEntry] = field(default_factory=dict)
+    """
+    Detail-panel entry per node id.
+    """
+
+    @abstractmethod
+    def panel_options(self) -> Dict[str, Any]:
+        """
+        The payload keys only this view sends, such as its breadcrumb or legend.
+        """
+
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The JSON-serializable shape the frontend's graph panel expects.
+        """
+        return {
+            "ok": self.ok,
+            "nodes": [node.to_payload() for node in self.nodes],
+            "edges": [edge.to_payload() for edge in self.edges],
+            "details": {
+                node_id: asdict(entry) for node_id, entry in self.details.items()
+            },
+            **self.panel_options(),
+        }
