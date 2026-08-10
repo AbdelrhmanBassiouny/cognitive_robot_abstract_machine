@@ -1,52 +1,58 @@
 # manifest-currency-first (workflow-unification)
 
-Branch: `claude/plan-manifest-update-priority-ex2zst`, based on fork `main`.
-No pull request yet — this session did the placement analysis and recorded the
-item; implementation has not started.
+Branch `claude/plan-manifest-update-priority-ex2zst` off fork `main`, draft PR
+**#151**. Item is `in_progress`; manifest, roadmap and dashboard all written
+before the first edit, per the ordering this item exists to generalize.
 
 ## The item
 
 Every skill that can affect a plan writes the manifest and republishes the
 dashboard first, at every transition that makes a recorded field stale.
 Generalizes what `plan-item-bootstrap` (#143) did for the single kickoff moment.
+Six bound surfaces: `plan-create`, `add-plan-item`, `plan-item-kickoff`,
+`plan-item-resolve`, `plan-dashboard`, `stacked-pr-maintenance`.
 
-Six bound surfaces, settled with the user: `plan-create`, `add-plan-item`,
-`plan-item-kickoff`, `plan-item-resolve`, `plan-dashboard`,
-`stacked-pr-maintenance`. As scripted as possible — the shared document keeps
-only what a script cannot do.
+## Approved plan
 
-## Done
+All three operations extend `.claude/hooks/plan_item_bootstrap.py` (it already
+owns `PlanDocuments`, `ManifestKey`, `ItemStatus`, `apply_item_fields`,
+`BootstrapReport`, `run_git`):
 
-- Placement analysed: `workflow-unification`, track `personal-data`, wave
-  `immediate`, `depends_on: []`, based on fork `main`. Verified with
-  `add-plan-item`'s `check_scope_overlap.py` (from #135's branch) rather than by
-  eye: every path exists on `main` except the shared doc this item introduces and
-  `add-plan-item/SKILL.md`.
-- Checked against every existing item: nothing duplicates it. `plan-item-bootstrap`
-  covers one moment, `plan-item-execution-modes` (#149) covers whether to ask,
-  `plan-item-edit-guard` covers item *existence* rather than currency.
-- Reuse seams surveyed in `plan_item_bootstrap.py`, `sync_manifest_status.py`,
-  `build_dashboard.py`, `record_dashboard_url.py`, `stack.py`. Three real gaps
-  and four don't-duplicate constraints recorded in the item's notes.
-- `plan.yaml` + `roadmap.md` written and saved (`save-plan.sh`), dashboard
-  republished (41 items, drift 0), structural change posted to issue #102.
+1. Block-styled field writing — fixes the silent `notes` corruption below.
+2. `update` — write any tracked field, no mandatory roadmap section.
+3. `check` — recorded fields vs local git state; own non-zero exit status.
+4. `manifest-currency.md` + `MANIFEST_CURRENCY_DOCUMENT` constant, referenced in
+   one subsection by each of the six skills.
 
-## Next
+## Two premises corrected at kickoff — both changed the plan
 
-1. Kick off implementation via `/plan-item-kickoff workflow-unification
-   manifest-currency-first` — branch and draft PR before the first edit.
-2. Extend `plan_item_bootstrap.py`: an update operation that writes any tracked
-   field without a mandatory roadmap section, `notes`/`blockers` writes, and a
-   transition-time staleness check reusing `sync_manifest_status.py`.
-3. Write `.claude/skills/plan-dashboard/manifest-currency.md`; add the one-line
-   reference to each of the six skills.
-4. TDD throughout, tests under `.claude/hooks/tests/` (already in CI's
-   `test_claude_dev_tooling` job — no `ci.yml` change needed).
+- **`sync_manifest_status.py` cannot be the reuse seam.** It imports
+  `build_dashboard` → `render_common` → jinja2/markdown/nh3, so a hook cannot
+  import it, and it answers a different question (post-hoc, GitHub-side, one
+  direction). The split is by what each can see: dashboard vs GitHub after the
+  fact; `check` vs local git before a push. Keeps the hook tier stdlib-only and
+  leaves `check` importable by `plan-item-edit-guard`.
+- **Writing `notes` today silently concatenates** the new note onto the old one
+  and still validates. Verified against the module's own fixture.
 
-## Open calls for the user
+## Progress
 
-- Renaming `plan_item_bootstrap.py` once it writes more than a bootstrap. Two
-  skills and `resolve-personal-notes-config.sh` reference the path, and
-  `dev-tooling-save-plan-python` absorbs the file anyway. Not taken unilaterally.
-- The `add-plan-item/SKILL.md` reference line, which cannot be written from
-  `main` and cannot go on #135 now that it is marked ready.
+- [x] Branch, draft PR #151, `open` + `record`, roadmap section, dashboard
+      republished, subscribed to #151 and to tracking issue #102.
+- [ ] Block-styled writing (failing test first: writing `notes` preserves the
+      existing note).
+- [ ] `update` operation + tests.
+- [ ] `check` operation + tests.
+- [ ] `manifest-currency.md`, the constant, six skill references, contract test.
+- [ ] Mutation-check every new test; full suite from a clean clone.
+
+## Deferred, with reasons
+
+- **No rename of `plan_item_bootstrap.py`** (user's call): the package migration
+  that already moves it renames it once, rather than twice with three branches
+  rebasing across the first attempt. Same call #106 made for splitting `stack.py`.
+- **`stacked-pr-maintenance` reports, does not write** — it runs unattended under
+  `--non-interactive`, and why a status changed is judgement the shared document
+  keeps with a session. The one place the rule is deliberately weaker.
+- **The `add-plan-item/SKILL.md` reference line** can only land here if #135
+  merges first; #135 is marked ready, so it is not a session's to push to.
