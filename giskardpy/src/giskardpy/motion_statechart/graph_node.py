@@ -914,7 +914,8 @@ def velocity_convergence_expression(
     :param maximum_threshold: Upper bound for the per-degree-of-freedom velocity
         threshold.
     :param degrees_of_freedom: Degrees of freedom to check for convergence. Defaults to
-        every active degree of freedom in the world when ``None``.
+        every active degree of freedom in the world when ``None``. Those without an
+        upper velocity limit are skipped, since no threshold can be derived for them.
     :param minimum_time: Minimum elapsed control time before the expression can become
         true.
     :param reference_cycle_variable: Cycle count elapsed time is measured from, instead
@@ -933,6 +934,11 @@ def velocity_convergence_expression(
     ref = []
     symbols = []
     for dof in degrees_of_freedom:
+        if dof.limits.upper.velocity is None:
+            # nothing to derive a threshold from, so this degree of freedom cannot
+            # converge by this measure; environment joints are routinely parsed
+            # without a velocity limit
+            continue
         velocity_limit = dof.limits.upper.velocity * joint_convergence_threshold
         velocity_limit = min(max(minimum_threshold, velocity_limit), maximum_threshold)
         ref.append(velocity_limit)
