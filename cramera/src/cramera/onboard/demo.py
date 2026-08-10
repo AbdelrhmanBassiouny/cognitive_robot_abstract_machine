@@ -38,10 +38,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from semantic_digital_twin.adapters.mesh import STLParser
+from semantic_digital_twin.api import BodySpecification
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
+from semantic_digital_twin.world_description.geometry import Box
 from typing_extensions import (
     Any,
     Callable,
@@ -62,7 +64,7 @@ from cramera.live.bridge import ROBOT_BASE_KEY
 from cramera.monkey_patch import MethodPatch
 from cramera.robot_parts import describe_robot_parts
 from cramera.onboard.bundle_urdf import bundle_urdf
-from cramera.palette import ObjectPalette
+from cramera.palette import css_color, ObjectPalette
 
 if TYPE_CHECKING:
     from coraplex.plans.executables import Executable
@@ -115,6 +117,54 @@ def log(*parts: object) -> None:
 
 # %% recorder
 @dataclass
+class SpawnedBox:
+    """
+    One primitive box body spawned from a specification while the demo ran.
+
+    Loose objects usually enter the world as mesh files, which the mesh-parser hook
+    captures; a box body has no file, so its geometry is remembered here instead.
+    """
+
+    name: str
+    """
+    The body's world name, the key its poses are recorded under.
+    """
+
+    scale: List[float]
+    """
+    The box extents in metres, as ``[x, y, z]``.
+    """
+
+    color: str
+    """
+    The authored colour, as a css hex string.
+    """
+
+    @classmethod
+    def of_specification(
+        cls, specification: BodySpecification, name: Optional[str] = None
+    ) -> Optional[SpawnedBox]:
+        """
+        The recordable box a specification describes, or None when it describes anything
+        other than a single box shape.
+
+        :param specification: The specification a body was materialized from.
+        :param name: The spawn-time name override, if one was given.
+        """
+        shapes = specification.shapes.shapes
+        if len(shapes) != 1 or not isinstance(shapes[0], Box):
+            return None
+        [shape] = shapes
+        return cls(
+            name=str(name or specification.name),
+            scale=[
+                round(float(value), POSE_PRECISION) for value in shape.scale.to_np()[:3]
+            ],
+            color=css_color(shape.color),
+        )
+
+
+@dataclass
 class Recorder:
     """
     Records one demo run: assets, per-tick motion and the executed plan.
@@ -146,6 +196,11 @@ class Recorder:
     mesh_sources: List[str] = field(default_factory=list)
     """
     Mesh files of the loose objects, in load order.
+    """
+
+    spawned_boxes: List[SpawnedBox] = field(default_factory=list)
+    """
+    Loose objects spawned as a primitive box rather than loaded from a mesh file.
     """
 
     frames: List[Dict[str, float]] = field(default_factory=list)
@@ -206,6 +261,9 @@ class Recorder:
         MethodPatch(PackageUriResolver, "resolve").install(self._remember_resolution)
         MethodPatch(URDFParser, "from_file").install(self._remember_urdf_source)
         MethodPatch(STLParser, "__init__").install(self._remember_mesh_source)
+        MethodPatch(BodySpecification, "to_domain_object").install(
+            self._remember_spawned_box
+        )
 
     def _remember_resolution(
         self,
@@ -265,6 +323,26 @@ class Recorder:
             self.mesh_sources.append(file_path)
         return original(stl_parser, file_path, *args, **kwargs)
 
+    def _remember_spawned_box(
+        self,
+        original: Callable[..., Any],
+        specification: BodySpecification,
+        name: Optional[str] = None,
+    ) -> Any:
+        """
+        Materialize as usual, but remember box bodies so their poses get recorded.
+
+        :param original: The real, unpatched ``BodySpecification.to_domain_object``.
+        :param specification: The specification a body is being materialized from.
+        :param name: The spawn-time name override, if one was given.
+        """
+        spawned = SpawnedBox.of_specification(specification, name)
+        if spawned is not None and all(
+            recorded.name != spawned.name for recorded in self.spawned_boxes
+        ):
+            self.spawned_boxes.append(spawned)
+        return original(specification, name)
+
     # %% trajectory hook
     def install_tick_hook(self) -> None:
         """
@@ -313,6 +391,10 @@ class Recorder:
             body = self.world.get_body_by_name(name)
             if body is not None:
                 self._bodies[name] = body
+        for spawned in self.spawned_boxes:
+            body = self.world.get_body_by_name(spawned.name)
+            if body is not None:
+                self._bodies[spawned.name] = body
         self._connections = [
             connection
             for connection in self.world.connections
@@ -365,17 +447,19 @@ class Recorder:
     # from the recorded data (object attach/detach + first base motion).
     def _target_of(self, designator: Any) -> Optional[str]:
         """
-        The recorded object a designator refers to, matched by mesh basename.
+        The recorded object a designator refers to, matched by its recorded key: the
+        mesh basename for mesh objects, the body name for spawned boxes.
 
         :param designator: The designator to search for a world-entity reference.
         """
-        basenames = {os.path.basename(path) for path in self.mesh_sources}
+        keys = {os.path.basename(path) for path in self.mesh_sources}
+        keys |= {spawned.name for spawned in self.spawned_boxes}
         for value in vars(designator).values():
             if not isinstance(value, NamesAWorldEntity):
                 continue
-            basename = str(value.name).split("/")[-1]
-            if basename in basenames:
-                return basename
+            key = str(value.name).split("/")[-1]
+            if key in keys:
+                return key
         return None
 
     @staticmethod
@@ -852,6 +936,19 @@ class SceneBuilder:
             if extent is not None:
                 entry["height"] = round(extent.z, POSE_PRECISION)
             objects.append(entry)
+        for spawned in self.recorder.spawned_boxes:
+            if spawned.name not in self.recorder.object_frames[0]:
+                continue
+            objects.append(
+                {
+                    "id": spawned.name,
+                    "key": spawned.name,
+                    "box": spawned.scale,
+                    "spawn": self.recorder.object_frames[0][spawned.name],
+                    "color": spawned.color,
+                    "height": spawned.scale[2],
+                }
+            )
 
         # %% place target + drag bounds
         places = [segment["place"] for segment in segments if segment.get("place")]

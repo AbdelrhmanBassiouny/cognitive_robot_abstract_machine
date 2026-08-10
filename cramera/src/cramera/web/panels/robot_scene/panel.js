@@ -220,11 +220,15 @@ Panels.define('robot-scene', function (root, bus) {
       worldRoot.add(g);
       needsRender = true;
     }
-    function box(scale) {
+    // a recorded box is placed by its centre, like any other body; a fallback
+    // placeholder for a mesh that failed to load sits on top of the recorded pose
+    function box(scale, centered) {
       const s = scale || [0.06, 0.06, 0.1];
-      place(new THREE.Mesh(new THREE.BoxGeometry(s[0], s[1], s[2]).translate(0, 0, s[2] / 2), mat));
+      const geometry = new THREE.BoxGeometry(s[0], s[1], s[2]);
+      if (!centered) geometry.translate(0, 0, s[2] / 2);
+      place(new THREE.Mesh(geometry, mat));
     }
-    if (spec.box) { box(spec.box); return; }
+    if (spec.box) { box(spec.box, true); return; }
     const fmt = (spec.format || (spec.meshUrl || '').split('?')[0].split('.').pop() || '').toLowerCase();
     if (fmt === 'obj' && THREE.OBJLoader) {
       new THREE.OBJLoader().load(spec.meshUrl, function (o) {
@@ -352,7 +356,11 @@ Panels.define('robot-scene', function (root, bus) {
     });
 
     (sc.objects || []).forEach(function (o) {
-      addObject({ id: o.id, key: o.key, meshUrl: sceneBase + o.mesh, color: o.color });
+      addObject({
+        id: o.id, key: o.key, color: o.color,
+        box: o.box || null,
+        meshUrl: o.mesh ? sceneBase + o.mesh : null,
+      });
     });
 
     buildMarker(sc.placeTarget);
