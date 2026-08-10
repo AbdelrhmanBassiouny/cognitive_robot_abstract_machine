@@ -45,6 +45,7 @@ from semantic_digital_twin.world_description.connections import ActiveConnection
 from typing_extensions import (
     Any,
     Callable,
+    ClassVar,
     Dict,
     List,
     Optional,
@@ -56,7 +57,7 @@ from typing_extensions import (
 
 from cram_viz import paths
 from cram_viz.logging_setup import get_logger
-from cram_viz.body_geometry import measure_body, rounded_pose
+from cram_viz.body_geometry import measure_body, POSE_PRECISION, rounded_pose
 from cram_viz.live.bridge import ROBOT_BASE_KEY
 from cram_viz.monkey_patch import MethodPatch
 from cram_viz.robot_parts import describe_robot_parts
@@ -73,37 +74,6 @@ logger = get_logger(__name__)
 
 #: when this process started, so progress lines can show elapsed recording time
 _STARTED_AT = time.time()
-
-#: decimal places poses and joint positions are rounded to in the bundle
-POSE_PRECISION = 5
-
-#: how many recorded frames pass between progress lines
-FRAME_LOG_INTERVAL = 2000
-
-#: upper bound on the plan nodes written into a bundle
-MAX_SERIALIZED_PLAN_NODES = 400
-
-#: frame rate assumed when the controller does not report its timestep
-FALLBACK_FRAMES_PER_SECOND = 50.0
-
-#: the slowest playback the viewer is given, however hard the recording is downsampled
-MINIMUM_FRAMES_PER_SECOND = 10
-
-#: how far below the lowest recorded place pose the place marker is drawn, in metres
-PLACE_TARGET_DROP = 0.02
-
-#: half-extent of the draggable place area around the recorded place poses, in metres
-PLACE_BOUNDS_MARGIN = 0.55
-
-#: extra room in front of the place area, so a target can be dragged towards the robot
-PLACE_BOUNDS_FRONT_MARGIN = 0.65
-
-#: how far beyond the objects' spawn poses they may be dragged, in metres
-DRAG_BOUNDS_MARGIN_X = 0.35
-DRAG_BOUNDS_MARGIN_Y = 0.6
-
-#: how many of a model's links are probed to find its prefix in the composed world
-PREFIX_PROBE_LINKS = 12
 
 #: frame count a bundle is downsampled towards when no explicit step is given
 TARGET_BUNDLE_FRAMES = 1500
@@ -183,6 +153,12 @@ class Recorder:
        ``cram-viz-onboard`` console script, which has to stay importable without
        them. This is one of the documented exceptions to the imports-at-top rule.
     """
+
+    #: how many recorded frames pass between progress lines
+    FRAME_LOG_INTERVAL: ClassVar[int] = 2000
+
+    #: upper bound on the plan nodes written into a bundle
+    MAX_SERIALIZED_PLAN_NODES: ClassVar[int] = 400
 
     resolutions: Dict[str, str] = field(default_factory=dict)
     """
@@ -394,18 +370,18 @@ class Recorder:
             }
         )
         self.base_frames.append(
-            rounded_pose(self._bodies[ROBOT_BASE_KEY], POSE_PRECISION)
+            rounded_pose(self._bodies[ROBOT_BASE_KEY])
             if ROBOT_BASE_KEY in self._bodies
             else None
         )
         self.object_frames.append(
             {
-                name: rounded_pose(body, POSE_PRECISION)
+                name: rounded_pose(body)
                 for name, body in self._bodies.items()
                 if name != ROBOT_BASE_KEY
             }
         )
-        if len(self.frames) % FRAME_LOG_INTERVAL == 0:
+        if len(self.frames) % self.FRAME_LOG_INTERVAL == 0:
             log("... %d frames" % len(self.frames))
 
     # %% action metadata hook
@@ -478,15 +454,16 @@ class Recorder:
         ActionNode.parse = parse
 
     # %% the executed plan tree, serialized from the real PlanNode graph
-    def serialize_plans(
-        self, max_nodes: int = MAX_SERIALIZED_PLAN_NODES
-    ) -> List[Dict[str, Any]]:
+    def serialize_plans(self, max_nodes: Optional[int] = None) -> List[Dict[str, Any]]:
         """
         The executed plan trees, deduplicated by root, as nested dicts.
 
         :param max_nodes: Upper bound on the total node count across all trees; the
-            recording stops descending once it is reached.
+            recording stops descending once it is reached. Defaults to
+            :attr:`MAX_SERIALIZED_PLAN_NODES`.
         """
+        if max_nodes is None:
+            max_nodes = self.MAX_SERIALIZED_PLAN_NODES
         roots: List[Any] = []
         seen_roots = set()
         for node in self.plan_nodes:
@@ -741,214 +718,263 @@ def derive_segments(recorder: Recorder) -> List[Dict[str, Any]]:
     return segments
 
 
-def build_scene(
-    recorder: Recorder, name: str, output_directory: str, step: int
-) -> Dict[str, Any]:
+@dataclass
+class SceneBuilder:
     """
-    Downsample the recording to every step-th frame (always keeping the last) and
-    assemble scene.json + trajectory.json from it.
-
-    :param recorder: The finished recording to build a scene from.
-    :param name: Scene name, used as the output folder and in the scene metadata.
-    :param output_directory: Directory the scene bundle is written into.
-    :param step: Downsampling step; every ``step``-th frame is kept.
+    Assembles one finished recording into a scene bundle on disk.
     """
-    frame_count = len(recorder.frames)
-    kept_indices = list(range(0, frame_count, step))
-    if kept_indices and kept_indices[-1] != frame_count - 1:
-        kept_indices.append(frame_count - 1)
-    downsampled_index = {raw_index: kept for kept, raw_index in enumerate(kept_indices)}
 
-    def nearest(raw_index: int) -> int:
+    #: frame rate assumed when the controller does not report its timestep
+    FALLBACK_FRAMES_PER_SECOND: ClassVar[float] = 50.0
+
+    #: the slowest playback the viewer is given, however hard the recording is
+    #: downsampled
+    MINIMUM_FRAMES_PER_SECOND: ClassVar[int] = 10
+
+    #: how far below the lowest recorded place pose the place marker is drawn, in metres
+    PLACE_TARGET_DROP: ClassVar[float] = 0.02
+
+    #: half-extent of the draggable place area around the recorded place poses, in
+    #: metres
+    PLACE_BOUNDS_MARGIN: ClassVar[float] = 0.55
+
+    #: extra room in front of the place area, so a target can be dragged towards the
+    #: robot
+    PLACE_BOUNDS_FRONT_MARGIN: ClassVar[float] = 0.65
+
+    #: how far beyond the objects' spawn poses they may be dragged, in metres
+    DRAG_BOUNDS_MARGIN_X: ClassVar[float] = 0.35
+    DRAG_BOUNDS_MARGIN_Y: ClassVar[float] = 0.6
+
+    #: how many of a model's links are probed to find its prefix in the composed world
+    PREFIX_PROBE_LINKS: ClassVar[int] = 12
+
+    recorder: Recorder
+    """
+    The finished recording a scene is built from.
+    """
+
+    scene_name: str
+    """
+    Scene name, used as the output folder and in the scene metadata.
+    """
+
+    output_directory: str
+    """
+    Directory the scene bundle is written into.
+    """
+
+    step: int
+    """
+    Downsampling step; every ``step``-th frame is kept.
+    """
+
+    def build(self) -> Dict[str, Any]:
         """
-        The downsampled index closest to a raw frame index.
-
-        :param raw_index: Frame index in the original, un-downsampled recording.
+        Downsample the recording to every step-th frame (always keeping the last) and
+        assemble scene.json + trajectory.json from it.
         """
-        return downsampled_index.get(
-            raw_index,
-            downsampled_index[
-                min(downsampled_index, key=lambda kept: abs(kept - raw_index))
-            ],
-        )
+        frame_count = len(self.recorder.frames)
+        kept_indices = list(range(0, frame_count, self.step))
+        if kept_indices and kept_indices[-1] != frame_count - 1:
+            kept_indices.append(frame_count - 1)
+        downsampled_index = {
+            raw_index: kept for kept, raw_index in enumerate(kept_indices)
+        }
 
-    frames = [recorder.frames[index] for index in kept_indices]
-    base = [recorder.base_frames[index] for index in kept_indices]
-    object_poses = [recorder.object_frames[index] for index in kept_indices]
+        def nearest(raw_index: int) -> int:
+            """
+            The downsampled index closest to a raw frame index.
 
-    raw_frames_per_second = (
-        1.0 / recorder.control_timestep
-        if recorder.control_timestep
-        else FALLBACK_FRAMES_PER_SECOND
-    )
-    frames_per_second = max(
-        MINIMUM_FRAMES_PER_SECOND, round(raw_frames_per_second / step)
-    )
-
-    # %% robot description
-    robot = recorder.robot
-    root_name = str(robot.root.name)
-    prefix = root_name.split("/", 1)[0] if "/" in root_name else ""
-    base_body = root_name.split("/", 1)[1] if "/" in root_name else root_name
-    part_annotations = describe_robot_parts(robot)
-    parts = {annotation.name: annotation.links for annotation in part_annotations}
-
-    # %% segments: data-derived windows, labelled from the parsed actions
-    segments = []
-    for raw_segment in derive_segments(recorder):
-        segment = dict(raw_segment)
-        segment["start"] = nearest(raw_segment["start"])
-        segment["end"] = nearest(raw_segment["end"])
-        if "attach" in segment:
-            segment["attach"] = nearest(raw_segment["attach"])
-            segment["detach"] = nearest(raw_segment["detach"])
-        segments.append(segment)
-    # a scene with two transports of the same object would otherwise name both steps
-    # identically, and the viewer keys its playback captions on the step name
-    step_counts: Dict[str, int] = {}
-    for segment in segments:
-        step_counts[segment["step"]] = step_counts.get(segment["step"], 0) + 1
-        if step_counts[segment["step"]] > 1:
-            segment["step"] = "%s_%d" % (
-                segment["step"],
-                step_counts[segment["step"]],
+            :param raw_index: Frame index in the original, un-downsampled recording.
+            """
+            return downsampled_index.get(
+                raw_index,
+                downsampled_index[
+                    min(downsampled_index, key=lambda kept: abs(kept - raw_index))
+                ],
             )
 
-    # %% objects
-    objects = []
-    palette = ObjectPalette()
-    for index, source in enumerate(recorder.mesh_sources):
-        mesh = os.path.basename(source)
-        if mesh not in recorder.object_frames[0]:
-            continue
-        destination = os.path.join(output_directory, "meshes", "objects", mesh)
-        os.makedirs(os.path.dirname(destination), exist_ok=True)
-        shutil.copy2(source, destination)
-        entry = {
-            "id": os.path.splitext(mesh)[0],
-            "key": mesh,
-            "mesh": "meshes/objects/" + mesh,
-            "spawn": recorder.object_frames[0][mesh],
-            "color": palette.color_for(index),
-        }
-        # recorded from the world, so the knowledge base does not have to guess it;
-        # omitted when the object's shapes report no measurable size
-        body = (recorder._bodies or {}).get(mesh)
-        extent = measure_body(body) if body is not None else None
-        if extent is not None:
-            entry["height"] = round(extent.z, POSE_PRECISION)
-        objects.append(entry)
+        frames = [self.recorder.frames[index] for index in kept_indices]
+        base = [self.recorder.base_frames[index] for index in kept_indices]
+        object_poses = [self.recorder.object_frames[index] for index in kept_indices]
 
-    # %% place target + drag bounds
-    places = [segment["place"] for segment in segments if segment.get("place")]
-    place_target = None
-    if places:
-        center_x = sum(place[0] for place in places) / len(places)
-        center_y = sum(place[1] for place in places) / len(places)
-        lowest_z = min(place[2] for place in places)
-        place_target = {
-            "position": [round(center_x, 3), round(center_y, 3)],
-            "z": round(lowest_z - PLACE_TARGET_DROP, 3),
-            "bounds": {
-                "minX": round(center_x - PLACE_BOUNDS_MARGIN, 2),
-                "maxX": round(center_x + PLACE_BOUNDS_MARGIN, 2),
-                "minY": round(center_y - PLACE_BOUNDS_MARGIN, 2),
-                "maxY": round(center_y + PLACE_BOUNDS_FRONT_MARGIN, 2),
-            },
-        }
-    drag_bounds = None
-    if objects:
-        spawn_x = [entry["spawn"][0] for entry in objects]
-        spawn_y = [entry["spawn"][1] for entry in objects]
-        drag_bounds = {
-            "minX": round(min(spawn_x) - DRAG_BOUNDS_MARGIN_X, 2),
-            "maxX": round(max(spawn_x) + DRAG_BOUNDS_MARGIN_X, 2),
-            "minY": round(min(spawn_y) - DRAG_BOUNDS_MARGIN_Y, 2),
-            "maxY": round(max(spawn_y) + DRAG_BOUNDS_MARGIN_Y, 2),
-        }
-
-    # %% bundle the URDF models
-    world_body_names = [
-        str(body.name) if isinstance(body, NamesAWorldEntity) else ""
-        for body in recorder.world.bodies
-    ]
-    models = []
-    missing: List[str] = []
-    for source in recorder.urdf_sources:
-        base_name = os.path.splitext(os.path.basename(source))[0]
-        report = bundle_urdf(
-            source, base_name, output_directory, hints=recorder.resolutions
+        raw_frames_per_second = (
+            1.0 / self.recorder.control_timestep
+            if self.recorder.control_timestep
+            else self.FALLBACK_FRAMES_PER_SECOND
         )
-        missing += report.missing
-        # find this model's prefix in the composed world via one of its links
-        model_prefix = ""
-        for link in report.links[:PREFIX_PROBE_LINKS]:
-            prefixed = next(
-                (
-                    body_name
-                    for body_name in world_body_names
-                    if body_name.endswith("/" + link)
-                ),
-                None,
-            )
-            if prefixed:
-                model_prefix = prefixed.split("/", 1)[0]
-                break
-        is_robot = base_body in report.links
-        models.append(
-            {
-                "name": base_name,
-                "urdf": "%s.urdf" % base_name,
-                "prefix": model_prefix,
-                "robot": is_robot,
-                "links": len(report.links),
-                "movableJoints": report.movable_joints,
+        frames_per_second = max(
+            self.MINIMUM_FRAMES_PER_SECOND, round(raw_frames_per_second / self.step)
+        )
+
+        # %% robot description
+        robot = self.recorder.robot
+        root_name = str(robot.root.name)
+        prefix = root_name.split("/", 1)[0] if "/" in root_name else ""
+        base_body = root_name.split("/", 1)[1] if "/" in root_name else root_name
+        part_annotations = describe_robot_parts(robot)
+        parts = {annotation.name: annotation.links for annotation in part_annotations}
+
+        # %% segments: data-derived windows, labelled from the parsed actions
+        segments = []
+        for raw_segment in derive_segments(self.recorder):
+            segment = dict(raw_segment)
+            segment["start"] = nearest(raw_segment["start"])
+            segment["end"] = nearest(raw_segment["end"])
+            if "attach" in segment:
+                segment["attach"] = nearest(raw_segment["attach"])
+                segment["detach"] = nearest(raw_segment["detach"])
+            segments.append(segment)
+        # a scene with two transports of the same object would otherwise name both steps
+        # identically, and the viewer keys its playback captions on the step name
+        step_counts: Dict[str, int] = {}
+        for segment in segments:
+            step_counts[segment["step"]] = step_counts.get(segment["step"], 0) + 1
+            if step_counts[segment["step"]] > 1:
+                segment["step"] = "%s_%d" % (
+                    segment["step"],
+                    step_counts[segment["step"]],
+                )
+
+        # %% objects
+        objects = []
+        palette = ObjectPalette()
+        for index, source in enumerate(self.recorder.mesh_sources):
+            mesh = os.path.basename(source)
+            if mesh not in self.recorder.object_frames[0]:
+                continue
+            destination = os.path.join(self.output_directory, "meshes", "objects", mesh)
+            os.makedirs(os.path.dirname(destination), exist_ok=True)
+            shutil.copy2(source, destination)
+            entry = {
+                "id": os.path.splitext(mesh)[0],
+                "key": mesh,
+                "mesh": "meshes/objects/" + mesh,
+                "spawn": self.recorder.object_frames[0][mesh],
+                "color": palette.color_for(index),
             }
-        )
-        log(
-            "bundled %-28s prefix=%-12s robot=%s meshes=%d missing=%d"
-            % (
-                base_name,
-                model_prefix or "-",
-                is_robot,
-                report.meshes_copied,
-                len(report.missing),
-            )
-        )
+            # recorded from the world, so the knowledge base does not have to guess it;
+            # omitted when the object's shapes report no measurable size
+            body = (self.recorder._bodies or {}).get(mesh)
+            extent = measure_body(body) if body is not None else None
+            if extent is not None:
+                entry["height"] = round(extent.z, POSE_PRECISION)
+            objects.append(entry)
 
-    scene = {
-        "name": name,
-        "framesPerSecond": frames_per_second,
-        "trajectory": "trajectory.json",
-        "models": models,
-        "robot": {
-            "name": type(robot).__name__.lower(),
-            "prefix": prefix,
-            "baseBody": base_body,
-            "parts": parts,
-            "partAnnotations": [
-                annotation.to_payload() for annotation in part_annotations
-            ],
-        },
-        "objects": objects,
-        "segments": segments,
-        "actions": recorder.actions,
-        "planTrees": recorder.serialize_plans(),
-        "placeTarget": place_target,
-        "dragBounds": drag_bounds,
-        "missingAssets": sorted(set(missing)),
-    }
-    _write_json(Path(output_directory) / "scene.json", scene, indent=1)
-    _write_json(
-        Path(output_directory) / "trajectory.json",
-        {
+        # %% place target + drag bounds
+        places = [segment["place"] for segment in segments if segment.get("place")]
+        place_target = None
+        if places:
+            center_x = sum(place[0] for place in places) / len(places)
+            center_y = sum(place[1] for place in places) / len(places)
+            lowest_z = min(place[2] for place in places)
+            place_target = {
+                "position": [round(center_x, 3), round(center_y, 3)],
+                "z": round(lowest_z - self.PLACE_TARGET_DROP, 3),
+                "bounds": {
+                    "minX": round(center_x - self.PLACE_BOUNDS_MARGIN, 2),
+                    "maxX": round(center_x + self.PLACE_BOUNDS_MARGIN, 2),
+                    "minY": round(center_y - self.PLACE_BOUNDS_MARGIN, 2),
+                    "maxY": round(center_y + self.PLACE_BOUNDS_FRONT_MARGIN, 2),
+                },
+            }
+        drag_bounds = None
+        if objects:
+            spawn_x = [entry["spawn"][0] for entry in objects]
+            spawn_y = [entry["spawn"][1] for entry in objects]
+            drag_bounds = {
+                "minX": round(min(spawn_x) - self.DRAG_BOUNDS_MARGIN_X, 2),
+                "maxX": round(max(spawn_x) + self.DRAG_BOUNDS_MARGIN_X, 2),
+                "minY": round(min(spawn_y) - self.DRAG_BOUNDS_MARGIN_Y, 2),
+                "maxY": round(max(spawn_y) + self.DRAG_BOUNDS_MARGIN_Y, 2),
+            }
+
+        # %% bundle the URDF models
+        world_body_names = [
+            str(body.name) if isinstance(body, NamesAWorldEntity) else ""
+            for body in self.recorder.world.bodies
+        ]
+        models = []
+        missing: List[str] = []
+        for source in self.recorder.urdf_sources:
+            base_name = os.path.splitext(os.path.basename(source))[0]
+            report = bundle_urdf(
+                source,
+                base_name,
+                self.output_directory,
+                hints=self.recorder.resolutions,
+            )
+            missing += report.missing
+            # find this model's prefix in the composed world via one of its links
+            model_prefix = ""
+            for link in report.links[: self.PREFIX_PROBE_LINKS]:
+                prefixed = next(
+                    (
+                        body_name
+                        for body_name in world_body_names
+                        if body_name.endswith("/" + link)
+                    ),
+                    None,
+                )
+                if prefixed:
+                    model_prefix = prefixed.split("/", 1)[0]
+                    break
+            is_robot = base_body in report.links
+            models.append(
+                {
+                    "name": base_name,
+                    "urdf": "%s.urdf" % base_name,
+                    "prefix": model_prefix,
+                    "robot": is_robot,
+                    "links": len(report.links),
+                    "movableJoints": report.movable_joints,
+                }
+            )
+            log(
+                "bundled %-28s prefix=%-12s robot=%s meshes=%d missing=%d"
+                % (
+                    base_name,
+                    model_prefix or "-",
+                    is_robot,
+                    report.meshes_copied,
+                    len(report.missing),
+                )
+            )
+
+        scene = {
+            "name": self.scene_name,
             "framesPerSecond": frames_per_second,
-            "frames": frames,
-            "base": base,
-            "objects": object_poses,
-        },
-    )
-    return scene
+            "trajectory": "trajectory.json",
+            "models": models,
+            "robot": {
+                "name": type(robot).__name__.lower(),
+                "prefix": prefix,
+                "baseBody": base_body,
+                "parts": parts,
+                "partAnnotations": [
+                    annotation.to_payload() for annotation in part_annotations
+                ],
+            },
+            "objects": objects,
+            "segments": segments,
+            "actions": self.recorder.actions,
+            "planTrees": self.recorder.serialize_plans(),
+            "placeTarget": place_target,
+            "dragBounds": drag_bounds,
+            "missingAssets": sorted(set(missing)),
+        }
+        _write_json(Path(self.output_directory) / "scene.json", scene, indent=1)
+        _write_json(
+            Path(self.output_directory) / "trajectory.json",
+            {
+                "framesPerSecond": frames_per_second,
+                "frames": frames,
+                "base": base,
+                "objects": object_poses,
+            },
+        )
+        return scene
 
 
 def _update_scene_index(path: Path, name: str) -> None:
@@ -1052,7 +1078,7 @@ def main() -> None:
     step = args.step or max(1, len(recorder.frames) // TARGET_BUNDLE_FRAMES)
     output_directory = os.path.join(args.out, args.name)
     os.makedirs(output_directory, exist_ok=True)
-    scene = build_scene(recorder, args.name, output_directory, step)
+    scene = SceneBuilder(recorder, args.name, output_directory, step).build()
     _update_scene_index(Path(args.out) / "index.json", args.name)
 
     log("scene '%s' written to %s" % (args.name, output_directory))

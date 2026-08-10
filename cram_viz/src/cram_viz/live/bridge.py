@@ -47,7 +47,12 @@ from semantic_digital_twin.spatial_types import (
     RotationMatrix,
 )
 from cram_viz.logging_setup import get_logger
-from cram_viz.body_geometry import measure_body, rounded_pose, rounded_scale
+from cram_viz.body_geometry import (
+    measure_body,
+    POSE_PRECISION,
+    rounded_pose,
+    rounded_scale,
+)
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
     Connection6DoF,
@@ -570,9 +575,6 @@ class Bridge:
     #: fallback size for an object whose shapes carry no scale, in metres
     DEFAULT_OBJECT_SIZE: ClassVar[Tuple[float, float, float]] = (0.06, 0.06, 0.12)
 
-    #: decimal places poses and joint positions are rounded to before publishing
-    POSE_PRECISION: ClassVar[int] = 5
-
     #: decimal places object sizes are rounded to before publishing
     SIZE_PRECISION: ClassVar[int] = 4
 
@@ -1028,16 +1030,16 @@ class Bridge:
         if time.time() - self._last_bind_time > self.REBIND_INTERVAL_SECONDS:
             self.bind()
         frames = {
-            str(connection.name): round(float(connection.position), self.POSE_PRECISION)
+            str(connection.name): round(float(connection.position), POSE_PRECISION)
             for connection in self._connections
         }
         base_pose: Optional[List[float]] = None
         object_poses: Dict[str, List[float]] = {}
         for name, body in self._bodies.items():
             if name == ROBOT_BASE_KEY:
-                base_pose = rounded_pose(body, self.POSE_PRECISION)
+                base_pose = rounded_pose(body)
             else:
-                object_poses[name] = rounded_pose(body, self.POSE_PRECISION)
+                object_poses[name] = rounded_pose(body)
         with self._lock:
             self.sequence_number += 1
             self.state = WorldStateSnapshot(
