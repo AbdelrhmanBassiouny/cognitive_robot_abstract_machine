@@ -47,7 +47,7 @@ try:
     import krrood  # noqa: F401  (the EQL engine)
 
     from cramera.knowledge.eql_session import EqlSession
-    from cramera.knowledge.knowledge_base import get_knowledge_base
+    from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
     from cramera.knowledge.views.dispatcher import GraphPanelViews
 
     EQL_AVAILABLE = True
@@ -261,7 +261,7 @@ def main(arguments: Optional[List[str]] = None) -> None:
     arguments = sys.argv[1:] if arguments is None else arguments
     port = int(arguments[0]) if arguments else DEFAULT_PORT
     if EQL_AVAILABLE:  # build the knowledge base once, before the first query
-        get_knowledge_base()
+        EpisodeKnowledgeBase.of_active_scene()
     with make_server(port) as server:
         eql = "EQL ready (krrood)" if EQL_AVAILABLE else "EQL unavailable — static only"
         scenes = paths.scenes_directory()

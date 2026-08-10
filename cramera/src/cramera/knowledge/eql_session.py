@@ -32,10 +32,7 @@ from cramera.knowledge.entities import (
     JointMotion,
     Robot,
 )
-from cramera.knowledge.knowledge_base import (
-    EpisodeKnowledgeBase,
-    get_knowledge_base,
-)
+from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
 
 
 @dataclass(kw_only=True)
@@ -238,7 +235,7 @@ class EqlSession:
         """
         A session against the scene bundle the server currently serves.
         """
-        return cls(knowledge_base=get_knowledge_base())
+        return cls(knowledge_base=EpisodeKnowledgeBase.of_active_scene())
 
     def namespace(self) -> Dict[str, Any]:
         """

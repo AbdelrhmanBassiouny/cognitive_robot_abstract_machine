@@ -44,9 +44,9 @@ def reset_knowledge_base_cache() -> None:
     """
     if importlib.util.find_spec("krrood") is None:
         return
-    from cramera.knowledge.knowledge_base import reset_knowledge_base
+    from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
 
-    reset_knowledge_base()
+    EpisodeKnowledgeBase.reset()
 
 
 @pytest.fixture()

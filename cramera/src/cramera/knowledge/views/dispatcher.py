@@ -8,10 +8,7 @@ from dataclasses import dataclass
 from typing_extensions import Any, Dict, Optional
 
 from cramera.knowledge.graph_payload import KnowledgeGraphPayload
-from cramera.knowledge.knowledge_base import (
-    EpisodeKnowledgeBase,
-    get_knowledge_base,
-)
+from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
 from cramera.knowledge.subgraph import GraphPanelPayload
 from cramera.knowledge.views.architecture import SubgraphViewPayload
 from cramera.knowledge.views.chart import ChartViewPayload
@@ -62,7 +59,7 @@ class GraphPanelViews:
         """
         The views of the scene bundle the server currently serves.
         """
-        return cls(knowledge_base=get_knowledge_base())
+        return cls(knowledge_base=EpisodeKnowledgeBase.of_active_scene())
 
     def for_tab(self, name: str) -> GraphPanelPayload:
         """

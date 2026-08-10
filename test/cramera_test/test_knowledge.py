@@ -17,10 +17,7 @@ from semantic_digital_twin.world_description.world_entity import Body  # noqa: E
 from cramera.knowledge.entities import BenchObject  # noqa: E402
 from cramera.knowledge.eql_session import EqlSession, RowRenderer  # noqa: E402
 from cramera.knowledge.graph_payload import KnowledgeGraphPayload  # noqa: E402
-from cramera.knowledge.knowledge_base import (  # noqa: E402
-    get_knowledge_base,
-    reset_knowledge_base,
-)
+from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase  # noqa: E402
 from cramera.knowledge.presets import Preset  # noqa: E402
 from cramera.knowledge.views.architecture import SubgraphViewPayload  # noqa: E402
 from cramera.knowledge.views.dispatcher import GraphPanelViews  # noqa: E402
@@ -49,8 +46,8 @@ from cramera.robot_parts import (  # noqa: E402
 
 @pytest.fixture()
 def fresh_knowledge_base(fixture_scene):
-    reset_knowledge_base()
-    return get_knowledge_base()
+    EpisodeKnowledgeBase.reset()
+    return EpisodeKnowledgeBase.of_active_scene()
 
 
 class TestEpisodeKnowledgeBase:
@@ -158,8 +155,8 @@ class TestArmsFromRecordedAnnotations:
         monkeypatch.setattr(
             SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
-        reset_knowledge_base()
-        knowledge_base_instance = get_knowledge_base()
+        EpisodeKnowledgeBase.reset()
+        knowledge_base_instance = EpisodeKnowledgeBase.of_active_scene()
 
         [arm] = knowledge_base_instance.arms
         assert arm.name == "ManipulatorOne"
@@ -183,9 +180,9 @@ class TestArmSideInference:
         monkeypatch.setattr(
             SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
-        reset_knowledge_base()
+        EpisodeKnowledgeBase.reset()
         center_arm = next(
-            arm for arm in get_knowledge_base().arms if arm.name == "center_arm"
+            arm for arm in EpisodeKnowledgeBase.of_active_scene().arms if arm.name == "center_arm"
         )
         assert center_arm.side is None
 
@@ -270,9 +267,9 @@ class TestRecordedMeasurements:
         monkeypatch.setattr(
             SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
-        reset_knowledge_base()
+        EpisodeKnowledgeBase.reset()
         milk = next(
-            entry for entry in get_knowledge_base().objects if entry.name == "milk"
+            entry for entry in EpisodeKnowledgeBase.of_active_scene().objects if entry.name == "milk"
         )
         assert milk.height_metres == 0.23
 
@@ -421,7 +418,7 @@ class TestPlanGroups:
         monkeypatch.setattr(
             SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
-        reset_knowledge_base()
+        EpisodeKnowledgeBase.reset()
         node = next(
             n
             for n in GraphPanelViews.of_active_scene().for_tab("plan").nodes
@@ -448,7 +445,7 @@ class TestPlanGroups:
         monkeypatch.setattr(
             SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
-        reset_knowledge_base()
+        EpisodeKnowledgeBase.reset()
         node = next(
             n
             for n in GraphPanelViews.of_active_scene().for_tab("plan").nodes
@@ -473,7 +470,7 @@ class TestPresetSafety:
         monkeypatch.setattr(
             SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
-        reset_knowledge_base()
+        EpisodeKnowledgeBase.reset()
         preset = next(
             p for p in Preset.of_active_scene() if "scene_object.name" in p.code
         )
@@ -493,7 +490,7 @@ class TestPresetSafety:
         monkeypatch.setattr(
             SceneBundle, "of_active_scene", lambda: SceneBundle(scene, trajectory)
         )
-        reset_knowledge_base()
+        EpisodeKnowledgeBase.reset()
         for preset in Preset.of_active_scene():
             assert EqlSession.of_active_scene().run(preset.code).ok
 
@@ -644,7 +641,7 @@ class TestGraphPayloadStructure:
         second hardcoded copy of them.
         """
         payload = GraphPanelViews.of_active_scene().for_tab("knowledge")
-        knowledge_base = get_knowledge_base()
+        knowledge_base = EpisodeKnowledgeBase.of_active_scene()
         assert payload.status == (
             "EQL ready · %d graph nodes · %d joints · %d CRAM classes"
             % (
@@ -761,7 +758,7 @@ class TestExpandNode:
         )
 
     def test_package_view_truncates_to_the_maximum_classes_shown(self, fixture_scene):
-        knowledge_base = get_knowledge_base()
+        knowledge_base = EpisodeKnowledgeBase.of_active_scene()
         synthetic_classes = [
             PythonClass(
                 name="Synthetic%d" % index,
@@ -788,7 +785,7 @@ class TestExpandNode:
         )
 
     def test_class_view_truncates_to_the_maximum_subclasses_shown(self, fixture_scene):
-        knowledge_base = get_knowledge_base()
+        knowledge_base = EpisodeKnowledgeBase.of_active_scene()
         base_class = PythonClass(
             name="SyntheticBase",
             package="synthetic_pkg",

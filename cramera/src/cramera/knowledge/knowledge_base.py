@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from typing_extensions import Any, Dict, List, Optional, Tuple
+from typing_extensions import Any, ClassVar, Dict, List, Optional, Tuple
 
 from coraplex.datastructures.enums import Arms
 from semantic_digital_twin.spatial_types import Point3
@@ -34,6 +34,30 @@ class EpisodeKnowledgeBase:
     every attribute is a plain list of dataclass instances that EQL variables range
     over.
     """
+
+    _instance: ClassVar[Optional[EpisodeKnowledgeBase]] = None
+    """
+    The process-wide instance, built on first use by :meth:`of_active_scene`.
+    """
+
+    @classmethod
+    def of_active_scene(cls) -> EpisodeKnowledgeBase:
+        """
+        The process-wide knowledge base of the active scene, built on first use.
+        """
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
+
+    @classmethod
+    def reset(cls) -> None:
+        """
+        Drop the cached instance so the next access rebuilds it.
+
+        Needed whenever the active scene changes, which is what tests do when they
+        point ``CRAMERA_SCENES`` at a fixture.
+        """
+        cls._instance = None
 
     def __init__(self) -> None:
         """
@@ -353,23 +377,3 @@ class EpisodeKnowledgeBase:
             return Arms.RIGHT
         return None
 
-
-_knowledge_base: Optional[EpisodeKnowledgeBase] = None
-
-
-def get_knowledge_base() -> EpisodeKnowledgeBase:
-    """
-    The process-wide knowledge base, built on first use.
-    """
-    global _knowledge_base
-    if _knowledge_base is None:
-        _knowledge_base = EpisodeKnowledgeBase()
-    return _knowledge_base
-
-
-def reset_knowledge_base() -> None:
-    """
-    Drop the cached knowledge base (tests point CRAMERA_SCENES at fixtures).
-    """
-    global _knowledge_base
-    _knowledge_base = None

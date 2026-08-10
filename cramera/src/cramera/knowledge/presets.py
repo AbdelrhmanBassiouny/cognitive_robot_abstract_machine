@@ -9,7 +9,7 @@ from typing import Tuple
 
 from typing_extensions import List
 
-from cramera.knowledge.knowledge_base import get_knowledge_base
+from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
 
 
 @dataclass
@@ -36,7 +36,7 @@ class Preset:
         Scene presets are generated from the loaded scene, so they stay valid for any
         onboarded robot/environment; the architecture presets are static.
         """
-        knowledge_base = get_knowledge_base()
+        knowledge_base = EpisodeKnowledgeBase.of_active_scene()
         presets = [
             cls("which robot is this?", "the(entity(robot))"),
             cls("which arms does it have?", "an(entity(arm))"),
