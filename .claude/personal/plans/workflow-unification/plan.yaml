@@ -383,6 +383,27 @@ items:
       with "No such file or directory". Resolving the markers alone would have left the suite
       broken; the fixture installs it now. 433 tests pass, was 408.
 
+      Merged its base a third time 2026-08-10 (44df7fdb to 5d3cf34b), pushed by another actor
+      rather than this session - a clean fast-forward, so nothing of the rebase was lost, verified
+      by ancestry rather than from the notification. main had moved 203 files and ~25,700 lines
+      beneath it (#516 rdr-backward-inference, #525 world_specification_fresh_worlds, #508
+      stretch_real_demo among them). Re-ran the whole suite rather than trusting the merge, since
+      the second merge had already produced exactly this surprise: 463 tests pass, was 433, the
+      difference being main's own new tests. check-stack-setup.sh's stack_tooling_files row still
+      reads ok, so the defect this item fixes survives both merges. test_claude_dev_tooling green
+      on the new head, mergeable_state back to unstable, needs-resolution left for the maintenance
+      pass to clear itself rather than raced. Description brought current: 463 tests, and the two
+      base merges recorded on it.
+
+      One CI red on that head is worth carrying beyond this item, because it blocks every pull
+      request in the repository rather than this one: test_each_lib (robokudo) fails during uv
+      sync, before any test runs, because greenlet 3.5.5 was published to PyPI with wheels for
+      macOS and Windows only. greenlet is pinned nowhere here, so it resolves fresh on every job
+      on every branch. Not this branch's by construction either - its entire non-.claude/ diff
+      against main is a 4-line .gitignore addition, touching no dependency manifest. Nothing
+      pushed for it; the mechanical workarounds are constraining greenlet below 3.5.5 or the
+      tool.uv.required-environments entry uv itself suggests.
+
   - id: stack-maintenance-executor
     branch: claude/plan-item-kickoff-workflow-koufa6
     title: "Deterministic maintenance executor: board, fast-forward, restack, run-report"

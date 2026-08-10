@@ -4668,3 +4668,55 @@ with three branches rebasing across the first attempt. Same call #106 made for s
 The one line into `add-plan-item/SKILL.md` still cannot be written from `main`, and #135
 is marked ready for review, which ends a session's job on it. It lands in this pull
 request if #135 merges first; otherwise it is left for whoever lands #135.
+
+## Update 2026-08-10: a repository-wide CI blocker, and the third base merge on #110
+
+### `greenlet` 3.5.5 stops every job in the repository before a test runs
+
+`test_each_lib (robokudo)` went red on #110's new head, and it is the first CI failure on
+this branch that is neither a flake nor reachable from the diff — it is a hard blocker for
+every open pull request:
+
+```
+error: Distribution `greenlet==3.5.5 @ registry+https://pypi.org/simple` can't be installed
+because it doesn't have a source distribution or wheel for the current platform
+hint: You're on Linux (`manylinux_2_39_x86_64`), but `greenlet` (v3.5.5) only has wheels for
+the following platforms: `macosx_11_0_universal2`, `win_amd64`, `win_arm64`
+```
+
+It fails during `uv sync`, before a single test executes. `greenlet` is a transitive
+dependency pinned in no `pyproject.toml`, no requirements file and no lock file here, so it
+is resolved fresh from PyPI on every job — and 3.5.5 was published with macOS and Windows
+wheels only. Any job that resolves dependencies today hits it, on any branch.
+
+Worth recording as its own kind rather than filed with the robotics flakes this plan has
+now ruled unrelated a dozen times. Those are real tests failing for reasons a `.claude/`
+diff cannot reach; this is the *environment* refusing to build, so it produces no test
+result at all and will not clear on a re-run. The two mechanical workarounds, if upstream
+does not publish Linux wheels: constrain `greenlet` below 3.5.5, or add the
+`tool.uv.required-environments` entry `uv` itself suggests in the hint. Neither is #110's
+to do, so nothing was pushed.
+
+**The check that made "not ours" provable rather than asserted**: #110's entire non-`.claude/`
+diff against `main` is a four-line `.gitignore` addition, and
+`git diff --name-only origin/main...HEAD | grep -Ei 'pyproject|requirements|uv\.lock'`
+returns nothing. That is a stronger answer than "it looks unrelated", and it is two commands.
+
+### The third base merge, and re-running rather than trusting it
+
+#110 moved from `44df7fdb` to `5d3cf34b` without this session's involvement — a merge of
+#107's head, pushed by another actor. Ancestry confirmed it was a clean fast-forward, so
+nothing of the rebase was lost, checked with `git merge-base --is-ancestor` rather than read
+off the notification. `main` had moved 203 files and ~25,700 lines beneath it.
+
+The whole three-directory suite was re-run rather than assumed green, and the reason is on
+record two merges earlier: the *second* merge produced a break the conflict markers did not
+show at all — `test_personal_settings_sync.py` arriving from `main` and calling a hook script
+whose transitive dependency exists only on this branch. 463 pass now, was 433; the difference
+is `main`'s own new tests. `check-stack-setup.sh`'s `stack_tooling_files` row still reads
+`ok`, which is the defect this item exists to fix, re-verified across both merges.
+
+**The generalizable half**: a fast-forward is safe for *your* commits and says nothing about
+whether the result still works. Ancestry answers "did I lose anything"; only running the
+suite answers "does it still pass", and on this branch those two questions have already had
+different answers once.
