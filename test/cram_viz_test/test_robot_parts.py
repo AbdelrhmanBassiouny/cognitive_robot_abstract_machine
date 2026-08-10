@@ -4,10 +4,10 @@ Tests for reading a world's sem_dt robot-part annotations and publishing them.
 
 from dataclasses import dataclass, field
 
-from coraplex.datastructures.enums import Arms
 from typing_extensions import Any, List, Optional
 
 from cram_viz.robot_parts import (
+    ArmSide,
     RobotPartAnnotation,
     RobotPartRole,
     describe_robot_parts,
@@ -146,7 +146,7 @@ class TestDescribeRobotParts:
             right=ArmPart(bodies=[NamedBody("pr2/second_link")]),
         )
         sides = [annotation.side for annotation in describe_robot_parts(robot)]
-        assert sides == [Arms.LEFT, Arms.RIGHT]
+        assert sides == [ArmSide.LEFT, ArmSide.RIGHT]
 
     def test_an_arm_of_a_robot_without_a_left_and_a_right_arm_has_no_side(self):
         robot = OneArmedRobot(arm=ArmPart(bodies=[NamedBody("stretch/arm_link")]))
@@ -162,7 +162,7 @@ class TestRobotPartAnnotationPayload:
         annotation = RobotPartAnnotation(
             name="PR2LeftGripper",
             role=RobotPartRole.END_EFFECTOR,
-            side=Arms.LEFT,
+            side=ArmSide.LEFT,
             links=["l_gripper_link"],
             attached_to="PR2LeftArm",
         )
@@ -170,7 +170,7 @@ class TestRobotPartAnnotationPayload:
 
     def test_the_payload_names_the_side_in_lower_case(self):
         annotation = RobotPartAnnotation(
-            name="PR2LeftArm", role=RobotPartRole.ARM, side=Arms.LEFT
+            name="PR2LeftArm", role=RobotPartRole.ARM, side=ArmSide.LEFT
         )
         assert annotation.to_payload() == {
             "name": "PR2LeftArm",

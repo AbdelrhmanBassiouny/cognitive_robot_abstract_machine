@@ -10,10 +10,24 @@ from enum import Enum
 
 from typing_extensions import Any, Dict, List, Optional
 
-from coraplex.datastructures.enums import Arms
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, AbstractRobotPart
 
 # %% the published shape of a robot part
+
+
+class ArmSide(str, Enum):
+    """
+    Which of a robot's two arms a part belongs to.
+
+    semantic_digital_twin encodes handedness structurally, through
+    :meth:`~semantic_digital_twin.robots.robot_parts.AbstractRobot.get_left_arm_if_specified`,
+    rather than as an enum. coraplex's :class:`~coraplex.datastructures.enums.Arms` is
+    not reused here because :mod:`cram_viz.live.bridge` reads this module and has to
+    stay importable outside a demo environment.
+    """
+
+    LEFT = "left"
+    RIGHT = "right"
 
 
 class RobotPartRole(str, Enum):
@@ -52,7 +66,7 @@ class RobotPartAnnotation:
     Whether the part is an arm or an end effector.
     """
 
-    side: Optional[Arms]
+    side: Optional[ArmSide]
     """
     Which arm of the robot the part belongs to, or None for a robot that does not
     specify a left and a right arm.
@@ -76,7 +90,7 @@ class RobotPartAnnotation:
         return {
             "name": self.name,
             "role": self.role.value,
-            "side": self.side.name.lower() if self.side is not None else None,
+            "side": self.side.value if self.side is not None else None,
             "links": list(self.links),
             "attachedTo": self.attached_to,
         }
@@ -92,7 +106,7 @@ class RobotPartAnnotation:
         return cls(
             name=payload["name"],
             role=RobotPartRole(payload["role"]),
-            side=Arms[side.upper()] if side else None,
+            side=ArmSide(side) if side else None,
             links=list(payload.get("links") or []),
             attached_to=payload.get("attachedTo"),
         )
@@ -114,7 +128,7 @@ def link_names(part: AbstractRobotPart) -> List[str]:
     return names
 
 
-def _arm_sides(robot: AbstractRobot) -> Dict[int, Arms]:
+def _arm_sides(robot: AbstractRobot) -> Dict[int, ArmSide]:
     """
     The side of every arm the robot names as its left or its right one, keyed by arm
     identity.
@@ -127,10 +141,10 @@ def _arm_sides(robot: AbstractRobot) -> Dict[int, Arms]:
     sides = {}
     left_arm = robot.get_left_arm_if_specified()
     if left_arm is not None:
-        sides[id(left_arm)] = Arms.LEFT
+        sides[id(left_arm)] = ArmSide.LEFT
     right_arm = robot.get_right_arm_if_specified()
     if right_arm is not None:
-        sides[id(right_arm)] = Arms.RIGHT
+        sides[id(right_arm)] = ArmSide.RIGHT
     return sides
 
 

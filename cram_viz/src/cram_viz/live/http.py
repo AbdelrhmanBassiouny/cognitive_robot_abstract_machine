@@ -71,6 +71,13 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         """
+        Entry point :class:`~http.server.BaseHTTPRequestHandler` dispatches a ``GET``
+        request to, found by name as ``"do_" + self.command``.
+        """
+        self.route_snapshot_request()
+
+    def route_snapshot_request(self) -> None:
+        """
         Route the read-only snapshot endpoints.
         """
         if self.path.startswith("/state"):
@@ -110,6 +117,13 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         """
+        Entry point :class:`~http.server.BaseHTTPRequestHandler` dispatches a ``POST``
+        request to, found by name as ``"do_" + self.command``.
+        """
+        self.queue_requested_move()
+
+    def queue_requested_move(self) -> None:
+        """
         Queue an object move requested by the viewer.
 
         The payload is validated here so that malformed input is rejected on the HTTP
@@ -136,6 +150,13 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         return self._send_json({"ok": True})
 
     def do_OPTIONS(self) -> None:
+        """
+        Entry point :class:`~http.server.BaseHTTPRequestHandler` dispatches an
+        ``OPTIONS`` request to, found by name as ``"do_" + self.command``.
+        """
+        self.answer_preflight()
+
+    def answer_preflight(self) -> None:
         """
         CORS preflight for the viewer's cross-origin POSTs.
         """

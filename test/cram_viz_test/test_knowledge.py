@@ -19,7 +19,11 @@ from cram_viz.knowledge.enums import EdgeKind, NodeGroup  # noqa: E402
 from cram_viz.knowledge.scene_bundle import SceneBundle  # noqa: E402
 from cram_viz.knowledge.subgraph import DetailEntry, GraphEdge  # noqa: E402
 from cram_viz.knowledge.views import plan_tree as plan_view  # noqa: E402
-from cram_viz.robot_parts import RobotPartAnnotation, RobotPartRole  # noqa: E402
+from cram_viz.robot_parts import (  # noqa: E402
+    ArmSide,
+    RobotPartAnnotation,
+    RobotPartRole,
+)
 
 
 @pytest.fixture()
@@ -102,13 +106,13 @@ class TestArmsFromRecordedAnnotations:
             RobotPartAnnotation(
                 name="ManipulatorOne",
                 role=RobotPartRole.ARM,
-                side=Arms.RIGHT,
+                side=ArmSide.RIGHT,
                 links=["upper_link"],
             ).to_payload(),
             RobotPartAnnotation(
                 name="HandOne",
                 role=RobotPartRole.END_EFFECTOR,
-                side=Arms.RIGHT,
+                side=ArmSide.RIGHT,
                 links=["hand_link"],
                 attached_to="ManipulatorOne",
             ).to_payload(),

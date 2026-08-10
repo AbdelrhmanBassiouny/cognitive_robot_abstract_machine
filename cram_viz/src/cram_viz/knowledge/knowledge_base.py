@@ -23,7 +23,19 @@ from cram_viz.knowledge.entities import (
 )
 from cram_viz.knowledge.enums import JointRegion
 from cram_viz.knowledge.scene_bundle import load_scene
-from cram_viz.robot_parts import RobotPartAnnotation, RobotPartRole
+from cram_viz.robot_parts import ArmSide, RobotPartAnnotation, RobotPartRole
+
+
+def _arm_of_side(side: Optional[ArmSide]) -> Optional[Arms]:
+    """
+    The coraplex arm a recorded robot-part side names.
+
+    :param side: The side a recorded annotation carries, or None for a robot that
+        specifies no left and right arm.
+    """
+    if side is None:
+        return None
+    return Arms[side.name]
 
 
 def _side_of_name(name: str) -> Optional[Arms]:
@@ -158,12 +170,13 @@ class EpisodeKnowledgeBase:
             if annotation.role is not RobotPartRole.ARM:
                 continue
             end_effector = end_effectors.get(annotation.name)
+            side = _arm_of_side(annotation.side)
             gripper = Gripper(
                 end_effector.name if end_effector else annotation.name + "_ee",
-                annotation.side,
+                side,
             )
             grippers.append(gripper)
-            arms.append(Arm(annotation.name, annotation.side, robot_name, gripper))
+            arms.append(Arm(annotation.name, side, robot_name, gripper))
         return grippers, arms
 
     @staticmethod
