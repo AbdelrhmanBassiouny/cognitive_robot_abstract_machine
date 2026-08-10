@@ -4826,3 +4826,58 @@ run failed 11 jobs three minutes before this branch's, the previous `main` run w
 every pull request in the repository until `greenlet` is constrained or
 `tool.uv.required-environments` is set; reported on #151 rather than fixed here, since it is
 neither this item's scope nor a one-branch problem.
+
+## Update 2026-08-10: the "subscribe to your own PRs" rule is inverted, as #153
+
+The workflow's oldest standing assumption was that a session stays live on the pull request
+it opened: subscribe to every event, handle each one, keep it up until the PR's job ends.
+The user's decision is the opposite, and it is not a tuning of the old rule but its
+inversion — **a session never subscribes to a pull request's activity at all**. Opening a
+pull request is now terminal for the session that opened it: push, report in the chat what
+was done and what is still outstanding, stop. A CI failure or a review comment gets handled
+when the user asks for it, in a session started for that.
+
+### Why it needed two commits in two places
+
+The rule lived in the personal notes *and* in the repository, and only the second half is
+reviewable. `cram-notes.md` carried the instruction itself; `starter-notes.md` shipped the
+same bullet as the default any new user of `/setup-personal-notes` inherits. Changing one
+without the other would have left the starter set teaching the rule the notes had just
+dropped.
+
+The personal-notes half also touched three sections written *around* the old assumption,
+which is the part that would have rotted quietly if only the bullet had been flipped:
+"Scheduled checks" declared event subscriptions "fine and wanted" (true of tracking issues,
+now false of pull requests); "Comment routing" justified its action-only rule by saying PR
+comments wake subscribed sessions (nothing wakes now — the reason is that an FYI is triage
+noise for the owner); and "When your PR's job ends" was mostly a teardown procedure for
+subscriptions that no longer exist, so it reduces to deleting armed triggers.
+
+### The scope call: pull requests, not tracking issues
+
+`subscribe_pr_activity` is also how a plan's tracking issue is watched — the tool takes a
+plain issue number. Those subscriptions stay. A tracking issue is a coordination mailbox
+several sessions read, not a pull request one session owns, so `/plan-create`,
+`/plan-item-kickoff` and `/plan-item-resolve` keep theirs unchanged, `allowed-tools` included.
+
+What that leaves is wording that assumed both kinds coexisted. `plan-schema.md` and
+`session-start.sh` both told a session to subscribe to the tracking issue "(in addition to
+your own item's PR)" — there is no longer an item PR for it to be in addition to.
+
+### Two passages that explained behaviour by the old rule
+
+Neither is a rule, which is why a grep for `subscribe_pr_activity` alone would have missed
+them. `stack/README.md` told a scheduled maintenance pass to poll CI and "leave
+`subscribe_pr_activity` to an interactive session babysitting that one PR" — the exception
+now has no one to name. `stacked-pr-maintenance/SKILL.md` told its `needs-resolution` comment
+that it might reach the owning session as a live event; it will not, so the comment has to
+stand alone on GitHub. The skill's own `NEVER call subscribe_pr_activity` hard rule was
+already correct and is untouched.
+
+### Verification, and what could not be run here
+
+`bash -n session-start.sh` passes — it is the only executable change. Every surviving
+`subscrib` match under `.claude/` was read individually and is a tracking-issue subscription,
+an unsubscribe, or a prohibition. `.claude/hooks/tests` never referenced the changed strings,
+so no test needed updating; pytest is not installed in this container, so the suite was not
+run locally and CI covers it.

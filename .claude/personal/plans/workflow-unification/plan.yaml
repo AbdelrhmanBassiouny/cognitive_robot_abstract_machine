@@ -2288,3 +2288,10 @@ items:
       main's own push run failed 11 jobs three minutes before this branch's, and
       test_claude_dev_tooling - the only job reaching this .claude/-only diff - passes. Reported on
       the pull request, not fixed here.
+
+  - id: no-pr-subscriptions
+    title: "Stop sessions from subscribing to their own pull requests"
+    branch: null
+    track: personal-data
+    depends_on: []
+    status: in_progress
