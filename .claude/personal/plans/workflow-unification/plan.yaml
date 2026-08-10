@@ -2161,8 +2161,9 @@ items:
     branch: claude/plan-manifest-update-priority-ex2zst
     track: personal-data
     depends_on: []
-    status: not_started
+    status: in_progress
     session: https://claude.ai/code/session_01NoxeSgtWJ6PuaHYQhzmw7n
+    pull_request_number: 151
     notes: >
       Raised 2026-08-09 by the user: every skill that can affect a plan must treat writing
       the manifest and republishing the dashboard as its first priority, at every point that
