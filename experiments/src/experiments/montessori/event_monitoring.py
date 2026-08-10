@@ -4,11 +4,10 @@ running, tick a small segmind statechart in the background so pick-up and insert
 events are detected as they happen, rather than only checked for after the fact via
 :meth:`~experiments.montessori.insert_shape_action.InsertMontessoriShapeAction.has_fallen_through_hole`.
 
-Scoped to a single tracked shape for now (see :func:`build_shape_monitor`): scoping
-every detector to one shape (rather than every loose shape on the table) keeps a tick
-around 0.2s on this scene, fast enough to run live in the background without slowing
-the demo down; widening to every shape needs the broader collision-broad-phase
-optimization tracked separately, not yet done.
+A monitor tracks one shape at a time (see :func:`build_shape_monitor`), which keeps a
+tick around 0.2s on this scene, fast enough to run live in the background without
+slowing the demo down. Tracking every loose shape on the table at once needs the
+broader collision-broad-phase optimization tracked separately, not yet done.
 """
 
 from __future__ import annotations

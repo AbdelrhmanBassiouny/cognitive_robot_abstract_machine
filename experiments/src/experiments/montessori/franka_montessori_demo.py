@@ -150,15 +150,6 @@ Number of times a single shape's insertion is repeated while the attempt never g
 far as releasing the shape, before giving up on it and logging a warning.
 """
 
-MONITORED_SHAPE_KEY = "square_hole"
-"""
-The one shape key (see :func:`_insert_all_shapes`) segmind live-monitors during a run.
-
-Scoping every detector to a single shape keeps a tick around 0.2s on this scene (see
-:mod:`experiments.montessori.event_monitoring`); widening to every shape needs a
-broader collision-broad-phase optimization not yet done.
-"""
-
 SHAPE_SETTLE_DURATION = 2.0
 """
 Real-time seconds a just-released shape is given to physically fall and come to rest
@@ -526,10 +517,8 @@ def _insert_all_shapes(
             break
         attempted += 1
 
-        event_monitor = None
-        if shape_key == MONITORED_SHAPE_KEY:
-            event_monitor = build_shape_monitor(montessori, shape)
-            event_monitor.start()
+        event_monitor = build_shape_monitor(montessori, shape)
+        event_monitor.start()
 
         fell_through = None
         for attempt in range(1, MAX_INSERTION_ATTEMPTS + 1):
@@ -545,9 +534,8 @@ def _insert_all_shapes(
             if fell_through is not None:
                 break
 
-        if event_monitor is not None:
-            event_monitor.stop()
-            _log_segmind_verdict(shape, fell_through, event_monitor)
+        event_monitor.stop()
+        _log_segmind_verdict(shape, fell_through, event_monitor)
 
         if fell_through is None:
             logger.warning(
