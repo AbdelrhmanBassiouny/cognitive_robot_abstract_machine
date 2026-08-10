@@ -906,6 +906,10 @@ class Bridge:
         # frame (a no-op while the parent is the world root)
         parent_T_world = connection.parent.global_pose.to_homogeneous_matrix().inverse()
         parent_T_object = parent_T_world @ world_T_object
+        # the matrix product drops the frames; the origin setter transforms whatever
+        # frame it is handed into the parent frame, so label the result explicitly
+        parent_T_object.reference_frame = connection.parent
+        parent_T_object.child_frame = body
         connection.origin = parent_T_object
         logger.info(
             "moved %s -> world (%.3f, %.3f, %.3f) [final=%s]",
