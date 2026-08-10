@@ -56,6 +56,19 @@ is unavoidable; what the change removes is the *process-global mutable list*.
   broke its own SKILL.md step 4.4 (clear the label unless `dirty`) and the
   label/report pair deadlocks: leaving the label parks the branch forever, clearing
   it guarantees a repeat report. Needs a fix in the routine, not here.
+- 2026-08-10: the stack routine merged main again at 77f79a99 (clean; no conflict
+  report this time). Local fast-forwarded to it; diff vs main unchanged at 8 files,
+  +424/-102.
+- CI red on 77f79a99 across ~8 `test_each_lib` jobs - NOT this branch. `greenlet`
+  3.5.5 was published 2026-08-10T13:28:09Z with wheels only for macos/win and no
+  sdist, so `uv` cannot install it on Linux; jobs started 13:36 and die at dependency
+  resolution before any repo code is imported. greenlet is transitive (SQLAlchemy)
+  and pinned nowhere, so every branch is hit: `eql-symbolic-function-sdt` failed 7/8
+  jobs with the identical error in the same minute. Diagnosis on the PR (comment
+  5241078820). Deliberately NOT pinning greenlet on this branch - the fix belongs on
+  main so it covers every branch, and would be unrelated infra in a focused PR.
+  Expect it to clear itself (partial upload); if not, main needs a constraint
+  excluding 3.5.5. Just re-run this PR's checks once greenlet installs again.
 - CI green on df0aef5e (all 20 checks). Local suites after the second merge:
   1443 passed, 6 skipped, 2 graphviz-`dot` failures that reproduce on main.
 - Dashboard tooling bug found, NOT fixed here (would bundle unrelated `.claude/`
