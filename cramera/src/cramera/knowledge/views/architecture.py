@@ -43,7 +43,6 @@ class SubgraphViewPayload(GraphPanelPayload):
     """
     At most this many classes are drawn in one drill-down view.
     """
-
     MAXIMUM_SUBCLASSES_SHOWN: ClassVar[int] = 80
     """
     At most this many subclasses are drawn in a class inheritance view.
@@ -146,7 +145,7 @@ class SubgraphViewPayload(GraphPanelPayload):
         view.add(
             package.name,
             package.name,
-            NodeGroup.CONCEPT,
+            NodeGroup.PACKAGE,
             [
                 "a Package",
                 package.description,

@@ -184,15 +184,16 @@ Panels.define('eql', function (root, bus) {
   // %% helpers
   const TYPE_GROUP = {
     BenchObject: 'object', ActionEpisode: 'event', Arm: 'robot', Gripper: 'robot',
-    Robot: 'robot', JointMotion: 'robot', Point3: 'concept',
-    Package: 'concept', SubPackage: 'subpackage', PythonClass: 'subpackage',
+    Robot: 'robot', JointMotion: 'robot', Point3: 'other',
+    Package: 'package', SubPackage: 'subpackage', PythonClass: 'python_class',
   };
   function groupOfType(t) { return TYPE_GROUP[t] || 'other'; }
   const GROUP_COLOR = {
     root: '#e8eefb', subpackage: '#5b8cff', external_class: '#8c9bbd',
-    robot: '#ff7a9c', object: '#39d5c8', event: '#b98cff', goal: '#ffb648', concept: '#4bd38a', other: '#7f8db0',
+    robot: '#ff7a9c', object: '#39d5c8', event: '#b98cff', plan: '#ffb648', package: '#4bd38a', other: '#7f8db0',
     base: '#4bd38a', left_arm: '#ff7a9c', right_arm: '#b98cff', gripper: '#39d5c8', sensor: '#ffb648',
     action: '#b98cff', motion: '#ff7a9c', condition: '#ffb648', attachment: '#39d5c8', other_plan_node: '#7f8db0',
+    task: '#ff7a9c', monitor: '#4bd38a', motion_goal: '#5b8cff', motion_end: '#b98cff',
   };
   function groupColor(g) { return GROUP_COLOR[g] || '#5b8cff'; }
   function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }

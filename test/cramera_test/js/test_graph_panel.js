@@ -121,3 +121,43 @@ test('AttachNode and DetachNode plan nodes render in the attachment colour group
     instance.destroy();       // clears the live-poll setInterval even if an assertion above throws
   }
 });
+
+// %% live statechart colour groups
+test('statechart nodes are grouped by the kind of node giskardpy compiled', async function () {
+  const panel = loadPanel({
+    '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} },
+    '/api/knowledge/view?name=chart': { ok: true, nodes: [], edges: [], details: {}, live: 'chart' },
+    'http://bridge/chart': {
+      signature: 'c1',
+      title: 'reach',
+      nodes: [
+        { id: 'g0', name: 'ReachGoal', class_name: 'Goal', life_cycle: 'RUNNING', observation: '1' },
+        { id: 't1', parent: 'g0', name: 'CartesianPose', class_name: 'CartesianPose', life_cycle: 'RUNNING', observation: '1' },
+        { id: 'm1', parent: 'g0', name: 'PoseReached', class_name: 'PoseReached', life_cycle: 'RUNNING', observation: '0' },
+        { id: 'e1', parent: 'g0', name: 'EndMotion', class_name: 'EndMotion', life_cycle: 'CREATED', observation: '0' },
+      ],
+      edges: [],
+    },
+  });
+  const root = makeRoot();
+  const bus = makeBus();
+  const instance = panel.factory(root, bus);
+  try {
+    await flush();
+
+    root.buttons.find(function (b) { return b.dataset.view === 'chart'; }).click();
+    await flush();
+
+    bus.emit('live:changed', { on: true, url: 'http://bridge' });
+    await flush();
+
+    const byId = {};
+    panel.lastBuild().nodes.forEach(function (n) { byId[n.id] = n; });
+    assert.strictEqual(byId.g0.group, 'motion_goal');   // has children
+    assert.strictEqual(byId.t1.group, 'task');
+    assert.strictEqual(byId.m1.group, 'monitor');       // name matches Reached
+    assert.strictEqual(byId.e1.group, 'motion_end');
+  } finally {
+    instance.destroy();
+  }
+});

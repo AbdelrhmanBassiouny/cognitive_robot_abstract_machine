@@ -83,7 +83,7 @@ function planFixture(Graph) {
       { id: 'p1', label: 'Transport', group: 'event', status: 'RUNNING' },
       { id: 'p2', label: 'MoveTCP', group: 'robot', status: 'CREATED' },
       { id: 'p3', label: 'Place', group: 'event', status: 'FAILED' },
-      { id: 'p4', label: 'plain', group: 'goal' },
+      { id: 'p4', label: 'plain', group: 'plan' },
     ],
     edges: [
       { from: 'p0', to: 'p1', kind: 'property' },
@@ -184,7 +184,7 @@ test('statechart transition kinds get distinct edge styles', function () {
   Graph.build({
     key: 'chart', layout: 'hier', arrows: true,
     nodes: [
-      { id: 's0', label: 'Goal', group: 'subpackage', status: 'RUNNING' },
+      { id: 's0', label: 'Goal', group: 'motion_goal', status: 'RUNNING' },
       { id: 's1', label: 'Move', group: 'robot', status: 'DONE' },
     ],
     edges: [

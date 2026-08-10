@@ -507,7 +507,7 @@ class TestGraphPayloadStructure:
         )
         assert payload.details["coraplex"] == DetailEntry(
             "coraplex",
-            NodeGroup.CONCEPT,
+            NodeGroup.PACKAGE,
             [
                 "a Package",
                 "the plan executive: designators, plans, locations",
@@ -562,7 +562,7 @@ class TestGraphPayloadStructure:
         payload = GraphPanelViews.of_active_scene().for_tab("knowledge")
         assert payload.details["plan"] == DetailEntry(
             "executed plan",
-            NodeGroup.GOAL,
+            NodeGroup.PLAN,
             [
                 "the plan tree the demo actually executed",
                 "4 nodes",

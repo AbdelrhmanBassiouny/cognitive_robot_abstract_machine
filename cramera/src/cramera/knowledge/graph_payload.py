@@ -163,7 +163,7 @@ class KnowledgeGraphPayload(GraphPanelPayload):
                 view.add(
                     package.name,
                     package.name,
-                    NodeGroup.CONCEPT,
+                    NodeGroup.PACKAGE,
                     [
                         "a Package",
                         package.description,
@@ -229,7 +229,7 @@ class KnowledgeGraphPayload(GraphPanelPayload):
             view.add(
                 "plan",
                 "executed plan",
-                NodeGroup.GOAL,
+                NodeGroup.PLAN,
                 [
                     "the plan tree the demo actually executed",
                     "%d nodes" % node_count,

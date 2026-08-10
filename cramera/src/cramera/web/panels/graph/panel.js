@@ -189,11 +189,13 @@ Panels.define('graph', function (root, bus) {
     { group: 'attachment', label: 'Attach / detach' },
     { group: 'other_plan_node', label: 'Other plan node' },
   ];
+  // statechart nodes are bucketed by the kind of node giskardpy compiled, not by the
+  // knowledge graph's ontological categories
   const CHART_LEGEND = [
-    { group: 'robot', label: 'Task (motion constraint)' },
-    { group: 'concept', label: 'Monitor / observation' },
-    { group: 'subpackage', label: 'Goal (contains nodes)' },
-    { group: 'event', label: 'End / cancel motion' },
+    { group: 'task', label: 'Task (motion constraint)' },
+    { group: 'monitor', label: 'Monitor / observation' },
+    { group: 'motion_goal', label: 'Goal (contains nodes)' },
+    { group: 'motion_end', label: 'End / cancel motion' },
   ];
   const liveSig = { plan: '', chart: '' };
   let liveTimer = null;
@@ -234,9 +236,9 @@ Panels.define('graph', function (root, bus) {
     const nodes = [], edges = [], details = {}, isParent = {};
     (live.nodes || []).forEach(function (n) { if (n.parent) isParent[n.parent] = 1; });
     (live.nodes || []).forEach(function (n) {
-      const group = isParent[n.id] ? 'subpackage'
-        : /EndMotion|CancelMotion/.test(n.class_name) ? 'event'
-        : /Monitor|Reached|Observation|Condition/.test(n.class_name + n.name) ? 'concept' : 'robot';
+      const group = isParent[n.id] ? 'motion_goal'
+        : /EndMotion|CancelMotion/.test(n.class_name) ? 'motion_end'
+        : /Monitor|Reached|Observation|Condition/.test(n.class_name + n.name) ? 'monitor' : 'task';
       const lines = ['a ' + n.class_name, 'life cycle: ' + n.life_cycle, 'observation: ' + n.observation];
       nodes.push({ id: n.id, label: n.name, group: group,
                    title: [n.name].concat(lines).join('\n'), status: n.life_cycle });

@@ -22,14 +22,14 @@
     root:    { color: '#e8eefb', ring: '#ffffff', size: 24, label: 'Root concept' },
     subpackage:   { color: '#5b8cff', ring: '#a9c2ff', size: 15, label: 'Subpackage' },
     python_class: { color: '#ffb648', ring: '#ffd89a', size: 13, label: 'Python class' },
-    external_class:   { color: '#8c9bbd', ring: '#c3ccdf', size: 14, label: 'Upper ontology (DUL)' },
+    external_class:   { color: '#8c9bbd', ring: '#c3ccdf', size: 14, label: 'External base class' },
     // %% ABox individuals, bucketed by their asserted type
     robot:   { color: '#ff7a9c', ring: '#ffb3c6', size: 20, label: 'Robot / body' },
     object:  { color: '#39d5c8', ring: '#8ff0e7', size: 15, label: 'Object / substance' },
     event:   { color: '#b98cff', ring: '#d9c2ff', size: 16, label: 'Event / episode' },
-    goal:    { color: '#ffb648', ring: '#ffd89a', size: 15, label: 'Goal' },
-    concept: { color: '#4bd38a', ring: '#a6ecc6', size: 14, label: 'Problem / phase / fluent' },
-    other:   { color: '#7f8db0', ring: '#b6c0d8', size: 13, label: 'Individual' },
+    plan:    { color: '#ffb648', ring: '#ffd89a', size: 15, label: 'Executed plan' },
+    package: { color: '#4bd38a', ring: '#a6ecc6', size: 14, label: 'Package' },
+    other:   { color: '#7f8db0', ring: '#b6c0d8', size: 13, label: 'Other' },
 
     // %% kinematic-chain links, bucketed by the robot part they belong to
     base:       { color: '#4bd38a', ring: '#a6ecc6', size: 14, label: 'Base / torso' },
@@ -44,6 +44,12 @@
     condition:        { color: '#ffb648', ring: '#ffd89a', size: 15, label: 'Condition' },
     attachment:       { color: '#39d5c8', ring: '#8ff0e7', size: 15, label: 'Attach / detach' },
     other_plan_node:  { color: '#7f8db0', ring: '#b6c0d8', size: 13, label: 'Other plan node' },
+
+    // %% motion-statechart nodes, bucketed by the kind giskardpy compiled
+    task:        { color: '#ff7a9c', ring: '#ffb3c6', size: 20, label: 'Task (motion constraint)' },
+    monitor:     { color: '#4bd38a', ring: '#a6ecc6', size: 14, label: 'Monitor / observation' },
+    motion_goal: { color: '#5b8cff', ring: '#a9c2ff', size: 15, label: 'Goal (contains nodes)' },
+    motion_end:  { color: '#b98cff', ring: '#d9c2ff', size: 16, label: 'End / cancel motion' },
   };
 
   // %% execution status → node ring
@@ -278,7 +284,7 @@
     }
     const present = {};
     data.nodes.forEach(function (n) { present[n.group] = 1; });
-    ['root', 'subpackage', 'python_class', 'external_class', 'robot', 'object', 'event', 'goal', 'concept', 'other']
+    ['root', 'package', 'subpackage', 'python_class', 'external_class', 'robot', 'object', 'event', 'plan', 'other']
       .filter(function (g) { return present[g]; })
       .forEach(function (g) {
         const st = GROUP_STYLE[g];
