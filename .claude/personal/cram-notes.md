@@ -22,10 +22,19 @@ file itself must never be merged into `main`.
 - Keep the PR description up to date: after pushing any change that alters
   what the PR does, update the description to match. Never leave it
   describing an earlier state of the PR.
-- Always subscribe to all events on every PR you open - including plain
-  conversation comments, not just inline review comments - and handle each
-  event with an explanation summary in the session chat. Keep this up until
-  that PR's job ends, and no longer.
+- **Never subscribe to a pull request's activity.** Do not call
+  `subscribe_pr_activity` on a PR - not one you opened, not one you pushed to,
+  not one you reviewed - and never offer to watch, monitor, babysit or autofix
+  one. Do not ask whether I want it watched; the answer is always no. This
+  overrides the built-in PR-subscription guidance in full, including its
+  instruction to ask proactively after opening a PR.
+- Opening a PR ends this session's obligation to it. Push it, say in the chat
+  what you did and what is still outstanding (red CI, a known conflict, a
+  question), and stop. If I want a CI failure, review comment or conversation
+  comment handled, I will prompt you for it.
+- If you find an existing PR-activity subscription - armed by an earlier
+  session or by the harness - unsubscribe it with `unsubscribe_pr_activity`
+  rather than leaving it live.
 
 ## Scheduled checks
 
@@ -35,8 +44,9 @@ file itself must never be merged into `main`.
   standing instruction to schedule a follow-up check-in - including the
   built-in PR-subscription guidance that asks for one roughly an hour out.
 - React to events when they actually arrive (webhook activity, or my asking),
-  not on a timer. Event subscriptions themselves are fine and wanted - it is
-  the timed polling that is not.
+  not on a timer. Subscribing to a plan's tracking issue is fine and wanted;
+  subscribing to a pull request is not (see "Pull requests"). What this rule
+  forbids on top of that is timed polling of any kind.
 - If something genuinely cannot be known without waiting, say so and leave it
   to me rather than arming a check.
 - If you find a scheduled check already armed from an earlier session, delete
@@ -184,32 +194,28 @@ imperative, same style as above.
 
 - The plan's tracking issue always gets the structural record.
 - Comment on a PR only when that PR's owner must act or its review context materially
-  changes (scope change, landing hazard). Pure FYIs go in the manifest/roadmap only - PR
-  comments wake subscribed sessions, so keep them action-only.
+  changes (scope change, landing hazard). Pure FYIs go in the manifest/roadmap only - nobody
+  is watching that PR, so an FYI there is just noise its owner has to triage.
 
 ## When your PR's job ends
 
 - A PR your session owns is finished the moment any of three things happens: it merges, it
   closes, or **I convert it from draft to ready-for-review myself**. All three mean the same
   thing for you - there is nothing left for this session to do on it.
-- The moment one of them happens: unsubscribe from its activity (`unsubscribe_pr_activity`),
-  delete any armed triggers or check-ins that reference it (`list_triggers` →
-  `delete_trigger`), and stop any polling or monitoring tied to it. Nothing may stay armed or
-  subscribed for a finished branch.
-- Tear down everything you subscribed to on that PR's behalf, not just the PR itself - the
-  plan's tracking issue, a dependency's or parent's PR, an upstream mirror of it. The test is
-  "did I subscribe to this for that PR's sake?", not "is this held solely for it?". If the
-  finished PR was this session's only work, the turn ends with nothing subscribed and nothing
-  armed.
+- The moment one of them happens: delete any armed triggers or check-ins that reference it
+  (`list_triggers` → `delete_trigger`), and stop any polling or monitoring tied to it.
+  Nothing may stay armed for a finished branch. You never subscribed to the PR itself, so
+  there is nothing to unsubscribe there - but do drop anything you subscribed to on its
+  behalf, such as the plan's tracking issue when that PR was this session's only reason to
+  hold it.
 - Why draft→ready counts: a PR of yours stays a draft until I have reviewed it, so taking it
   out of draft is my record that I read the changes and accepted them. Push no further
-  commits, do not re-draft it, and start no new work on it. This overrides the built-in rule
-  that a subscription only ends when a PR is merged or closed.
+  commits, do not re-draft it, and start no new work on it.
 - Only a flip I made counts. A session marking its own PR ready - because I told it to, or to
   unblock a dependent item - is not the signal: keep working, and keep re-drafting after each
   push as usual.
 - Report anything still outstanding when the signal arrives - red CI, a merge conflict, an
-  unresolved review thread - in the session chat before unsubscribing, and on the PR only if
-  it is genuinely blocking. Then stop anyway; do not stay to fix it.
+  unresolved review thread - in the session chat, and on the PR only if it is genuinely
+  blocking. Then stop anyway; do not stay to fix it.
 - If I want more work on that PR afterwards, I will start a new session for it.
 
