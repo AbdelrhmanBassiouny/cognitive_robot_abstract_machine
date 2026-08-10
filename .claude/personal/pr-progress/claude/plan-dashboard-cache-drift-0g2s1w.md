@@ -38,8 +38,31 @@ artifact, and produced the duplicate. Both live pairs arose that way.
 - Ran `record_dashboard_url.py` for `workflow-unification` and `_index` afterwards, per
   the new step 3. Both `changed: false` — cache already right, nothing pushed.
 
+**CI on #150 — red, and proven base-side.** A merge of `origin/main` landed on the branch
+from outside any session (`358b373d`), bringing main's own breakage with it. Four
+`test_each_lib` jobs failed (3x coraplex, 1x experiments), all identically:
+
+    error: Distribution `greenlet==3.5.5` ... doesn't have a source distribution or
+    wheel for the current platform (Linux manylinux_2_39_x86_64; greenlet 3.5.5 has
+    wheels only for macosx_11_0_universal2, win_amd64, win_arm64)
+
+Every one dies at step 4 *Install dependencies*; steps 5-7 (Restore cache, Build ORM,
+Run Script) are **skipped**, so no test ran. Three independent proofs it is not ours:
+the branch diff vs main is still the same six `.claude/` files and touches no lockfile
+or dependency manifest; main's own run at `7df3ce503` (the commit merged in) failed
+**11 of 13** jobs, repo-wide, not coraplex-specific; and `ci.yml` on our own commit
+`2e2dba47`, before that merge, was **success** — that is the workflow carrying
+`test_claude_dev_tooling`, the only job reaching a `.claude/`-only diff.
+
+Replied once on the PR with the evidence and why the fix (a `greenlet` pin, or the
+`tool.uv.required-environments` entry uv suggests) belongs to whoever owns the repo's
+Python dependency set rather than to a URL-cache PR. Offered to open a separate
+`bug` PR for the pin. The later `experiments` event was the same error byte for byte,
+so it was skipped rather than answered twice.
+
 **Next**
-- CI on #150 was `pending`/0 checks at hand-off; react to webhook events as they arrive.
+- Nothing to push. React to further events; a new *kind* of failure would be worth a
+  reply, another `greenlet` one would not.
 - Nothing armed. The subscription notice asked for an hourly `send_later` check-in; not
   armed, per the no-scheduled-checks rule, which explicitly overrides that guidance.
 - One concurrent-write note: another session republished the dashboard mid-run and the
