@@ -403,35 +403,6 @@ class TestBundledAssets:
         assert assets.mesh_suffixes == [".dae", ".stl"]
 
 
-# %% xacro expansion
-class TestXacroToUrdfText:
-    def test_a_xacro_file_expands_to_urdf_text(self, tmp_path):
-        """
-        A macro-free xacro file expands to URDF text carrying the same links and joints,
-        via :class:`URDFParser.from_xacro` rather than the ``xacro`` CLI.
-        """
-        source = (
-            '<robot name="demo">\n'
-            '  <link name="base_link"/>\n'
-            '  <link name="cup_link"/>\n'
-            '  <joint name="cup_joint" type="fixed">\n'
-            '    <parent link="base_link"/><child link="cup_link"/>\n'
-            "  </joint>\n"
-            "</robot>\n"
-        )
-        xacro_path = tmp_path / "robot.xacro"
-        xacro_path.write_text(source)
-
-        expanded = bundler.xacro_to_urdf_text(str(xacro_path))
-
-        assert bundler.LINK_PATTERN.findall(expanded) == bundler.LINK_PATTERN.findall(
-            source
-        )
-        assert bundler.JOINT_PATTERN.findall(expanded) == bundler.JOINT_PATTERN.findall(
-            source
-        )
-
-
 # %% bundling a URDF
 class TestBundleUrdf:
     @pytest.fixture()
@@ -484,8 +455,9 @@ class TestBundleUrdf:
     ):
         """
         Bundling a xacro source produces the same links, joints and mesh copy as
-        bundling the equivalent URDF - :func:`xacro_to_urdf_text`'s ElementTree
-        round-trip does not break the regex-based mesh rewriting.
+        bundling the equivalent URDF - the ElementTree round-trip
+        :meth:`URDFParser.from_xacro` performs does not break the regex-based mesh
+        rewriting.
         """
         report = bundler.bundle_urdf(
             str(xacro_source_tree), "demo", str(tmp_path / "bundle")

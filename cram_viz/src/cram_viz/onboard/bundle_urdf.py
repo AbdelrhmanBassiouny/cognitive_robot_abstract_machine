@@ -235,16 +235,6 @@ class BundledAssets:
         return references
 
 
-# %% xacro
-def xacro_to_urdf_text(path: str) -> str:
-    """
-    Expand a xacro file to URDF text in-process, without any ROS installed.
-
-    :param path: Path of the xacro (or plain URDF) source file.
-    """
-    return URDFParser.from_xacro(path).urdf
-
-
 # %% bundling
 @dataclass
 class BundleReport:
@@ -325,7 +315,8 @@ def bundle_urdf(
             "URDF source not found: %s (from %s)" % (source_path, source)
         )
     if source_path.endswith(".xacro"):
-        urdf_text = xacro_to_urdf_text(source_path)
+        # expanded in-process, so no ROS installation is needed to bundle
+        urdf_text = URDFParser.from_xacro(source_path).urdf
     else:
         urdf_text = Path(source_path).read_text(encoding="utf-8", errors="replace")
     base_directory = os.path.dirname(source_path)
