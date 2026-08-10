@@ -100,33 +100,6 @@ class DescribesAnAction(Protocol):
     designator: Any
 
 
-@runtime_checkable
-class ReportsAStatus(Protocol):
-    """
-    A plan node carrying its own execution status.
-    """
-
-    status: Any
-
-
-@runtime_checkable
-class HasChildren(Protocol):
-    """
-    A plan node with a child list to descend into.
-    """
-
-    children: Any
-
-
-@runtime_checkable
-class HasAParent(Protocol):
-    """
-    A plan node that can be walked upwards to its tree's root.
-    """
-
-    parent: Any
-
-
 def log(*parts: object) -> None:
     """
     Emit a progress line prefixed with the elapsed recording time.
@@ -468,7 +441,7 @@ class Recorder:
         seen_roots = set()
         for node in self.plan_nodes:
             root = node
-            while isinstance(root, HasAParent) and root.parent is not None:
+            while root.parent is not None:
                 root = root.parent
             if id(root) not in seen_roots:
                 seen_roots.add(id(root))
@@ -486,7 +459,6 @@ class Recorder:
             designator = (
                 node.designator if isinstance(node, DescribesAnAction) else None
             )
-            status = node.status if isinstance(node, ReportsAStatus) else None
             entry = {
                 "kind": type(node).__name__,
                 "label": (
@@ -494,7 +466,7 @@ class Recorder:
                     if designator is not None
                     else type(node).__name__
                 ),
-                "status": status.name if status is not None else "",
+                "status": node.status.name,
             }
             if designator is not None:
                 target = self._target_of(designator)
@@ -503,7 +475,7 @@ class Recorder:
                 arm = self._arm_of(designator)
                 if arm is not None:
                     entry["arm"] = arm
-            children = node.children if isinstance(node, HasChildren) else ()
+            children = node.children
             entry["children"] = [
                 child
                 for child in (serialize(child) for child in children or ())
@@ -516,206 +488,227 @@ class Recorder:
 
 # %% post-processing the recording
 #: how far a pose must travel to count as moved at all, in metres
-MOVEMENT_TOLERANCE = 0.02
-
-#: how far an object must travel over the whole run to count as transported, in metres
-TRANSPORT_TOLERANCE = 0.03
-
-#: how far the robot base must travel to count as having driven off, in metres
-BASE_MOTION_TOLERANCE = 0.05
-
-
-def moved(
-    first: Sequence[float],
-    second: Sequence[float],
-    tolerance: float = MOVEMENT_TOLERANCE,
-) -> bool:
+# %% post-processing the recording
+@dataclass
+class RecordingAnalysis:
     """
-    Whether two poses are more than ``tolerance`` apart (planar distance plus height).
-
-    :param first: The pose to compare against ``second``.
-    :param second: The pose to compare against ``first``.
-    :param tolerance: Tolerance in metres, so sensor jitter does not read as movement.
+    Derives the played-back story of a recording: which objects were transported, when
+    the robot drove, and the plan segments the viewer scrubs through.
     """
-    return (
-        math.hypot(first[0] - second[0], first[1] - second[1])
-        + abs(first[2] - second[2])
-        > tolerance
-    )
 
+    #: how far a pose must travel to count as moved at all, in metres
+    MOVEMENT_TOLERANCE: ClassVar[float] = 0.02
 
-def object_windows(recorder: Recorder) -> List[Dict[str, Any]]:
+    #: how far an object must travel over the whole run to count as transported, in
+    #: metres
+    TRANSPORT_TOLERANCE: ClassVar[float] = 0.03
+
+    #: how far the robot base must travel to count as having driven off, in metres
+    BASE_MOTION_TOLERANCE: ClassVar[float] = 0.05
+
+    recorder: Recorder
     """
-    The attach..detach frame window of every object that travelled overall.
-
-    An object whose first and last pose differ was transported; the window spans from
-    the first frame that differs from where it started to just past the last frame that
-    differs from where it ended up.
-
-    :param recorder: The finished recording to derive windows from.
+    The finished recording being analysed.
     """
-    object_frames = recorder.object_frames
-    frame_count = len(object_frames)
-    windows = []
-    for name in object_frames[0]:
-        spawn = object_frames[0].get(name)
-        final = object_frames[frame_count - 1].get(name)
-        if not spawn or not final or not moved(spawn, final, TRANSPORT_TOLERANCE):
-            continue
-        attach = next(
-            (
-                index
-                for index in range(frame_count)
-                if name in object_frames[index]
-                and moved(object_frames[index][name], spawn)
-            ),
-            frame_count - 1,
+
+    @classmethod
+    def has_moved(
+        cls,
+        first: Sequence[float],
+        second: Sequence[float],
+        tolerance: Optional[float] = None,
+    ) -> bool:
+        """
+        Whether two poses are more than ``tolerance`` apart (planar distance plus
+        height).
+
+        :param first: The pose to compare against ``second``.
+        :param second: The pose to compare against ``first``.
+        :param tolerance: Tolerance in metres, so sensor jitter does not read as
+            movement. Defaults to :attr:`MOVEMENT_TOLERANCE`.
+        """
+        if tolerance is None:
+            tolerance = cls.MOVEMENT_TOLERANCE
+        return (
+            math.hypot(first[0] - second[0], first[1] - second[1])
+            + abs(first[2] - second[2])
+            > tolerance
         )
-        detach = (
-            next(
+
+    def object_windows(self) -> List[Dict[str, Any]]:
+        """
+        The attach..detach frame window of every object that travelled overall.
+
+        An object whose first and last pose differ was transported; the window spans
+        from the first frame that differs from where it started to just past the last
+        frame that differs from where it ended up.
+        """
+        object_frames = self.recorder.object_frames
+        frame_count = len(object_frames)
+        windows = []
+        for name in object_frames[0]:
+            spawn = object_frames[0].get(name)
+            final = object_frames[frame_count - 1].get(name)
+            if (
+                not spawn
+                or not final
+                or not self.has_moved(spawn, final, self.TRANSPORT_TOLERANCE)
+            ):
+                continue
+            attach = next(
                 (
                     index
-                    for index in range(frame_count - 1, -1, -1)
+                    for index in range(frame_count)
                     if name in object_frames[index]
-                    and moved(object_frames[index][name], final)
+                    and self.has_moved(object_frames[index][name], spawn)
                 ),
-                0,
+                frame_count - 1,
             )
-            + 1
-        )
-        if attach < detach:
-            windows.append(
+            detach = (
+                next(
+                    (
+                        index
+                        for index in range(frame_count - 1, -1, -1)
+                        if name in object_frames[index]
+                        and self.has_moved(object_frames[index][name], final)
+                    ),
+                    0,
+                )
+                + 1
+            )
+            if attach < detach:
+                windows.append(
+                    {
+                        "object": name,
+                        "attach": attach,
+                        "detach": detach,
+                        "place": final[:3],
+                    }
+                )
+        windows.sort(key=lambda window: window["attach"])
+        return windows
+
+    def first_base_motion(self, before: int) -> int:
+        """
+        The first frame before ``before`` at which the robot base left its spawn.
+
+        :param before: Frame index to stop searching before.
+        :return: That frame's index, or ``before`` if the base never moved.
+        """
+        spawn = self.recorder.base_frames[0]
+        for index in range(min(before, len(self.recorder.base_frames))):
+            pose = self.recorder.base_frames[index]
+            if not pose or not spawn:
+                continue
+            if (
+                math.hypot(pose[0] - spawn[0], pose[1] - spawn[1])
+                > self.BASE_MOTION_TOLERANCE
+            ):
+                return index
+        return before
+
+    def derive_segments(self) -> List[Dict[str, Any]]:
+        """
+        Segments = data-driven windows, labelled from the parsed action list.
+
+        """
+        frame_count = len(self.recorder.frames)
+        transport_windows = self.object_windows()
+        manipulation_actions = [
+            action for action in self.recorder.actions if action.get("target")
+        ]
+        leading_actions = []
+        for action in self.recorder.actions:
+            if action.get("target"):
+                break
+            leading_actions.append(action)
+
+        segments = []
+        previous_end = 0
+        if transport_windows:
+            lead_end = self.first_base_motion(transport_windows[0]["attach"])
+            if lead_end > 10:
+                label = (
+                    leading_actions[0]["action"].replace("Action", "").lower()
+                    if len(leading_actions) == 1
+                    else "prepare"
+                )
+                segments.append(
+                    {
+                        "step": label,
+                        "action": ",".join(
+                            leading_action["action"]
+                            for leading_action in leading_actions
+                        )
+                        or None,
+                        "arm": None,
+                        "start": 0,
+                        "end": lead_end,
+                    }
+                )
+                previous_end = lead_end
+        unmatched_actions = list(manipulation_actions)
+        for window_index, window in enumerate(transport_windows):
+            matching_action = next(
+                (
+                    action
+                    for action in unmatched_actions
+                    if action["target"] == window["object"]
+                ),
+                None,
+            )
+            if matching_action:
+                unmatched_actions.remove(matching_action)
+            object_id = os.path.splitext(window["object"])[0]
+            verb = (
+                matching_action["action"].replace("Action", "").lower()
+                if matching_action
+                else "move"
+            )
+            has_next_window = window_index + 1 < len(transport_windows)
+            next_attach = (
+                transport_windows[window_index + 1]["attach"]
+                if has_next_window
+                else frame_count - 1
+            )
+            end = (
+                min(
+                    next_attach,
+                    window["detach"] + max(10, (next_attach - window["detach"]) // 2),
+                )
+                if has_next_window
+                else frame_count - 1
+            )
+            segments.append(
                 {
-                    "object": name,
-                    "attach": attach,
-                    "detach": detach,
-                    "place": final[:3],
+                    "step": "%s_%s" % (verb, object_id),
+                    "action": matching_action["action"] if matching_action else None,
+                    "arm": matching_action["arm"] if matching_action else None,
+                    "start": previous_end,
+                    "end": end,
+                    "picks": object_id,
+                    "attach": window["attach"],
+                    "detach": window["detach"],
+                    "place": window["place"],
                 }
             )
-    windows.sort(key=lambda window: window["attach"])
-    return windows
-
-
-def first_base_motion(recorder: Recorder, before: int) -> int:
-    """
-    The first frame before ``before`` at which the robot base left its spawn.
-
-    :param recorder: The finished recording to search.
-    :param before: Frame index to stop searching before.
-    :return: That frame's index, or ``before`` if the base never moved.
-    """
-    spawn = recorder.base_frames[0]
-    for index in range(min(before, len(recorder.base_frames))):
-        pose = recorder.base_frames[index]
-        if not pose or not spawn:
-            continue
-        if math.hypot(pose[0] - spawn[0], pose[1] - spawn[1]) > BASE_MOTION_TOLERANCE:
-            return index
-    return before
-
-
-def derive_segments(recorder: Recorder) -> List[Dict[str, Any]]:
-    """
-    Segments = data-driven windows, labelled from the parsed action list.
-
-    :param recorder: The finished recording to derive segments from.
-    """
-    frame_count = len(recorder.frames)
-    transport_windows = object_windows(recorder)
-    manipulation_actions = [
-        action for action in recorder.actions if action.get("target")
-    ]
-    leading_actions = []
-    for action in recorder.actions:
-        if action.get("target"):
-            break
-        leading_actions.append(action)
-
-    segments = []
-    previous_end = 0
-    if transport_windows:
-        lead_end = first_base_motion(recorder, transport_windows[0]["attach"])
-        if lead_end > 10:
+            previous_end = end
+        if not segments:
             label = (
-                leading_actions[0]["action"].replace("Action", "").lower()
-                if len(leading_actions) == 1
-                else "prepare"
+                self.recorder.actions[0]["action"].replace("Action", "").lower()
+                if len(self.recorder.actions) == 1
+                else "plan"
             )
             segments.append(
                 {
                     "step": label,
-                    "action": ",".join(
-                        leading_action["action"] for leading_action in leading_actions
-                    )
-                    or None,
+                    "action": None,
                     "arm": None,
                     "start": 0,
-                    "end": lead_end,
+                    "end": frame_count - 1,
                 }
             )
-            previous_end = lead_end
-    unmatched_actions = list(manipulation_actions)
-    for window_index, window in enumerate(transport_windows):
-        matching_action = next(
-            (
-                action
-                for action in unmatched_actions
-                if action["target"] == window["object"]
-            ),
-            None,
-        )
-        if matching_action:
-            unmatched_actions.remove(matching_action)
-        object_id = os.path.splitext(window["object"])[0]
-        verb = (
-            matching_action["action"].replace("Action", "").lower()
-            if matching_action
-            else "move"
-        )
-        has_next_window = window_index + 1 < len(transport_windows)
-        next_attach = (
-            transport_windows[window_index + 1]["attach"]
-            if has_next_window
-            else frame_count - 1
-        )
-        end = (
-            min(
-                next_attach,
-                window["detach"] + max(10, (next_attach - window["detach"]) // 2),
-            )
-            if has_next_window
-            else frame_count - 1
-        )
-        segments.append(
-            {
-                "step": "%s_%s" % (verb, object_id),
-                "action": matching_action["action"] if matching_action else None,
-                "arm": matching_action["arm"] if matching_action else None,
-                "start": previous_end,
-                "end": end,
-                "picks": object_id,
-                "attach": window["attach"],
-                "detach": window["detach"],
-                "place": window["place"],
-            }
-        )
-        previous_end = end
-    if not segments:
-        label = (
-            recorder.actions[0]["action"].replace("Action", "").lower()
-            if len(recorder.actions) == 1
-            else "plan"
-        )
-        segments.append(
-            {
-                "step": label,
-                "action": None,
-                "arm": None,
-                "start": 0,
-                "end": frame_count - 1,
-            }
-        )
-    return segments
+        return segments
 
 
 @dataclass
@@ -818,7 +811,7 @@ class SceneBuilder:
 
         # %% segments: data-derived windows, labelled from the parsed actions
         segments = []
-        for raw_segment in derive_segments(self.recorder):
+        for raw_segment in RecordingAnalysis(self.recorder).derive_segments():
             segment = dict(raw_segment)
             segment["start"] = nearest(raw_segment["start"])
             segment["end"] = nearest(raw_segment["end"])
@@ -891,10 +884,7 @@ class SceneBuilder:
             }
 
         # %% bundle the URDF models
-        world_body_names = [
-            str(body.name) if isinstance(body, NamesAWorldEntity) else ""
-            for body in self.recorder.world.bodies
-        ]
+        world_body_names = [str(body.name) for body in self.recorder.world.bodies]
         models = []
         missing: List[str] = []
         for source in self.recorder.urdf_sources:

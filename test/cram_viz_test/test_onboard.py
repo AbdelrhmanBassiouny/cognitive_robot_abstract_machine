@@ -12,16 +12,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 import pytest
-from typing_extensions import Any, Dict, List
+from typing_extensions import Any, Dict, List, Optional
 
 from cram_viz.onboard import bundle_urdf as bundler
-from cram_viz.onboard.demo import (
-    Recorder,
-    derive_segments,
-    first_base_motion,
-    moved,
-    object_windows,
-)
+from cram_viz.onboard.demo import Recorder, RecordingAnalysis
 
 #: a pose that stays put, used wherever a frame's value must not matter
 RESTING = [0.0, 0.0, 1.0, 0, 0, 0, 1]
@@ -140,25 +134,96 @@ class TestAssetHookMethods:
 
 
 # %% movement detection
+# %% the executed plan tree
+@dataclass
+class RecordedStatus:
+    """
+    A plan node's status, of which the serializer reads only the name.
+    """
+
+    name: str
+
+
+@dataclass
+class RecordedPlanNode:
+    """
+    A plan node as the serializer walks it: a status, a parent and ordered children.
+    """
+
+    status: RecordedStatus = field(default_factory=lambda: RecordedStatus("SUCCEEDED"))
+    parent: Optional["RecordedPlanNode"] = None
+    children: List["RecordedPlanNode"] = field(default_factory=list)
+
+    def with_children(self, *children: "RecordedPlanNode") -> "RecordedPlanNode":
+        for child in children:
+            child.parent = self
+        self.children = list(children)
+        return self
+
+
+class TestSerializePlans:
+    def test_a_tree_is_serialized_from_the_root_of_any_recorded_node(self):
+        """
+        Recording a leaf is enough: the serializer walks up to the root and emits the
+        whole tree from there, once.
+        """
+        leaf = RecordedPlanNode()
+        root = RecordedPlanNode().with_children(RecordedPlanNode().with_children(leaf))
+        recorder = Recorder(plan_nodes=[leaf, root])
+
+        [tree] = recorder.serialize_plans()
+
+        assert tree["kind"] == "RecordedPlanNode"
+        assert tree["status"] == "SUCCEEDED"
+        assert len(tree["children"]) == 1
+        assert len(tree["children"][0]["children"]) == 1
+
+    def test_serialization_stops_at_the_node_cap(self):
+        root = RecordedPlanNode().with_children(*(RecordedPlanNode() for _ in range(5)))
+        recorder = Recorder(plan_nodes=[root])
+
+        [tree] = recorder.serialize_plans(max_nodes=3)
+
+        assert len(tree["children"]) == 2  # the root itself counts towards the cap
+
+    def test_the_cap_defaults_to_the_recorders_own_limit(self):
+        root = RecordedPlanNode().with_children(
+            *(
+                RecordedPlanNode()
+                for _ in range(Recorder.MAX_SERIALIZED_PLAN_NODES + 10)
+            )
+        )
+        recorder = Recorder(plan_nodes=[root])
+
+        [tree] = recorder.serialize_plans()
+
+        assert len(tree["children"]) == Recorder.MAX_SERIALIZED_PLAN_NODES - 1
+
+
 class TestMovementDetection:
     def test_a_pose_is_unmoved_within_the_tolerance(self):
-        assert moved(pose_at(0, 0), pose_at(0.01, 0.0)) is False
+        assert RecordingAnalysis.has_moved(pose_at(0, 0), pose_at(0.01, 0.0)) is False
 
     def test_planar_travel_counts_as_movement(self):
-        assert moved(pose_at(0, 0), pose_at(0.5, 0.0)) is True
+        assert RecordingAnalysis.has_moved(pose_at(0, 0), pose_at(0.5, 0.0)) is True
 
     def test_vertical_travel_counts_as_movement(self):
-        assert moved(pose_at(0, 0, 1.0), pose_at(0, 0, 1.5)) is True
+        assert (
+            RecordingAnalysis.has_moved(pose_at(0, 0, 1.0), pose_at(0, 0, 1.5)) is True
+        )
 
     def test_the_tolerance_is_configurable(self):
-        assert moved(pose_at(0, 0), pose_at(0.5, 0.0), tolerance=1.0) is False
+        assert (
+            RecordingAnalysis.has_moved(pose_at(0, 0), pose_at(0.5, 0.0), tolerance=1.0)
+            is False
+        )
 
 
 # %% transport windows
 class TestObjectWindows:
     def test_an_object_that_never_moves_has_no_window(self):
         recorder = recording([{"milk.stl": RESTING} for _ in range(5)])
-        assert object_windows(recorder) == []
+        assert RecordingAnalysis(recorder).object_windows() == []
 
     def test_a_transported_object_reports_its_travel_window(self):
         """
@@ -172,7 +237,7 @@ class TestObjectWindows:
             {"milk.stl": pose_at(2, 0)},
             {"milk.stl": pose_at(2, 0)},
         ]
-        window = object_windows(recording(frames))[0]
+        window = RecordingAnalysis(recording(frames)).object_windows()[0]
         assert window["object"] == "milk.stl"
         assert window["attach"] == 2
         assert window["detach"] == 3
@@ -185,7 +250,7 @@ class TestObjectWindows:
         """
         frames = [{"milk.stl": pose_at(0, 0)} for _ in range(3)]
         frames += [{"milk.stl": pose_at(2, 0)} for _ in range(3)]
-        assert object_windows(recording(frames)) == []
+        assert RecordingAnalysis(recording(frames)).object_windows() == []
 
     def test_windows_are_ordered_by_when_they_start(self):
         early = [pose_at(0, 0), pose_at(1, 0), pose_at(2, 0), pose_at(3, 0)]
@@ -194,7 +259,7 @@ class TestObjectWindows:
         frames = [
             {"early.stl": early[index], "late.stl": late[index]} for index in range(6)
         ]
-        windows = object_windows(recording(frames))
+        windows = RecordingAnalysis(recording(frames)).object_windows()
         assert [window["object"] for window in windows] == ["early.stl", "late.stl"]
         assert [window["attach"] for window in windows] == [1, 3]
 
@@ -202,7 +267,7 @@ class TestObjectWindows:
 class TestFirstBaseMotion:
     def test_a_standing_base_reports_the_upper_bound(self):
         recorder = recording([{} for _ in range(5)])
-        assert first_base_motion(recorder, 4) == 4
+        assert RecordingAnalysis(recorder).first_base_motion(4) == 4
 
     def test_the_frame_the_base_leaves_its_spawn_is_found(self):
         recorder = recording([{} for _ in range(5)])
@@ -213,12 +278,12 @@ class TestFirstBaseMotion:
             pose_at(2, 0),
             pose_at(2, 0),
         ]
-        assert first_base_motion(recorder, 5) == 2
+        assert RecordingAnalysis(recorder).first_base_motion(5) == 2
 
     def test_motion_after_the_bound_is_not_reported(self):
         recorder = recording([{} for _ in range(5)])
         recorder.base_frames = [RESTING, RESTING, RESTING, pose_at(3, 0), pose_at(3, 0)]
-        assert first_base_motion(recorder, 2) == 2
+        assert RecordingAnalysis(recorder).first_base_motion(2) == 2
 
 
 # %% segment derivation
@@ -228,13 +293,15 @@ class TestDeriveSegments:
             [{"milk.stl": RESTING} for _ in range(4)],
             actions=[{"action": "ParkArmsAction", "arm": None, "target": None}],
         )
-        segments = derive_segments(recorder)
+        segments = RecordingAnalysis(recorder).derive_segments()
         assert [segment["step"] for segment in segments] == ["parkarms"]
         assert segments[0]["start"] == 0
 
     def test_an_unlabelled_recording_falls_back_to_one_plan_segment(self):
         recorder = recording([{"milk.stl": RESTING} for _ in range(4)])
-        assert [segment["step"] for segment in derive_segments(recorder)] == ["plan"]
+        assert [
+            segment["step"] for segment in RecordingAnalysis(recorder).derive_segments()
+        ] == ["plan"]
 
     def test_a_transport_is_named_after_its_action_and_object(self):
         milk = [pose_at(0, 0), pose_at(0, 0), pose_at(1, 0)]
@@ -245,7 +312,7 @@ class TestDeriveSegments:
                 {"action": "TransportAction", "arm": "LEFT", "target": "milk.stl"}
             ],
         )
-        transport = derive_segments(recorder)[-1]
+        transport = RecordingAnalysis(recorder).derive_segments()[-1]
         assert transport["step"] == "transport_milk"
         assert transport["picks"] == "milk"
         assert transport["arm"] == "LEFT"
@@ -263,7 +330,7 @@ class TestDeriveSegments:
                 {"action": "TransportAction", "arm": None, "target": "cup.stl"},
             ],
         )
-        segments = derive_segments(recorder)
+        segments = RecordingAnalysis(recorder).derive_segments()
         assert len(segments) == 2
         for earlier, later in zip(segments, segments[1:]):
             assert earlier["end"] == later["start"]
