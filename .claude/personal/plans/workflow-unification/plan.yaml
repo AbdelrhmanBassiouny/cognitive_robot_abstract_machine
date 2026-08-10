@@ -2397,3 +2397,40 @@ items:
       whether --test defaults on, whether to comment on #139 about the ci field, and whether
       the script and skill are one pull request or two (recommendation: one, since a conflict
       report nothing consumes is half a feature).
+
+      Scope widened 2026-08-10, after recording, on the user's question of whether the skill
+      should resolve conflicts as well as judge them, and whether it should ask when something
+      is unclear or could be harmful. It resolves, but bounded by where the resolution lands
+      rather than by how confident it is - the artifact decides the risk, not the certainty.
+
+      On a defer verdict it resolves fully, writing into .git/rr-cache. Nothing touches a
+      feature branch, the integration branch is regenerated from scratch on every build, and
+      --test checks the result, so a wrong answer costs one cache entry. This replaces the
+      design's weakest step: resolve --record set up a worktree and expected the developer to
+      fix the files by hand, and defer is both the commonest verdict and the one where the
+      skill has everything it needs - both diffs and both pull request intents. On reconcile it
+      proposes and does not apply, because that is a real code change to a published pull
+      request under review and resetting an approval to apply an unagreed design call is the
+      wrong default. On stack it reports: re-basing is maintenance.py's work, and the
+      base-branch PATCH 403s through the agent proxy regardless. The boundary is restated
+      rather than broken - the script never writes to a branch, the skill writes only to
+      rr-cache, and neither pushes.
+
+      Asking is not driven by confidence, which would make the skill a prompt generator whose
+      questions get rubber-stamped. The test is whose decision it is. Uncertainty about facts -
+      what a branch does, whether two things are the same abstraction - is resolved by reading
+      the diffs, the pull requests and the roadmap, never by asking. Uncertainty about intent -
+      which abstraction is right, whether two branches should be one pull request - is asked.
+      That lands almost exactly on reconcile, and it asks before proposing, since the proposal
+      already encodes the choice. #110 and #106 building the same artifact is the precedent for
+      the cost of not asking.
+
+      One hazard follows from the skill authoring resolutions rather than replaying a human's.
+      rerere matches on the conflict preimage and replays automatically, so a resolution that
+      is textually matching but semantically wrong is reapplied unreviewed on every later
+      build. Tolerable when a developer recorded it, different when a skill did, so a recorded
+      resolution carries its provenance and the build report distinguishes skill-authored
+      replays from human-authored ones - the existing rule that a replay is never silent, made
+      auditable by author. A --test failure following a skill-authored resolution reports and
+      stops rather than attempting another, since re-resolving into the same failure is how a
+      build starts thrashing.

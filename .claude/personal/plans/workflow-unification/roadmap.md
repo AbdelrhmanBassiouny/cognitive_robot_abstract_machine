@@ -4991,3 +4991,61 @@ Whether `--restack` defaults off locally and on in the on-demand Action; whether
 defaults on; whether to tell #139 about the `ci` field; and whether the script and the skill
 are one pull request or two — recommendation one, since a conflict report nothing consumes is
 half a feature.
+
+## Update 2026-08-10: the triage skill resolves too, bounded by where the resolution lands
+
+Follow-up to the item added earlier the same day, from the user's question: should
+`/integration-conflict-triage` also solve the conflicts, and should it ask when something is
+unclear or could be harmful? Both, with the boundaries below.
+
+### The artifact decides the risk, not the confidence
+
+The tempting rule is "resolve when sure, escalate when not". It is the wrong axis. A confident
+resolution written onto a published feature branch is more dangerous than an uncertain one
+written into a throwaway cache, so the question is where the resolution lands:
+
+- **Defer → resolve fully.** The artifact is a `.git/rr-cache` entry. No feature branch is
+  touched, the integration branch is rebuilt from scratch every run, and `--test` checks the
+  result. A wrong answer costs one cache entry.
+- **Reconcile → propose, don't apply.** This is a real code change to a pull request under
+  review. Resetting an approval to apply a design call its author has not agreed to is the
+  wrong default, however good the change.
+- **Stack → report.** Re-basing belongs to `maintenance.py`, and the base-branch PATCH 403s
+  through the agent proxy anyway — a session cannot perform it even if it should.
+
+This closes the design's weakest step rather than adding a feature. As recorded, `resolve
+--record` set up a worktree and expected the developer to fix the files by hand. Defer is both
+the commonest verdict and the one where the skill already holds everything the fix needs —
+both diffs and both pull request intents — so leaving it to a human was the least defensible
+part of the split. The boundary itself is unchanged, only restated: the script never writes to
+a branch, the skill writes only to `rr-cache`, and neither pushes.
+
+### Asking is about whose decision it is, not about how sure the skill is
+
+A skill that asks whenever it is unsure becomes a prompt generator, and prompts that arrive
+without a recommendation get rubber-stamped — which is worse than not asking, because it
+launders the skill's guess as the developer's decision. The usable test is ownership:
+
+- **Uncertainty about facts** — what a branch does, whether two implementations are the same
+  abstraction — is resolved by reading the diffs, the pull requests and the roadmap. Never
+  asked.
+- **Uncertainty about intent** — which abstraction is right, whether two branches should have
+  been one pull request — is asked.
+
+That maps almost exactly onto the reconcile verdict, and the question comes *before* the
+proposal, since a proposal already encodes the choice it would be asking about. The cost of
+not asking is on record in this plan: #110 and #106 independently built the same artifact.
+
+### A new hazard, created by the skill authoring resolutions
+
+rerere matches on the conflict preimage and replays automatically. A resolution that is
+textually matching but semantically wrong is therefore reapplied, unreviewed, on every later
+build. That risk already existed for human-recorded resolutions and was accepted; it is a
+different proposition once a skill is the author.
+
+So a recorded resolution carries its provenance, and the build report distinguishes
+skill-authored replays from human-authored ones. The existing rule — a replay is never
+reported as a clean merge — stands, and gains an author so the machine's resolutions can be
+audited without re-reading one's own. And a `--test` failure following a skill-authored
+resolution reports and stops rather than trying again: re-resolving into the same failure is
+how a build starts thrashing.
