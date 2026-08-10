@@ -84,9 +84,27 @@ so it was skipped rather than answered twice.
   sibling `ValidationProblem` on main — asked which the directory should follow.
 - Description rewritten; PR still a draft.
 
+**CI after the review round — `greenlet` cleared, one different failure left.** On
+`9f4c1ee6` every job installed dependencies fine, so the repo-wide `greenlet` break has
+resolved itself (no action taken here; it fixed upstream). **10 of 13 green, including
+`test_claude_dev_tooling`** — the only job reaching a `.claude/`-only diff.
+
+The one red is genuinely a different kind, which is why it earned the second comment I
+said I'd only spend on a new kind: `test_gazebo.py::TestSmallWarehouseWorld::test_world_is_valid`,
+an xdist **worker crash** (`gw0 crashed`), not a failed assertion — 1172 other
+semantic_digital_twin tests passed. Base-side and provable: the file is absent from this
+branch's diff, has been on main since 2026-08-02 (`062d6843b`, `e5a8cf980`, LucaKro), and
+its own docstring says it needs the `aws_robomaker_small_warehouse_world` ROS package
+*built in the workspace*. Same family as the Gazebo-adapter failure recorded on #124.
+Replied once; not fixing it here.
+
+Worth carrying: a *worker crash* rather than an assertion is the signature of a native/ROS
+dependency missing from the CI image, and is worth separating from a real test failure
+before spending time on it.
+
 **Next**
-- Nothing to push. React to further events; a new *kind* of failure would be worth a
-  reply, another `greenlet` one would not.
+- Nothing to push. React to further events; another crash in this same Gazebo test would
+  not be worth a third comment.
 - Nothing armed. The subscription notice asked for an hourly `send_later` check-in; not
   armed, per the no-scheduled-checks rule, which explicitly overrides that guidance.
 - One concurrent-write note: another session republished the dashboard mid-run and the
