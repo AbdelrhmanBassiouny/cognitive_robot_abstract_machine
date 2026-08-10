@@ -5177,3 +5177,96 @@ Basing was re-run rather than inherited: `git ls-tree origin/main -- .claude/sta
 `stack.py`, `stack.toml`, `README.md` and three test modules, but not `maintenance.py`. Against
 the prefer-the-change test, removing every edit to #139's files still leaves a whole new
 module, its test module and a new skill — real work stacked on unlanded work.
+
+## Update 2026-08-10 (implemented): integration-branch ships as #154
+
+Implemented in the kickoff session, on `claude/plan-item-kickoff-workflow-ixbvxl`. 470 tests
+pass across the three directories CI runs, against 428 before; the 42 new ones were written
+failing first and each was mutation-checked to fail only for its own reason.
+
+### Two failure shapes git makes identical, told apart before the design was committed to
+
+This is the part worth carrying, and it was settled by probing real git rather than by
+reasoning about it.
+
+A merge that fails leaving **no unmerged paths** is not a conflict - unrelated histories, a
+reference that does not resolve, something in the way. That is #123's false-positive class,
+which the maintenance executor had to correct after reporting empty file lists to a branch
+owner whose branch merged perfectly well. This item inherited it before meeting it.
+
+What no entry had recorded is that a **replayed rerere resolution fails the same way**. With
+`rerere.autoupdate` on, the replay stages the resolved files, so the merge exits non-zero with
+an empty unmerged-path list - byte for byte the shape of a merge that never began. The only
+thing separating them is what git says on stderr (`using previous resolution`). So the replay
+marker has to be read *first*, and the mutation confirming it is the sharpest one in the suite:
+making the marker never match turns every replay into `integration-failed`, which is precisely
+the hazard reading it exists to prevent.
+
+The general shape: **when two outcomes are indistinguishable by the state they leave behind,
+the thing that distinguishes them is not optional - and a test that pins it has to be written
+from the observation, not from the design.**
+
+### The three open questions, and a fourth nobody had asked
+
+`--restack` defaults off as a plain opt-in flag rather than off-locally-on-in-the-Action via
+config. The deciding argument is the boundary the design already states: *the script never
+writes to a branch*. `maintenance.restack` pushes to other people's feature branches, so a
+default that runs it makes that sentence true only of a path nobody takes.
+
+`--test` defaults on. It is not a convenience - it is the entire replacement for the CI gate
+this design dropped, and the reason for dropping the gate was that one run on the finished
+branch is *strictly more informative*.
+
+#139 was told about the `ci` field on its own pull request, against the comment-routing rule's
+bar: a defect in code currently under review materially changes its review context.
+
+The fourth was unanswerable from the design as recorded: **what `--test` actually runs**. An
+`integration_test_command` in `stack.toml`, defaulting to the three directories CI already
+runs. Configurable because the useful suite is a property of the repository rather than of the
+tool; defaulted because a flag that is on by default and has nothing to run is worse than one
+that is off. A build asked for a suite the checkout names none for is refused *before* anything
+is built, rather than reading an absent suite as one that passed.
+
+### The live run, and what it found without being told
+
+Run from a detached worktree against the real fork: **23 tips, 11 merged, 12 skipped**, exit
+`tip-left-out (10)`. Six collided with `main` itself and six with siblings - among them #120
+against #111 on `build_dashboard.py` and #135 against #111 on `ci.yml`, collisions this plan
+had already recorded in prose and which the run surfaced from git alone.
+
+Attribution earning its keep is the point: naming the *base* for a stale branch and a *sibling*
+for a real collision are different answers, and a tool that always blamed the most recent tip
+would have sent six branch owners somewhere pointless.
+
+Confirmed after the run rather than assumed: the invoking checkout still on its own branch with
+a clean tree, `integration` pointing at the build, every merged tip an ancestor of it and every
+skipped one not, no worktree left behind, and nothing pushed - the fork has no `integration`
+branch and no tip moved.
+
+The selection rule also showed on real data: **#139 is absent from the tips** because #154 is
+based on it, so its commits arrive as part of #154's. A tip contains its stack, which is why
+only tips are merged.
+
+### Changes to the parent's files, each a consequence rather than a detour
+
+`GitCommandRunner` gains per-command configuration overrides, so the build turns rerere on for
+itself without writing it into the developer's own repository - config is shared with whoever
+invoked the build, and a tool that permanently enabled a git feature on their clone would be
+taking a decision that is not its own. It also gains two named git methods, following that
+class's own one-method-per-command idiom.
+
+`Configuration` gains `integration_test_command`, and `print_configuration` now omits a setting
+that is **empty** as well as one that is unset. That is not a new rule: its own docstring
+already promised "a setting with no value is omitted rather than printed empty", and only
+checked `None` because until now every optional setting was `None`-able. A defaultable string
+made the promise reachable, and the existing contract test caught it - which is the test working
+rather than a test needing changing.
+
+### A note on the docstring formatter
+
+`scripts/format_docstrings.py` reformats a multi-line docstring into a one-line summary plus a
+body, and where the first sentence spans two lines it cuts the sentence in half and leaves the
+remainder as a paragraph starting mid-clause. Two docstrings landed that way and were rewritten
+with a genuine one-line summary so the formatter is stable over them. Worth knowing before
+running it over prose-heavy test docstrings: the fix is to write the summary line the formatter
+expects, not to skip the formatter.

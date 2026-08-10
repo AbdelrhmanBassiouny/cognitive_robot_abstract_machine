@@ -2434,3 +2434,52 @@ items:
       auditable by author. A --test failure following a skill-authored resolution reports and
       stops rather than attempting another, since re-resolving into the same failure is how a
       build starts thrashing.
+
+      Implemented 2026-08-10, same session as the kickoff. The three open questions were closed
+      first: --restack defaults off as a plain opt-in flag (it pushes to other people's branches,
+      so the default path keeps "the script never writes to a branch" true of itself rather than
+      only of a path nobody takes), --test defaults on with --no-test to skip (it is the whole
+      replacement for the CI gate this design dropped), and #139 was told about the ci field on
+      its own pull request rather than only in this manifest, since a defect in code under review
+      materially changes its review context. Script and skill shipped as one pull request.
+
+      A fourth question nobody had asked was settled at kickoff because it is unanswerable from
+      the design as recorded: what --test actually runs. It is an integration_test_command setting
+      in stack.toml, defaulting to the three directories CI's test_claude_dev_tooling job already
+      runs - configurable because the useful suite is a property of the repository rather than of
+      the tool, and defaulted because a flag that is on by default and has nothing to run is worse
+      than one that is off. A build asked for a suite the checkout names none for is refused
+      before anything is built, rather than reading an absent suite as one that passed.
+
+      Two failure shapes had to be told apart, and git makes them identical. A merge that fails
+      leaving no unmerged paths is not a conflict - unrelated histories, a reference that does not
+      resolve, something in the way - which is #123's false-positive class, inherited before
+      meeting it. A replayed rerere resolution *also* fails leaving no unmerged paths, because the
+      replay has already staged them, and is distinguishable only by what git says on stderr. So
+      the replay marker has to be read before the unmerged-paths rule, and removing it makes every
+      replay report as integration-failed - verified by mutation rather than assumed. Both were
+      probed against real git before a line of the design was committed to.
+
+      Verified live against the real fork from a detached worktree: 23 tips, 11 merged, 12 skipped,
+      exit tip-left-out (10). Six collided with main itself - stale branches, correctly attributed
+      to the base rather than to an innocent sibling - and six with siblings, including #120 against
+      #111 on build_dashboard.py and #135 against #111 on ci.yml, both collisions this plan already
+      knew about and neither of which the run was told about. Confirmed afterwards rather than
+      assumed: the invoking checkout still on its own branch with a clean tree, the pointer at the
+      build, every merged tip an ancestor of it and every skipped one not, no worktree left behind,
+      and nothing pushed - the fork has no integration branch and no tip moved. The selection rule
+      showed on real data too: #139 is absent from the tips because this branch is based on it, so
+      its commits arrive as part of this one.
+
+      470 tests pass across the three directories CI runs, was 428. The 42 new ones were written
+      failing first against real git in #139's scratch-fork harness, and each was mutation-checked
+      to fail only for its own reason. The exit status is covered from the first commit rather than
+      after a live run, which is the second time this plan has had a lesson available before meeting
+      it rather than after.
+
+      Three changes to files this branch's parent introduces, each a consequence rather than a
+      detour: GitCommandRunner gains per-command configuration overrides, so the build turns rerere
+      on for itself without writing it into the developer's own repository, plus two named git
+      methods; Configuration gains integration_test_command; and print_configuration now omits a
+      setting that is empty as well as one that is unset, which its own docstring already promised
+      and which only became reachable when a defaultable setting existed.
