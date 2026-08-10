@@ -28,6 +28,7 @@ from pathlib import Path
 
 from typing_extensions import (
     Any,
+    ClassVar,
     Dict,
     List,
     Optional,
@@ -52,6 +53,7 @@ from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
 )
 
+from cram_viz.mesh_format import MeshFormat
 from cram_viz.palette import ObjectPalette
 from cram_viz.robot_parts import RobotPartAnnotation, describe_robot_parts
 
@@ -83,6 +85,39 @@ class TaskStatusName(StrEnum):
     INTERRUPTED = "INTERRUPTED"
     PAUSE = "PAUSE"
 
+    @classmethod
+    def _precedence(cls) -> Tuple[TaskStatusName, ...]:
+        """
+        The statuses from lowest to highest precedence.
+        """
+        return (
+            cls.CREATED,
+            cls.SUCCEEDED,
+            cls.PAUSE,
+            cls.RUNNING,
+            cls.INTERRUPTED,
+            cls.FAILED,
+        )
+
+    @property
+    def rank(self) -> int:
+        """
+        Precedence when a plan node's status is aggregated from its children: the higher
+        rank wins.
+        """
+        return self._precedence().index(self)
+
+    @classmethod
+    def rank_of(cls, status: str) -> int:
+        """
+        The rank of a status name, or the lowest rank for one this enum does not know.
+
+        :param status: A status name as reported by coraplex or the statechart.
+        """
+        if status not in cls._value2member_map_:
+            return 0
+        return cls(status).rank
+
 
 class LiveHook(Enum):
     """
@@ -105,45 +140,8 @@ class LiveHook(Enum):
     """
 
 
-#: for bottom-up aggregation in the plan tree: the higher rank wins
-STATUS_RANK: Dict[TaskStatusName, int] = {
-    TaskStatusName.CREATED: 0,
-    TaskStatusName.SUCCEEDED: 1,
-    TaskStatusName.PAUSE: 2,
-    TaskStatusName.RUNNING: 3,
-    TaskStatusName.INTERRUPTED: 4,
-    TaskStatusName.FAILED: 5,
-}
-
-#: how long a world binding stays fresh before the bridge re-discovers bodies
-REBIND_INTERVAL_SECONDS = 3.0
-
 #: key under which the robot's root body is published, instead of as a loose object
 ROBOT_BASE_KEY = "__base__"
-
-#: a body whose name ends in one of these is a loose object, not part of a model
-MESH_SUFFIXES = (".stl", ".obj", ".dae")
-
-#: fallback size for an object whose shapes carry no scale, in metres
-DEFAULT_OBJECT_SIZE = (0.06, 0.06, 0.12)
-
-#: decimal places poses and joint positions are rounded to before publishing
-POSE_PRECISION = 5
-
-#: decimal places object sizes are rounded to before publishing
-SIZE_PRECISION = 4
-
-
-def _pose_as_position_quaternion(body: Body) -> List[float]:
-    """
-    Return a body's world pose as ``[x, y, z, qx, qy, qz, qw]``.
-
-    :param body: The body whose world pose is read.
-    """
-    return [
-        round(value, POSE_PRECISION)
-        for value in body.global_pose.to_position_quaternion_list()
-    ]
 
 
 @runtime_checkable
@@ -557,6 +555,18 @@ class Bridge:
     handlers only ever read the finished snapshot dicts under :attr:`_lock`.
     """
 
+    #: how long a world binding stays fresh before bodies are re-discovered
+    REBIND_INTERVAL_SECONDS: ClassVar[float] = 3.0
+
+    #: fallback size for an object whose shapes carry no scale, in metres
+    DEFAULT_OBJECT_SIZE: ClassVar[Tuple[float, float, float]] = (0.06, 0.06, 0.12)
+
+    #: decimal places poses and joint positions are rounded to before publishing
+    POSE_PRECISION: ClassVar[int] = 5
+
+    #: decimal places object sizes are rounded to before publishing
+    SIZE_PRECISION: ClassVar[int] = 4
+
     world: Optional[World] = None
     """
     The executing world, captured by the tick hook on its first call.
@@ -604,7 +614,7 @@ class Bridge:
 
     _last_bind: float = 0.0
     """
-    Timestamp of the last world discovery (see ``REBIND_INTERVAL_SECONDS``).
+    Timestamp of the last world discovery (see :attr:`REBIND_INTERVAL_SECONDS`).
     """
 
     _lock: threading.Lock = field(default_factory=threading.Lock)
@@ -917,7 +927,7 @@ class Bridge:
             # loose objects by convention: bodies named like mesh files
             for body in world.bodies:
                 basename = str(body.name).split("/")[-1]
-                if basename.lower().endswith(MESH_SUFFIXES):
+                if MeshFormat.of_path(basename) is not None:
                     bodies[basename] = body
         except Exception as error:
             # boundary guard: the world is mid-modification (a body is being spawned
@@ -928,6 +938,18 @@ class Bridge:
             for key, body in self._bodies.items():
                 bodies.setdefault(key, body)
         self.publish_bodies(bodies)
+
+    @classmethod
+    def _pose_as_position_quaternion(cls, body: Body) -> List[float]:
+        """
+        A body's world pose as ``[x, y, z, qx, qy, qz, qw]``.
+
+        :param body: The body whose world pose is read.
+        """
+        return [
+            round(value, cls.POSE_PRECISION)
+            for value in body.global_pose.to_position_quaternion_list()
+        ]
 
     @staticmethod
     def _actuated_connections(world: World) -> List[ActiveConnection1DOF]:
@@ -979,22 +1001,22 @@ class Bridge:
                         id=object_id,
                         kind=ObjectKind.BOX,
                         color=color,
-                        size=self._box_size(body) or list(DEFAULT_OBJECT_SIZE),
+                        size=self._box_size(body) or list(self.DEFAULT_OBJECT_SIZE),
                     )
                 )
         self._mesh_serve = serve
         with self._lock:
             self.object_metadata = catalog
 
-    @staticmethod
-    def _box_size(body: Body) -> Optional[List[float]]:
+    @classmethod
+    def _box_size(cls, body: Body) -> Optional[List[float]]:
         """
         Size of a body's geometry in metres, or None when no shape reports one.
 
         :param body: The body whose geometry is measured.
         """
         extent = measure_body(body)
-        return rounded_scale(extent, SIZE_PRECISION) if extent else None
+        return rounded_scale(extent, cls.SIZE_PRECISION) if extent else None
 
     # %% world snapshot
     def snapshot(self) -> None:
@@ -1006,19 +1028,19 @@ class Bridge:
         """
         if self.world is None:
             return
-        if time.time() - self._last_bind > REBIND_INTERVAL_SECONDS:
+        if time.time() - self._last_bind > self.REBIND_INTERVAL_SECONDS:
             self.bind()
         frames = {
-            str(connection.name): round(float(connection.position), POSE_PRECISION)
+            str(connection.name): round(float(connection.position), self.POSE_PRECISION)
             for connection in self._connections
         }
         base_pose: Optional[List[float]] = None
         object_poses: Dict[str, List[float]] = {}
         for name, body in self._bodies.items():
             if name == ROBOT_BASE_KEY:
-                base_pose = _pose_as_position_quaternion(body)
+                base_pose = self._pose_as_position_quaternion(body)
             else:
-                object_poses[name] = _pose_as_position_quaternion(body)
+                object_poses[name] = self._pose_as_position_quaternion(body)
         with self._lock:
             self.seq += 1
             self.state = WorldStateSnapshot(
@@ -1228,12 +1250,12 @@ class Bridge:
     @staticmethod
     def _max_status(first: str, second: str) -> str:
         """
-        The higher-ranked of two statuses (see ``STATUS_RANK``).
+        The higher-ranked of two statuses.
 
         :param first: The first status to compare.
         :param second: The second status to compare.
         """
-        if STATUS_RANK.get(first, 0) >= STATUS_RANK.get(second, 0):
+        if TaskStatusName.rank_of(first) >= TaskStatusName.rank_of(second):
             return first
         return second
 

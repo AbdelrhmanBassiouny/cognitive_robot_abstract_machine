@@ -36,7 +36,6 @@ from typing_extensions import Any, Dict, List, Optional, Tuple
 from cram_viz.live.bridge import (
     Bridge,
     ChartEdgeEntry,
-    DEFAULT_OBJECT_SIZE,
     LiveHook,
     MalformedMoveRequest,
     MoveRequest,
@@ -484,7 +483,7 @@ class TestViewerAccessors:
     def test_an_object_with_unscaled_shapes_falls_back_to_the_default_size(self):
         bridge = Bridge()
         bridge.publish_bodies({"blob.stl": PublishedBody(name="world/blob.stl")})
-        assert bridge.object_catalog()[0]["size"] == list(DEFAULT_OBJECT_SIZE)
+        assert bridge.object_catalog()[0]["size"] == list(Bridge.DEFAULT_OBJECT_SIZE)
 
     def test_an_unserved_mesh_has_no_path(self):
         assert Bridge().mesh_path("milk.stl") is None

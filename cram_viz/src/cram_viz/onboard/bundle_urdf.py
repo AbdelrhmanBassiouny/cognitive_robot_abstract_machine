@@ -33,11 +33,9 @@ from semantic_digital_twin.exceptions import ParsingError
 
 from cram_viz import paths
 from cram_viz.logging_setup import get_logger
+from cram_viz.mesh_format import MeshFormat
 
 logger = get_logger(__name__)
-
-#: mesh formats the web viewer's loaders can read
-MESH_SUFFIXES = (".dae", ".stl", ".obj")
 
 #: how many unresolved assets ``main`` lists before truncating
 MISSING_ASSETS_LOGGED = 20
@@ -304,7 +302,7 @@ def bundle_urdf(
     missing: List[str] = []
     rewritten = 0
     for reference in sorted(set(MESH_REFERENCE_PATTERN.findall(urdf_text))):
-        if not reference.lower().endswith(MESH_SUFFIXES):
+        if MeshFormat.of_path(reference) is None:
             continue  # plugins (.so) and other non-geometry references
         resolved = resolve_uri(reference, hints=hints, base_dir=base_dir)
         relative_path = _bundled_relative_path(reference)
