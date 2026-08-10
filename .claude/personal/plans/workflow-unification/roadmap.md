@@ -5111,3 +5111,69 @@ reported as a clean merge — stands, and gains an author so the machine's resol
 audited without re-reading one's own. And a `--test` failure following a skill-authored
 resolution reports and stops rather than trying again: re-resolving into the same failure is
 how a build starts thrashing.
+
+## Update 2026-08-10 (kickoff): integration-branch opens as #154, with three of its four open questions answered
+
+`/plan-item-kickoff workflow-unification integration-branch`, session
+https://claude.ai/code/session_01Ue4PvfV5LDxHGRRS5BZB4g. Bootstrapped before implementation:
+branch `claude/plan-item-kickoff-workflow-ixbvxl` off #139's head (`04902f40`), draft pull
+request **#154**, manifest flipped to `in_progress`.
+
+Nothing here revises the design recorded earlier today. What this entry adds is the four
+questions that were left open at recording time, now closed, and one hazard the design did
+not carry.
+
+### The three open questions, answered
+
+**`--restack` defaults off, as a plain opt-in flag** — not off-locally-on-in-the-Action via
+config, which was the shape the item recorded. The deciding argument is the boundary the
+design already states rather than a preference about ergonomics: *the script never writes to
+a branch*. `maintenance.restack` pushes to other people's feature branches, so a default that
+runs it makes the sentence false of the default path and true only of a path nobody takes.
+The Action passes the flag explicitly, which also keeps one command meaning one thing in both
+places.
+
+**`--test` defaults on, with `--no-test` to skip.** It is not a convenience: it is the entire
+replacement for the CI gate this design dropped, and the roadmap's own reason for dropping the
+gate was that a single run on the finished branch is *strictly more informative*. A build
+nobody tested is the failure mode the flag exists to prevent, so it cannot be the one that
+happens by default.
+
+**#139 is told about the `ci` field.** Routed as a pull request comment rather than to the
+manifest alone, against the comment-routing rule's own bar: it is a defect in code currently
+under review, so the review context materially changes. That is a different judgement from the
+one the design made when it dropped the CI gate — dropping the gate removed *this item's*
+dependency on the field, and left the hole exactly where it was.
+
+**Script and skill ship as one pull request**, taking the recommendation the item already
+recorded, for the reason it recorded: a conflict report nothing consumes is half a feature.
+
+### The question nobody had asked: what `--test` actually runs
+
+Settled at kickoff because it is unanswerable from the design as recorded. A
+`integration_test_command` setting in `stack.toml`, defaulting to the three directories CI's
+`test_claude_dev_tooling` job already runs. Configurable because the useful suite is a
+property of the repository rather than of this tool; defaulted rather than required because a
+flag that is on by default and has nothing to run is worse than one that is off.
+
+### The exit status is designed in, not discovered live
+
+#139 shipped, ran live, and only then found that a restack hitting a conflict and a refused
+fast-forward both exited `0` — *"a test over the return value does not cover the exit status"*,
+and the exit status is the only half a scheduled Action reads. This item inherits that finding
+before writing a line, so `IntegrationExitCode` and its per-outcome tests are in the first
+commit rather than in a correction after a live run. It is the second time this plan has had a
+lesson available *before* meeting it rather than after; the first was #139 inheriting
+`plan-item-bootstrap`'s two `Enum` hazards.
+
+### A hazard the design did not carry
+
+`greenlet==3.5.5` has no Linux wheel, so `uv sync` fails before a single test runs on every
+open pull request in this repository, on any branch. Red robotics jobs on #154 will not be
+#154's doing, and the proof is two commands rather than an assertion: its diff touches no
+`pyproject`, `requirements` or `uv.lock` file.
+
+Basing was re-run rather than inherited: `git ls-tree origin/main -- .claude/stack/` carries
+`stack.py`, `stack.toml`, `README.md` and three test modules, but not `maintenance.py`. Against
+the prefer-the-change test, removing every edit to #139's files still leaves a whole new
+module, its test module and a new skill — real work stacked on unlanded work.
