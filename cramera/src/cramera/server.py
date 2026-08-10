@@ -32,7 +32,7 @@ import sys
 import threading
 import traceback
 from pathlib import Path
-from typing_extensions import Any, Callable, Dict, List, Optional
+from typing_extensions import Any, Callable, ClassVar, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
 from cramera import paths
@@ -70,6 +70,11 @@ Krrood's SymbolGraph singleton is not threadsafe; queries are serialized.
 class Handler(http.server.SimpleHTTPRequestHandler):
     """
     Static files from the packaged web root, plus the JSON API routes.
+    """
+
+    NO_EQL_MESSAGE: ClassVar[str] = "krrood/EQL not available in this environment"
+    """
+    What every API route answers with when krrood is not importable.
     """
 
     def __init__(self, *args, **kwargs):
@@ -130,13 +135,11 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         :param handler: The handler to run, returning the payload to send on success.
         """
         if not EQL_AVAILABLE:
-            return self._send_json(self._no_eql_error())
+            return self._send_error(self.NO_EQL_MESSAGE)
         try:
             return self._send_json(handler())
         except Exception as error:
-            return self._send_json(
-                {"ok": False, "error": "%s: %s" % (type(error).__name__, error)}
-            )
+            return self._send_exception(error)
 
     # %% scene bundles (generated data, lives outside the package)
     def _serve_scene_file(self, url_path: str) -> None:
@@ -201,30 +204,37 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         Execute an EQL query (the only write-ish endpoint).
         """
         if self.path.split("?")[0] != "/api/eql":
-            return self._send_json({"ok": False, "error": "unknown endpoint"}, 404)
+            return self._send_error("unknown endpoint", 404)
         if not EQL_AVAILABLE:
-            return self._send_json(self._no_eql_error())
+            return self._send_error(self.NO_EQL_MESSAGE)
         try:
             length = int(self.headers.get("Content-Length") or 0)
             request_body = json.loads(self.rfile.read(length) or b"{}")
             code = (request_body.get("code") or "").strip()
             if not code:
-                return self._send_json({"ok": False, "error": "empty query"})
+                return self._send_error("empty query")
             with _EQL_LOCK:
                 return self._send_json(EqlSession.of_active_scene().run(code))
-        except SyntaxError as error:
-            return self._send_json({"ok": False, "error": "SyntaxError: %s" % error})
         except Exception as error:
-            return self._send_json(
-                {"ok": False, "error": "%s: %s" % (type(error).__name__, error)}
-            )
+            # a SyntaxError from the query is named by its own type, like any other
+            return self._send_exception(error)
 
-    @staticmethod
-    def _no_eql_error() -> Dict[str, Any]:
+    def _send_error(self, message: str, code: int = 200) -> None:
         """
-        The standard error payload for any API route when krrood isn't importable.
+        Send an error payload; the panels render ``error`` as their message.
+
+        :param message: What went wrong, in the panel's own words.
+        :param code: HTTP status code to respond with.
         """
-        return {"ok": False, "error": "krrood/EQL not available in this environment"}
+        self._send_json({"ok": False, "error": message}, code)
+
+    def _send_exception(self, error: Exception) -> None:
+        """
+        Send an exception as an error payload, named by its type.
+
+        :param error: The exception to report.
+        """
+        self._send_error("%s: %s" % (type(error).__name__, error))
 
 
 def make_server(port: int = 0) -> socketserver.ThreadingTCPServer:

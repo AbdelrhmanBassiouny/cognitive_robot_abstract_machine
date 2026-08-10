@@ -20,6 +20,7 @@ from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.scope import eql_factory_namespace
 from semantic_digital_twin.spatial_types import Point3
 
+from cramera.body_geometry import position_label
 from cramera.knowledge.architecture_entities import Package, PythonClass, SubPackage
 from cramera.payload import CrameraPayload
 from cramera.knowledge.entity import NamedEntity
@@ -199,7 +200,7 @@ class RowRenderer:
         :param value: The raw query result value to render.
         """
         if isinstance(value, Point3):
-            return "(%.2f, %.2f, %.2f)" % tuple(value.to_np().tolist()[:3])
+            return position_label(value)
         if is_dataclass(value) and not isinstance(value, type):
             return cls._entity_name(value) or repr(value)
         if isinstance(value, float):

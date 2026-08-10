@@ -13,6 +13,7 @@ from semantic_digital_twin.spatial_types import Point3
 
 from cramera.knowledge.enums import EdgeKind, NodeGroup
 from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
+from cramera.body_geometry import position_label
 from cramera.knowledge.presets import Preset
 from cramera.knowledge.scene_bundle import SceneBundle
 from cramera.knowledge.subgraph import (
@@ -102,7 +103,7 @@ class KnowledgeGraphPayload(GraphPanelPayload):
                 [
                     "a BenchObject",
                     "kind: " + bench_object.kind,
-                    "position: " + cls._position_label(bench_object.position),
+                    "position: " + position_label(bench_object.position),
                 ]
                 + cls._measurement_line("height", bench_object.height_metres, "%.2f"),
             )
@@ -280,18 +281,6 @@ class KnowledgeGraphPayload(GraphPanelPayload):
         :param side: The arm side to label.
         """
         return side.name.lower() if side is not None else "unknown"
-
-    @staticmethod
-    def _position_label(position: Point3) -> str:
-        """
-        A position's coordinates, formatted to two decimal places.
-
-        :class:`Point3` has no plain-value ``__repr__`` of its own (it is a CasADi-
-        symbolic type), so the coordinates are read out explicitly.
-
-        :param position: The position to format.
-        """
-        return "(%.2f, %.2f, %.2f)" % tuple(position.to_np().tolist()[:3])
 
     @classmethod
     def _count_plan_nodes(cls, tree: Dict[str, Any]) -> int:
