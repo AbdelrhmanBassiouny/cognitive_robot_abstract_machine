@@ -66,6 +66,18 @@ class PlanViewPayload(GraphPanelPayload):
             "empty": self.empty_message,
         }
 
+    @staticmethod
+    def _shorten_action_label(label: str) -> str:
+        """
+        Drop the redundant ``Action`` suffix from a plan-node label.
+
+        Only the suffix goes: a label that merely *contains* the word, such as
+        ``ActionNode``, is left alone.
+
+        :param label: The plan-node label to shorten.
+        """
+        return label.removesuffix("Action") or label
+
     @classmethod
     def of_tab(cls, knowledge_base: EpisodeKnowledgeBase) -> PlanViewPayload:
         """
@@ -100,7 +112,7 @@ class PlanViewPayload(GraphPanelPayload):
                 lines.append("arm: " + tree["arm"])
             if tree.get("target"):
                 lines.append("target: " + tree["target"])
-            label = shorten_action_label(tree.get("label", "?"))
+            label = cls._shorten_action_label(tree.get("label", "?"))
             view.add(
                 node_id,
                 label,
@@ -116,15 +128,3 @@ class PlanViewPayload(GraphPanelPayload):
         for tree in trees:
             walk(tree, None)
         return cls(nodes=view.nodes, edges=view.edges, details=view.details)
-
-
-def shorten_action_label(label: str) -> str:
-    """
-    Drop the redundant ``Action`` suffix from a plan-node label.
-
-    Only the suffix goes: a label that merely *contains* the word, such as
-    ``ActionNode``, is left alone.
-
-    :param label: The plan-node label to shorten.
-    """
-    return label.removesuffix("Action") or label

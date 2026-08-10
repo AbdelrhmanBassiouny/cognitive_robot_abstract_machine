@@ -18,7 +18,7 @@ from cramera.knowledge.presets import get_presets  # noqa: E402
 from cramera.knowledge.scene_bundle import load_scene  # noqa: E402
 from cramera.knowledge.views.architecture import SubgraphViewPayload  # noqa: E402
 from cramera.knowledge.views.dispatcher import GraphPanelViews  # noqa: E402
-from cramera.knowledge.views.plan_tree import shorten_action_label  # noqa: E402
+from cramera.knowledge.views.plan_tree import PlanViewPayload  # noqa: E402
 from cramera.knowledge import knowledge_base  # noqa: E402
 from cramera.knowledge.architecture_entities import (  # noqa: E402
     Package,
@@ -231,16 +231,19 @@ class TestRecordedMeasurements:
 
 class TestActionLabelShortening:
     def test_action_suffix_is_dropped(self):
-        assert shorten_action_label("TransportAction") == "Transport"
+        assert PlanViewPayload._shorten_action_label("TransportAction") == "Transport"
 
     def test_the_word_action_inside_a_label_is_kept(self):
-        assert shorten_action_label("ActionNode") == "ActionNode"
+        assert PlanViewPayload._shorten_action_label("ActionNode") == "ActionNode"
 
     def test_only_the_trailing_occurrence_is_dropped(self):
-        assert shorten_action_label("ActionSequenceAction") == "ActionSequence"
+        assert (
+            PlanViewPayload._shorten_action_label("ActionSequenceAction")
+            == "ActionSequence"
+        )
 
     def test_a_label_that_is_only_the_suffix_is_kept(self):
-        assert shorten_action_label("Action") == "Action"
+        assert PlanViewPayload._shorten_action_label("Action") == "Action"
 
 
 class TestViewPayloads:

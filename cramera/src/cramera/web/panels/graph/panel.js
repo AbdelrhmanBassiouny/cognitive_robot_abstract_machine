@@ -192,8 +192,10 @@ Panels.define('graph', function (root, bus) {
     return (p && p.live) || null;               // 'plan' | 'chart' | null
   }
 
-  // drop the redundant 'Action' suffix only — a label that merely contains the
-  // word, such as 'ActionNode', must survive intact (mirrors knowledge.shorten_action_label)
+  // drop the redundant 'Action' suffix only — a label that merely contains the word,
+  // such as 'ActionNode', must survive intact. Mirrors
+  // PlanViewPayload._shorten_action_label: the bridge sends the raw designator name,
+  // so the live path shortens it here.
   function shortenActionLabel(label) {
     const shortened = label.replace(/Action$/, '');
     return shortened || label;
