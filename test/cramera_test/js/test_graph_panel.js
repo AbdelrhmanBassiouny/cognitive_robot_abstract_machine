@@ -89,7 +89,7 @@ function loadPanel(responses) {
 }
 
 // %% live plan colour groups
-test('AttachNode and DetachNode plan nodes render in the object colour group', async function () {
+test('AttachNode and DetachNode plan nodes render in the attachment colour group', async function () {
   const panel = loadPanel({
     '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} },
     '/api/knowledge/view?name=plan': { ok: true, nodes: [], edges: [], details: {}, live: 'plan' },
@@ -115,8 +115,8 @@ test('AttachNode and DetachNode plan nodes render in the object colour group', a
 
     const byId = {};
     panel.lastBuild().nodes.forEach(function (n) { byId[n.id] = n; });
-    assert.strictEqual(byId.a1.group, 'object');
-    assert.strictEqual(byId.d1.group, 'object');
+    assert.strictEqual(byId.a1.group, 'attachment');
+    assert.strictEqual(byId.d1.group, 'attachment');
   } finally {
     instance.destroy();       // clears the live-poll setInterval even if an assertion above throws
   }

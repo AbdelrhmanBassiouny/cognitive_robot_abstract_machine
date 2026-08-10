@@ -29,6 +29,7 @@ from cramera.knowledge.enums import (  # noqa: E402
     EdgeKind,
     KinematicChainGroup,
     NodeGroup,
+    PlanNodeGroup,
 )
 from cramera.knowledge.scene_bundle import SceneBundle  # noqa: E402
 from cramera.knowledge.subgraph import DetailEntry, GraphEdge  # noqa: E402
@@ -342,7 +343,9 @@ class TestViewPayloads:
 
 # %% BUG-1 -- attach/detach plan-node grouping
 class TestPlanGroups:
-    def test_attach_node_renders_in_the_object_group(self, fixture_scene, monkeypatch):
+    def test_attach_node_renders_in_the_attachment_group(
+        self, fixture_scene, monkeypatch
+    ):
         """
         Coraplex's real class is ``AttachNode``, not ``AttachmentNode``.
         """
@@ -365,9 +368,11 @@ class TestPlanGroups:
             for n in GraphPanelViews.of_active_scene().for_tab("plan").nodes
             if n.label == "AttachNode"
         )
-        assert node.group == NodeGroup.OBJECT
+        assert node.group == PlanNodeGroup.ATTACHMENT
 
-    def test_detach_node_renders_in_the_object_group(self, fixture_scene, monkeypatch):
+    def test_detach_node_renders_in_the_attachment_group(
+        self, fixture_scene, monkeypatch
+    ):
         """
         Coraplex's real class is ``DetachNode``, not ``DetachmentNode``.
         """
@@ -390,7 +395,7 @@ class TestPlanGroups:
             for n in GraphPanelViews.of_active_scene().for_tab("plan").nodes
             if n.label == "DetachNode"
         )
-        assert node.group == NodeGroup.OBJECT
+        assert node.group == PlanNodeGroup.ATTACHMENT
 
 
 # %% BUG-2 -- EQL preset splicing

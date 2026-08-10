@@ -66,7 +66,23 @@ class KinematicChainGroup(str, Enum):
     SENSOR = "sensor"
 
 
-ColourGroup = Union[NodeGroup, KinematicChainGroup]
+class PlanNodeGroup(str, Enum):
+    """
+    Colour group of a node in the executed plan tree.
+
+    Separate from :class:`NodeGroup` for the same reason as
+    :class:`KinematicChainGroup`: a motion is not a robot and a condition is not a goal,
+    they are kinds of plan node that each need a colour of their own.
+    """
+
+    ACTION = "action"
+    MOTION = "motion"
+    CONDITION = "condition"
+    ATTACHMENT = "attachment"
+    OTHER = "other_plan_node"
+
+
+ColourGroup = Union[NodeGroup, KinematicChainGroup, PlanNodeGroup]
 """
 Any colour group a graph-panel node can carry: an ontological one from the knowledge
 graph, or a kinematic-chain one from the URDF tree.

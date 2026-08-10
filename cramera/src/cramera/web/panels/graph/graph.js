@@ -37,6 +37,13 @@
     right_arm:  { color: '#b98cff', ring: '#d9c2ff', size: 15, label: 'Right arm' },
     gripper:    { color: '#39d5c8', ring: '#8ff0e7', size: 15, label: 'Grippers' },
     sensor:     { color: '#ffb648', ring: '#ffd89a', size: 15, label: 'Head / sensors' },
+
+    // %% plan-tree nodes, bucketed by the kind of plan node
+    action:           { color: '#b98cff', ring: '#d9c2ff', size: 16, label: 'Action' },
+    motion:           { color: '#ff7a9c', ring: '#ffb3c6', size: 15, label: 'Motion' },
+    condition:        { color: '#ffb648', ring: '#ffd89a', size: 15, label: 'Condition' },
+    attachment:       { color: '#39d5c8', ring: '#8ff0e7', size: 15, label: 'Attach / detach' },
+    other_plan_node:  { color: '#7f8db0', ring: '#b6c0d8', size: 13, label: 'Other plan node' },
   };
 
   // %% execution status → node ring

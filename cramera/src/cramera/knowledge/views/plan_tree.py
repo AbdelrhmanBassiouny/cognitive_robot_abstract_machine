@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass
 
 from typing_extensions import Any, ClassVar, Dict, List, TYPE_CHECKING, Optional, Tuple
 
-from cramera.knowledge.enums import EdgeKind, NodeGroup
+from cramera.knowledge.enums import EdgeKind, PlanNodeGroup
 from cramera.knowledge.scene_bundle import load_scene
 
 if TYPE_CHECKING:
@@ -27,23 +27,23 @@ from cramera.knowledge.subgraph import (
     SubgraphAccumulator,
 )
 
-PLAN_GROUPS: Dict[str, NodeGroup] = {
-    "ActionNode": NodeGroup.EVENT,
-    "MotionNode": NodeGroup.ROBOT,
-    "ConditionNode": NodeGroup.GOAL,
-    "AttachNode": NodeGroup.OBJECT,
-    "DetachNode": NodeGroup.OBJECT,
+PLAN_GROUPS: Dict[str, PlanNodeGroup] = {
+    "ActionNode": PlanNodeGroup.ACTION,
+    "MotionNode": PlanNodeGroup.MOTION,
+    "ConditionNode": PlanNodeGroup.CONDITION,
+    "AttachNode": PlanNodeGroup.ATTACHMENT,
+    "DetachNode": PlanNodeGroup.ATTACHMENT,
 }
 """
 Plan-node kind → node colour group of the graph panel.
 """
 
 PLAN_LEGEND: Tuple[LegendEntry, ...] = (
-    LegendEntry(NodeGroup.EVENT, "Action"),
-    LegendEntry(NodeGroup.ROBOT, "Motion"),
-    LegendEntry(NodeGroup.GOAL, "Condition"),
-    LegendEntry(NodeGroup.OBJECT, "Attach / detach"),
-    LegendEntry(NodeGroup.OTHER, "Other plan node"),
+    LegendEntry(PlanNodeGroup.ACTION, "Action"),
+    LegendEntry(PlanNodeGroup.MOTION, "Motion"),
+    LegendEntry(PlanNodeGroup.CONDITION, "Condition"),
+    LegendEntry(PlanNodeGroup.ATTACHMENT, "Attach / detach"),
+    LegendEntry(PlanNodeGroup.OTHER, "Other plan node"),
 )
 """
 Legend rows of the plan view.
@@ -119,7 +119,7 @@ class PlanViewPayload(GraphPanelPayload):
             view.add(
                 node_id,
                 label,
-                PLAN_GROUPS.get(tree.get("kind"), NodeGroup.OTHER),
+                PLAN_GROUPS.get(tree.get("kind"), PlanNodeGroup.OTHER),
                 lines,
                 status=status,
             )
