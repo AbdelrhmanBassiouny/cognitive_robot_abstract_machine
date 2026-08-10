@@ -61,10 +61,17 @@ The user reversed the default and asked for a way to set it in passing.
 
 - Nothing outstanding on the implementation. 384 tests pass; #149 is a draft
   with its description current.
-- CI red on #149 is base-side: `greenlet` 3.5.5 shipped no Linux wheel, `main`
-  fails the same 7 jobs identically, and `1dc0a52a` was 20/20 green before the
-  base merge. Reported once on the PR; the fix (pin `greenlet!=3.5.5` in three
-  requirements files) is offered as its own bug-labelled change, not folded in.
+- CI history on #149, two distinct causes, neither this branch's:
+  1. `greenlet` 3.5.5 shipped no Linux wheel, so every job died at dependency
+     install. `main` failed the same 7 jobs identically and `1dc0a52a` was
+     20/20 green before the base merge. **Now cleared** — those jobs pass.
+  2. On `99732801`, `test_each_lib (robokudo)` fails on
+     `Network is unreachable` to `gitlab.informatik.uni-bremen.de`, which
+     `robokudo/src/robokudo/utils/data_downloader.py` fetches test data from.
+     Round 2's commit is 6 files, all `.claude/`; robokudo passed before the
+     base merge brought 145 robotics files. `main` has not re-run since
+     `greenlet` cleared, so there is no green base run to compare against.
+  Both reported on the PR, one comment each. Nothing pushed for either.
 - Still not done deliberately: the user's own
   `.claude/personal/plan-item-modes.toml` is unwritten. With the committed
   default now `auto`, they need no pin to get the behaviour they asked for.
