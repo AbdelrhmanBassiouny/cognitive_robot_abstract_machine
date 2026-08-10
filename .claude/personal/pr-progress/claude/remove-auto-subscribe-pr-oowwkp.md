@@ -30,8 +30,19 @@ the same tool but are a coordination mailbox, not a PR a session owns, so
   prohibition. `.claude/hooks/tests` never referenced the changed strings
   (pytest is not installed in this container, so the suite was not run).
 
+- Draft PR #153 opened against `main`, session link in the description, no
+  `bug` label (not a bug fix). Not subscribed, per the rule it introduces.
+- Tracked as plan item `no-pr-subscriptions` in `workflow-unification`
+  (track `personal-data`, status `in_progress`, PR #153), recorded via
+  `plan_item_bootstrap.py record` + `open`, with a roadmap section and a
+  `notes` entry. Dashboard republished.
+
 ## Next
 
-- No PR opened yet - waiting on the user to ask for one. If asked: draft,
-  `bug` label not applicable, session link in the description.
-- Per the new rule itself: do not subscribe to that PR once it exists.
+- Nothing outstanding. CI on #153 was not checked from here; the repository-
+  wide `greenlet` 3.5.5 resolve failure noted on #151 affects every PR until
+  it is constrained.
+- The dashboard URL cache was stale: it held
+  `07123af6-...` for this plan, which no longer resolves. Republished to the
+  live page `af60607f-...` and corrected the cache. That is the same failure
+  the plan's own `dashboard-url-recording` item exists to fix.
