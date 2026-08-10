@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass, field
 
 from typing_extensions import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING
 
-from cramera.knowledge.enums import EdgeKind, NodeGroup
+from cramera.knowledge.enums import ColourGroup, EdgeKind
 
 if TYPE_CHECKING:
     from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
@@ -32,7 +32,7 @@ class GraphNode:
     Display label.
     """
 
-    group: NodeGroup
+    group: ColourGroup
     """
     Colour group the frontend renders this node with.
     """
@@ -73,7 +73,7 @@ class DetailEntry:
     Display label, mirrors the node's own label.
     """
 
-    group: NodeGroup
+    group: ColourGroup
     """
     Colour group, mirrors the node's own group.
     """
@@ -131,7 +131,7 @@ class LegendEntry:
     One row of a graph panel's colour legend.
     """
 
-    group: NodeGroup
+    group: ColourGroup
     """
     Node colour group this row explains.
     """
@@ -167,7 +167,7 @@ class SubgraphAccumulator:
         self,
         node_id: str,
         label: str,
-        group: NodeGroup,
+        group: ColourGroup,
         lines: List[str],
         status: Optional[str] = None,
     ) -> None:

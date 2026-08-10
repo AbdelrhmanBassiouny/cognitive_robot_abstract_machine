@@ -191,6 +191,7 @@ Panels.define('eql', function (root, bus) {
   const GROUP_COLOR = {
     root: '#e8eefb', subpackage: '#5b8cff', external_class: '#8c9bbd',
     robot: '#ff7a9c', object: '#39d5c8', event: '#b98cff', goal: '#ffb648', concept: '#4bd38a', other: '#7f8db0',
+    base: '#4bd38a', left_arm: '#ff7a9c', right_arm: '#b98cff', gripper: '#39d5c8', sensor: '#ffb648',
   };
   function groupColor(g) { return GROUP_COLOR[g] || '#5b8cff'; }
   function esc(s) { return String(s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }

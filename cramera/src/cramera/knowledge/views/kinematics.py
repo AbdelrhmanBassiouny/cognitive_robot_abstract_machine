@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from coraplex.datastructures.enums import JointType
 from typing_extensions import Any, ClassVar, Dict, List, Optional, TYPE_CHECKING
 
-from cramera.knowledge.enums import EdgeKind, NodeGroup
+from cramera.knowledge.enums import EdgeKind, KinematicChainGroup
 from cramera.knowledge.scene_bundle import load_scene, load_urdf
 from cramera.knowledge.subgraph import (
     DetailEntry,
@@ -110,11 +110,11 @@ class UrdfViewPayload(GraphPanelPayload):
             % (len(links), len(joints), movable_count)
         )
         legend = [
-            LegendEntry(NodeGroup.CONCEPT, "Base / torso"),
-            LegendEntry(NodeGroup.ROBOT, "Left arm"),
-            LegendEntry(NodeGroup.EVENT, "Right arm"),
-            LegendEntry(NodeGroup.OBJECT, "Grippers"),
-            LegendEntry(NodeGroup.GOAL, "Head / sensors"),
+            LegendEntry(KinematicChainGroup.BASE, "Base / torso"),
+            LegendEntry(KinematicChainGroup.LEFT_ARM, "Left arm"),
+            LegendEntry(KinematicChainGroup.RIGHT_ARM, "Right arm"),
+            LegendEntry(KinematicChainGroup.GRIPPER, "Grippers"),
+            LegendEntry(KinematicChainGroup.SENSOR, "Head / sensors"),
         ]
         # force-directed, not hierarchical: the chains read better when the arms and
         # the sensor head spread out around the base than as one wide LR tree
@@ -127,7 +127,7 @@ class UrdfViewPayload(GraphPanelPayload):
         )
 
     @staticmethod
-    def _chain_group(link_name: str, part: str) -> NodeGroup:
+    def _chain_group(link_name: str, part: str) -> KinematicChainGroup:
         """
         The colour group a kinematic-chain link is drawn in.
 
@@ -137,15 +137,15 @@ class UrdfViewPayload(GraphPanelPayload):
         """
         part = part.lower()
         if "gripper" in part or "hand" in part or "effector" in part:
-            return NodeGroup.OBJECT  # grippers (teal)
+            return KinematicChainGroup.GRIPPER
         if "left" in part:
-            return NodeGroup.ROBOT  # left arm (pink)
+            return KinematicChainGroup.LEFT_ARM
         if "right" in part:
-            return NodeGroup.EVENT  # right arm (purple)
+            return KinematicChainGroup.RIGHT_ARM
         lowered = link_name.lower()
         if any(
             keyword in lowered
             for keyword in ("head", "stereo", "sensor", "kinect", "camera", "laser")
         ):
-            return NodeGroup.GOAL  # head / sensors (amber)
-        return NodeGroup.CONCEPT  # base, torso, casters (green)
+            return KinematicChainGroup.SENSOR
+        return KinematicChainGroup.BASE  # base, torso, casters

@@ -25,7 +25,11 @@ from cramera.knowledge.architecture_entities import (  # noqa: E402
     PythonClass,
 )
 from cramera.knowledge.architecture_scan import ArchitectureScanner  # noqa: E402
-from cramera.knowledge.enums import EdgeKind, NodeGroup  # noqa: E402
+from cramera.knowledge.enums import (  # noqa: E402
+    EdgeKind,
+    KinematicChainGroup,
+    NodeGroup,
+)
 from cramera.knowledge.scene_bundle import SceneBundle  # noqa: E402
 from cramera.knowledge.subgraph import DetailEntry, GraphEdge  # noqa: E402
 from cramera.knowledge.views import plan_tree as plan_view  # noqa: E402
@@ -255,6 +259,30 @@ class TestViewPayloads:
         kinds = {e.label.split(" ")[0]: e.kind for e in payload.edges}
         assert kinds["torso_lift_joint"] == EdgeKind.PROPERTY
         assert kinds["l_gripper_joint"] == EdgeKind.TYPE
+
+    def test_kinematics_links_carry_their_own_colour_groups(self, fixture_scene):
+        """
+        The URDF tree groups links by robot part, not by the knowledge graph's
+        ontological categories — a right arm is not an "event".
+        """
+        payload = GraphPanelViews.of_active_scene().for_tab("kinematics")
+        by_id = {node.id: node.group for node in payload.nodes}
+
+        assert by_id["urdf:torso_link"] == KinematicChainGroup.BASE
+        assert by_id["urdf:l_shoulder_link"] == KinematicChainGroup.LEFT_ARM
+        assert by_id["urdf:l_gripper_link"] == KinematicChainGroup.GRIPPER
+        assert not {group for group in by_id.values()} & set(NodeGroup)
+
+    def test_the_kinematics_legend_names_every_chain_group(self, fixture_scene):
+        payload = GraphPanelViews.of_active_scene().for_tab("kinematics")
+
+        assert [row.group for row in payload.legend] == [
+            KinematicChainGroup.BASE,
+            KinematicChainGroup.LEFT_ARM,
+            KinematicChainGroup.RIGHT_ARM,
+            KinematicChainGroup.GRIPPER,
+            KinematicChainGroup.SENSOR,
+        ]
 
     def test_kinematics_edge_label_shows_the_urdf_joint_type(self, fixture_scene):
         """

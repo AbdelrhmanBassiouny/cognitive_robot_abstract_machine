@@ -30,6 +30,13 @@
     goal:    { color: '#ffb648', ring: '#ffd89a', size: 15, label: 'Goal' },
     concept: { color: '#4bd38a', ring: '#a6ecc6', size: 14, label: 'Problem / phase / fluent' },
     other:   { color: '#7f8db0', ring: '#b6c0d8', size: 13, label: 'Individual' },
+
+    // %% kinematic-chain links, bucketed by the robot part they belong to
+    base:       { color: '#4bd38a', ring: '#a6ecc6', size: 14, label: 'Base / torso' },
+    left_arm:   { color: '#ff7a9c', ring: '#ffb3c6', size: 15, label: 'Left arm' },
+    right_arm:  { color: '#b98cff', ring: '#d9c2ff', size: 15, label: 'Right arm' },
+    gripper:    { color: '#39d5c8', ring: '#8ff0e7', size: 15, label: 'Grippers' },
+    sensor:     { color: '#ffb648', ring: '#ffd89a', size: 15, label: 'Head / sensors' },
   };
 
   // %% execution status → node ring
@@ -248,8 +255,8 @@
 
   function buildLegend(data) {
     legendEl.innerHTML = '';
-    // a view can override the legend labels (e.g. the URDF tree relabels the
-    // reused group colours as left arm / right arm / gripper / camera / base)
+    // a view can ship its own legend rows (the URDF tree names the kinematic-chain
+    // groups: base / left arm / right arm / gripper / sensor)
     if (data.legend) {
       data.legend.forEach(function (row) {
         const st = GROUP_STYLE[row.group];

@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from enum import Enum
 
+from typing_extensions import Union
+
 
 class JointRegion(str, Enum):
     """
@@ -47,3 +49,25 @@ class EdgeKind(str, Enum):
 
     PROPERTY = "property"
     TYPE = "type"
+
+
+class KinematicChainGroup(str, Enum):
+    """
+    Colour group of a link in the robot's kinematic tree.
+
+    Separate from :class:`NodeGroup`, whose members name ontological categories of the
+    knowledge graph: a right arm is not an "event", it just needs a colour of its own.
+    """
+
+    BASE = "base"
+    LEFT_ARM = "left_arm"
+    RIGHT_ARM = "right_arm"
+    GRIPPER = "gripper"
+    SENSOR = "sensor"
+
+
+ColourGroup = Union[NodeGroup, KinematicChainGroup]
+"""
+Any colour group a graph-panel node can carry: an ontological one from the knowledge
+graph, or a kinematic-chain one from the URDF tree.
+"""
