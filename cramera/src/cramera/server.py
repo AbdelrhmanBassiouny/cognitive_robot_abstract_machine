@@ -188,16 +188,18 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             )
         if route == "/api/knowledge/expand":
             node = (self._query_parameters().get("node") or [""])[0]
-
-            def expand() -> Dict[str, Any]:
-                """
-                The node's subgraph, or a "not drillable" error if it has none.
-                """
-                payload = GraphPanelViews.of_active_scene().for_node(node)
-                return payload if payload else {"ok": False, "error": "not drillable"}
-
-            return self._guarded(expand)
+            return self._guarded(lambda: self._expanded_node(node))
         return super().do_GET()
+
+    @staticmethod
+    def _expanded_node(node: str) -> Any:
+        """
+        The node's subgraph, or a "not drillable" error if it has none.
+
+        :param node: Id of the double-clicked node to expand.
+        """
+        payload = GraphPanelViews.of_active_scene().for_node(node)
+        return payload if payload else {"ok": False, "error": "not drillable"}
 
     def do_POST(self) -> None:
         """

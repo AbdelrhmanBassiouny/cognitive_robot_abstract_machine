@@ -8,9 +8,19 @@ recorded in a scene bundle, not a coraplex ``Plan`` itself.
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import asdict, dataclass
 
-from typing_extensions import Any, ClassVar, Dict, List, TYPE_CHECKING, Optional, Tuple
+from typing_extensions import (
+    Any,
+    ClassVar,
+    Dict,
+    Iterator,
+    List,
+    Optional,
+    Tuple,
+    TYPE_CHECKING,
+)
 
 from cramera.knowledge.enums import EdgeKind, PlanNodeGroup
 from cramera.knowledge.scene_bundle import SceneBundle
@@ -90,6 +100,41 @@ class PlanViewPayload(GraphPanelPayload):
         )
 
     @classmethod
+    def _add_plan_node(
+        cls,
+        view: SubgraphAccumulator,
+        node_ids: Iterator[int],
+        tree: Dict[str, Any],
+        parent: Optional[str],
+    ) -> None:
+        """
+        Add one plan node, with a freshly assigned id, and recurse into its children.
+
+        :param view: The subgraph the node and its edge are added to.
+        :param node_ids: Counter handing out ids, shared across the whole tree walk.
+        :param tree: The serialized plan node to add.
+        :param parent: Id of the node's parent entry, or None for the root.
+        """
+        node_id = "plan_tree_node_%d" % next(node_ids)
+        status = tree.get("status") or "CREATED"
+        lines = ["a " + tree.get("kind", "PlanNode"), "status: " + status]
+        if tree.get("arm"):
+            lines.append("arm: " + tree["arm"])
+        if tree.get("target"):
+            lines.append("target: " + tree["target"])
+        view.add(
+            node_id,
+            cls._shorten_action_label(tree.get("label", "?")),
+            PlanNodeGroup.of_plan_node_kind(tree.get("kind")),
+            lines,
+            status=status,
+        )
+        if parent:
+            view.add_edge(parent, node_id, EdgeKind.PROPERTY, "has step")
+        for child in tree.get("children", []):
+            cls._add_plan_node(view, node_ids, child, node_id)
+
+    @classmethod
     def of_tab(cls, knowledge_base: EpisodeKnowledgeBase) -> PlanViewPayload:
         """
         The executed plan as a tree, one node per plan node the demo ran.
@@ -106,36 +151,7 @@ class PlanViewPayload(GraphPanelPayload):
         scene = SceneBundle.of_active_scene().scene
         trees = scene.get("planTrees") or []
         view = SubgraphAccumulator()
-        counter = [0]
-
-        def walk(tree: Dict[str, Any], parent: Optional[str]) -> None:
-            """
-            Add this plan node (with a freshly assigned id) and recurse into its children.
-
-            :param tree: The serialized plan node to add.
-            :param parent: Id of the node's parent entry, or None for the root.
-            """
-            node_id = "plan_tree_node_%d" % counter[0]
-            counter[0] += 1
-            status = tree.get("status") or "CREATED"
-            lines = ["a " + tree.get("kind", "PlanNode"), "status: " + status]
-            if tree.get("arm"):
-                lines.append("arm: " + tree["arm"])
-            if tree.get("target"):
-                lines.append("target: " + tree["target"])
-            label = cls._shorten_action_label(tree.get("label", "?"))
-            view.add(
-                node_id,
-                label,
-                PlanNodeGroup.of_plan_node_kind(tree.get("kind")),
-                lines,
-                status=status,
-            )
-            if parent:
-                view.add_edge(parent, node_id, EdgeKind.PROPERTY, "has step")
-            for child in tree.get("children", []):
-                walk(child, node_id)
-
+        node_ids = itertools.count()
         for tree in trees:
-            walk(tree, None)
+            cls._add_plan_node(view, node_ids, tree, None)
         return cls(nodes=view.nodes, edges=view.edges, details=view.details)

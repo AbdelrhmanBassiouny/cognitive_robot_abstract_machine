@@ -47,6 +47,7 @@ from typing_extensions import (
     Callable,
     ClassVar,
     Dict,
+    Iterator,
     List,
     Optional,
     Protocol,
@@ -406,35 +407,39 @@ class Recorder:
         """
         from coraplex.plans.plan_node import ActionNode
 
-        recorder = self
-        original_parse = ActionNode.parse
+        MethodPatch(ActionNode, "parse").install(self._record_segment)
 
-        def parse(node: ActionNode, *args: Any, **kwargs: Any) -> Executable:
-            """
-            Record this action's designator before letting it parse normally.
+    def _record_segment(
+        self,
+        original: Callable[..., Executable],
+        node: Any,
+        *args: Any,
+        **kwargs: Any,
+    ) -> Executable:
+        """
+        Record this action's designator before letting it parse normally.
 
-            :param node: The action node being parsed.
-            :param args: Positional arguments forwarded to the wrapped call.
-            :param kwargs: Keyword arguments forwarded to the wrapped call.
-            """
-            designator = node.designator
-            recorder.actions.append(
-                {
-                    "action": type(designator).__name__,
-                    "arm": recorder._arm_of(designator),
-                    "target": recorder._target_of(designator),
-                }
-            )
-            recorder.plan_nodes.append(node)
-            log(
-                "action parsed:",
-                recorder.actions[-1]["action"],
-                "->",
-                recorder.actions[-1]["target"] or "-",
-            )
-            return original_parse(node, *args, **kwargs)
-
-        ActionNode.parse = parse
+        :param original: The real, unpatched ``ActionNode.parse`` bound method.
+        :param node: The action node being parsed.
+        :param args: Positional arguments forwarded to the wrapped call.
+        :param kwargs: Keyword arguments forwarded to the wrapped call.
+        """
+        designator = node.designator
+        self.actions.append(
+            {
+                "action": type(designator).__name__,
+                "arm": self._arm_of(designator),
+                "target": self._target_of(designator),
+            }
+        )
+        self.plan_nodes.append(node)
+        log(
+            "action parsed:",
+            self.actions[-1]["action"],
+            "->",
+            self.actions[-1]["target"] or "-",
+        )
+        return original(node, *args, **kwargs)
 
     # %% the executed plan tree, serialized from the real PlanNode graph
     def serialize_plans(self, max_nodes: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -457,43 +462,58 @@ class Recorder:
                 seen_roots.add(id(root))
                 roots.append(root)
         serialized_count = itertools.count()
-
-        def serialize(node: Any) -> Optional[Dict[str, Any]]:
-            """
-            One plan node and its children as a dict, or None past ``max_nodes``.
-
-            :param node: The plan node to serialize.
-            """
-            if next(serialized_count) >= max_nodes:
-                return None
-            designator = (
-                node.designator if isinstance(node, DescribesAnAction) else None
+        return [
+            tree
+            for tree in (
+                self._serialized_plan_node(root, serialized_count, max_nodes)
+                for root in roots
             )
-            entry = {
-                "kind": type(node).__name__,
-                "label": (
-                    type(designator).__name__
-                    if designator is not None
-                    else type(node).__name__
-                ),
-                "status": node.status.name,
-            }
-            if designator is not None:
-                target = self._target_of(designator)
-                if target:
-                    entry["target"] = target
-                arm = self._arm_of(designator)
-                if arm is not None:
-                    entry["arm"] = arm
-            children = node.children
-            entry["children"] = [
-                child
-                for child in (serialize(child) for child in children or ())
-                if child
-            ]
-            return entry
+            if tree
+        ]
 
-        return [tree for tree in (serialize(root) for root in roots) if tree]
+    def _serialized_plan_node(
+        self, node: Any, serialized_count: Iterator[int], max_nodes: int
+    ) -> Optional[Dict[str, Any]]:
+        """
+        One plan node and its children as a dict, or None past ``max_nodes``.
+
+        :param node: The plan node to serialize.
+        :param serialized_count: Counter shared across the whole tree walk, advanced
+            once per serialized node.
+        :param max_nodes: Node count at which the walk stops descending.
+        """
+        if next(serialized_count) >= max_nodes:
+            return None
+        designator = (
+            node.designator if isinstance(node, DescribesAnAction) else None
+        )
+        entry = {
+            "kind": type(node).__name__,
+            "label": (
+                type(designator).__name__
+                if designator is not None
+                else type(node).__name__
+            ),
+            "status": node.status.name,
+        }
+        if designator is not None:
+            target = self._target_of(designator)
+            if target:
+                entry["target"] = target
+            arm = self._arm_of(designator)
+            if arm is not None:
+                entry["arm"] = arm
+        children = node.children
+        entry["children"] = [
+            child
+            for child in (
+                self._serialized_plan_node(child, serialized_count, max_nodes)
+                for child in children or ()
+            )
+            if child
+        ]
+        return entry
+
 
 
 # %% post-processing the recording
@@ -786,6 +806,24 @@ class SceneBuilder:
     Downsampling step; every ``step``-th frame is kept.
     """
 
+    @staticmethod
+    def _nearest_kept_frame(
+        downsampled_index: Dict[int, int], raw_index: int
+    ) -> int:
+        """
+        The downsampled index closest to a raw frame index.
+
+        :param downsampled_index: Raw frame indices mapped to their downsampled
+            position.
+        :param raw_index: Frame index in the original, un-downsampled recording.
+        """
+        return downsampled_index.get(
+            raw_index,
+            downsampled_index[
+                min(downsampled_index, key=lambda kept: abs(kept - raw_index))
+            ],
+        )
+
     def build(self) -> Dict[str, Any]:
         """
         Downsample the recording to every step-th frame (always keeping the last) and
@@ -798,19 +836,6 @@ class SceneBuilder:
         downsampled_index = {
             raw_index: kept for kept, raw_index in enumerate(kept_indices)
         }
-
-        def nearest(raw_index: int) -> int:
-            """
-            The downsampled index closest to a raw frame index.
-
-            :param raw_index: Frame index in the original, un-downsampled recording.
-            """
-            return downsampled_index.get(
-                raw_index,
-                downsampled_index[
-                    min(downsampled_index, key=lambda kept: abs(kept - raw_index))
-                ],
-            )
 
         frames = [self.recorder.frames[index] for index in kept_indices]
         base = [self.recorder.base_frames[index] for index in kept_indices]
@@ -837,11 +862,11 @@ class SceneBuilder:
         segments = []
         for raw_segment in RecordingAnalysis(self.recorder).derive_segments():
             segment = dict(raw_segment)
-            segment["start"] = nearest(raw_segment["start"])
-            segment["end"] = nearest(raw_segment["end"])
+            segment["start"] = self._nearest_kept_frame(downsampled_index, raw_segment["start"])
+            segment["end"] = self._nearest_kept_frame(downsampled_index, raw_segment["end"])
             if "attach" in segment:
-                segment["attach"] = nearest(raw_segment["attach"])
-                segment["detach"] = nearest(raw_segment["detach"])
+                segment["attach"] = self._nearest_kept_frame(downsampled_index, raw_segment["attach"])
+                segment["detach"] = self._nearest_kept_frame(downsampled_index, raw_segment["detach"])
             segments.append(segment)
         # a scene with two transports of the same object would otherwise name both steps
         # identically, and the viewer keys its playback captions on the step name

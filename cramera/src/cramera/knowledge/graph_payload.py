@@ -197,32 +197,32 @@ class KnowledgeGraphPayload(GraphPanelPayload):
 
             # ground the demo in the architecture at the SUBPACKAGE that actually
             # realises each part (only wire to a node that exists in this view)
-            def link(source: str, target: str, label: str) -> None:
-                """
-                Add an edge, but only if target is actually a node in this view.
-
-                :param source: Id of the edge's source node.
-                :param target: Id of the edge's target node; the edge is dropped if this
-                        node is not in the view.
-                :param label: Label shown on the edge.
-                """
-                if any(node.id == target for node in view.nodes):
-                    view.add_edge(source, target, EdgeKind.TYPE, label)
-
             # anchor one representative manipulation episode (they share the stack)
             anchor = next(
                 (episode.name for episode in knowledge_base.episodes if episode.picks),
                 None,
             )
             if anchor:
-                link(anchor, "coraplex.plans", "planned by")  # plan / designator layer
-                link(
-                    anchor, "giskardpy.motion_statechart", "motion by"
-                )  # motion execution
+                view.add_edge_to_existing(
+                    anchor, "coraplex.plans", EdgeKind.TYPE, "planned by"
+                )  # plan / designator layer
+                view.add_edge_to_existing(  # motion execution
+                    anchor,
+                    "giskardpy.motion_statechart",
+                    EdgeKind.TYPE,
+                    "motion by",
+                )
             # every physical thing in the scene is modelled in the semantic digital twin
-            link(robot_name, "semantic_digital_twin", "modelled in")
+            view.add_edge_to_existing(
+                robot_name, "semantic_digital_twin", EdgeKind.TYPE, "modelled in"
+            )
             for bench_object in knowledge_base.objects:
-                link(bench_object.name, "semantic_digital_twin", "modelled in")
+                view.add_edge_to_existing(
+                    bench_object.name,
+                    "semantic_digital_twin",
+                    EdgeKind.TYPE,
+                    "modelled in",
+                )
 
         # the executed plan tree (captured from the real PlanNode graph)
         scene = SceneBundle.of_active_scene().scene

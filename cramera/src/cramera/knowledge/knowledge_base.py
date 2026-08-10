@@ -209,19 +209,6 @@ class EpisodeKnowledgeBase:
         :param place_area: The scene's place-area object, if any.
         """
 
-        def arm_for(segment: Dict[str, Any]) -> Optional[Arm]:
-            """
-            The arm matching the segment's recorded side hint, falling back to the first
-            arm if the segment picks something but names no side.
-
-            :param segment: The recorded plan segment to match an arm to.
-            """
-            hint = (segment.get("arm") or "").lower()
-            for arm in self.arms:
-                if arm.side is not None and arm.side.name.lower() in hint:
-                    return arm
-            return self.arms[0] if self.arms and segment.get("picks") else None
-
         episodes = []
         for index, segment in enumerate(scene.get("segments") or []):
             picks = objects_by_id.get(segment.get("picks"))
@@ -235,12 +222,53 @@ class EpisodeKnowledgeBase:
                         (segment["end"] - segment["start"]) / max(1, frames_per_second),
                         1,
                     ),
-                    performed_by=arm_for(segment) if picks else None,
+                    performed_by=self._arm_of_segment(segment) if picks else None,
                     picks=picks,
                     places_at=place_area if picks else None,
                 )
             )
         return episodes
+
+    def _arm_of_segment(self, segment: Dict[str, Any]) -> Optional[Arm]:
+        """
+        The arm matching a recorded plan segment's side hint, falling back to the first
+        arm if the segment picks something but names no side.
+
+        :param segment: The recorded plan segment to match an arm to.
+        """
+        hint = (segment.get("arm") or "").lower()
+        for arm in self.arms:
+            if arm.side is not None and arm.side.name.lower() in hint:
+                return arm
+        return self.arms[0] if self.arms and segment.get("picks") else None
+
+    @classmethod
+    def _region_of_joint(
+        cls, key: str, robot_prefix: str, link_to_part: Dict[str, str]
+    ) -> JointRegion:
+        """
+        Which region a prefixed joint key belongs to: ``LEFT``/``RIGHT`` for an arm
+        joint, ``ENVIRONMENT`` when it isn't the recorded robot's own joint, else
+        ``BODY``.
+
+        :param key: The prefixed joint key to classify.
+        :param robot_prefix: World-name prefix of the recorded robot's own joints.
+        :param link_to_part: Robot link names mapped to the part they belong to.
+        """
+        prefix, _, joint_name = key.partition("/")
+        if "/" not in key:
+            prefix, joint_name = "", key
+        if robot_prefix and prefix != robot_prefix:
+            return JointRegion.ENVIRONMENT
+        part = link_to_part.get(joint_name.replace("_joint", "_link"))
+        region = cls._side_of_name(part) if part else None
+        if region is None:
+            region = cls._side_of_name(joint_name)
+        if region is Arms.LEFT:
+            return JointRegion.LEFT
+        if region is Arms.RIGHT:
+            return JointRegion.RIGHT
+        return JointRegion.BODY
 
     @classmethod
     def _build_joint_motions(
@@ -265,33 +293,10 @@ class EpisodeKnowledgeBase:
 
         link_to_part = {link: part for part, links in parts.items() for link in links}
 
-        def side_of(key: str) -> JointRegion:
-            """
-            Which region a prefixed joint key belongs to: ``LEFT``/``RIGHT`` for an arm
-            joint, ``ENVIRONMENT`` when it isn't the recorded robot's own joint, else
-            ``BODY``.
-
-            :param key: The prefixed joint key to classify.
-            """
-            prefix, _, joint_name = key.partition("/")
-            if "/" not in key:
-                prefix, joint_name = "", key
-            if robot_prefix and prefix != robot_prefix:
-                return JointRegion.ENVIRONMENT
-            part = link_to_part.get(joint_name.replace("_joint", "_link"))
-            region = cls._side_of_name(part) if part else None
-            if region is None:
-                region = cls._side_of_name(joint_name)
-            if region is Arms.LEFT:
-                return JointRegion.LEFT
-            if region is Arms.RIGHT:
-                return JointRegion.RIGHT
-            return JointRegion.BODY
-
         return [
             JointMotion(
                 name=key.partition("/")[2] or key,
-                region=side_of(key),
+                region=cls._region_of_joint(key, robot_prefix, link_to_part),
                 minimum_radians=round(minimum[key], 3),
                 maximum_radians=round(maximum[key], 3),
                 range_radians=round(maximum[key] - minimum[key], 3),

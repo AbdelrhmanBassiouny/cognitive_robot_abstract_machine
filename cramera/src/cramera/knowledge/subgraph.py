@@ -196,6 +196,24 @@ class SubgraphAccumulator:
         """
         self.edges.append(GraphEdge(source, target, kind, label))
 
+    def add_edge_to_existing(
+        self, source: str, target: str, kind: EdgeKind, label: str
+    ) -> None:
+        """
+        Append one edge, but only if the target is a node of this subgraph.
+
+        Lets a caller wire a node into a cluster that may or may not have been built,
+        without leaving an edge pointing at nothing.
+
+        :param source: Id of the edge's source node.
+        :param target: Id of the edge's target node; the edge is dropped if this node
+            is not in the subgraph.
+        :param kind: Rendering kind of the edge.
+        :param label: Edge label shown on hover.
+        """
+        if any(node.id == target for node in self.nodes):
+            self.add_edge(source, target, kind, label)
+
 
 # %% what a graph-panel tab sends to the frontend
 @dataclass(kw_only=True)
