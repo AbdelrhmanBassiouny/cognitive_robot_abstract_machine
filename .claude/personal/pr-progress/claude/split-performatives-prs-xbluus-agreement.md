@@ -79,10 +79,23 @@
   robokudo code. Commented on the PR (part 6).
 - rerun_failed_jobs refused (workflow still running).
 
+## 2026-08-10: PDF modify/delete conflict resolved (b6769dd73)
+- Routine flagged needs-resolution: main (7df3ce50) deleted drawer_explanation.pdf
+  + query_graph.pdf (LucaKro 07-31 cleanup) while the branch carried modified
+  copies — accidental: the 07-30 merge's local test run re-rendered these
+  graphviz artifacts and `git add -A` swept them in. Resolved by taking main's
+  deletion; nothing else conflicted.
+- Lesson recorded: after local test runs, discard regeneration artifacts
+  (dataset ormatic_interface.py, verbalization_results.py rewritten with local
+  formatting) before committing — done explicitly this time.
+- Full test_eql on merged tree: 1180 passed, 3 pre-existing skips. Commit
+  amended to gmail author (session env had GIT_AUTHOR_EMAIL=uni address).
+- Replied on the PR; left needs-resolution label for the routine to auto-clear.
+
 ## Next
-- When run 31044994608 completes: re-run failed jobs (robokudo should recover
-  once the Uni Bremen GitLab is reachable). Act via events or user ping — no
-  timed polling.
+- Await CI on b6769dd73; also still outstanding from earlier heads: robokudo
+  network-outage rerun (superseded if this head's run is green). Act via events
+  or user ping — no timed polling.
 - Once a head goes fully green: PR ready for user review/mark-ready. The restack
   routine handles #54/#14/#15.
 - Candidate separate bug-fix PR (needs user approval to open): guard the coraplex
