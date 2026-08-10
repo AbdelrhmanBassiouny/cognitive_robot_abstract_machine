@@ -1,68 +1,55 @@
 # integration-branch (#154) — regenerated personal integration branch
 
 `workflow-unification` plan, `stack-tooling` track. Branch
-`claude/plan-item-kickoff-workflow-ixbvxl`, based on **#139's head**
-(`claude/plan-item-kickoff-workflow-koufa6`) because `maintenance.py` exists only
-there. Draft PR #154. Session
+`claude/plan-item-kickoff-workflow-ixbvxl` on **#139's head** (`maintenance.py`
+exists only there). Draft PR #154, head `80e40e0f`. Session
 https://claude.ai/code/session_01Ue4PvfV5LDxHGRRS5BZB4g.
 
-## The plan
+## Status: implemented, pushed, awaiting review
 
-Build a branch that is upstream `main` with every in-flight stack tip merged on
-top, regenerated from scratch on demand — something to build *from* while the
-`cram2` review queue lags. It gates nothing: promotion asks whether a branch is
-ready for review, integration asks whether the branches coexist.
+Both deliverables are in one commit. Nothing is outstanding for this session; the
+PR is a draft and the plan manifest, roadmap and dashboard are all current.
 
-Two deliverables, one pull request (a conflict report nothing consumes is half a
-feature):
+## What shipped
 
-1. **`.claude/stack/integration.py`** — detects, attributes, skips. No judgement.
-   Reuses `BoardExport`/`GitHubRepository`, `build_stack`/`order`,
-   `has_landed_upstream`, `maintenance.restack`, `GitCommandRunner.merge` +
-   `unmerged_paths`, `RestackWorktree`/`DetachedCheckout`, `merge-tree` as the
-   non-mutating pair probe, and the report/exit-code shape #139 established.
-   Selection is the stack tip; conflicts **skip and continue**; the report names
-   the conflicting **pair**, not the casualty; rerere resolutions replay but are
-   never reported as clean and carry their author.
-2. **`.claude/skills/integration-conflict-triage/SKILL.md`** — the judgement.
-   *defer* resolves fully into `.git/rr-cache`, *reconcile* proposes without
-   applying, *stack* reports. Bounded by where the resolution lands, not by
-   confidence.
+- **`.claude/stack/integration.py`** — builds the upstream base plus every
+  in-flight stack tip. Tips only, ascending PR number. Conflicts skip and
+  continue; the report names the **pair**. `--restack` off by default (it pushes
+  to other people's branches), `--test` on by default (`--no-test` to skip).
+- **`.claude/skills/integration-conflict-triage/SKILL.md`** — the judgement.
+  defer resolves into `rr-cache`, reconcile proposes without applying, stack
+  reports. Ask by whose decision it is, not by confidence.
+- `integration_test_command` in `stack.toml` + `Configuration`;
+  `INTEGRATION_SCRIPT` constant; README section.
+- On #139's files: `GitCommandRunner` gains per-command config overrides (rerere
+  on for the build without touching the developer's config) + two git methods;
+  `print_configuration` omits empty settings as well as unset ones.
 
-Plus `INTEGRATION_SCRIPT` in `resolve-personal-notes-config.sh`,
-`integration_test_command` in `stack.toml` + `Configuration`, and a README line.
+## The finding worth remembering
 
-Settled at kickoff: `--restack` **off** by default (it pushes to other people's
-branches); `--test` **on** by default (it replaces the dropped CI gate);
-`--test` runs a configurable command defaulting to CI's three tooling
-directories.
+A **replayed rerere resolution fails exactly like a merge that never began** —
+non-zero exit, no unmerged paths, because `autoupdate` already staged them. Only
+git's stderr (`using previous resolution`) separates them, so the replay marker
+must be read *before* the unmerged-paths rule. The mutation that proves it:
+disabling the marker turns every replay into `integration-failed`.
 
-## Done
+## Verified
 
-- Branch cut off `04902f40`, empty bootstrap commit, pushed.
-- Draft PR #154 opened against #139's branch.
-- `plan.yaml` → `in_progress` with branch/session/PR; roadmap kickoff section
-  appended; dashboard republished.
-- Commented on #139 about the unpopulated `stack.PullRequest.ci` field.
+- 470 tests across the three directories CI runs, was 428. 42 new, TDD, each
+  mutation-checked to fail only for its own reason.
+- Live against the real fork from a detached worktree: 23 tips, 11 merged, 12
+  skipped, exit `tip-left-out (10)`. Afterwards: invoking checkout untouched,
+  pointer at the build, merged tips ancestors and skipped ones not, no leftover
+  worktree, **nothing pushed**.
 
-## Next
+## If this is picked up again
 
-- TDD `.claude/stack/tests/test_integration.py` against real git: clean build;
-  conflict **skipped, pair named**; failed-merge-without-unmerged-paths is *not*
-  a conflict (#123's false-positive class); stable order; tips-only selection;
-  replay reported with author; **exit status per outcome, parametrised**;
-  `--restack` off means no push (assert on git arguments); `--test` failure after
-  a skill-authored resolution stops rather than re-resolving.
-- Then `integration.py`, then the skill + its contract test mirroring
-  `test_maintenance_skill.py`.
-- Verify with the exact CI invocation (plan-dashboard + hooks + stack tests), then
-  a live `build --json` from a detached worktree.
-
-## Watch
-
-- `greenlet==3.5.5` has no Linux wheel — `uv sync` fails before any test runs on
-  **every** open PR in this repo. Red robotics jobs here are not this PR's; the
-  diff touches no `pyproject`/`requirements`/`uv.lock`.
-- #139 is `in-review` and still moving. A base merge may land underneath; ancestry
+- Re-draft #154 after any push.
+- CI red on `test_each_lib` is base-side: `greenlet==3.5.5` has no Linux wheel,
+  so `uv sync` fails before any test runs on every open PR. This diff touches no
+  `pyproject`/`requirements`/`uv.lock`.
+- #139 is `in-review` and moving; a base merge may land underneath. Ancestry
   answers "did I lose anything", only the suite answers "does it still pass".
-- Re-draft #154 after every push.
+- The live run left local `integration` / `integration-20260810-224716` branches
+  and a `cram2` remote in this clone. All local, all harmless.
+
