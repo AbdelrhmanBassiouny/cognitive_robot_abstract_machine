@@ -13,7 +13,8 @@ from pathlib import Path
 from coraplex.datastructures.enums import JointType
 from typing_extensions import Any, Dict, List, Optional
 
-from cram_viz import get_logger, paths
+from cram_viz import paths
+from cram_viz.logging_setup import get_logger
 
 logger = get_logger(__name__)
 

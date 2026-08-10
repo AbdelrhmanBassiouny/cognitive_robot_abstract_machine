@@ -28,7 +28,7 @@ from pathlib import Path
 
 from typing_extensions import Any, Dict
 
-from cram_viz import get_logger
+from cram_viz.logging_setup import get_logger
 from cram_viz.live.bridge import Bridge, MalformedMoveRequest, MoveRequest
 
 logger = get_logger(__name__)

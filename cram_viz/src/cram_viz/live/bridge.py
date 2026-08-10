@@ -45,7 +45,7 @@ from semantic_digital_twin.spatial_types import (
     Quaternion,
     RotationMatrix,
 )
-from cram_viz import get_logger
+from cram_viz.logging_setup import get_logger
 from cram_viz.body_geometry import measure_body, rounded_scale
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,

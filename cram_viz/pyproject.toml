@@ -36,7 +36,7 @@ include = ["cram_viz*"]
 cram_viz = ["web/**/*"]
 
 [tool.setuptools.dynamic]
-version = { attr = "cram_viz.__version__" }
+version = { attr = "cram_viz.version.__version__" }
 dependencies = { file = "requirements.txt" }
 
 [project.optional-dependencies]

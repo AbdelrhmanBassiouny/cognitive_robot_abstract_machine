@@ -33,12 +33,9 @@ from cram_viz.knowledge.views import (
     expand_node as expand_node,
     view_payload as view_payload,
 )
-from cram_viz.knowledge.views.architecture import ArchitectureViews
-
-#: re-exported for the test suite and any external caller inspecting the truncation
-#: limits; the module itself now scopes these onto ArchitectureViews, not a global.
-CLASS_CAP = ArchitectureViews.CLASS_CAP
-SUBCLASS_CAP = ArchitectureViews.SUBCLASS_CAP
+from cram_viz.knowledge.views.architecture import (
+    ArchitectureViews as ArchitectureViews,
+)
 from cram_viz.knowledge.views.plan_tree import (
     shorten_action_label as shorten_action_label,
 )

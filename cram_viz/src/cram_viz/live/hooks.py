@@ -25,7 +25,7 @@ from giskardpy.executor import Executor
 from semantic_digital_twin.adapters.mesh import MeshParser
 from semantic_digital_twin.world import World
 
-from cram_viz import get_logger
+from cram_viz.logging_setup import get_logger
 from cram_viz.live.bridge import BRIDGE, Bridge, LiveHook, TaskStatusName
 from cram_viz.monkey_patch import MethodPatch
 

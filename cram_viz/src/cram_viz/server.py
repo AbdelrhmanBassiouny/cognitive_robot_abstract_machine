@@ -35,7 +35,8 @@ from pathlib import Path
 from typing_extensions import Any, Callable, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
-from cram_viz import get_logger, paths
+from cram_viz import paths
+from cram_viz.logging_setup import get_logger
 
 logger = get_logger(__name__)
 

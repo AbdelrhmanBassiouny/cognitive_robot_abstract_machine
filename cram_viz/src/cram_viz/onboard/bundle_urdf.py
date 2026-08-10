@@ -31,7 +31,8 @@ from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.exceptions import ParsingError
 
-from cram_viz import get_logger, paths
+from cram_viz import paths
+from cram_viz.logging_setup import get_logger
 
 logger = get_logger(__name__)
 

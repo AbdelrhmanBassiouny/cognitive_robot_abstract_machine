@@ -615,7 +615,7 @@ class TestExpandNode:
                 methods=index,
                 doc="",
             )
-            for index in range(knowledge.CLASS_CAP + 1)
+            for index in range(knowledge.ArchitectureViews.CLASS_CAP + 1)
         ]
         knowledge_base.packages = knowledge_base.packages + [
             knowledge.Package(
@@ -626,7 +626,10 @@ class TestExpandNode:
         payload = knowledge.expand_node("synthetic_pkg")
         assert payload.details["synthetic_pkg"].lines[-1] == (
             "showing the %d largest of %d classes (by method count)"
-            % (knowledge.CLASS_CAP, knowledge.CLASS_CAP + 1)
+            % (
+                knowledge.ArchitectureViews.CLASS_CAP,
+                knowledge.ArchitectureViews.CLASS_CAP + 1,
+            )
         )
 
     def test_class_view_truncates_to_subclass_cap(self, fixture_scene):
@@ -650,7 +653,7 @@ class TestExpandNode:
                 methods=0,
                 doc="",
             )
-            for index in range(knowledge.SUBCLASS_CAP + 1)
+            for index in range(knowledge.ArchitectureViews.SUBCLASS_CAP + 1)
         ]
         knowledge_base.classes = (
             knowledge_base.classes + [base_class] + synthetic_subclasses
@@ -658,7 +661,10 @@ class TestExpandNode:
         payload = knowledge.expand_node("synthetic_pkg.base.SyntheticBase")
         assert payload.details["synthetic_pkg.base.SyntheticBase"].lines[-1] == (
             "showing %d of %d subclasses"
-            % (knowledge.SUBCLASS_CAP, knowledge.SUBCLASS_CAP + 1)
+            % (
+                knowledge.ArchitectureViews.SUBCLASS_CAP,
+                knowledge.ArchitectureViews.SUBCLASS_CAP + 1,
+            )
         )
 
 

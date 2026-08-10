@@ -53,7 +53,8 @@ from typing_extensions import (
     TYPE_CHECKING,
 )
 
-from cram_viz import get_logger, paths
+from cram_viz import paths
+from cram_viz.logging_setup import get_logger
 from cram_viz.body_geometry import measure_body
 from cram_viz.live.bridge import ROBOT_BASE_KEY
 from cram_viz.monkey_patch import MethodPatch
