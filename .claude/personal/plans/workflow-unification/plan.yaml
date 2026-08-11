@@ -2375,6 +2375,42 @@ items:
       git-identity-from-personal-notes to blocked with the five files GitHub's dirty verdict on #126
       is about, and the blocker round-tripped byte-exact after the fold fix.
 
+      Review round 2026-08-11, eleven threads, applied in 0118aca6. Three were substantive and one
+      of them reversed a rule this plan had been treating as settled. The report's JSON keys become
+      a ReportKey StrEnum and every render method is to_json - but the tests keep their string
+      literals deliberately, because that duplication is what pins the wire format two other
+      programs parse. #135 removed exactly that guard when it made both sides read its own
+      ReportKey, and the removal was invisible: renaming SHARED_PATHS there left all 8 tests green.
+      So the 2026-08-07 entry's generalization needs one more qualification - single-sourcing an
+      external contract deletes a guard, and whether to replace it with a dedicated test or to keep
+      the literals depends on who reads the contract. Here two programs do, so the literals stay;
+      the thread asking for the enum is answered and left open rather than resolved. Each of the
+      seven subcommands is a Subcommand subclass owning its flags and its work, with SUBCOMMANDS
+      built from the subclasses, collapsing what had been a parser block and a handler entry per
+      command into one class. The name and description are abstract instance properties rather than
+      #139's classproperty, and the reason is worth carrying: the parser here is built from
+      instances, so plain ABCMeta already refuses a nameless command as the module imports. That
+      avoids writing class_property.py a second time - it exists only on #139's unlanded branch, and
+      a fifth same-artifact-twice instance was the alternative - and avoids the trap #139 measured,
+      where a plain classproperty silently loses abstractness because ABCMeta calls the descriptor.
+      update gains --append-notes, which retires the extend-a-note trap this item's notes had left
+      open as a question. The answer to should the writer accept both forms is no, and the
+      measurement is why: a note read back out of plan.yaml separates paragraphs with a single
+      newline while a note written into a file separates them with a blank line and uses single
+      newlines for its own hard wrapping. The same character means opposite things in the two
+      sources, so teaching fold to split on any newline fixes the first and explodes the second.
+      extend_note does the conversion and the flag says which source it holds; --notes and
+      --append-notes are mutually exclusive. This note was appended with it. Also renamed
+      throughout, on the user's question of staleness or status: manifest-currency.md became
+      manifest-staleness.md and CurrencyReport became StalenessReport. Status was already taken
+      twice - an item's lifecycle field and the key every report leads with - and staleness is the
+      word check already uses. 416 tests pass across the three directories CI runs, was 408. Six
+      new, each mutation-checked. Two threads stay open on purpose, both answered rather than acted
+      on: the test-literals one, and whether blockers written before the ownership convention
+      survive a pass. They do by construction, verified against this plan's real manifest - the
+      three pre-convention blockers on personal-settings-sync carry no owner-shaped prefix, so
+      blockers_not_owned_by never matches them.
+
   - id: no-pr-subscriptions
     title: "Stop sessions from subscribing to their own pull requests"
     branch: claude/remove-auto-subscribe-pr-oowwkp
