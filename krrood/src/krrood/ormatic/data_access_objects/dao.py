@@ -727,7 +727,16 @@ class DataAccessObject(HasGeneric[T]):
                     for item in source_collection
                 ]
 
-            setattr(self, relationship.key, type(source_collection)(dao_collection))
+            # The DAO-side relationship attribute is SQLAlchemy-instrumented and only
+            # accepts a mutable collection_class (list/set/dict); a domain field typed
+            # as an immutable container (e.g. tuple) can't be assigned to it directly
+            # even though that is source_collection's own type, so fall back to list
+            # for the assignment here, mirroring wrapped_table.py's own fallback when
+            # generating that relationship's collection_class.
+            collection_type = type(source_collection)
+            if issubclass(collection_type, tuple):
+                collection_type = list
+            setattr(self, relationship.key, collection_type(dao_collection))
 
     def _get_or_queue_dao(
         self,

@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 
 from coraplex.plans.plan import Plan
+from segmind.datastructures.events import DetectionEvent
 
 
 class InsertionOutcome(StrEnum):
@@ -31,6 +32,28 @@ class InsertionOutcome(StrEnum):
     FELL_THROUGH = "fell_through"
     DID_NOT_FALL_THROUGH = "did_not_fall_through"
     ATTEMPTS_EXHAUSTED = "attempts_exhausted"
+
+
+@dataclass
+class ShapeInsertionAttempt:
+    """
+    One insertion attempt's realized plan and the segmind events detected while it ran.
+    """
+
+    plan: Plan
+    """
+    The entire realized plan tree of this attempt -- every sub-action and motion
+    :func:`~coraplex.plans.factories.execute_single` and
+    :meth:`~coraplex.plans.plan_node.PlanNode.perform` expanded it into, not just its
+    top-level :class:`~experiments.montessori.insert_shape_action.InsertMontessoriShapeAction`
+    node (see :func:`~experiments.montessori.franka_montessori_demo._insert_shape_or_none`).
+    """
+
+    events: list[DetectionEvent] = field(default_factory=list)
+    """
+    Segmind events whose timestamp fell within this attempt's time window (see
+    :func:`~experiments.montessori.franka_montessori_demo._partition_events_by_attempt`).
+    """
 
 
 @dataclass
@@ -51,14 +74,11 @@ class ShapeInsertionResult:
     How this shape's insertion attempts ended.
     """
 
-    plan: Plan
+    attempts: list[ShapeInsertionAttempt] = field(default_factory=list)
     """
-    The entire realized plan tree of the last insertion attempt made for this shape --
-    every sub-action and motion :func:`~coraplex.plans.factories.execute_single` and
-    :meth:`~coraplex.plans.plan_node.PlanNode.perform` expanded it into, not just its
-    top-level :class:`~experiments.montessori.insert_shape_action.InsertMontessoriShapeAction`
-    node -- that produced :attr:`outcome`, whether or not it raised (see
-    :func:`~experiments.montessori.franka_montessori_demo._insert_shape_or_none`).
+    Every attempt made for this shape, in order; the last entry is the one whose
+    fell-through result (or lack of one) determined :attr:`outcome` (see
+    :func:`~experiments.montessori.franka_montessori_demo._insert_all_shapes`).
     """
 
 
