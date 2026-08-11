@@ -64,3 +64,60 @@ recovery. If #121 merges normally, rebase #126 onto `main`.
 **Next:** respond to review comments and CI events as they arrive (no timed
 check-in). Unconfirmed recommendation now built in: `needs-setup` as the
 no-identity-recorded status.
+
+---
+
+## Resolve pass 2026-08-11 (session_016kC5DfwqNRAmDkWYLxpa3x)
+
+Item was `blocked`; now `in_progress`, blocker cleared. Head `edca885f`,
+`mergeable_state` `dirty` → `unstable`, `needs-resolution` dropped, still a
+draft, no `bug` label, description rewritten. Plan:
+`/root/.claude/plans/imperative-honking-trinket.md`.
+
+**Done**
+
+1. Merged the base at `311354a3` (was `5baac7d8` — #121's own resolve, two
+   review rounds, two `main` merges). Five conflicts, all additive-vs-additive,
+   three carrying a real choice:
+   - `session-start.sh`: our git-identity block vs `main`'s personal-settings
+     sync at the same anchor. **This branch did not carry the settings block at
+     all**, so keeping ours would have silently deleted it from the hook. Both
+     kept, git identity first, both above the setup verdict.
+   - `scratch_repository.py`: dropped `REQUIREMENTS_FILE`/`TOOLING_FILES` for
+     #121's `SetupPrerequisiteFile` enum over the same paths; `run_git` keeps
+     both its `cwd` argument and our `run_git_allowing_failure` delegation.
+   - `README.md`: summary paragraph and gitignore bullet re-authored, keeping
+     #121's third-person wording. Both merged files read end to end — no
+     resurrected or stranded sections.
+2. Folded the `git identity:` wording into `session-start-messages.sh` with
+   `SummaryMessage` members; moved `SummaryMessage`/`summary_message` beside
+   `summary_value` in `session_start_summary.py`, now shared by two test
+   modules. Replaced `test_git_identity_sync.py`'s four literal copies of the
+   wording. No wording pinned (per #121 round 2); mutation-checked that a
+   missing function and a silent function each fail the contract test.
+3. Replied to the `GIT_AUTHOR_IDENT` thread with the `git var -l` measurement
+   and **left it open** — the rename cannot be applied, `GIT_AUTHOR_IDENTITY`
+   does not exist.
+4. 397 tests green (107 hooks / 194 plan-dashboard / 96 stack), re-run from a
+   clean clone of the pushed branch. Live hook run in this clone reports
+   `git identity: set from 'claude/personal-notes' ...` and `setup: ok`.
+5. Manifest + roadmap saved (`31e253fe`), dashboard republished, structural
+   comment on #102.
+
+**Caught and repaired: a stale save.** The notes branch moved `7170e664` →
+`49e0a3aa` while the edit was being composed, and the first `save-plan.sh`
+reverted `manifest-currency-first`'s fold-bug repair across five items' notes.
+Re-applied only this item's block onto `49e0a3aa` and re-saved; verified
+semantically — 43 items, zero fields differing outside this item. The
+fetch-before-write rule did not catch it because the window is between *reading*
+and *writing*; diffing the push against the tip it landed on is what did.
+
+**Outstanding**
+
+- The `GIT_AUTHOR_IDENT` thread is open by design — the user's to close, or to
+  redirect toward avoiding the bare token in prose.
+- CI has not run against the merged tree yet. `test_each_lib
+  (semantic_digital_twin)` is expected to stay red as the base's failure; check
+  it on the new run rather than inheriting the 2026-08-03 ruling.
+- The watch item above still stands: if #121 lands by push, #126 needs a manual
+  base `PATCH` to `main`.
