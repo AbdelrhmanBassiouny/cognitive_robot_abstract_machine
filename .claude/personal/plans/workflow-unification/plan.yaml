@@ -821,16 +821,38 @@ items:
     status: not_started
     notes: >
       Move the existing Python (.claude/stack/stack.py, build_dashboard.py + siblings,
-      plan_manifest_tools.py) into the package PR 3 created, with all their tests moved
-      to the standard test/ directory and the test_claude_dev_tooling CI job repointed.
-      Boundary: SKILL.md files, settings.json, and the bash hook entry points stay in
-      .claude/ (Claude Code discovers them by path) as thin wrappers calling python -m
-      into the package. Constraints: zero-install must survive (importable from repo
-      root; installation optional), and the package stays visibly dev-tooling (own
-      directory, not published, not in the default install). Stronger dependency than
-      the open-ready rule: requires #101 MERGED (this moves files in
-      .claude/hooks/tests/ that #101's diff adds) and PR 3 merged or at least stable
-      (it moves files PR 3 edits) — sequence it last in the upstream wave.
+      plan_manifest_tools.py) into the package PR 3 created, with all their tests moved to the
+      standard test/ directory and the test_claude_dev_tooling CI job repointed. Boundary: SKILL.md
+      files, settings.json, and the bash hook entry points stay in .claude/ (Claude Code discovers
+      them by path) as thin wrappers calling python -m into the package. Constraints: zero-install
+      must survive (importable from repo root; installation optional), and the package stays visibly
+      dev-tooling (own directory, not published, not in the default install). Stronger dependency
+      than the open-ready rule: requires #101 MERGED (this moves files in .claude/hooks/tests/ that
+      #101's diff adds) and PR 3 merged or at least stable (it moves files PR 3 edits) — sequence it
+      last in the upstream wave.
+
+      Fifth carrier recorded 2026-08-11, from two review comments on #151 asking why its command
+      classes are not #139's and whether the duplication across the tooling pull requests can be
+      fixed. The command-class pattern now exists twice: #139's MaintenanceCommand in
+      .claude/stack/maintenance_commands.py, with classproperty in .claude/stack/class_property.py,
+      and #151's Subcommand in .claude/hooks/plan_item_bootstrap.py - each a frozen dataclass ABC
+      whose registry comes from __subclasses__(), each with its own tests.
+
+      They differ only in where the parser is built from, which is what decides whether the name has
+      to be readable off the class: #139 builds from the classes and needs classproperty, and had to
+      discover that a plain one silently loses abstractness because ABCMeta resolves it through
+      getattr; #151 builds from instances, where plain ABCMeta refuses a nameless command as the
+      module imports. Neither is wrong for its own module, and making them textually identical today
+      means copying class_property.py into .claude/hooks/ - a fifth duplicated file added in answer
+      to a complaint about duplication.
+
+      The mechanical cause is the one this item exists to remove: .claude/hooks/ and .claude/stack/
+      are separate sys.path entries, so nothing in one can import the other without the hackery
+      decision 8 ends. So the command base, its registry and its tests join run_git, the GitHub
+      backend rule and ItemStatus on the list this migration unifies, rather than being reconciled
+      pairwise beforehand. Basing #151 on #139 was considered and declined for the same reason it
+      was declined for #143: it holds a dependency-free immediate-wave item behind an unlanded
+      stack-tooling pull request and still does not let either import the other.
 
   - id: dev-tooling-notes-core-python
     branch: null
