@@ -1,0 +1,346 @@
+"""
+Serializing a :class:`~semantic_digital_twin.world.World` as a self-contained URDF.
+
+Any adapter that resolves a robot description into a :class:`World` (Gazebo/SDF, MJCF,
+...) can bundle it by parsing it and handing the result to
+:meth:`UrdfDocument.of_world`; this module walks the kinematic tree and serializes it,
+it has no notion of the source format.
+"""
+
+from __future__ import annotations
+
+import os
+import xml.etree.ElementTree as ElementTree
+from dataclasses import dataclass, field
+
+from coraplex.datastructures.enums import JointType
+from scipy.spatial.transform import Rotation
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+)
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import (
+    Connection,
+    Connection6DoF,
+    FixedConnection,
+    PrismaticConnection,
+    RevoluteConnection,
+)
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Cylinder,
+    Mesh,
+    Shape,
+    Sphere,
+)
+from semantic_digital_twin.world_description.world_entity import Body
+from typing_extensions import ClassVar, Dict, Iterable, List, Type
+
+from cramera.onboard.bundle_urdf import BundledAssets, BundleReport
+
+
+@dataclass
+class UrdfDocument:
+    """
+    A URDF document being assembled from a world's kinematic tree.
+    """
+
+    CONNECTION_JOINT_TYPES: ClassVar[Dict[Type[Connection], JointType]] = {
+        FixedConnection: JointType.FIXED,
+        RevoluteConnection: JointType.REVOLUTE,
+        PrismaticConnection: JointType.PRISMATIC,
+        Connection6DoF: JointType.FLOATING,
+    }
+    """
+    The joint type a connection class becomes. A :class:`RevoluteConnection` additionally
+    becomes :attr:`JointType.CONTINUOUS` when its degree of freedom has no position
+    limits.
+    """
+
+    COORDINATE_PRECISION: ClassVar[int] = 6
+    """
+    Decimal places a bundled numeric attribute keeps.
+    """
+
+    AXIS_JOINT_TYPES: ClassVar[frozenset] = frozenset(
+        {JointType.REVOLUTE, JointType.CONTINUOUS, JointType.PRISMATIC}
+    )
+    """
+    Joint types that carry an ``axis`` element.
+    """
+
+    LIMITED_JOINT_TYPES: ClassVar[frozenset] = frozenset(
+        {JointType.REVOLUTE, JointType.PRISMATIC}
+    )
+    """
+    Joint types that carry a ``limit`` element when their degree of freedom is limited.
+    """
+
+    output_directory: str
+    """
+    Directory the URDF and its ``meshes/`` tree are written to.
+    """
+
+    mesh_subdirectory: str
+    """
+    Directory bundled meshes nest under, so meshes from different source formats or
+    models cannot collide.
+    """
+
+    root_element: ElementTree.Element
+    """
+    The document's ``robot`` element, which every link and joint is added to.
+    """
+
+    assets: BundledAssets
+    """
+    Collects the files copied into the bundle.
+    """
+
+    joint_names: List[str] = field(default_factory=list)
+    """
+    Names of the joints added so far, in document order.
+    """
+
+    movable_joint_names: List[str] = field(default_factory=list)
+    """
+    Names of the added joints that are not fixed.
+    """
+
+    @classmethod
+    def of_world(
+        cls, world: World, name: str, output_directory: str, mesh_subdirectory: str
+    ) -> BundleReport:
+        """
+        Serialize a parsed world, with every mesh it references, as a URDF.
+
+        :param world: The world to serialize, already resolved to concrete shapes and
+            poses by whichever adapter parsed it.
+        :param name: Output model name, used for ``<output_directory>/<name>.urdf``.
+        :param output_directory: Directory the URDF and its ``meshes/`` tree go into.
+        :param mesh_subdirectory: Directory bundled meshes nest under.
+        """
+        os.makedirs(output_directory, exist_ok=True)
+        document = cls(
+            output_directory=output_directory,
+            mesh_subdirectory=mesh_subdirectory,
+            root_element=ElementTree.Element("robot", {"name": name}),
+            assets=BundledAssets(bundle_root=output_directory),
+        )
+        bodies = world.bodies_topologically_sorted
+        for body in bodies:
+            document.add_link(body)
+            if body.parent_connection is not None:
+                document.add_joint(body.parent_connection)
+        return document.write(name, bodies)
+
+    def write(self, name: str, bodies: Iterable[Body]) -> BundleReport:
+        """
+        Write the assembled document to disk and report what it contains.
+
+        :param name: Output model name, used for ``<output_directory>/<name>.urdf``.
+        :param bodies: The bodies serialized into the document.
+        """
+        urdf_out = os.path.join(self.output_directory, "%s.urdf" % name)
+        ElementTree.indent(self.root_element)
+        ElementTree.ElementTree(self.root_element).write(
+            urdf_out, encoding="utf-8", xml_declaration=True
+        )
+        return BundleReport(
+            name=name,
+            urdf=urdf_out,
+            source=urdf_out,
+            links=[str(body.name) for body in bodies],
+            joints=self.joint_names,
+            movable_joints=self.movable_joint_names,
+            meshes_copied=len(self.assets.copied),
+            mesh_suffixes=self.assets.mesh_suffixes,
+            references_rewritten=len(self.assets.copied),
+            missing=self.assets.missing,
+        )
+
+    # %% links
+    def add_link(self, body: Body) -> None:
+        """
+        Add a ``link`` element for a body, with one ``visual`` per shape it carries.
+
+        :param body: The body the link describes.
+        """
+        link_element = ElementTree.SubElement(
+            self.root_element, "link", {"name": str(body.name)}
+        )
+        for shape in body.visual.shapes:
+            visual_element = ElementTree.SubElement(link_element, "visual")
+            self._set_origin(visual_element, shape.origin)
+            self._add_geometry(visual_element, shape)
+            self._add_material(visual_element, shape)
+
+    def _add_geometry(
+        self, visual_element: ElementTree.Element, shape: Shape
+    ) -> None:
+        """
+        Add the ``geometry`` a shape describes, copying a mesh's file into the bundle
+        first if the shape is one.
+
+        :param visual_element: The ``visual`` element the geometry belongs to.
+        :param shape: The shape to describe.
+        :raises TypeError: If the shape is of a type this bundler does not support.
+        """
+        geometry_element = ElementTree.SubElement(visual_element, "geometry")
+        if isinstance(shape, Box):
+            ElementTree.SubElement(
+                geometry_element,
+                "box",
+                {"size": self._format_numbers(shape.scale.to_np())},
+            )
+            return
+        if isinstance(shape, Sphere):
+            ElementTree.SubElement(
+                geometry_element, "sphere", {"radius": str(shape.radius)}
+            )
+            return
+        if isinstance(shape, Cylinder):
+            ElementTree.SubElement(
+                geometry_element,
+                "cylinder",
+                {"radius": str(shape.radius), "length": str(shape.height)},
+            )
+            return
+        if not isinstance(shape, Mesh):
+            raise TypeError("Unsupported shape type for bundling: %s" % type(shape))
+
+        relative_path = os.path.join(
+            self.mesh_subdirectory,
+            os.path.basename(os.path.dirname(shape.filename)),
+            os.path.basename(shape.filename),
+        )
+        bundled = os.path.join(self.output_directory, "meshes", relative_path)
+        if self.assets.copy(shape.filename, bundled):
+            self.assets.copy_side_assets(shape.filename, bundled)
+        ElementTree.SubElement(
+            geometry_element,
+            "mesh",
+            {
+                "filename": "meshes/" + relative_path.replace(os.sep, "/"),
+                "scale": self._format_numbers(shape.scale.to_np()),
+            },
+        )
+
+    def _add_material(
+        self, visual_element: ElementTree.Element, shape: Shape
+    ) -> None:
+        """
+        Add the ``material`` a shape's colour describes.
+
+        :param visual_element: The ``visual`` element the material belongs to.
+        :param shape: The shape whose colour is described.
+        """
+        material_element = ElementTree.SubElement(
+            visual_element, "material", {"name": ""}
+        )
+        color = shape.color
+        ElementTree.SubElement(
+            material_element,
+            "color",
+            {"rgba": self._format_numbers([color.R, color.G, color.B, color.A])},
+        )
+
+    # %% joints
+    def add_joint(self, connection: Connection) -> None:
+        """
+        Add a ``joint`` element for a connection.
+
+        :param connection: The connection the joint describes.
+        """
+        joint_type = self._joint_type(connection)
+        joint_element = ElementTree.SubElement(
+            self.root_element,
+            "joint",
+            {"name": str(connection.name), "type": joint_type.name.lower()},
+        )
+        ElementTree.SubElement(
+            joint_element, "parent", {"link": str(connection.parent.name)}
+        )
+        ElementTree.SubElement(
+            joint_element, "child", {"link": str(connection.child.name)}
+        )
+        self._set_origin(joint_element, connection.origin)
+
+        if joint_type in self.AXIS_JOINT_TYPES:
+            ElementTree.SubElement(
+                joint_element,
+                "axis",
+                {"xyz": self._format_numbers(connection.axis.to_np()[:3])},
+            )
+        if (
+            joint_type in self.LIMITED_JOINT_TYPES
+            and connection.dof.has_position_limits()
+        ):
+            limits = connection.dof.limits
+            ElementTree.SubElement(
+                joint_element,
+                "limit",
+                {
+                    "lower": str(limits.lower.position),
+                    "upper": str(limits.upper.position),
+                    "velocity": str(limits.upper.velocity or 0.0),
+                    "effort": "0.0",
+                },
+            )
+        self.joint_names.append(str(connection.name))
+        if joint_type is not JointType.FIXED:
+            self.movable_joint_names.append(str(connection.name))
+
+    @classmethod
+    def _joint_type(cls, connection: Connection) -> JointType:
+        """
+        The joint type a connection becomes.
+
+        :param connection: The connection to classify.
+        :raises TypeError: If the connection is of a type this bundler does not support.
+        """
+        if (
+            isinstance(connection, RevoluteConnection)
+            and not connection.dof.has_position_limits()
+        ):
+            return JointType.CONTINUOUS
+        for connection_type, joint_type in cls.CONNECTION_JOINT_TYPES.items():
+            if isinstance(connection, connection_type):
+                return joint_type
+        raise TypeError(
+            "Unsupported connection type for bundling: %s" % type(connection)
+        )
+
+    # %% numeric formatting
+    @classmethod
+    def _set_origin(
+        cls, element: ElementTree.Element, pose: HomogeneousTransformationMatrix
+    ) -> None:
+        """
+        Add an ``origin`` child expressing a pose as URDF does: a translation plus a
+        fixed-axis (extrinsic) roll-pitch-yaw rotation.
+
+        :param element: The element the origin belongs to.
+        :param pose: The pose to express, relative to the frame the element implies.
+        """
+        matrix = pose.to_np()
+        roll, pitch, yaw = Rotation.from_matrix(matrix[:3, :3]).as_euler("xyz")
+        ElementTree.SubElement(
+            element,
+            "origin",
+            {
+                "xyz": cls._format_numbers(matrix[:3, 3]),
+                "rpy": cls._format_numbers([roll, pitch, yaw]),
+            },
+        )
+
+    @classmethod
+    def _format_numbers(cls, values: Iterable[float]) -> str:
+        """
+        Numbers as the space-separated attribute value a URDF carries.
+
+        :param values: The numbers to format.
+        """
+        return " ".join(
+            str(round(float(value), cls.COORDINATE_PRECISION)) for value in values
+        )
