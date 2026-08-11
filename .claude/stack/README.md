@@ -85,6 +85,9 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   - `python .claude/stack/integration.py build` - assemble it, then run the suite on the result.
     `--restack` brings stale tips forward first, which pushes to other people's branches and is
     why it is opt-in; `--no-test` skips the suite; `--json` emits the whole build as one document.
+  - `python .claude/stack/integration.py bisect` - when the branch builds and the suite fails on
+    it, add the tips back one at a time until it turns, and name the pair. A semantic collision
+    leaves no conflict to attribute, so there is nothing else to go on.
   - `stage-conflict` / `record-resolution` - reproduce one collision, and record what was chosen
     so later builds replay it instead of skipping the tip again.
 - **`.claude/skills/integration-conflict-triage/SKILL.md`** - what a collision between two
@@ -145,6 +148,12 @@ It gates nothing. Promotion asks whether one branch is ready for review; integra
 the branches coexist, and a collision between two of yours is not a reason to hold either back.
 A tip that collides is skipped so the rest still builds, and the report names the **pair** - which
 of the two should change is a judgement, and `/integration-conflict-triage` is where it is made.
+
+Two branches can also merge perfectly and still not work together - one removing what another's
+test imports, one adding a dependency another's fixture does not provide. No per-branch check can
+see that, because neither branch is wrong and the failure exists only in a tree neither of them
+is. That is what the `--test` run on the finished branch is for, and `bisect` is what turns a red
+suite over a dozen merged tips into a named pair.
 
 ## Rules of hygiene
 

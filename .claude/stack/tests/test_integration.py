@@ -34,6 +34,7 @@ from integration import (
     build_branch_name,
     build_integration,
     exit_code_for,
+    exit_code_for_bisect,
     tips_of,
 )
 
@@ -709,6 +710,176 @@ def test_a_failing_suite_over_a_machine_written_replay_is_its_own_status(
     )
 
     assert exit_code_for(report) is IntegrationExitCode.SUSPECT_REPLAY
+
+
+# %% localising a semantic break
+
+
+THE_SUITE_RUNNER = """\
+import pathlib
+import sys
+
+# Only a build carrying the test needs the module it imports, which is what makes this
+# fail for a combination of tips rather than for either one of them.
+if pathlib.Path("test_needs_the_module.py").exists():
+    import a_module
+
+    assert a_module.VALUE
+sys.exit(0)
+"""
+"""
+A suite whose verdict depends on what the build actually contains, so a semantic break
+is reproduced rather than declared. Lives on the base, where every build has it.
+"""
+
+
+def two_tips_that_break_only_together(checkout: ForkCheckout) -> list[PullRequest]:
+    """
+    Build tips that each pass alone, merge cleanly, and fail the suite together.
+
+    The shape a semantic break really takes: one branch's test comes to depend on
+    something another branch removes. Neither is wrong, neither conflicts textually, and
+    only a build carrying both can see it. An innocent tip merges first, so a bisect that
+    blamed everything already in the build would be caught naming it.
+
+    :param checkout: The checkout to build them in.
+    :return: The board entries.
+    """
+    checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
+    (checkout.project_root / "a_module.py").write_text("VALUE = 1\n")
+    (checkout.project_root / "check_the_build.py").write_text(THE_SUITE_RUNNER)
+    checkout.run_git("add", "a_module.py", "check_the_build.py")
+    checkout.run_git("commit", "--quiet", "-m", "the module both tips are about")
+    checkout.run_git("push", "--quiet", "origin", UPSTREAM_BASE)
+    checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
+    checkout.run_git("fetch", "--quiet", "cram2")
+
+    checkout.branch_from("innocent-tip", UPSTREAM_BASE)
+
+    checkout.run_git("checkout", "--quiet", "-B", "needs-the-module", UPSTREAM_BASE)
+    (checkout.project_root / "test_needs_the_module.py").write_text(
+        "import a_module\n\n\ndef test_it_is_there():\n    assert a_module.VALUE\n"
+    )
+    checkout.run_git("add", "test_needs_the_module.py")
+    checkout.run_git("commit", "--quiet", "-m", "a test that needs the module")
+    checkout.run_git("push", "--quiet", "origin", "needs-the-module:needs-the-module")
+
+    checkout.run_git("checkout", "--quiet", "-B", "removes-the-module", UPSTREAM_BASE)
+    checkout.run_git("rm", "--quiet", "a_module.py")
+    checkout.run_git("commit", "--quiet", "-m", "the module goes away")
+    checkout.run_git(
+        "push", "--quiet", "origin", "removes-the-module:removes-the-module"
+    )
+    checkout.run_git("fetch", "--quiet", "origin")
+    checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
+    return [
+        a_pull_request(1, "innocent-tip", UPSTREAM_BASE),
+        a_pull_request(2, "needs-the-module", UPSTREAM_BASE),
+        a_pull_request(3, "removes-the-module", UPSTREAM_BASE),
+    ]
+
+
+def bisect(
+    checkout: ForkCheckout, pull_requests: list[PullRequest], test_command: str
+) -> integration.BisectReport:
+    """
+    Run one bisect against the scratch fork.
+
+    :param checkout: The checkout to build in.
+    :param pull_requests: The board entries the stack is derived from.
+    :param test_command: The suite that decides whether a build works.
+    :return: What it localised.
+    """
+    return integration.bisect_integration(
+        stack=a_stack(checkout, pull_requests),
+        git=checkout.git,
+        build_branch=A_BUILD_BRANCH,
+        provenance=ResolutionProvenance({}),
+        test_command=test_command,
+    )
+
+
+A_SUITE_OVER_THE_BUILD = f"{sys.executable} check_the_build.py"
+"""
+The command that runs :data:`THE_SUITE_RUNNER` against whatever a build contains.
+"""
+
+
+def test_a_bisect_names_the_tip_whose_arrival_broke_the_suite(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A build that merged cleanly and then failed says nothing about which branch to look
+    at. Adding tips one at a time until the suite turns does, and it is the same order
+    the build itself used - so the answer describes the build that failed rather than
+    some other ordering of it.
+    """
+    pull_requests = two_tips_that_break_only_together(fork_checkout)
+
+    report = bisect(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
+
+    assert report.semantic_break is not None
+    assert report.semantic_break.culprit == "removes-the-module"
+
+
+def test_a_bisect_names_the_tip_the_culprit_actually_breaks_against(
+    fork_checkout: ForkCheckout,
+):
+    """
+    Naming everything already in the build is not actionable when only one of them is
+    involved - the innocent tip merged first has nothing to do with it.
+    """
+    pull_requests = two_tips_that_break_only_together(fork_checkout)
+
+    report = bisect(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
+
+    assert report.semantic_break.breaks_against == "needs-the-module"
+
+
+def test_a_bisect_of_a_build_that_works_localises_nothing(fork_checkout: ForkCheckout):
+    """
+    There is no break to attribute, and inventing one would send somebody after a branch
+    that is fine.
+    """
+    fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
+
+    report = bisect(
+        fork_checkout,
+        [a_pull_request(1, "only-tip", UPSTREAM_BASE)],
+        f"{sys.executable} -c pass",
+    )
+
+    assert report.semantic_break is None
+    assert exit_code_for_bisect(report) is IntegrationExitCode.SUCCESS
+
+
+def test_a_localised_break_is_never_reported_as_a_clean_bisect(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The exit status is the only half a caller with no model in it reads, and a bisect
+    that found the break is the case it most needs to hear about.
+    """
+    pull_requests = two_tips_that_break_only_together(fork_checkout)
+
+    report = bisect(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
+
+    assert exit_code_for_bisect(report) is IntegrationExitCode.TESTS_FAILED
+
+
+def test_a_bisect_report_serialises_what_it_localised(fork_checkout: ForkCheckout):
+    """
+    ``--json`` is what the triage skill reads, so the pair has to survive the document.
+    """
+    pull_requests = two_tips_that_break_only_together(fork_checkout)
+
+    document = json.loads(
+        bisect(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD).as_json()
+    )
+
+    assert document["status"] == "tests-failed"
+    assert document["semantic_break"]["culprit"] == "removes-the-module"
+    assert document["semantic_break"]["breaks_against"] == "needs-the-module"
 
 
 # %% the exit status every build derives from what it left behind

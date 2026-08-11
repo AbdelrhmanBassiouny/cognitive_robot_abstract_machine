@@ -9,9 +9,16 @@ nobody can follow, and it would go stale silently.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
-from integration import IntegrationExitCode, ResolutionAuthor, TipStatus
+from integration import (
+    COMMANDS,
+    BisectCommand,
+    IntegrationExitCode,
+    ResolutionAuthor,
+    TipStatus,
+)
 
 from test_maintenance_skill import candidate_forks
 
@@ -76,6 +83,48 @@ def test_the_skill_triages_exactly_the_outcomes_that_leave_something_to_judge():
     assert f"`{TipStatus.SKIPPED}`" in skill
     assert f"`{TipStatus.REPLAYED}`" in skill
     assert f"`{TipStatus.MERGED}`" not in skill
+
+
+def test_every_command_the_skill_tells_the_reader_to_run_exists():
+    """
+    The skill drives the builder by naming its commands, so one it names that the
+    builder does not answer is an instruction that fails where it is followed.
+
+    Computed from the commands themselves, so adding or renaming one is what fails this
+    rather than a literal list kept beside them.
+    """
+    skill = TRIAGE_SKILL_DOCUMENT.read_text()
+    answered = {command.invoked_as for command in COMMANDS}
+
+    named = set(re.findall(r"integration\.py (\S+)", skill))
+
+    assert named, "the skill drives the builder, so it has to name at least one command"
+    assert named <= answered, f"names commands that do not exist: {named - answered}"
+
+
+def test_the_skill_localises_a_semantic_break_rather_than_judging_it_by_hand():
+    """
+    A failing suite over ten merged tips names nothing on its own, and bisecting it by
+    hand is several worktrees and several suite runs - mechanical, and easy to get subtly
+    wrong. The skill has to reach for the command that does it.
+    """
+    skill = TRIAGE_SKILL_DOCUMENT.read_text()
+
+    assert f"integration.py {BisectCommand.invoked_as}" in skill
+
+
+def test_the_skill_says_a_semantic_break_cannot_be_recorded():
+    """
+    The dangerous mistake here is reasoning by analogy from a merge collision:
+    ``rerere`` replays a *conflict* resolution, a semantic break has no conflict to key
+    one on, and an agent that recorded one would report a fix that does not exist.
+
+    The document has to rule it out where a reader meets it.
+    """
+    skill = TRIAGE_SKILL_DOCUMENT.read_text()
+    semantic_break_section = skill[skill.index("## Step 4") :]
+
+    assert "Nothing can be recorded for a semantic break." in semantic_break_section
 
 
 def test_the_skill_records_its_own_resolutions_as_machine_written():

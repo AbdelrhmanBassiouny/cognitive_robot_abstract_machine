@@ -426,6 +426,163 @@ def build_integration(
     )
 
 
+# %% localising a break the merge could not see
+
+
+@dataclass(frozen=True)
+class SemanticBreak:
+    """Two tips that each work, merge cleanly, and do not work together.
+
+    Nothing about the merge can find this: there was no conflict, so there is no pair to
+    attribute and no preimage to key a recorded resolution on. It is found by adding tips
+    one at a time until the suite turns, and narrowed by asking which earlier tip the
+    culprit fails against on its own.
+    """
+
+    culprit: str
+    """The tip whose arrival turned the suite red."""
+
+    culprit_pull_request_number: int
+    """The fork pull request that publishes it."""
+
+    already_included: tuple[str, ...]
+    """What was in the build when it turned, in merge order."""
+
+    breaks_against: str | None
+    """The single earlier tip the culprit fails against alone, or ``None`` when only the
+    combination fails - which is a materially different thing to tell somebody."""
+
+
+@dataclass(frozen=True)
+class BisectReport:
+    """What one bisect localised."""
+
+    build_branch: str
+    """The branch the bisect assembled onto."""
+
+    base: str
+    """The upstream base it started from."""
+
+    tips_tested: tuple[str, ...] = ()
+    """The tips that reached the build and had the suite run over them, in order."""
+
+    semantic_break: SemanticBreak | None = None
+    """The break, or ``None`` when every prefix of the build passed."""
+
+    def as_json(self) -> str:
+        """:return: The bisect as one machine-readable document, led by its status."""
+        status = exit_code_for_bisect(self)
+        return json.dumps(
+            {
+                "status": status.name_for_a_caller,
+                "exit_code": int(status),
+                **asdict(self),
+            },
+            indent=2,
+        )
+
+
+def exit_code_for_bisect(report: BisectReport) -> IntegrationExitCode:
+    """:param report: What the bisect localised.
+    :return: The process exit code, which reports a located break the same way the build
+        that failed reported it."""
+    if report.semantic_break is None:
+        return IntegrationExitCode.SUCCESS
+    return IntegrationExitCode.TESTS_FAILED
+
+
+def bisect_integration(
+    stack: Stack,
+    git: GitCommandRunner,
+    build_branch: str,
+    provenance: ResolutionProvenance,
+    test_command: str,
+) -> BisectReport:
+    """Find the tip whose arrival breaks a build that merged cleanly.
+
+    Assembles the same tips in the same order as :func:`build_integration` and runs the
+    suite after each one that reaches the build, so what it localises describes the build
+    that failed rather than some other ordering of it. Stops at the first tip that turns
+    the suite, then narrows to the earlier tip that alone reproduces it.
+
+    Slow by construction - one suite run per tip, plus one per candidate while narrowing.
+    It is a diagnosis, not part of a build.
+
+    :param stack: The derived stack, whose tips this merges.
+    :param git: The runner naming the checkout to add the worktree to.
+    :param build_branch: The branch to assemble onto.
+    :param provenance: Who wrote each recorded resolution.
+    :param test_command: The suite that decides whether a build works.
+    :return: What it localised.
+    """
+    tips = tips_of(stack)
+    by_name = {tip.name: tip for tip in tips}
+    with DetachedCheckout.of(git), RestackWorktree.added_to(git) as assembling:
+        build = IntegrationBuild(
+            git=dataclasses.replace(
+                assembling, configuration_overrides=RERERE_SETTINGS
+            ),
+            configuration=stack.configuration,
+            provenance=provenance,
+        )
+        build.start(build_branch)
+        included: list[str] = []
+        for tip in tips:
+            if not build.merge(tip, included).reached_the_build:
+                continue
+            if _run_tests(test_command, build.git.working_directory):
+                included.append(tip.name)
+                continue
+            return BisectReport(
+                build_branch=build_branch,
+                base=stack.configuration.upstream_base,
+                tips_tested=tuple(included) + (tip.name,),
+                semantic_break=SemanticBreak(
+                    culprit=tip.name,
+                    culprit_pull_request_number=tip.pull_request_number,
+                    already_included=tuple(included),
+                    breaks_against=_breaks_against(
+                        build, tip, included, by_name, test_command
+                    ),
+                ),
+            )
+        return BisectReport(
+            build_branch=build_branch,
+            base=stack.configuration.upstream_base,
+            tips_tested=tuple(included),
+        )
+
+
+def _breaks_against(
+    build: IntegrationBuild,
+    culprit: Branch,
+    already_included: list[str],
+    by_name: dict[str, Branch],
+    test_command: str,
+) -> str | None:
+    """Narrow a break to the one earlier tip that reproduces it on its own.
+
+    Naming everything that was in the build is not actionable when only one of them is
+    involved. Asked most-recent-first, the same way a merge conflict's partner is.
+
+    :param build: The build under assembly, whose worktree the probes run in.
+    :param culprit: The tip whose arrival turned the suite.
+    :param already_included: The tips in the build when it turned, in merge order.
+    :param by_name: Every tip, keyed by branch name.
+    :param test_command: The suite that decides whether a build works.
+    :return: The tip it fails against alone, or ``None`` when only the combination does.
+    """
+    for candidate in reversed(already_included):
+        build.start(f"{culprit.name}-against-{candidate}".replace("/", "-"))
+        if not build.merge(by_name[candidate], []).reached_the_build:
+            continue
+        if not build.merge(culprit, [candidate]).reached_the_build:
+            continue
+        if not _run_tests(test_command, build.git.working_directory):
+            return candidate
+    return None
+
+
 def _run_tests(command: str | None, working_directory: Path) -> bool | None:
     """Run the configured suite against the finished branch.
 
@@ -582,6 +739,22 @@ def print_build(report: IntegrationReport) -> None:
         print(
             f"{report.build_branch}\ttests\t{'passed' if report.tests_passed else 'failed'}"
         )
+
+
+def print_bisect(report: BisectReport) -> None:
+    """:param report: The bisect to summarise."""
+    localised = report.semantic_break
+    if localised is None:
+        print(
+            f"{report.build_branch}\tno-break-localised\t{len(report.tips_tested)} tip(s)"
+        )
+        return
+    against = localised.breaks_against or "the combination before it"
+    print(f"{localised.culprit}\tbreaks-against\t{against}")
+    print(
+        f"{localised.culprit}\twas-added-to\t{','.join(localised.already_included)}",
+        file=sys.stderr,
+    )
 
 
 # %% entry point
@@ -818,6 +991,44 @@ class BuildCommand(IntegrationCommand):
         if not configuration.integration_test_command:
             raise TestCommandNotConfiguredError("integration_test_command")
         return configuration.integration_test_command
+
+
+@dataclass(frozen=True)
+class BisectCommand(IntegrationCommand):
+    """Finds which tip's arrival breaks a build that merged cleanly."""
+
+    invoked_as: ClassVar[str] = "bisect"
+    description: ClassVar[str] = "find which tip's arrival breaks the suite"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare ``--json`` on."""
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """:param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code."""
+        test_command = BuildCommand._test_command(run.configuration, run_tests=True)
+        fork = run.fork()
+        run.refresh_remotes()
+        report = bisect_integration(
+            stack=run.stack(fork),
+            git=run.git,
+            build_branch=build_branch_name(datetime.now(timezone.utc)),
+            provenance=ResolutionProvenance.read(run.provenance_path()),
+            test_command=test_command,
+        )
+        if arguments.json:
+            print(report.as_json())
+        else:
+            print_bisect(report)
+        return exit_code_for_bisect(report)
 
 
 @dataclass(frozen=True)

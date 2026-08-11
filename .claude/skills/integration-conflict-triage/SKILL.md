@@ -48,17 +48,20 @@ Act on the status the document leads with and the process exits with:
 
 | status | what it means for you |
 |---|---|
-| `success` | every tip is in the branch; there is nothing to triage |
-| `tip-left-out` | at least one tip is missing - this is your work, below |
-| `tests-failed` | the branch built but does not work; a semantic collision no per-branch check could catch |
-| `suspect-replay` | as above, over a resolution a skill wrote. **Report and stop** - see below |
+| `success` | every tip is in the branch and it works; there is nothing to triage |
+| `tip-left-out` | at least one tip is missing - a merge collision, step 2 |
+| `tests-failed` | the branch built and does not work - a *semantic* collision, step 4 |
+| `suspect-replay` | as `tests-failed`, over a resolution a skill wrote. **Report and stop** |
+
+Both kinds can be present at once: a build can leave a tip out *and* fail its suite. Work step
+2 and step 4 independently - they are different collisions between different pairs.
 
 A `suspect-replay` is the one status that forbids you to act. The build replayed a resolution
 some earlier run of this skill wrote, and the result does not work. Re-resolving into the same
 failure is how a build starts thrashing, so say which tip carries the suspect resolution, say
 that it needs a human to look at the resolution itself, and stop.
 
-## Step 2 - judge each pair, not each casualty
+## Step 2 - a `tip-left-out` build: judge each pair, not each casualty
 
 For every tip the document reports as `skipped` or `replayed`, it names the branch it collided
 with. Judge the **pair**. "B was skipped" is not actionable; which of the two should change is
@@ -124,6 +127,57 @@ verdict to the owner of the branch that should change.
 
 **stack - report.** Say which branch should sit on which. Do not retarget anything.
 
+## Step 4 - a `tests-failed` build: the collision the merge could not see
+
+Two branches can each pass their own checks, merge with no conflict at all, and not work
+together - one renames what the other calls, one removes what the other's test imports, one
+adds a dependency the other's fixture does not provide. Per-branch checks structurally cannot
+catch this: neither branch is wrong, and the failure exists only in a tree neither of them is.
+
+**Find the pair before judging it.** A failing suite over ten merged tips names nothing:
+
+```bash
+python .claude/stack/integration.py bisect --json
+```
+
+It re-assembles the tips in the same order and runs the suite after each, so what it reports
+describes the build that failed. It names the tip whose arrival turned the suite, and narrows
+to the earlier tip that alone reproduces it. Do not bisect by hand - it is several worktrees
+and several suite runs, and getting it subtly wrong is easy.
+
+Confirm what it hands you rather than taking it: each of the two on its own should pass the
+suite. If one fails alone, that branch is simply red and this is not a collision at all - tell
+its owner that instead.
+
+### The one thing that is different here
+
+**Nothing can be recorded for a semantic break.** `rerere` replays *merge conflict*
+resolutions, and a semantic break has no conflict and therefore no preimage to key one on. So
+the `defer` verdict from step 3 does not exist here, and reaching for it is the mistake this
+section is written to prevent. Until one of the two branches changes, **every future build
+carries the break**. Rebuilding does not help, and saying it might would be a lie with a delay
+attached.
+
+### The verdicts
+
+**adapt** - one branch's assumption has been made untrue by the other, and that branch changes
+to match. This is the common case. It is a real change to a published pull request, so it is
+**proposed, never applied** - the same bound as `reconcile`. *Which* of the two should change
+is intent rather than fact, so **ask before proposing**: the branch that broke the assumption
+and the branch that held it are both defensible places to fix it, and picking for the developer
+launders your guess as their decision.
+
+**reconcile** - as in step 3. A break can reveal a duplicated abstraction just as a conflict
+can, and it is worth looking for before settling for `adapt`.
+
+**sequence** - the break exists only because both are unlanded. Once the first lands, fixing
+the second is ordinary work on a normal base, with a real review behind it. Nothing to do now
+but record it where the plan's state lives, and say which order makes it go away.
+
+Whichever it is, say plainly that the integration branch is red until somebody acts, and which
+area of the suite is affected - a developer can still work from a branch whose breakage they
+know the shape of, and cannot from one they do not.
+
 ## What this never does
 
 - **It never writes to a feature branch, and it never pushes.** Every branch in this collision
@@ -145,5 +199,6 @@ verdict to the owner of the branch that should change.
 Report every pair, with its verdict and the reason. For a *defer*, say that the resolution is
 recorded and that the collision is still live for whoever lands second - a replay buys a working
 daily driver, not a discharged obligation upstream. For a *reconcile* or a *stack*, say which
-branch you took it to. Name anything you left undecided, and why, rather than picking to be
-finished.
+branch you took it to. For a semantic break, say that the branch stays red until somebody acts,
+since nothing can be recorded for it. Name anything you left undecided, and why, rather than
+picking to be finished.
