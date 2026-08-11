@@ -1,6 +1,17 @@
-/* Draggable splitter + maximize toggle for the knowledge-graph panel.
-   Include after the DOM (end of body). Needs main.split with the two
-   [data-slot] elements index.html declares. */
+/* ============================================================================
+ * core/split-resize.js — draggable dividers and the maximize toggles.
+ *
+ * Two dividers, both driven by core/split-sizing.js:
+ *   · a column divider between the scene slot and the knowledge slot
+ *   · a row divider between the panels a slot stacks (EQL above the graph)
+ *
+ * A divider turns its container into a three-track grid — first pane, divider,
+ * second pane — so the gap between panes stays a layout gap and the panes keep
+ * their share of the container when the window resizes.
+ *
+ * Include after the DOM and after Panels.boot(): the row divider is placed
+ * between panels the registry has already mounted.
+ * ==========================================================================*/
 (function () {
   'use strict';
 
@@ -9,47 +20,114 @@
   const right = document.querySelector('[data-slot="right"]');
   if (!split || !left || !right) return;
 
-  const storeKey = 'splitRight:' + location.pathname.split('/').pop();
+  const page = location.pathname.split('/').pop();
+  const GAP_PIXELS = '4px';
+  /* 4 + the divider's 8px + 4 = the 16px gap app.css lays out without one. */
 
-  // %% divider
-  const divider = document.createElement('div');
-  divider.className = 'split-divider';
-  divider.title = 'Drag to resize · double-click for 50/50';
-  split.insertBefore(divider, right);
-  split.style.columnGap = '4px'; /* 4 + 8px divider + 4 = former 16px gap */
+  // %% the two axes a divider can work along
+  const COLUMNS = {
+    className: 'pane-divider split-divider',
+    title: 'Drag to resize the scene against the knowledge column · double-click to reset',
+    template: 'gridTemplateColumns',
+    defaultFraction: 0.5,
+    prepare: function (container) { container.style.columnGap = GAP_PIXELS; },
+    total: function (rect) { return rect.width; },
+    offset: function (rect, event) { return event.clientX - rect.left; },
+  };
 
-  function applyRight(pct) {
-    pct = Math.min(75, Math.max(25, pct));
-    split.style.gridTemplateColumns = `minmax(0,${100 - pct}fr) auto minmax(0,${pct}fr)`;
-    return pct;
+  const ROWS = {
+    className: 'pane-divider slot-divider',
+    title: 'Drag to resize the panels above and below · double-click to reset',
+    template: 'gridTemplateRows',
+    defaultFraction: 0.6,
+    /* The lower panel — the graph — starts with the larger share. */
+    prepare: function (container) {
+      container.style.display = 'grid';
+      container.style.rowGap = GAP_PIXELS;
+    },
+    total: function (rect) { return rect.height; },
+    offset: function (rect, event) { return event.clientY - rect.top; },
+  };
+
+  // %% let the canvases catch up with their new size
+  function reflow() {
+    window.dispatchEvent(new Event('resize'));
   }
 
-  let rightPct = parseFloat(localStorage.getItem(storeKey)) || 50;
-  applyRight(rightPct);
+  function refit() {
+    if (window.Graph && Graph.resize) Graph.resize();
+  }
 
-  divider.addEventListener('pointerdown', e => {
-    e.preventDefault();
-    divider.setPointerCapture(e.pointerId);
-    divider.classList.add('dragging');
-    const rect = split.getBoundingClientRect();
+  // %% one divider
+  /* Insert a divider before `secondPane` and let it resize the two panes it sits
+     between, remembering the size under `storeKey`. Returns the handles the
+     maximize toggle needs to drop and restore the sizing. */
+  function installDivider(container, secondPane, axis, storeKey) {
+    const divider = document.createElement('div');
+    divider.className = axis.className;
+    divider.title = axis.title;
+    container.insertBefore(divider, secondPane);
+    axis.prepare(container);
 
-    function onMove(ev) {
-      rightPct = applyRight((rect.right - ev.clientX) / rect.width * 100);
+    let fraction = parseFloat(localStorage.getItem(storeKey));
+
+    function apply(next) {
+      fraction = SplitSizing.clampFraction(axis.total(container.getBoundingClientRect()), next);
+      container.style[axis.template] = SplitSizing.template(fraction);
     }
-    function onUp() {
-      divider.classList.remove('dragging');
-      divider.removeEventListener('pointermove', onMove);
-      divider.removeEventListener('pointerup', onUp);
-      localStorage.setItem(storeKey, rightPct.toFixed(1));
-    }
-    divider.addEventListener('pointermove', onMove);
-    divider.addEventListener('pointerup', onUp);
-  });
 
-  divider.addEventListener('dblclick', () => {
-    rightPct = applyRight(50);
-    localStorage.setItem(storeKey, '50');
+    function remember() {
+      localStorage.setItem(storeKey, fraction.toFixed(3));
+    }
+
+    // a value outside (0,1) — no size remembered yet, or the percentages an
+    // earlier build stored — starts from the axis default
+    apply(fraction > 0 && fraction < 1 ? fraction : axis.defaultFraction);
+
+    divider.addEventListener('pointerdown', function (event) {
+      event.preventDefault();
+      divider.setPointerCapture(event.pointerId);
+      divider.classList.add('dragging');
+      const rect = container.getBoundingClientRect();
+
+      function onMove(moved) {
+        fraction = SplitSizing.secondPaneFraction(axis.total(rect), axis.offset(rect, moved));
+        container.style[axis.template] = SplitSizing.template(fraction);
+        reflow();
+      }
+      function onUp() {
+        divider.classList.remove('dragging');
+        divider.removeEventListener('pointermove', onMove);
+        divider.removeEventListener('pointerup', onUp);
+        remember();
+        refit();
+      }
+      divider.addEventListener('pointermove', onMove);
+      divider.addEventListener('pointerup', onUp);
+    });
+
+    divider.addEventListener('dblclick', function () {
+      apply(axis.defaultFraction);
+      remember();
+      reflow();
+      refit();
+    });
+
+    return {
+      restore: function () { apply(fraction); },
+      release: function () { container.style[axis.template] = ''; },
+    };
+  }
+
+  const columns = installDivider(split, right, COLUMNS, 'splitRight:' + page);
+
+  // %% the panels a slot stacks
+  /* A three-track grid holds one divider, so a slot is only made resizable when
+     it stacks exactly two panels. */
+  const stacked = Array.prototype.filter.call(right.children, function (child) {
+    return child.dataset.panel;
   });
+  if (stacked.length === 2) installDivider(right, stacked[1], ROWS, 'splitBottom:' + page);
 
   // %% maximize button on the knowledge panel
   const head = right.querySelector('.panel-head');
@@ -64,8 +142,10 @@
       const max = split.classList.toggle('kg-maximized');
       btn.textContent = max ? '⊟' : '⛶';
       btn.title = max ? 'Back to the split view' : 'Maximize the knowledge graph';
-      if (max) split.style.gridTemplateColumns = '';
-      else applyRight(rightPct);
+      if (max) columns.release();
+      else columns.restore();
+      reflow();
+      refit();
     });
 
     document.addEventListener('keydown', e => {
@@ -85,18 +165,13 @@
     gbtn.textContent = '⛶';
     graphWrap.appendChild(gbtn);
 
-    function reflow() {
-      // let the layout settle, then let vis re-fit to the new size
-      window.dispatchEvent(new Event('resize'));
-      if (window.Graph && Graph.resize) Graph.resize();
-    }
-
     function toggleGraphFull() {
       const full = graphWrap.classList.toggle('graph-fullscreen');
       gbtn.textContent = full ? '⊟' : '⛶';
       gbtn.title = full ? 'Leave fullscreen (Esc)' : 'Graph to fullscreen';
       document.body.classList.toggle('graph-full-open', full);
-      setTimeout(reflow, 60);
+      // let the layout settle, then let vis re-fit to the new size
+      setTimeout(function () { reflow(); refit(); }, 60);
     }
 
     gbtn.addEventListener('click', toggleGraphFull);

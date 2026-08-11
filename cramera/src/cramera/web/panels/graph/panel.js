@@ -29,6 +29,11 @@ Panels.define('graph', function (root, bus) {
     '    <span class="gt-live" id="gt-live" title="node status is streaming from the running demo">◉ live status</span>' +
     '  </div>' +
     '  <div id="graph"></div>' +
+    '  <div class="graph-zoom">' +
+    '    <button id="graph-zoom-in" title="Zoom in — or pinch on a touchpad">+</button>' +
+    '    <button id="graph-zoom-out" title="Zoom out — or pinch on a touchpad">−</button>' +
+    '    <button id="graph-zoom-fit" title="Fit the whole graph">⤡</button>' +
+    '  </div>' +
     '  <div id="graph-empty" class="graph-empty" style="display:none"></div>' +
     '  <div id="graph-nav" class="graph-nav" style="display:none">' +
     '    <button id="gnav-home" title="back to the overview">⌂</button>' +
@@ -46,6 +51,13 @@ Panels.define('graph', function (root, bus) {
   const tabsEl = root.querySelector('#graph-tabs');
   const liveBadge = root.querySelector('#gt-live');
   Graph.attach(root.querySelector('#graph'), root.querySelector('#legend'));
+
+  // %% zoom controls
+  // one step in and its exact inverse out, so clicking + then − lands where it started
+  const ZOOM_STEP = 1.3;
+  root.querySelector('#graph-zoom-in').addEventListener('click', function () { Graph.zoomBy(ZOOM_STEP); });
+  root.querySelector('#graph-zoom-out').addEventListener('click', function () { Graph.zoomBy(1 / ZOOM_STEP); });
+  root.querySelector('#graph-zoom-fit').addEventListener('click', function () { Graph.fit(); });
 
   // %% tabs
   const TABS = {

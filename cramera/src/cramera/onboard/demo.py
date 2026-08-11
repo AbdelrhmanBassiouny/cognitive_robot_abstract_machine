@@ -20,6 +20,11 @@ What the hooks capture while the demo runs:
 Usage (the interpreter needs the CRAM stack on it)::
 
     cramera-onboard path/to/demo.py --name pr2_kitchen
+
+A demo file that parses its own CLI arguments (its own ``argparse.ArgumentParser``
+or ``sys.argv`` reads) receives everything after a ``--`` separator unchanged::
+
+    cramera-onboard path/to/demo.py --name pr2_kitchen -- --robot pr2 --seed 3
 """
 
 from __future__ import annotations
@@ -645,9 +650,7 @@ class Recorder:
         """
         if next(serialized_count) >= max_nodes:
             return None
-        designator = (
-            node.designator if isinstance(node, DescribesAnAction) else None
-        )
+        designator = node.designator if isinstance(node, DescribesAnAction) else None
         entry = {
             "kind": type(node).__name__,
             "label": (
@@ -674,7 +677,6 @@ class Recorder:
             if child
         ]
         return entry
-
 
 
 @dataclass
@@ -1007,11 +1009,8 @@ class SceneBuilder:
     Downsampling step; every ``step``-th frame is kept.
     """
 
-
     @staticmethod
-    def _nearest_kept_frame(
-        downsampled_index: Dict[int, int], raw_index: int
-    ) -> int:
+    def _nearest_kept_frame(downsampled_index: Dict[int, int], raw_index: int) -> int:
         """
         The downsampled index closest to a raw frame index.
 
@@ -1080,7 +1079,6 @@ class SceneBuilder:
             report=report,
         )
 
-
     def build(self) -> Dict[str, Any]:
         """
         Downsample the recording to every step-th frame (always keeping the last) and
@@ -1119,11 +1117,19 @@ class SceneBuilder:
         segments = []
         for raw_segment in RecordingAnalysis(self.recorder).derive_segments():
             segment = dict(raw_segment)
-            segment["start"] = self._nearest_kept_frame(downsampled_index, raw_segment["start"])
-            segment["end"] = self._nearest_kept_frame(downsampled_index, raw_segment["end"])
+            segment["start"] = self._nearest_kept_frame(
+                downsampled_index, raw_segment["start"]
+            )
+            segment["end"] = self._nearest_kept_frame(
+                downsampled_index, raw_segment["end"]
+            )
             if "attach" in segment:
-                segment["attach"] = self._nearest_kept_frame(downsampled_index, raw_segment["attach"])
-                segment["detach"] = self._nearest_kept_frame(downsampled_index, raw_segment["detach"])
+                segment["attach"] = self._nearest_kept_frame(
+                    downsampled_index, raw_segment["attach"]
+                )
+                segment["detach"] = self._nearest_kept_frame(
+                    downsampled_index, raw_segment["detach"]
+                )
             segments.append(segment)
         # a scene with two transports of the same object would otherwise name both steps
         # identically, and the viewer keys its playback captions on the step name
@@ -1207,10 +1213,7 @@ class SceneBuilder:
         models = []
         missing: List[str] = []
         bundled_sources = (
-            [
-                (source, BundleReport.of_source)
-                for source in self.recorder.urdf_sources
-            ]
+            [(source, BundleReport.of_source) for source in self.recorder.urdf_sources]
             + [
                 (source, BundledWorld.of_gazebo_source)
                 for source in self.recorder.gazebo_sources
@@ -1221,9 +1224,7 @@ class SceneBuilder:
             ]
         )
         for source, bundler in bundled_sources:
-            bundled = self._bundle_model(
-                source, bundler, world_body_names, base_body
-            )
+            bundled = self._bundle_model(source, bundler, world_body_names, base_body)
             models.append(bundled.to_payload())
             missing += bundled.report.missing
 
@@ -1370,6 +1371,34 @@ class SceneIndexEntry:
         }
 
 
+@dataclass
+class ArgumentSplit:
+    """
+    Command-line arguments for ``cramera-onboard``, split at a ``--`` separator.
+    """
+
+    own: List[str]
+    """Arguments that configure ``cramera-onboard`` itself."""
+
+    passthrough: List[str]
+    """Arguments left untouched for the demo file's own argument parsing."""
+
+
+def split_passthrough_arguments(arguments: List[str]) -> ArgumentSplit:
+    """
+    Splits CLI arguments at a ``--`` separator.
+
+    Everything before ``--`` is parsed by ``cramera-onboard``'s own
+    :class:`argparse.ArgumentParser`. Everything after it is left untouched so a
+    demo file that parses its own ``sys.argv`` (for example with its own
+    ``argparse.ArgumentParser``) sees exactly the arguments meant for it.
+    """
+    if "--" not in arguments:
+        return ArgumentSplit(own=list(arguments), passthrough=[])
+    index = arguments.index("--")
+    return ArgumentSplit(own=arguments[:index], passthrough=arguments[index + 1 :])
+
+
 # %% the cramera-onboard entry point
 def main() -> None:
     """
@@ -1390,7 +1419,8 @@ def main() -> None:
     parser.add_argument(
         "--step", type=int, default=0, help="downsample step (0 = auto)"
     )
-    args = parser.parse_args()
+    argument_split = split_passthrough_arguments(sys.argv[1:])
+    args = parser.parse_args(argument_split.own)
 
     try:
         import coraplex  # noqa: F401
@@ -1419,6 +1449,7 @@ def main() -> None:
             log("repo root on sys.path:", candidate)
             break
         candidate = os.path.dirname(candidate)
+    sys.argv = [demo, *argument_split.passthrough]
     runpy.run_path(demo, run_name="__main__")
     log(
         "demo finished: %d raw frames, %d actions"

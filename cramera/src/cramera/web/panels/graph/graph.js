@@ -109,6 +109,7 @@
   };
 
   let network = null, nodes = null, edges = null, allNodeIds = [];
+  let gestures = null;      // the wheel handler installed on the container
   let selectCb = function () {};
   let dblCb = function () {};
   let freezeTimer = null;   // re-freeze physics a moment after a node drag ends
@@ -206,9 +207,15 @@
         stabilization: { iterations: bigGraph ? 120 : 200, updateInterval: 25 },
         barnesHut: { gravitationalConstant: -7000, springLength: 120, springConstant: 0.03, damping: 0.5, avoidOverlap: 0 },
       },
-      interaction: { hover: !bigGraph, tooltipDelay: 150, navigationButtons: false, dragNodes: true },
+      // zoomView off: core/graph-gestures.js reads the wheel instead, so a touchpad
+      // swipe pans rather than zooming a flat 10% per event
+      interaction: { hover: !bigGraph, tooltipDelay: 150, navigationButtons: false,
+                     dragNodes: true, zoomView: false },
       layout: layout,
     });
+
+    if (gestures) gestures.destroy();
+    gestures = GraphGestures.install(network, el);
 
     // freeze the simulation once it has settled — this is the key win: without it
     // vis keeps simulating forever, so every hover/redraw stays laggy.
@@ -344,9 +351,20 @@
     fitView(zoomFloor);
   }
 
+  // %% zoom controls, for when a gesture is not the easiest way to get there
+  function zoomBy(factor) {
+    if (network) GraphGestures.zoomBy(network, factor);
+  }
+
+  function fit() {
+    fitView(zoomFloor);
+  }
+
   window.Graph = {
     attach: attach,
     build: build,
+    zoomBy: zoomBy,
+    fit: fit,
     setStatuses: setStatuses,
     highlight: highlight,
     reset: reset,
