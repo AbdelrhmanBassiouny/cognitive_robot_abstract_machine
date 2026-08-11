@@ -62,8 +62,9 @@ push, which is exactly where a session works.
 
 - **Publishing the dashboard.** Only a live session can call the `Artifact` tool, so
   every operation hands back `/plan-dashboard <plan-id>` rather than pretending it
-  ran. Run it in the same turn as the write. A published dashboard older than the
-  manifest behind it is the staleness this rule exists to close.
+  ran. Run it in the same turn as the write — every session does, unattended ones
+  included. A published dashboard older than the manifest behind it is the staleness
+  this rule exists to close.
 - **Creating the pull request.** One the script creates is attributed to the app its
   requests are proxied through rather than to you; create it yourself and pass
   `--pull-request-number`.
@@ -75,19 +76,51 @@ push, which is exactly where a session works.
 
 ## For a pass that changes state without owning it
 
-`stacked-pr-maintenance` reparents pull requests, promotes branches and moves
-labels. All of that changes what a tracked item's recorded fields should say, while
-touching no manifest.
+`stacked-pr-maintenance` reparents pull requests, promotes branches, restacks and
+moves labels. All of that changes what a tracked item's recorded fields should say,
+and none of it happens in the session that owns the item.
 
-Its obligation therefore runs the other way: **report the items it just made stale**,
-rather than write them. Map each branch it moved to its item through the generated
-branch index (`${PLAN_BRANCH_INDEX_PATH}` on the personal-notes branch) and name
-them in the finish summary, with what changed.
+It holds a branch rather than an item id, so every operation below is keyed on the
+branch and resolves the rest itself:
 
-It reports rather than writes for two reasons, and both matter: it runs unattended
-under `--non-interactive`, where its own doctrine forbids opening a discussion; and
-*why* a status changed is judgement, which the section above keeps with a session.
-A pass that guessed would write a manifest nobody had decided.
+```bash
+source .claude/hooks/resolve-personal-notes-config.sh
+
+# Which plan and items does this branch belong to?
+python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" resolve --branch <branch>
+
+# Block every item on it, under this pass's own name.
+python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" block --branch <branch> \
+    --owner "${MAINTENANCE_BLOCKER_OWNER}" --reason <file>
+
+# Withdraw that blocker once the pass finds the branch clean again.
+python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" unblock --branch <branch> \
+    --owner "${MAINTENANCE_BLOCKER_OWNER}"
+```
+
+A branch can carry more than one item, so each writes all of them; a branch no plan
+claims exits `branch_tracks_no_item` and writes nothing, which is a finding to report
+rather than a failure — every fork pull request is supposed to belong to a plan.
+
+**What it writes is only what it decided itself.** A branch it labels
+`needs-resolution` is blocked because this pass concluded so; one whose label it
+clears is not. The blocker carries the owner it was written under, so the pass
+replaces and withdraws its own entry and never one a person wrote, and an item left
+carrying somebody else's blocker stays blocked.
+
+**What it reports rather than writes** is everything whose status is a reading rather
+than a mechanical fact: a reparent, a promotion, a landed branch. A landed branch
+needs no write at all — the refresh below corrects merged to `done` on its own.
+
+Then republish, once per plan it wrote to, at the transition rather than in the
+finish summary. The finish summary still names every item touched, which of them were
+written, and which plans were republished.
+
+It publishes rather than handing the command back because it runs as a session like
+any other: `--non-interactive` suppresses asking the user a question, not writing a
+file or calling a tool. The write is a script call precisely so it survives
+`routine-cutover`, after which the pass is a plain Action with no session in it and
+publishing moves to the built site.
 
 ## In auto mode
 

@@ -1,7 +1,7 @@
 ---
 name: stacked-pr-maintenance
 description: Run one maintenance pass over a stacked-PR fork-staging workflow - reparent any pull request whose base has landed, restack branches whose parent moved, and promote every approved unblocked branch to the upstream review queue. Invoke as "/stacked-pr-maintenance [fork=<owner/repo>] [upstream=<owner/repo>] [--non-interactive]". Use when asked to run a stack maintenance pass, restack the stack, promote ready branches, or clean up after a branch has landed upstream, and when a scheduled routine hands this document its values.
-allowed-tools: Bash, Read, Grep, AskUserQuestion, mcp__github__pull_request_read, mcp__github__list_pull_requests, mcp__github__update_pull_request, mcp__github__issue_write, mcp__github__add_issue_comment
+allowed-tools: Bash, Read, Grep, Skill, AskUserQuestion, mcp__github__pull_request_read, mcp__github__list_pull_requests, mcp__github__update_pull_request, mcp__github__issue_write, mcp__github__add_issue_comment
 ---
 
 # Stacked-PR maintenance
@@ -204,6 +204,33 @@ summary as yours rather than the branch owner's, and never label the branch for 
 If a landed pull request is somehow still open after the pass, report it rather than closing it
 yourself.
 
+## Block and clear the plan items a branch's own trouble affects
+
+The executor labels and comments on a branch it reported as `branch-needs-attention`, but writes no
+manifest - blocking the plan items that branch carries is this session's own step, done in the same
+pass rather than left for later:
+
+```bash
+python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" resolve --branch <branch>
+python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" block --branch <branch> \
+  --owner "${MAINTENANCE_BLOCKER_OWNER}" --reason <file>
+```
+
+Write the same conflicting files or failing check the executor's comment names, then republish that
+plan's dashboard before moving on to the next branch: `/plan-dashboard <plan-id>`.
+`${MANIFEST_CURRENCY_DOCUMENT}` is the rule this serves.
+
+Clear it once a later pass restacks that branch normally again - `restacked: pushed` or
+`up-to-date` in the run-report document, rather than `branch-needs-attention`, is what tells you the
+trouble is gone:
+
+```bash
+python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" unblock --branch <branch> \
+  --owner "${MAINTENANCE_BLOCKER_OWNER}"
+```
+
+Then republish the same way.
+
 ## What this pass never does
 
 - **It never resolves a conflict** - not the executor, and not you. A conflict is a change to
@@ -224,23 +251,28 @@ yourself.
   react then; do not sit idle waiting on a long run.
 - **It never adds `in-review`.** That is the developer's, once they have clicked Create.
 
-## Report the plan items this pass made stale
+## Account for the plan items this pass moved
 
 Reparenting a pull request, promoting a branch and moving a label all change what a
-tracked item's manifest should say, and this pass writes no manifest. Follow
-`${MANIFEST_CURRENCY_DOCUMENT}`'s section for a pass that changes state without
-owning it.
+tracked item's manifest should say. Follow `${MANIFEST_CURRENCY_DOCUMENT}`'s section
+for a pass that changes state without owning it, which is where the commands live.
 
-For every branch you moved, look it up in the generated branch index on the
-personal-notes branch (`${PLAN_BRANCH_INDEX_PATH}`, branch to plan id) and name the
-ones it resolves in the finish summary, with what changed about them. A branch the
-index does not name belongs to no plan; say that too, since every fork pull request
-is supposed to.
+For every branch you moved, resolve it to its items and name them in the finish
+summary, with what changed about them:
 
-**Report them, do not write them.** This pass runs unattended and, under
-`--non-interactive`, must not open a discussion — and which status a move implies is
-judgement rather than mechanics. Writing the manifest is the owning session's, off
-this report.
+```bash
+python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" resolve --branch <branch>
+```
+
+An exit of `branch_tracks_no_item` means no plan claims that branch; say that too,
+since every fork pull request is supposed to belong to one.
+
+**You write only the blockers you decided yourself** - "Block and clear the plan
+items a branch's own trouble affects"'s `block` and `unblock`, under
+`${MAINTENANCE_BLOCKER_OWNER}`, which is why they can be withdrawn again by the same
+pass. A reparent, a promotion or a landed branch is reported and not written: which
+status those imply is a reading rather than a mechanical fact, and a landed branch is
+corrected to `done` by the dashboard refresh on its own.
 
 ## Finish
 
@@ -261,6 +293,11 @@ its number, the base it is stuck on, the base it should have, and which step of 
 sequence stopped you - a stack left dissolved or half-rebuilt needs attention immediately and
 nothing else surfaces it. Then summarise what landed, what was restacked, and what was promoted,
 plus anything you stopped on.
+
+Then the plan side: every item this pass moved, which of them you **wrote** and to what, which plans
+you **republished**, and every branch that belongs to no plan at all. A written item is already true
+in the manifest by the time this summary is read - what the summary adds is that somebody can tell
+which writes were the pass's own.
 
 ## Command reference - resuming a partial run
 

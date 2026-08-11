@@ -271,7 +271,9 @@ name — this is the actionable output, don't bury it under a wall of
 If you're in single-plan mode and the master index already exists (its URL
 is in the cache), mention that it wasn't refreshed automatically and the
 user can run `/plan-dashboard` with no argument to update it too — don't do
-it unprompted, since that republishes a second, separate page.
+it unprompted, since that republishes a second, separate page. A caller
+that asks for both is not breaking this: `plan-create` does, because
+adding a plan is the one change that alters what the index itself lists.
 
 ## Republishing is half of every transition, not a step of its own
 

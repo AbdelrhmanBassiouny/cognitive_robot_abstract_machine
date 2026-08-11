@@ -401,6 +401,12 @@ PULL_REQUEST_DATA_FETCHING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/pr-data-fetchin
 # rule, referenced by every skill that can change what a plan records
 # instead of each restating it.
 MANIFEST_CURRENCY_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/manifest-currency.md"
+# MAINTENANCE_BLOCKER_OWNER: the name the stacked-PR maintenance pass writes
+# its own blockers under, so that pass replaces and clears its own entries
+# and never one a person wrote. Named here rather than in either the rule
+# document or the skill, since the writer and the clearer have to agree on
+# it exactly - see plan_item_bootstrap.py's block/unblock operations.
+MAINTENANCE_BLOCKER_OWNER="stacked-pr-maintenance"
 # write-personal-notes-file.sh: generic commit-and-push-one-file-to-the
 # personal-notes-branch helper, used by refresh_dashboard.sh (the manifest
 # auto-sync correction) and plan-dashboard/SKILL.md (the dashboard-URL

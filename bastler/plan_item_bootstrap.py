@@ -14,7 +14,7 @@ conclusion that changes what the item means - so writing the entry is not a boot
 step but a standing obligation. ``manifest-currency.md``, beside the plan-dashboard
 skill, is the rule these operations serve.
 
-Four operations, so each caller depends only on the surface it uses:
+Seven operations, so each caller depends only on the surface it uses:
 
 ``record``
     Write or update the item's ``plan.yaml`` entry and append its ``roadmap.md``
@@ -37,6 +37,15 @@ Four operations, so each caller depends only on the surface it uses:
     Deliberately local-only: the dashboard already compares the manifest against GitHub
     after the fact, so what nothing covered was the window before a push.
 
+``resolve``
+    Name the plan and the items a branch belongs to, for a caller that holds a branch
+    rather than an item id - an automated pass over many branches at once.
+
+``block`` / ``unblock``
+    Record or withdraw one caller's own blocker on every item a branch carries, deriving
+    the status from what is left blocking it. The owner is written into the blocker, so
+    a pass replaces and clears its own entries and never a person's.
+
 ``open`` runs before ``record`` when both are wanted: the pull request number does not
 exist until the pull request does.
 
@@ -52,6 +61,10 @@ Usage:
         [--session <url>] [--notes <file>] [--blockers <file> ...]
     python3 plan_item_bootstrap.py check --plan <plan-id> --item <item-id> \\
         [--remote <remote>]
+    python3 plan_item_bootstrap.py resolve --branch <branch>
+    python3 plan_item_bootstrap.py block --branch <branch> --owner <name> \\
+        --reason <file>
+    python3 plan_item_bootstrap.py unblock --branch <branch> --owner <name>
 
 Prints a one-line JSON report led by ``status`` and ``exit_code``, so a caller acting on
 the document never has to decode an integer back into a meaning.
@@ -146,6 +159,12 @@ def fold(text: str, indent: str) -> str:
     """
     Wrap *text* as the body of a folded scalar, newline-terminated.
 
+    Only ever breaks between words. A folded scalar reads a line break back as a space,
+    so a break placed inside a word - at a hyphen, or anywhere at all in a word too long
+    for one line - returns a different string than it was given, still valid and no
+    longer what anybody wrote. A word wider than the column overflows it instead, which
+    is the one thing wrapping is allowed to get wrong here.
+
     :param text: The value to wrap, whose own paragraph breaks are preserved.
     :param indent: The indentation every body line carries.
     :return: The body's lines.
@@ -156,6 +175,8 @@ def fold(text: str, indent: str) -> str:
             width=MANIFEST_LINE_WIDTH,
             initial_indent=indent,
             subsequent_indent=indent,
+            break_long_words=False,
+            break_on_hyphens=False,
         )
         for paragraph in re.split(r"\n\s*\n", text.strip())
     ]
@@ -272,7 +293,9 @@ class ValueStyle(StrEnum):
     A list, one entry per dash beneath the key.
 
     Spans the lines beneath the key exactly as :attr:`BLOCK` does; they differ only in
-    what those lines say, which is why writing one is not writing the other.
+    what those lines say, which is why writing one is not writing the other. A list with
+    no entries is written inline as ``[]``, since a key with nothing beneath it parses
+    as null rather than as an empty list.
     """
 
     @property
@@ -405,6 +428,8 @@ class ManifestKey(KeySpecification, Enum):
         """
         prefix = ITEM_MARKER if opening_the_item else ITEM_FIELD_INDENT
         if self.style is ValueStyle.SEQUENCE:
+            if not value:
+                return f"{prefix}{self.key}: []\n"
             entries = "".join(render_sequence_entry(entry) for entry in value)
             return f"{prefix}{self.key}:\n{entries}"
         if self.style is ValueStyle.BLOCK:
@@ -498,6 +523,14 @@ class ExitCode(IntEnum):
     MANIFEST_IS_STALE = 9
     """
     The check found recorded fields that local git contradicts.
+    """
+
+    BRANCH_TRACKS_NO_ITEM = 10
+    """
+    No plan claims the branch, so there was nothing to resolve or to write.
+
+    A finding rather than a failure - every pull request is supposed to belong to a
+    plan, so a caller acting on the status alone reports it instead of guessing.
     """
 
     @property
@@ -1519,6 +1552,310 @@ def fields_a_published_branch_requires(
     return findings
 
 
+# %% resolving a branch to the items it carries
+
+
+BLOCKER_OWNER_SEPARATOR = ": "
+"""
+What separates the owner of a written blocker from its reason.
+
+An automated caller writes ``<owner>: <reason>`` so that the pass which wrote a blocker
+is the only one that replaces or clears it, and a blocker a person wrote carries no
+owner and is therefore never touched.
+"""
+
+
+def plan_tracking(branch: str, project_root: Path) -> str | None:
+    """
+    The plan that tracks *branch*, per the generated branch index.
+
+    Calls the shell configuration's own lookup rather than reading the index here, so
+    this and every other reader agree on where the index lives and how it is written.
+
+    :param branch: The branch to look up.
+    :param project_root: The repository to run within.
+    :raises NotesBranchUnavailableError: If the notes branch cannot be fetched.
+    :return: The plan's id, or None when no plan claims the branch.
+    """
+    fetch_notes_branch(project_root)
+    lookup = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "{HookScript.CONFIGURATION.path}" && plan_id_for_branch "$1"',
+            HookScript.CONFIGURATION.value,
+            branch,
+        ],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+    )
+    return lookup.stdout.strip() or None
+
+
+@dataclass(frozen=True)
+class TrackedItem:
+    """
+    One item a branch carries, in the shape a caller deciding what to write reads it.
+    """
+
+    item_identifier: str
+    """
+    The item's id.
+    """
+
+    status: ItemStatus
+    """
+    The status the manifest records for it right now.
+    """
+
+    blockers: list[str]
+    """
+    What the manifest records as blocking it right now.
+    """
+
+    def blockers_not_owned_by(self, owner: str) -> list[str]:
+        """
+        Every blocker except the ones *owner* wrote, in their recorded order.
+
+        :param owner: The automated caller whose blockers are its own to replace.
+        :return: The blockers it must leave alone.
+        """
+        prefix = f"{owner}{BLOCKER_OWNER_SEPARATOR}"
+        return [blocker for blocker in self.blockers if not blocker.startswith(prefix)]
+
+    def as_document(self) -> dict[str, Any]:
+        """
+        Render the item as the JSON a caller reads.
+        """
+        return {
+            "item": self.item_identifier,
+            ManifestKey.STATUS.key: self.status.value,
+            ManifestKey.BLOCKERS.key: self.blockers,
+        }
+
+
+@dataclass(frozen=True)
+class ItemWrite(TrackedItem):
+    """
+    One item's recorded state after a write, and the status it carried before it.
+
+    A written item is still a tracked item - the same id, status and blockers a reader
+    acts on - so a caller reading either operation's report reads one shape.
+    """
+
+    previous_status: ItemStatus
+    """
+    The status the manifest recorded before the write.
+    """
+
+    def as_document(self) -> dict[str, Any]:
+        """
+        Render the write as the JSON a caller reads, naming what changed as well as what
+        the item now says.
+        """
+        return {**super().as_document(), "previous_status": self.previous_status.value}
+
+
+@dataclass(frozen=True)
+class BranchReport:
+    """
+    What an operation keyed on a branch found, for every item that branch carries.
+    """
+
+    branch: str
+    """
+    The branch that was looked up.
+    """
+
+    plan_identifier: str | None
+    """
+    The plan tracking it, or None when no plan claims the branch.
+    """
+
+    items: list[TrackedItem]
+    """
+    Every item recording that branch, in manifest order.
+    """
+
+    @property
+    def exit_code(self) -> ExitCode:
+        """
+        The status the process exits with, so a caller acting on the status alone
+        reports an unclaimed branch rather than writing against a plan it guessed.
+        """
+        return ExitCode.SUCCESS if self.items else ExitCode.BRANCH_TRACKS_NO_ITEM
+
+    def as_document(self) -> dict[str, Any]:
+        """
+        Render the report as the JSON a caller reads, led by what it means.
+        """
+        document: dict[str, Any] = {
+            "status": self.exit_code.name_for_a_caller,
+            "exit_code": int(self.exit_code),
+            ManifestKey.BRANCH.key: self.branch,
+            "plan": self.plan_identifier,
+            "items": [item.as_document() for item in self.items],
+        }
+        if self.plan_identifier is not None:
+            document["dashboard_command"] = f"/plan-dashboard {self.plan_identifier}"
+        return document
+
+
+def resolve_branch(branch: str, project_root: Path) -> BranchReport:
+    """
+    Find the plan and the items a branch belongs to.
+
+    A branch can carry more than one item - a plan may split what one branch does into
+    several - so every item recording it is answered with, not the first.
+
+    :param branch: The branch to resolve.
+    :param project_root: The repository to run within.
+    :raises UnknownPlanError: If the index names a plan with no manifest on the branch.
+    :return: What the branch belongs to.
+    """
+    plan_identifier = plan_tracking(branch, project_root)
+    if plan_identifier is None:
+        return BranchReport(branch=branch, plan_identifier=None, items=[])
+
+    documents = PlanDocuments.load(plan_identifier, project_root)
+    items = [
+        TrackedItem(
+            item_identifier=item[ManifestKey.IDENTIFIER.key],
+            status=ItemStatus(item[ManifestKey.STATUS.key]),
+            blockers=list(item.get(ManifestKey.BLOCKERS.key) or []),
+        )
+        for item in documents.manifest[ManifestKey.ITEMS.key]
+        if item.get(ManifestKey.BRANCH.key) == branch
+    ]
+    return BranchReport(branch=branch, plan_identifier=plan_identifier, items=items)
+
+
+# %% owning a blocker on every item a branch carries
+
+
+def block_branch(
+    branch: str, owner: str, reason: str, project_root: Path
+) -> BranchReport:
+    """
+    Record *owner*'s blocker on every item a branch carries, and mark them blocked.
+
+    Running it again replaces that owner's own blocker rather than adding a second, so a
+    pass that keeps finding the same conflict keeps writing the same entry.
+
+    :param branch: The branch whose items are blocked.
+    :param owner: The automated caller the blocker belongs to.
+    :param reason: Why the branch is blocked, in a reader's terms.
+    :param project_root: The repository to run within.
+    :return: What was written.
+    """
+    return write_owned_blocker(
+        branch=branch,
+        owner=owner,
+        reason=reason,
+        project_root=project_root,
+    )
+
+
+def unblock_branch(branch: str, owner: str, project_root: Path) -> BranchReport:
+    """
+    Clear *owner*'s blocker from every item a branch carries.
+
+    An item left carrying somebody else's blocker stays blocked; one left carrying none
+    returns to :attr:`ItemStatus.IN_PROGRESS`, since the branch it names exists.
+
+    :param branch: The branch whose items are cleared.
+    :param owner: The automated caller whose blocker is being withdrawn.
+    :param project_root: The repository to run within.
+    :return: What was written.
+    """
+    return write_owned_blocker(
+        branch=branch,
+        owner=owner,
+        reason=None,
+        project_root=project_root,
+    )
+
+
+def write_owned_blocker(
+    branch: str, owner: str, reason: str | None, project_root: Path
+) -> BranchReport:
+    """
+    Rewrite every item on a branch with *owner*'s blocker set or withdrawn.
+
+    Both directions are the same write - replace the owner's entries, leave everyone
+    else's, then derive the status from what is left - so they cannot disagree about
+    which blockers belong to whom.
+
+    Only fields that actually change are written. A pass withdraws its blocker from every
+    branch it finds clean, and most of those it never blocked; recording an empty list on
+    each would spread noise across the manifest one run at a time.
+
+    :param branch: The branch whose items are written.
+    :param owner: The automated caller the blocker belongs to.
+    :param reason: Why the branch is blocked, or None to withdraw the blocker.
+    :param project_root: The repository to run within.
+    :return: What was written.
+    """
+    resolution = resolve_branch(branch, project_root)
+    if not resolution.items:
+        return resolution
+
+    writes: list[TrackedItem] = []
+    for item in resolution.items:
+        blockers = item.blockers_not_owned_by(owner)
+        if reason is not None:
+            blockers.append(f"{owner}{BLOCKER_OWNER_SEPARATOR}{reason}")
+        status = status_beside(blockers, previous=item.status)
+        changed = {
+            manifest_key: value
+            for manifest_key, value, recorded in (
+                (ManifestKey.STATUS, status.value, item.status.value),
+                (ManifestKey.BLOCKERS, blockers, item.blockers),
+            )
+            if value != recorded
+        }
+        if changed:
+            update_item(
+                ItemUpdateRequest(
+                    plan_identifier=resolution.plan_identifier,
+                    item_identifier=item.item_identifier,
+                    values_by_key=changed,
+                ),
+                project_root=project_root,
+            )
+        writes.append(
+            ItemWrite(
+                item_identifier=item.item_identifier,
+                status=status,
+                blockers=blockers,
+                previous_status=item.status,
+            )
+        )
+    return BranchReport(
+        branch=branch, plan_identifier=resolution.plan_identifier, items=writes
+    )
+
+
+def status_beside(blockers: list[str], previous: ItemStatus) -> ItemStatus:
+    """
+    The status an item carries given what is now blocking it.
+
+    Only the blocked/unblocked axis is decided here: an item nothing blocks keeps
+    whatever it already said unless that was :attr:`ItemStatus.BLOCKED`, which the
+    blockers it no longer has were the reason for.
+
+    :param blockers: What blocks the item now.
+    :param previous: The status it recorded before.
+    :return: The status to record.
+    """
+    if blockers:
+        return ItemStatus.BLOCKED
+    if previous is ItemStatus.BLOCKED:
+        return ItemStatus.IN_PROGRESS
+    return previous
+
+
 def append_roadmap_section(roadmap_text: str, section: str) -> str:
     """
     Add one section to the end of a roadmap, separated by a blank line.
@@ -1908,6 +2245,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="A file whose text becomes one blocker; repeat for each",
     )
 
+    resolve = subcommands.add_parser(
+        "resolve", help="Name the plan and items a branch belongs to"
+    )
+    resolve.add_argument("--branch", required=True)
+
+    block = subcommands.add_parser(
+        "block", help="Record your own blocker on every item a branch carries"
+    )
+    block.add_argument("--branch", required=True)
+    block.add_argument("--owner", required=True)
+    block.add_argument(
+        "--reason", required=True, type=Path, help="A file whose text is the blocker"
+    )
+
+    unblock = subcommands.add_parser(
+        "unblock", help="Clear your own blocker from every item a branch carries"
+    )
+    unblock.add_argument("--branch", required=True)
+    unblock.add_argument("--owner", required=True)
+
     check = subcommands.add_parser(
         "check", help="Report which recorded fields local git contradicts"
     )
@@ -2000,6 +2357,49 @@ def run_update(arguments: argparse.Namespace, project_root: Path) -> BootstrapRe
     )
 
 
+def run_resolve(arguments: argparse.Namespace, project_root: Path) -> BranchReport:
+    """
+    Run the ``resolve`` subcommand from its parsed arguments.
+
+    :param arguments: The parsed command line.
+    :param project_root: The repository to run within.
+    :return: What the branch belongs to.
+    """
+    return resolve_branch(arguments.branch, project_root=project_root)
+
+
+def run_block(arguments: argparse.Namespace, project_root: Path) -> BranchReport:
+    """
+    Run the ``block`` subcommand from its parsed arguments.
+
+    The reason comes from a file for the same reason a note does: it is routinely longer
+    than a shell invocation should carry.
+
+    :param arguments: The parsed command line.
+    :param project_root: The repository to run within.
+    :return: What was written.
+    """
+    return block_branch(
+        arguments.branch,
+        owner=arguments.owner,
+        reason=arguments.reason.read_text().strip(),
+        project_root=project_root,
+    )
+
+
+def run_unblock(arguments: argparse.Namespace, project_root: Path) -> BranchReport:
+    """
+    Run the ``unblock`` subcommand from its parsed arguments.
+
+    :param arguments: The parsed command line.
+    :param project_root: The repository to run within.
+    :return: What was written.
+    """
+    return unblock_branch(
+        arguments.branch, owner=arguments.owner, project_root=project_root
+    )
+
+
 def run_check(arguments: argparse.Namespace, project_root: Path) -> CurrencyReport:
     """
     Run the ``check`` subcommand from its parsed arguments.
@@ -2047,6 +2447,9 @@ def run_open(arguments: argparse.Namespace, project_root: Path) -> BootstrapRepo
 SUBCOMMAND_HANDLERS = {
     "record": run_record,
     "update": run_update,
+    "resolve": run_resolve,
+    "block": run_block,
+    "unblock": run_unblock,
     "check": run_check,
     "open": run_open,
 }
