@@ -2726,3 +2726,52 @@ items:
       479 tests pass across the three directories CI runs, was 470 and 428 before the item. The
       integration branch was pushed to the fork at the user's request, which the tool itself never
       does.
+
+      Review round 2026-08-11, 28 threads. All are answered; none is actioned and none is
+      resolved. The five needing a decision were settled with the user and the implementation was
+      handed to a fresh session on their instruction, so this entry records decisions rather than
+      work. The full plan is in the PR-progress note for the branch, which is what a session's
+      own SessionStart hook loads.
+
+      The base changes to #151 rather than #139. #151 rebased onto #139 while this round was
+      being worked, so 6fd229ff3 contains ebf67734 and one merge now brings the eleven-module
+      split, class_property.py and the manifest subcommands together. That matters beyond
+      tidiness: most of the round's "you duplicated #139" threads exist only because this branch
+      was cut before that split, so it independently grew its own error base, command classes and
+      git helpers. They are answered by merging the parent, not by writing new abstractions. A
+      conflicted #139 merge was started before the rebase landed and has been aborted.
+
+      The escalation decision reverses this item's own recorded design. A semantic break was to
+      be reported and left; the skill now pushes a mimic test to the breaking branch, comments,
+      applies a blocking label, writes the manifest and republishes the dashboard, reusing the
+      scripted pipeline rather than restating it as prose. The test belongs on the breaking
+      branch because the relying branch cannot express a test against an import that does not
+      exist on it yet, which is exactly the #111 against #110 shape.
+
+      The label must be a new one, and the reason is a defect this round found rather than a
+      preference. WithholdBranchStillConflicting clears needs-resolution whenever mergeable_state
+      is not dirty, and a semantic break never makes a pull request dirty, so reusing that label
+      means the next maintenance pass strips it and the loop the label exists to close reopens.
+      The new label still has to block, so Configuration.needs_resolution_label generalises into
+      a collection read by both the withholding step and promotion's exclusion, with the
+      auto-clear left keyed to needs-resolution alone.
+
+      Two smaller reversals. A suspect-replay now discards the bad rr-cache entry and triages
+      normally instead of stopping, since stopping left the developer with a poisoned cache and
+      no instruction. And a pull request based on both conflicting branches was proposed and
+      declined: a pull request has one base, so it is a diamond, its diff swells to contain the
+      whole second branch, it cannot promote alone, and restack_plan derives exactly one parent
+      per branch.
+
+      The verdict moves to GitHub CI. build pushes the branch, prints the run URL and exits, and
+      a separate subcommand reads the conclusion; localisation pushes every prefix at once so CI
+      runs them concurrently. integration_test_command, --test and --no-test all go, and the
+      tests-failed status stays with only its source changed. This narrowly reverses the "the
+      tool pushes nothing" property, to a branch the tool owns and regenerates and never to a
+      feature branch. Reachability was not assumed: #146 already measured that actions/runs, jobs
+      and job-logs all answer 200 from a session, and that this fork's queue time is a median of
+      0s.
+
+      Also retracted here, since this entry is where it was recorded: the greenlet claim. 3.5.5
+      does publish cp312 manylinux wheels and an sdist, so a test_each_lib red must be judged on
+      its own evidence rather than against that note.

@@ -5760,3 +5760,88 @@ workspace below the current release to avoid a problem that no longer exists, on
 transitive dependency nothing here declares. `tool.uv.required-environments` remains
 available as a resilience measure on its own merits — it would not have prevented this —
 and was offered rather than assumed.
+
+## Update 2026-08-11 (review round on #154): settled, then handed over
+
+28 threads on `integration-branch`. All answered, none actioned, none resolved: the five
+that needed a decision were settled with the user, and implementation was handed to a fresh
+session on their instruction. The executable plan is in the branch's PR-progress note, which
+is the file a session's own SessionStart hook loads — the manifest carries the decisions,
+the note carries the work.
+
+### The stale base is the round's real content
+
+Most of the "this duplicates #139" comments are one fact seen from several angles. #139 split
+`maintenance.py` into eleven modules and added `class_property.py` *after* this branch was
+cut, so `integration.py` independently grew its own error base, command classes and git
+helpers. None of that is a design disagreement, and none of it is answered by writing a new
+abstraction — it is answered by merging the parent and deleting what the parent now supplies.
+
+The base also moved mid-round, which changed the answer. #151 rebased onto #139, so
+`6fd229ff3` contains `ebf67734` and the chain `#139 → #151 → #154` is linear. One merge now
+brings the module split, `class_property.py` *and* `block --branch` / `unblock --branch`
+together — which is what makes the manifest half of the escalation pipeline buildable at all
+rather than a dependency to wait on. A conflicted #139 merge started earlier was aborted.
+
+Worth carrying: the round was planned twice, first against #139 as the base and then against
+#151, and the second plan is materially simpler. Re-checking a base at the moment of acting,
+rather than inheriting the one recorded at kickoff, is the same lesson
+`git-identity-from-personal-notes` recorded on 2026-08-01 — a basing decision is a claim about
+live branches and expires when a sibling moves.
+
+### A label that would have been silently stripped
+
+The user asked for `needs-resolution` on a branch that breaks another. Reading the code first
+is what stopped that shipping: `WithholdBranchStillConflicting`
+(`maintenance_restack_steps.py:225`) clears that label whenever `mergeable_state` is not
+`dirty`, and a semantic break never makes a pull request dirty. So the label would have been
+written by the triage skill and removed by the very next maintenance pass — reopening exactly
+the re-reporting loop the label was invented to close, and doing it invisibly.
+
+The resolution keeps the user's intent and changes the mechanism: a separate
+`integration-conflict` label the pass never auto-clears, with
+`Configuration.needs_resolution_label` generalised into a *collection* of blocking labels read
+by both the withholding step and `maintenance_promotion.py`'s exclusion. Both labels then
+block through one code path, which is what the user asked for in preferring extraction over a
+second copy.
+
+This is the same shape as the 2026-08-05 promotion incident recorded on #139 — a rule that was
+followed to the letter and still broken, because the state it read was not the state that
+mattered. There it was a snapshot a later step invalidated; here it is a label whose clearing
+condition does not model the case being labelled.
+
+### Three reversals of this item's own design
+
+**Escalation.** A semantic break was to be reported and left. It now pushes a mimic test to
+the breaking branch, comments, labels, writes the manifest and republishes. The test goes on
+the *breaking* branch because the relying branch cannot express a test against an import that
+does not exist on it yet — #111 adding a module-scope `import development_tooling` is
+testable on #111 alone, with no merge involved.
+
+**`suspect-replay`.** Stopping left a poisoned `rr-cache` entry and no instruction, so every
+later build reproduced the same failure. It now discards the entry and triages normally. The
+prohibition that survives is narrower and still right: never auto-write a *replacement* in the
+same pass, which is how a build starts thrashing.
+
+**The verdict.** `--test` running a local suite is replaced by GitHub CI: `build` pushes,
+prints the run URL and exits; a separate subcommand reads the conclusion; localisation pushes
+every prefix at once so CI runs them concurrently. This reverses "the tool pushes nothing"
+deliberately and narrowly — to a branch the tool owns and regenerates, never to a feature
+branch. Reachability was already measured rather than assumed: #146 established that
+`actions/runs`, `jobs` and job-logs all answer 200 from a session, and that this fork's queue
+time is a median of 0s.
+
+### The one thing proposed and declined
+
+A pull request based on *both* conflicting branches. It is a diamond: a pull request has one
+base, so the second branch arrives whole in the diff, the thing cannot promote independently,
+and `restack_plan` derives exactly one parent per branch — the identical reasoning that
+linearized the upstream wave as decision 10.
+
+### Retraction
+
+The `greenlet` blocker recorded on 2026-08-10 against this item, #151 and #135 is withdrawn.
+3.5.5 publishes cp312 manylinux wheels and an sdist; it reads as a publish-propagation window.
+A `test_each_lib` red must be judged on its own evidence rather than against that note. The
+retraction is repeated in the manifest entry and the PR-progress note, because those are the
+two places a session reads before CI.
