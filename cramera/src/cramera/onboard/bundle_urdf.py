@@ -16,6 +16,8 @@ Standalone use::
 it the exact uri->path resolutions recorded while the demo ran.
 """
 
+from __future__ import annotations
+
 import argparse
 import logging
 import os
@@ -25,7 +27,7 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from typing_extensions import ClassVar, Dict, List, Optional, Pattern, Set
+from typing_extensions import Any, Callable, ClassVar, Dict, List, Optional, Pattern, Set
 
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -34,6 +36,7 @@ from semantic_digital_twin.exceptions import ParsingError
 from cramera import paths
 from cramera.logging_setup import get_logger
 from cramera.mesh_format import MeshFormat
+from cramera.robot_parts import model_identity
 
 logger = get_logger(__name__)
 

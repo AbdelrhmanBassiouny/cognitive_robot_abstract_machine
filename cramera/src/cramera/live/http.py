@@ -9,7 +9,10 @@ HTTP endpoints of the live bridge (default port 8765).
                   base: pose, objects: {mesh_key: pose}}
     GET /objects geometry catalog (mesh served via /mesh?key=)
     GET /models  [{index, prefix, robot}] (URDF served via /model_urdf?model=,
-                  mesh served via /model_mesh?model=&ref=)
+                  mesh served via /model_mesh/<model>/<ref>.<ext> — the real
+                  extension has to be the URL's own trailing characters, since the
+                  frontend's URDF loader dispatches to a mesh format by regex-
+                  matching it, not by any query parameter)
     GET /plan    {signature, nodes: [{id, parent, kind, label, status, derived}]}
     GET /chart   {signature, title,
                   nodes: [{id, parent, name, class_name, life_cycle, observation}],
@@ -27,6 +30,7 @@ from __future__ import annotations
 import functools
 import json
 import os
+import re
 import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -45,6 +49,13 @@ DEFAULT_PORT = int(os.environ.get("LIVE_VIZ_PORT", "8765"))
 class BridgeRequestHandler(BaseHTTPRequestHandler):
     """
     Serves the bridge's snapshots and accepts viewer moves.
+    """
+
+    MODEL_MESH_PATH_PATTERN = re.compile(r"^/model_mesh/(\d+)/(\d+)\.[A-Za-z0-9]+$")
+    """
+    ``/model_mesh/<model index>/<reference index>.<extension>`` — the extension is
+    read only by the frontend to pick a mesh loader; the server resolves purely from
+    the two numeric indices.
     """
 
     def __init__(self, *args: Any, bridge: Bridge, **kwargs: Any) -> None:
@@ -160,11 +171,10 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         Serve one tracked model's mesh reference, resolved to an absolute path (plain
         file IO, no world access).
         """
-        index = self._query_int("model")
-        reference_index = self._query_int("ref")
+        match = self.MODEL_MESH_PATH_PATTERN.match(self.path)
         path = (
-            self.bridge.model_mesh_path(index, reference_index)
-            if index is not None and reference_index is not None
+            self.bridge.model_mesh_path(int(match.group(1)), int(match.group(2)))
+            if match
             else None
         )
         self._send_file(path)

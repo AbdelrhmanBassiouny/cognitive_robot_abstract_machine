@@ -19,6 +19,7 @@ from typing_extensions import Dict, List, Optional
 
 from semantic_digital_twin.adapters.urdf import URDFParser
 
+from cramera.mesh_format import MeshFormat
 from cramera.onboard.bundle_urdf import BundleReport, MeshReference
 from cramera.robot_parts import model_identity
 
@@ -124,9 +125,10 @@ class LiveModelCatalog:
         if text is None:
             return None
         for reference_index, reference in enumerate(self._references(text)):
+            mesh_format = MeshFormat.of_path(reference)
             text = text.replace(
                 '"%s"' % reference,
-                '"%s"' % model_mesh_url(index, reference_index),
+                '"%s"' % model_mesh_url(index, reference_index, mesh_format),
             )
         return text
 
@@ -174,9 +176,18 @@ class LiveModelCatalog:
         """
         A URDF's mesh references, sorted and deduplicated.
 
+        Every ``filename="..."`` attribute matches the same pattern regardless of the
+        tag it belongs to, so a plugin (``.so``) or other non-geometry reference is
+        excluded here rather than mistaken for a mesh.
+
         :param text: The URDF text to read references out of.
         """
-        return sorted(set(BundleReport.MESH_REFERENCE_PATTERN.findall(text)))
+        references = set(BundleReport.MESH_REFERENCE_PATTERN.findall(text))
+        return sorted(
+            reference
+            for reference in references
+            if MeshFormat.of_path(reference) is not None
+        )
 
     def _read(self, source: str) -> Optional[str]:
         """
@@ -206,16 +217,24 @@ class LiveModelCatalog:
         return Path(source).read_text(encoding="utf-8", errors="replace")
 
 
-def model_mesh_url(index: int, reference_index: int) -> str:
+def model_mesh_url(index: int, reference_index: int, mesh_format: MeshFormat) -> str:
     """
     The servable URL :meth:`LiveModelCatalog.urdf_text` rewrites a reference to.
+
+    Two constraints on the shape of this URL, both learned from a live bug:
+
+    - Relative, not root-relative: the vendored URDFLoader resolves a non-
+      ``package://`` reference by string-concatenating it onto the URDF's own
+      directory URL (which already ends in ``/``), not through standard browser URL
+      resolution — a leading ``/`` here produces a double-slash URL that 404s.
+    - The real extension has to be the URL's own trailing characters: the same
+      loader dispatches to STL/COLLADA/OBJ by regex-matching the end of the URL
+      string, not by any query parameter, so the extension is a path segment here
+      rather than e.g. ``?ref=0``.
 
     :param index: Position of the source in a catalog's tracked sources.
     :param reference_index: Position of the reference within that source's own
         sorted, deduplicated mesh references.
+    :param mesh_format: The reference's own mesh format, kept as the URL's suffix.
     """
-    # relative, not root-relative: the vendored URDFLoader resolves a non-package://
-    # reference by string-concatenating it onto the URDF's own directory URL (which
-    # already ends in "/"), not through standard browser URL resolution — a leading
-    # "/" here produces a double-slash URL that 404s.
-    return "model_mesh?model=%d&ref=%d" % (index, reference_index)
+    return "model_mesh/%d/%d%s" % (index, reference_index, mesh_format.value)
