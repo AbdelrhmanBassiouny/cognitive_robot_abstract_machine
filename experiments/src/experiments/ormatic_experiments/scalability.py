@@ -18,7 +18,6 @@ from typing import Type, List, Set, Tuple
 import plotly.graph_objects as go
 import tqdm
 
-import coraplex.orm.ormatic_interface  # type: ignore
 import coraplex.plans.plan_node
 import semantic_digital_twin  # type: ignore
 from experiments.experiment_definitions import (
@@ -48,6 +47,16 @@ def build_cram_class_sets() -> Tuple[Set[Type], List[Type], dict]:
     :return: Tuple of (classes, alternative_mappings, type_mappings) ready to pass to
         :func:`run_scalability_experiment`.
     """
+    # Local import: experiments.orm.ormatic_interface (imported by every other
+    # module in this package, including experiments.montessori.franka_montessori_demo)
+    # pulls this whole module in just to discover its dataclasses, and a module-level
+    # import here would register coraplex.orm.ormatic_interface's DAO classes
+    # (e.g. BodyDAO) alongside experiments.orm.ormatic_interface's own separately
+    # generated DAOs for the same domain classes -- krrood.ormatic.data_access_objects
+    # .helper.get_dao_class resolves ambiguously between the two, breaking any
+    # unrelated to_dao() call whose object graph reaches those domain classes.
+    import coraplex.orm.ormatic_interface
+
     classes, alternative_mappings, type_mappings = get_classes_of_ormatic_interface(
         coraplex.orm.ormatic_interface
     )

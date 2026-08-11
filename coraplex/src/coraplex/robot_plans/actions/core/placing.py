@@ -75,7 +75,7 @@ class PlaceAction(ActionDescription, PlaceTuningParameters, HasGraspDetectionThr
         """
         return sequential(
             [
-                DetachNode(body=self.object_designator, new_parent=self.world.root),
+                #DetachNode(body=self.object_designator, new_parent=self.world.root),
                 MoveToolCenterPointMotion(
                     retract_pose,
                     self.arm,
