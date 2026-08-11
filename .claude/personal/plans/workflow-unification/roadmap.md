@@ -5485,3 +5485,101 @@ head now, so there is nothing to clean up rather than something to remember to c
 And the integration branch was pushed to the fork on request. Worth stating plainly because the
 tool never does it: `build` writes to no branch and pushes nothing, so a build lives only in the
 clone that made it, and an ephemeral container takes it with it.
+
+## Update 2026-08-11 (review round): the duplication that was doing work, and a trap retired
+
+Eleven threads on #151, applied in `0118aca6`. Three were substantive, and the first
+qualifies a generalization this roadmap made four days earlier.
+
+### Single-sourcing a contract deletes a guard — and whether that matters depends on who reads it
+
+The ask was to make the report's JSON keys a `StrEnum`. Done, as `ReportKey`, holding only
+the keys this module invents — a key naming a manifest field still comes from `ManifestKey`,
+since `status` appears in both and means different things in each.
+
+But the **tests deliberately keep their string literals**, and that is the whole finding.
+With the render methods and the tests both reading the enum, renaming a member's value
+changes them identically and no test fails: the rename becomes invisible, and a breaking
+change to a format two other programs parse (`stacked-pr-maintenance` today,
+`routine-cutover`'s Action later) ships green. #135 hit exactly this — renaming
+`SHARED_PATHS` there left all 8 tests passing — and its fix was to add one test pinning
+member names to wire values.
+
+Here the literals the assertions were going to contain anyway already do that job, measured
+rather than assumed: renaming `FINDINGS` still fails
+`test_the_check_subcommand_exits_stale_and_names_the_field`.
+
+That refines the 2026-08-07 entry, which promoted "single-source, then add one contract
+test" from precedent to expectation, and the 2026-08-07 second round, which then cut such a
+test on the user's instruction. Both were right about their own case, and the rule joining
+them is narrower than either: **notice the guard you are deleting, and decide by who reads
+the contract.** A diagnostic line a human reads is the owner's call to pin or not; a wire
+format another program parses has to stay pinned by something. The thread asking for the
+enum in the tests is answered and left open rather than resolved, since the answer is the
+opposite of the ask.
+
+### Abstract instance properties, because the parser is built from instances
+
+Each of the seven subcommands is now a `Subcommand` subclass owning its `invoked_as`,
+`description`, `add_arguments` and `run`, with `SUBCOMMANDS` built by instantiating
+`Subcommand.__subclasses__()`. The parser and the dispatch table had been two lists of the
+same seven words; they are one now, and a command that exists but is unreachable is not
+expressible.
+
+The reviewer offered `StrEnum` or dataclasses-with-abstract-members, and the enum loses on a
+concrete point rather than taste: a member can carry a name, but not the flags — the parser
+block and the `run_*` function would have stayed apart regardless.
+
+Worth carrying is why this did **not** reach for #139's `classproperty`. That class exists
+because #139's parser is built from the *classes*, and its third round had to discover that a
+plain `classproperty` silently loses abstractness, since `ABCMeta` resolves abstractness with
+`getattr(cls, name)` and gets a plain string back. Building the parser from *instances*
+sidesteps the question entirely: plain `ABCMeta` refuses a nameless command with
+`TypeError: Can't instantiate abstract class`, raised as the module imports. And it avoids
+copying `class_property.py`, which lives only on #139's unlanded branch — this plan has
+recorded four same-artifact-twice instances already, and a fifth was the alternative.
+
+### The extend-a-note trap is retired, and the answer to its open question is "no"
+
+`plan_item_bootstrap.py` gains `update --append-notes`, closing the question this item's own
+notes left open on 2026-08-11 — whether `fold` should accept both paragraph conventions.
+
+It should not, and the measurement is why. A note **read back out of `plan.yaml`** separates
+paragraphs with a single `\n`, because a folded scalar reads its own line breaks back as
+spaces and a blank line back as one newline. A note **written into a file** separates them
+with a blank line, and its single `\n`s are hard wrapping that must *not* become breaks. The
+same character means opposite things in the two sources, and only the caller knows which it
+holds — so teaching `fold` to split on any newline fixes the first and explodes the second,
+turning every hard-wrapped `--notes` file into one paragraph per line. `extend_note` does the
+conversion, the flag says which source it is, and the two are mutually exclusive.
+
+### Using it immediately found the one thing it cannot catch
+
+Appending this round's note with the new flag produced a single run-together paragraph on the
+first attempt, because the file was written as continuously wrapped prose with no blank lines.
+The tool did exactly what it promises; the input was wrong. Recorded because every later
+caller writes that file the same way: **`--append-notes` reads a file the way a person writes
+markdown**, so its paragraphs must be blank-line separated, and a run-together note is an
+authoring mistake rather than a defect to go hunting for.
+
+Repairing it turned up something else. Five hyphen-broken words sat in the live note —
+`plan- item`, `stacked- pr`, `plan- writing`, `dependency- chips` and one of this session's
+own. The first four are **residue of the fold bug this very branch fixed**, written by the
+old `break_on_hyphens` behaviour before the fix landed, and they had been sitting in the
+manifest unnoticed since. A fix stops the bug producing new damage; it does not repair what
+the bug already wrote, and nothing was looking. All five are rejoined.
+
+### Naming
+
+`manifest-currency.md` → `manifest-staleness.md`, `CurrencyReport` → `StalenessReport`, and
+the shell constant with them, on the user's question of staleness or status. *Status* is
+already taken twice — an item's lifecycle field, and the key every report here leads with — so
+a `manifest_status_document` would read as being about those. *Staleness* names the defect and
+is the word `check` already uses (`MANIFEST_IS_STALE`, `StalenessFinding`).
+
+416 tests across the three directories CI runs, was 408; six new, each mutation-checked. A
+second thread stays open by the same reply-don't-resolve rule: whether blockers written before
+the ownership convention survive a pass. They do by construction — no `<owner>: ` prefix means
+`blockers_not_owned_by` never matches, the identical path as a hand-written blocker — verified
+against this plan's real manifest, where the three pre-convention blockers on
+`personal-settings-sync` carry no owner-shaped prefix.
