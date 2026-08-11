@@ -2258,8 +2258,8 @@ items:
       2026-08-07 - and each time everything needed to diagnose the item was already on the pull
       request.
 
-      Scope settled with the user 2026-08-09: six bound surfaces - plan-create, add-plan-item, plan-
-      item-kickoff, plan-item-resolve, plan-dashboard and stacked-pr-maintenance - with the
+      Scope settled with the user 2026-08-09: six bound surfaces - plan-create, add-plan-item,
+      plan-item-kickoff, plan-item-resolve, plan-dashboard and stacked-pr-maintenance - with the
       maintenance pass deliberately in, since it reparents pull requests, promotes branches and
       moves labels without ever touching plan.yaml. As scripted as possible, the instructions
       document keeping only what a script cannot do.
@@ -2300,21 +2300,22 @@ items:
       SCOPE_DECISION_DOCUMENT, cited in a short subsection by each bound skill. plan-item-resolve
       took the largest change, and it was not something the notes had singled out: it wrote the
       manifest nowhere at all, though its own blockers and notes are precisely the fields that went
-      stale on #109, #115 and #121. It now records what it found before proposing anything. stacked-
-      pr-maintenance reports the items its pass made stale rather than writing them - it runs
-      unattended under --non-interactive, where its own doctrine forbids opening a discussion, and
-      which status a move implies is judgement. That asymmetry is stated in the document with its
-      reason.
+      stale on #109, #115 and #121. It now records what it found before proposing anything.
+      stacked-pr-maintenance reports the items its pass made stale rather than writing them - it
+      runs unattended under --non-interactive, where its own doctrine forbids opening a discussion,
+      and which status a move implies is judgement. That asymmetry is stated in the document with
+      its reason.
 
-      The contract test derives which skills are bound from what they do - a skill invoking a plan-
-      writing script is bound by that fact - rather than listing them, so a skill added later is
-      covered without editing the test; only the maintenance pass is named, because it is bound for
-      the opposite reason and asserts it writes no manifest.
+      The contract test derives which skills are bound from what they do - a skill invoking a
+      plan-writing script is bound by that fact - rather than listing them, so a skill added later
+      is covered without editing the test; only the maintenance pass is named, because it is bound
+      for the opposite reason and asserts it writes no manifest.
 
       389 tests pass across the three directories CI runs, against 367 on main. Every new test was
       mutation-checked, each failing only for its own reason. Verified live rather than only in the
-      harness: check run against all 41 items of this plan returned one true positive - dependency-
-      chips-blocked-fix records a published branch with no session, exit 9 - and 40 clean.
+      harness: check run against all 41 items of this plan returned one true positive -
+      dependency-chips-blocked-fix records a published branch with no session, exit 9 - and 40
+      clean.
 
       One incidental fix rides along, as its own concern: the scratch repository fixture now
       disables commit signing. This environment signs by default, so every scratch commit depended
@@ -2411,7 +2412,7 @@ items:
       blank lines, so five intended paragraphs were correctly folded into one. The tool did exactly
       what it promised and the input was wrong. Worth carrying, because every later caller writes
       that file the same way: --append-notes reads a file the way a person writes markdown, so the
-      paragraphs have to be blank- line separated in the file, and a run-together note is an
+      paragraphs have to be blank-line separated in the file, and a run-together note is an
       authoring mistake rather than a defect to go looking for.
 
       Also renamed throughout, on the user's question of staleness or status: manifest-currency.md
