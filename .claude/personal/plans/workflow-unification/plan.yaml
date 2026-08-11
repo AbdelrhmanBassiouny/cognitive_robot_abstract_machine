@@ -717,6 +717,43 @@ items:
       was correct rather than a bug - get_session_link_in reads the link out of the pull request's
       own description, so a report reaches the branch's owner.
 
+      Review round 2026-08-11 (four comments) applied in ebf67734, and three of the four were
+      structural. Two named a module split - the restack step classes into their own module with
+      RESTACK_STEPS in another, and the command classes into one with COMMANDS - and the third was
+      the earlier constants comment, whose seven plain values moved with them. The commands one is
+      what inverted the file, and the reasoning is worth keeping because it was not obvious until
+      it was tried: a commands module cannot both be imported by maintenance.py and import
+      everything the commands do. So maintenance.py is the command line and nothing else now, and
+      the work sits below it in eleven modules named for what they do. The earlier deferral to
+      dev-tooling-python-package - the one that kept stack.py unsplit - is therefore overridden for
+      maintenance.py alone, on the user's explicit instruction; stack.py is untouched and still
+      waits for that item.
+
+      The command's name and description became abstract class properties, replacing
+      __init_subclass__ and the ClassVars. This is the third round on the same two members, and the
+      measurement that settled it is the one nobody had made: a plain classproperty silently loses
+      the abstractness, because ABCMeta decides what is still abstract with getattr(cls, name),
+      which calls the descriptor and gets a plain string back - so a subclass supplying nothing was
+      not abstract at all and answered None. __get__ answers with the descriptor itself while it is
+      abstract, which restores the refusal, and COMMANDS instantiates every subclass, so it lands
+      as the module is imported. classproperty is class_property.py rather than krrood's, per
+      decision 12's stdlib-only tier.
+
+      The three fork Protocols became abstract dataclasses, on the user's answer to the question
+      the previous round left open. It caught a hole the same day it was applied: the fork stand-in
+      never implemented open_pull_requests, which structural typing could not see because restack
+      and promote never call it. Completed rather than stubbed. One constraint learned rather than
+      assumed: dataclasses refuse a non-frozen subclass of a frozen base, so making the bases frozen
+      - the module's idiom - made both test stand-ins frozen too.
+
+      154 tests pass, was 151. Four new assertions, each checked by breaking the implementation, and
+      one existing test changed where the refusal moved from class definition to construction - it
+      keeps its assertion and instantiates rather than defining. Two threads stay open deliberately:
+      the --quiet question, which is answered and calls for no change, and the doc-formatting one,
+      whose outstanding half is whether to sweep main's 8 unformatted files in a separate pull
+      request. The gh/PyGithub pair stays deferred to dev-tooling-github-api-unification as before.
+      Session: https://claude.ai/code/session_01DHbsXEZCDRYbegKU4iVGyP
+
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script
     title: "Extract a deterministic setup script from /setup-personal-notes"

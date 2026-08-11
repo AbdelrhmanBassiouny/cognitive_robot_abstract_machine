@@ -5343,3 +5343,79 @@ plan, until somebody thought to run `/plan-dashboard` with no argument. Creating
 single change that alters what the index itself lists, which is why it is the exception to the
 don't-republish-the-index-unprompted convention rather than a violation of it; `_index` has its own
 cached URL, so it updates that page rather than minting a second.
+
+## Update 2026-08-11 (review round): #139's executor becomes eleven modules, and the third try at a class property
+
+`/plan-item-resolve workflow-unification stack-maintenance-executor`, handling the four comments
+of 2026-08-11. Session: https://claude.ai/code/session_01DHbsXEZCDRYbegKU4iVGyP. Applied in
+`ebf67734`.
+
+### The split, and why it went further than either comment asked
+
+Two comments asked for modules: the restack step classes in one with `RESTACK_STEPS` in another,
+and the command classes in one with `COMMANDS`. The second is what reshaped the file, for a reason
+that only shows up once it is attempted - **a commands module cannot both be imported by
+`maintenance.py` and import everything the commands do.** That is a cycle, and the only way out
+that keeps `python .claude/stack/maintenance.py <command>` as the entry point is to invert it: the
+entry module holds the parser, `main` and `_dispatch`, and everything else moves below the commands.
+
+So the file became eleven modules rather than three: `maintenance_constants`, `maintenance_errors`,
+`maintenance_git_commands`, `maintenance_board`, `maintenance_github`, `maintenance_fast_forward`,
+`maintenance_restack_steps`, `maintenance_restack_procedure`, `maintenance_promotion`,
+`maintenance_report`, `maintenance_commands`. The seven hand-maintained constants went into the
+first of them, which answers the 2026-08-07 comment in its original form.
+
+**This overrides the standing deferral for `maintenance.py` only.** The recorded decision of
+2026-08-02 was that no `.claude/` Python file is split before `dev-tooling-python-package`, so the
+surgery happens once - the reasoning that kept `stack.py` whole through two review rounds. The user
+instructed the split here explicitly, so it is taken for this file; `stack.py` is untouched and
+still waits for that item. Whoever runs `dev-tooling-python-package` inherits eleven modules to
+place rather than one, which is less work, not more.
+
+`test_every_module_of_the_executor_imports_on_its_own` imports each module in a subprocess of its
+own. A layout like this fails silently otherwise: a cycle only bites whichever module a caller
+imports first, so the suite could stay green while the entry point was broken.
+
+### The class-property question, settled by measurement on the third round
+
+`invoked_as` and `description` have now been three shapes: `ClassVar` + `__init_subclass__`,
+abstract properties, and - as of this round, on the user's instruction - `classproperty` +
+`abstractmethod`. The measurement nobody had made is the one that matters:
+
+> A plain `classproperty` **silently loses the abstractness.** `ABCMeta` decides what is still
+> abstract with `getattr(cls, name)`, which *calls* the descriptor and gets a plain string back -
+> never anything carrying `__isabstractmethod__`. So a subclass supplying nothing was not abstract
+> and answered `None`.
+
+The fix is that `__get__` answers with the descriptor itself while it is abstract. Then a nameless
+command is refused with the ordinary `Can't instantiate abstract class ...` message, and since
+`COMMANDS` instantiates every subclass, the refusal lands as the module is imported - before the
+parser it feeds exists. Enforcement is at construction rather than at class definition, which is
+strictly later than `__init_subclass__` was; the user was told that when recommending against the
+switch, and chose it anyway.
+
+`classproperty` lives in `class_property.py` and is written rather than imported from `krrood`,
+per decision 12's stdlib-only tier for this layer.
+
+### The `Protocol` question, answered
+
+The three "dataclass" comments of 2026-08-10 against `PullRequestReader`, `PullRequestWriter` and
+`ForkPullRequests` had been left open with two readings and a recommendation. The user chose
+abstract dataclasses, and applying it turned up two things neither reading predicted:
+
+- **Frozen-ness is inherited as a constraint.** dataclasses refuse a non-frozen subclass of a
+  frozen base, so making the bases frozen - the idiom everywhere else in the module - made both
+  test stand-ins frozen too. The one that assigned a field appends to a list now.
+- **It found a hole structural typing could not see.** The fork stand-in never implemented
+  `open_pull_requests`; `restack` and `promote` never call it, so nothing noticed for three rounds.
+  Completed rather than stubbed.
+
+### Left open on purpose
+
+The `--quiet` question is answered (it is git's own progress suppression; the runner captures both
+streams regardless, so what it changes is what a failure message carries) and calls for no change,
+so the thread stays open for the user to close. The doc-formatting thread's outstanding half is
+whether main's 8 unformatted files get a sweep of their own. `gh`/PyGithub stay deferred to
+`dev-tooling-github-api-unification`.
+
+154 tests pass, was 151.
