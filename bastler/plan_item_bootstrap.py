@@ -48,13 +48,6 @@ Seven operations, so each caller depends only on the surface it uses:
     the status from what is left blocking it. The owner is written into the blocker, so
     a pass replaces and clears its own entries and never a person's.
 
-``repair``
-    Rejoin the words an earlier wrap broke across a plan's recorded notes. Fixing the
-    writer stops it breaking new words; it does not repair what it already wrote, and
-    nothing else looks at those values. Only a break whose rejoined word appears
-    elsewhere is closed up - a suspended hyphen has the same shape and is reported
-    instead, since editing somebody's prose on a guess is the worse error.
-
 ``open`` runs before ``record`` when both are wanted: the pull request number does not
 exist until the pull request does.
 
@@ -75,7 +68,6 @@ Usage:
     python3 plan_item_bootstrap.py block --branch <branch> --owner <name> \\
         --reason <file>
     python3 plan_item_bootstrap.py unblock --branch <branch> --owner <name>
-    python3 plan_item_bootstrap.py repair --plan <plan-id>
 
 Prints a one-line JSON report led by ``status`` and ``exit_code``, so a caller acting on
 the document never has to decode an integer back into a meaning.
@@ -568,15 +560,6 @@ class ExitCode(IntEnum):
     plan, so a caller acting on the status alone reports it instead of guessing.
     """
 
-    TEXT_NEEDS_REPAIR = 11
-    """
-    Words a wrap once broke are still broken, and repairing them needs a person.
-
-    A finding rather than a failure, like :attr:`BRANCH_TRACKS_NO_ITEM`: the repair the
-    tool could make safely is already made, and what is left is what it declines to
-    guess at.
-    """
-
     @property
     def name_for_a_caller(self) -> str:
         """
@@ -680,25 +663,6 @@ class ReportKey(StrEnum):
     a caller who meant several and wrote none has no other way to see it.
     """
 
-    REPAIRS = "repairs"
-    """
-    Every word a wrap once broke, and whether it was rejoined.
-    """
-
-    BROKEN = "broken"
-    """
-    The word as the manifest currently carries it, split across the break.
-    """
-
-    REJOINED = "rejoined"
-    """
-    What the word reads as once rejoined.
-    """
-
-    REPAIRED = "repaired"
-    """
-    Whether this one was rejoined, as against left for a person to judge.
-    """
 
 
 # %% failures
@@ -1610,192 +1574,6 @@ def written_value(value: Any) -> str | Sequence[str]:
     return [str(entry) for entry in value]
 
 
-# %% repairing words an earlier wrap broke
-
-
-BROKEN_WORD_PATTERN = re.compile(r"([A-Za-z0-9_.]+)- ([A-Za-z0-9_.]+)")
-"""
-A hyphenated word with a space after the hyphen, which a wrap that broke on hyphens
-leaves behind once a folded scalar reads the break back as a space.
-
-Matching is not deciding: a suspended hyphen (*network- and credential-free*) has the
-same shape and is correct English. :func:`repairable_words` is what tells them apart.
-"""
-
-
-@dataclass(frozen=True)
-class BrokenWord:
-    """
-    One word an earlier wrap may have broken, and what rejoining it would give.
-    """
-
-    broken: str
-    """
-    The word as the manifest carries it now, hyphen and space included.
-    """
-
-    rejoined: str
-    """
-    What it reads as with the break closed up.
-    """
-
-    repaired: bool
-    """
-    Whether this one was rejoined, as against left for a person.
-    """
-
-    def to_json(self) -> dict[str, Any]:
-        """
-        Render the word as the JSON a caller reads.
-        """
-        return {
-            ReportKey.BROKEN: self.broken,
-            ReportKey.REJOINED: self.rejoined,
-            ReportKey.REPAIRED: self.repaired,
-        }
-
-
-def repairable_words(text: str, corpus: str) -> list[BrokenWord]:
-    """
-    Every apparently broken word in *text*, and whether rejoining it is safe.
-
-    A break is only rejoined when the rejoined word occurs somewhere in *corpus*
-    unbroken - inside a longer compound counts, since *plan-item-kickoff* is evidence
-    that *plan-item* is a word somebody wrote. That is the bug's own signature rather
-    than a guess about English: a wrap breaks a word its author wrote whole, and such a
-    word is written elsewhere. A suspended hyphen fails the test, since *network-and*
-    appears nowhere.
-
-    The cost of the rule is that a genuinely broken word occurring exactly once is left
-    alone. That is the safe direction - it is reported rather than rewritten, where the
-    opposite error silently edits somebody's prose.
-
-    :param text: The value to examine.
-    :param corpus: The whole plan's text, as the evidence for what a word looks like.
-    :return: Every candidate, in the order they appear.
-    """
-    candidates = []
-    for match in BROKEN_WORD_PATTERN.finditer(text):
-        rejoined = f"{match.group(1)}-{match.group(2)}"
-        candidates.append(
-            BrokenWord(
-                broken=match.group(0),
-                rejoined=rejoined,
-                repaired=rejoined in corpus,
-            )
-        )
-    return candidates
-
-
-def repair_text(text: str, corpus: str) -> tuple[str, list[BrokenWord]]:
-    """
-    Close up every break in *text* that :func:`repairable_words` judges safe.
-
-    :param text: The value to repair.
-    :param corpus: The whole plan's text, as the evidence for what a word looks like.
-    :return: The repaired value, and every candidate found.
-    """
-    candidates = repairable_words(text, corpus)
-    repaired = text
-    for candidate in candidates:
-        if candidate.repaired:
-            repaired = repaired.replace(candidate.broken, candidate.rejoined)
-    return repaired, candidates
-
-
-@dataclass(frozen=True)
-class RepairReport:
-    """
-    Every broken word a plan's notes carry, and which of them were rejoined.
-    """
-
-    plan_identifier: str
-    """
-    The plan that was repaired.
-    """
-
-    words_by_item: dict[str, list[BrokenWord]]
-    """
-    Every candidate found, by the item whose note carries it.
-    """
-
-    @property
-    def left_for_a_person(self) -> list[BrokenWord]:
-        """
-        Every candidate the rule declined to rejoin.
-        """
-        return [
-            word
-            for words in self.words_by_item.values()
-            for word in words
-            if not word.repaired
-        ]
-
-    @property
-    def exit_code(self) -> ExitCode:
-        """
-        The status the process exits with, so a caller acting on the status alone sees
-        that something is still broken rather than reading a partial repair as a clean
-        one.
-        """
-        return (
-            ExitCode.TEXT_NEEDS_REPAIR if self.left_for_a_person else ExitCode.SUCCESS
-        )
-
-    def to_json(self) -> dict[str, Any]:
-        """
-        Render the report as the JSON a caller reads, led by what it means.
-        """
-        return {
-            ReportKey.STATUS: self.exit_code.name_for_a_caller,
-            ReportKey.EXIT_CODE: int(self.exit_code),
-            ReportKey.PLAN: self.plan_identifier,
-            ReportKey.REPAIRS: {
-                item_identifier: [word.to_json() for word in words]
-                for item_identifier, words in self.words_by_item.items()
-            },
-            ReportKey.DASHBOARD_COMMAND: f"/plan-dashboard {self.plan_identifier}",
-        }
-
-
-def repair_plan(plan_identifier: str, project_root: Path) -> RepairReport:
-    """
-    Rejoin the words an earlier wrap broke across a plan's recorded notes.
-
-    A fix to the writer stops it breaking new words; it does not repair what it already
-    wrote, and nothing else is looking at those values.
-
-    :param plan_identifier: The plan to repair.
-    :param project_root: The repository to run within.
-    :raises UnknownPlanError: If the plan has no manifest on the notes branch.
-    :return: What was found and what was rejoined.
-    """
-    documents = PlanDocuments.load(plan_identifier, project_root)
-    corpus = documents.manifest_text + documents.roadmap_text
-    manifest_text = documents.manifest_text
-    words_by_item: dict[str, list[BrokenWord]] = {}
-
-    for item in documents.manifest[ManifestKey.ITEMS.key]:
-        note = item.get(ManifestKey.NOTES.key)
-        if not note:
-            continue
-        repaired, candidates = repair_text(note, corpus)
-        if not candidates:
-            continue
-        words_by_item[item[ManifestKey.IDENTIFIER.key]] = candidates
-        if repaired != note:
-            manifest_text = apply_item_fields(
-                manifest_text,
-                plan_identifier,
-                item[ManifestKey.IDENTIFIER.key],
-                {ManifestKey.NOTES: repaired},
-            )
-
-    if manifest_text != documents.manifest_text:
-        documents.save(manifest_text, documents.roadmap_text, project_root)
-    return RepairReport(plan_identifier=plan_identifier, words_by_item=words_by_item)
-
-
 # %% checking what the manifest claims against local git
 
 
@@ -2613,7 +2391,7 @@ def open_work(
 # %% command line
 
 
-OperationReport = BootstrapReport | BranchReport | StalenessReport | RepairReport
+OperationReport = BootstrapReport | BranchReport | StalenessReport
 """
 What any of the operations answers with: a report carrying both the status the process
 exits with and the JSON a caller reads.
@@ -3068,45 +2846,6 @@ class OpenSubcommand(Subcommand):
             project_root=project_root,
             remote=arguments.remote,
         )
-
-
-@dataclass(frozen=True)
-class RepairSubcommand(Subcommand):
-    """
-    Rejoin the words an earlier wrap broke across a plan's recorded notes.
-    """
-
-    @property
-    def invoked_as(self) -> str:
-        """
-        :return: The word that selects this command.
-        """
-        return "repair"
-
-    @property
-    def description(self) -> str:
-        """
-        :return: What the command does.
-        """
-        return "Rejoin words an earlier wrap broke across a plan's notes"
-
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        """
-        Declare the plan to repair.
-
-        :param parser: The subparser to declare it on.
-        """
-        parser.add_argument("--plan", required=True)
-
-    def run(self, arguments: argparse.Namespace, project_root: Path) -> RepairReport:
-        """
-        Repair what can be repaired safely, and report the rest.
-
-        :param arguments: The parsed command line.
-        :param project_root: The repository to run within.
-        :return: What was found and what was rejoined.
-        """
-        return repair_plan(arguments.plan, project_root=project_root)
 
 
 SUBCOMMANDS: dict[str, Subcommand] = {

@@ -49,7 +49,6 @@ from bastler.plan_item_bootstrap import (
     check_item,
     open_work,
     record_item,
-    repair_text,
     resolve_branch,
     unblock_branch,
     update_item,
@@ -1567,7 +1566,6 @@ def test_every_operation_is_reachable_by_the_word_it_names():
         "unblock": "UnblockSubcommand",
         "check": "CheckSubcommand",
         "open": "OpenSubcommand",
-        "repair": "RepairSubcommand",
     }
 
 
@@ -1661,98 +1659,6 @@ def test_a_write_that_sets_no_note_reports_no_paragraph_count(
     )
 
     assert report.note_paragraphs is None
-
-
-# %% repairing words an earlier wrap broke
-
-
-EVIDENCED_COMPOUND = "the plan-item-kickoff skill"
-"""
-Text proving ``plan-item`` is a word somebody wrote, which is what makes rejoining a
-break in it safe.
-"""
-
-
-def test_a_break_in_a_word_written_elsewhere_is_rejoined():
-    repaired, candidates = repair_text(
-        "the plan- item guard", corpus=EVIDENCED_COMPOUND
-    )
-
-    assert repaired == "the plan-item guard"
-    assert [(word.broken, word.rejoined, word.repaired) for word in candidates] == [
-        ("plan- item", "plan-item", True)
-    ]
-
-
-def test_a_suspended_hyphen_is_reported_rather_than_rejoined():
-    """
-    ``network- and credential-free`` is correct English, and shares its shape with a
-    broken word - so the rule has to leave it alone rather than edit somebody's prose.
-    """
-    repaired, candidates = repair_text(
-        "all network- and credential-free", corpus=EVIDENCED_COMPOUND
-    )
-
-    assert repaired == "all network- and credential-free"
-    assert [(word.rejoined, word.repaired) for word in candidates] == [
-        ("network-and", False)
-    ]
-
-
-def test_repairing_a_plan_rejoins_the_evidenced_break_and_leaves_the_other(
-    bootstrap_repository: ScratchRepository,
-):
-    update_item(
-        update_request(
-            values_by_key={
-                ManifestKey.NOTES: (
-                    f"{EVIDENCED_COMPOUND} broke as plan- item here, "
-                    "and all network- and credential-free stayed as written."
-                )
-            }
-        ),
-        project_root=bootstrap_repository.project_root,
-    )
-
-    report = plan_item_bootstrap.repair_plan(
-        PLAN_IDENTIFIER, project_root=bootstrap_repository.project_root
-    )
-
-    note = published_item(bootstrap_repository)[ManifestKey.NOTES.key]
-    assert "plan-item here" in note
-    assert "network- and credential-free" in note
-    assert [word.rejoined for word in report.left_for_a_person] == ["network-and"]
-
-
-def test_a_plan_whose_notes_are_whole_repairs_nothing_and_exits_clean(
-    bootstrap_repository: ScratchRepository,
-):
-    report = plan_item_bootstrap.repair_plan(
-        PLAN_IDENTIFIER, project_root=bootstrap_repository.project_root
-    )
-
-    assert report.words_by_item == {}
-    assert report.exit_code == ExitCode.SUCCESS
-
-
-def test_a_break_left_for_a_person_is_its_own_exit_status(
-    bootstrap_repository: ScratchRepository,
-):
-    """
-    A partial repair must not read as a clean one to a caller acting on the status.
-    """
-    update_item(
-        update_request(
-            values_by_key={ManifestKey.NOTES: "all network- and credential-free"}
-        ),
-        project_root=bootstrap_repository.project_root,
-    )
-
-    report = plan_item_bootstrap.repair_plan(
-        PLAN_IDENTIFIER, project_root=bootstrap_repository.project_root
-    )
-
-    assert report.exit_code == ExitCode.TEXT_NEEDS_REPAIR
 
 
 # %% a word its author wrapped, rather than one they hyphenated
