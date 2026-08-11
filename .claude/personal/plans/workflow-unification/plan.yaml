@@ -1727,9 +1727,10 @@ items:
     session: https://claude.ai/code/session_011qPaY1qP7B8hhGQauH4k61
     blockers:
       - >-
-          stacked-pr-maintenance: Merge conflict against its base claude/workflow-unification-setup-
-          jgvs53 in .claude/hooks/README.md, .claude/hooks/session-start.sh,
-          .claude/hooks/tests/scratch_repository.py, .claude/hooks/tests/test_check_setup_sh.py and
+          stacked-pr-maintenance: Merge conflict against its base
+          claude/workflow-unification-setup-jgvs53 in .claude/hooks/README.md,
+          .claude/hooks/session-start.sh, .claude/hooks/tests/scratch_repository.py,
+          .claude/hooks/tests/test_check_setup_sh.py and
           .claude/hooks/tests/test_session_start_sh.py. Reported on pull request 126, which GitHub
           reports as dirty.
     notes: >
