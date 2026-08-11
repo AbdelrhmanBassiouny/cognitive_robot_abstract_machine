@@ -216,7 +216,7 @@ close.
 
 This step is one instance of a rule that holds for every later transition too —
 a pull request number arriving, a blocker appearing, a status changing, a
-description that stops matching. Follow `${MANIFEST_CURRENCY_DOCUMENT}`: write
+description that stops matching. Follow `${MANIFEST_STALENESS_DOCUMENT}`: write
 the manifest and republish before carrying on, not at the end. `update` is the
 operation for a field that changes without deserving a roadmap section, and
 `check` reports what local git already contradicts.

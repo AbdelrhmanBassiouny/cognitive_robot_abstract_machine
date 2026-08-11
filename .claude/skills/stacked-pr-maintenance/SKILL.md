@@ -238,7 +238,7 @@ and you do not fix it. Report it to the branch's owner and move on:
    ```
 
    Then republish that plan's dashboard, once per plan, before moving on:
-   `/plan-dashboard <plan-id>`. `${MANIFEST_CURRENCY_DOCUMENT}` is the rule this serves.
+   `/plan-dashboard <plan-id>`. `${MANIFEST_STALENESS_DOCUMENT}` is the rule this serves.
 5. At the start of every restack pass, fetch each `needs-resolution` branch's `mergeable_state`
    (`pull_request_read` → `get`). GitHub reports `dirty` when the branch has merge conflicts against
    its base; anything else (`clean`, `unstable`, `blocked`, `behind`, `has_hooks`, `unknown`) means
@@ -293,7 +293,7 @@ Then, for that branch:
 ## Account for the plan items this pass moved
 
 Reparenting a pull request, promoting a branch and moving a label all change what a
-tracked item's manifest should say. Follow `${MANIFEST_CURRENCY_DOCUMENT}`'s section
+tracked item's manifest should say. Follow `${MANIFEST_STALENESS_DOCUMENT}`'s section
 for a pass that changes state without owning it, which is where the commands live.
 
 For every branch you moved, resolve it to its items and name them in the finish
