@@ -2464,6 +2464,35 @@ items:
       below the current release, justified by a problem that no longer exists, would be the worse
       change. 424 tests pass across the three directories CI runs, was 416.
 
+      Correction, 2026-08-11, and the review comment that forced it. Asked why a repair is needed
+      rather than the write being deterministic, tracing the damage showed the premise recorded
+      above is wrong: these words are not residue of the fold bug this branch fixed. Counting broken
+      words per commit on the notes branch gives 0 on 07-29, rising to 7 between 07-30 and 08-09, 11
+      when this item's own notes were first written on 08-10, and 12 on 08-11. fold did not exist
+      until 08-11, so eleven of the twelve were never written by any writer in this pull request.
+      They are hand-wrapped prose - a session composing a note and wrapping a line at a hyphen - and
+      the break_on_hyphens defect, fixed in the commit that introduced it, produced none of the
+      survivors.
+
+      The deterministic half was therefore available and had not been taken. paragraphs_of now
+      closes up a hyphen sitting immediately before a hard-wrapped line break rather than letting it
+      become a space, because that is where the author broke a word they wrote whole. A suspended
+      hyphen keeps its space, since a person types network- and on one line rather than breaking
+      after the hyphen -so the two are distinguishable at write time by where the break falls, which
+      is exactly what the corpus rule had to infer afterwards. The one shape it reads wrongly is a
+      suspended hyphen a wrap lands on: zero instances in this corpus against eleven of the case it
+      fixes.
+
+      What that leaves for repair is genuinely open and was not decided unilaterally. Its stated
+      justification was that a fix stops new damage without repairing what is already written, and
+      the write rule removes the first half while the run already did the second - the manifest is
+      clean across all six plans, with only correct English left. The argument for keeping it is the
+      path the writer does not own: eleven of the twelve arrived by a session hand-editing plan.yaml
+      and pushing through save-plan.sh, which no write-time rule can reach. Recommended cutting it;
+      left in place pending the user's call, since deleting is the harder one to take back.
+
+      427 tests pass across the three directories CI runs, was 424.
+
   - id: no-pr-subscriptions
     title: "Stop sessions from subscribing to their own pull requests"
     branch: claude/remove-auto-subscribe-pr-oowwkp
