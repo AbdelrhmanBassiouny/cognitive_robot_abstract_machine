@@ -1054,77 +1054,67 @@ items:
     status: in_progress
     session: https://claude.ai/code/session_017JMftn3ujp7xsyhwcMaF75
     notes: >
-      Target revised 2026-07-31 (native-stacks pivot, user-approved): the endgame is no
-      scheduled LLM run at all, finally aligning the Routine with the
-      no-scheduled-checks rule. A plain scheduled Action takes the deterministic
-      duties — fork-main fast-forward from cram2/main, label hygiene, cram2-link
-      comment, plans-site build, and the happy-path cascade (gh stack sync is
-      documented as safe in automation: fetches, fast-forwards the trunk, rebases the
-      remaining branches, force-pushes, syncs PR status, aborts cleanly on divergence
-      in non-interactive terminals; Actions runners ship gh). The judgment residue —
-      cascade conflicts and red CI after a restack — runs in on-demand sessions,
-      surfaced by the plans dashboard rather than a timer. The 2026-07-30 pointer-
-      prompt design (roadmap addendum of that date: replacement prompt, update_trigger
-      mechanism, gate checklist) is superseded as the endgame but survives as an
-      optional interim step if the Action lags the tooling wave; the live Routine is
-      trigger trig_01N79jHmLo3bSbg8pLM6MNTB ("PR Stack Monitor and Update"), and the
-      final cutover deletes or disables it. Gate unchanged: only after PR 1 is on
-      cram2/main and fork main fast-forwards; one green Action cycle flips this done.
-      Base-change requirement, corrected 2026-08-02 by session-safe-pr-reparent's probe:
-      the 403 recorded here is a property of the session git-proxy credential, not of
-      sessions or of the operation - the MCP `update_pull_request` tool changes a base
-      fine (verified on throwaway PR #129), so the "no session can ever do a real
-      base-branch reparent" reading was wrong and no close+create fallback exists to
-      inherit. The Action's own credential (default GITHUB_TOKEN or a stored PAT) is a
-      third identity again, and the probe makes it much more likely to work than feared,
-      since the block is narrow rather than platform-wide. Still verify it concretely
-      with a real base change from the Action before relying on it; if it does 403, the
-      Action can call the same MCP-equivalent REST endpoint under a token that does not
-      carry the restriction rather than degrade to renumbering pull requests. Also fold in event-triggered
-      detection rather than cadence-only: trigger the Action (or an additional one) on
-      `pull_request` `closed`, ancestry-test that PR's head branch immediately, and
-      reparent any open fork PR based on it right then if it turns out to have landed
-      elsewhere - this is what actually prevents the #40/#41 orphan pattern from
-      recurring with a multi-cycle delay, rather than only shrinking the window to one
-      scheduled tick.
-      Corrected 2026-08-02 (traced #40/#41's actual history, at the user's request, to
-      answer "who closed the parent and can automation stop that"): the human action
-      (the user closing #40 as ordinary hygiene after rebuilding its branch, then
-      normally merging its successor #53 nine days later) is not something automation
-      should ever try to prevent - it is correct, deliberate maintenance, not a mistake.
-      The trigger design above is one PR-closed-event narrower than it needs to be: the
-      real defect is that ANY pull request leaving the open set drops it from
-      board.json, whether it closes unmerged (#40) or merges normally and GitHub
-      auto-closes it (#53) - `pull_request: closed` fires for both, so the Action should
-      re-sweep git-ancestry for every remaining open fork PR's base on that one event
-      type generally, not just check the closed PR's own branch. In this real case that
-      would have caught #41's orphaning at #53's merge on 2026-07-25, days before a
-      review round noticed it by accident on 2026-07-31.
-      Interim pointer prompt ADOPTED AND LIVE 2026-08-02. The user replaced the Routine's
-      ~17.5k inline prompt at claude.ai/code/routines with the short pointer this item
-      had specified: HARD RULES inline (they must bind before any file is read), plus
-      "read .claude/stack/ROUTINE.md and execute the fenced text block". It resolves
-      origin/main first and falls back to origin/claude/stack-landed-parent-detection
-      while that is in review, because .claude/stack/ is NOT on main yet - it is only on
-      #106 and #117. So #117's branch is currently live production input, and an edit to
-      ROUTINE.md now ships to the running workflow on push with no deploy step.
-      This is the "optional interim step if the Action lags the tooling wave" this item
-      already described, so the endgame is unchanged: a plain scheduled Action plus
-      on-demand sessions, no scheduled LLM. What the adoption buys now is that doctrine
-      corrections stop needing a manual paste - which is what let the base-PATCH error sit
-      in the live prompt after ROUTINE.md had been fixed.
-      Adoption immediately exposed a latent ordering bug, fixed in #117: SETUP step 0 told
-      the Routine that stack.py and stack.toml "are already on this checkout - they live on
-      main". Written in anticipation of #106 landing, false today, and harmless only while
-      nothing read it. Under the pointer the Routine would resolve its doctrine fine,
-      believe the tooling was present, then fail on the first stack.py call in Phase 2 -
-      after Phase 1 had already mutated pull requests. Step 0 now fetches .claude/stack/
-      from the same ref rather than asserting it. Verified end to end in a worktree at
-      origin/main: stack.py absent before, `stack.py --help` working after.
-      Two deletions are due when #106 lands and .claude/stack/ reaches main: the pointer
-      prompt's source-2 line (needs a manual paste) and step 0's fetch fallback (a normal
-      commit). Neither breaks anything if forgotten - the fetch becomes a no-op and the
-      fallback ref stops resolving - but both are dead weight.
+      Target revised 2026-07-31 (native-stacks pivot, user-approved): the endgame is no scheduled
+      LLM run at all, finally aligning the Routine with the no-scheduled-checks rule. A plain
+      scheduled Action takes the deterministic duties — fork-main fast-forward from cram2/main,
+      label hygiene, cram2-link comment, plans-site build, and the happy-path cascade (gh stack sync
+      is documented as safe in automation: fetches, fast-forwards the trunk, rebases the remaining
+      branches, force-pushes, syncs PR status, aborts cleanly on divergence in non-interactive
+      terminals; Actions runners ship gh). The judgment residue — cascade conflicts and red CI after
+      a restack — runs in on-demand sessions, surfaced by the plans dashboard rather than a timer.
+      The 2026-07-30 pointer-prompt design (roadmap addendum of that date: replacement prompt,
+      update_trigger mechanism, gate checklist) is superseded as the endgame but survives as an
+      optional interim step if the Action lags the tooling wave; the live Routine is trigger
+      trig_01N79jHmLo3bSbg8pLM6MNTB ("PR Stack Monitor and Update"), and the final cutover deletes
+      or disables it. Gate unchanged: only after PR 1 is on cram2/main and fork main fast-forwards;
+      one green Action cycle flips this done. Base-change requirement, corrected 2026-08-02 by
+      session-safe-pr-reparent's probe: the 403 recorded here is a property of the session git-proxy
+      credential, not of sessions or of the operation - the MCP `update_pull_request` tool changes a
+      base fine (verified on throwaway PR #129), so the "no session can ever do a real base-branch
+      reparent" reading was wrong and no close+create fallback exists to inherit. The Action's own
+      credential (default GITHUB_TOKEN or a stored PAT) is a third identity again, and the probe
+      makes it much more likely to work than feared, since the block is narrow rather than
+      platform-wide. Still verify it concretely with a real base change from the Action before
+      relying on it; if it does 403, the Action can call the same MCP-equivalent REST endpoint under
+      a token that does not carry the restriction rather than degrade to renumbering pull requests.
+      Also fold in event-triggered detection rather than cadence-only: trigger the Action (or an
+      additional one) on `pull_request` `closed`, ancestry-test that PR's head branch immediately,
+      and reparent any open fork PR based on it right then if it turns out to have landed elsewhere
+      - this is what actually prevents the #40/#41 orphan pattern from recurring with a multi-cycle
+      delay, rather than only shrinking the window to one scheduled tick. Corrected 2026-08-02
+      (traced #40/#41's actual history, at the user's request, to answer "who closed the parent and
+      can automation stop that"): the human action (the user closing #40 as ordinary hygiene after
+      rebuilding its branch, then normally merging its successor #53 nine days later) is not
+      something automation should ever try to prevent - it is correct, deliberate maintenance, not a
+      mistake. The trigger design above is one PR-closed-event narrower than it needs to be: the
+      real defect is that ANY pull request leaving the open set drops it from board.json, whether it
+      closes unmerged (#40) or merges normally and GitHub auto-closes it (#53) - `pull_request:
+      closed` fires for both, so the Action should re-sweep git-ancestry for every remaining open
+      fork PR's base on that one event type generally, not just check the closed PR's own branch. In
+      this real case that would have caught #41's orphaning at #53's merge on 2026-07-25, days
+      before a review round noticed it by accident on 2026-07-31. Interim pointer prompt ADOPTED AND
+      LIVE 2026-08-02. The user replaced the Routine's ~17.5k inline prompt at
+      claude.ai/code/routines with the short pointer this item had specified: HARD RULES inline
+      (they must bind before any file is read), plus "read .claude/stack/ROUTINE.md and execute the
+      fenced text block". It resolves origin/main first and falls back to
+      origin/claude/stack-landed-parent-detection while that is in review, because .claude/stack/ is
+      NOT on main yet - it is only on #106 and #117. So #117's branch is currently live production
+      input, and an edit to ROUTINE.md now ships to the running workflow on push with no deploy
+      step. This is the "optional interim step if the Action lags the tooling wave" this item
+      already described, so the endgame is unchanged: a plain scheduled Action plus on-demand
+      sessions, no scheduled LLM. What the adoption buys now is that doctrine corrections stop
+      needing a manual paste - which is what let the base-PATCH error sit in the live prompt after
+      ROUTINE.md had been fixed. Adoption immediately exposed a latent ordering bug, fixed in #117:
+      SETUP step 0 told the Routine that stack.py and stack.toml "are already on this checkout -
+      they live on main". Written in anticipation of #106 landing, false today, and harmless only
+      while nothing read it. Under the pointer the Routine would resolve its doctrine fine, believe
+      the tooling was present, then fail on the first stack.py call in Phase 2 - after Phase 1 had
+      already mutated pull requests. Step 0 now fetches .claude/stack/ from the same ref rather than
+      asserting it. Verified end to end in a worktree at origin/main: stack.py absent before,
+      `stack.py --help` working after. Two deletions are due when #106 lands and .claude/stack/
+      reaches main: the pointer prompt's source-2 line (needs a manual paste) and step 0's fetch
+      fallback (a normal commit). Neither breaks anything if forgotten - the fetch becomes a no-op
+      and the fallback ref stops resolving - but both are dead weight.
 
   - id: tooling-branch-retirement
     branch: null
