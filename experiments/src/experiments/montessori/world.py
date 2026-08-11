@@ -1027,7 +1027,10 @@ class MontessoriWorld:
         # leaves the dofs at create_with_dofs' identity default, so MuJoCo starts the
         # body at the world origin regardless of where it was spawned.
         connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-            x=position.x, y=position.y, z=position.z
+            x=position.x,
+            y=position.y,
+            z=position.z,
+            reference_frame=self.world.root,
         )
         self.world.add_semantic_annotation(annotation)
         return annotation
