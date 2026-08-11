@@ -25,7 +25,23 @@ Where every skill's own directory lives.
 
 MAINTENANCE_SKILL = SKILLS_DIRECTORY / "stacked-pr-maintenance" / "SKILL.md"
 """
-The pass that changes a tracked item's real state while writing no manifest.
+The pass that changes a tracked item's real state without owning the item.
+"""
+
+PLAN_CREATE_SKILL = SKILLS_DIRECTORY / "plan-create" / "SKILL.md"
+"""
+The skill whose own act of creating a plan is what makes the master index stale.
+"""
+
+MASTER_INDEX_KEY = "_index"
+"""
+How the dashboard URL cache names the master index's own page.
+"""
+
+BLOCKER_OWNER_CONSTANT = "MAINTENANCE_BLOCKER_OWNER"
+"""
+The constant naming who the maintenance pass writes its blockers under, which the writer
+and the clearer of one have to agree on exactly.
 """
 
 PLAN_WRITING_SCRIPTS = (
@@ -72,6 +88,17 @@ def shell_constant(name: str) -> str:
     return result.stdout
 
 
+def currency_document() -> str:
+    """
+    The rule document itself, found where the shell configuration says it is.
+
+    :return: Its markdown.
+    """
+    return (
+        SKILLS_DIRECTORY.parents[1] / shell_constant(CURRENCY_DOCUMENT_CONSTANT)
+    ).read_text()
+
+
 def skills_writing_plan_data() -> list[Path]:
     """
     Every skill document that runs a script which writes plan data.
@@ -99,17 +126,48 @@ def test_a_skill_that_writes_plan_data_cites_the_currency_rule(skill: Path):
     assert CURRENCY_DOCUMENT_CONSTANT in skill.read_text()
 
 
-def test_the_maintenance_pass_cites_the_rule_without_writing_the_manifest():
+def test_the_maintenance_pass_writes_the_manifest_its_own_moves_make_stale():
+    """
+    The pass concluding a branch is blocked is what makes the item blocked, so it is the
+    one that records it - reporting instead leaves the manifest wrong for as long as
+    nobody reads the summary.
+    """
     maintenance = MAINTENANCE_SKILL.read_text()
 
-    assert CURRENCY_DOCUMENT_CONSTANT in maintenance
-    assert not any(script in maintenance for script in PLAN_WRITING_SCRIPTS)
+    assert any(script in maintenance for script in PLAN_WRITING_SCRIPTS)
+
+
+def test_the_maintenance_pass_can_reach_the_skill_that_publishes():
+    """
+    Republishing means invoking ``plan-dashboard``, which needs the ``Skill`` tool - a
+    grant no amount of prose in the document can substitute for.
+    """
+    frontmatter = MAINTENANCE_SKILL.read_text().split("---")[1]
+    granted = frontmatter.partition("allowed-tools:")[2].partition("\n")[0]
+
+    assert "Skill" in {tool.strip() for tool in granted.split(",")}
+
+
+def test_the_writer_and_the_clearer_of_a_blocker_name_the_same_owner():
+    """
+    A blocker written under one name and cleared under another would accumulate forever,
+    so both sides cite the constant rather than spelling the name out.
+    """
+    assert shell_constant(BLOCKER_OWNER_CONSTANT)
+    assert BLOCKER_OWNER_CONSTANT in currency_document()
+    assert BLOCKER_OWNER_CONSTANT in MAINTENANCE_SKILL.read_text()
+
+
+def test_creating_a_plan_republishes_the_index_the_new_plan_belongs_in():
+    """
+    The index lists every plan, so adding one is the single change that makes the index
+    itself wrong - the one case where publishing only the plan's own page is not enough.
+    """
+    assert MASTER_INDEX_KEY in PLAN_CREATE_SKILL.read_text()
 
 
 def test_the_rule_names_no_plan_of_its_own():
-    document = (
-        SKILLS_DIRECTORY.parents[1] / shell_constant(CURRENCY_DOCUMENT_CONSTANT)
-    ).read_text()
+    document = currency_document()
     placeholders = set(re.findall(r"<([a-z-]+)>", document))
 
     assert "plan-id" in placeholders

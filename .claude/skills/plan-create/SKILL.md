@@ -191,10 +191,16 @@ commit.
 ## 8. Publish
 
 Invoke the `plan-dashboard` skill for `<plan-id>` to publish its first
-dashboard Artifact. Ask the user whether they also want the master index
-refreshed (`plan-dashboard` with no argument) — don't do it unprompted,
-same convention `plan-dashboard` itself already follows, since that
-republishes a second, separate page.
+dashboard Artifact, then invoke it again with no argument to republish the
+master index. Both, every time, without asking.
+
+The index is the one page that lists every plan, so creating a plan is
+precisely what makes it stale — the staleness `${MANIFEST_CURRENCY_DOCUMENT}`
+exists to close, and a new plan missing from the index is the worst version
+of it, since nobody knows to look for what they cannot see. Elsewhere the
+index is left alone unless asked for, because republishing it says nothing
+new; here it is the only page that changed. It has its own cached URL
+(`_index`), so this updates that page rather than minting a second one.
 
 If this was a migration from an existing freeform doc, offer — don't do it
 unprompted — to replace that old doc with a short pointer stub at its
@@ -211,8 +217,8 @@ so what you report is what a reader will actually see.
 
 ## 9. Report back
 
-Plan id, item/wave/track counts, the dashboard URL, the tracking issue link
-if one was created, and — explicitly, not buried — every judgment call you
+Plan id, item/wave/track counts, the dashboard URL and the index URL, the
+tracking issue link if one was created, and — explicitly, not buried — every judgment call you
 made or flagged along the way (structural assumptions, any live-vs-source
 disagreement found in step 4) so the user can sanity-check them before
 relying on the plan.
