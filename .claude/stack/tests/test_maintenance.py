@@ -41,7 +41,6 @@ from stack import (
 
 import maintenance_commands
 import maintenance_restack_procedure
-from class_property import classproperty
 from maintenance_board import (
     BoardExport,
     MissingPullRequestFieldError,
@@ -62,9 +61,9 @@ from maintenance_fast_forward import (
     FastForwardReport,
     fast_forward,
 )
+from git_commands import GitCommandFailed
 from maintenance_git_commands import (
     BranchAncestry,
-    GitCommandFailed,
     GitCommandRunner,
     ProposedPush,
 )
@@ -1621,15 +1620,6 @@ def test_every_command_class_is_one_reachable_command():
     assert len({command.invoked_as for command in COMMANDS}) == len(COMMANDS)
 
 
-def test_a_command_names_itself_without_being_instantiated():
-    """
-    The parser reads both to build the command line before any command is constructed,
-    so they have to answer on the class.
-    """
-    assert BoardCommand.invoked_as == "board"
-    assert isinstance(BoardCommand.description, str)
-
-
 def test_a_command_that_omits_its_name_cannot_be_built():
     """
     A command stays abstract until it says what it is called, and COMMANDS builds every
@@ -1637,8 +1627,8 @@ def test_a_command_that_omits_its_name_cannot_be_built():
     """
 
     class CommandWithoutAName(MaintenanceCommand):
-        @classproperty
-        def description(cls) -> str:
+        @property
+        def description(self) -> str:
             return "a command that forgot what it is called"
 
         def run(self, maintenance, arguments):
@@ -1646,17 +1636,6 @@ def test_a_command_that_omits_its_name_cannot_be_built():
 
     with pytest.raises(TypeError, match="invoked_as"):
         CommandWithoutAName()
-
-
-def test_a_command_answers_with_its_own_name_rather_than_its_base_s():
-    """
-    An abstract class property answers with itself rather than calling its accessor,
-    which is what leaves a subclass supplying nothing abstract instead of silently
-    answering ``None``.
-    """
-    assert isinstance(MaintenanceCommand.invoked_as, classproperty)
-    assert MaintenanceCommand.invoked_as.__isabstractmethod__
-    assert BoardCommand.invoked_as == "board"
 
 
 def test_a_fork_client_that_cannot_make_one_of_the_writes_cannot_be_built():
@@ -1688,8 +1667,15 @@ def test_every_module_of_the_executor_imports_on_its_own():
     """
     The executor is split across modules, and a cycle between two of them shows up only
     when whichever one a caller imports first is the one that has to be complete.
+
+    The shared directory is on the path because the entry point puts it there; what is
+    under test is the modules' dependence on each other, not on it.
     """
     modules = sorted(path.stem for path in STACK_DIRECTORY.glob("*.py"))
+    environment = {
+        **os.environ,
+        "PYTHONPATH": str(STACK_DIRECTORY.parent / "shared"),
+    }
 
     for module in modules:
         result = subprocess.run(
@@ -1697,6 +1683,7 @@ def test_every_module_of_the_executor_imports_on_its_own():
             cwd=STACK_DIRECTORY,
             capture_output=True,
             text=True,
+            env=environment,
         )
         assert result.returncode == 0, f"{module}: {result.stderr}"
 

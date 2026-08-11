@@ -42,6 +42,32 @@ _MAXIMUM_HEADING_LEVEL = 6
 """The deepest valid HTML heading level - shifting never produces anything
 past this, even for an already-deep roadmap heading."""
 
+STATUS_DISPLAY_LABELS: dict[str, str] = {
+    "not_started": "Not started",
+    "in_progress": "In progress",
+    "blocked": "Blocked",
+    "deferred": "Deferred",
+    "done": "Done",
+}
+"""
+How each plan-item status is labelled on a rendered page.
+
+Keyed by the status's own value rather than by :class:`plan_model.ItemStatus`, which is
+shared with the hooks: a hook has no interface to label anything, so wording only a page
+shows belongs with the rendering rather than with the model.
+"""
+
+
+def status_label(status: str) -> str:
+    """
+    Label a plan-item status for display.
+
+    :param status: The status, as a :class:`plan_model.ItemStatus` or its own value.
+    :return: The label the page shows for it.
+    :raises KeyError: If the status has no label, so a new one cannot render blank.
+    """
+    return STATUS_DISPLAY_LABELS[status]
+
 
 def create_template_environment() -> jinja2.Environment:
     """
@@ -56,12 +82,14 @@ def create_template_environment() -> jinja2.Environment:
 
     :return: A configured, ready-to-use Jinja2 environment.
     """
-    return jinja2.Environment(
+    environment = jinja2.Environment(
         loader=jinja2.FileSystemLoader(TEMPLATES_DIRECTORY),
         autoescape=True,
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    environment.filters["status_label"] = status_label
+    return environment
 
 
 def render_markdown_to_html(markdown_text: str) -> str:

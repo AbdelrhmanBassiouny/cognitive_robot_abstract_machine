@@ -106,7 +106,13 @@ from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
 from typing import Any, ClassVar, Protocol
 
+sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
+
 import yaml
+
+from command_line import Command, commands_of
+from git_commands import GitCommandFailed, GitCommandRunner
+from plan_model import ItemStatus
 
 GITHUB_API_ROOT = "https://api.github.com"
 """
@@ -481,42 +487,6 @@ rather than listed a second time.
 """
 
 
-class ItemStatus(StrEnum):
-    """
-    The statuses ``plan.yaml``'s ``status`` field accepts.
-
-    Mirrors ``build_dashboard.py``'s own enum, which lives in the plan-dashboard skill
-    directory and needs jinja2 and markdown to import, so a hook cannot reach it. A test
-    holds the two equal; the one definition both share arrives with the package
-    migration that gives them a home.
-    """
-
-    NOT_STARTED = "not_started"
-    """
-    Nothing has begun.
-    """
-
-    IN_PROGRESS = "in_progress"
-    """
-    The work is underway - what bootstrapping an item sets.
-    """
-
-    BLOCKED = "blocked"
-    """
-    Something outside the item has to move first.
-    """
-
-    DEFERRED = "deferred"
-    """
-    Deliberately parked rather than stuck.
-    """
-
-    DONE = "done"
-    """
-    Landed.
-    """
-
-
 ITEM_START_PATTERN = re.compile(rf"^\s*- {re.escape(ManifestKey.IDENTIFIER.key)}:")
 """
 Matches the first line of an item block, which is always its ``id``.
@@ -696,7 +666,6 @@ class ReportKey(StrEnum):
     Reported because a file's paragraphs are whatever its blank lines say they are, and
     a caller who meant several and wrote none has no other way to see it.
     """
-
 
 
 # %% failures
@@ -946,17 +915,10 @@ def run_git(*arguments: str, project_root: Path) -> str:
 
     :param arguments: The arguments to pass to git.
     :param project_root: The repository to run within.
-    :raises subprocess.CalledProcessError: If git reports an error.
+    :raises GitCommandFailed: If git reports an error.
     :return: Standard output, stripped of its trailing newline.
     """
-    result = subprocess.run(
-        ["git", *arguments],
-        cwd=project_root,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return result.stdout.rstrip("\n")
+    return GitCommandRunner(working_directory=project_root).run(*arguments)
 
 
 def branch_is_published(branch: str, remote: str, project_root: Path) -> bool:
@@ -1043,7 +1005,7 @@ class PlanDocuments:
                     run_git("show", f"FETCH_HEAD:{path}", project_root=project_root)
                     + "\n"
                 )
-            except subprocess.CalledProcessError as error:
+            except GitCommandFailed as error:
                 raise UnknownPlanError(
                     plan_identifier=plan_identifier, manifest_path=path
                 ) from error
@@ -2433,35 +2395,13 @@ exits with and the JSON a caller reads.
 
 
 @dataclass(frozen=True)
-class Subcommand(ABC):
+class Subcommand(Command):
     """
-    One operation the command line offers, owning both its flags and the work it runs.
+    One operation this command line offers, owning both its flags and the work it runs.
 
-    :data:`SUBCOMMANDS` is built by instantiating every subclass, so a command that
-    exists is reachable by construction rather than by also being listed somewhere.
+    Adds to the shared :class:`command_line.Command` only what is this tool's own: what
+    a command is handed, and what it answers with.
     """
-
-    @property
-    @abstractmethod
-    def invoked_as(self) -> str:
-        """
-        :return: The word that selects this command on the command line.
-        """
-
-    @property
-    @abstractmethod
-    def description(self) -> str:
-        """
-        :return: What the command does, as ``--help`` puts it.
-        """
-
-    @abstractmethod
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
-        """
-        Declare the flags this command takes.
-
-        :param parser: The subparser to declare them on.
-        """
 
     @abstractmethod
     def run(self, arguments: argparse.Namespace, project_root: Path) -> OperationReport:
@@ -2494,7 +2434,7 @@ class RecordSubcommand(Subcommand):
         """
         return "Write an item's manifest entry and roadmap section"
 
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """
         Declare the item to record and the section to record it with.
 
@@ -2548,7 +2488,7 @@ class UpdateSubcommand(Subcommand):
         """
         return "Set an item's recorded fields, without a roadmap section"
 
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """
         Declare every field this command can set.
 
@@ -2643,7 +2583,7 @@ class ResolveSubcommand(Subcommand):
         """
         return "Name the plan and items a branch belongs to"
 
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """
         Declare the branch to look up.
 
@@ -2682,7 +2622,7 @@ class BlockSubcommand(Subcommand):
         """
         return "Record your own blocker on every item a branch carries"
 
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """
         Declare the branch, the blocker's owner, and the reason.
 
@@ -2736,7 +2676,7 @@ class UnblockSubcommand(Subcommand):
         """
         return "Clear your own blocker from every item a branch carries"
 
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """
         Declare the branch and whose blocker to withdraw.
 
@@ -2778,7 +2718,7 @@ class CheckSubcommand(Subcommand):
         """
         return "Report which recorded fields local git contradicts"
 
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """
         Declare the item to check and the remote to measure it against.
 
@@ -2824,7 +2764,7 @@ class OpenSubcommand(Subcommand):
         """
         return "Create the item's branch and draft pull request"
 
-    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """
         Declare the branch to open and how to reach its pull request.
 
@@ -2883,8 +2823,7 @@ class OpenSubcommand(Subcommand):
 
 
 SUBCOMMANDS: dict[str, Subcommand] = {
-    subcommand.invoked_as: subcommand
-    for subcommand in (subclass() for subclass in Subcommand.__subclasses__())
+    subcommand.invoked_as: subcommand for subcommand in commands_of(Subcommand)
 }
 """
 Every operation the command line offers, by the word that selects it.
@@ -2905,7 +2844,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="subcommand", required=True)
     for subcommand in SUBCOMMANDS.values():
-        subcommand.add_arguments(
+        subcommand.declare_arguments(
             subparsers.add_parser(subcommand.invoked_as, help=subcommand.description)
         )
     return parser

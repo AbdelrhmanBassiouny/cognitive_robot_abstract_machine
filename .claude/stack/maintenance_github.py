@@ -22,7 +22,7 @@ from typing import Any
 
 from maintenance_board import PullRequestRecord
 from maintenance_constants import CREDENTIAL_VARIABLES, GITHUB_API_ROOT
-from maintenance_errors import ExternalCallFailed
+from errors import ExternalCallFailed
 from stack import Repository
 
 

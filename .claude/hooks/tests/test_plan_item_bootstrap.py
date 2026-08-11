@@ -1573,7 +1573,7 @@ def test_a_command_that_names_no_word_of_its_own_cannot_be_built():
     """
 
     class NamelessSubcommand(Subcommand):
-        def add_arguments(self, parser):
+        def declare_arguments(self, parser):
             """
             Take no flags.
 

@@ -22,6 +22,15 @@ HOOKS_SOURCE_DIRECTORY = Path(plan_manifest_tools.__file__).parent
 The real hooks directory the scripts under test are copied from.
 """
 
+SHARED_SOURCE_DIRECTORY = HOOKS_SOURCE_DIRECTORY.parent / "shared"
+"""
+The modules the hooks import from outside their own directory.
+
+Copied alongside whatever is installed rather than on request: they are a transitive
+dependency of the scripts under test, so a scratch layout without them fails at import
+with a message about the wrong file.
+"""
+
 NOTES_BRANCH = "claude/personal-notes"
 """
 The personal-notes branch name the hooks resolve to by default.
@@ -121,10 +130,16 @@ class ScratchRepository:
 
     def install_hook_scripts(self, *script_names: str) -> None:
         """
-        Copy the real hook scripts under test into the scratch layout.
+        Copy the real hook scripts under test, and what they import, into the scratch
+        layout.
 
         :param script_names: File names within the hooks directory.
         """
+        shutil.copytree(
+            SHARED_SOURCE_DIRECTORY,
+            self.project_root / ".claude" / "shared",
+            dirs_exist_ok=True,
+        )
         for script_name in script_names:
             shutil.copy(
                 HOOKS_SOURCE_DIRECTORY / script_name,
