@@ -1325,7 +1325,6 @@ items:
     depends_on: [stack-tooling-on-main]
     status: done
     session: https://claude.ai/code/session_01URVDhViP2TijuQAHAysUKL
-    blockers: []
     notes: >
       Bug fix, found while handling a review round on PR #41. board.json carries only
       OPEN fork PRs, so a parent branch whose own PR was closed is absent from it, and
@@ -1400,7 +1399,6 @@ items:
     depends_on: [landed-parent-detection]
     status: done
     session: https://claude.ai/code/session_01WvRrTrtiznzAyvaoeCdNSq
-    blockers: []
     notes: >
       Premise disproven and item re-scoped 2026-08-02. It was spun out of
       landed-parent-detection on the reading that PATCHing any pull request's base 403s
