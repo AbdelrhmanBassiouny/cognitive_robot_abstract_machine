@@ -8,6 +8,8 @@ HTTP endpoints of the live bridge (default port 8765).
     GET /state   {sequenceNumber, frames: {prefixed_joint: position},
                   base: pose, objects: {mesh_key: pose}}
     GET /objects geometry catalog (mesh served via /mesh?key=)
+    GET /models  [{index, prefix, robot}] (URDF served via /model_urdf?model=,
+                  mesh served via /model_mesh?model=&ref=)
     GET /plan    {signature, nodes: [{id, parent, kind, label, status, derived}]}
     GET /chart   {signature, title,
                   nodes: [{id, parent, name, class_name, life_cycle, observation}],
@@ -30,7 +32,7 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from typing_extensions import Any, Dict
+from typing_extensions import Any, Dict, Optional
 
 from cramera.logging_setup import get_logger
 from cramera.live.bridge import Bridge, MalformedMoveRequest, MoveRequest
@@ -94,18 +96,85 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_json({"objects": self.bridge.object_catalog()})
         if self.path.startswith("/mesh"):
             return self._send_mesh()
+        if self.path.startswith("/models"):
+            return self._send_json({"models": self.bridge.live_models()})
+        if self.path.startswith("/model_urdf"):
+            return self._send_model_urdf()
+        if self.path.startswith("/model_mesh"):
+            return self._send_model_mesh()
         if self.path.startswith("/info"):
             return self._send_json(self.bridge.status())
         self.send_response(404)
         self.end_headers()
 
+    def _query_value(self, name: str) -> Optional[str]:
+        """
+        One query-string parameter's value, or None if it is absent.
+
+        :param name: The parameter's name.
+        """
+        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+        values = query.get(name)
+        return values[0] if values else None
+
+    def _query_int(self, name: str) -> Optional[int]:
+        """
+        One query-string parameter's value, parsed as an int, or None if it is absent or
+        not a valid int.
+
+        :param name: The parameter's name.
+        """
+        value = self._query_value(name)
+        try:
+            return int(value) if value is not None else None
+        except ValueError:
+            return None
+
     def _send_mesh(self) -> None:
         """
         Serve one object's mesh file (plain file IO, no world access).
         """
-        query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
-        key = (query.get("key") or [""])[0]
-        path = self.bridge.mesh_path(key)
+        self._send_file(self.bridge.mesh_path(self._query_value("key") or ""))
+
+    def _send_model_urdf(self) -> None:
+        """
+        Serve one tracked model's URDF text, mesh references rewritten to servable URLs.
+        """
+        index = self._query_int("model")
+        text = self.bridge.model_urdf_text(index) if index is not None else None
+        if text is None:
+            self.send_response(404)
+            self.end_headers()
+            return
+        body = text.encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "application/xml")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def _send_model_mesh(self) -> None:
+        """
+        Serve one tracked model's mesh reference, resolved to an absolute path (plain
+        file IO, no world access).
+        """
+        index = self._query_int("model")
+        reference_index = self._query_int("ref")
+        path = (
+            self.bridge.model_mesh_path(index, reference_index)
+            if index is not None and reference_index is not None
+            else None
+        )
+        self._send_file(path)
+
+    def _send_file(self, path: Optional[str]) -> None:
+        """
+        Stream an absolute path's bytes, or 404 when it does not resolve to a file.
+
+        :param path: The absolute path to stream, or None/empty when nothing resolved.
+        """
         if not path or not Path(path).is_file():
             self.send_response(404)
             self.end_headers()

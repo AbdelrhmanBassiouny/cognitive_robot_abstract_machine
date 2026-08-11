@@ -44,6 +44,7 @@ def start(
         logger.info("live bridge is already running — reusing it")
         return bridge.live_server
     hooks.install_mesh_hook()  # before the demo parses its objects
+    hooks.install_urdf_source_hook()  # before the demo parses its world
     hooks.install_plan_hooks()
     if world is not None:
         bridge.world = world

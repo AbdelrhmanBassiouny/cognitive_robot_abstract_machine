@@ -49,8 +49,11 @@ from semantic_digital_twin.api import BodySpecification
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
-from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
-from semantic_digital_twin.world_description.geometry import Box
+from semantic_digital_twin.world_description.connections import (
+    ActiveConnection1DOF,
+    Connection6DoF,
+)
+from semantic_digital_twin.world_description.geometry import Box, Mesh
 from typing_extensions import (
     Any,
     Callable,
@@ -67,12 +70,19 @@ from typing_extensions import (
 
 from cramera import paths
 from cramera.logging_setup import get_logger
-from cramera.body_geometry import measure_body, POSE_PRECISION, rounded_pose
+from cramera.body_geometry import (
+    measure_body,
+    POSE_PRECISION,
+    rounded_pose,
+    rounded_scale,
+)
 from cramera.live.bridge import ROBOT_BASE_KEY
 from cramera.monkey_patch import MethodPatch
-from cramera.robot_parts import RobotPartAnnotation
-from cramera.onboard.bundle_urdf import BundleReport
+from cramera.robot_parts import RobotPartAnnotation, model_identity
+from cramera.mesh_format import MeshFormat
+from cramera.onboard.bundle_urdf import BundledAssets, BundleReport
 from cramera.onboard.bundle_world import BundledWorld
+from cramera.onboard.world_to_urdf import UrdfDocument
 from cramera.palette import ObjectPalette
 
 if TYPE_CHECKING:
@@ -464,6 +474,36 @@ class Recorder:
         self.record_frame(executor)
         return result
 
+    @staticmethod
+    def object_key(body: Body) -> str:
+        """
+        The key a body's recorded poses are filed under: its local name, without the world
+        prefix a composed world gives it.
+
+        :param body: The body to key.
+        """
+        return str(body.name).split("/")[-1]
+
+    def free_floating_bodies(self) -> List[Body]:
+        """
+        Every body its world lets move freely, which is how a world states that a body is
+        loose rather than part of the furniture.
+
+        The robot's own bodies are left out: a mobile base is free-floating too, and it is
+        recorded as the robot rather than as an object.
+        """
+        robot_body_names = (
+            {str(body.name) for body in self.robot.bodies}
+            if self.robot is not None
+            else set()
+        )
+        return [
+            body
+            for body in self.world.bodies
+            if isinstance(body.parent_connection, Connection6DoF)
+            and str(body.name) not in robot_body_names
+        ]
+
     def bind_to_executor(self, executor: Executor) -> None:
         """
         Locate the world, robot and recordable objects of a running executor.
@@ -488,6 +528,10 @@ class Recorder:
             body = self.world.get_body_by_name(spawned.name)
             if body is not None:
                 self._bodies[spawned.name] = body
+        # a world built in code loads no mesh file and spawns no box, so its loose objects
+        # can only be recognized by the world letting them move freely
+        for body in self.free_floating_bodies():
+            self._bodies.setdefault(self.object_key(body), body)
         self._connections = [
             connection
             for connection in self.world.connections
@@ -547,6 +591,7 @@ class Recorder:
         """
         keys = {os.path.basename(path) for path in self.mesh_sources}
         keys |= {spawned.name for spawned in self.spawned_boxes}
+        keys |= set(self._bodies or {})
         for value in vars(designator).values():
             if not isinstance(value, NamesAWorldEntity):
                 continue
@@ -606,6 +651,19 @@ class Recorder:
             self.actions[-1]["target"] or "-",
         )
         return original(node, *args, **kwargs)
+
+    def resolve_action_targets(self) -> None:
+        """
+        Fill in the target of every action that had none when it was parsed.
+
+        An action parsed before the first tick was recorded while no world was bound yet,
+        so an object that is neither a mesh file nor a spawned box could not be recognized
+        as its target. The designators are still on the recorded plan nodes, so they are
+        matched again against the objects that ended up tracked.
+        """
+        for action, node in zip(self.actions, self.plan_nodes):
+            if action["target"] is None:
+                action["target"] = self._target_of(node.designator)
 
     # %% the executed plan tree, serialized from the real PlanNode graph
     def serialize_plans(self, max_nodes: Optional[int] = None) -> List[Dict[str, Any]]:
@@ -963,6 +1021,13 @@ class SceneBuilder:
     The slowest playback the viewer is given, however hard the recording is downsampled.
     """
 
+    ENVIRONMENT_MODEL_NAME: ClassVar[str] = "environment"
+    """
+    Name of the model synthesized from the bodies no recorded source describes, which is
+    also the environment such a scene is listed under since a world built in code names
+    none of its own.
+    """
+
     PLACE_TARGET_DROP: ClassVar[float] = 0.02
     """
     How far below the lowest recorded place pose the place marker is drawn, in metres.
@@ -1047,21 +1112,12 @@ class SceneBuilder:
         report = bundler(
             source, base_name, self.output_directory, hints=self.recorder.resolutions
         )
-        # find this model's prefix in the composed world via one of its links
-        model_prefix = ""
-        for link in report.links[: self.PREFIX_PROBE_LINKS]:
-            prefixed = next(
-                (
-                    body_name
-                    for body_name in world_body_names
-                    if body_name.endswith("/" + link)
-                ),
-                None,
-            )
-            if prefixed:
-                model_prefix = prefixed.split("/", 1)[0]
-                break
-        is_robot = base_body in report.links
+        model_prefix, is_robot = model_identity(
+            links=report.links,
+            world_body_names=world_body_names,
+            base_body=base_body,
+            probe_link_count=self.PREFIX_PROBE_LINKS,
+        )
         log(
             "bundled %-28s prefix=%-12s robot=%s meshes=%d missing=%d"
             % (
@@ -1078,6 +1134,112 @@ class SceneBuilder:
             is_robot=is_robot,
             report=report,
         )
+
+    def _bundle_unclaimed_bodies(
+        self, bundled_models: List[BundledModel], objects: List[Dict[str, Any]]
+    ) -> Optional[BundledModel]:
+        """
+        Bundle the world's remaining bodies as one model, or answer None when a parsed
+        source already describes every one of them.
+
+        A world built in code -- bodies constructed directly rather than parsed out of a
+        file -- otherwise leaves the viewer nothing to draw, because a model is only ever
+        made from a recorded source. The bodies the recording tracks as objects are left
+        out: those are drawn from their own geometry and moved per frame, so a copy of them
+        in the environment would be a second, motionless one.
+
+        :param bundled_models: The models built from the recorded sources.
+        :param objects: The ``objects`` entries built for this scene.
+        """
+        described = {link for model in bundled_models for link in model.report.links}
+        tracked = {entry["key"] for entry in objects}
+        unclaimed = [
+            body
+            for body in self.recorder.world.bodies_topologically_sorted
+            if str(body.name) not in described
+            and self.recorder.object_key(body) not in tracked
+        ]
+        if not unclaimed:
+            return None
+        report = UrdfDocument.of_bodies(
+            bodies=unclaimed,
+            name=self.ENVIRONMENT_MODEL_NAME,
+            output_directory=self.output_directory,
+            mesh_subdirectory=self.ENVIRONMENT_MODEL_NAME,
+        )
+        log(
+            "bundled %-28s prefix=%-12s robot=%s meshes=%d missing=%d (%d bodies no source described)"
+            % (
+                self.ENVIRONMENT_MODEL_NAME,
+                "-",
+                False,
+                report.meshes_copied,
+                len(report.missing),
+                len(unclaimed),
+            )
+        )
+        return BundledModel(
+            name=self.ENVIRONMENT_MODEL_NAME,
+            prefix="",
+            is_robot=False,
+            report=report,
+        )
+
+    def _object_of_body(
+        self, body: Body, key: str, index: int, palette: ObjectPalette
+    ) -> Dict[str, Any]:
+        """
+        The ``objects`` entry describing a body the world holds only in memory.
+
+        A single box is described as one, since the viewer can draw that without a file.
+        Anything else needs geometry on disk: a mesh shape's own file is copied, so its
+        materials come along, and a body of any other shape is written out as the single
+        mesh it adds up to.
+
+        :param body: The body to describe.
+        :param key: The key the body's recorded poses are filed under.
+        :param index: Position in the object list, which picks the entry's colour.
+        :param palette: Supplies a distinguishable colour per object.
+        """
+        entry = {
+            "id": key,
+            "key": key,
+            "spawn": self.recorder.object_frames[0][key],
+            "color": palette.color_for(index),
+        }
+        extent = measure_body(body)
+        if extent is not None:
+            entry["height"] = round(extent.z, POSE_PRECISION)
+        shapes = body.visual.shapes
+        if len(shapes) == 1 and isinstance(shapes[0], Box):
+            entry["box"] = rounded_scale(shapes[0].scale, POSE_PRECISION)
+            return entry
+        entry["mesh"] = self._write_object_mesh(body, key, shapes)
+        return entry
+
+    def _write_object_mesh(self, body: Body, key: str, shapes: Sequence[Any]) -> str:
+        """
+        Write a body's geometry into the bundle and answer the path the scene records.
+
+        :param body: The body whose geometry is written.
+        :param key: The key the body's recorded poses are filed under.
+        :param shapes: The body's visual shapes.
+        """
+        objects_directory = os.path.join(self.output_directory, "meshes", "objects")
+        os.makedirs(objects_directory, exist_ok=True)
+        if len(shapes) == 1 and isinstance(shapes[0], Mesh):
+            source = shapes[0].filename
+            if source and os.path.isfile(source):
+                destination = os.path.join(
+                    objects_directory, key + os.path.splitext(source)[1]
+                )
+                assets = BundledAssets(bundle_root=self.output_directory)
+                if assets.copy(source, destination):
+                    assets.copy_side_assets(source, destination)
+                return "meshes/objects/" + os.path.basename(destination)
+        destination = os.path.join(objects_directory, key + MeshFormat.OBJ.value)
+        body.combined_mesh.export(destination)
+        return "meshes/objects/" + os.path.basename(destination)
 
     def build(self) -> Dict[str, Any]:
         """
@@ -1179,6 +1341,14 @@ class SceneBuilder:
                     "height": spawned.scale[2],
                 }
             )
+        # the loose objects of a world built in code: no source file named them, so their
+        # geometry is written out of the world itself
+        emitted = {entry["key"] for entry in objects}
+        for body in self.recorder.free_floating_bodies():
+            key = self.recorder.object_key(body)
+            if key in emitted or key not in self.recorder.object_frames[0]:
+                continue
+            objects.append(self._object_of_body(body, key, len(objects), palette))
 
         # %% place target + drag bounds
         places = [segment["place"] for segment in segments if segment.get("place")]
@@ -1223,8 +1393,14 @@ class SceneBuilder:
                 for source in self.recorder.mjcf_sources
             ]
         )
-        for source, bundler in bundled_sources:
-            bundled = self._bundle_model(source, bundler, world_body_names, base_body)
+        bundled_models = [
+            self._bundle_model(source, bundler, world_body_names, base_body)
+            for source, bundler in bundled_sources
+        ]
+        environment = self._bundle_unclaimed_bodies(bundled_models, objects)
+        if environment is not None:
+            bundled_models.append(environment)
+        for bundled in bundled_models:
             models.append(bundled.to_payload())
             missing += bundled.report.missing
 
@@ -1467,6 +1643,7 @@ def main() -> None:
     # bundling re-parses the recorded Gazebo/MJCF sources, which the still-installed
     # hooks would record as further sources
     recorder.uninstall_asset_hooks()
+    recorder.resolve_action_targets()
     scene = SceneBuilder(recorder, args.name, output_directory, step).build()
     SceneBuilder._update_scene_index(Path(args.out) / "index.json", args.name)
 

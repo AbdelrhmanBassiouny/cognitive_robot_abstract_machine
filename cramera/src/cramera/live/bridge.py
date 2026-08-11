@@ -59,6 +59,7 @@ from semantic_digital_twin.world_description.connections import (
 )
 
 from cramera.knowledge.enums import PlanNodeGroup
+from cramera.live.model_source import LiveModelCatalog
 from cramera.mesh_format import MeshFormat
 from cramera.palette import ObjectPalette
 from cramera.robot_parts import RobotPartAnnotation
@@ -143,6 +144,12 @@ class LiveHook(Enum):
     MESH = "mesh"
     """
     ``MeshParser.parse`` — remember which file each object's geometry came from.
+    """
+
+    URDF_SOURCE = "urdf_source"
+    """
+    ``URDFParser.from_file`` — remember which URDF/xacro files the world was built
+    from, so their geometry can be served to the viewer without a bundle.
     """
 
 
@@ -679,6 +686,11 @@ class Bridge:
     Object key → absolute mesh path served via the ``/mesh`` endpoint.
     """
 
+    _model_catalog: LiveModelCatalog = field(default_factory=LiveModelCatalog)
+    """
+    URDF/xacro sources the world was built from, served without a bundle.
+    """
+
     _plan: Optional[Plan] = None
     """
     The coraplex plan captured by the ``Plan.perform`` hook.
@@ -810,6 +822,19 @@ class Bridge:
         """
         self._mesh_files[Path(file_path).name.lower()] = file_path
 
+    def remember_urdf_source(self, file_path: str) -> None:
+        """
+        Remember a URDF/xacro file the world was built from.
+
+        Deliberately does not take :attr:`_lock` — :class:`LiveModelCatalog` guards
+        its own state with its own lock, kept separate so a slow xacro expansion never
+        waits behind (or blocks) the tick hook, which holds :attr:`_lock` while
+        publishing every snapshot.
+
+        :param file_path: Absolute path of the source file.
+        """
+        self._model_catalog.remember(file_path)
+
     def publish_bodies(self, bodies: Dict[str, Body]) -> None:
         """
         Replace the published bodies and rebuild the viewer's geometry catalog.
@@ -842,6 +867,58 @@ class Bridge:
         """
         with self._lock:
             return self._mesh_serve.get(key)
+
+    def live_models(self) -> List[Dict[str, Any]]:
+        """
+        Every tracked model source, with its world-instance prefix and robot flag.
+
+        Only the quick read of :attr:`world`/:attr:`robot` takes :attr:`_lock`; the
+        catalog lookup itself (a cache miss re-expands a xacro file, which can take
+        seconds) deliberately runs outside it — see :meth:`remember_urdf_source`.
+        """
+        with self._lock:
+            world_body_names = (
+                [str(body.name) for body in self.world.bodies]
+                if self.world is not None
+                else []
+            )
+            base_body = self._base_body()
+        models = self._model_catalog.models(world_body_names, base_body)
+        return [
+            {"index": index, "prefix": model.prefix, "robot": model.robot}
+            for index, model in enumerate(models)
+        ]
+
+    def model_urdf_text(self, index: int) -> Optional[str]:
+        """
+        A tracked model's URDF text, with mesh references rewritten to servable URLs.
+
+        See :meth:`remember_urdf_source` for why this does not take :attr:`_lock`.
+
+        :param index: Position of the model, as reported by :meth:`live_models`.
+        """
+        return self._model_catalog.urdf_text(index)
+
+    def model_mesh_path(self, index: int, reference_index: int) -> Optional[str]:
+        """
+        Absolute path a tracked model's mesh reference resolves to.
+
+        See :meth:`remember_urdf_source` for why this does not take :attr:`_lock`.
+
+        :param index: Position of the model, as reported by :meth:`live_models`.
+        :param reference_index: Position of the reference, as
+            :meth:`model_urdf_text` numbered it.
+        """
+        return self._model_catalog.mesh_path(index, reference_index)
+
+    def _base_body(self) -> Optional[str]:
+        """
+        The bound robot's base link name, unprefixed, or None if no robot is bound.
+        """
+        if self.robot is None:
+            return None
+        root_name = str(self.robot.root.name)
+        return root_name.split("/", 1)[1] if "/" in root_name else root_name
 
     def status(self) -> Dict[str, Any]:
         """
