@@ -55,20 +55,40 @@ class RecordingRenderer {
   redraw() {}
 }
 
+// the container the panel hands over, recording the input handlers installed on it
+function makeCanvasStub() {
+  const listeners = [];
+  return {
+    appendChild() {}, innerHTML: '',
+    addEventListener(type, callback) { listeners.push({ type: type, callback: callback }); },
+    removeEventListener(type, callback) {
+      const at = listeners.findIndex((l) => l.type === type && l.callback === callback);
+      if (at >= 0) listeners.splice(at, 1);
+    },
+    getBoundingClientRect() { return { left: 0, top: 0, width: 800, height: 600 }; },
+    handlerCount(type) { return listeners.filter((l) => l.type === type).length; },
+    handles(type) { return listeners.some((l) => l.type === type); },
+    wheel(event) { listeners.filter((l) => l.type === 'wheel').forEach((l) => l.callback(event)); },
+  };
+}
+
 function evaluateGraphJs() {
   global.document = {
     createElement() { return { className: '', innerHTML: '' }; },
   };
   global.window = {};
+  // the real gesture module, so the wheel handling under test is the one that ships
+  new Function('window', fs.readFileSync(path.join(WEB, 'core/graph-gestures.js'), 'utf8'))(global.window);
+  global.GraphGestures = global.window.GraphGestures;
   global.vis = { DataSet: ItemStore, Network: RecordingRenderer };
   new Function(fs.readFileSync(path.join(WEB, 'panels/graph/graph.js'), 'utf8'))();
   return global.window.Graph;
 }
 
 // the renderer must receive its elements from the panel, never look them up itself
-function loadGraphJs() {
+function loadGraphJs(canvas) {
   const graph = evaluateGraphJs();
-  graph.attach({ appendChild() {}, innerHTML: '' }, { appendChild() {}, innerHTML: '' });
+  graph.attach(canvas || makeCanvasStub(), { appendChild() {}, innerHTML: '' });
   return graph;
 }
 
@@ -176,6 +196,47 @@ test('plain entity graphs fit freely (no zoom floor)', function () {
   Graph.build({ key: 'knowledge', nodes: [{ id: 'k', label: 'k', group: 'robot' }], edges: [] });
   lastRenderer.fire('stabilizationIterationsDone');
   assert.strictEqual(lastRenderer.moved, undefined);
+});
+
+// %% touchpad input
+test("vis-network's own wheel zoom is off, so the gestures are the only wheel handler", function () {
+  const canvas = makeCanvasStub();
+  const Graph = loadGraphJs(canvas);
+  planFixture(Graph);
+  assert.strictEqual(lastOptions.interaction.zoomView, false);
+  assert.ok(canvas.handles('wheel'), 'no wheel handler installed on the graph container');
+});
+
+test('a two-finger scroll over the graph pans it instead of zooming', function () {
+  const canvas = makeCanvasStub();
+  const Graph = loadGraphJs(canvas);
+  planFixture(Graph);
+  let prevented = 0;
+  canvas.wheel({ deltaX: 0, deltaY: 12, deltaMode: 0, ctrlKey: false, metaKey: false,
+                 clientX: 400, clientY: 300, preventDefault() { prevented += 1; } });
+  assert.strictEqual(prevented, 1, 'the page would scroll instead');
+  assert.strictEqual(lastRenderer.moved.scale, undefined, 'a scroll must not rescale');
+  // 12 pixels at the stub's scale of 0.3
+  assert.strictEqual(lastRenderer.moved.position.y, 40);
+});
+
+test('rebuilding for another tab leaves one wheel handler, not one per build', function () {
+  const canvas = makeCanvasStub();
+  const Graph = loadGraphJs(canvas);
+  planFixture(Graph);
+  Graph.build({ key: 'knowledge', nodes: [{ id: 'k', label: 'k', group: 'robot' }], edges: [] });
+  Graph.build({ key: 'kinematics', nodes: [{ id: 'l', label: 'l', group: 'base' }], edges: [] });
+  assert.strictEqual(canvas.handlerCount('wheel'), 1);
+});
+
+test('the zoom buttons step the scale and the fit button refits', function () {
+  const Graph = loadGraphJs();
+  planFixture(Graph);
+  Graph.zoomBy(2);
+  assert.strictEqual(lastRenderer.moved.scale, 0.6);      // stub scale 0.3
+  const fits = lastRenderer.fitted || 0;
+  Graph.fit();
+  assert.strictEqual(lastRenderer.fitted, fits + 1);
 });
 
 // %% statechart transitions

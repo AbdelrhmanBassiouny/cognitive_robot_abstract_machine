@@ -331,7 +331,7 @@ class UrdfDocument:
         ElementTree.SubElement(
             joint_element, "child", {"link": str(connection.child.name)}
         )
-        self._set_origin(joint_element, connection.origin)
+        self._set_origin(joint_element, self._joint_origin(connection, joint_type))
 
         if joint_type in self.AXIS_JOINT_TYPES:
             ElementTree.SubElement(
@@ -357,6 +357,28 @@ class UrdfDocument:
         self.joint_names.append(str(connection.name))
         if joint_type is not JointType.FIXED:
             self.movable_joint_names.append(str(connection.name))
+
+    @classmethod
+    def _joint_origin(
+        cls, connection: Connection, joint_type: JointType
+    ) -> HomogeneousTransformationMatrix:
+        """
+        The parent-to-child pose a joint's ``origin`` states.
+
+        URDF reads a joint as its origin followed by the joint's own displacement, so a
+        joint whose displacement is supplied from outside -- the axis-driven types,
+        which a recording or a live bridge drives -- must be written at its zero. Its
+        :attr:`Connection.origin` is the pose at the *current* value, which would bake
+        that value in and have the supplied one applied on top of it. Every other joint
+        type carries no value of its own, so its full origin is the only thing placing
+        its child.
+
+        :param connection: The connection the joint describes.
+        :param joint_type: The joint type the connection becomes.
+        """
+        if joint_type in cls.AXIS_JOINT_TYPES:
+            return connection.parent_T_connection_expression
+        return connection.origin
 
     @classmethod
     def _joint_type(cls, connection: Connection) -> JointType:

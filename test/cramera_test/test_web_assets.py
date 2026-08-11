@@ -23,6 +23,7 @@ SCRIPT_PATTERN = re.compile(r'<script src="([^"]+)"')
 """
 How the shell references the assets that must ship with it.
 """
+
 STYLESHEET_PATTERN = re.compile(r'<link rel="stylesheet" href="([^"]+)"')
 IMAGE_PATTERN = re.compile(r'<img[^>]+src="([^"]+)"')
 CSS_URL_PATTERN = re.compile(r"url\(['\"]?([^)'\"]+)['\"]?\)")
@@ -149,6 +150,18 @@ class TestJsUnits:
 
     def test_environment_theme(self):
         self.run_node("test_environment_theme.js")
+
+    def test_split_sizing(self):
+        self.run_node("test_split_sizing.js")
+
+    def test_split_resize(self):
+        self.run_node("test_split_resize.js")
+
+    def test_graph_gestures(self):
+        self.run_node("test_graph_gestures.js")
+
+    def test_joint_routing(self):
+        self.run_node("test_joint_routing.js")
 
 
 class TestQueryPanelHints:

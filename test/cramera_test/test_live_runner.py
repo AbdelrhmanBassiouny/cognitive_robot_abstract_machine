@@ -4,8 +4,8 @@ Unit tests for :func:`cramera.live.runner.start`'s control flow.
 ``hooks.install_*`` monkey-patches coraplex/giskardpy classes process-globally with no
 uninstall (see :meth:`cramera.live.bridge.Bridge.claim_hook`), so these tests replace
 them with no-ops rather than calling them for real, and substitute a fresh
-:class:`Bridge` for :data:`cramera.live.runner.BRIDGE` so no test touches or dirties
-the real process singleton.
+:class:`Bridge` for :data:`cramera.live.runner.BRIDGE` so no test touches or dirties the
+real process singleton.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ def install_no_op_hooks(monkeypatch):
     Replace every hook-installing call ``start()`` makes with a no-op.
     """
     monkeypatch.setattr(runner.hooks, "install_mesh_hook", lambda: None)
+    monkeypatch.setattr(runner.hooks, "install_urdf_source_hook", lambda: None)
     monkeypatch.setattr(runner.hooks, "install_plan_hooks", lambda: None)
     monkeypatch.setattr(runner.hooks, "install_tick_hook", lambda: None)
 
