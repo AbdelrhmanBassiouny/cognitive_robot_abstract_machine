@@ -205,7 +205,7 @@ dashboard Artifact, then invoke it again with no argument to republish the
 master index. Both, every time, without asking.
 
 The index is the one page that lists every plan, so creating a plan is
-precisely what makes it stale — the staleness `${MANIFEST_CURRENCY_DOCUMENT}`
+precisely what makes it stale — the staleness `${MANIFEST_STALENESS_DOCUMENT}`
 exists to close, and a new plan missing from the index is the worst version
 of it, since nobody knows to look for what they cannot see. Elsewhere the
 index is left alone unless asked for, because republishing it says nothing
@@ -220,7 +220,7 @@ immediately.
 ## 8b. From here on, the manifest leads
 
 The plan now exists, so every later change to it is a transition rather than a
-draft. Follow `${MANIFEST_CURRENCY_DOCUMENT}` for all of them: write the manifest
+draft. Follow `${MANIFEST_STALENESS_DOCUMENT}` for all of them: write the manifest
 and republish the dashboard before the work that follows, not after it. That
 applies to this skill's own remaining steps too — publish before reporting back,
 so what you report is what a reader will actually see.

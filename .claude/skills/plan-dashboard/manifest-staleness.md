@@ -32,7 +32,8 @@ source .claude/hooks/resolve-personal-notes-config.sh
 python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" update \
     --plan <plan-id> --item <item-id> \
     [--status <status>] [--branch <branch>] [--pull-request-number <number>] \
-    [--session <url>] [--notes <file>] [--blockers <file> ...]
+    [--session <url>] [--notes <file> | --append-notes <file>] \
+    [--blockers <file> ...]
 
 # Ask what local git contradicts, before or after a transition.
 python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" check --plan <plan-id> --item <item-id>
@@ -43,11 +44,11 @@ invocation should carry. `check` exits `manifest_is_stale` when anything is stal
 and prints one finding per contradicted field, so a caller can act on the status
 alone.
 
-**Extending an existing note needs one conversion.** A folded scalar hands its
-paragraph breaks back as *single* newlines, and the file `--notes` reads marks them
-with *blank* lines — so appending to a note read out of `plan.yaml` and writing it
-straight back collapses the whole thing into one paragraph. Replace each newline in
-what you read with a blank line before you append to it.
+**To add to a note rather than replace it, use `--append-notes`.** It takes only
+what you are adding and extends what the item already records. Do not read the note
+back and write it out again yourself: a folded scalar hands its paragraph breaks back
+as *single* newlines while the file `--notes` reads marks them with *blank* lines, so
+writing a read-back note straight back collapses the whole thing into one paragraph.
 
 Use `record` instead when the transition also deserves a roadmap section — a
 decision, a reversal, a conclusion that changes what the item means. `update` is

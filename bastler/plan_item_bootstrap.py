@@ -11,7 +11,7 @@ downstream reads as truth.
 
 The same holds for every later transition - a blocker appearing, a status changing, a
 conclusion that changes what the item means - so writing the entry is not a bootstrap
-step but a standing obligation. ``manifest-currency.md``, beside the plan-dashboard
+step but a standing obligation. ``manifest-staleness.md``, beside the plan-dashboard
 skill, is the rule these operations serve.
 
 Seven operations, so each caller depends only on the surface it uses:
@@ -30,7 +30,9 @@ Seven operations, so each caller depends only on the surface it uses:
     Set any of the item's recorded fields without appending a roadmap section, which
     ``record`` cannot do - it reads the section unconditionally. Most transitions change
     a field without warranting a section, and ``notes`` and ``blockers`` had no writer
-    at all before this.
+    at all before this. ``--append-notes`` extends the recorded note rather than
+    replacing it, since the two forms a note reaches this script in separate their
+    paragraphs differently - see :func:`extend_note`.
 
 ``check``
     Report which recorded fields local git contradicts, exiting non-zero when any do.
@@ -58,7 +60,8 @@ Usage:
          --pull-request-body <file>)
     python3 plan_item_bootstrap.py update --plan <plan-id> --item <item-id> \\
         [--status <status>] [--branch <branch>] [--pull-request-number <number>] \\
-        [--session <url>] [--notes <file>] [--blockers <file> ...]
+        [--session <url>] [--notes <file> | --append-notes <file>] \\
+        [--blockers <file> ...]
     python3 plan_item_bootstrap.py check --plan <plan-id> --item <item-id> \\
         [--remote <remote>]
     python3 plan_item_bootstrap.py resolve --branch <branch>
@@ -542,6 +545,91 @@ class ExitCode(IntEnum):
         carry a name belonging to a different one.
         """
         return self.name.lower()
+
+
+# %% the vocabulary a report is written in
+
+
+class ReportKey(StrEnum):
+    """
+    The keys of the JSON documents these operations print.
+
+    Named here so the reader consuming a report and the code building it cannot drift
+    apart, and so no caller spells one out as a bare string.
+
+    Only the keys this module invents. A key naming a manifest field - ``branch``,
+    ``blockers``, ``pull_request_number``, an item's own ``status`` - is read from
+    :class:`ManifestKey` instead, since that is where a field's name already lives.
+    """
+
+    STATUS = "status"
+    """
+    What the run means, as :attr:`ExitCode.name_for_a_caller` puts it.
+
+    Distinct from an item's own ``status``, which names a point in its lifecycle and
+    comes from :attr:`ManifestKey.STATUS`; the two share a spelling and nothing else.
+    """
+
+    EXIT_CODE = "exit_code"
+    """
+    The status the process exits with, for a caller reading the document rather than
+    waiting on the process.
+    """
+
+    PLAN = "plan"
+    """
+    The plan the operation acted on.
+    """
+
+    ITEM = "item"
+    """
+    The item the operation acted on.
+    """
+
+    ITEMS = "items"
+    """
+    Every item a branch carries, for an operation keyed on a branch.
+    """
+
+    CREATED_ITEM = "created_item"
+    """
+    Whether the item's manifest entry was written for the first time.
+    """
+
+    DASHBOARD_COMMAND = "dashboard_command"
+    """
+    The republish a live session still has to run, since only it can call ``Artifact``.
+    """
+
+    FINDINGS = "findings"
+    """
+    Every recorded field local git contradicts.
+    """
+
+    FIELD = "field"
+    """
+    The manifest field one finding is about.
+    """
+
+    RECORDED = "recorded"
+    """
+    What the manifest says for that field.
+    """
+
+    OBSERVED = "observed"
+    """
+    What git shows for it instead.
+    """
+
+    PREVIOUS_STATUS = "previous_status"
+    """
+    The status an item carried before a write, so a reader sees what changed.
+    """
+
+    PULL_REQUEST_URL = "pull_request_url"
+    """
+    Where an opened pull request lives.
+    """
 
 
 # %% failures
@@ -1275,23 +1363,23 @@ class BootstrapReport:
         """
         return f"/plan-dashboard {self.plan_identifier}"
 
-    def as_document(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Render the report as the JSON a caller reads, led by what it means.
         """
         document: dict[str, Any] = {
-            "status": self.exit_code.name_for_a_caller,
-            "exit_code": int(self.exit_code),
-            "plan": self.plan_identifier,
-            "item": self.item_identifier,
-            "created_item": self.created_item,
-            "dashboard_command": self.dashboard_command,
+            ReportKey.STATUS: self.exit_code.name_for_a_caller,
+            ReportKey.EXIT_CODE: int(self.exit_code),
+            ReportKey.PLAN: self.plan_identifier,
+            ReportKey.ITEM: self.item_identifier,
+            ReportKey.CREATED_ITEM: self.created_item,
+            ReportKey.DASHBOARD_COMMAND: self.dashboard_command,
         }
         if self.branch is not None:
             document[ManifestKey.BRANCH.key] = self.branch
         if self.pull_request_number is not None:
             document[ManifestKey.PULL_REQUEST_NUMBER.key] = self.pull_request_number
-            document["pull_request_url"] = self.pull_request_url
+            document[ReportKey.PULL_REQUEST_URL] = self.pull_request_url
         return document
 
 
@@ -1355,6 +1443,35 @@ class ItemUpdateRequest:
     The value to write to each key, in the order they should be applied.
     """
 
+    notes_to_append: str | None = None
+    """
+    A further paragraph for the item's existing note, rather than a replacement for it.
+    """
+
+
+def extend_note(recorded: str | None, addition: str) -> str:
+    """
+    A recorded note with *addition* as a further paragraph.
+
+    The two sources separate their paragraphs differently, which is why extending a note
+    cannot simply concatenate them. A folded scalar reads its own line breaks back as
+    spaces and a blank line back as one newline, so a note read out of the manifest
+    separates paragraphs with a single newline - which :func:`fold` would take for a
+    hard-wrapped line and run together into one paragraph. A file a caller writes uses a
+    blank line, which :func:`fold` already reads correctly.
+
+    :param recorded: The note the manifest carries, or ``None`` where it carries none.
+    :param addition: The text to add, as its author wrote it.
+    :return: The whole note, separated the way a written note is.
+    """
+    paragraphs = [
+        paragraph
+        for paragraph in re.split(r"\n+", (recorded or "").strip())
+        if paragraph
+    ]
+    paragraphs.append(addition.strip())
+    return "\n\n".join(paragraphs)
+
 
 def update_item(request: ItemUpdateRequest, project_root: Path) -> BootstrapReport:
     """
@@ -1367,11 +1484,17 @@ def update_item(request: ItemUpdateRequest, project_root: Path) -> BootstrapRepo
     :return: What was written.
     """
     documents = PlanDocuments.load(request.plan_identifier, project_root)
+    values_by_key = dict(request.values_by_key)
+    if request.notes_to_append is not None:
+        values_by_key[ManifestKey.NOTES] = extend_note(
+            documents.item(request.item_identifier).get(ManifestKey.NOTES.key),
+            request.notes_to_append,
+        )
     manifest_text = apply_item_fields(
         documents.manifest_text,
         request.plan_identifier,
         request.item_identifier,
-        {key: written_value(value) for key, value in request.values_by_key.items()},
+        {key: written_value(value) for key, value in values_by_key.items()},
     )
     documents.save(manifest_text, documents.roadmap_text, project_root)
     return BootstrapReport(
@@ -1417,19 +1540,19 @@ class StalenessFinding:
     What git shows instead, in the terms a reader acts on.
     """
 
-    def as_document(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Render the finding as the JSON a caller reads.
         """
         return {
-            "field": self.manifest_key.key,
-            "recorded": self.recorded,
-            "observed": self.observed,
+            ReportKey.FIELD: self.manifest_key.key,
+            ReportKey.RECORDED: self.recorded,
+            ReportKey.OBSERVED: self.observed,
         }
 
 
 @dataclass(frozen=True)
-class CurrencyReport:
+class StalenessReport:
     """
     Which of an item's recorded fields local git contradicts, if any.
     """
@@ -1457,17 +1580,17 @@ class CurrencyReport:
         """
         return ExitCode.MANIFEST_IS_STALE if self.findings else ExitCode.SUCCESS
 
-    def as_document(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Render the report as the JSON a caller reads, led by what it means.
         """
         return {
-            "status": self.exit_code.name_for_a_caller,
-            "exit_code": int(self.exit_code),
-            "plan": self.plan_identifier,
-            "item": self.item_identifier,
-            "findings": [finding.as_document() for finding in self.findings],
-            "dashboard_command": f"/plan-dashboard {self.plan_identifier}",
+            ReportKey.STATUS: self.exit_code.name_for_a_caller,
+            ReportKey.EXIT_CODE: int(self.exit_code),
+            ReportKey.PLAN: self.plan_identifier,
+            ReportKey.ITEM: self.item_identifier,
+            ReportKey.FINDINGS: [finding.to_json() for finding in self.findings],
+            ReportKey.DASHBOARD_COMMAND: f"/plan-dashboard {self.plan_identifier}",
         }
 
 
@@ -1476,7 +1599,7 @@ def check_item(
     item_identifier: str,
     project_root: Path,
     remote: str = "origin",
-) -> CurrencyReport:
+) -> StalenessReport:
     """
     Compare one item's recorded fields against what local git actually shows.
 
@@ -1510,13 +1633,13 @@ def check_item(
                 observed=f"no branch of that name on {remote}",
             )
         )
-        return CurrencyReport(plan_identifier, item_identifier, findings)
+        return StalenessReport(plan_identifier, item_identifier, findings)
 
     if not recorded_branch:
-        return CurrencyReport(plan_identifier, item_identifier, findings)
+        return StalenessReport(plan_identifier, item_identifier, findings)
 
     findings.extend(fields_a_published_branch_requires(item, recorded_branch))
-    return CurrencyReport(plan_identifier, item_identifier, findings)
+    return StalenessReport(plan_identifier, item_identifier, findings)
 
 
 def fields_a_published_branch_requires(
@@ -1624,12 +1747,12 @@ class TrackedItem:
         prefix = f"{owner}{BLOCKER_OWNER_SEPARATOR}"
         return [blocker for blocker in self.blockers if not blocker.startswith(prefix)]
 
-    def as_document(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Render the item as the JSON a caller reads.
         """
         return {
-            "item": self.item_identifier,
+            ReportKey.ITEM: self.item_identifier,
             ManifestKey.STATUS.key: self.status.value,
             ManifestKey.BLOCKERS.key: self.blockers,
         }
@@ -1649,12 +1772,15 @@ class ItemWrite(TrackedItem):
     The status the manifest recorded before the write.
     """
 
-    def as_document(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Render the write as the JSON a caller reads, naming what changed as well as what
         the item now says.
         """
-        return {**super().as_document(), "previous_status": self.previous_status.value}
+        return {
+            **super().to_json(),
+            ReportKey.PREVIOUS_STATUS: self.previous_status.value,
+        }
 
 
 @dataclass(frozen=True)
@@ -1686,19 +1812,21 @@ class BranchReport:
         """
         return ExitCode.SUCCESS if self.items else ExitCode.BRANCH_TRACKS_NO_ITEM
 
-    def as_document(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         Render the report as the JSON a caller reads, led by what it means.
         """
         document: dict[str, Any] = {
-            "status": self.exit_code.name_for_a_caller,
-            "exit_code": int(self.exit_code),
+            ReportKey.STATUS: self.exit_code.name_for_a_caller,
+            ReportKey.EXIT_CODE: int(self.exit_code),
             ManifestKey.BRANCH.key: self.branch,
-            "plan": self.plan_identifier,
-            "items": [item.as_document() for item in self.items],
+            ReportKey.PLAN: self.plan_identifier,
+            ReportKey.ITEMS: [item.to_json() for item in self.items],
         }
         if self.plan_identifier is not None:
-            document["dashboard_command"] = f"/plan-dashboard {self.plan_identifier}"
+            document[ReportKey.DASHBOARD_COMMAND] = (
+                f"/plan-dashboard {self.plan_identifier}"
+            )
         return document
 
 
@@ -2205,258 +2333,490 @@ def open_work(
 # %% command line
 
 
+OperationReport = BootstrapReport | BranchReport | StalenessReport
+"""
+What any of the operations answers with: a report carrying both the status the process
+exits with and the JSON a caller reads.
+"""
+
+
+@dataclass(frozen=True)
+class Subcommand(ABC):
+    """
+    One operation the command line offers, owning both its flags and the work it runs.
+
+    :data:`SUBCOMMANDS` is built by instantiating every subclass, so a command that
+    exists is reachable by construction rather than by also being listed somewhere.
+    """
+
+    @property
+    @abstractmethod
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command on the command line.
+        """
+
+    @property
+    @abstractmethod
+    def description(self) -> str:
+        """
+        :return: What the command does, as ``--help`` puts it.
+        """
+
+    @abstractmethod
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare the flags this command takes.
+
+        :param parser: The subparser to declare them on.
+        """
+
+    @abstractmethod
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> OperationReport:
+        """
+        Do the work the parsed command line asks for.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What the operation found or wrote.
+        """
+
+
+@dataclass(frozen=True)
+class RecordSubcommand(Subcommand):
+    """
+    Write an item's manifest entry and its roadmap section.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "record"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Write an item's manifest entry and roadmap section"
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare the item to record and the section to record it with.
+
+        :param parser: The subparser to declare them on.
+        """
+        parser.add_argument("--plan", required=True)
+        parser.add_argument("--item", required=True)
+        parser.add_argument("--status", required=True, type=ItemStatus)
+        parser.add_argument("--roadmap-section", required=True, type=Path)
+        parser.add_argument("--title")
+        parser.add_argument("--track")
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> BootstrapReport:
+        """
+        Record the item.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What was recorded.
+        """
+        return record_item(
+            ItemRecordRequest(
+                plan_identifier=arguments.plan,
+                item_identifier=arguments.item,
+                status=arguments.status,
+                roadmap_section_path=arguments.roadmap_section,
+                title=arguments.title,
+                track=arguments.track,
+            ),
+            project_root=project_root,
+        )
+
+
+@dataclass(frozen=True)
+class UpdateSubcommand(Subcommand):
+    """
+    Set an item's recorded fields, without demanding a roadmap section.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "update"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Set an item's recorded fields, without a roadmap section"
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare every field this command can set.
+
+        :param parser: The subparser to declare them on.
+        """
+        parser.add_argument("--plan", required=True)
+        parser.add_argument("--item", required=True)
+        parser.add_argument("--status", type=ItemStatus)
+        parser.add_argument("--branch")
+        parser.add_argument("--pull-request-number", type=int)
+        parser.add_argument("--session")
+        notes = parser.add_mutually_exclusive_group()
+        notes.add_argument(
+            "--notes", type=Path, help="A file whose text becomes the item's notes"
+        )
+        notes.add_argument(
+            "--append-notes",
+            type=Path,
+            help="A file whose text is added to the item's notes as a new paragraph",
+        )
+        parser.add_argument(
+            "--blockers",
+            type=Path,
+            action="append",
+            help="A file whose text becomes one blocker; repeat for each",
+        )
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> BootstrapReport:
+        """
+        Write whichever fields the command line named.
+
+        Prose comes from files rather than the command line, the same way
+        ``--pull-request-body`` already does: a note is routinely longer than a shell
+        invocation should carry.
+
+        ``--append-notes`` extends the recorded note instead of replacing it, so a
+        caller adding to one never has to read it back and restore its paragraph breaks
+        itself - see :func:`extend_note` for why those two forms differ.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What was written.
+        """
+        values_by_key: dict[ManifestKey, Any] = {
+            manifest_key: value
+            for manifest_key, value in (
+                (ManifestKey.STATUS, arguments.status),
+                (ManifestKey.BRANCH, arguments.branch),
+                (ManifestKey.PULL_REQUEST_NUMBER, arguments.pull_request_number),
+                (ManifestKey.SESSION, arguments.session),
+            )
+            if value is not None
+        }
+        if arguments.notes:
+            values_by_key[ManifestKey.NOTES] = arguments.notes.read_text()
+        if arguments.blockers:
+            values_by_key[ManifestKey.BLOCKERS] = [
+                blocker.read_text().strip() for blocker in arguments.blockers
+            ]
+        return update_item(
+            ItemUpdateRequest(
+                plan_identifier=arguments.plan,
+                item_identifier=arguments.item,
+                values_by_key=values_by_key,
+                notes_to_append=(
+                    arguments.append_notes.read_text()
+                    if arguments.append_notes
+                    else None
+                ),
+            ),
+            project_root=project_root,
+        )
+
+
+@dataclass(frozen=True)
+class ResolveSubcommand(Subcommand):
+    """
+    Name the plan and the items a branch belongs to.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "resolve"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Name the plan and items a branch belongs to"
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare the branch to look up.
+
+        :param parser: The subparser to declare it on.
+        """
+        parser.add_argument("--branch", required=True)
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> BranchReport:
+        """
+        Look the branch up.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What the branch belongs to.
+        """
+        return resolve_branch(arguments.branch, project_root=project_root)
+
+
+@dataclass(frozen=True)
+class BlockSubcommand(Subcommand):
+    """
+    Record your own blocker on every item a branch carries.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "block"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Record your own blocker on every item a branch carries"
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare the branch, the blocker's owner, and the reason.
+
+        :param parser: The subparser to declare them on.
+        """
+        parser.add_argument("--branch", required=True)
+        parser.add_argument("--owner", required=True)
+        parser.add_argument(
+            "--reason",
+            required=True,
+            type=Path,
+            help="A file whose text is the blocker",
+        )
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> BranchReport:
+        """
+        Write the blocker.
+
+        The reason comes from a file for the same reason a note does: it is routinely
+        longer than a shell invocation should carry.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What was written.
+        """
+        return block_branch(
+            arguments.branch,
+            owner=arguments.owner,
+            reason=arguments.reason.read_text().strip(),
+            project_root=project_root,
+        )
+
+
+@dataclass(frozen=True)
+class UnblockSubcommand(Subcommand):
+    """
+    Clear your own blocker from every item a branch carries.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "unblock"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Clear your own blocker from every item a branch carries"
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare the branch and whose blocker to withdraw.
+
+        :param parser: The subparser to declare them on.
+        """
+        parser.add_argument("--branch", required=True)
+        parser.add_argument("--owner", required=True)
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> BranchReport:
+        """
+        Withdraw the blocker.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What was written.
+        """
+        return unblock_branch(
+            arguments.branch, owner=arguments.owner, project_root=project_root
+        )
+
+
+@dataclass(frozen=True)
+class CheckSubcommand(Subcommand):
+    """
+    Report which of an item's recorded fields local git contradicts.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "check"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Report which recorded fields local git contradicts"
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare the item to check and the remote to measure it against.
+
+        :param parser: The subparser to declare them on.
+        """
+        parser.add_argument("--plan", required=True)
+        parser.add_argument("--item", required=True)
+        parser.add_argument("--remote", default="origin")
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> StalenessReport:
+        """
+        Compare the item's recorded fields against local git.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What is stale, if anything.
+        """
+        return check_item(
+            arguments.plan,
+            arguments.item,
+            project_root=project_root,
+            remote=arguments.remote,
+        )
+
+
+@dataclass(frozen=True)
+class OpenSubcommand(Subcommand):
+    """
+    Create the item's branch and draft pull request, and record them.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        :return: The word that selects this command.
+        """
+        return "open"
+
+    @property
+    def description(self) -> str:
+        """
+        :return: What the command does.
+        """
+        return "Create the item's branch and draft pull request"
+
+    def add_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """
+        Declare the branch to open and how to reach its pull request.
+
+        :param parser: The subparser to declare them on.
+        """
+        parser.add_argument("--plan", required=True)
+        parser.add_argument("--item", required=True)
+        parser.add_argument("--branch", required=True)
+        parser.add_argument("--base", required=True)
+        parser.add_argument("--session", required=True)
+        parser.add_argument(
+            "--pull-request-title",
+            help="Required unless --pull-request-number is given",
+        )
+        parser.add_argument(
+            "--pull-request-body",
+            type=Path,
+            help="Required unless --pull-request-number is given",
+        )
+        parser.add_argument(
+            "--pull-request-number",
+            type=int,
+            help=(
+                "Record a pull request the caller already created, instead of "
+                "creating one"
+            ),
+        )
+        parser.add_argument("--remote", default="origin")
+
+    def run(self, arguments: argparse.Namespace, project_root: Path) -> BootstrapReport:
+        """
+        Open the branch and pull request.
+
+        :param arguments: The parsed command line.
+        :param project_root: The repository to run within.
+        :return: What was opened.
+        """
+        return open_work(
+            WorkOpenRequest(
+                plan_identifier=arguments.plan,
+                item_identifier=arguments.item,
+                branch=arguments.branch,
+                base_branch=arguments.base,
+                session_url=arguments.session,
+                pull_request_title=arguments.pull_request_title,
+                pull_request_body=(
+                    arguments.pull_request_body.read_text()
+                    if arguments.pull_request_body
+                    else None
+                ),
+                pull_request_number=arguments.pull_request_number,
+            ),
+            project_root=project_root,
+            remote=arguments.remote,
+        )
+
+
+SUBCOMMANDS: dict[str, Subcommand] = {
+    subcommand.invoked_as: subcommand
+    for subcommand in (subclass() for subclass in Subcommand.__subclasses__())
+}
+"""
+Every operation the command line offers, by the word that selects it.
+
+Found from the subclasses rather than listed, since the list carried nothing a reader
+needs: it is the classes themselves that say what each command is and takes.
+"""
+
+
 def build_parser() -> argparse.ArgumentParser:
     """
-    Build the argument parser for both subcommands.
+    Build the argument parser from the commands themselves.
 
     :return: The parser.
     """
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    subcommands = parser.add_subparsers(dest="subcommand", required=True)
-
-    record = subcommands.add_parser(
-        "record", help="Write an item's manifest entry and roadmap section"
-    )
-    record.add_argument("--plan", required=True)
-    record.add_argument("--item", required=True)
-    record.add_argument("--status", required=True, type=ItemStatus)
-    record.add_argument("--roadmap-section", required=True, type=Path)
-    record.add_argument("--title")
-    record.add_argument("--track")
-
-    update = subcommands.add_parser(
-        "update", help="Set an item's recorded fields, without a roadmap section"
-    )
-    update.add_argument("--plan", required=True)
-    update.add_argument("--item", required=True)
-    update.add_argument("--status", type=ItemStatus)
-    update.add_argument("--branch")
-    update.add_argument("--pull-request-number", type=int)
-    update.add_argument("--session")
-    update.add_argument(
-        "--notes", type=Path, help="A file whose text becomes the item's notes"
-    )
-    update.add_argument(
-        "--blockers",
-        type=Path,
-        action="append",
-        help="A file whose text becomes one blocker; repeat for each",
-    )
-
-    resolve = subcommands.add_parser(
-        "resolve", help="Name the plan and items a branch belongs to"
-    )
-    resolve.add_argument("--branch", required=True)
-
-    block = subcommands.add_parser(
-        "block", help="Record your own blocker on every item a branch carries"
-    )
-    block.add_argument("--branch", required=True)
-    block.add_argument("--owner", required=True)
-    block.add_argument(
-        "--reason", required=True, type=Path, help="A file whose text is the blocker"
-    )
-
-    unblock = subcommands.add_parser(
-        "unblock", help="Clear your own blocker from every item a branch carries"
-    )
-    unblock.add_argument("--branch", required=True)
-    unblock.add_argument("--owner", required=True)
-
-    check = subcommands.add_parser(
-        "check", help="Report which recorded fields local git contradicts"
-    )
-    check.add_argument("--plan", required=True)
-    check.add_argument("--item", required=True)
-    check.add_argument("--remote", default="origin")
-
-    open_command = subcommands.add_parser(
-        "open", help="Create the item's branch and draft pull request"
-    )
-    open_command.add_argument("--plan", required=True)
-    open_command.add_argument("--item", required=True)
-    open_command.add_argument("--branch", required=True)
-    open_command.add_argument("--base", required=True)
-    open_command.add_argument("--session", required=True)
-    open_command.add_argument(
-        "--pull-request-title", help="Required unless --pull-request-number is given"
-    )
-    open_command.add_argument(
-        "--pull-request-body",
-        type=Path,
-        help="Required unless --pull-request-number is given",
-    )
-    open_command.add_argument(
-        "--pull-request-number",
-        type=int,
-        help="Record a pull request the caller already created, instead of creating one",
-    )
-    open_command.add_argument("--remote", default="origin")
-
-    return parser
-
-
-def run_record(arguments: argparse.Namespace, project_root: Path) -> BootstrapReport:
-    """
-    Run the ``record`` subcommand from its parsed arguments.
-
-    :param arguments: The parsed command line.
-    :param project_root: The repository to run within.
-    :return: What was recorded.
-    """
-    return record_item(
-        ItemRecordRequest(
-            plan_identifier=arguments.plan,
-            item_identifier=arguments.item,
-            status=arguments.status,
-            roadmap_section_path=arguments.roadmap_section,
-            title=arguments.title,
-            track=arguments.track,
-        ),
-        project_root=project_root,
-    )
-
-
-def run_update(arguments: argparse.Namespace, project_root: Path) -> BootstrapReport:
-    """
-    Run the ``update`` subcommand from its parsed arguments.
-
-    Prose comes from files rather than the command line, the same way
-    ``--pull-request-body`` already does: a note is routinely longer than a shell
-    invocation should carry.
-
-    :param arguments: The parsed command line.
-    :param project_root: The repository to run within.
-    :return: What was written.
-    """
-    values_by_key: dict[ManifestKey, Any] = {
-        manifest_key: value
-        for manifest_key, value in (
-            (ManifestKey.STATUS, arguments.status),
-            (ManifestKey.BRANCH, arguments.branch),
-            (ManifestKey.PULL_REQUEST_NUMBER, arguments.pull_request_number),
-            (ManifestKey.SESSION, arguments.session),
+    subparsers = parser.add_subparsers(dest="subcommand", required=True)
+    for subcommand in SUBCOMMANDS.values():
+        subcommand.add_arguments(
+            subparsers.add_parser(subcommand.invoked_as, help=subcommand.description)
         )
-        if value is not None
-    }
-    if arguments.notes:
-        values_by_key[ManifestKey.NOTES] = arguments.notes.read_text()
-    if arguments.blockers:
-        values_by_key[ManifestKey.BLOCKERS] = [
-            blocker.read_text().strip() for blocker in arguments.blockers
-        ]
-    return update_item(
-        ItemUpdateRequest(
-            plan_identifier=arguments.plan,
-            item_identifier=arguments.item,
-            values_by_key=values_by_key,
-        ),
-        project_root=project_root,
-    )
-
-
-def run_resolve(arguments: argparse.Namespace, project_root: Path) -> BranchReport:
-    """
-    Run the ``resolve`` subcommand from its parsed arguments.
-
-    :param arguments: The parsed command line.
-    :param project_root: The repository to run within.
-    :return: What the branch belongs to.
-    """
-    return resolve_branch(arguments.branch, project_root=project_root)
-
-
-def run_block(arguments: argparse.Namespace, project_root: Path) -> BranchReport:
-    """
-    Run the ``block`` subcommand from its parsed arguments.
-
-    The reason comes from a file for the same reason a note does: it is routinely longer
-    than a shell invocation should carry.
-
-    :param arguments: The parsed command line.
-    :param project_root: The repository to run within.
-    :return: What was written.
-    """
-    return block_branch(
-        arguments.branch,
-        owner=arguments.owner,
-        reason=arguments.reason.read_text().strip(),
-        project_root=project_root,
-    )
-
-
-def run_unblock(arguments: argparse.Namespace, project_root: Path) -> BranchReport:
-    """
-    Run the ``unblock`` subcommand from its parsed arguments.
-
-    :param arguments: The parsed command line.
-    :param project_root: The repository to run within.
-    :return: What was written.
-    """
-    return unblock_branch(
-        arguments.branch, owner=arguments.owner, project_root=project_root
-    )
-
-
-def run_check(arguments: argparse.Namespace, project_root: Path) -> CurrencyReport:
-    """
-    Run the ``check`` subcommand from its parsed arguments.
-
-    :param arguments: The parsed command line.
-    :param project_root: The repository to run within.
-    :return: What is stale, if anything.
-    """
-    return check_item(
-        arguments.plan,
-        arguments.item,
-        project_root=project_root,
-        remote=arguments.remote,
-    )
-
-
-def run_open(arguments: argparse.Namespace, project_root: Path) -> BootstrapReport:
-    """
-    Run the ``open`` subcommand from its parsed arguments.
-
-    :param arguments: The parsed command line.
-    :param project_root: The repository to run within.
-    :return: What was opened.
-    """
-    return open_work(
-        WorkOpenRequest(
-            plan_identifier=arguments.plan,
-            item_identifier=arguments.item,
-            branch=arguments.branch,
-            base_branch=arguments.base,
-            session_url=arguments.session,
-            pull_request_title=arguments.pull_request_title,
-            pull_request_body=(
-                arguments.pull_request_body.read_text()
-                if arguments.pull_request_body
-                else None
-            ),
-            pull_request_number=arguments.pull_request_number,
-        ),
-        project_root=project_root,
-        remote=arguments.remote,
-    )
-
-
-SUBCOMMAND_HANDLERS = {
-    "record": run_record,
-    "update": run_update,
-    "resolve": run_resolve,
-    "block": run_block,
-    "unblock": run_unblock,
-    "check": run_check,
-    "open": run_open,
-}
-"""
-What each subcommand runs, so adding one is a parser entry and a handler rather than
-another branch in :func:`main`.
-"""
+    return parser
 
 
 def main() -> int:
@@ -2469,12 +2829,12 @@ def main() -> int:
     project_root = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd()))
 
     try:
-        report = SUBCOMMAND_HANDLERS[arguments.subcommand](arguments, project_root)
+        report = SUBCOMMANDS[arguments.subcommand].run(arguments, project_root)
     except BootstrapError as error:
         print(f"{error.exit_code.name_for_a_caller}: {error}", file=sys.stderr)
         return int(error.exit_code)
 
-    print(json.dumps(report.as_document()))
+    print(json.dumps(report.to_json()))
     return int(report.exit_code)
 
 

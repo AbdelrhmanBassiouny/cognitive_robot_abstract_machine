@@ -1,5 +1,5 @@
 """
-Tests that the manifest-currency rule reaches every skill it binds.
+Tests that the manifest-staleness rule reaches every skill it binds.
 
 The rule lives in one document, referenced by each skill rather than restated in it,
 so what needs guarding is the reference: a skill that writes plan data without citing
@@ -60,7 +60,7 @@ a plan-data write like any other - so the publisher is bound by what it does rat
 than by being named here.
 """
 
-CURRENCY_DOCUMENT_CONSTANT = "MANIFEST_CURRENCY_DOCUMENT"
+STALENESS_DOCUMENT_CONSTANT = "MANIFEST_STALENESS_DOCUMENT"
 """
 The constant a bound skill cites the rule through.
 """
@@ -96,7 +96,7 @@ def currency_document() -> str:
 
     :return: Its markdown.
     """
-    return (REPOSITORY_ROOT / shell_constant(CURRENCY_DOCUMENT_CONSTANT)).read_text()
+    return (REPOSITORY_ROOT / shell_constant(STALENESS_DOCUMENT_CONSTANT)).read_text()
 
 
 def skills_writing_plan_data() -> list[Path]:
@@ -113,9 +113,9 @@ def skills_writing_plan_data() -> list[Path]:
 
 
 def test_the_rule_lives_where_the_shell_configuration_says_it_does():
-    document = Path(shell_constant(CURRENCY_DOCUMENT_CONSTANT))
+    document = Path(shell_constant(STALENESS_DOCUMENT_CONSTANT))
 
-    assert document.name == "manifest-currency.md"
+    assert document.name == "manifest-staleness.md"
     assert (REPOSITORY_ROOT / document).is_file()
 
 
@@ -123,7 +123,7 @@ def test_the_rule_lives_where_the_shell_configuration_says_it_does():
     "skill", skills_writing_plan_data(), ids=lambda skill: skill.parent.name
 )
 def test_a_skill_that_writes_plan_data_cites_the_currency_rule(skill: Path):
-    assert CURRENCY_DOCUMENT_CONSTANT in skill.read_text()
+    assert STALENESS_DOCUMENT_CONSTANT in skill.read_text()
 
 
 def test_the_maintenance_pass_writes_the_manifest_its_own_moves_make_stale():

@@ -40,6 +40,7 @@ from bastler.plan_item_bootstrap import (
     ManifestKey,
     PlanDocument,
     PullRequestRequest,
+    Subcommand,
     UnknownItemError,
     UnknownPlanError,
     ValueStyle,
@@ -710,6 +711,73 @@ def test_writing_a_note_replaces_the_folded_block_rather_than_its_first_line(
     assert published_item(bootstrap_repository)[ManifestKey.NOTES.key] == (
         "What this run found.\n"
     )
+
+
+def test_appending_to_a_note_keeps_the_recorded_paragraphs_apart(
+    bootstrap_repository: ScratchRepository,
+):
+    """
+    The recorded note comes back with one newline between paragraphs where the file a
+    caller writes uses a blank line, so appending must restore the blank lines or the
+    whole note collapses into a single paragraph.
+    """
+    update_item(
+        update_request(values_by_key={ManifestKey.NOTES: "The first.\n\nThe second."}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    update_item(
+        update_request(notes_to_append="The third.\n"),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert published_item(bootstrap_repository)[ManifestKey.NOTES.key] == (
+        "The first.\nThe second.\nThe third.\n"
+    )
+
+
+def test_appending_to_an_item_carrying_no_note_records_only_the_addition(
+    bootstrap_repository: ScratchRepository,
+):
+    update_item(
+        update_request(
+            item_identifier=SECOND_ITEM, notes_to_append="The only paragraph.\n"
+        ),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    published = yaml.safe_load(
+        published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
+    )
+    written = next(
+        item
+        for item in published[ManifestKey.ITEMS.key]
+        if item[ManifestKey.IDENTIFIER.key] == SECOND_ITEM
+    )
+    assert written[ManifestKey.NOTES.key] == "The only paragraph.\n"
+
+
+def test_replacing_a_note_and_extending_it_cannot_be_asked_for_at_once(
+    bootstrap_repository: ScratchRepository,
+):
+    note = bootstrap_repository.write("note.md", "Replaces it.\n")
+    addition = bootstrap_repository.write("addition.md", "Extends it.\n")
+
+    result = run_bootstrap(
+        bootstrap_repository,
+        "update",
+        "--plan",
+        PLAN_IDENTIFIER,
+        "--item",
+        EXISTING_ITEM,
+        "--notes",
+        str(note),
+        "--append-notes",
+        str(addition),
+    )
+
+    assert result.returncode != 0
+    assert "--append-notes" in result.stderr
 
 
 def test_writing_a_note_leaves_the_other_items_byte_identical(
@@ -1477,3 +1545,69 @@ def test_the_block_subcommand_exits_on_a_branch_that_belongs_to_no_plan(
 
     assert result.returncode == ExitCode.BRANCH_TRACKS_NO_ITEM
     assert json.loads(result.stdout)["plan"] is None
+
+
+# %% the operations the command line offers
+
+
+def test_every_operation_is_reachable_by_the_word_it_names():
+    """
+    A command is registered under its own :attr:`Subcommand.invoked_as`, so the parser
+    cannot offer a word that reaches a different operation.
+    """
+    assert {
+        word: type(subcommand).__name__
+        for word, subcommand in plan_item_bootstrap.SUBCOMMANDS.items()
+    } == {
+        "record": "RecordSubcommand",
+        "update": "UpdateSubcommand",
+        "resolve": "ResolveSubcommand",
+        "block": "BlockSubcommand",
+        "unblock": "UnblockSubcommand",
+        "check": "CheckSubcommand",
+        "open": "OpenSubcommand",
+    }
+
+
+def test_a_command_that_names_no_word_of_its_own_cannot_be_built():
+    """
+    The name and description are abstract, so a subclass that supplies neither is
+    refused when :data:`SUBCOMMANDS` instantiates it - as the module is imported, rather
+    than when someone tries to invoke it.
+    """
+
+    class NamelessSubcommand(Subcommand):
+        def add_arguments(self, parser):
+            """
+            Take no flags.
+
+            :param parser: The subparser that would declare them.
+            """
+
+        def run(self, arguments, project_root):
+            """
+            Do nothing.
+
+            :param arguments: The parsed command line.
+            :param project_root: The repository to run within.
+            """
+
+    with pytest.raises(TypeError) as refusal:
+        NamelessSubcommand()
+
+    assert "invoked_as" in str(refusal.value)
+
+
+def test_the_parser_takes_each_registered_word(
+    bootstrap_repository: ScratchRepository,
+):
+    """
+    The parser is built from the commands themselves, so a word the registry answers for
+    is a word the command line accepts - one list rather than two that can disagree.
+    """
+    refusals = {
+        word: run_bootstrap(bootstrap_repository, word, "--help").returncode
+        for word in plan_item_bootstrap.SUBCOMMANDS
+    }
+
+    assert refusals == {word: 0 for word in plan_item_bootstrap.SUBCOMMANDS}

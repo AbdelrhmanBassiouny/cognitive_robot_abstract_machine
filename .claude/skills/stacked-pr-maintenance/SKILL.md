@@ -218,7 +218,7 @@ python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" block --branch <branch> \
 
 Write the same conflicting files or failing check the executor's comment names, then republish that
 plan's dashboard before moving on to the next branch: `/plan-dashboard <plan-id>`.
-`${MANIFEST_CURRENCY_DOCUMENT}` is the rule this serves.
+`${MANIFEST_STALENESS_DOCUMENT}` is the rule this serves.
 
 Clear it once a later pass restacks that branch normally again - `restacked: pushed` or
 `up-to-date` in the run-report document, rather than `branch-needs-attention`, is what tells you the
@@ -254,7 +254,7 @@ Then republish the same way.
 ## Account for the plan items this pass moved
 
 Reparenting a pull request, promoting a branch and moving a label all change what a
-tracked item's manifest should say. Follow `${MANIFEST_CURRENCY_DOCUMENT}`'s section
+tracked item's manifest should say. Follow `${MANIFEST_STALENESS_DOCUMENT}`'s section
 for a pass that changes state without owning it, which is where the commands live.
 
 For every branch you moved, resolve it to its items and name them in the finish
