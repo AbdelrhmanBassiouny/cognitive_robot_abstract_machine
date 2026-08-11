@@ -867,6 +867,23 @@ def test_a_localised_break_is_never_reported_as_a_clean_bisect(
     assert exit_code_for_bisect(report) is IntegrationExitCode.TESTS_FAILED
 
 
+def test_a_bisect_leaves_no_branch_of_its_own_behind(fork_checkout: ForkCheckout):
+    """
+    Narrowing asks one question per candidate, and a branch per question would
+    accumulate a ref for every break ever localised. Only the build it assembled is a
+    thing anybody meant to keep.
+    """
+    pull_requests = two_tips_that_break_only_together(fork_checkout)
+
+    bisect(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
+
+    branches = {
+        line.strip().lstrip("* ")
+        for line in fork_checkout.run_git("branch", "--list").splitlines()
+    }
+    assert not {branch for branch in branches if "against" in branch}
+
+
 def test_a_bisect_report_serialises_what_it_localised(fork_checkout: ForkCheckout):
     """
     ``--json`` is what the triage skill reads, so the pair has to survive the document.

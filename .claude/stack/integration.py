@@ -305,6 +305,15 @@ class IntegrationBuild:
         """:param build_branch: The branch to assemble onto, at the upstream base."""
         self.git.checkout(build_branch, self.base_reference)
 
+    def start_unnamed(self) -> None:
+        """Begin an assembly nobody is meant to keep, at the upstream base.
+
+        A probe exists to answer one question and be thrown away, so it is built on a
+        detached head rather than a branch: a named one would outlive the answer and
+        accumulate, one ref per question ever asked.
+        """
+        self.git.run("checkout", "--quiet", "--detach", self.base_reference)
+
     def merge(self, tip: Branch, already_included: list[str]) -> TipOutcome:
         """Merge one tip, or say why it was left out.
 
@@ -573,7 +582,7 @@ def _breaks_against(
     :return: The tip it fails against alone, or ``None`` when only the combination does.
     """
     for candidate in reversed(already_included):
-        build.start(f"{culprit.name}-against-{candidate}".replace("/", "-"))
+        build.start_unnamed()
         if not build.merge(by_name[candidate], []).reached_the_build:
             continue
         if not build.merge(culprit, [candidate]).reached_the_build:
