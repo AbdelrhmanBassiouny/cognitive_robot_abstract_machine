@@ -2208,7 +2208,7 @@ items:
     track: personal-data
     depends_on: []
     status: in_progress
-    session: https://claude.ai/code/session_01NoxeSgtWJ6PuaHYQhzmw7n
+    session: https://claude.ai/code/session_01SgGzMvxTxaePhpkT28uuJV
     pull_request_number: 151
     notes: >
       Raised 2026-08-09 by the user: every skill that can affect a plan must treat writing the
@@ -2219,46 +2219,36 @@ items:
       rather than asserted: this plan's own roadmap names the manifest "the least accurate source"
       three separate times in one week - #109 on 2026-08-03, #115 on 2026-08-05 and #121 on
       2026-08-07 - and each time everything needed to diagnose the item was already on the pull
-      request.
-
-      Scope settled with the user 2026-08-09: six bound surfaces - plan-create, add-plan-item, plan-
-      item-kickoff, plan-item-resolve, plan-dashboard and stacked-pr-maintenance - with the
-      maintenance pass deliberately in, since it reparents pull requests, promotes branches and
-      moves labels without ever touching plan.yaml. As scripted as possible, the instructions
-      document keeping only what a script cannot do.
-
-      Kicked off and implemented 2026-08-10 as draft #151 on fork main, bootstrapped in the order
-      this item itself prescribes. Two premises the notes carried were disproved by reading the
-      code, and both changed the design.
-
-      (1) The recorded instruction that the transition check "must reuse sync_manifest_status.py" is
-      wrong, and following it would have been worse than not. That script imports build_dashboard,
-      which imports render_common, which imports jinja2, markdown and nh3 at module level - so a
-      hook cannot import it at all, which is the constraint ItemStatus's own docstring already
-      records from the other side. It also answers a different question: post-hoc, GitHub-side, one
-      direction. The split is by what each can see, and it is genuinely non-overlapping rather than
-      a compromise - the dashboard compares the manifest against GitHub after the fact, while check
-      compares it against local git before a push, which the dashboard can never see. That keeps the
-      hook tier stdlib-only and leaves check importable by plan-item-edit-guard, whose hook must
-      also be dependency-free.
-
-      (2) Writing notes through the existing setter silently corrupted the manifest, latent since
-      #143 gave NOTES and BLOCKERS members but no writer. ManifestKey.NOTES is block-styled, its
-      pattern matches the "notes: >" line, and render emitted a single line - so apply_item_fields
-      replaced the ">" and orphaned the indented body, which YAML then read as a continuation of the
-      new value, concatenating the old note onto the new one. The result still validated, so nothing
-      caught it.
-
-      Delivered on plan_item_bootstrap.py rather than a sibling module, since it already owns
-      PlanDocuments, ManifestKey, ItemStatus, locate_item_block/apply_item_fields, BootstrapReport
-      and run_git: block-styled field writing (a value spanning the lines beneath its key is
-      replaced whole, and ValueStyle gains SEQUENCE so blockers render as a list rather than a
-      folded scalar); update, which sets any recorded field without the roadmap section record
-      demands unconditionally; and check, which reports the recorded fields local git contradicts
-      and exits manifest_is_stale when any do. branch_is_published was extracted from WorkOpener so
-      both callers share one definition. Dispatch became a handler mapping rather than a fourth
-      if/elif branch.
-
+      request. Scope settled with the user 2026-08-09: six bound surfaces - plan-create,
+      add-plan-item, plan- item-kickoff, plan-item-resolve, plan-dashboard and
+      stacked-pr-maintenance - with the maintenance pass deliberately in, since it reparents pull
+      requests, promotes branches and moves labels without ever touching plan.yaml. As scripted as
+      possible, the instructions document keeping only what a script cannot do. Kicked off and
+      implemented 2026-08-10 as draft #151 on fork main, bootstrapped in the order this item itself
+      prescribes. Two premises the notes carried were disproved by reading the code, and both
+      changed the design. (1) The recorded instruction that the transition check "must reuse
+      sync_manifest_status.py" is wrong, and following it would have been worse than not. That
+      script imports build_dashboard, which imports render_common, which imports jinja2, markdown
+      and nh3 at module level - so a hook cannot import it at all, which is the constraint
+      ItemStatus's own docstring already records from the other side. It also answers a different
+      question: post-hoc, GitHub-side, one direction. The split is by what each can see, and it is
+      genuinely non-overlapping rather than a compromise - the dashboard compares the manifest
+      against GitHub after the fact, while check compares it against local git before a push, which
+      the dashboard can never see. That keeps the hook tier stdlib-only and leaves check importable
+      by plan-item-edit-guard, whose hook must also be dependency-free. (2) Writing notes through
+      the existing setter silently corrupted the manifest, latent since #143 gave NOTES and BLOCKERS
+      members but no writer. ManifestKey.NOTES is block-styled, its pattern matches the "notes: >"
+      line, and render emitted a single line - so apply_item_fields replaced the ">" and orphaned
+      the indented body, which YAML then read as a continuation of the new value, concatenating the
+      old note onto the new one. The result still validated, so nothing caught it. Delivered on
+      plan_item_bootstrap.py rather than a sibling module, since it already owns PlanDocuments,
+      ManifestKey, ItemStatus, locate_item_block/apply_item_fields, BootstrapReport and run_git:
+      block-styled field writing (a value spanning the lines beneath its key is replaced whole, and
+      ValueStyle gains SEQUENCE so blockers render as a list rather than a folded scalar); update,
+      which sets any recorded field without the roadmap section record demands unconditionally; and
+      check, which reports the recorded fields local git contradicts and exits manifest_is_stale
+      when any do. branch_is_published was extracted from WorkOpener so both callers share one
+      definition. Dispatch became a handler mapping rather than a fourth if/elif branch.
       manifest-currency.md carries the rule once, with MANIFEST_CURRENCY_DOCUMENT beside
       SCOPE_DECISION_DOCUMENT, cited in a short subsection by each bound skill. plan-item-resolve
       took the largest change, and it was not something the notes had singled out: it wrote the
@@ -2267,35 +2257,68 @@ items:
       pr-maintenance reports the items its pass made stale rather than writing them - it runs
       unattended under --non-interactive, where its own doctrine forbids opening a discussion, and
       which status a move implies is judgement. That asymmetry is stated in the document with its
-      reason.
+      reason. The contract test derives which skills are bound from what they do - a skill invoking
+      a plan- writing script is bound by that fact - rather than listing them, so a skill added
+      later is covered without editing the test; only the maintenance pass is named, because it is
+      bound for the opposite reason and asserts it writes no manifest. 389 tests pass across the
+      three directories CI runs, against 367 on main. Every new test was mutation-checked, each
+      failing only for its own reason. Verified live rather than only in the harness: check run
+      against all 41 items of this plan returned one true positive - dependency- chips-blocked-fix
+      records a published branch with no session, exit 9 - and 40 clean. One incidental fix rides
+      along, as its own concern: the scratch repository fixture now disables commit signing. This
+      environment signs by default, so every scratch commit depended on a reachable signing service,
+      and the suite failed on a different test each run with "signing server returned status 520".
+      It also halved the suite's runtime. Deferred with the user's agreement: plan_item_bootstrap.py
+      is not renamed, though its name stops being true once it carries update and check -
+      dev-tooling-save-plan-python absorbs the file into the package regardless, so that migration
+      renames it once rather than twice with three branches rebasing across the first attempt. The
+      one line into add-plan-item/SKILL.md still cannot be written from main, and #135 is marked
+      ready for review, so it lands here only if #135 merges first. CI on the branch is red on
+      test_each_lib and it is base-side rather than this pull request's: greenlet 3.5.5 was
+      published with no Linux wheel, so uv fails to resolve before any test runs. main's own push
+      run failed 11 jobs three minutes before this branch's, and test_claude_dev_tooling - the only
+      job reaching this .claude/-only diff - passes. Reported on the pull request, not fixed here.
 
-      The contract test derives which skills are bound from what they do - a skill invoking a plan-
-      writing script is bound by that fact - rather than listing them, so a skill added later is
-      covered without editing the test; only the maintenance pass is named, because it is bound for
-      the opposite reason and asserts it writes no manifest.
+      Reversed 2026-08-11 at the user's request, folded into this item rather than split out, since
+      it rewrites the very sections this item introduced. stacked-pr-maintenance now writes and
+      publishes rather than reporting. One of the two reasons recorded above for the asymmetry was
+      wrong: --non-interactive suppresses AskUserQuestion and nothing else, and routine-prompt.md
+      registers the pass as a live Claude session, so the Artifact tool was reachable throughout -
+      the reasoning was about the mode's name rather than what the mode does. The second reason
+      survives and bounds the change: which status a reparent or a promotion implies is a reading
+      rather than a mechanical fact, so the pass writes only what it decided itself (a branch it
+      labels needs-resolution is blocked; one whose label it clears is not) and reports the rest. A
+      landed branch still needs no write - sync_manifest_status.py corrects merged to done on the
+      refresh the pass now triggers.
 
-      389 tests pass across the three directories CI runs, against 367 on main. Every new test was
-      mutation-checked, each failing only for its own reason. Verified live rather than only in the
-      harness: check run against all 41 items of this plan returned one true positive - dependency-
-      chips-blocked-fix records a published branch with no session, exit 9 - and 40 clean.
+      plan_item_bootstrap.py gains resolve, block and unblock, all keyed on a branch because that is
+      what the pass holds - update needs a plan and an item id, PLAN_BRANCH_INDEX_PATH stops at the
+      plan id, and PlanDocuments only looks items up by id. The owner is written into the blocker
+      under MAINTENANCE_BLOCKER_OWNER, so a pass replaces and withdraws its own entries and never a
+      person's, and an item still carrying somebody else's stays blocked. All three answer for every
+      item on the branch, since two items on one branch is ordinary. stacked-pr-maintenance's
+      frontmatter gains the Skill grant it lacked, which was the mechanical reason it could not
+      publish.
 
-      One incidental fix rides along, as its own concern: the scratch repository fixture now
-      disables commit signing. This environment signs by default, so every scratch commit depended
-      on a reachable signing service, and the suite failed on a different test each run with
-      "signing server returned status 520". It also halved the suite's runtime.
+      Two defects found by writing a real blocker into this plan's own manifest rather than only
+      into the harness. fold broke inside words - textwrap breaks at hyphens and through any
+      over-long word, and a folded scalar reads a line break back as a space, so
+      claude/workflow-unification-setup-jgvs53 returned with a space inside it - latent since the
+      block-styled writer landed and reachable the moment anything wrote an identifier into a note
+      or blocker. And withdrawing a blocker an item never carried wrote it an empty list, which the
+      every-clean-branch sweep would have spread across the manifest one run at a time; both fixed,
+      the second observed live and reverted.
 
-      Deferred with the user's agreement: plan_item_bootstrap.py is not renamed, though its name
-      stops being true once it carries update and check - dev-tooling-save-plan-python absorbs the
-      file into the package regardless, so that migration renames it once rather than twice with
-      three branches rebasing across the first attempt. The one line into add-plan-item/SKILL.md
-      still cannot be written from main, and #135 is marked ready for review, so it lands here only
-      if #135 merges first.
+      plan-create's half was nearly already done: step 8 has invoked plan-dashboard since before
+      this item. The hole was the master index, which step 8 asked about, leaving a new plan missing
+      from the one page that lists every plan. It now republishes both unconditionally - adding a
+      plan is the single change that alters what the index lists, and _index has its own cached URL
+      so that updates the page rather than minting a second.
 
-      CI on the branch is red on test_each_lib and it is base-side rather than this pull request's:
-      greenlet 3.5.5 was published with no Linux wheel, so uv fails to resolve before any test runs.
-      main's own push run failed 11 jobs three minutes before this branch's, and
-      test_claude_dev_tooling - the only job reaching this .claude/-only diff - passes. Reported on
-      the pull request, not fixed here.
+      408 tests pass across the three directories CI runs, was 389. Verified live on the fork:
+      resolve answered with both items on claude/stack-landed-parent-detection, block flipped
+      git-identity-from-personal-notes to blocked with the five files GitHub's dirty verdict on #126
+      is about, and the blocker round-tripped byte-exact after the fold fix.
 
   - id: no-pr-subscriptions
     title: "Stop sessions from subscribing to their own pull requests"
