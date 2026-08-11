@@ -127,7 +127,7 @@ items:
   track: S0-steward
   depends_on:
   - ripple-down-rules-refactor
-  status: in_progress
+  status: done
   session: https://claude.ai/code/session_012xQWiZExn9frHtbfm44eR1
   notes: 'Recorded blocker (base_expressions.py conflict over _last_parent_of_type_) cleared:
     PR #89 merged to main 2026-07-30 and cascaded the fix down the stack as predicted. Verified
