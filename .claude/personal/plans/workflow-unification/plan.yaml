@@ -2411,6 +2411,37 @@ items:
       on personal-settings-sync carry no owner-shaped prefix, so blockers_not_owned_by never matches
       them.
 
+      Two follow-ups the review round's own dogfooding produced, in 14f90753. A write that sets a
+      note now reports note_paragraphs, counted through the same splitter fold uses so the number
+      and the manifest cannot disagree. That is the whole fix available for the run-together note:
+      which paragraphs were meant is not recoverable from a file whose blank lines do not say, but
+      the outcome stops being something a later reader discovers. The first attempt at it counted
+      the value before folding, where a hard-wrapped line still looks like a break, and its own test
+      caught that.
+
+      repair rejoins the words the old fold broke, which the fold fix itself does not touch - a fix
+      stops new damage and leaves what is already written, with nothing looking at it. The rule is
+      deliberately not a blind rejoin, and the data is why: network- and credential-free is a
+      suspended hyphen, correct English with exactly the shape of a break. So a break is closed up
+      only when the rejoined word appears elsewhere in the plan, which is the bug's own signature
+      rather than a guess about English, and a longer compound counts as evidence. What fails that
+      test is reported under exit status text_needs_repair rather than rewritten, so a genuinely
+      broken word occurring once is left for a person - the safe direction, since the opposite error
+      edits somebody's prose silently. Run live: four rejoined, three reported, two of those judged
+      and fixed by hand, and network- and correctly still stands.
+
+      Worth carrying beyond this item: the five words repaired by hand earlier in the day were fixed
+      with a blind regular expression, and that only happened to be right. Running the same rule
+      over the whole plan turned up seven more, one of which it would have corrupted. A repair rule
+      needs its own evidence, not a shape match.
+
+      The greenlet claim recorded here on 2026-08-10 is retracted. greenlet 3.5.5 publishes cp312
+      manylinux wheels and an sdist, uv resolves and installs it cleanly on this platform, and CI
+      run 31478716090 went green on another branch. It reads as a publish-propagation window rather
+      than a missing artifact, so no pin was added and no bug pull request opened - a constraint
+      below the current release, justified by a problem that no longer exists, would be the worse
+      change. 424 tests pass across the three directories CI runs, was 416.
+
   - id: no-pr-subscriptions
     title: "Stop sessions from subscribing to their own pull requests"
     branch: claude/remove-auto-subscribe-pr-oowwkp
