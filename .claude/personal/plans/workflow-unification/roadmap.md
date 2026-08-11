@@ -5419,3 +5419,69 @@ whether main's 8 unformatted files get a sweep of their own. `gh`/PyGithub stay 
 `dev-tooling-github-api-unification`.
 
 154 tests pass, was 151.
+
+## Update 2026-08-11 (live on the real stack): the build works, and it found a gap in its own skill
+
+Run on the real fork at the user's request. The build did what it was built to do, and the run
+turned up two things worth recording: a real defect in two of the plan's own pull requests, and
+a gap in this item's deliverable that nobody had noticed while it was being written.
+
+### The semantic collision, found on the first real run
+
+`build --test` came back `tests-failed`. Measured rather than inferred:
+
+| tree | `test_check_stack_setup_sh.py` + `test_setup_stacked_prs_sh.py` |
+|---|---|
+| #110 alone | 32 passed |
+| #111 alone | green |
+| #110 merged with #111 | **18 failed** |
+
+The merge is completely clean - no textual conflict, nothing for `merge-tree` to report. #111
+gives `stack.py` a module-scope import of the repository-root `development_tooling` package;
+#110's `check-stack-setup.sh` shells out to `stack.py configuration`, and its scratch fixture
+builds a minimal project without that package. Merged, `stack.py` dies on import, `configuration`
+exits non-zero, and every dependent check degrades to `not checked`.
+
+Neither branch is wrong, and **neither branch's CI can see it** - the failure exists only in a
+tree neither of them is. That is the exact failure class this design was written against,
+appearing unprompted the first time the tool was pointed at the real stack. Reported on both
+pull requests with the measurements and no proposal: which side absorbs it is a design call, and
+the honest options (the fixture provides what `stack.py` needs, or `stack.py` stays runnable
+without the package) belong to their owners.
+
+### The gap that found: a verdict with nothing to reach it
+
+The skill classified the status and stopped. Two things were missing, and only the second was
+obvious from reading it.
+
+**A verdict cannot be reached without localising the break first.** A red suite over a dozen
+merged tips names no branch. Localising it by hand is several worktrees and several suite runs -
+and this session got that wrong once, reusing a worktree path `git worktree` still had registered,
+so a `cd` failed and two merges ran in the invoking checkout (recovered with `git merge --abort`;
+nothing was committed, and `integration.py` itself never did that, because it builds behind a
+detached checkout in a worktree of its own). Prose telling an agent to bisect by hand would have
+been an instruction to repeat that.
+
+So `integration.py bisect` re-assembles the tips in the same order, runs the suite after each,
+names the tip whose arrival turned it, and narrows to the earlier tip that alone reproduces it -
+the same shape as the merge case's pair attribution, and for the same reason: naming everything
+already in the build is not actionable when one of them is innocent. It reproduced the #110/#111
+finding independently, leaving out the innocent tip merged before them.
+
+**And the verdicts themselves needed a different rule.** `adapt`, `reconcile` and `sequence`, all
+proposed rather than applied. But the load-bearing sentence is what is *not* available:
+**`rerere` replays a merge conflict's resolution, and a semantic break has no conflict to key one
+on**, so nothing can be recorded and every later build carries it until a branch changes.
+Reasoning by analogy from the merge case - reaching for `defer`, recording something, reporting a
+fix - is the mistake that section exists to prevent, which is why a contract test pins that
+sentence rather than trusting the prose to survive an edit.
+
+### Two smaller things the run corrected
+
+The first version of the narrowing built each probe on a branch named after the pair, which
+outlives the answer; one was left in the clone by the live run. Probes are built on a detached
+head now, so there is nothing to clean up rather than something to remember to clean up.
+
+And the integration branch was pushed to the fork on request. Worth stating plainly because the
+tool never does it: `build` writes to no branch and pushes nothing, so a build lives only in the
+clone that made it, and an ephemeral container takes it with it.

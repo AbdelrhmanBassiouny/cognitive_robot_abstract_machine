@@ -2569,3 +2569,42 @@ items:
       methods; Configuration gains integration_test_command; and print_configuration now omits a
       setting that is empty as well as one that is unset, which its own docstring already promised
       and which only became reachable when a defaultable setting existed.
+
+      Extended 2026-08-11, from running it on the real stack at the user's request. The build
+      worked and the run found a defect in this item rather than in the branches: --test caught
+      that the assembled branch does not work, and the skill had no verdict taxonomy for that -
+      it reported tests-failed and stopped. A gap in the item's own deliverable, flagged before
+      the user met it.
+
+      Two things were missing, and only the second was obvious. A failing suite over a dozen
+      merged tips names no branch, so a verdict cannot even be reached without localising it
+      first - and localising it by hand is several worktrees and several suite runs, which this
+      session got wrong once (a reused worktree path let two merges run in the invoking checkout;
+      recovered by git merge --abort, nothing committed). So integration.py gains bisect, which
+      re-assembles the tips in the same order, runs the suite after each, names the tip whose
+      arrival turned it, and narrows to the earlier tip that alone reproduces it. Probes run on a
+      detached head, so a bisect leaves no ref behind - the first version named them after the
+      pair and left one in the clone.
+
+      The verdicts for a semantic break are adapt, reconcile and sequence, all proposed rather
+      than applied. What matters more is what is *not* available: rerere replays a merge
+      conflict's resolution, and a semantic break has no conflict to key one on, so nothing can
+      be recorded and every later build carries it until a branch changes. Reasoning by analogy
+      from the merge case is the mistake the section exists to prevent, and a contract test pins
+      that sentence because an agent that recorded a resolution would be reporting a fix that
+      does not exist.
+
+      The live run is what made this concrete. 22 tips, 10 merged, 12 skipped, then tests-failed:
+      #110 alone passes 32 tests, #111 alone is green, merged they fail 18. #111 gives stack.py a
+      module-scope import of the repository-root development_tooling package; #110's scratch
+      fixture builds a minimal project without it, so stack.py configuration dies and every
+      dependent check degrades to "not checked". A clean merge, no textual conflict, and
+      invisible to both pull requests' CI - the exact failure class the design was written
+      against, found on the first real run. Reported on #110 and #111 with the measurements,
+      proposing nothing: which side absorbs it is a design call. bisect then reproduced it
+      independently, naming #111 against #110 and correctly leaving out the innocent tip merged
+      before them.
+
+      479 tests pass across the three directories CI runs, was 470 and 428 before the item. The
+      integration branch was pushed to the fork at the user's request, which the tool itself never
+      does.
