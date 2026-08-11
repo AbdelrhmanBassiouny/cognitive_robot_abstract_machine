@@ -12,7 +12,7 @@ from segmind.datastructures.object_tracker import ObjectEventTracker, ObjectTrac
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Aperture
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.geometry import BoundingBox
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import Body, Region
 
 
 @dataclass
@@ -50,11 +50,18 @@ class EventWithTrackedObjects(DetectionEvent, ABC):
     tracked_object: Body
     """The primary object involved in this event."""
 
-    with_object: Optional[Body] = None
-    """The secondary object involved in this event, if any."""
+    with_object: Optional[Body | Region] = None
+    """
+    The secondary object involved in this event, if any.
+
+    Usually a :class:`Body`; a hole-related event (e.g. contact with an
+    :class:`~semantic_digital_twin.semantic_annotations.semantic_annotations.Aperture`)
+    sets this to that aperture's own :class:`Region` root instead, since an aperture is
+    a virtual opening rather than a collidable body.
+    """
 
     @property
-    def tracked_objects(self) -> List[Body]:
+    def tracked_objects(self) -> List[Body | Region]:
         """
         :return: the primary object, plus the secondary object when present.
         """
@@ -198,15 +205,18 @@ class AbstractContactEvent(EventWithTrackedObjects, ABC):
     """
 
     def __post_init__(self):
+        # combined_mesh (not tracked_object.collision.combined_mesh directly) so this
+        # also works when with_object is a hole's Region root, which exposes its
+        # geometry via .area rather than .collision.
         self.bounding_box = BoundingBox.from_mesh(
-            self.tracked_object.collision.combined_mesh,
+            self.tracked_object.combined_mesh,
             origin=self.tracked_object.global_pose.to_homogeneous_matrix()
         )
         self.pose = self.tracked_object.global_pose
 
         if self.with_object is not None:
             self.with_object_bounding_box = BoundingBox.from_mesh(
-                self.with_object.collision.combined_mesh,
+                self.with_object.combined_mesh,
                 origin=self.with_object.global_pose.to_homogeneous_matrix()
             )
             self.with_object_pose = self.with_object.global_pose
@@ -258,10 +268,16 @@ class InsertionEvent(EventWithTrackedObjects):
     List of objects into which the object was inserted.
     """
 
-    @property
-    def through_hole(self) -> Aperture:
-        return self.with_object.get_semantic_annotations_by_type(type_=Aperture)[0]
+    through_hole: Optional[Aperture] = None
+    """
+    The aperture :attr:`~EventWithTrackedObjects.with_object` (its own ``Region`` root)
+    was detected passing through.
 
+    Set directly by the detector that builds this event, which already has the
+    aperture in hand (via ``SegmindContext.holes``) rather than derived from
+    ``with_object`` here: a hole's root is a virtual ``Region``, not a ``Body``, and has
+    no reliable way to look its owning annotation back up on its own.
+    """
 
     def __str__(self) -> str:
         with_object_name = " - " + " - ".join([str(obj.name) for obj in self.inserted_into_objects])
