@@ -2,10 +2,11 @@
 Build the Montessori shape-sorting world and have a table-mounted Franka Emika Panda
 sort every loose shape into its matching hole -- the same narrative as
 :mod:`experiments.montessori.montessori_demo`'s HSRB-driven original, but reaching with
-its arm alone (see :meth:`~experiments.montessori.world.MontessoriWorld.mount_stationary_robot`;
-the Panda has no mobile base to navigate) and holding each shape by the gripper's own
-contact friction throughout the whole run, rather than kinematically teleporting it and
-settling it afterwards (see :mod:`experiments.montessori.franka_panda_equipment`).
+its arm alone (see
+:meth:`~experiments.montessori.world.MontessoriWorld.mount_stationary_robot`; the Panda
+has no mobile base to navigate) and holding each shape by the gripper's own contact
+friction throughout the whole run, rather than kinematically teleporting it and settling
+it afterwards (see :mod:`experiments.montessori.franka_panda_equipment`).
 
 Run with (the ``experiments`` package must be importable)::
 
@@ -27,6 +28,8 @@ ORMatic; see ``--database-uri`` and :data:`DEFAULT_DATABASE_URI`.
 from __future__ import annotations
 
 import argparse
+import ctypes
+import gc
 import logging
 import math
 import os
@@ -85,9 +88,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_DATABASE_URI = "sqlite:///franka_montessori_sorting_results.db"
 """
 Database URI used when neither ``--database-uri`` nor
-``FRANKA_MONTESSORI_SORTING_DATABASE_URI`` is given: a local SQLite file in the
-current directory, matching :mod:`experiments.montessori.generate_insertion_experience`'s
-own default.
+``FRANKA_MONTESSORI_SORTING_DATABASE_URI`` is given: a local SQLite file in the current
+directory, matching :mod:`experiments.montessori.generate_insertion_experience`'s own
+default.
 """
 
 NODE_NAME = "franka_montessori_demo"
@@ -118,11 +121,12 @@ arm shake rather than hold still near a commanded pose.
 MUJOCO_INTEGRATOR = mujoco.mjtIntegrator.mjINT_IMPLICITFAST
 """
 Numerical integrator MuJoCo advances the physics with, matching
-``coraplex_panda_demo/stacking_scene.xml``'s own ``<option integrator="implicitfast" />``
-(:class:`~physics_simulators.mujoco_simulator.MujocoSimulator` otherwise falls back to
-its own ``RK4`` default regardless of what a scene declares). RK4's four force
-evaluations per step measured about four times slower here than ``implicitfast``, with
-no observed difference in insertion outcomes.
+``coraplex_panda_demo/stacking_scene.xml``'s own ``<option integrator="implicitfast"
+/>`` (:class:`~physics_simulators.mujoco_simulator.MujocoSimulator` otherwise falls back
+to its own ``RK4`` default regardless of what a scene declares).
+
+RK4's four force evaluations per step measured about four times slower here than
+``implicitfast``, with no observed difference in insertion outcomes.
 """
 
 SYNC_RATE_HZ = 100
@@ -163,7 +167,8 @@ MINIMUM_PICKUP_DISPLACEMENT = 0.03
 """
 Minimum distance (in meters) a shape must have moved between just before its
 :class:`~experiments.montessori.insert_shape_action.InsertMontessoriShapeAction` starts
-and right after it finishes, for the pickup to be considered real (see :func:`_insert_shape`).
+and right after it finishes, for the pickup to be considered real (see
+:func:`_insert_shape`).
 
 A grasp that silently fails to actually close on the shape (rather than raising) has
 been observed to let the rest of the action run to completion anyway, with the shape
@@ -175,9 +180,10 @@ so this threshold only needs to rule out the shape having simply not moved at al
 
 TCP_POSITION_THRESHOLD = 0.007
 """
-Position tolerance in meters used for every :class:`~coraplex.robot_plans.motions.gripper.MoveToolCenterPointMotion`
-in this demo (see :attr:`~coraplex.datastructures.dataclasses.MotionToleranceConfig.default_tcp_position_threshold`),
-in place of Giskard's own tighter default (0.005m).
+Position tolerance in meters used for every
+:class:`~coraplex.robot_plans.motions.gripper.MoveToolCenterPointMotion` in this demo
+(see :attr:`~coraplex.datastructures.dataclasses.MotionToleranceConfig.default_tcp_posit
+ion_threshold`), in place of Giskard's own tighter default (0.005m).
 
 A physically simulated, PD-tracked arm settles with some residual error rather than
 converging exactly onto a goal; the tight default was observed to have the arm hover and
@@ -189,9 +195,10 @@ that had never missed before; splitting the difference between the two.
 
 TCP_ORIENTATION_THRESHOLD = 0.03
 """
-Orientation tolerance in rad used for every :class:`~coraplex.robot_plans.motions.gripper.MoveToolCenterPointMotion`
-in this demo (see :attr:`~coraplex.datastructures.dataclasses.MotionToleranceConfig.tool_orientation_threshold`),
-loosened for the same reason as :data:`TCP_POSITION_THRESHOLD`.
+Orientation tolerance in rad used for every
+:class:`~coraplex.robot_plans.motions.gripper.MoveToolCenterPointMotion` in this demo
+(see :attr:`~coraplex.datastructures.dataclasses.MotionToleranceConfig.tool_orientation_
+threshold`), loosened for the same reason as :data:`TCP_POSITION_THRESHOLD`.
 """
 
 
@@ -393,8 +400,8 @@ def _insert_shape_or_none(
         equipped, inside a running simulation.
     :param context: The CRAM execution context to run the insertion action in.
     :param attempt: This attempt's 1-based index, used only for the log message.
-    :return: Whether the shape fell through its hole (``None`` if this attempt failed
-        in a retryable way), and the plan this attempt ran, for the caller to record
+    :return: Whether the shape fell through its hole (``None`` if this attempt failed in
+        a retryable way), and the plan this attempt ran, for the caller to record
         regardless of outcome.
     """
     from coraplex.plans.failures import PlanFailure
@@ -562,8 +569,8 @@ def _insert_all_shapes(
 
 def _parse_arguments() -> argparse.Namespace:
     """
-    Parse command-line arguments selecting whether a MuJoCo viewer window is opened
-    and how many shapes to attempt.
+    Parse command-line arguments selecting whether a MuJoCo viewer window is opened and
+    how many shapes to attempt.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -617,6 +624,19 @@ def _parse_arguments() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--start-iteration",
+        type=int,
+        default=1,
+        help=(
+            "1-based index recorded on the first iteration's SortingIterationResult, "
+            "counting up from there; only the recorded index is affected, not how "
+            "many iterations actually run. Lets a caller that restarts this process "
+            "every few iterations keep recorded iteration numbers globally unique "
+            "and increasing across restarts instead of every restart re-numbering "
+            "from 1."
+        ),
+    )
+    parser.add_argument(
         "--exit-after-sorting",
         action="store_true",
         help=(
@@ -644,8 +664,9 @@ def _parse_arguments() -> argparse.Namespace:
 def _open_results_session(database_uri: str) -> Session:
     """
     Open a SQLAlchemy session against ``database_uri``, creating
-    :class:`~experiments.montessori.sorting_results.SortingIterationResult` and :class:`~experiments.montessori.sorting_results.ShapeInsertionResult`'s tables
-    first if they don't already exist.
+    :class:`~experiments.montessori.sorting_results.SortingIterationResult` and
+    :class:`~experiments.montessori.sorting_results.ShapeInsertionResult`'s tables first
+    if they don't already exist.
 
     :param database_uri: Database to write recorded results to; see
         :data:`DEFAULT_DATABASE_URI`.
@@ -670,11 +691,11 @@ def _build_world_and_sort(
     physics simulation, and have it sort every loose shape into the board once.
 
     :param node: The ROS 2 node TF/marker publishing runs against.
-    :param arguments: Parsed command-line arguments selecting the world layout,
-        viewer, RViz publishing, and shape-attempt limits.
-    :return: This run's per-shape results (see :func:`_insert_all_shapes`), and
-        the live simulation and publishers, left running for the caller to stop
-        once it is done with them.
+    :param arguments: Parsed command-line arguments selecting the world layout, viewer,
+        RViz publishing, and shape-attempt limits.
+    :return: This run's per-shape results (see :func:`_insert_all_shapes`), and the live
+        simulation and publishers, left running for the caller to stop once it is done
+        with them.
     """
     from coraplex.datastructures.dataclasses import Context, MotionToleranceConfig
     from semantic_digital_twin.adapters.multi_sim import MujocoSim
@@ -755,10 +776,29 @@ def _build_world_and_sort(
     return results, multi_sim, tf_publisher, viz_marker_publisher
 
 
+def _reclaim_native_heap_fragmentation() -> None:
+    """
+    Collect Python cycles, then ask glibc to release freed-but-unreturned heap back to
+    the OS.
+
+    Each rebuilt world's MuJoCo model/data and Bullet collision shapes (see
+    :class:`~semantic_digital_twin.collision_checking.pybullet_collision_detector.BulletCollisionDetector`)
+    free their native allocations correctly, but glibc's allocator keeps the
+    resulting holes in its own arenas rather than returning them to the OS, so RSS
+    climbs by ~150-230MB per iteration of a long ``--iterations`` run until the
+    process is OOM-killed even though no Python object leaks. ``malloc_trim`` reclaims
+    that fragmented-but-freed memory; ``gc.collect()`` runs first so any Python-level
+    garbage is freed (and its native backing memory released) before trimming.
+    """
+    gc.collect()
+    ctypes.CDLL(None).malloc_trim(0)
+
+
 def _log_iteration_summary(iteration_results: list[SortingIterationResult]) -> None:
     """
-    Log a per-shape success-rate summary across every :class:`~experiments.montessori.sorting_results.SortingIterationResult`
-    :func:`main` collected, once its :attr:`~argparse.Namespace.iterations` finish.
+    Log a per-shape success-rate summary across every
+    :class:`~experiments.montessori.sorting_results.SortingIterationResult` :func:`main`
+    collected, once its :attr:`~argparse.Namespace.iterations` finish.
 
     :param iteration_results: One entry per iteration :func:`main` ran.
     """
@@ -845,10 +885,15 @@ def main() -> None:
 #    results_session = _open_results_session(arguments.database_uri)
     logger.info("Recording results to '%s'.", arguments.database_uri)
     try:
-        for iteration in range(1, arguments.iterations + 1):
+        for iteration in range(
+            arguments.start_iteration,
+            arguments.start_iteration + arguments.iterations,
+        ):
             if arguments.iterations > 1:
                 logger.info(
-                    "=== Starting iteration %d/%d ===", iteration, arguments.iterations
+                    "=== Starting iteration %d/%d ===",
+                    iteration,
+                    arguments.start_iteration + arguments.iterations - 1,
                 )
             shape_results, multi_sim, tf_publisher, viz_marker_publisher = (
                 _build_world_and_sort(node, arguments)
@@ -869,6 +914,7 @@ def main() -> None:
             if tf_publisher is not None:
                 tf_publisher.stop()
             multi_sim = tf_publisher = viz_marker_publisher = None
+            _reclaim_native_heap_fragmentation()
 
         if keep_simulation_running:
             logger.info("Sorting done; the simulation keeps running.")

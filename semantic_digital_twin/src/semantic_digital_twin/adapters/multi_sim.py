@@ -3760,9 +3760,15 @@ class MultiSim(ABC):
     def stop_simulation(self):
         """
         Stops the simulation. This will stop the physics simulation and the rendering.
+
+        The simulator is stopped (and its physics thread joined) before the
+        synchronizer tears down the state callback: the physics thread reads
+        ``synchronizer._state_callback`` on every step, so tearing it down
+        first would race a still-running physics thread and crash it with an
+        ``AttributeError`` on the now-``None`` callback.
         """
-        self.synchronizer.stop()
         self.simulator.stop()
+        self.synchronizer.stop()
 
     def pause_simulation(self):
         """

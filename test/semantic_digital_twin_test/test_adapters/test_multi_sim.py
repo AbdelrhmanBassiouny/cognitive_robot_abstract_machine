@@ -317,9 +317,11 @@ def test_mesh_scale_and_equality(test_mjcf_2_world):
 def _write_textured_tetrahedron(directory, texture_color) -> str:
     """
     Writes a minimal textured OBJ+MTL+PNG mesh (a tetrahedron, so its convex hull is
-    non-degenerate) into ``directory``, textured with a solid ``texture_color``, and returns
-    the OBJ file's path. Always named "tetra.obj"/"tetra.mtl"/"wood.png", so callers writing
-    into different directories can reproduce a texture basename collision between them.
+    non-degenerate) into ``directory``, textured with a solid ``texture_color``, and
+    returns the OBJ file's path.
+
+    Always named "tetra.obj"/"tetra.mtl"/"wood.png", so callers writing into different
+    directories can reproduce a texture basename collision between them.
     """
     directory.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", (4, 4), color=texture_color).save(directory / "wood.png")
@@ -683,11 +685,12 @@ def test_spawn_body_with_connections():
 
 
 def test_body_frame_excludes_joint_state_at_build_time():
-    """A body's static frame must be built at the reference (zero-joint) pose.
+    """
+    A body's static frame must be built at the reference (zero-joint) pose.
 
-    The joint is non-zero while the simulator is built and is evaluated at a
-    different angle, so a frame that baked in the build-time angle would have it
-    applied twice and drift away from the world forward kinematics.
+    The joint is non-zero while the simulator is built and is evaluated at a different
+    angle, so a frame that baked in the build-time angle would have it applied twice and
+    drift away from the world forward kinematics.
     """
     world = World()
     base_body = Body(name=PrefixedName("base"))
@@ -848,3 +851,25 @@ def test_world_sim_state_sync():
         )
     finally:
         stop_multisim_if_running(multi_sim)
+
+
+def test_stop_simulation_stops_simulator_before_tearing_down_synchronizer():
+    """
+    Regression test: ``MultiSim.stop_simulation`` used to call ``synchronizer.stop()``
+    (which nulls ``_state_callback``, read by the physics thread on every step) before
+    ``simulator.stop()`` (which stops the physics thread and joins it).
+
+    A still-running physics thread reading ``_state_callback`` in that window raised an
+    uncaught ``AttributeError`` on the now-``None`` callback, silently killing the
+    thread instead of surfacing to the caller. The simulator must therefore be stopped
+    (and its thread joined) *before* the synchronizer tears down the callback.
+    """
+    world = World()
+    multi_sim = MujocoSim(world=world, headless=headless)
+    call_order = []
+    multi_sim.simulator.stop = lambda: call_order.append("simulator")
+    multi_sim.synchronizer.stop = lambda: call_order.append("synchronizer")
+
+    multi_sim.stop_simulation()
+
+    assert call_order == ["simulator", "synchronizer"]
