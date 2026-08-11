@@ -168,149 +168,119 @@ items:
     status: done
     session: https://claude.ai/code/session_01Y9egTHHu5RTXmkFL4SwXM9
     notes: >
-      Implemented as draft PR #106 (2026-07-29): stack.py ported to .claude/stack/ minus
-      the round-robin/WIP-cap subsystem, per-user config layering from the personal-notes
-      branch, canonical ROUTINE.md + 1-page README, tests via ScratchRepository; restack.js
-      and board rendering not ported (board deferred to PR 3/PR 4 as planned). Landed as
-      plain scripts — the dev-tooling Python package is created in PR 3 instead (see
-      dev-tooling-python-package). Self-reviewed and un-drafted since: open and ready,
-      so it unblocks its dependents by the plan's normal open-and-ready rule. Now also
-      the parent of #107, which was restacked onto it (2026-07-30) so the upstream wave
-      is a linear chain rather than two siblings on #101.
-      Re-scoped 2026-07-31 (native-stacks pivot, user-approved): before review goes
-      deep, add one trim commit — (a) read stack structure from the stacks REST API
-      when the PR is a stack member, keeping PR-base derivation as the fallback for
-      preview-less repos; (b) ROUTINE.md merge doctrine becomes merge-async + poll
-      only, never the classic merge API or the MCP merge tool on a stack member, with
-      stack base.sha lagging the trunk head as the needs-cascade signal; (c) Phase 1
-      REPARENT must special-case stack members — PATCH base 422s on them ("Cannot
-      change the base branch because the pull request is part of a stack"), so
-      reparent via unstack → PATCH base → re-stack, or leave it to gh stack sync /
-      the UI Rebase-stack button. (c) is load-bearing before the next cram2 landing
-      of any stacked branch: stack #112 already exists on the fork.
-      Upgraded to a cut the same day (user decision, "decision 11" in the roadmap):
-      the restack subsystem (restack-plan, next, status/structure derivation) is
-      removed from the PR entirely rather than trimmed — native stacks own
-      structure, gh stack / the Rebase-stack button own cascading, and the
-      preview-less-repo fallback is YAGNI (the preview is account-wide; the old
-      tooling branch remains as a tagged archive). The PR keeps: ROUTINE.md
-      rewritten around native mechanics (incl. the Phase-1 reparent special case
-      and merge-async doctrine), stack.toml + per-user config layering, the
-      label/cram2-link helpers, a small reparent-recovery script, and tests.
-      Re-scope instruction posted on the PR itself.
-
-      Assessed 2026-08-02 against #110 (see roadmap): the two are split correctly, but
-      three artifacts had been built twice. This PR keeps all of them by landing first.
-      Shipped here (36eda87a): `stack.py remotes` becomes `configuration`, printing one
-      `field<TAB>value` line per Configuration field instead of four hand-written
-      hyphenated keys, with `upstream_setup_command` moved onto Configuration and omitted
-      when the remote already exists. That makes this PR's command surface and #110's
-      independently-built `config` one surface, so #110's rebase deletes the resolution
-      internals only. 286 CI tests pass, was 283. Description updated to match.
-
-      Re-scoped again 2026-08-02 (user-approved, session_01BByQFT6he8xf5qvBWtyUPV): the
-      doctrine becomes a skill and the recipes become subcommands. ROUTINE.md is deleted;
+      Implemented as draft PR #106 (2026-07-29): stack.py ported to .claude/stack/ minus the
+      round-robin/WIP-cap subsystem, per-user config layering from the personal-notes branch,
+      canonical ROUTINE.md + 1-page README, tests via ScratchRepository; restack.js and board
+      rendering not ported (board deferred to PR 3/PR 4 as planned). Landed as plain scripts — the
+      dev-tooling Python package is created in PR 3 instead (see dev-tooling-python-package).
+      Self-reviewed and un-drafted since: open and ready, so it unblocks its dependents by the
+      plan's normal open-and-ready rule. Now also the parent of #107, which was restacked onto it
+      (2026-07-30) so the upstream wave is a linear chain rather than two siblings on #101.
+      Re-scoped 2026-07-31 (native-stacks pivot, user-approved): before review goes deep, add one
+      trim commit — (a) read stack structure from the stacks REST API when the PR is a stack member,
+      keeping PR-base derivation as the fallback for preview-less repos; (b) ROUTINE.md merge
+      doctrine becomes merge-async + poll only, never the classic merge API or the MCP merge tool on
+      a stack member, with stack base.sha lagging the trunk head as the needs-cascade signal; (c)
+      Phase 1 REPARENT must special-case stack members — PATCH base 422s on them ("Cannot change the
+      base branch because the pull request is part of a stack"), so reparent via unstack → PATCH
+      base → re-stack, or leave it to gh stack sync / the UI Rebase-stack button. (c) is
+      load-bearing before the next cram2 landing of any stacked branch: stack #112 already exists on
+      the fork. Upgraded to a cut the same day (user decision, "decision 11" in the roadmap): the
+      restack subsystem (restack-plan, next, status/structure derivation) is removed from the PR
+      entirely rather than trimmed — native stacks own structure, gh stack / the Rebase-stack button
+      own cascading, and the preview-less-repo fallback is YAGNI (the preview is account-wide; the
+      old tooling branch remains as a tagged archive). The PR keeps: ROUTINE.md rewritten around
+      native mechanics (incl. the Phase-1 reparent special case and merge-async doctrine),
+      stack.toml + per-user config layering, the label/cram2-link helpers, a small reparent-recovery
+      script, and tests. Re-scope instruction posted on the PR itself. Assessed 2026-08-02 against
+      #110 (see roadmap): the two are split correctly, but three artifacts had been built twice.
+      This PR keeps all of them by landing first. Shipped here (36eda87a): `stack.py remotes`
+      becomes `configuration`, printing one `field<TAB>value` line per Configuration field instead
+      of four hand-written hyphenated keys, with `upstream_setup_command` moved onto Configuration
+      and omitted when the remote already exists. That makes this PR's command surface and #110's
+      independently-built `config` one surface, so #110's rebase deletes the resolution internals
+      only. 286 CI tests pass, was 283. Description updated to match. Re-scoped again 2026-08-02
+      (user-approved, session_01BByQFT6he8xf5qvBWtyUPV): the doctrine becomes a skill and the
+      recipes become subcommands. ROUTINE.md is deleted;
       .claude/skills/stacked-pr-maintenance/SKILL.md carries the doctrine, is invocable as
-      /stacked-pr-maintenance from any session, and is what POINTER.md's registered block
-      now resolves and runs. Context resolution is arguments first (fork=/upstream=, passed
-      through as configuration --fork/--upstream, so nothing is inferred when both are
-      given), then stack.py configuration, then - only interactively - an AskUserQuestion
-      whose answer is persisted to .claude/personal/stack.toml on the personal-notes
-      branch; --non-interactive turns that question into a stop, which is what a scheduled
-      run needs given its own rule against opening a discussion. Landed as one commit on
-      this branch (e20b0bb4) rather than as a child PR: every path it touches is absent
-      from main, so by the scope rule nothing standalone would have remained, and shipping
-      a ROUTINE.md that its successor deletes would change the live doctrine twice - the
-      pointer resolves origin/main first.
-
-      Four new stack.py subcommands, each replacing a rule a reader had to remember:
-      labels (the complete set a label write must send, computed from the current labels),
-      preflight (refuses a wrong checked-out branch, a mismatched refspec, a non-fork
-      destination, and the child-becomes-ancestor-of-parent false merge; exit 5),
-      promotion-link (owns the compare URL's encoding and length limit), and
-      reparents/landed (phase 1 derived from git ancestry rather than pull-request state).
-      331 tests pass, was 294. An MCP server was considered and rejected: the raw PATCH
-      base change 403s on the session git-proxy credential, so a local server could not own
-      the riskiest operation, and subcommands survive routine-cutover's no-LLM endgame.
-
-      Decision 11's half-applied cut is deliberately not completed: print_next and
-      print_restack_plan are kept, because phases 2 and 3 call them and they are the
-      derivation half of the scripts-over-prose choice made here. print_restack_plan's
-      docstring no longer names "the restack workflow's args".
-
-      One review thread stays open by design - stack.toml:23, the remote inference. The
-      skill answers its interactive half; the remaining caller is a non-interactive run
-      with no arguments on an unconfigured checkout, so the ~120-line deletion is still
-      #110's, alongside the setup that writes fork_repository. Replied on the thread and
-      on #110 rather than resolving it. stack.py:84 (from_remote_url parses without
-      validating) also remains open and dies with the same deletion.
-
-      Review round 2026-08-02 (25 comments) applied in 8b7435bb; three decisions were the
-      user's, each taken after the options were costed. (1) GitHub marks a pull request
-      merged - not closed - the moment its head becomes an ancestor of its base, proven
-      from live data: #101, #103 and #105 all carry merged_at 2026-07-31T10:36:43Z, the
-      second fork main fast-forwarded, and two carry no merged label. So the label-then-
-      close step was duplicating the fast-forward and is deleted, the merged label with
-      it; landed becomes a report. The fast-forward moves after the reparent sweep,
-      because auto-detection only fires for a pull request whose own base moved.
-      (2) The skill never writes code: a conflict it cannot merge cleanly, or a red check,
-      is reported to the branch's owner and skipped. That removed every krrood, ormatic,
-      coraplex and semantic_digital_twin mention, so the instructions are now repo-generic.
-      A conflict it does resolve while restacking must be reported in a comment.
-      (3) POINTER.md, prompt_model.py and test_prompt_documents.py are deleted - the
-      registered prompt is a skill call now, so the duplication the prose tests guarded no
-      longer exists. One test survives, that the skill names no fork of its own: an absence
-      computed from live configuration rather than a sentence asserted against a document.
-      313 tests pass, was 331; the difference is exactly those 18 prose assertions.
-
-      Consequence to carry: the HARD RULES no longer bind before the first file is read,
-      which reverses design decision 4. Flagged to the user on the PR rather than buried -
-      the window is now one turn, and routine-cutover deletes the scheduled run anyway.
-
-      Also: commands are a Command StrEnum with a needs_a_board property; a pre-flight
-      refusal carries a RefusalReason so callers act on which refusal rather than its
-      wording; BranchMove is ProposedCommitMove; label tests read their labels from the
-      configuration that defines them; promotion writes its compare link into the fork
-      pull request's description so it outlives the summary.
-
-      Settled 2026-08-02 (user decision): stack.py is not split in this PR. It stays ~1,540
-      lines here and dev-tooling-python-package does the surgery once, when it moves every
-      .claude/ Python file into the package - rather than twice, with #110 and #111 rebasing
-      across the first attempt. The review comment that raised it stays answered rather than
-      resolved.
-
-      Manual step still due: register the routine's prompt as a call to
-      /stacked-pr-maintenance with fork=, upstream= and --non-interactive. Until this
-      lands on main the skill cannot be invoked by name from a fresh clone, so the prompt
-      must read the file from a ref until then.
-
-      Resolved 2026-08-04 (session_01F6tM5mDZr5pTB37UgBV6N5): CI in upstream cram2 failed
-      test_the_skill_names_no_fork_of_its_own with ForkRemoteNotFoundError - the checkout
-      topology of a cross-fork PR's base-repo CI run (only origin, pointing at cram2
-      itself) has zero fork candidates, which load_configuration() treats as an error.
-      Not new - #110 already hit and fixed the identical bug when it removed the remote
-      inference; its fixed test computes candidate forks directly from the checkout's
-      remotes and tolerates zero of them, using only symbols already in #106's stack.py.
-      Ported that fix back to this branch verbatim (b3e240e6) rather than waiting on
-      #110's rebase, since #106 is the parent and runs in this topology once promoted.
-      Verified against a scratch clone whose only remote is cram2 (reproduces the exact
-      reported traceback pre-fix, passes post-fix) plus the full test_claude_dev_tooling
-      scope (321 tests, no regressions). See roadmap.md for the full writeup.
-
-      Merged into fork main 2026-08-05T14:10:36Z (merged_by AbdelrhmanBassiouny, head
-      b3e240e6 - the fork-resolution fix's own commit). Verified by presence on fork
-      main rather than from the merge notification alone: .claude/stack/stack.py,
-      .claude/skills/stacked-pr-maintenance/SKILL.md and
-      .claude/stack/tests/test_maintenance_skill.py all git cat-file -e clean on
-      origin/main. This is the fork-internal merge only - the separate cram2 promotion
-      (the PR's own "Promote" compare-and-create link) is still a manual step, so
-      routine-cutover's gate ("PR 1 on cram2/main and fork main fast-forwards") is not
-      yet met by this alone. Unblocks #107/#110/#111/#139, all based on this branch,
-      to rebase onto main. The only CI red on this PR at merge time was
-      test_each_lib (giskardpy)'s test_pacer.py::test_with_executor - a physics/timing
-      assertion unrelated to this PR's 11-file .claude/-only diff, matching this PR's
-      established pattern of unrelated robotics-stack flakes; test_claude_dev_tooling
-      itself was green.
+      /stacked-pr-maintenance from any session, and is what POINTER.md's registered block now
+      resolves and runs. Context resolution is arguments first (fork=/upstream=, passed through as
+      configuration --fork/--upstream, so nothing is inferred when both are given), then stack.py
+      configuration, then - only interactively - an AskUserQuestion whose answer is persisted to
+      .claude/personal/stack.toml on the personal-notes branch; --non-interactive turns that
+      question into a stop, which is what a scheduled run needs given its own rule against opening a
+      discussion. Landed as one commit on this branch (e20b0bb4) rather than as a child PR: every
+      path it touches is absent from main, so by the scope rule nothing standalone would have
+      remained, and shipping a ROUTINE.md that its successor deletes would change the live doctrine
+      twice - the pointer resolves origin/main first. Four new stack.py subcommands, each replacing
+      a rule a reader had to remember: labels (the complete set a label write must send, computed
+      from the current labels), preflight (refuses a wrong checked-out branch, a mismatched refspec,
+      a non-fork destination, and the child-becomes-ancestor-of-parent false merge; exit 5),
+      promotion-link (owns the compare URL's encoding and length limit), and reparents/landed (phase
+      1 derived from git ancestry rather than pull-request state). 331 tests pass, was 294. An MCP
+      server was considered and rejected: the raw PATCH base change 403s on the session git-proxy
+      credential, so a local server could not own the riskiest operation, and subcommands survive
+      routine-cutover's no-LLM endgame. Decision 11's half-applied cut is deliberately not
+      completed: print_next and print_restack_plan are kept, because phases 2 and 3 call them and
+      they are the derivation half of the scripts-over-prose choice made here. print_restack_plan's
+      docstring no longer names "the restack workflow's args". One review thread stays open by
+      design - stack.toml:23, the remote inference. The skill answers its interactive half; the
+      remaining caller is a non-interactive run with no arguments on an unconfigured checkout, so
+      the ~120-line deletion is still #110's, alongside the setup that writes fork_repository.
+      Replied on the thread and on #110 rather than resolving it. stack.py:84 (from_remote_url
+      parses without validating) also remains open and dies with the same deletion. Review round
+      2026-08-02 (25 comments) applied in 8b7435bb; three decisions were the user's, each taken
+      after the options were costed. (1) GitHub marks a pull request merged - not closed - the
+      moment its head becomes an ancestor of its base, proven from live data: #101, #103 and #105
+      all carry merged_at 2026-07-31T10:36:43Z, the second fork main fast-forwarded, and two carry
+      no merged label. So the label-then-close step was duplicating the fast-forward and is deleted,
+      the merged label with it; landed becomes a report. The fast-forward moves after the reparent
+      sweep, because auto-detection only fires for a pull request whose own base moved. (2) The
+      skill never writes code: a conflict it cannot merge cleanly, or a red check, is reported to
+      the branch's owner and skipped. That removed every krrood, ormatic, coraplex and
+      semantic_digital_twin mention, so the instructions are now repo-generic. A conflict it does
+      resolve while restacking must be reported in a comment. (3) POINTER.md, prompt_model.py and
+      test_prompt_documents.py are deleted - the registered prompt is a skill call now, so the
+      duplication the prose tests guarded no longer exists. One test survives, that the skill names
+      no fork of its own: an absence computed from live configuration rather than a sentence
+      asserted against a document. 313 tests pass, was 331; the difference is exactly those 18 prose
+      assertions. Consequence to carry: the HARD RULES no longer bind before the first file is read,
+      which reverses design decision 4. Flagged to the user on the PR rather than buried - the
+      window is now one turn, and routine-cutover deletes the scheduled run anyway. Also: commands
+      are a Command StrEnum with a needs_a_board property; a pre-flight refusal carries a
+      RefusalReason so callers act on which refusal rather than its wording; BranchMove is
+      ProposedCommitMove; label tests read their labels from the configuration that defines them;
+      promotion writes its compare link into the fork pull request's description so it outlives the
+      summary. Settled 2026-08-02 (user decision): stack.py is not split in this PR. It stays ~1,540
+      lines here and dev-tooling-python-package does the surgery once, when it moves every .claude/
+      Python file into the package - rather than twice, with #110 and #111 rebasing across the first
+      attempt. The review comment that raised it stays answered rather than resolved. Manual step
+      still due: register the routine's prompt as a call to /stacked-pr-maintenance with fork=,
+      upstream= and --non-interactive. Until this lands on main the skill cannot be invoked by name
+      from a fresh clone, so the prompt must read the file from a ref until then. Resolved
+      2026-08-04 (session_01F6tM5mDZr5pTB37UgBV6N5): CI in upstream cram2 failed
+      test_the_skill_names_no_fork_of_its_own with ForkRemoteNotFoundError - the checkout topology
+      of a cross-fork PR's base-repo CI run (only origin, pointing at cram2 itself) has zero fork
+      candidates, which load_configuration() treats as an error. Not new - #110 already hit and
+      fixed the identical bug when it removed the remote inference; its fixed test computes
+      candidate forks directly from the checkout's remotes and tolerates zero of them, using only
+      symbols already in #106's stack.py. Ported that fix back to this branch verbatim (b3e240e6)
+      rather than waiting on #110's rebase, since #106 is the parent and runs in this topology once
+      promoted. Verified against a scratch clone whose only remote is cram2 (reproduces the exact
+      reported traceback pre-fix, passes post-fix) plus the full test_claude_dev_tooling scope (321
+      tests, no regressions). See roadmap.md for the full writeup. Merged into fork main
+      2026-08-05T14:10:36Z (merged_by AbdelrhmanBassiouny, head b3e240e6 - the fork-resolution fix's
+      own commit). Verified by presence on fork main rather than from the merge notification alone:
+      .claude/stack/stack.py, .claude/skills/stacked-pr-maintenance/SKILL.md and
+      .claude/stack/tests/test_maintenance_skill.py all git cat-file -e clean on origin/main. This
+      is the fork-internal merge only - the separate cram2 promotion (the PR's own "Promote"
+      compare-and-create link) is still a manual step, so routine-cutover's gate ("PR 1 on
+      cram2/main and fork main fast-forwards") is not yet met by this alone. Unblocks
+      #107/#110/#111/#139, all based on this branch, to rebase onto main. The only CI red on this PR
+      at merge time was test_each_lib (giskardpy)'s test_pacer.py::test_with_executor - a
+      physics/timing assertion unrelated to this PR's 11-file .claude/-only diff, matching this PR's
+      established pattern of unrelated robotics-stack flakes; test_claude_dev_tooling itself was
+      green.
 
   - id: setup-stacked-prs-skill
     branch: claude/setup-stacked-prs-skill
@@ -1215,81 +1185,68 @@ items:
     status: done
     session: https://claude.ai/code/session_01UrxbEr6ZHMThA2p4Vcnrqv
     notes: >
-      Implements the recheck-deltas convention recorded in cram-notes.md (2026-07-31): a
-      small hook script next to save-plan.sh that, given a plan id and the last-seen
-      personal-notes commit SHA, fetches the notes branch and prints only the delta -
-      `git diff <sha>..FETCH_HEAD -- .claude/personal/plans/<id>/` - plus the plan's
-      tracking-issue comments newer than that commit's timestamp (github-api.sh dual
-      backend once #107 lands, else curl). session-start.sh stamps the SHA it loaded plan
-      state at (gitignored file) so sessions have the baseline for free; the script
-      updates the stamp. Sized as a small independent PR off fork main, like #109 - not
-      part of the #101 chain. Tests via ScratchRepository, network-free.
-      Kicked off 2026-07-31 via /plan-item-kickoff: confirmed with the user this is based
-      off fork main directly, independent of #109 (not stacked on it) - "off fork main,
-      like #109" in this item's own notes means the same *kind* of independent, main-based
-      PR, not a stack on #109's branch. Expect a textual overlap in the same two files
-      #109 already edits (resolve-personal-notes-config.sh, session-start.sh) - same
-      no-depends_on, whichever-lands-second precedent already established for #107/#109/
-      #110 sharing files with no dependency between them. github-api.sh is confirmed not
-      yet on fork main (only on #107's branch, which this item doesn't depend on), so the
-      dual-backend GitHub call this item needs (fetching tracking-issue comments) is
-      implemented inline, matching github-api.sh's gh-then-curl+token style, rather than
-      depending on that file - a later cleanup once #107 lands can dedupe the shared
-      credential/repo-resolution helpers.
-      Implemented as draft PR #115 (2026-07-31), same session, based directly on fork
-      main (claude/plan-item-kickoff-workflow-n814iz): PLAN_STATE_SYNC_STAMP +
-      record/read helpers in resolve-personal-notes-config.sh, an unconditional stamp
-      call in session-start.sh, the new plan-updates-since.sh script, .gitignore/README
-      updates, and test_plan_updates_since_sh.py (13 new tests, self-contained scratch-
-      repo + stubbed gh/curl fixtures since neither sibling's shared fixture has landed
-      on main yet). All 29 tests under .claude/hooks/tests pass. Verified live against
-      the real personal-notes branch and tracking issue #102. Two real bugs caught by
-      the tests before they shipped: an f-string with escaped quotes inside the
-      expression (invalid before Python 3.12, and this repo's own test tooling runs
-      3.11), and a missing `|| true` on the default_repository grep that let `set -e`
-      silently kill the script on a plan with tracking_issue but no default_repository.
-
-      Resolved 2026-08-05 via /plan-item-resolve (session
-      https://claude.ai/code/session_016kAVapbHxDokYjZBukKA5X): the item had sat
-      in_progress since 2026-07-31 with notes asserting readiness and no blockers
-      field, while the pull request was mergeable_state: dirty and labelled
-      needs-resolution - the same stale-entry failure #109's resolution recorded two
-      days earlier. The conflict was .gitignore (two independent additive blocks,
-      concatenated) and .claude/hooks/README.md. The README was not merely a
-      conflict: this branch was cut before #101's 378-to-140-line rewrite, and an
-      earlier merge here resolved that rewrite hunk-by-hunk, resurrecting the
-      pre-#101 "Setup: overriding the default remote/branch/path" and "Verifying it
-      worked" sections alongside the "Configuration" sections that had replaced them,
-      and stranding the labels list's closing sentence 75 lines from its list.
-      Re-authored against main rather than merged, per #109's own generalization, and
-      only after confirming both resurrected sections are superseded verbatim. The
-      branch's README delta is now +12/-2, was +86/-0. resolve-personal-notes-config.sh
-      and session-start.sh auto-merged and were checked semantically, not just
-      textually - the summary block carries both #109's local-settings line and this
-      branch's plan-state-SHA line. Checked for the same-artifact-twice pattern and
-      found no instance: the test module already imports main's shared
-      ScratchRepository, tests/stubs/ has no counterpart on main, and
-      plan_updates_since_support.py does not overlap plan_manifest_tools.py. 243 tests
-      pass across the two suites CI runs (194 plan-dashboard, 49 hooks - this module's
-      13 plus main's 36), none lost. Verified live: session-start.sh prints all five
-      summary lines and writes the stamp, and plan-updates-since.sh against the real
-      plan returned a delta that included a manifest change another session had pushed
-      mid-resolve. Pushed as 99c92c3c; mergeable_state back to unstable,
-      needs-resolution dropped (full label set re-sent so cram2-link-sent survived),
-      pull request back to draft. This unblocks its half of decision 12's sequencing
-      constraint, which cannot land ahead of the in-flight bash-touching pull requests.
-
-      Merged into fork main 2026-08-05, hours after the resolve above cleared its
-      conflict. Verified by content rather than from the merge notification alone:
-      99c92c3c is a git merge-base --is-ancestor of origin/main, and
-      plan-updates-since.sh, plan_updates_since_support.py and
-      test_plan_updates_since_sh.py are all present on main, with README.md at the
-      re-authored 180 lines. The recurring test_world_sim_state_sync Mujoco flake,
-      red on this pull request since 2026-07-31, passed on the post-merge run, so
-      the branch went green on every check rather than merging with a known red.
-      The convention this item implements is therefore live on main: session-start.sh
-      stamps the notes-branch commit on every run, and any session can now recheck a
-      plan by delta instead of rereading it.
+      Implements the recheck-deltas convention recorded in cram-notes.md (2026-07-31): a small hook
+      script next to save-plan.sh that, given a plan id and the last-seen personal-notes commit SHA,
+      fetches the notes branch and prints only the delta - `git diff <sha>..FETCH_HEAD --
+      .claude/personal/plans/<id>/` - plus the plan's tracking-issue comments newer than that
+      commit's timestamp (github-api.sh dual backend once #107 lands, else curl). session-start.sh
+      stamps the SHA it loaded plan state at (gitignored file) so sessions have the baseline for
+      free; the script updates the stamp. Sized as a small independent PR off fork main, like #109 -
+      not part of the #101 chain. Tests via ScratchRepository, network-free. Kicked off 2026-07-31
+      via /plan-item-kickoff: confirmed with the user this is based off fork main directly,
+      independent of #109 (not stacked on it) - "off fork main, like #109" in this item's own notes
+      means the same *kind* of independent, main-based PR, not a stack on #109's branch. Expect a
+      textual overlap in the same two files #109 already edits (resolve-personal-notes-config.sh,
+      session-start.sh) - same no-depends_on, whichever-lands-second precedent already established
+      for #107/#109/ #110 sharing files with no dependency between them. github-api.sh is confirmed
+      not yet on fork main (only on #107's branch, which this item doesn't depend on), so the
+      dual-backend GitHub call this item needs (fetching tracking-issue comments) is implemented
+      inline, matching github-api.sh's gh-then-curl+token style, rather than depending on that file
+      - a later cleanup once #107 lands can dedupe the shared credential/repo-resolution helpers.
+      Implemented as draft PR #115 (2026-07-31), same session, based directly on fork main
+      (claude/plan-item-kickoff-workflow-n814iz): PLAN_STATE_SYNC_STAMP + record/read helpers in
+      resolve-personal-notes-config.sh, an unconditional stamp call in session-start.sh, the new
+      plan-updates-since.sh script, .gitignore/README updates, and test_plan_updates_since_sh.py (13
+      new tests, self-contained scratch-repo + stubbed gh/curl fixtures since neither sibling's
+      shared fixture has landed on main yet). All 29 tests under .claude/hooks/tests pass. Verified
+      live against the real personal-notes branch and tracking issue #102. Two real bugs caught by
+      the tests before they shipped: an f-string with escaped quotes inside the expression (invalid
+      before Python 3.12, and this repo's own test tooling runs 3.11), and a missing `|| true` on
+      the default_repository grep that let `set -e` silently kill the script on a plan with
+      tracking_issue but no default_repository. Resolved 2026-08-05 via /plan-item-resolve (session
+      https://claude.ai/code/session_016kAVapbHxDokYjZBukKA5X): the item had sat in_progress since
+      2026-07-31 with notes asserting readiness and no blockers field, while the pull request was
+      mergeable_state: dirty and labelled needs-resolution - the same stale-entry failure #109's
+      resolution recorded two days earlier. The conflict was .gitignore (two independent additive
+      blocks, concatenated) and .claude/hooks/README.md. The README was not merely a conflict: this
+      branch was cut before #101's 378-to-140-line rewrite, and an earlier merge here resolved that
+      rewrite hunk-by-hunk, resurrecting the pre-#101 "Setup: overriding the default
+      remote/branch/path" and "Verifying it worked" sections alongside the "Configuration" sections
+      that had replaced them, and stranding the labels list's closing sentence 75 lines from its
+      list. Re-authored against main rather than merged, per #109's own generalization, and only
+      after confirming both resurrected sections are superseded verbatim. The branch's README delta
+      is now +12/-2, was +86/-0. resolve-personal-notes-config.sh and session-start.sh auto-merged
+      and were checked semantically, not just textually - the summary block carries both #109's
+      local-settings line and this branch's plan-state-SHA line. Checked for the same-artifact-twice
+      pattern and found no instance: the test module already imports main's shared
+      ScratchRepository, tests/stubs/ has no counterpart on main, and plan_updates_since_support.py
+      does not overlap plan_manifest_tools.py. 243 tests pass across the two suites CI runs (194
+      plan-dashboard, 49 hooks - this module's 13 plus main's 36), none lost. Verified live:
+      session-start.sh prints all five summary lines and writes the stamp, and plan-updates-since.sh
+      against the real plan returned a delta that included a manifest change another session had
+      pushed mid-resolve. Pushed as 99c92c3c; mergeable_state back to unstable, needs-resolution
+      dropped (full label set re-sent so cram2-link-sent survived), pull request back to draft. This
+      unblocks its half of decision 12's sequencing constraint, which cannot land ahead of the
+      in-flight bash-touching pull requests. Merged into fork main 2026-08-05, hours after the
+      resolve above cleared its conflict. Verified by content rather than from the merge
+      notification alone: 99c92c3c is a git merge-base --is-ancestor of origin/main, and
+      plan-updates-since.sh, plan_updates_since_support.py and test_plan_updates_since_sh.py are all
+      present on main, with README.md at the re-authored 180 lines. The recurring
+      test_world_sim_state_sync Mujoco flake, red on this pull request since 2026-07-31, passed on
+      the post-merge run, so the branch went green on every check rather than merging with a known
+      red. The convention this item implements is therefore live on main: session-start.sh stamps
+      the notes-branch commit on every run, and any session can now recheck a plan by delta instead
+      of rereading it.
 
   - id: ready-to-start-dependency-free-fix
     branch: claude/funny-feynman-wexezs
@@ -1327,11 +1284,11 @@ items:
     depends_on: []
     status: done
     notes: >
-      Pre-existing bug-fix PR, adopted 2026-07-31 under the every-fork-PR-belongs-to-a-
-      plan rule. Renders an item's unmet dependencies as blocked chips instead of
-      neutral ones on the dashboards. Based on fork main, independent of the #101
-      chain; bug + in-review labels - already promoted to cram2. Same
-      build_dashboard.py overlap note as its sibling fix (#103) and #111.
+      Pre-existing bug-fix PR, adopted 2026-07-31 under the every-fork-PR-belongs-to-a-plan rule.
+      Renders an item's unmet dependencies as blocked chips instead of neutral ones on the
+      dashboards. Based on fork main, independent of the #101 chain; bug + in-review labels -
+      already promoted to cram2. Same build_dashboard.py overlap note as its sibling fix (#103) and
+      #111.
 
   - id: merge-timestamp-required-fix
     branch: claude/cram2-main-drift-4owm9a
@@ -1899,34 +1856,31 @@ items:
     session: https://claude.ai/code/session_01HaU9fwvtLUvFh4k93K6p5C
     notes: >
       Raised 2026-08-01 against a screenshot of this very plan's own dashboard: the
-      ready-to-review-merged-dependency card's notes ran to several hundred words and
-      alone filled the viewport, forcing heavy scrolling and leaving only one item
-      visible at a time - defeating the dashboard's purpose as an overview. item.notes
-      (item_card macro, dashboard.html) rendered at full height with no truncation, so
-      any item with a long investigation writeup did this to the page. Fixed by wrapping
-      the notes div in a collapsed-by-default <details>/<summary> toggle, reusing the
-      .roadmap-details CSS-only arrow-toggle pattern already in the file for the
-      "Background & history" section, rather than inventing new JS. No Python changes
-      needed - build_dashboard.py/render_common.py already pass item.notes through
-      unchanged; the sidebar "What to do next" cards are unaffected since they render
-      short fixed one-liners, not item.notes. Verified by rendering example/ through
-      build_dashboard.py with a temporarily lengthened note and publishing the result as
-      an Artifact: notes collapse by default behind "▸ Notes", expand to "▾ Notes" on
-      click, and items with no notes show no summary line. 194 tests pass (plan-dashboard
-      suite - unaffected, since this is template/CSS only). Independent of the #101 chain,
-      based on fork main; build_dashboard.py/dashboard.html overlap with #103, #105,
-      #111, #119, #120 and #122 is the usual whichever-lands-second-merges pattern for
-      this track. Opened as draft pull request #124, subscribed to its activity.
-      CI: two unrelated failures investigated across three origin/main merges that landed
-      on this branch from outside any session (coraplex/semantic_digital_twin worker
-      crashes, a mesh-material assertion cleared by an upstream fix, and a missing-ROS-
-      package error in a newly-merged Gazebo adapter's tests) - none had any path back to
-      this template-only diff; each was replied to on the pull request rather than fixed
-      here, per the established pattern of unrelated robotics CI noise on .claude/-only
-      changes. The user marked the pull request ready for review themselves on 2026-08-03
-      (not reverted to draft, per this plan's own precedent for a user-made draft-to-ready
-      flip) and it merged into fork main the same day. Session unsubscribed from both the
-      pull request and this plan's tracking issue #102 on merge.
+      ready-to-review-merged-dependency card's notes ran to several hundred words and alone filled
+      the viewport, forcing heavy scrolling and leaving only one item visible at a time - defeating
+      the dashboard's purpose as an overview. item.notes (item_card macro, dashboard.html) rendered
+      at full height with no truncation, so any item with a long investigation writeup did this to
+      the page. Fixed by wrapping the notes div in a collapsed-by-default <details>/<summary>
+      toggle, reusing the .roadmap-details CSS-only arrow-toggle pattern already in the file for the
+      "Background & history" section, rather than inventing new JS. No Python changes needed -
+      build_dashboard.py/render_common.py already pass item.notes through unchanged; the sidebar
+      "What to do next" cards are unaffected since they render short fixed one-liners, not
+      item.notes. Verified by rendering example/ through build_dashboard.py with a temporarily
+      lengthened note and publishing the result as an Artifact: notes collapse by default behind "▸
+      Notes", expand to "▾ Notes" on click, and items with no notes show no summary line. 194 tests
+      pass (plan-dashboard suite - unaffected, since this is template/CSS only). Independent of the
+      #101 chain, based on fork main; build_dashboard.py/dashboard.html overlap with #103, #105,
+      #111, #119, #120 and #122 is the usual whichever-lands-second-merges pattern for this track.
+      Opened as draft pull request #124, subscribed to its activity. CI: two unrelated failures
+      investigated across three origin/main merges that landed on this branch from outside any
+      session (coraplex/semantic_digital_twin worker crashes, a mesh-material assertion cleared by
+      an upstream fix, and a missing-ROS-package error in a newly-merged Gazebo adapter's tests) -
+      none had any path back to this template-only diff; each was replied to on the pull request
+      rather than fixed here, per the established pattern of unrelated robotics CI noise on
+      .claude/-only changes. The user marked the pull request ready for review themselves on
+      2026-08-03 (not reverted to draft, per this plan's own precedent for a user-made
+      draft-to-ready flip) and it merged into fork main the same day. Session unsubscribed from both
+      the pull request and this plan's tracking issue #102 on merge.
 
   - id: add-plan-item-skill
     branch: claude/add-plan-item-skill-e89irj
