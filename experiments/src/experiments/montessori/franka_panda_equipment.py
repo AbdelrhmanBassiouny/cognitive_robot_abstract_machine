@@ -36,18 +36,17 @@ from semantic_digital_twin.world_description.world_entity import Actuator, Body
 PANDA_SCENE_PATH = (
     Path(__file__).resolve().parents[4]
     / "coraplex"
-    / "demos"
-    / "coraplex_panda_demo"
-    / "stacking_scene.xml"
+    / "resources"
+    / "robots"
+    / "franka_panda"
+    / "panda.xml"
 )
 """
 The one MJCF this repo has for the Panda: its body tree, gripper, and mesh references,
 shared with ``coraplex_panda_demo``'s own cube-stacking demo.
 """
 
-PANDA_SCENE_BODIES_TO_DISCARD = frozenset(
-    {"target", "cube0", "cube1", "cube2", "cube3", "floor", "stack_pad"}
-)
+
 """
 Bodies of :data:`PANDA_SCENE_PATH` that belong to its own cube-stacking task rather than
 to the robot, dropped so only the Panda itself is merged into another scene.
@@ -76,12 +75,6 @@ def parse_panda() -> World:
     PandaMeshAssets(scene=PANDA_SCENE_PATH).download_if_missing()
     panda_world = MJCFParser(str(PANDA_SCENE_PATH)).parse()
     with panda_world.modify_world():
-        for body in [
-            body
-            for body in panda_world.bodies
-            if body.name.name in PANDA_SCENE_BODIES_TO_DISCARD
-        ]:
-            panda_world.remove_kinematic_structure_entity(body)
         for actuator in list(panda_world.actuators):
             panda_world.remove_actuator(actuator)
         panda_world.root.name = PANDA_MOUNT_ROOT_NAME

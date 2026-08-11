@@ -273,28 +273,7 @@
         </body>
       </body>
     </body>
-    <body name="target" pos="0.5 0 0.5" quat="0 1 0 0" mocap="true">
-      <site pos="0 0 0" size="0.01" group="1" rgba="0 0 1 1" />
-    </body>
-    <body name="cube0" pos="0.45 -0.18 0.02">
-      <joint type="free" />
-      <geom name="cube0_geom" size="0.02 0.02 0.02" type="box" contype="3" conaffinity="3" friction="1 0.05 0.001" solref="0.008" solimp="0.96 0.99" rgba="0.9 0.315 0.315 1" />
-    </body>
-    <body name="cube1" pos="0.45 -0.06 0.02">
-      <joint type="free" />
-      <geom name="cube1_geom" size="0.020 0.02 0.02" type="box" contype="3" conaffinity="3" friction="1 0.05 0.001" solref="0.008" solimp="0.96 0.99" rgba="0.6075 0.9 0.315 1" />
-    </body>
-    <body name="cube2" pos="0.45 0.06 0.02">
-      <joint type="free" />
-      <geom name="cube2_geom" size="0.02 0.02 0.02" type="box" contype="3" conaffinity="3" friction="1 0.05 0.001" solref="0.008" solimp="0.96 0.99" rgba="0.315 0.9 0.9 1" />
-    </body>
-    <body name="cube3" pos="0.45 0.18 0.02">
-      <joint type="free" />
-      <geom name="cube3_geom" size="0.02 0.02 0.02" type="box" contype="3" conaffinity="3" friction="1 0.05 0.001" solref="0.008" solimp="0.96 0.99" rgba="0.6075 0.315 0.9 1" />
-    </body>
-  <body name="floor"><geom name="floor" size="1.0 1.0 0.01" type="box" material="grid" pos="0.0 0.0 -0.01" rgba="0.35 0.40 0.45 1" />
-    </body><body name="stack_pad"><geom name="stack_pad" size="0.05 0.05 0.001" pos="0.5 0.15 0.001" type="box" contype="0" conaffinity="0" rgba="0.9 0.9 0.2 0.4" />
-    </body></worldbody>
+  </worldbody>
 
   <contact>
     <exclude body1="/hand" body2="/left_finger" />
@@ -342,6 +321,6 @@
   </actuator>
 
   <keyframe>
-    <key name="home" qpos="0 0 0 -1.57079 0 1.57079 -0.7853 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0" ctrl="0 0 0 -1.57079 0 1.57079 -0.7853 0" />
+    <key name="home" qpos="0 0 0 -1.57079 0 1.57079 -0.7853 0 0" ctrl="0 0 0 -1.57079 0 1.57079 -0.7853 0" />
   </keyframe>
 </mujoco>
