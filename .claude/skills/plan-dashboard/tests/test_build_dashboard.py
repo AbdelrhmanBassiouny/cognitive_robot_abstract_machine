@@ -17,6 +17,7 @@ from build_dashboard import (
     DashboardRenderer,
     DependencyCycle,
     DuplicateItemId,
+    InvalidBlockers,
     InvalidDependsOn,
     InvalidManifestRoot,
     InvalidSchemaVersion,
@@ -25,6 +26,7 @@ from build_dashboard import (
     LiveState,
     MalformedPullRequestDataError,
     MAXIMUM_DEPENDENCY_STACK_LEVEL,
+    MissingMergeTimestampError,
     Plan,
     PlanValidationError,
     PullRequestLabel,
@@ -178,6 +180,24 @@ def test_validate_plan_rejects_depends_on_that_is_not_a_list():
     )
 
 
+def test_validate_plan_rejects_blockers_that_is_not_a_list():
+    # A plain string is iterable char-by-char - must be rejected outright,
+    # not silently misinterpreted as one blocker per character.
+    items = [
+        {
+            "id": "a",
+            "title": "A",
+            "branch": "a",
+            "track": "track-1",
+            "status": "not_started",
+            "blockers": "some prose describing the blocker",
+        }
+    ]
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(minimal_plan(items=items))
+    assert any(isinstance(problem, InvalidBlockers) for problem in error.value.problems)
+
+
 def test_validate_plan_rejects_unknown_status():
     items = [
         {
@@ -306,6 +326,31 @@ def test_was_merged_false_for_an_open_pull_request():
     assert not record.was_merged
 
 
+# %% PullRequestRecord.from_mapping - merge signal
+
+
+def test_from_mapping_rejects_a_closed_entry_without_a_merge_timestamp():
+    # An omitted key is a gatherer that never asked GitHub for merged_at, not a
+    # statement that the pull request went unmerged - accepting it silently
+    # reports every merged pull request as closed-unmerged.
+    with pytest.raises(MissingMergeTimestampError):
+        PullRequestRecord.from_mapping(
+            {"state": "closed", "draft": False, "labels": ["bug"]}
+        )
+
+
+def test_from_mapping_accepts_a_closed_entry_whose_merge_timestamp_is_null():
+    record = PullRequestRecord.from_mapping(
+        {"state": "closed", "draft": False, "merged_at": None, "labels": ["bug"]}
+    )
+    assert record == PullRequestRecord(state=PullRequestState.CLOSED, labels=["bug"])
+
+
+def test_from_mapping_accepts_an_open_entry_without_a_merge_timestamp():
+    record = PullRequestRecord.from_mapping({"state": "open", "draft": True})
+    assert record == PullRequestRecord(state=PullRequestState.OPEN, draft=True)
+
+
 # %% PullRequestRecord.identified_labels
 
 
@@ -353,6 +398,13 @@ def test_load_pull_requests_by_repository_reports_repository_and_number_for_an_i
         load_pull_requests_by_repository({"owner/repo": {"7": {"state": "sideways"}}})
 
 
+def test_load_pull_requests_by_repository_reports_repository_and_number_for_a_closed_entry_without_a_merge_timestamp():
+    with pytest.raises(MalformedPullRequestDataError, match="owner/repo#103"):
+        load_pull_requests_by_repository(
+            {"owner/repo": {"103": {"state": "closed", "draft": False}}}
+        )
+
+
 # %% Item / StackedItem - precomputed template values
 
 
@@ -395,6 +447,34 @@ def test_is_ready_to_unblock_dependents_false_when_not_started():
         title="A", branch="a", track="track-1", status=ItemStatus.NOT_STARTED
     )
     assert not fresh_item.is_ready_to_unblock_dependents()
+
+
+def test_is_ready_for_dependent_review_true_while_still_a_draft():
+    draft_item = Item(
+        title="A", branch="a", track="track-1", status=ItemStatus.IN_PROGRESS
+    )
+    draft_item.live_state = LiveState.OPEN_DRAFT
+    assert draft_item.is_ready_for_dependent_review()
+
+
+def test_is_ready_for_dependent_review_true_when_merged():
+    merged_item = Item(
+        title="A", branch="a", track="track-1", status=ItemStatus.IN_PROGRESS
+    )
+    merged_item.live_state = LiveState.MERGED
+    assert merged_item.is_ready_for_dependent_review()
+
+
+def test_is_ready_for_dependent_review_true_when_done_without_a_pull_request():
+    done_item = Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE)
+    assert done_item.is_ready_for_dependent_review()
+
+
+def test_is_ready_for_dependent_review_false_when_there_is_no_pull_request():
+    fresh_item = Item(
+        title="A", branch="a", track="track-1", status=ItemStatus.NOT_STARTED
+    )
+    assert not fresh_item.is_ready_for_dependent_review()
 
 
 def test_stacked_item_indent_style_exposes_both_indent_levels_as_css_variables():
@@ -937,6 +1017,59 @@ def test_item_ready_to_review_once_dependency_has_an_open_pull_request():
     )
     _, summary = renderer.render()
     assert summary.ready_to_review == ["a", "b"]
+
+
+def test_item_ready_to_review_once_its_dependency_has_merged():
+    pull_requests_by_repository = {
+        "owner/repo": {
+            "1": PullRequestRecord(
+                state=PullRequestState.CLOSED, merged_at=datetime(2026, 1, 1)
+            ),
+            "2": PullRequestRecord(state=PullRequestState.OPEN, draft=True),
+        }
+    }
+    items = [
+        item("a", ItemStatus.DONE, pull_request_number=1),
+        item("b", ItemStatus.IN_PROGRESS, pull_request_number=2, depends_on=["a"]),
+    ]
+    renderer = make_renderer(
+        items, pull_requests_by_repository=pull_requests_by_repository
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_review == ["b"]
+
+
+def test_item_ready_to_review_when_its_dependency_is_done_without_a_pull_request():
+    pull_requests_by_repository = {
+        "owner/repo": {"2": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
+    }
+    items = [
+        item("a", ItemStatus.DONE),
+        item("b", ItemStatus.IN_PROGRESS, pull_request_number=2, depends_on=["a"]),
+    ]
+    renderer = make_renderer(
+        items, pull_requests_by_repository=pull_requests_by_repository
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_review == ["b"]
+
+
+def test_item_not_ready_to_review_while_its_dependency_is_closed_unmerged():
+    pull_requests_by_repository = {
+        "owner/repo": {
+            "1": PullRequestRecord(state=PullRequestState.CLOSED),
+            "2": PullRequestRecord(state=PullRequestState.OPEN, draft=True),
+        }
+    }
+    items = [
+        item("a", ItemStatus.IN_PROGRESS, pull_request_number=1),
+        item("b", ItemStatus.IN_PROGRESS, pull_request_number=2, depends_on=["a"]),
+    ]
+    renderer = make_renderer(
+        items, pull_requests_by_repository=pull_requests_by_repository
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_review == []
 
 
 # %% DashboardRenderer - item action button
@@ -1819,4 +1952,7 @@ def test_example_plan_renders_the_counts_and_sections_the_walkthrough_describes(
     assert summary.blocker_maybe_cleared == [
         "Load-test the retry path under failure injection"
     ]
-    assert summary.ready_to_review == ["Feature flag for the new retry behavior"]
+    assert summary.ready_to_review == [
+        "Circuit breaker around the retry loop",
+        "Feature flag for the new retry behavior",
+    ]

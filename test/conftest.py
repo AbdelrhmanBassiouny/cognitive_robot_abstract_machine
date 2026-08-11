@@ -49,6 +49,9 @@ from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import ParsingError
+from semantic_digital_twin.predetermined_maps.apartment_environment import (
+    ApartmentEnvironment,
+)
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
@@ -155,21 +158,27 @@ def pytest_configure(config):
         os.environ["ROS_DOMAIN_ID"] = str(100 + worker_num)
 
 
-@pytest.fixture(autouse=True, scope="function")
-def cleanup_after_test():
-    # We need to pass the class diagram, since otherwise some names are not found anymore after clearing the symbol graph
-    # for the first time, since World is not a symbol
-    SymbolGraph.clear()
-    class_diagram = ClassDiagram(
+@pytest.fixture(scope="session")
+def _session_class_diagram() -> ClassDiagram:
+    # We need to pass the class diagram, since otherwise some names are not found anymore
+    # after clearing the symbol graph, since World is not a symbol. Built once per
+    # session: the set of Symbol subclasses is static after collection, and the
+    # SymbolGraph singleton reset below only needs to drop per-test instance state, not
+    # this class-level graph.
+    return ClassDiagram(
         recursive_subclasses(Symbol) + [World],
         introspector=DescriptorAwareIntrospector(),
     )
-    SymbolGraph(_class_diagram=class_diagram)
+
+
+@pytest.fixture(autouse=True, scope="function")
+def cleanup_after_test(_session_class_diagram):
+    SymbolGraph.clear_instance()
+    SymbolGraph(_class_diagram=_session_class_diagram)
     # runs BEFORE each test
     yield
     # runs AFTER each test (even if the test fails or errors)
-    SymbolGraph.clear()
-    class_diagram.clear()
+    SymbolGraph.clear_instance()
 
 
 @pytest.fixture(autouse=True, scope="module")
@@ -519,6 +528,11 @@ def _stretch_world_setup():
     return world_with_urdf_factory(Stretch)
 
 
+@pytest.fixture(scope="function")
+def stretch_world_copy(_stretch_world_setup):
+    return deepcopy(_stretch_world_setup)
+
+
 @pytest.fixture(scope="session")
 def _tiago_world_setup():
     return world_with_urdf_factory(Tiago)
@@ -832,6 +846,27 @@ def building_floor():
     world = World.create_with_root_body("root")
     BuildingFloor().spawn(world, "building_floor")
     return world
+
+
+@pytest.fixture(scope="session")
+def apartment_meshes():
+    """
+    Skip tests that need the visual meshes of the ``iai_apartment`` package.
+    """
+    try:
+        walls_mesh = ApartmentEnvironment.mesh_path("walls.dae")
+    except ParsingError as error:
+        pytest.skip(f"apartment meshes not available: {error}")
+    if not os.path.isfile(walls_mesh):
+        pytest.skip(f"apartment meshes not available: {walls_mesh} is missing")
+
+
+@pytest.fixture(scope="session")
+def apartment_environment_world(apartment_meshes):
+    """
+    A world holding nothing but the apartment of :class:`ApartmentEnvironment`.
+    """
+    return ApartmentEnvironment().get_world()
 
 
 @pytest.fixture(scope="session")

@@ -563,6 +563,15 @@ class World(HasSimulatorProperties):
             world.add_body(root_body)
         return world
 
+    def force_root_name(self, name: PrefixedName) -> None:
+        """
+        Rename the world's root body.
+
+        :param name: The new name for the root body.
+        """
+        with self.modify_world():
+            self.root.update_name(name)
+
     def __hash__(self):
         return hash((id(self), self._model_manager.version))
 
@@ -1521,7 +1530,9 @@ class World(HasSimulatorProperties):
         root_connection = self.get_kinematic_structure_entity_by_id(
             other_root_id
         ).parent_connection
-        root_connection.origin = pose
+        root_connection.origin = pose.copy_with_new_reference_frames(
+            new_reference_frame=self.root, new_child_frame=root_connection.child
+        )
 
     def merge_world(
         self,
@@ -2173,7 +2184,9 @@ class World(HasSimulatorProperties):
             else self._manually_compute_world_root_T_self(entity_b)
         )
         return HomogeneousTransformationMatrix(
-            (root_T_reference.inverse() @ root_T_target).evaluate()
+            (root_T_reference.inverse() @ root_T_target).evaluate(),
+            reference_frame=entity_a,
+            child_frame=entity_b,
         )
 
     def _manually_compute_world_root_T_self(
@@ -2304,6 +2317,8 @@ class World(HasSimulatorProperties):
         """
         if spatial_object.reference_frame is None:
             raise MissingReferenceFrameError(spatial_object)
+        if spatial_object.reference_frame == target_frame:
+            return spatial_object
         target_frame_T_reference_frame = self.compute_forward_kinematics(
             root=target_frame, tip=spatial_object.reference_frame
         )

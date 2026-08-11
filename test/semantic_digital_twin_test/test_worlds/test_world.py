@@ -63,6 +63,9 @@ from semantic_digital_twin.world_description.world_entity import (
     WorldEntityWithClassBasedID,
     WorldEntityWithID,
 )
+from semantic_digital_twin.world_description.world_modification import (
+    AttributeUpdateModification,
+)
 from semantic_digital_twin.world_description.world_state import (
     WorldStateTrajectory,
     WorldState,
@@ -83,6 +86,41 @@ def test_create_with_root_body_defaults_the_root_name_to_map():
     assert world.root.name == PrefixedName("map")
 
 
+def test_force_root_name_renames_the_root_body():
+    world = World.create_with_root_body("map")
+    world.force_root_name(PrefixedName("odom"))
+    assert world.root.name == PrefixedName("odom")
+
+
+def test_force_root_name_preserves_root_identity_and_children(world_setup):
+    world, l1, l2, bf, r1, r2 = world_setup
+    root_id = world.root.id
+    bf_connection_before = world.get_connection(world.root, bf)
+
+    world.force_root_name(PrefixedName("new_root", prefix="world"))
+
+    assert world.root.id == root_id
+    assert world.root.name == PrefixedName("new_root", prefix="world")
+    assert world.get_connection(world.root, bf) is bf_connection_before
+    assert world.get_kinematic_structure_entity_by_name(PrefixedName("bf")) is bf
+
+
+def test_force_root_name_records_an_attribute_update_modification():
+    world = World.create_with_root_body("map")
+    root_id = world.root.id
+
+    world.force_root_name(PrefixedName("odom"))
+
+    last_block = world._model_manager.model_modification_blocks[-1]
+    attribute_updates = [
+        modification
+        for modification in last_block.modifications
+        if isinstance(modification, AttributeUpdateModification)
+        and modification.entity_id == root_id
+    ]
+    assert len(attribute_updates) == 1
+
+
 def test_set_state(world_setup):
     world, l1, l2, bf, r1, r2 = world_setup
     c1: PrismaticConnection = world.get_connection(l1, l2)
@@ -94,7 +132,9 @@ def test_set_state(world_setup):
     c3: Connection6DoF = world.get_connection(world.root, bf)
     transform = RotationMatrix.from_rpy(1, 0, 0).to_np()
     transform[0, 3] = 69
-    c3.origin = transform
+    c3.origin = HomogeneousTransformationMatrix(
+        data=transform, reference_frame=world.root, child_frame=bf
+    )
     assert np.allclose(world.compute_forward_kinematics_np(world.root, bf), transform)
 
     world.set_positions_1DOF_connection({c1: 2})
@@ -346,13 +386,17 @@ def test_compute_relative_pose(world_setup):
 
 def test_compute_relative_pose_both(world_setup):
     world, l1, l2, bf, r1, r2 = world_setup
-    world.get_connection(world.root, bf).origin = np.array(
-        [
-            [0.0, -1.0, 0.0, 1.0],
-            [1.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0],
-        ]
+    world.get_connection(world.root, bf).origin = HomogeneousTransformationMatrix(
+        data=np.array(
+            [
+                [0.0, -1.0, 0.0, 1.0],
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        ),
+        reference_frame=world.root,
+        child_frame=bf,
     )
     world.notify_state_change()
 
@@ -710,8 +754,10 @@ def test_copy_world(world_setup):
         original_bf_con.parent, original_bf_con.child
     )
     assert id(copy_connection) != id(original_bf_con)
-    bf.parent_connection.origin = np.array(
-        [[1, 0, 0, 1.5], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    bf.parent_connection.origin = HomogeneousTransformationMatrix(
+        data=np.array([[1, 0, 0, 1.5], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
+        reference_frame=bf.parent_connection.parent,
+        child_frame=bf,
     )
     assert (
         float(
