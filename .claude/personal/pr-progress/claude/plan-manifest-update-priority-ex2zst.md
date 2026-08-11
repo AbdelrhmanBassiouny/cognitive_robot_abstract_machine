@@ -1,52 +1,32 @@
-# manifest-currency-first (workflow-unification)
+PR #151 (`manifest-currency-first`, workflow-unification). This session folded in a
+reversal the user asked for on 2026-08-11: `stacked-pr-maintenance` writes the manifest
+and publishes rather than reporting, and `plan-create` republishes the master index.
+Folded here rather than split out, because it rewrites the sections this PR introduced -
+`manifest-currency.md`'s report-don't-write section, the matching one in
+`stacked-pr-maintenance/SKILL.md`, and the contract test asserting the pass writes no
+manifest. `main` was never a possible base: none of those exist there.
 
-Branch `claude/plan-manifest-update-priority-ex2zst` off fork `main`, draft PR
-**#151**, item `in_progress`. Implemented; awaiting your review.
+Done, pushed as 5fe15975 + 6c5203c8:
+- `plan_item_bootstrap.py` gains `resolve`, `block`, `unblock`, all keyed on a branch.
+  Blockers carry their owner (`MAINTENANCE_BLOCKER_OWNER`), so the pass replaces and
+  withdraws its own and never a person's.
+- `manifest-currency.md`'s asymmetry section reversed; `stacked-pr-maintenance` writes at
+  the label transitions rather than in `Finish`, and gains the `Skill` grant it lacked.
+- `plan-create` step 8 publishes the plan page and the index unconditionally.
+- Contract test inverted; three added (Skill grant, shared blocker owner, index).
+- Two defects the live run found: `fold` broke inside words (a folded scalar reads the
+  break back as a space, so a branch name returned with a space in it), and withdrawing a
+  blocker an item never carried wrote it `blockers: []`. Both fixed with failing tests
+  first, both mutation-checked.
+- 408 tests pass across the three CI directories, was 389. Two `test_check_setup_sh.py`
+  failures are pre-existing and local-environment only (ambient python3 lacks the
+  dashboard requirements); confirmed by stashing the diff.
+- Plan state written and the dashboard republished in the same turn:
+  `git-identity-from-personal-notes` is now `blocked` with the real conflict against #126.
 
-## What shipped
-
-Three operations on `.claude/hooks/plan_item_bootstrap.py` — block-styled field
-writing, `update` (any field, no roadmap section), `check` (recorded fields vs
-local git, exits `manifest_is_stale`) — plus
-`.claude/skills/plan-dashboard/manifest-currency.md` and its constant, cited by
-each bound skill.
-
-389 tests across the three CI directories, against 367 on `main`. Every new test
-mutation-checked.
-
-## Two premises corrected during the work
-
-- **`sync_manifest_status.py` cannot be the reuse seam** the item's notes named:
-  it reaches `build_dashboard` → jinja2/markdown/nh3, so a hook cannot import it,
-  and it answers a post-hoc GitHub-side question. The split is by what each can
-  see — dashboard vs GitHub after the fact, `check` vs local git before a push.
-- **Writing `notes` silently concatenated** onto the old note and still validated.
-  Latent since #143 gave `NOTES`/`BLOCKERS` members and no writer.
-
-## Where the real gap was
-
-`plan-item-resolve` wrote the manifest nowhere at all — the skill that exists to
-diagnose a stalled item was the one guaranteed not to record the diagnosis. It now
-records what it found before proposing anything.
-
-## Verified live
-
-`check` across all 41 items of this plan: one true positive
-(`dependency-chips-blocked-fix`, published branch with no `session`, exit 9), 40
-clean. `update` wrote this item's own notes.
-
-## Open for you
-
-- **CI is red base-side**, not this branch's: `greenlet` 3.5.5 has no Linux wheel,
-  so `uv` fails to resolve before any test runs; `main`'s own run failed 11 jobs
-  three minutes earlier. Blocks every PR in the repo. Reported on #151, offered as
-  its own bug-labelled item — your call whether to take it.
-- **No rename of `plan_item_bootstrap.py`**, per your earlier call; the package
-  migration renames it once.
-- **The `add-plan-item/SKILL.md` reference line** lands here only if #135 merges
-  first.
-
-## Incidental
-
-Scratch fixture disables commit signing — the suite was failing on a different
-test each run against this environment's signing service, and it halved runtime.
+Outstanding, nothing in flight:
+- `test_each_lib` stays red base-side (greenlet 3.5.5 has no Linux wheel). Not this diff.
+- The one line into `add-plan-item/SKILL.md` still waits on #135 merging, as before.
+- The extend-a-note trap is documented, not fixed: `--notes` reads blank-line paragraphs
+  while a folded scalar hands back single newlines. Worth deciding whether the writer
+  should accept both.
