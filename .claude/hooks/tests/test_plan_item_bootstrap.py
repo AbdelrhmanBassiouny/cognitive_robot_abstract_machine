@@ -1749,3 +1749,39 @@ def test_a_break_left_for_a_person_is_its_own_exit_status(
     )
 
     assert report.exit_code == ExitCode.TEXT_NEEDS_REPAIR
+
+
+# %% a word its author wrapped, rather than one they hyphenated
+
+
+def test_a_word_wrapped_at_its_hyphen_is_written_whole():
+    """
+    A hyphen at the end of a hard-wrapped line is where the author broke a word they
+    wrote whole, so closing it up is what keeps the value the one they wrote. This is
+    the case that put ``blank- line`` into the live manifest.
+    """
+    written = plan_item_bootstrap.fold(
+        "the paragraphs have to be blank-\nline separated", ""
+    )
+
+    assert "blank-line separated" in written
+    assert "blank- line" not in written
+
+
+def test_a_suspended_hyphen_typed_on_one_line_keeps_its_space():
+    """
+    ``network- and credential-free`` is correct English and must survive being written.
+    """
+    written = plan_item_bootstrap.fold("all network- and credential-free tests", "")
+
+    assert "network- and credential-free" in written
+
+
+def test_a_paragraph_break_still_separates_paragraphs_after_a_hyphen():
+    """
+    Closing up a wrapped break must not swallow a blank line that follows a hyphen.
+    """
+    assert plan_item_bootstrap.paragraphs_of("ends in a-\n\nnew paragraph") == [
+        "ends in a-",
+        "new paragraph",
+    ]
