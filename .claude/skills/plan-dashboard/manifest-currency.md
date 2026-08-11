@@ -43,6 +43,12 @@ invocation should carry. `check` exits `manifest_is_stale` when anything is stal
 and prints one finding per contradicted field, so a caller can act on the status
 alone.
 
+**Extending an existing note needs one conversion.** A folded scalar hands its
+paragraph breaks back as *single* newlines, and the file `--notes` reads marks them
+with *blank* lines — so appending to a note read out of `plan.yaml` and writing it
+straight back collapses the whole thing into one paragraph. Replace each newline in
+what you read with a blank line before you append to it.
+
 Use `record` instead when the transition also deserves a roadmap section — a
 decision, a reversal, a conclusion that changes what the item means. `update` is
 for the state; `record` is for the story.
