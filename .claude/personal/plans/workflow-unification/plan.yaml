@@ -168,149 +168,119 @@ items:
     status: done
     session: https://claude.ai/code/session_01Y9egTHHu5RTXmkFL4SwXM9
     notes: >
-      Implemented as draft PR #106 (2026-07-29): stack.py ported to .claude/stack/ minus
-      the round-robin/WIP-cap subsystem, per-user config layering from the personal-notes
-      branch, canonical ROUTINE.md + 1-page README, tests via ScratchRepository; restack.js
-      and board rendering not ported (board deferred to PR 3/PR 4 as planned). Landed as
-      plain scripts — the dev-tooling Python package is created in PR 3 instead (see
-      dev-tooling-python-package). Self-reviewed and un-drafted since: open and ready,
-      so it unblocks its dependents by the plan's normal open-and-ready rule. Now also
-      the parent of #107, which was restacked onto it (2026-07-30) so the upstream wave
-      is a linear chain rather than two siblings on #101.
-      Re-scoped 2026-07-31 (native-stacks pivot, user-approved): before review goes
-      deep, add one trim commit — (a) read stack structure from the stacks REST API
-      when the PR is a stack member, keeping PR-base derivation as the fallback for
-      preview-less repos; (b) ROUTINE.md merge doctrine becomes merge-async + poll
-      only, never the classic merge API or the MCP merge tool on a stack member, with
-      stack base.sha lagging the trunk head as the needs-cascade signal; (c) Phase 1
-      REPARENT must special-case stack members — PATCH base 422s on them ("Cannot
-      change the base branch because the pull request is part of a stack"), so
-      reparent via unstack → PATCH base → re-stack, or leave it to gh stack sync /
-      the UI Rebase-stack button. (c) is load-bearing before the next cram2 landing
-      of any stacked branch: stack #112 already exists on the fork.
-      Upgraded to a cut the same day (user decision, "decision 11" in the roadmap):
-      the restack subsystem (restack-plan, next, status/structure derivation) is
-      removed from the PR entirely rather than trimmed — native stacks own
-      structure, gh stack / the Rebase-stack button own cascading, and the
-      preview-less-repo fallback is YAGNI (the preview is account-wide; the old
-      tooling branch remains as a tagged archive). The PR keeps: ROUTINE.md
-      rewritten around native mechanics (incl. the Phase-1 reparent special case
-      and merge-async doctrine), stack.toml + per-user config layering, the
-      label/cram2-link helpers, a small reparent-recovery script, and tests.
-      Re-scope instruction posted on the PR itself.
-
-      Assessed 2026-08-02 against #110 (see roadmap): the two are split correctly, but
-      three artifacts had been built twice. This PR keeps all of them by landing first.
-      Shipped here (36eda87a): `stack.py remotes` becomes `configuration`, printing one
-      `field<TAB>value` line per Configuration field instead of four hand-written
-      hyphenated keys, with `upstream_setup_command` moved onto Configuration and omitted
-      when the remote already exists. That makes this PR's command surface and #110's
-      independently-built `config` one surface, so #110's rebase deletes the resolution
-      internals only. 286 CI tests pass, was 283. Description updated to match.
-
-      Re-scoped again 2026-08-02 (user-approved, session_01BByQFT6he8xf5qvBWtyUPV): the
-      doctrine becomes a skill and the recipes become subcommands. ROUTINE.md is deleted;
+      Implemented as draft PR #106 (2026-07-29): stack.py ported to .claude/stack/ minus the
+      round-robin/WIP-cap subsystem, per-user config layering from the personal-notes branch,
+      canonical ROUTINE.md + 1-page README, tests via ScratchRepository; restack.js and board
+      rendering not ported (board deferred to PR 3/PR 4 as planned). Landed as plain scripts — the
+      dev-tooling Python package is created in PR 3 instead (see dev-tooling-python-package).
+      Self-reviewed and un-drafted since: open and ready, so it unblocks its dependents by the
+      plan's normal open-and-ready rule. Now also the parent of #107, which was restacked onto it
+      (2026-07-30) so the upstream wave is a linear chain rather than two siblings on #101.
+      Re-scoped 2026-07-31 (native-stacks pivot, user-approved): before review goes deep, add one
+      trim commit — (a) read stack structure from the stacks REST API when the PR is a stack member,
+      keeping PR-base derivation as the fallback for preview-less repos; (b) ROUTINE.md merge
+      doctrine becomes merge-async + poll only, never the classic merge API or the MCP merge tool on
+      a stack member, with stack base.sha lagging the trunk head as the needs-cascade signal; (c)
+      Phase 1 REPARENT must special-case stack members — PATCH base 422s on them ("Cannot change the
+      base branch because the pull request is part of a stack"), so reparent via unstack → PATCH
+      base → re-stack, or leave it to gh stack sync / the UI Rebase-stack button. (c) is
+      load-bearing before the next cram2 landing of any stacked branch: stack #112 already exists on
+      the fork. Upgraded to a cut the same day (user decision, "decision 11" in the roadmap): the
+      restack subsystem (restack-plan, next, status/structure derivation) is removed from the PR
+      entirely rather than trimmed — native stacks own structure, gh stack / the Rebase-stack button
+      own cascading, and the preview-less-repo fallback is YAGNI (the preview is account-wide; the
+      old tooling branch remains as a tagged archive). The PR keeps: ROUTINE.md rewritten around
+      native mechanics (incl. the Phase-1 reparent special case and merge-async doctrine),
+      stack.toml + per-user config layering, the label/cram2-link helpers, a small reparent-recovery
+      script, and tests. Re-scope instruction posted on the PR itself. Assessed 2026-08-02 against
+      #110 (see roadmap): the two are split correctly, but three artifacts had been built twice.
+      This PR keeps all of them by landing first. Shipped here (36eda87a): `stack.py remotes`
+      becomes `configuration`, printing one `field<TAB>value` line per Configuration field instead
+      of four hand-written hyphenated keys, with `upstream_setup_command` moved onto Configuration
+      and omitted when the remote already exists. That makes this PR's command surface and #110's
+      independently-built `config` one surface, so #110's rebase deletes the resolution internals
+      only. 286 CI tests pass, was 283. Description updated to match. Re-scoped again 2026-08-02
+      (user-approved, session_01BByQFT6he8xf5qvBWtyUPV): the doctrine becomes a skill and the
+      recipes become subcommands. ROUTINE.md is deleted;
       .claude/skills/stacked-pr-maintenance/SKILL.md carries the doctrine, is invocable as
-      /stacked-pr-maintenance from any session, and is what POINTER.md's registered block
-      now resolves and runs. Context resolution is arguments first (fork=/upstream=, passed
-      through as configuration --fork/--upstream, so nothing is inferred when both are
-      given), then stack.py configuration, then - only interactively - an AskUserQuestion
-      whose answer is persisted to .claude/personal/stack.toml on the personal-notes
-      branch; --non-interactive turns that question into a stop, which is what a scheduled
-      run needs given its own rule against opening a discussion. Landed as one commit on
-      this branch (e20b0bb4) rather than as a child PR: every path it touches is absent
-      from main, so by the scope rule nothing standalone would have remained, and shipping
-      a ROUTINE.md that its successor deletes would change the live doctrine twice - the
-      pointer resolves origin/main first.
-
-      Four new stack.py subcommands, each replacing a rule a reader had to remember:
-      labels (the complete set a label write must send, computed from the current labels),
-      preflight (refuses a wrong checked-out branch, a mismatched refspec, a non-fork
-      destination, and the child-becomes-ancestor-of-parent false merge; exit 5),
-      promotion-link (owns the compare URL's encoding and length limit), and
-      reparents/landed (phase 1 derived from git ancestry rather than pull-request state).
-      331 tests pass, was 294. An MCP server was considered and rejected: the raw PATCH
-      base change 403s on the session git-proxy credential, so a local server could not own
-      the riskiest operation, and subcommands survive routine-cutover's no-LLM endgame.
-
-      Decision 11's half-applied cut is deliberately not completed: print_next and
-      print_restack_plan are kept, because phases 2 and 3 call them and they are the
-      derivation half of the scripts-over-prose choice made here. print_restack_plan's
-      docstring no longer names "the restack workflow's args".
-
-      One review thread stays open by design - stack.toml:23, the remote inference. The
-      skill answers its interactive half; the remaining caller is a non-interactive run
-      with no arguments on an unconfigured checkout, so the ~120-line deletion is still
-      #110's, alongside the setup that writes fork_repository. Replied on the thread and
-      on #110 rather than resolving it. stack.py:84 (from_remote_url parses without
-      validating) also remains open and dies with the same deletion.
-
-      Review round 2026-08-02 (25 comments) applied in 8b7435bb; three decisions were the
-      user's, each taken after the options were costed. (1) GitHub marks a pull request
-      merged - not closed - the moment its head becomes an ancestor of its base, proven
-      from live data: #101, #103 and #105 all carry merged_at 2026-07-31T10:36:43Z, the
-      second fork main fast-forwarded, and two carry no merged label. So the label-then-
-      close step was duplicating the fast-forward and is deleted, the merged label with
-      it; landed becomes a report. The fast-forward moves after the reparent sweep,
-      because auto-detection only fires for a pull request whose own base moved.
-      (2) The skill never writes code: a conflict it cannot merge cleanly, or a red check,
-      is reported to the branch's owner and skipped. That removed every krrood, ormatic,
-      coraplex and semantic_digital_twin mention, so the instructions are now repo-generic.
-      A conflict it does resolve while restacking must be reported in a comment.
-      (3) POINTER.md, prompt_model.py and test_prompt_documents.py are deleted - the
-      registered prompt is a skill call now, so the duplication the prose tests guarded no
-      longer exists. One test survives, that the skill names no fork of its own: an absence
-      computed from live configuration rather than a sentence asserted against a document.
-      313 tests pass, was 331; the difference is exactly those 18 prose assertions.
-
-      Consequence to carry: the HARD RULES no longer bind before the first file is read,
-      which reverses design decision 4. Flagged to the user on the PR rather than buried -
-      the window is now one turn, and routine-cutover deletes the scheduled run anyway.
-
-      Also: commands are a Command StrEnum with a needs_a_board property; a pre-flight
-      refusal carries a RefusalReason so callers act on which refusal rather than its
-      wording; BranchMove is ProposedCommitMove; label tests read their labels from the
-      configuration that defines them; promotion writes its compare link into the fork
-      pull request's description so it outlives the summary.
-
-      Settled 2026-08-02 (user decision): stack.py is not split in this PR. It stays ~1,540
-      lines here and dev-tooling-python-package does the surgery once, when it moves every
-      .claude/ Python file into the package - rather than twice, with #110 and #111 rebasing
-      across the first attempt. The review comment that raised it stays answered rather than
-      resolved.
-
-      Manual step still due: register the routine's prompt as a call to
-      /stacked-pr-maintenance with fork=, upstream= and --non-interactive. Until this
-      lands on main the skill cannot be invoked by name from a fresh clone, so the prompt
-      must read the file from a ref until then.
-
-      Resolved 2026-08-04 (session_01F6tM5mDZr5pTB37UgBV6N5): CI in upstream cram2 failed
-      test_the_skill_names_no_fork_of_its_own with ForkRemoteNotFoundError - the checkout
-      topology of a cross-fork PR's base-repo CI run (only origin, pointing at cram2
-      itself) has zero fork candidates, which load_configuration() treats as an error.
-      Not new - #110 already hit and fixed the identical bug when it removed the remote
-      inference; its fixed test computes candidate forks directly from the checkout's
-      remotes and tolerates zero of them, using only symbols already in #106's stack.py.
-      Ported that fix back to this branch verbatim (b3e240e6) rather than waiting on
-      #110's rebase, since #106 is the parent and runs in this topology once promoted.
-      Verified against a scratch clone whose only remote is cram2 (reproduces the exact
-      reported traceback pre-fix, passes post-fix) plus the full test_claude_dev_tooling
-      scope (321 tests, no regressions). See roadmap.md for the full writeup.
-
-      Merged into fork main 2026-08-05T14:10:36Z (merged_by AbdelrhmanBassiouny, head
-      b3e240e6 - the fork-resolution fix's own commit). Verified by presence on fork
-      main rather than from the merge notification alone: .claude/stack/stack.py,
-      .claude/skills/stacked-pr-maintenance/SKILL.md and
-      .claude/stack/tests/test_maintenance_skill.py all git cat-file -e clean on
-      origin/main. This is the fork-internal merge only - the separate cram2 promotion
-      (the PR's own "Promote" compare-and-create link) is still a manual step, so
-      routine-cutover's gate ("PR 1 on cram2/main and fork main fast-forwards") is not
-      yet met by this alone. Unblocks #107/#110/#111/#139, all based on this branch,
-      to rebase onto main. The only CI red on this PR at merge time was
-      test_each_lib (giskardpy)'s test_pacer.py::test_with_executor - a physics/timing
-      assertion unrelated to this PR's 11-file .claude/-only diff, matching this PR's
-      established pattern of unrelated robotics-stack flakes; test_claude_dev_tooling
-      itself was green.
+      /stacked-pr-maintenance from any session, and is what POINTER.md's registered block now
+      resolves and runs. Context resolution is arguments first (fork=/upstream=, passed through as
+      configuration --fork/--upstream, so nothing is inferred when both are given), then stack.py
+      configuration, then - only interactively - an AskUserQuestion whose answer is persisted to
+      .claude/personal/stack.toml on the personal-notes branch; --non-interactive turns that
+      question into a stop, which is what a scheduled run needs given its own rule against opening a
+      discussion. Landed as one commit on this branch (e20b0bb4) rather than as a child PR: every
+      path it touches is absent from main, so by the scope rule nothing standalone would have
+      remained, and shipping a ROUTINE.md that its successor deletes would change the live doctrine
+      twice - the pointer resolves origin/main first. Four new stack.py subcommands, each replacing
+      a rule a reader had to remember: labels (the complete set a label write must send, computed
+      from the current labels), preflight (refuses a wrong checked-out branch, a mismatched refspec,
+      a non-fork destination, and the child-becomes-ancestor-of-parent false merge; exit 5),
+      promotion-link (owns the compare URL's encoding and length limit), and reparents/landed (phase
+      1 derived from git ancestry rather than pull-request state). 331 tests pass, was 294. An MCP
+      server was considered and rejected: the raw PATCH base change 403s on the session git-proxy
+      credential, so a local server could not own the riskiest operation, and subcommands survive
+      routine-cutover's no-LLM endgame. Decision 11's half-applied cut is deliberately not
+      completed: print_next and print_restack_plan are kept, because phases 2 and 3 call them and
+      they are the derivation half of the scripts-over-prose choice made here. print_restack_plan's
+      docstring no longer names "the restack workflow's args". One review thread stays open by
+      design - stack.toml:23, the remote inference. The skill answers its interactive half; the
+      remaining caller is a non-interactive run with no arguments on an unconfigured checkout, so
+      the ~120-line deletion is still #110's, alongside the setup that writes fork_repository.
+      Replied on the thread and on #110 rather than resolving it. stack.py:84 (from_remote_url
+      parses without validating) also remains open and dies with the same deletion. Review round
+      2026-08-02 (25 comments) applied in 8b7435bb; three decisions were the user's, each taken
+      after the options were costed. (1) GitHub marks a pull request merged - not closed - the
+      moment its head becomes an ancestor of its base, proven from live data: #101, #103 and #105
+      all carry merged_at 2026-07-31T10:36:43Z, the second fork main fast-forwarded, and two carry
+      no merged label. So the label-then-close step was duplicating the fast-forward and is deleted,
+      the merged label with it; landed becomes a report. The fast-forward moves after the reparent
+      sweep, because auto-detection only fires for a pull request whose own base moved. (2) The
+      skill never writes code: a conflict it cannot merge cleanly, or a red check, is reported to
+      the branch's owner and skipped. That removed every krrood, ormatic, coraplex and
+      semantic_digital_twin mention, so the instructions are now repo-generic. A conflict it does
+      resolve while restacking must be reported in a comment. (3) POINTER.md, prompt_model.py and
+      test_prompt_documents.py are deleted - the registered prompt is a skill call now, so the
+      duplication the prose tests guarded no longer exists. One test survives, that the skill names
+      no fork of its own: an absence computed from live configuration rather than a sentence
+      asserted against a document. 313 tests pass, was 331; the difference is exactly those 18 prose
+      assertions. Consequence to carry: the HARD RULES no longer bind before the first file is read,
+      which reverses design decision 4. Flagged to the user on the PR rather than buried - the
+      window is now one turn, and routine-cutover deletes the scheduled run anyway. Also: commands
+      are a Command StrEnum with a needs_a_board property; a pre-flight refusal carries a
+      RefusalReason so callers act on which refusal rather than its wording; BranchMove is
+      ProposedCommitMove; label tests read their labels from the configuration that defines them;
+      promotion writes its compare link into the fork pull request's description so it outlives the
+      summary. Settled 2026-08-02 (user decision): stack.py is not split in this PR. It stays ~1,540
+      lines here and dev-tooling-python-package does the surgery once, when it moves every .claude/
+      Python file into the package - rather than twice, with #110 and #111 rebasing across the first
+      attempt. The review comment that raised it stays answered rather than resolved. Manual step
+      still due: register the routine's prompt as a call to /stacked-pr-maintenance with fork=,
+      upstream= and --non-interactive. Until this lands on main the skill cannot be invoked by name
+      from a fresh clone, so the prompt must read the file from a ref until then. Resolved
+      2026-08-04 (session_01F6tM5mDZr5pTB37UgBV6N5): CI in upstream cram2 failed
+      test_the_skill_names_no_fork_of_its_own with ForkRemoteNotFoundError - the checkout topology
+      of a cross-fork PR's base-repo CI run (only origin, pointing at cram2 itself) has zero fork
+      candidates, which load_configuration() treats as an error. Not new - #110 already hit and
+      fixed the identical bug when it removed the remote inference; its fixed test computes
+      candidate forks directly from the checkout's remotes and tolerates zero of them, using only
+      symbols already in #106's stack.py. Ported that fix back to this branch verbatim (b3e240e6)
+      rather than waiting on #110's rebase, since #106 is the parent and runs in this topology once
+      promoted. Verified against a scratch clone whose only remote is cram2 (reproduces the exact
+      reported traceback pre-fix, passes post-fix) plus the full test_claude_dev_tooling scope (321
+      tests, no regressions). See roadmap.md for the full writeup. Merged into fork main
+      2026-08-05T14:10:36Z (merged_by AbdelrhmanBassiouny, head b3e240e6 - the fork-resolution fix's
+      own commit). Verified by presence on fork main rather than from the merge notification alone:
+      .claude/stack/stack.py, .claude/skills/stacked-pr-maintenance/SKILL.md and
+      .claude/stack/tests/test_maintenance_skill.py all git cat-file -e clean on origin/main. This
+      is the fork-internal merge only - the separate cram2 promotion (the PR's own "Promote"
+      compare-and-create link) is still a manual step, so routine-cutover's gate ("PR 1 on
+      cram2/main and fork main fast-forwards") is not yet met by this alone. Unblocks
+      #107/#110/#111/#139, all based on this branch, to rebase onto main. The only CI red on this PR
+      at merge time was test_each_lib (giskardpy)'s test_pacer.py::test_with_executor - a
+      physics/timing assertion unrelated to this PR's 11-file .claude/-only diff, matching this PR's
+      established pattern of unrelated robotics-stack flakes; test_claude_dev_tooling itself was
+      green.
 
   - id: setup-stacked-prs-skill
     branch: claude/setup-stacked-prs-skill
@@ -418,9 +388,9 @@ items:
       work for the session running the skill, and more reliable. The gap is real and was verified
       rather than assumed: grep -n "git push" over stack.py's 1,600 lines returns nothing. stack.py
       is read-only derivation only, so every fetch, merge, rebase and push in the workflow is
-      performed by a session following prose, and board.json is hand-assembled from MCP output -
-      the same hand-assembled-input failure class as #119, where a dropped field was
-      indistinguishable from a legitimate one.
+      performed by a session following prose, and board.json is hand-assembled from MCP output - the
+      same hand-assembled-input failure class as #119, where a dropped field was indistinguishable
+      from a legitimate one.
 
       Four commands in a new module (.claude/stack/maintenance.py + its own test module), so the
       only edits to #106's files are the SKILL.md steps and the dispatch wiring: board --write
@@ -429,55 +399,55 @@ items:
       every push, never force-pushes without the rebase label, reporting per branch pushed /
       up-to-date / conflict <files> / refused <RefusalReason>), and run-report --json as the one
       machine-readable document the skill renders and routine-cutover's Action emits directly.
-      SKILL.md steps 2-4 collapse to "run it, act on the report" - the same computed-rather-than-
-      recalled move #106 already made for labels/preflight/promotion-link.
+      SKILL.md steps 2-4 collapse to "run it, act on the report" - the same
+      computed-rather-than-recalled move #106 already made for labels/preflight/promotion-link.
 
-      Step 0 before any design is committed: a credential probe. Already on record are the raw
-      PATCH base 403, the MCP update_pull_request 200, and the stacks endpoints working via curl +
+      Step 0 before any design is committed: a credential probe. Already on record are the raw PATCH
+      base 403, the MCP update_pull_request 200, and the stacks endpoints working via curl +
       GH_TOKEN. The 403's message names the base branch specifically, so three writes are unknown
       and decide how much can move into code - PUT /issues/{n}/labels, POST /issues/{n}/comments,
       and a body-only PATCH /pulls/{n}. Record the results either way: routine-cutover's Action
       needs the same table for its own credential.
 
-      Staying with a session/MCP regardless: base changes, conflict resolution, and whichever of
-      the three probed writes come back blocked. Scoped as its own item rather than folded into
-      #106 (user's call): the executor is new files that stand alone, #106 is already 3,413
-      additions across 29 commits and out of draft after a 25-comment review round, and this is a
-      direct enabler of routine-cutover's no-LLM endgame. It does not reverse decision 11 - that
-      cut structure derivation in favour of GitHub's stack object; this executes an already-derived
+      Staying with a session/MCP regardless: base changes, conflict resolution, and whichever of the
+      three probed writes come back blocked. Scoped as its own item rather than folded into #106
+      (user's call): the executor is new files that stand alone, #106 is already 3,413 additions
+      across 29 commits and out of draft after a 25-comment review round, and this is a direct
+      enabler of routine-cutover's no-LLM endgame. It does not reverse decision 11 - that cut
+      structure derivation in favour of GitHub's stack object; this executes an already-derived
       plan.
 
-      Kicked off and implemented 2026-08-04 via /plan-item-kickoff as draft PR #139, based on
-      #106's head as a sibling of #107/#111 (it needs only #106's files; git ls-tree origin/main
-      -- .claude/stack is empty, so main was never a possible base). The gap was re-verified
-      against #106's head rather than taken from the earlier grep: stack.py contains no push,
-      merge or rebase outside docstrings and enum members.
+      Kicked off and implemented 2026-08-04 via /plan-item-kickoff as draft PR #139, based on #106's
+      head as a sibling of #107/#111 (it needs only #106's files; git ls-tree origin/main --
+      .claude/stack is empty, so main was never a possible base). The gap was re-verified against
+      #106's head rather than taken from the earlier grep: stack.py contains no push, merge or
+      rebase outside docstrings and enum members.
 
       Step 0's credential probe came back the opposite way round from the fear it was written
-      against. On throwaway PR #138, four calls minutes apart through the same GH_TOKEN and the
-      same git proxy: PUT /issues/{n}/labels 200, POST /issues/{n}/comments 201, body-only PATCH
-      /pulls/{n} 200, and - as a control on the same pull request - a base-branch PATCH 403. So
-      the recorded 403 is a property of the base field specifically, not of writes generally and
-      not of the credential as a whole. Label writes, conflict-report comments and description
-      writes are all available to deterministic code; only the base change needs the MCP server.
-      That table is what routine-cutover's Action needs for its own credential, and it is
-      recorded here rather than only in the pull request. This PR deliberately did not widen its
-      scope to use those writes - the four commands are what was agreed - so moving the
-      needs-resolution labelling and the conflict comment into code is a concrete follow-up, now
-      known to be possible rather than assumed blocked.
+      against. On throwaway PR #138, four calls minutes apart through the same GH_TOKEN and the same
+      git proxy: PUT /issues/{n}/labels 200, POST /issues/{n}/comments 201, body-only PATCH
+      /pulls/{n} 200, and - as a control on the same pull request - a base-branch PATCH 403. So the
+      recorded 403 is a property of the base field specifically, not of writes generally and not of
+      the credential as a whole. Label writes, conflict-report comments and description writes are
+      all available to deterministic code; only the base change needs the MCP server. That table is
+      what routine-cutover's Action needs for its own credential, and it is recorded here rather
+      than only in the pull request. This PR deliberately did not widen its scope to use those
+      writes - the four commands are what was agreed - so moving the needs-resolution labelling and
+      the conflict comment into code is a concrete follow-up, now known to be possible rather than
+      assumed blocked.
 
       Delivered: .claude/stack/maintenance.py with its own argparse entry point and zero edits to
       stack.py - which keeps stack.py's read-only contract and means this branch cannot conflict
       with #110's inference deletion in that file. Entry-point shape was the one genuinely open
-      question at kickoff ("the dispatch wiring" read two ways) and the user chose the separate
-      CLI over new stack.py subcommands. GitCommandRunner is the one new seam: stack.py's git
-      helper returns "" on failure, which is right for derivation and wrong for a push. Forcing is
-      decided in exactly one place, push_arguments, and only for the rebase strategy - which
-      build_stack sets only from the rebase label - and even then with a lease, so a branch
-      somebody else moved comes back push-rejected and untouched.
+      question at kickoff ("the dispatch wiring" read two ways) and the user chose the separate CLI
+      over new stack.py subcommands. GitCommandRunner is the one new seam: stack.py's git helper
+      returns "" on failure, which is right for derivation and wrong for a push. Forcing is decided
+      in exactly one place, push_arguments, and only for the rebase strategy - which build_stack
+      sets only from the rebase label - and even then with a lease, so a branch somebody else moved
+      comes back push-rejected and untouched.
 
-      342 tests pass, was 321 on this branch (the 313 in #106's description predates its merges
-      from main). 21 new, written failing first, against real git in a scratch fork with bare
+      342 tests pass, was 321 on this branch (the 313 in #106's description predates its merges from
+      main). 21 new, written failing first, against real git in a scratch fork with bare
       repositories addressed as file:// URLs per #110's fixture rule. Each was checked by breaking
       the implementation and confirming only it failed. One test corrected a wrong premise of its
       own: the executor starts each integration from the branch's published tip, so a branch that
@@ -485,59 +455,59 @@ items:
 
       One regression found and fixed rather than shipped: board --write makes a local board.json
       routine, and two tests - one pre-existing in test_stack.py - assert on a missing board while
-      reading the real board.json beside stack.py. Running a pass then the suite failed both.
-      Proven by writing a board and watching them fail, then fixed with an autouse fixture in
+      reading the real board.json beside stack.py. Running a pass then the suite failed both. Proven
+      by writing a board and watching them fail, then fixed with an autouse fixture in
       .claude/stack/tests/conftest.py that sets an existing snapshot aside and restores it.
       .gitignore gains board.json; #110 adds the identical line, so whoever lands second drops one
       copy - a deliberate, named duplication rather than a fourth same-artifact-twice instance.
 
       Not verified live and deliberately so: restack and run-report push to real branches, and the
-      upstream remote is outside a session's repo scope, so they are covered end to end in the
-      test harness instead. board --write was run live (44 open pull requests, and the export
-      parses straight back through stack.py status); fast-forward was run live as far as its guard
-      (exit 6 naming the missing cram2 remote, before any push).
+      upstream remote is outside a session's repo scope, so they are covered end to end in the test
+      harness instead. board --write was run live (44 open pull requests, and the export parses
+      straight back through stack.py status); fast-forward was run live as far as its guard (exit 6
+      naming the missing cram2 remote, before any push).
 
       Residue: the throwaway branch claude/credential-probe-koufa6 needs deleting outside the
       harness, per the standing session-cannot-delete-branches constraint.
 
-      Scope widened 2026-08-04 on the user's instruction, once the probe had shown the three
-      writes available: "do it as well and anything you found doable in code related to this".
-      All three moved into the executor rather than staying prose. A conflict is now handled end
-      to end - the branch is labelled needs-resolution with the complete set LabelWrite computes,
-      and its owner gets a comment naming the conflicting files and addressing the session link -
-      and the next pass reads mergeable_state to either withhold the branch while it is still
-      dirty or clear the label and restack it. That closes the loop the label was invented for:
-      previously nothing removed it, so a resolved branch stayed withheld until somebody noticed.
-      A fifth command, promote, builds each ready branch's compare-and-create link, writes it into
-      the fork pull request's description under a Promote heading (replacing any already there,
-      since the description is rewritten on every run that rebuilds one), adds cram2-link-sent,
-      and drops that label from anything since promoted or landed. in-review stays the developer's
-      to add. Reads and writes are one GitHubRepository behind PullRequestReader/PullRequestWriter,
-      so the board export depends only on the reader. Retargeting a base is now the single step
-      still reported rather than performed, and the report says so.
+      Scope widened 2026-08-04 on the user's instruction, once the probe had shown the three writes
+      available: "do it as well and anything you found doable in code related to this". All three
+      moved into the executor rather than staying prose. A conflict is now handled end to end - the
+      branch is labelled needs-resolution with the complete set LabelWrite computes, and its owner
+      gets a comment naming the conflicting files and addressing the session link - and the next
+      pass reads mergeable_state to either withhold the branch while it is still dirty or clear the
+      label and restack it. That closes the loop the label was invented for: previously nothing
+      removed it, so a resolved branch stayed withheld until somebody noticed. A fifth command,
+      promote, builds each ready branch's compare-and-create link, writes it into the fork pull
+      request's description under a Promote heading (replacing any already there, since the
+      description is rewritten on every run that rebuilds one), adds cram2-link-sent, and drops that
+      label from anything since promoted or landed. in-review stays the developer's to add. Reads
+      and writes are one GitHubRepository behind PullRequestReader/PullRequestWriter, so the board
+      export depends only on the reader. Retargeting a base is now the single step still reported
+      rather than performed, and the report says so.
 
       351 tests pass, was 342. Four more mutations checked, each caught by exactly the test naming
       it: a label write computed from the addition alone, a still-dirty branch restacked anyway, a
       promotion link appended rather than replacing, and an already-linked branch promoted twice.
-      The write client was exercised live against closed throwaway PR #138 - read, description
-      write proven idempotent by a second write, label replace, comment - then restored. restack,
-      promote and run-report are still not run against the live fork: they rewrite real
-      descriptions and push real branches.
+      The write client was exercised live against closed throwaway PR #138 - read, description write
+      proven idempotent by a second write, label replace, comment - then restored. restack, promote
+      and run-report are still not run against the live fork: they rewrite real descriptions and
+      push real branches.
 
       CI then caught a real ordering defect the local run could not: resolving the credential had
       moved ahead of deriving the board, so restack on a checkout with neither reported a missing
       token instead of the missing board its caller fixes with the previous command. A session
       environment exports GH_TOKEN, so the wrong branch was never taken locally. Fixed, and the
-      command-line tests now strip the credential for every run - the same ambient-state coupling
-      as the board.json fixture, met a second time in one PR: a test that reads ambient state
-      cannot assert about the state it is reading.
+      command-line tests now strip the credential for every run - the same ambient-state coupling as
+      the board.json fixture, met a second time in one PR: a test that reads ambient state cannot
+      assert about the state it is reading.
 
       Run live against the fork 2026-08-04 on the user's authorisation, using throwaway pull
       requests #140 (parent, non-draft) and #141 (child, draft) and a board scoped to those two
       only, from a detached worktree so the executor's checkout could not disturb the branch under
-      review. All five commands exercised: restack integrated a moved parent and pushed the child;
-      a real conflict pushed nothing, labelled #141 needs-resolution and posted the naming comment;
-      a second pass withheld it while mergeable_state was still dirty and posted no second comment;
+      review. All five commands exercised: restack integrated a moved parent and pushed the child; a
+      real conflict pushed nothing, labelled #141 needs-resolution and posted the naming comment; a
+      second pass withheld it while mergeable_state was still dirty and posted no second comment;
       once the conflict was resolved and pushed the next pass cleared the label by itself and the
       branch rejoined; promote wrote the compare link under a Promote heading taking only the first
       paragraph, applied cram2-link-sent, and on a second run replaced the section rather than
@@ -573,36 +543,36 @@ items:
 
       Statuses name themselves as of 2026-08-04, from the user's question about strings beside or
       instead of the numbers. Instead is not available - a process exit status is an integer by
-      definition, and these stay aligned with stack.ExitCode value for value - but beside was a
-      real gap: the meaning was already in the enum member and nothing emitted it. MaintenanceExitCode
+      definition, and these stay aligned with stack.ExitCode value for value - but beside was a real
+      gap: the meaning was already in the enum member and nothing emitted it. MaintenanceExitCode
       gains name_for_a_caller, derived from the member so a status can never carry a name belonging
       to another; main prints it once for any non-zero run ("maintenance.py: branch-needs-attention
       (10)") and stays silent on success; and run-report --json leads with status and exit_code,
       which is the case it matters most for, since routine-cutover's Action reads the document
       rather than the process status. 361 tests pass, was 357; three more mutations checked.
 
-      Review round 2026-08-05 (25 comments) applied in 7048a962. Three were design decisions
-      taken with the user rather than corrections, and the largest reshaped the skill: the
-      document now leads with run-report --json as step 2 and demotes the four individual
-      commands to a reference section for resuming a partial run. Writing it that way round the
-      first time was not arbitrary - the per-command sections carried doctrine that had nowhere
-      else to live, so explaining a command and stating a rule had become one paragraph. What
-      made the change possible was splitting those apart: a What this pass never does section now
-      holds the rules with no command attached, and it is where the reviewer's two other points
-      landed - the pass never resolves a conflict (the "if you resolve one yourself" escape is
-      deleted, and the header's promise changed with it from "the only file changes are conflict
-      resolutions" to no file changes at all) and it never attempts to open the upstream pull
-      request, which previously read as a call to try and expect to fail.
+      Review round 2026-08-05 (25 comments) applied in 7048a962. Three were design decisions taken
+      with the user rather than corrections, and the largest reshaped the skill: the document now
+      leads with run-report --json as step 2 and demotes the four individual commands to a reference
+      section for resuming a partial run. Writing it that way round the first time was not arbitrary
+      - the per-command sections carried doctrine that had nowhere else to live, so explaining a
+      command and stating a rule had become one paragraph. What made the change possible was
+      splitting those apart: a What this pass never does section now holds the rules with no command
+      attached, and it is where the reviewer's two other points landed - the pass never resolves a
+      conflict (the "if you resolve one yourself" escape is deleted, and the header's promise
+      changed with it from "the only file changes are conflict resolutions" to no file changes at
+      all) and it never attempts to open the upstream pull request, which previously read as a call
+      to try and expect to fail.
 
-      The shape the reviewer asked for repeatedly is a member carrying its own specification, and
-      it is now the module's idiom twice over: PullRequestField(FieldSpecification, Enum) carries
-      each field's key, how its value has to be read and whether a record omitting it is rejected,
-      and Command(CommandSpecification, Enum) carries each command's name and help text. Both hit
-      the same two hazards #143's roadmap entry already records - a member's value must be the
-      argument tuple rather than a built specification, and the field cannot be called name
-      because Enum reserves it - so the first is guarded by a test and the second is invoked_as.
-      That collapsed _required, _branch_reference and _label_names into PullRequestField.read, and
-      took the three raw record.get calls in promote and the conflict check with it.
+      The shape the reviewer asked for repeatedly is a member carrying its own specification, and it
+      is now the module's idiom twice over: PullRequestField(FieldSpecification, Enum) carries each
+      field's key, how its value has to be read and whether a record omitting it is rejected, and
+      Command(CommandSpecification, Enum) carries each command's name and help text. Both hit the
+      same two hazards #143's roadmap entry already records - a member's value must be the argument
+      tuple rather than a built specification, and the field cannot be called name because Enum
+      reserves it - so the first is guarded by a test and the second is invoked_as. That collapsed
+      _required, _branch_reference and _label_names into PullRequestField.read, and took the three
+      raw record.get calls in promote and the conflict check with it.
 
       ExternalCallFailed is the shared parent of GitCommandFailed and GitHubRequestFailed, holding
       status and detail and composing the message from an abstract call - krrood's
@@ -618,17 +588,17 @@ items:
       and its work, listed once in COMMANDS, which is also what builds the parser - so a command
       that exists but is unreachable is not expressible. MaintenancePass preserves the
       board-before-credential ordering CI caught earlier. run-report deletes board.json when the
-      pass finishes with it (the user's call, scoped to that command alone, since the other four
-      are the resume path); a stale snapshot read as current is worse than none, and exit 3 names
-      the command that fixes it.
+      pass finishes with it (the user's call, scoped to that command alone, since the other four are
+      the resume path); a stale snapshot read as current is worse than none, and exit 3 names the
+      command that fixes it.
 
       Three threads left open deliberately: the two asking why not gh or PyGithub - answered with
       the reason for now (gh absent, stdlib-only tier) and deferred to
       dev-tooling-github-api-unification, which exists to settle exactly that once - and the
       question about supplying a credential that can reparent, which is answered but calls for no
       change here. 364 tests pass, was 361; two new (what the export reads out of each field's own
-      shape, and that every field is named by a string) plus the board-deletion one, each checked
-      by mutation.
+      shape, and that every field is named by a string) plus the board-deletion one, each checked by
+      mutation.
 
       Second review round the same day (12 comments) applied in eb648308. Two were put back to the
       user rather than guessed at, and both answers shaped the result. PreFlight becomes
@@ -636,11 +606,11 @@ items:
       subcommand and MOVE_REFUSED in both tools' exit codes - because the old name said when it ran
       rather than what it did, and the new one pairs with the ProposedCommitMove it is handed. And
       "actions as dataclasses with a shared abstract parent" meant the restack's per-branch steps:
-      each is now a RestackStep subclass that either concludes the branch or lets the next run,
-      with BranchUnderRestack carrying what a step needs, so _restack_branch is a loop rather than
-      a chain of ifs and the two free functions taking six arguments became the steps that own
-      them. Unlike the commands these stay listed rather than discovered, because their order is
-      the procedure; a branch no step concludes raises rather than returning silently.
+      each is now a RestackStep subclass that either concludes the branch or lets the next run, with
+      BranchUnderRestack carrying what a step needs, so _restack_branch is a loop rather than a
+      chain of ifs and the two free functions taking six arguments became the steps that own them.
+      Unlike the commands these stay listed rather than discovered, because their order is the
+      procedure; a branch no step concludes raises rather than returning silently.
 
       The Command enum is deleted - with a class per command it was a second registry that could
       name a command nothing implemented - and COMMANDS is derived from
@@ -654,57 +624,56 @@ items:
       code does has nothing holding it true, so it is a future lie with a delay attached. Out went
       the conflict-labelling description, the force-with-lease rule, the board deletion, the
       per-outcome table and the flag lists - each already documented next to the code that does it.
-      What is left is what the agent decides: act on the status, act on reparents, name the
-      branches left for their owners. Step 2 is ~30 lines, was ~70.
+      What is left is what the agent decides: act on the status, act on reparents, name the branches
+      left for their owners. Step 2 is ~30 lines, was ~70.
 
       366 tests pass, was 364. Two threads stay open on purpose: whether the stack.py half of the
       rename belongs on #106's branch by the prefer-the-change rule, and whether the test pass
-      should use __post_init__ regardless now that making the derived values fields removed the
-      need for it (and for object.__setattr__, which is what the neighbouring comment objected to).
+      should use __post_init__ regardless now that making the derived values fields removed the need
+      for it (and for object.__setattr__, which is what the neighbouring comment objected to).
 
       Third round, four comments, in 62133080 and 16d04f99. The reviewer's reading that a member
       could be written as a constructor call was right, and prototyping it settled the shape the
-      previous two rounds had both got wrong: written plainly it builds and is silently wrong -
-      an enum hands a member's value straight to the type it mixes in, so the whole specification
-      lands in key and required reverts to its default - but an __init__ on the enum that unpacks
-      the specification onto the member fixes it, and the arguments become real keywords rather
-      than a helper's. That helper, which existed only to return its arguments unchanged, is
-      deleted. Removing the __init__ fails three tests, so the silent form cannot come back
-      unnoticed.
+      previous two rounds had both got wrong: written plainly it builds and is silently wrong - an
+      enum hands a member's value straight to the type it mixes in, so the whole specification lands
+      in key and required reverts to its default - but an __init__ on the enum that unpacks the
+      specification onto the member fixes it, and the arguments become real keywords rather than a
+      helper's. That helper, which existed only to return its arguments unchanged, is deleted.
+      Removing the __init__ fails three tests, so the silent form cannot come back unnoticed.
 
-      The same reviewer's suggestion to find RESTACK_STEPS from its subclasses was applied and
-      then reverted on their own call once they had read why it was a list. The mutation check is
-      what settled it and is worth keeping: swapping PublishBranch ahead of RefuseAnUnsafeMove
-      fails test_a_push_the_move_checks_refuse_is_not_made, a behavioural test that publishes to a
-      real scratch fork and asserts the destination ref never moved. So the order is load-bearing
+      The same reviewer's suggestion to find RESTACK_STEPS from its subclasses was applied and then
+      reverted on their own call once they had read why it was a list. The mutation check is what
+      settled it and is worth keeping: swapping PublishBranch ahead of RefuseAnUnsafeMove fails
+      test_a_push_the_move_checks_refuse_is_not_made, a behavioural test that publishes to a real
+      scratch fork and asserts the destination ref never moved. So the order is load-bearing
       behaviour a test already catches, which also made the order test added during the
-      auto-discovery attempt redundant - it restated the tuple - and it was dropped with the
-      revert. COMMANDS stays discovered, because its list carried no meaning; the steps stay
-      listed, because theirs is a decision about what a pass does.
+      auto-discovery attempt redundant - it restated the tuple - and it was dropped with the revert.
+      COMMANDS stays discovered, because its list carried no meaning; the steps stay listed, because
+      theirs is a decision about what a pass does.
 
-      stack.py's enum members and its two undocumented module variables gained docstrings, swept
-      by an AST pass over both modules rather than fixed at the one line flagged. 366 tests pass.
+      stack.py's enum members and its two undocumented module variables gained docstrings, swept by
+      an AST pass over both modules rather than fixed at the one line flagged. 366 tests pass.
 
-      First live run against the real stack, 2026-08-05, and it found a defect in this pull
-      request that every throwaway run had missed. The pass restacked, hit a .gitignore conflict
-      on this very branch, labelled it needs-resolution at 14:10:42 - and then promote stripped
-      that label at 14:11:46, in the same pass, replacing the set with cram2-link-sent alone.
+      First live run against the real stack, 2026-08-05, and it found a defect in this pull request
+      that every throwaway run had missed. The pass restacked, hit a .gitignore conflict on this
+      very branch, labelled it needs-resolution at 14:10:42 - and then promote stripped that label
+      at 14:11:46, in the same pass, replacing the set with cram2-link-sent alone.
 
-      Root cause: board --write exports a snapshot at the start of a pass, restack then withholds
-      a conflicted branch by labelling it live, and promote read neither back. promotion_order's
+      Root cause: board --write exports a snapshot at the start of a pass, restack then withholds a
+      conflicted branch by labelling it live, and promote read neither back. promotion_order's
       needs_resolution exclusion and LabelWrite.replacing both took branch.labels, which is the
-      snapshot - so promotion promoted a branch the same pass had just conflicted on, and computed
-      a whole-set label write from a list already stale. That is the production incident
+      snapshot - so promotion promoted a branch the same pass had just conflicted on, and computed a
+      whole-set label write from a list already stale. That is the production incident
       LabelWrite.replacing exists to prevent, re-entered through a different door: the rule is
       compute it from the labels the pull request carries now, and branch.labels is at board time.
-      The consequence was the loop this item exists to close staying open, since with the label
-      gone the next pass has nothing to withhold on and re-reports the same conflict.
+      The consequence was the loop this item exists to close staying open, since with the label gone
+      the next pass has nothing to withhold on and re-reports the same conflict.
 
       Fixed by reading both the decision and the write off the pull request record promote already
       fetches for its title and description. Two tests written failing first, each checked by
-      mutation. One pre-existing test changed setup only, not assertions: the behaviour it names -
-      a branch already carrying the link label is not promoted again - is unchanged and still
-      correct, and only where "already carrying" is read from moved.
+      mutation. One pre-existing test changed setup only, not assertions: the behaviour it names - a
+      branch already carrying the link label is not promoted again - is unchanged and still correct,
+      and only where "already carrying" is read from moved.
 
       Also merged main, which had moved a long way: #106 landed, so this branch's base became main
       and .claude/stack/ plus the maintenance skill are now on main (maintenance.py is not, so the
@@ -721,10 +690,10 @@ items:
       structural. Two named a module split - the restack step classes into their own module with
       RESTACK_STEPS in another, and the command classes into one with COMMANDS - and the third was
       the earlier constants comment, whose seven plain values moved with them. The commands one is
-      what inverted the file, and the reasoning is worth keeping because it was not obvious until
-      it was tried: a commands module cannot both be imported by maintenance.py and import
-      everything the commands do. So maintenance.py is the command line and nothing else now, and
-      the work sits below it in eleven modules named for what they do. The earlier deferral to
+      what inverted the file, and the reasoning is worth keeping because it was not obvious until it
+      was tried: a commands module cannot both be imported by maintenance.py and import everything
+      the commands do. So maintenance.py is the command line and nothing else now, and the work sits
+      below it in eleven modules named for what they do. The earlier deferral to
       dev-tooling-python-package - the one that kept stack.py unsplit - is therefore overridden for
       maintenance.py alone, on the user's explicit instruction; stack.py is untouched and still
       waits for that item.
@@ -735,12 +704,12 @@ items:
       the abstractness, because ABCMeta decides what is still abstract with getattr(cls, name),
       which calls the descriptor and gets a plain string back - so a subclass supplying nothing was
       not abstract at all and answered None. __get__ answers with the descriptor itself while it is
-      abstract, which restores the refusal, and COMMANDS instantiates every subclass, so it lands
-      as the module is imported. classproperty is class_property.py rather than krrood's, per
-      decision 12's stdlib-only tier.
+      abstract, which restores the refusal, and COMMANDS instantiates every subclass, so it lands as
+      the module is imported. classproperty is class_property.py rather than krrood's, per decision
+      12's stdlib-only tier.
 
-      The three fork Protocols became abstract dataclasses, on the user's answer to the question
-      the previous round left open. It caught a hole the same day it was applied: the fork stand-in
+      The three fork Protocols became abstract dataclasses, on the user's answer to the question the
+      previous round left open. It caught a hole the same day it was applied: the fork stand-in
       never implemented open_pull_requests, which structural typing could not see because restack
       and promote never call it. Completed rather than stubbed. One constraint learned rather than
       assumed: dataclasses refuse a non-frozen subclass of a frozen base, so making the bases frozen
@@ -1085,77 +1054,67 @@ items:
     status: in_progress
     session: https://claude.ai/code/session_017JMftn3ujp7xsyhwcMaF75
     notes: >
-      Target revised 2026-07-31 (native-stacks pivot, user-approved): the endgame is no
-      scheduled LLM run at all, finally aligning the Routine with the
-      no-scheduled-checks rule. A plain scheduled Action takes the deterministic
-      duties — fork-main fast-forward from cram2/main, label hygiene, cram2-link
-      comment, plans-site build, and the happy-path cascade (gh stack sync is
-      documented as safe in automation: fetches, fast-forwards the trunk, rebases the
-      remaining branches, force-pushes, syncs PR status, aborts cleanly on divergence
-      in non-interactive terminals; Actions runners ship gh). The judgment residue —
-      cascade conflicts and red CI after a restack — runs in on-demand sessions,
-      surfaced by the plans dashboard rather than a timer. The 2026-07-30 pointer-
-      prompt design (roadmap addendum of that date: replacement prompt, update_trigger
-      mechanism, gate checklist) is superseded as the endgame but survives as an
-      optional interim step if the Action lags the tooling wave; the live Routine is
-      trigger trig_01N79jHmLo3bSbg8pLM6MNTB ("PR Stack Monitor and Update"), and the
-      final cutover deletes or disables it. Gate unchanged: only after PR 1 is on
-      cram2/main and fork main fast-forwards; one green Action cycle flips this done.
-      Base-change requirement, corrected 2026-08-02 by session-safe-pr-reparent's probe:
-      the 403 recorded here is a property of the session git-proxy credential, not of
-      sessions or of the operation - the MCP `update_pull_request` tool changes a base
-      fine (verified on throwaway PR #129), so the "no session can ever do a real
-      base-branch reparent" reading was wrong and no close+create fallback exists to
-      inherit. The Action's own credential (default GITHUB_TOKEN or a stored PAT) is a
-      third identity again, and the probe makes it much more likely to work than feared,
-      since the block is narrow rather than platform-wide. Still verify it concretely
-      with a real base change from the Action before relying on it; if it does 403, the
-      Action can call the same MCP-equivalent REST endpoint under a token that does not
-      carry the restriction rather than degrade to renumbering pull requests. Also fold in event-triggered
-      detection rather than cadence-only: trigger the Action (or an additional one) on
-      `pull_request` `closed`, ancestry-test that PR's head branch immediately, and
-      reparent any open fork PR based on it right then if it turns out to have landed
-      elsewhere - this is what actually prevents the #40/#41 orphan pattern from
-      recurring with a multi-cycle delay, rather than only shrinking the window to one
-      scheduled tick.
-      Corrected 2026-08-02 (traced #40/#41's actual history, at the user's request, to
-      answer "who closed the parent and can automation stop that"): the human action
-      (the user closing #40 as ordinary hygiene after rebuilding its branch, then
-      normally merging its successor #53 nine days later) is not something automation
-      should ever try to prevent - it is correct, deliberate maintenance, not a mistake.
-      The trigger design above is one PR-closed-event narrower than it needs to be: the
-      real defect is that ANY pull request leaving the open set drops it from
-      board.json, whether it closes unmerged (#40) or merges normally and GitHub
-      auto-closes it (#53) - `pull_request: closed` fires for both, so the Action should
-      re-sweep git-ancestry for every remaining open fork PR's base on that one event
-      type generally, not just check the closed PR's own branch. In this real case that
-      would have caught #41's orphaning at #53's merge on 2026-07-25, days before a
-      review round noticed it by accident on 2026-07-31.
-      Interim pointer prompt ADOPTED AND LIVE 2026-08-02. The user replaced the Routine's
-      ~17.5k inline prompt at claude.ai/code/routines with the short pointer this item
-      had specified: HARD RULES inline (they must bind before any file is read), plus
-      "read .claude/stack/ROUTINE.md and execute the fenced text block". It resolves
-      origin/main first and falls back to origin/claude/stack-landed-parent-detection
-      while that is in review, because .claude/stack/ is NOT on main yet - it is only on
-      #106 and #117. So #117's branch is currently live production input, and an edit to
-      ROUTINE.md now ships to the running workflow on push with no deploy step.
-      This is the "optional interim step if the Action lags the tooling wave" this item
-      already described, so the endgame is unchanged: a plain scheduled Action plus
-      on-demand sessions, no scheduled LLM. What the adoption buys now is that doctrine
-      corrections stop needing a manual paste - which is what let the base-PATCH error sit
-      in the live prompt after ROUTINE.md had been fixed.
-      Adoption immediately exposed a latent ordering bug, fixed in #117: SETUP step 0 told
-      the Routine that stack.py and stack.toml "are already on this checkout - they live on
-      main". Written in anticipation of #106 landing, false today, and harmless only while
-      nothing read it. Under the pointer the Routine would resolve its doctrine fine,
-      believe the tooling was present, then fail on the first stack.py call in Phase 2 -
-      after Phase 1 had already mutated pull requests. Step 0 now fetches .claude/stack/
-      from the same ref rather than asserting it. Verified end to end in a worktree at
-      origin/main: stack.py absent before, `stack.py --help` working after.
-      Two deletions are due when #106 lands and .claude/stack/ reaches main: the pointer
-      prompt's source-2 line (needs a manual paste) and step 0's fetch fallback (a normal
-      commit). Neither breaks anything if forgotten - the fetch becomes a no-op and the
-      fallback ref stops resolving - but both are dead weight.
+      Target revised 2026-07-31 (native-stacks pivot, user-approved): the endgame is no scheduled
+      LLM run at all, finally aligning the Routine with the no-scheduled-checks rule. A plain
+      scheduled Action takes the deterministic duties — fork-main fast-forward from cram2/main,
+      label hygiene, cram2-link comment, plans-site build, and the happy-path cascade (gh stack sync
+      is documented as safe in automation: fetches, fast-forwards the trunk, rebases the remaining
+      branches, force-pushes, syncs PR status, aborts cleanly on divergence in non-interactive
+      terminals; Actions runners ship gh). The judgment residue — cascade conflicts and red CI after
+      a restack — runs in on-demand sessions, surfaced by the plans dashboard rather than a timer.
+      The 2026-07-30 pointer-prompt design (roadmap addendum of that date: replacement prompt,
+      update_trigger mechanism, gate checklist) is superseded as the endgame but survives as an
+      optional interim step if the Action lags the tooling wave; the live Routine is trigger
+      trig_01N79jHmLo3bSbg8pLM6MNTB ("PR Stack Monitor and Update"), and the final cutover deletes
+      or disables it. Gate unchanged: only after PR 1 is on cram2/main and fork main fast-forwards;
+      one green Action cycle flips this done. Base-change requirement, corrected 2026-08-02 by
+      session-safe-pr-reparent's probe: the 403 recorded here is a property of the session git-proxy
+      credential, not of sessions or of the operation - the MCP `update_pull_request` tool changes a
+      base fine (verified on throwaway PR #129), so the "no session can ever do a real base-branch
+      reparent" reading was wrong and no close+create fallback exists to inherit. The Action's own
+      credential (default GITHUB_TOKEN or a stored PAT) is a third identity again, and the probe
+      makes it much more likely to work than feared, since the block is narrow rather than
+      platform-wide. Still verify it concretely with a real base change from the Action before
+      relying on it; if it does 403, the Action can call the same MCP-equivalent REST endpoint under
+      a token that does not carry the restriction rather than degrade to renumbering pull requests.
+      Also fold in event-triggered detection rather than cadence-only: trigger the Action (or an
+      additional one) on `pull_request` `closed`, ancestry-test that PR's head branch immediately,
+      and reparent any open fork PR based on it right then if it turns out to have landed elsewhere
+      - this is what actually prevents the #40/#41 orphan pattern from recurring with a multi-cycle
+      delay, rather than only shrinking the window to one scheduled tick. Corrected 2026-08-02
+      (traced #40/#41's actual history, at the user's request, to answer "who closed the parent and
+      can automation stop that"): the human action (the user closing #40 as ordinary hygiene after
+      rebuilding its branch, then normally merging its successor #53 nine days later) is not
+      something automation should ever try to prevent - it is correct, deliberate maintenance, not a
+      mistake. The trigger design above is one PR-closed-event narrower than it needs to be: the
+      real defect is that ANY pull request leaving the open set drops it from board.json, whether it
+      closes unmerged (#40) or merges normally and GitHub auto-closes it (#53) - `pull_request:
+      closed` fires for both, so the Action should re-sweep git-ancestry for every remaining open
+      fork PR's base on that one event type generally, not just check the closed PR's own branch. In
+      this real case that would have caught #41's orphaning at #53's merge on 2026-07-25, days
+      before a review round noticed it by accident on 2026-07-31. Interim pointer prompt ADOPTED AND
+      LIVE 2026-08-02. The user replaced the Routine's ~17.5k inline prompt at
+      claude.ai/code/routines with the short pointer this item had specified: HARD RULES inline
+      (they must bind before any file is read), plus "read .claude/stack/ROUTINE.md and execute the
+      fenced text block". It resolves origin/main first and falls back to
+      origin/claude/stack-landed-parent-detection while that is in review, because .claude/stack/ is
+      NOT on main yet - it is only on #106 and #117. So #117's branch is currently live production
+      input, and an edit to ROUTINE.md now ships to the running workflow on push with no deploy
+      step. This is the "optional interim step if the Action lags the tooling wave" this item
+      already described, so the endgame is unchanged: a plain scheduled Action plus on-demand
+      sessions, no scheduled LLM. What the adoption buys now is that doctrine corrections stop
+      needing a manual paste - which is what let the base-PATCH error sit in the live prompt after
+      ROUTINE.md had been fixed. Adoption immediately exposed a latent ordering bug, fixed in #117:
+      SETUP step 0 told the Routine that stack.py and stack.toml "are already on this checkout -
+      they live on main". Written in anticipation of #106 landing, false today, and harmless only
+      while nothing read it. Under the pointer the Routine would resolve its doctrine fine, believe
+      the tooling was present, then fail on the first stack.py call in Phase 2 - after Phase 1 had
+      already mutated pull requests. Step 0 now fetches .claude/stack/ from the same ref rather than
+      asserting it. Verified end to end in a worktree at origin/main: stack.py absent before,
+      `stack.py --help` working after. Two deletions are due when #106 lands and .claude/stack/
+      reaches main: the pointer prompt's source-2 line (needs a manual paste) and step 0's fetch
+      fallback (a normal commit). Neither breaks anything if forgotten - the fetch becomes a no-op
+      and the fallback ref stops resolving - but both are dead weight.
 
   - id: tooling-branch-retirement
     branch: null
@@ -1215,81 +1174,68 @@ items:
     status: done
     session: https://claude.ai/code/session_01UrxbEr6ZHMThA2p4Vcnrqv
     notes: >
-      Implements the recheck-deltas convention recorded in cram-notes.md (2026-07-31): a
-      small hook script next to save-plan.sh that, given a plan id and the last-seen
-      personal-notes commit SHA, fetches the notes branch and prints only the delta -
-      `git diff <sha>..FETCH_HEAD -- .claude/personal/plans/<id>/` - plus the plan's
-      tracking-issue comments newer than that commit's timestamp (github-api.sh dual
-      backend once #107 lands, else curl). session-start.sh stamps the SHA it loaded plan
-      state at (gitignored file) so sessions have the baseline for free; the script
-      updates the stamp. Sized as a small independent PR off fork main, like #109 - not
-      part of the #101 chain. Tests via ScratchRepository, network-free.
-      Kicked off 2026-07-31 via /plan-item-kickoff: confirmed with the user this is based
-      off fork main directly, independent of #109 (not stacked on it) - "off fork main,
-      like #109" in this item's own notes means the same *kind* of independent, main-based
-      PR, not a stack on #109's branch. Expect a textual overlap in the same two files
-      #109 already edits (resolve-personal-notes-config.sh, session-start.sh) - same
-      no-depends_on, whichever-lands-second precedent already established for #107/#109/
-      #110 sharing files with no dependency between them. github-api.sh is confirmed not
-      yet on fork main (only on #107's branch, which this item doesn't depend on), so the
-      dual-backend GitHub call this item needs (fetching tracking-issue comments) is
-      implemented inline, matching github-api.sh's gh-then-curl+token style, rather than
-      depending on that file - a later cleanup once #107 lands can dedupe the shared
-      credential/repo-resolution helpers.
-      Implemented as draft PR #115 (2026-07-31), same session, based directly on fork
-      main (claude/plan-item-kickoff-workflow-n814iz): PLAN_STATE_SYNC_STAMP +
-      record/read helpers in resolve-personal-notes-config.sh, an unconditional stamp
-      call in session-start.sh, the new plan-updates-since.sh script, .gitignore/README
-      updates, and test_plan_updates_since_sh.py (13 new tests, self-contained scratch-
-      repo + stubbed gh/curl fixtures since neither sibling's shared fixture has landed
-      on main yet). All 29 tests under .claude/hooks/tests pass. Verified live against
-      the real personal-notes branch and tracking issue #102. Two real bugs caught by
-      the tests before they shipped: an f-string with escaped quotes inside the
-      expression (invalid before Python 3.12, and this repo's own test tooling runs
-      3.11), and a missing `|| true` on the default_repository grep that let `set -e`
-      silently kill the script on a plan with tracking_issue but no default_repository.
-
-      Resolved 2026-08-05 via /plan-item-resolve (session
-      https://claude.ai/code/session_016kAVapbHxDokYjZBukKA5X): the item had sat
-      in_progress since 2026-07-31 with notes asserting readiness and no blockers
-      field, while the pull request was mergeable_state: dirty and labelled
-      needs-resolution - the same stale-entry failure #109's resolution recorded two
-      days earlier. The conflict was .gitignore (two independent additive blocks,
-      concatenated) and .claude/hooks/README.md. The README was not merely a
-      conflict: this branch was cut before #101's 378-to-140-line rewrite, and an
-      earlier merge here resolved that rewrite hunk-by-hunk, resurrecting the
-      pre-#101 "Setup: overriding the default remote/branch/path" and "Verifying it
-      worked" sections alongside the "Configuration" sections that had replaced them,
-      and stranding the labels list's closing sentence 75 lines from its list.
-      Re-authored against main rather than merged, per #109's own generalization, and
-      only after confirming both resurrected sections are superseded verbatim. The
-      branch's README delta is now +12/-2, was +86/-0. resolve-personal-notes-config.sh
-      and session-start.sh auto-merged and were checked semantically, not just
-      textually - the summary block carries both #109's local-settings line and this
-      branch's plan-state-SHA line. Checked for the same-artifact-twice pattern and
-      found no instance: the test module already imports main's shared
-      ScratchRepository, tests/stubs/ has no counterpart on main, and
-      plan_updates_since_support.py does not overlap plan_manifest_tools.py. 243 tests
-      pass across the two suites CI runs (194 plan-dashboard, 49 hooks - this module's
-      13 plus main's 36), none lost. Verified live: session-start.sh prints all five
-      summary lines and writes the stamp, and plan-updates-since.sh against the real
-      plan returned a delta that included a manifest change another session had pushed
-      mid-resolve. Pushed as 99c92c3c; mergeable_state back to unstable,
-      needs-resolution dropped (full label set re-sent so cram2-link-sent survived),
-      pull request back to draft. This unblocks its half of decision 12's sequencing
-      constraint, which cannot land ahead of the in-flight bash-touching pull requests.
-
-      Merged into fork main 2026-08-05, hours after the resolve above cleared its
-      conflict. Verified by content rather than from the merge notification alone:
-      99c92c3c is a git merge-base --is-ancestor of origin/main, and
-      plan-updates-since.sh, plan_updates_since_support.py and
-      test_plan_updates_since_sh.py are all present on main, with README.md at the
-      re-authored 180 lines. The recurring test_world_sim_state_sync Mujoco flake,
-      red on this pull request since 2026-07-31, passed on the post-merge run, so
-      the branch went green on every check rather than merging with a known red.
-      The convention this item implements is therefore live on main: session-start.sh
-      stamps the notes-branch commit on every run, and any session can now recheck a
-      plan by delta instead of rereading it.
+      Implements the recheck-deltas convention recorded in cram-notes.md (2026-07-31): a small hook
+      script next to save-plan.sh that, given a plan id and the last-seen personal-notes commit SHA,
+      fetches the notes branch and prints only the delta - `git diff <sha>..FETCH_HEAD --
+      .claude/personal/plans/<id>/` - plus the plan's tracking-issue comments newer than that
+      commit's timestamp (github-api.sh dual backend once #107 lands, else curl). session-start.sh
+      stamps the SHA it loaded plan state at (gitignored file) so sessions have the baseline for
+      free; the script updates the stamp. Sized as a small independent PR off fork main, like #109 -
+      not part of the #101 chain. Tests via ScratchRepository, network-free. Kicked off 2026-07-31
+      via /plan-item-kickoff: confirmed with the user this is based off fork main directly,
+      independent of #109 (not stacked on it) - "off fork main, like #109" in this item's own notes
+      means the same *kind* of independent, main-based PR, not a stack on #109's branch. Expect a
+      textual overlap in the same two files #109 already edits (resolve-personal-notes-config.sh,
+      session-start.sh) - same no-depends_on, whichever-lands-second precedent already established
+      for #107/#109/ #110 sharing files with no dependency between them. github-api.sh is confirmed
+      not yet on fork main (only on #107's branch, which this item doesn't depend on), so the
+      dual-backend GitHub call this item needs (fetching tracking-issue comments) is implemented
+      inline, matching github-api.sh's gh-then-curl+token style, rather than depending on that file
+      - a later cleanup once #107 lands can dedupe the shared credential/repo-resolution helpers.
+      Implemented as draft PR #115 (2026-07-31), same session, based directly on fork main
+      (claude/plan-item-kickoff-workflow-n814iz): PLAN_STATE_SYNC_STAMP + record/read helpers in
+      resolve-personal-notes-config.sh, an unconditional stamp call in session-start.sh, the new
+      plan-updates-since.sh script, .gitignore/README updates, and test_plan_updates_since_sh.py (13
+      new tests, self-contained scratch-repo + stubbed gh/curl fixtures since neither sibling's
+      shared fixture has landed on main yet). All 29 tests under .claude/hooks/tests pass. Verified
+      live against the real personal-notes branch and tracking issue #102. Two real bugs caught by
+      the tests before they shipped: an f-string with escaped quotes inside the expression (invalid
+      before Python 3.12, and this repo's own test tooling runs 3.11), and a missing `|| true` on
+      the default_repository grep that let `set -e` silently kill the script on a plan with
+      tracking_issue but no default_repository. Resolved 2026-08-05 via /plan-item-resolve (session
+      https://claude.ai/code/session_016kAVapbHxDokYjZBukKA5X): the item had sat in_progress since
+      2026-07-31 with notes asserting readiness and no blockers field, while the pull request was
+      mergeable_state: dirty and labelled needs-resolution - the same stale-entry failure #109's
+      resolution recorded two days earlier. The conflict was .gitignore (two independent additive
+      blocks, concatenated) and .claude/hooks/README.md. The README was not merely a conflict: this
+      branch was cut before #101's 378-to-140-line rewrite, and an earlier merge here resolved that
+      rewrite hunk-by-hunk, resurrecting the pre-#101 "Setup: overriding the default
+      remote/branch/path" and "Verifying it worked" sections alongside the "Configuration" sections
+      that had replaced them, and stranding the labels list's closing sentence 75 lines from its
+      list. Re-authored against main rather than merged, per #109's own generalization, and only
+      after confirming both resurrected sections are superseded verbatim. The branch's README delta
+      is now +12/-2, was +86/-0. resolve-personal-notes-config.sh and session-start.sh auto-merged
+      and were checked semantically, not just textually - the summary block carries both #109's
+      local-settings line and this branch's plan-state-SHA line. Checked for the same-artifact-twice
+      pattern and found no instance: the test module already imports main's shared
+      ScratchRepository, tests/stubs/ has no counterpart on main, and plan_updates_since_support.py
+      does not overlap plan_manifest_tools.py. 243 tests pass across the two suites CI runs (194
+      plan-dashboard, 49 hooks - this module's 13 plus main's 36), none lost. Verified live:
+      session-start.sh prints all five summary lines and writes the stamp, and plan-updates-since.sh
+      against the real plan returned a delta that included a manifest change another session had
+      pushed mid-resolve. Pushed as 99c92c3c; mergeable_state back to unstable, needs-resolution
+      dropped (full label set re-sent so cram2-link-sent survived), pull request back to draft. This
+      unblocks its half of decision 12's sequencing constraint, which cannot land ahead of the
+      in-flight bash-touching pull requests. Merged into fork main 2026-08-05, hours after the
+      resolve above cleared its conflict. Verified by content rather than from the merge
+      notification alone: 99c92c3c is a git merge-base --is-ancestor of origin/main, and
+      plan-updates-since.sh, plan_updates_since_support.py and test_plan_updates_since_sh.py are all
+      present on main, with README.md at the re-authored 180 lines. The recurring
+      test_world_sim_state_sync Mujoco flake, red on this pull request since 2026-07-31, passed on
+      the post-merge run, so the branch went green on every check rather than merging with a known
+      red. The convention this item implements is therefore live on main: session-start.sh stamps
+      the notes-branch commit on every run, and any session can now recheck a plan by delta instead
+      of rereading it.
 
   - id: ready-to-start-dependency-free-fix
     branch: claude/funny-feynman-wexezs
@@ -1327,11 +1273,11 @@ items:
     depends_on: []
     status: done
     notes: >
-      Pre-existing bug-fix PR, adopted 2026-07-31 under the every-fork-PR-belongs-to-a-
-      plan rule. Renders an item's unmet dependencies as blocked chips instead of
-      neutral ones on the dashboards. Based on fork main, independent of the #101
-      chain; bug + in-review labels - already promoted to cram2. Same
-      build_dashboard.py overlap note as its sibling fix (#103) and #111.
+      Pre-existing bug-fix PR, adopted 2026-07-31 under the every-fork-PR-belongs-to-a-plan rule.
+      Renders an item's unmet dependencies as blocked chips instead of neutral ones on the
+      dashboards. Based on fork main, independent of the #101 chain; bug + in-review labels -
+      already promoted to cram2. Same build_dashboard.py overlap note as its sibling fix (#103) and
+      #111.
 
   - id: merge-timestamp-required-fix
     branch: claude/cram2-main-drift-4owm9a
@@ -1940,34 +1886,31 @@ items:
     session: https://claude.ai/code/session_01HaU9fwvtLUvFh4k93K6p5C
     notes: >
       Raised 2026-08-01 against a screenshot of this very plan's own dashboard: the
-      ready-to-review-merged-dependency card's notes ran to several hundred words and
-      alone filled the viewport, forcing heavy scrolling and leaving only one item
-      visible at a time - defeating the dashboard's purpose as an overview. item.notes
-      (item_card macro, dashboard.html) rendered at full height with no truncation, so
-      any item with a long investigation writeup did this to the page. Fixed by wrapping
-      the notes div in a collapsed-by-default <details>/<summary> toggle, reusing the
-      .roadmap-details CSS-only arrow-toggle pattern already in the file for the
-      "Background & history" section, rather than inventing new JS. No Python changes
-      needed - build_dashboard.py/render_common.py already pass item.notes through
-      unchanged; the sidebar "What to do next" cards are unaffected since they render
-      short fixed one-liners, not item.notes. Verified by rendering example/ through
-      build_dashboard.py with a temporarily lengthened note and publishing the result as
-      an Artifact: notes collapse by default behind "▸ Notes", expand to "▾ Notes" on
-      click, and items with no notes show no summary line. 194 tests pass (plan-dashboard
-      suite - unaffected, since this is template/CSS only). Independent of the #101 chain,
-      based on fork main; build_dashboard.py/dashboard.html overlap with #103, #105,
-      #111, #119, #120 and #122 is the usual whichever-lands-second-merges pattern for
-      this track. Opened as draft pull request #124, subscribed to its activity.
-      CI: two unrelated failures investigated across three origin/main merges that landed
-      on this branch from outside any session (coraplex/semantic_digital_twin worker
-      crashes, a mesh-material assertion cleared by an upstream fix, and a missing-ROS-
-      package error in a newly-merged Gazebo adapter's tests) - none had any path back to
-      this template-only diff; each was replied to on the pull request rather than fixed
-      here, per the established pattern of unrelated robotics CI noise on .claude/-only
-      changes. The user marked the pull request ready for review themselves on 2026-08-03
-      (not reverted to draft, per this plan's own precedent for a user-made draft-to-ready
-      flip) and it merged into fork main the same day. Session unsubscribed from both the
-      pull request and this plan's tracking issue #102 on merge.
+      ready-to-review-merged-dependency card's notes ran to several hundred words and alone filled
+      the viewport, forcing heavy scrolling and leaving only one item visible at a time - defeating
+      the dashboard's purpose as an overview. item.notes (item_card macro, dashboard.html) rendered
+      at full height with no truncation, so any item with a long investigation writeup did this to
+      the page. Fixed by wrapping the notes div in a collapsed-by-default <details>/<summary>
+      toggle, reusing the .roadmap-details CSS-only arrow-toggle pattern already in the file for the
+      "Background & history" section, rather than inventing new JS. No Python changes needed -
+      build_dashboard.py/render_common.py already pass item.notes through unchanged; the sidebar
+      "What to do next" cards are unaffected since they render short fixed one-liners, not
+      item.notes. Verified by rendering example/ through build_dashboard.py with a temporarily
+      lengthened note and publishing the result as an Artifact: notes collapse by default behind "▸
+      Notes", expand to "▾ Notes" on click, and items with no notes show no summary line. 194 tests
+      pass (plan-dashboard suite - unaffected, since this is template/CSS only). Independent of the
+      #101 chain, based on fork main; build_dashboard.py/dashboard.html overlap with #103, #105,
+      #111, #119, #120 and #122 is the usual whichever-lands-second-merges pattern for this track.
+      Opened as draft pull request #124, subscribed to its activity. CI: two unrelated failures
+      investigated across three origin/main merges that landed on this branch from outside any
+      session (coraplex/semantic_digital_twin worker crashes, a mesh-material assertion cleared by
+      an upstream fix, and a missing-ROS-package error in a newly-merged Gazebo adapter's tests) -
+      none had any path back to this template-only diff; each was replied to on the pull request
+      rather than fixed here, per the established pattern of unrelated robotics CI noise on
+      .claude/-only changes. The user marked the pull request ready for review themselves on
+      2026-08-03 (not reverted to draft, per this plan's own precedent for a user-made
+      draft-to-ready flip) and it merged into fork main the same day. Session unsubscribed from both
+      the pull request and this plan's tracking issue #102 on merge.
 
   - id: add-plan-item-skill
     branch: claude/add-plan-item-skill-e89irj
