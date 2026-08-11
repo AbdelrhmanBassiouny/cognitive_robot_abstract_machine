@@ -2493,6 +2493,68 @@ items:
 
       427 tests pass across the three directories CI runs, was 424.
 
+      Re-scoped 2026-08-11 on the user's decisions, taken after the two review comments about
+      `repair` and about the command-class duplication were costed. `repair` is cut; this pull
+      request is now based on #139; and everything the two branches duplicated is extracted into a
+      new `.claude/shared/` that both import.
+
+      `repair` is deleted with its exit status, its four `ReportKey` members and its six tests. What
+      replaces it is the write-time rule from the previous round, and the correction recorded above
+      is the reason: eleven of the twelve broken words predate `fold` entirely, so they were never
+      this writer's to produce, and the manifest is clean across all six plans now. A subcommand
+      whose stated justification is spent is the YAGNI smell `AGENTS.md` names.
+
+      `.claude/shared/` holds four stdlib-only modules: `errors.py` (`ExternalCallFailed`),
+      `git_commands.py` (`GitCommandRunner` with its `attempt`/`run` split), `command_line.py` (the
+      `Command` base and `commands_of`), and `plan_model.py` (`ItemStatus`). Its tests live in
+      `.claude/hooks/tests/`, which CI already runs, so `ci.yml` is untouched and the single pytest
+      line #135 also edits stays unconflicted.
+
+      The git seam is the one extraction that was not mechanical, and reading the three copies is
+      what shaped it. Their contracts are deliberately opposite - this module's `run_git` raises,
+      `stack.py`'s `_git` answers nothing on failure, and #135's raises a domain error - so a single
+      function could not have served them. #139's runner already had both halves, so it was moved
+      rather than redesigned: `attempt` reports and `run` raises. `stack.py`'s ten call sites now
+      read through `attempt`, and its 152 tests pass unchanged, which is the evidence the
+      never-raises contract survived rather than being quietly tightened.
+
+      `classproperty` is deleted rather than shared, which reverses the shape #139 adopted over
+      three rounds. Measured rather than argued: both parsers are built from the instances in their
+      registry, and grep found no class-level reader of `invoked_as` or `description` anywhere in
+      production - the only ones were #139's own two tests, asserting the descriptor's behaviour.
+      Plain abstract properties give the same refusal at the same moment, since both registries
+      instantiate every subclass as their module imports. That also avoided copying
+      `class_property.py` into `.claude/hooks/`, which was the alternative and would have been a
+      fifth duplicated file added in answer to a complaint about duplication.
+
+      `ItemStatus` now has one definition. `display_label` did not move with it: it is presentation,
+      so the label map and a `status_label` filter live in `render_common.py`, registered on the
+      environment that builds every page. That was forced by a test rather than chosen - the first
+      attempt registered the filter at the call site, and
+      `test_template_environment_finds_the_committed_templates` failed, correctly, because a
+      template must not depend on a filter its own environment does not provide.
+
+      Four production `sys.path` inserts are the cost, and they are the first in this repository
+      -the hackery decision 8 exists to end. They are what let a script invoked as `python3
+      .claude/hooks/plan_item_bootstrap.py` reach a sibling directory, and
+      `dev-tooling-python-package` removes all four when it creates `development_tooling`. Two of
+      the six recorded duplications stay carriers because this branch cannot reach them: #135's
+      `run_git` is on neither `main` nor #139, and two of the three GitHub-backend copies are on
+      #107 and #111.
+
+      Two defects the work found rather than assumed. The scratch fixture installed the hooks but
+      not the shared modules they now import, so two suites failed at import with a message about
+      the wrong file - the same transitive-dependency break #110 recorded, fixed by copying shared
+      wherever hooks are installed so it cannot be forgotten. And `commands_of(Command)` raises,
+      because only direct subclasses are found and `Command`'s are the two abstract tool bases; a
+      test of mine asked for exactly that and only the combined run exposed it, since running the
+      module alone never imported the other tool. The constraint is now in the function's own
+      docstring.
+
+      Verified beyond the harness: all four entry points run standalone, `check` against this plan
+      still returns the single true positive it did before, and every new test was mutation-checked
+      to fail only for its own reason.
+
   - id: no-pr-subscriptions
     title: "Stop sessions from subscribing to their own pull requests"
     branch: claude/remove-auto-subscribe-pr-oowwkp
