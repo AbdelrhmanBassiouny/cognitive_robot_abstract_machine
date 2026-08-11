@@ -5583,3 +5583,106 @@ the ownership convention survive a pass. They do by construction — no `<owner>
 `blockers_not_owned_by` never matches, the identical path as a hand-written blocker — verified
 against this plan's real manifest, where the three pre-convention blockers on
 `personal-settings-sync` carry no owner-shaped prefix.
+
+## Update 2026-08-11 (resolved): #126's conflict, and a rename git will not accept
+
+`/plan-item-resolve workflow-unification git-identity-from-personal-notes`, session
+https://claude.ai/code/session_016kC5DfwqNRAmDkWYLxpa3x. The item was `blocked` with one
+recorded blocker and, as usual, a second thing wrong that nothing had written down.
+
+### The manifest named one of the two, which is now the expected shape rather than a surprise
+
+`blockers` carried the maintenance pass's conflict report. It did not carry the review thread
+opened the same morning, because no writer exists for review arriving after an item's last
+manifest write — the finding the 2026-08-07 entry generalized, now on its fourth item.
+
+Worth recording as a *narrowing* rather than a repeat: `manifest-currency-first` (#151) has
+since made the pass write the blocker it decides itself, and that half worked exactly as
+designed here — the conflict blocker was accurate, owner-prefixed, and round-tripped intact.
+What is still unwritten is everything the pass does not decide, and a review comment is the
+clearest case of it. The gap is smaller and better-defined than it was a week ago; it is not
+closed, and nothing in flight closes it.
+
+### The conflicts, and the one that would have deleted a feature
+
+Five files, all additive-vs-additive, but "keep both" was the wrong instinct in one place and
+worth stating because the failure would have been silent. `session-start.sh`'s hunk pitted this
+branch's git-identity block against `main`'s personal-settings sync — and this branch, whose
+last base merge predates #109 landing, **does not carry the settings block at all**. Resolving
+in favour of ours would have dropped a shipped feature out of the hook with no conflict, no
+test failure (this branch's tests do not install the settings path) and nothing to notice it.
+The tell was mechanical rather than clever: `grep SUMMARY_SETTINGS` on our own side returned
+nothing, which is the check worth running on any conflict hunk where one side looks like a
+wholesale replacement of the other.
+
+The ordering the 2026-08-07 entry wrote down for exactly this arrival held without
+adjustment: the git-identity write goes above the setup verdict, and the verdict's comment
+already said "last of everything the hook writes" rather than naming `CLAUDE.local.md`, so the
+new block inherited the rule instead of rediscovering it. That is the entry's own prediction
+coming true one item later, and it is the argument for generalizing a comment at the moment
+you notice it is too narrow.
+
+`scratch_repository.py` carried the one judgement that was not mechanical. This branch's
+`REQUIREMENTS_FILE` and `TOOLING_FILES` and #121's `SetupPrerequisiteFile` enum are the same
+paths under two spellings — the same-artifact-twice pattern this roadmap has now recorded for
+#109's `ScratchRepository`/`ScratchProject` and #110/#106's three duplicated artifacts. Keeping
+both sides would have re-landed literals a review round had just removed, so the literals go
+and the enum stays.
+
+### A rename that cannot be done, and the reply that says so
+
+The review thread asked for `GIT_AUTHOR_IDENT` → `GIT_AUTHOR_IDENTITY`, reading it as an
+abbreviation. It is git's own variable:
+
+```
+$ git var -l | grep IDENT
+GIT_COMMITTER_IDENT=...
+GIT_AUTHOR_IDENT=...
+$ git var GIT_AUTHOR_IDENTITY
+usage: git var (-l | <variable>)
+```
+
+Applying it makes `git var` exit non-zero on every call, so `effective_git_identity` would
+report that git cannot determine an identity — the single wrong answer the item's own design
+notes say a check about commit authorship must never give. Answered with the measurement and
+left open, per the reply-don't-resolve rule.
+
+The boundary this draws is the reusable part, since AGENTS.md's no-abbreviations rule is one
+of the most frequently applied on this plan: the rule governs identifiers **we** choose, which
+is why #106's subcommand became `configuration`, and it cannot govern one another program
+defines. Everything this branch names is already spelled out; the remaining `IDENT` tokens are
+citations. A reviewer reading a diff cannot tell those two cases apart by eye, so the answer
+is a measurement rather than an argument.
+
+### The merge created work beyond itself
+
+`session-start-messages.sh` did not exist when this branch was written. After merging, the
+`git identity:` line was the only summary line still wording itself inline, and
+`test_git_identity_sync.py` held four literal copies of that wording — precisely the
+duplication #121's review round had removed from every other line days earlier. Left alone it
+would have merged clean, passed CI, and quietly reintroduced the pattern.
+
+So the four messages moved into that file with `SummaryMessage` members, and `SummaryMessage`
+and `summary_message` moved beside `summary_value` in `session_start_summary.py`, which two
+test modules now share. #121's second round settled that no wording is pinned; that call was
+followed rather than relitigated, and what is pinned is the pair of failures that break the
+hook, both mutation-checked.
+
+**Generalizable: a convention adopted on a branch does not apply itself to the branch's
+children.** #121 single-sourced its wording after #126 was already open, so the convention and
+the code that violates it never met until the merge. A conflict resolution is the moment they
+do, and reviewing only the conflicted hunks would have missed this entirely — the git-identity
+block merged cleanly. Worth adding to what a resolve checks: not just does it merge, but does
+the merged tree still honour what the base decided while we were away.
+
+### State
+
+Pushed as `edca885f`; `mergeable_state` `dirty` → `unstable`; `needs-resolution` dropped by
+re-sending the full label set; still a draft, still no `bug` label; description rewritten. 397
+tests across the three directories CI runs — 107 hooks, 194 plan-dashboard, 96 stack — and the
+hooks suite re-run from a clean clone of the pushed branch, per #121's staged-diff lesson.
+`test_each_lib (semantic_digital_twin)` is re-checked on the new run rather than inherited from
+the 2026-08-03 ruling; it remains the base's failure, and this diff is `.claude/hooks/` only.
+
+Pushed to this item's own branch rather than the resolving session's designated one, the same
+override recorded for #115, #121, #133 into #117, and #143's one line onto #135's branch.
