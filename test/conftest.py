@@ -80,6 +80,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Slider,
     Door,
     Hinge,
+    GroundFloor,
 )
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -110,6 +111,7 @@ from semantic_digital_twin.world_description.geometry import (
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
     Body,
+    Region,
 )
 
 ###############################
@@ -633,23 +635,25 @@ def _elevator_world_setup():
         wall_thickness = 0.05
         scale = Scale(1, 1, 1)
         name = PrefixedName("elevator")
-        elevator = Elevator.create_with_new_body_in_world(
-            name=PrefixedName("Elevator"),
-            world=world,
-            scale=Scale(1, 1, 1),
-            wall_thickness=0.05,
-        )
+        elevator = Elevator.get_annotation_specification(
+            "Elevator",
+            Elevator.get_default_root_kinematic_structure_entity_specification(
+                scale=Scale(1, 1, 1), wall_thickness=0.05
+            ),
+        ).spawn(world)
 
-        vertical_drive = Slider.create_with_new_body_in_world(
-            name=PrefixedName(f"{name.name}_drive", name.prefix),
-            world=world,
-            active_axis=Vector3.Z(),
-        )
+        vertical_drive = Slider.get_annotation_specification(
+            f"{name.name}_drive",
+            Slider.get_default_root_kinematic_structure_entity_specification(),
+            parent_connection_specification=Slider.parent_connection_specification(
+                axis=Vector3.Z()
+            ),
+        ).spawn(world)
         elevator.add(vertical_drive)
 
         door_scale = Scale(wall_thickness, scale.y / 2, scale.z)
         door1 = Door.create_with_new_body_in_world(
-            name=PrefixedName(f"{name.name}_door0", name.prefix),
+            name=f"{name.name}_door0",
             world=world,
             world_root_T_self=HomogeneousTransformationMatrix.from_point_rotation_matrix(
                 Point3(-scale.x / 2, -scale.y / 4, 0),
@@ -658,7 +662,7 @@ def _elevator_world_setup():
             scale=door_scale,
         )
         door2 = Door.create_with_new_body_in_world(
-            name=PrefixedName(f"{name.name}_door1", name.prefix),
+            name=f"{name.name}_door1",
             world=world,
             world_root_T_self=HomogeneousTransformationMatrix.from_point_rotation_matrix(
                 Point3(-scale.x / 2, scale.y / 4, 0),
@@ -684,12 +688,14 @@ def _elevator_world_setup():
             ),
         )
         for i, (current_door, lower, upper) in enumerate(door_slider_configs):
-            door_slider = Slider.create_with_new_body_in_world(
-                name=PrefixedName(f"{name.name}_door{i}_drive", name.prefix),
-                world=world,
-                active_axis=(Vector3.Y() * ((-1) ** (i + 1))),
-                connection_limits=DegreeOfFreedomLimits(lower=lower, upper=upper),
-            )
+            door_slider = Slider.get_annotation_specification(
+                f"{name.name}_door{i}_drive",
+                Slider.get_default_root_kinematic_structure_entity_specification(),
+                parent_connection_specification=Slider.parent_connection_specification(
+                    axis=(Vector3.Y() * ((-1) ** (i + 1))),
+                    dof_limits=DegreeOfFreedomLimits(lower=lower, upper=upper),
+                ),
+            ).spawn(world)
             current_door.add(door_slider)
 
         world.add_semantic_annotation(elevator)
@@ -845,6 +851,38 @@ def kitchen_world():
 def building_floor():
     world = World.create_with_root_body("root")
     BuildingFloor().spawn(world, "building_floor")
+    return world
+
+
+@pytest.fixture(scope="session")
+def multi_story_building(_elevator_world_setup):
+    elevator_copy = deepcopy(_elevator_world_setup)
+    world = World.create_with_root_body("root")
+    BuildingFloor().spawn(world, "floor_1")
+    BuildingFloor().spawn(
+        world,
+        "floor_2",
+        parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 3),
+    )
+    world.merge_world(
+        elevator_copy,
+        FixedConnection(
+            parent=world.root,
+            child=elevator_copy.root,
+            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                -4.5, 0, 0.5
+            ),
+        ),
+    )
+
+    with world.modify_world():
+        ground_floor_region = Region(name=PrefixedName("Ground Floor"), area=ShapeCollection(shapes=[Box(scale=Scale(8, 8, 3))]))
+        world.add_connection(FixedConnection(parent=world.root, child=ground_floor_region, parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 1.5)))
+        world.add_semantic_annotation(GroundFloor(root=ground_floor_region))
+
+        first_floor_region = Region(name=PrefixedName("First Floor"), area=ShapeCollection(shapes=[Box(scale=Scale(8, 8, 3))]))
+        world.add_connection(FixedConnection(parent=world.root, child=first_floor_region, parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 4.5)))
+        world.add_semantic_annotation(GroundFloor(root=first_floor_region))
     return world
 
 

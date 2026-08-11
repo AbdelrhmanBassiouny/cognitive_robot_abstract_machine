@@ -20,7 +20,7 @@ from semantic_digital_twin.world_description.world_entity import (
 
 
 @dataclass
-class Room:
+class GenericRoom:
     """
     World-independent description of a room: a floor with four walls, one of which
     carries a hinged door with a handle, whose entry way cuts a doorway into that wall.
@@ -60,8 +60,8 @@ class Room:
             Identity if None.
         :return: The room's floor annotation.
         """
-        floor = Floor.get_specification(
-            f"{name}_floor", Floor.get_default_root_specification(scale=self.scale.xy)
+        floor = Floor.get_annotation_specification(
+            f"{name}_floor", Floor.get_default_root_kinematic_structure_entity_specification(scale=self.scale.xy)
         ).spawn(world, parent=parent, parent_T_self=parent_T_self)
 
         wall = None
@@ -75,29 +75,29 @@ class Room:
                 0,
                 yaw,
             )
-            wall = Wall.get_specification(
+            wall = Wall.get_annotation_specification(
                 f"{name}_wall_{i}",
-                Wall.get_default_root_specification(
+                Wall.get_default_root_kinematic_structure_entity_specification(
                     scale=Scale(self.wall_thickness, self.scale.x, self.scale.z)
                 ),
             ).spawn(world, parent=floor.root, parent_T_self=wall_pose)
 
-        handle_root_specification = Handle.get_default_root_specification()
+        handle_root_specification = Handle.get_default_root_kinematic_structure_entity_specification()
         handle_root_specification.parent_T_self = (
             HomogeneousTransformationMatrix.from_xyz_rpy(
                 y=self.door_scale.y / 2 * 0.9, yaw=np.pi
             )
         )
-        door = Door.get_specification(
+        door = Door.get_annotation_specification(
             f"{name}_door",
-            Door.get_default_root_specification(
+            Door.get_default_root_kinematic_structure_entity_specification(
                 scale=self.door_scale,
                 connection_specification=RevoluteConnectionSpecification(
                     axis=Vector3.Z()
                 ),
             ),
             part_specifications={
-                "handle": Handle.get_specification(
+                "handle": Handle.get_annotation_specification(
                     f"{name}_handle", handle_root_specification
                 )
             },
@@ -127,7 +127,7 @@ class BuildingFloor:
     Extents of the floor slab.
     """
 
-    room: Room = field(default_factory=Room)
+    room: GenericRoom = field(default_factory=GenericRoom)
     """
     The room spawned into each of the floor's four corners.
     """
@@ -151,9 +151,9 @@ class BuildingFloor:
             Identity if None.
         :return: The floor slab's annotation.
         """
-        floor = Floor.get_specification(
+        floor = Floor.get_annotation_specification(
             f"{name}_floor",
-            Floor.get_default_root_specification(scale=self.floor_scale),
+            Floor.get_default_root_kinematic_structure_entity_specification(scale=self.floor_scale),
         ).spawn(world, parent=parent, parent_T_self=parent_T_self)
 
         room_poses = [
