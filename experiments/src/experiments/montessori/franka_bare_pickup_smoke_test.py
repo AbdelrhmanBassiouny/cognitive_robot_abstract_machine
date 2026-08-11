@@ -212,7 +212,10 @@ def build_scene() -> tuple[World, Panda, Body]:
     # create_with_dofs instead it would be a fixed offset and the cube would start at
     # the world origin.
     cube_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-        x=CUBE_POSITION.x, y=CUBE_POSITION.y, z=CUBE_POSITION.z
+        x=CUBE_POSITION.x,
+        y=CUBE_POSITION.y,
+        z=CUBE_POSITION.z,
+        reference_frame=root,
     )
 
     robot = mount_stationary_robot(
