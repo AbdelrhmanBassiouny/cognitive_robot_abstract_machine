@@ -5686,3 +5686,77 @@ the 2026-08-03 ruling; it remains the base's failure, and this diff is `.claude/
 
 Pushed to this item's own branch rather than the resolving session's designated one, the same
 override recorded for #115, #121, #133 into #117, and #143's one line onto #135's branch.
+
+## Update 2026-08-11 (later): a repair rule needs evidence, not a shape match
+
+Two follow-ups to the review round above, both produced by using `--append-notes` on this
+item's own note rather than by reasoning about it.
+
+### The paragraph count is the only fix available, and that is worth saying
+
+Appending the round's note produced one run-together paragraph, because the file was
+written as continuously wrapped prose with no blank lines. Nothing was wrong with the
+tool: a file's paragraphs are whatever its blank lines say they are, and five intended
+paragraphs written as one *are* one.
+
+What was missing is that nothing said so at the time. The write now reports
+`note_paragraphs`, counted through the same splitter `fold` uses, so the number and the
+manifest cannot disagree. Which paragraphs were *meant* is not recoverable from the file
+— that information never reached the script — so the honest fix is to make the outcome
+visible at the moment of writing rather than to guess at intent. The first attempt
+counted the value *before* folding, where a hard-wrapped line still looks like a break;
+its own test caught it, which is the second time this week a fix for a wrapping problem
+has needed the same distinction drawn.
+
+### The blind rejoin was luck, and running it wider proved it
+
+Repairing that note by hand turned up five hyphen-broken words in the live manifest —
+`plan- item`, `stacked- pr`, `plan- writing`, `dependency- chips` and one of the
+session's own — all residue of the fold bug this branch had just fixed. A fix stops new
+damage; it does not repair what the bug already wrote, and nothing was looking at those
+values. They were rejoined with a plain regular expression over `\w+- \w+`.
+
+**That rule is wrong, and only happened to be right on those five.** Running it across
+every item turned up seven more, and one of them is
+`all network- and credential-free` — a suspended hyphen, correct English, and
+character-for-character the shape of a break. A blind rejoin would have written
+`network-and credential-free` into somebody's note and nothing would have flagged it.
+
+So `repair` closes a break only when the rejoined word appears **elsewhere in the plan**.
+That is the bug's own signature rather than a guess about English: a wrap breaks a word
+its author wrote whole, and such a word is written elsewhere — inside a longer compound
+counts, since `plan-item-kickoff` is evidence for `plan-item`. `network-and` appears
+nowhere and is left alone. What fails the test is reported under its own exit status,
+`text_needs_repair`, so a partial repair cannot read as a clean one.
+
+The cost is real and is the right way round: a genuinely broken word occurring exactly
+once is left for a person. Live on this plan that was four rejoined and three reported,
+two of which were real breaks then judged and fixed by hand.
+
+The generalization, which this plan has now met from both directions: a rule that
+*detects* damage by shape is fine, and a rule that *repairs* it needs evidence for each
+case. The five hand-fixes were made with a detector and no evidence, and got away with
+it; the same rule at eight times the scale would have corrupted prose. Where the
+evidence is missing, report rather than write.
+
+### The greenlet blocker is retracted
+
+Recorded on 2026-08-10, and on #151 and #135, as `greenlet` 3.5.5 having been published
+with macOS and Windows wheels only, blocking `uv sync` on every branch in the repository.
+Not true, checked rather than re-asserted: 3.5.5 ships 80 wheels including
+`cp312-manylinux_2_24_x86_64.manylinux_2_28_x86_64` **and** an sdist, `uv lock` and
+`uv pip install` both resolve it on this platform with the runners' own uv 0.8.17, and CI
+run 31478716090 completed green on another branch. The runner's `manylinux_2_39_x86_64`
+is compatible with a `manylinux_2_28` wheel.
+
+Everything fits a publish-propagation window — greenlet uploads per-platform from
+separate jobs, so there is an interval where the macOS and Windows wheels are on the
+index and the Linux ones and the sdist are not, which is exactly what the error said
+including "doesn't have a source distribution or wheel". External, transient, and
+self-resolved.
+
+No pin was added and no bug pull request opened: `greenlet<3.5.5` would hold the whole
+workspace below the current release to avoid a problem that no longer exists, on a
+transitive dependency nothing here declares. `tool.uv.required-environments` remains
+available as a resilience measure on its own merits — it would not have prevented this —
+and was offered rather than assumed.
