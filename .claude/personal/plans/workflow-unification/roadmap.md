@@ -5270,3 +5270,76 @@ remainder as a paragraph starting mid-clause. Two docstrings landed that way and
 with a genuine one-line summary so the formatter is stable over them. Worth knowing before
 running it over prose-heavy test docstrings: the fix is to write the summary line the formatter
 expects, not to skip the formatter.
+
+## Update 2026-08-11 (`manifest-currency-first`, #151): the maintenance pass writes after all
+
+Raised by the user, reversing a call this item itself made a day earlier: *"i want the stack
+maintenance skill to also update the plan manifest files and publish the dashboard, for example
+conflicts are detected and now the item is blocked because it needs resolution, this information
+should be instantly updated in the dashboard."*
+
+Folded into this item rather than opened as its own, by the scope rule: it rewrites the section
+`manifest-currency.md` introduced, the section `stacked-pr-maintenance/SKILL.md` gained from it,
+and the contract test asserting the pass writes no manifest. Strip those and nothing stands on
+its own; `main` is not a possible base either, since `manifest-currency.md`, the
+`MANIFEST_CURRENCY_DOCUMENT` constant and `update` exist only here.
+
+### One of the two reasons for reporting was simply wrong
+
+The recorded reasoning was that the pass "runs unattended under `--non-interactive`, where its own
+doctrine forbids opening a discussion". `--non-interactive` suppresses `AskUserQuestion` and
+nothing else: `routine-prompt.md` registers the pass as `/stacked-pr-maintenance ...
+--non-interactive`, which is a live Claude session, so the `Artifact` tool was reachable the whole
+time. The doctrine forbids opening a *discussion*, not writing a file. It was reasoning about the
+mode's name rather than about what the mode does.
+
+The second reason survives intact and bounds the change: *which* status a reparent or a promotion
+implies is a reading, not a mechanical fact. So the pass writes only what it decided itself - a
+branch it labels `needs-resolution` is blocked because this pass concluded so, and one whose label
+it clears is not - and reports reparents, promotions and landed branches as before. A landed branch
+needs no write at all; `sync_manifest_status.py` corrects merged to `done` on the refresh the pass
+now triggers anyway.
+
+The write is a script call and the publish is a skill invocation, which is also what makes this
+survive `routine-cutover`: after that the pass is a plain Action with no session in it, the writes
+keep working unchanged, and publishing moves to `stack-board-single-site`'s built site.
+
+### Keyed on a branch, because that is what the pass holds
+
+`update` needs a plan id and an item id; the pass has neither. `PLAN_BRANCH_INDEX_PATH` stops at
+the plan id and `PlanDocuments` only looks items up by id, so `resolve --branch` was the missing
+half. `block`/`unblock --branch` then follow, rather than leaving a session to filter a blocker
+list in shell prose: the owner is written into the blocker (`<owner>: <reason>`, under
+`MAINTENANCE_BLOCKER_OWNER`), so a pass replaces and withdraws its own entries and never a
+person's, and an item still carrying somebody else's blocker stays `blocked`. Two items on one
+branch is ordinary - `landed-parent-detection` and `session-safe-pr-reparent` share one today - so
+all three operations answer for every item on the branch.
+
+### Two defects the live run found and the harness had not
+
+Both were reached only by writing a real blocker into this plan's own manifest, which is the
+argument for running these against the fork rather than only in a scratch repository.
+
+**Folding broke inside words.** `textwrap.fill` breaks at hyphens and through any word too long
+for the column, and a folded scalar reads a line break back as a space - so
+`claude/workflow-unification-setup-jgvs53` came back as `claude/workflow-unification-setup-
+jgvs53`, still valid YAML and no longer the branch anybody named. Latent since the block-styled
+writer landed, and reachable the moment something wrote an identifier into a note or a blocker,
+which is exactly what this change does. `fold` now breaks only between words; a word wider than
+the column overflows it, which is the one thing wrapping is allowed to get wrong here.
+
+**Withdrawing a blocker an item never carried wrote it an empty list.** The pass clears its label
+from every branch it finds clean, most of which it never blocked, so this would have spread
+`blockers: []` across the whole manifest one run at a time. Observed live on
+`landed-parent-detection` and `session-safe-pr-reparent`; reverted, and the write is now skipped
+for any field whose value is unchanged.
+
+### `plan-create` already published; the index did not
+
+The second half of the request turned out to be nearly done: step 8 has invoked the
+`plan-dashboard` skill since before this item existed. The real hole was the master index, which
+step 8 *asked* about - so a plan was created and then missing from the one page that lists every
+plan, until somebody thought to run `/plan-dashboard` with no argument. Creating a plan is the
+single change that alters what the index itself lists, which is why it is the exception to the
+don't-republish-the-index-unprompted convention rather than a violation of it; `_index` has its own
+cached URL, so it updates that page rather than minting a second.
