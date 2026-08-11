@@ -39,7 +39,12 @@ from semantic_digital_twin.robots.robot_parts import (
     EndEffector,
 )
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
-from semantic_digital_twin.spatial_types import Quaternion, Vector3
+from semantic_digital_twin.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Quaternion,
+    Vector3,
+)
+from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
@@ -529,10 +534,23 @@ class Armar7MobileBase(MobileBase[OmniDrive], HasTorso[Armar7Torso]):
     def setup_default_configuration_in_world_below_robot_root(
         cls, robot_root: KinematicStructureEntity
     ) -> Self:
+        base_root = robot_root._world.get_body_in_branch_by_name(
+            robot_root, "Dummy_Platform_link"
+        )
+        if not base_root.collision.shapes:
+            # `Dummy_Platform_link` itself carries no geometry in the URDF; the
+            # platform mesh lives on `Platform_body_link` a few fixed joints below it.
+            # Box dimensions/offset are that mesh's own axis-aligned bounding box.
+            base_root.collision.shapes.append(
+                Box(
+                    origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        0.0, -0.0025, 0.191, reference_frame=base_root
+                    ),
+                    scale=Scale(0.75, 0.74, 0.44),
+                )
+            )
         return cls(
-            root=robot_root._world.get_body_in_branch_by_name(
-                robot_root, "Dummy_Platform_link"
-            ),
+            root=base_root,
             forward_axis=Vector3.Y(),
         )
 
@@ -551,7 +569,10 @@ class Armar7(AbstractRobot, HasMobileBase[Armar7MobileBase]):
 
     @classmethod
     def _get_root_body_name(cls) -> str:
-        return "Dummy_Platform_link"
+        # `Dummy_Platform_link` sits one fixed joint below the URDF's actual root
+        # (named "root"), so rooting the robot there instead would attach it via a
+        # `FixedConnection` rather than the drive connection built onto "root".
+        return "root"
 
     def _setup_collision_rules(self):
         pass

@@ -265,6 +265,39 @@ class DuplicateContextExtensionError(MotionStatechartError):
 
 
 @dataclass
+class ActionClientTypeMismatchError(MotionStatechartError):
+    """
+    Raised when an action topic is requested with a different message type than the
+    one its cached action client was created with.
+    """
+
+    action_topic: str
+    """
+    The action topic that was requested with two different message types.
+    """
+
+    existing_message_type: Type
+    """
+    The message type the cached action client for this topic was created with.
+    """
+
+    requested_message_type: Type
+    """
+    The message type that was requested for this topic instead.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f'Action topic "{self.action_topic}" was already used with message type '
+            f'"{self.existing_message_type.__name__}", but is now requested with '
+            f'"{self.requested_message_type.__name__}".'
+        )
+
+    def suggest_correction(self) -> str:
+        return "Use a unique action_topic per message type."
+
+
+@dataclass
 class PlotterNotConfiguredError(MotionStatechartError):
     """
     Raised when a plot is requested but the corresponding plotter was never configured.
