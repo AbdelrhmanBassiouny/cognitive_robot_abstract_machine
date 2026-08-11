@@ -174,10 +174,20 @@ def paragraphs_of(text: str) -> list[str]:
     one, which is how a person writes the file a value comes from. Shared with
     :func:`fold` so that what gets counted and what gets written can never disagree.
 
+    A hyphen immediately before one of those wrapped line breaks closes up rather than
+    becoming a space, because that is where its author wrapped a word they wrote whole -
+    ``blank-\\nline`` is *blank-line*, not *blank- line*. A suspended hyphen keeps its
+    space, since a person types *network- and* on one line rather than breaking after
+    the hyphen. The one shape this reads wrongly is a suspended hyphen a wrap happens to
+    land on, which is why the space is only removed where the author put the break.
+
     :param text: The value as its author wrote it.
     :return: Its paragraphs, stripped.
     """
-    return [paragraph.strip() for paragraph in re.split(r"\n\s*\n", text.strip())]
+    return [
+        re.sub(r"-\n", "-", paragraph.strip())
+        for paragraph in re.split(r"\n\s*\n", text.strip())
+    ]
 
 
 def fold(text: str, indent: str) -> str:
