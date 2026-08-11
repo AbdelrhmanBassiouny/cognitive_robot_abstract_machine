@@ -50,6 +50,12 @@ back and write it out again yourself: a folded scalar hands its paragraph breaks
 as *single* newlines while the file `--notes` reads marks them with *blank* lines, so
 writing a read-back note straight back collapses the whole thing into one paragraph.
 
+Separate the paragraphs in your file with **blank lines**. A single newline is a
+hard-wrapped line within one paragraph, which is how a person writes markdown — so
+continuously wrapped prose is one paragraph however many lines it occupies. The report
+prints `note_paragraphs`, the count the manifest will actually show; if you meant five
+and it says one, that is this mistake and not a defect to go hunting for.
+
 Use `record` instead when the transition also deserves a roadmap section — a
 decision, a reversal, a conclusion that changes what the item means. `update` is
 for the state; `record` is for the story.
