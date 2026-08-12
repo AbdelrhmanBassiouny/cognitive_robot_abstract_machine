@@ -1,250 +1,93 @@
 # D-core-single-class — PR progress
 
-**Status: not started.** No branch cut, no code written. This note is the
-approved implementation plan from a `/plan-item-kickoff rdr-refactor
-d-core-single-class` session, saved so another session can pick the work up.
+**Branch cut, draft PR #159 open, bootstrap commit only — no engine code yet.**
+This note replaces the 2026-08-03 plan that sat here unexecuted; that plan is
+re-verified below, with the five premises that had gone stale corrected.
 
-Kickoff session: https://claude.ai/code/session_01FJUE2ePxVHbFSVegZ9WRtP
+- PR: #159 (draft, base `D-core-expert`)
+- Kickoff session: https://claude.ai/code/session_01QjvFKyqAynJmr18FPZgVZr
+- Full narrative: `plans/rdr-refactor/roadmap.md` §20
 
-## Next steps
+## Done
 
-1. Get a CI or local-test baseline on `D-core-expert` first — PR #98 has never
-   had CI run on it (see the assumptions below). Without it the new PR's first
-   CI result cannot be separated from anything inherited.
-2. Check whether #98 has picked up the "Handed to #98" items below before
-   implementing anything that touches `condition_resolver.py`, `interface.py`
-   or `progress.py`. Item 4 there (segregating `ExpertInterface`) changes the
-   shape this slice consumes, so its outcome gates step 4's engine work.
-3. Cut `D-core-single-class` from `origin/D-core-expert` (not from `main`).
-   Do *not* cascade the stack first — see the staleness assumption below.
-4. Work through the plan below, tests first.
-5. Update `plan.yaml`'s `d-core-single-class` item (`status`, `branch`,
-   `session`, `pull_request_number`) and run `save-plan.sh rdr-refactor` +
-   `/plan-dashboard rdr-refactor` as state changes.
+1. Branch `D-core-single-class` cut from `origin/D-core-expert` (`e52d74b4`),
+   bootstrap commit `d5b94c5a` pushed.
+2. Draft PR #159 opened against `D-core-expert`.
+3. `plan.yaml` updated by hand (`status: in_progress`, `branch`,
+   `pull_request_number: 159`, `session`, rewritten `notes`) and roadmap §20
+   appended. **`plan_item_bootstrap.py open` could not do this** — it writes
+   patched item fields at four-space indent inside a two-space item, producing
+   unparseable YAML, and still reports `{"status": "success"}`. Recorded in §20;
+   not fixed here.
 
----
+## Next
 
-# d-core-single-class — `EQLSingleClassRDR` core inference engine
+1. **Local baseline on `D-core-expert` before any code.** CI has queued nothing
+   on that branch across six pushes, so the baseline cannot come from CI. Use
+   §18/§19's recipe: `/usr/bin/python3.12` venv (the default `python3` is 3.11
+   and fails in `class_diagram.py` on `make_dataclass(module=…)`), `krrood`'s
+   requirements, editable `random_events`/`probabilistic_model`, `casadi`, and
+   `--confcutdir=test/krrood_test`. Expect `test_eql_rdr` **150 passed / 0
+   failed**. Record the collected test ids, not just the count.
+2. **Tests first.** Port six files from mega-branch `e650d968`:
+   `test_single_class_rdr.py` (1079), `test_condition_resolver_integration.py`
+   (831), `test_ask_for_rule.py` (518), `test_backward_inference_integration.py`
+   (448), `test_fit_convergence.py` (426, rewritten around
+   `RDRDidNotConvergeError`), `test_corner_case_population.py` (217). Add
+   `expert_doubles.py` for the stubs/scripted experts currently duplicated
+   across three of them; hoist case builders onto the existing `animal.py`;
+   reuse `progress.py`'s `SpyProgressReporter`.
+3. **`single_class.py`** (554 lines) with its #68 threads applied — see below.
+4. **`rdr/exceptions.py`**: `RDRDidNotConvergeError` + the expert-required
+   exception, following the file's existing `DataclassException` shape.
+5. PR body answering every "discuss with me" thread this slice touches; record
+   the handoff on tracking issue #94.
 
-## Context
+## What this slice consumes from #98 (do not rebuild)
 
-`rdr-refactor`'s Wave-0 stack is landing the EQL-native RDR engine bottom-up. The
-`D-core-engine` mega-PR (#68) carried the whole remaining core in one slice; its review
-(71 inline threads) asked for a topic split into three stacked PRs — `d-core-expert` →
-**`d-core-single-class`** → `d-core-backend` (roadmap §6). `d-core-expert` landed as PR #98
-(open, non-draft, `mergeable_state: clean`), which extracted `expert.py`, the
-`DataclassException` hierarchy, `AnswerName`/`NamespaceName`, `AnswerValidator`, `RuleAnswer`,
-and moved `CaseContext` construction to the caller.
+`ConditionResolver.resolve(context, target_knowledge, current_knowledge)`, the
+segregated `ExpertInterface`, `NullProgressReporter`/`ProgressDescription.FITTING`,
+and `ModelSaver`/`NullModelSaver`/`FileModelSaver`. All landed in `28a89ff4`.
 
-This item is the middle slice: bring `single_class.py` (the engine) and its six engine-level
-test files across from the mega-branch, adapted to #98's API and to the design decisions the
-#68 review locked in. Nothing on `D-core-expert` has an engine yet — #98's own tests build
-`CaseContext` by hand precisely because the engine that will build it lands here.
+## Engine changes, restated against current APIs
 
-Outcome: `EQLSingleClassRDR` exists on the stack with its full engine test suite, and every
-#68 review thread filed against `single_class.py` and its tests is answered.
-
-## Assumptions and flags
-
-- **Dependency is ready by the rule, but unverified.** `d-core-expert` (#98) is open, non-draft,
-  `mergeable_state: clean` → `open_ready` by `plan-schema.md`'s rule. Checked by hand against the
-  live PR rather than via `check_dependency_readiness.py`: that script imports `build_dashboard` →
-  `render_common`, which needs `markdown` + `nh3`, and `check-setup.sh` reports both missing in
-  this clone (`pip install -r .claude/skills/plan-dashboard/requirements.txt` fixes it — also
-  needed before `/plan-dashboard` can republish).
-  **#98 has never had CI run on it**: `get_status` on head `ed805dc7` returns
-  `state: pending, total_count: 0`, and `get_check_runs` returns an empty list. Get a baseline
-  before writing code on top — trigger CI on `D-core-expert`, or run
-  `pytest test/krrood_test/test_eql_rdr` on it and record the count — so the new PR's first CI
-  result is separable from anything inherited.
-- **Base is `D-core-expert`, not `main`.** Branch: `D-core-single-class` (your choice; matches
-  `plan.yaml` and every sibling). The pre-created `claude/rdr-refactor-d-core-single-class-t3f2ds`
-  branch is unused and currently just `main`'s tip.
-- **The stack is stale, and that is fine to build on.** Verified live 2026-08-02, unchanged since
-  roadmap §10: `D-core-support` `8eb7518a` (2026-07-19) still does not contain
-  `D-core-serialization` `2577a2e3`, `D-core-expert` `ed805dc7` sits on that stale support, and
-  `main` `82501888` is not an ancestor of the serialization tip either. Do **not** run the cascade
-  before starting: `git merge-tree --write-tree origin/D-core-expert origin/D-core-serialization`
-  exits 0 with no conflicts and a merged tree carrying zero stale `code_generation.type_hints`
-  references, the missing commits are entirely in `code_generation/` while this item touches only
-  `rdr/` and `test_eql_rdr/`, and the cascade is the S0-steward's own tracked job that has to be
-  redone before anything merges anyway.
-- Could not subscribe to tracking issue #94 — both `subscribe_pr_activity` tools return
-  "Could not subscribe to this PR". Not a blocker; the PR itself will be subscribed normally.
-- **Handed to #98 — see the section below.** The condition-resolver `CaseContext` change and the
-  `interface.py`/`progress.py` Null-Object work target files that already exist on
-  `D-core-expert`, so they belong to that PR's topic rather than this one.
-
-## Handed to #98 (`D-core-expert`) — not built here
-
-Every file below already exists on `D-core-expert`, so these changes belong to the PR that owns
-the parameter-object/Null-Object topic. Reported on #98 so that session can pick them up. This
-slice consumes the results and must not re-implement them.
-
-1. **`ConditionResolver.resolve` takes `CaseContext`** (thread `single_class.py:239`, comment 2 of
-   3). Four definitions change — abstract `ConditionResolver` (`condition_resolver.py:72`),
-   `TargetKnowledgeResolver` (`:115`), `CornerCaseKnowledgeResolver` (`:172`),
-   `ChainConditionResolver` (`:208`) — from eight flattened parameters to
-   `resolve(context, target_knowledge, current_knowledge)`. Five of the eight are already
-   `CaseContext` fields (`case`→`case_instance`, `case_variable`, `target_conclusion`,
-   `current_conclusion`, `corner_case`) and `firing_anchor` comes off `context.trace.firing_anchor`.
-   Plus `test_condition_resolver.py` (383 lines, 10 `.resolve(` call sites). The import is
-   type-only and cycle-free: `interface.py:38` already imports `ResolvedCondition` under
-   `TYPE_CHECKING`, and `condition_resolver.py` has `from __future__ import annotations` plus its
-   own `TYPE_CHECKING` block.
-2. **Null-Object defaults for progress and save.** `make_progress_reporter()` returns
-   `Optional[ProgressReporter]` today (`interface.py:310`, returns `None`); `on_save` is
-   `Optional[Callable[[], None]] = None` (`:181`) with `save()` guarding
-   `if self.on_save is not None` (`:190`). Add `NullProgressReporter` to `progress.py` (alongside
-   the existing `SpyProgressReporter`) and make both non-`Optional` so no caller guards on `None`.
-   Item 4 decides *where* they live — on the RDR, not on `ExpertInterface`.
-3. **`ProgressDescription` `StrEnum` in `progress.py`** (thread `single_class.py:67`) — replaces
-   the `_FITTING_DESCRIPTION` module global. The enum belongs with progress reporting; only the
-   engine consumes it.
-4. **Segregate `ExpertInterface`** (supersedes the earlier "promote onto `Expert`?" question).
-   The interface bundles three responsibilities: expert Q&A (`_run`, `interact`,
-   `_build_namespace`, `_validate`, `_missing_required`, `_render_header` — genuinely the
-   `Expert`'s), model persistence (`on_save`, `save()`), and fitting progress
-   (`make_progress_reporter()`). The last two are the RDR's, and the mega-branch proves it:
-   `single_class.py:439-440` *writes* to the expert's interface —
-   `expert.interface.on_save = lambda: save_rdr_with_case(self, self.save_path)` — installing a
-   callback built from the RDR's own `save_path`. Nothing else in `krrood/src` references
-   `on_save`, `save()` or `make_progress_reporter()`; the only `make_progress_reporter` overrides
-   anywhere are two test doubles that subclass `FunctionInterface` just to inject a progress spy
-   (`test_single_class_rdr.py:110`, `test_fit_convergence.py:70`).
-
-   So: the RDR takes a `ProgressReporter` and a save strategy as its own collaborators with
-   Null-Object defaults, and `ExpertInterface` keeps only the Q&A surface. This subsumes item 2 —
-   the Null-Object defaults land on the RDR's collaborators rather than on `ExpertInterface`.
-   Consequences: `expert.interface.on_save = …` disappears, the `expert is not None` guard around
-   progress disappears (progress belongs to the fitting loop, expert or no expert), and test
-   doubles pass a `SpyProgressReporter` in instead of subclassing an interface.
-
-   Cost to weigh: progress and Q&A currently share a session — in the IPython case the bar and
-   the prompt render into the same shell, and `make_progress_reporter()` living on the interface
-   is what lets the interactive interface wire the bar to that shell. After the split the
-   interactive layer constructs both and hands them in. D-ui (#76) is the PR that feels this, and
-   it has not merged, so now is the cheap moment.
-
-Staying here: `RDRDidNotConvergeError` and the expert-required exception in `rdr/exceptions.py`.
-Both are engine-specific and only meaningful once the convergence loop exists.
-
-## Decisions already settled (do not re-litigate)
-
-From roadmap §6, carried by the split PRs: `classify()` returns `UNSET` not `None`;
-non-convergence raises `RDRDidNotConvergeError` (a `DataclassException`) and `max_passes` is
-removed; conclusion validation lives on `ConclusionDomain`; `CaseContext` is built by the engine
-and threaded down; progress and save use Null-Object defaults; docs stop restating field docs and
-stop mentioning plans/phases/history. The auto condition-resolver and `resolution_mode` are
-**kept, minimally tidied** — the "should `ConditionResolver` be an `Expert`?" and "should
-`resolution_mode` live on the resolver/interface?" threads are already deferred to the
-`expert-capabilities` track.
-
-From this session: branch `D-core-single-class`; tests stay on `unittest.TestCase` to match #98;
-`_observe`/`_trace` both kept. Progress and save move off `ExpertInterface` onto the RDR as its
-own collaborators — not promoted to `Expert` (see the handoff section's item 4).
-
-## Work
-
-### 1. Branch + plan state
-
-Cut `D-core-single-class` from `origin/D-core-expert`. Update `plan.yaml`'s item
-(`status: in_progress`, `session`, later `pull_request_number`), run `save-plan.sh rdr-refactor`,
-then `/plan-dashboard rdr-refactor` — after installing the two missing dashboard deps.
-
-### 2. Tests first (TDD — every file fails on `ImportError` until step 3)
-
-Port from mega-branch `e650d968`, adapting each to #98's API (`ask_for_conditions(context, …)`,
-`ask_for_rule(context) -> RuleAnswer`, `AnswerName`, exceptions-not-strings):
-
-| file | lines | notes |
-|---|---|---|
-| `test_single_class_rdr.py` | 1079 | core engine behaviour; `classify` → `UNSET` assertions |
-| `test_condition_resolver_integration.py` | 831 | already pytest-style; resolver signature change |
-| `test_ask_for_rule.py` | 518 | the file #98 deliberately left for this slice |
-| `test_backward_inference_integration.py` | 448 | already pytest-style |
-| `test_fit_convergence.py` | 426 | **rewritten**: `RDRConvergenceWarning`/`max_passes` → `RDRDidNotConvergeError` |
-| `test_corner_case_population.py` | 217 | already pytest-style |
-
-All under `test/krrood_test/test_eql_rdr/`, reusing the existing `animal.py` and `zoo_loader.py`.
-
-**De-duplication** (thread `test_single_class_rdr.py:28`): `FEATURE_FIELDS`, `first()`,
-`labelling_expert()`, `scripted_expert()`, `SpyFunctionInterface` and the animal builders are
-copy-pasted across three files. Hoist the case builders onto `animal.py` and put the interface
-stubs / scripted experts in a new `test/krrood_test/test_eql_rdr/expert_doubles.py`, named after
-the behaviour they stand in for (AGENTS.md), imported relatively (the documented test exception).
-No catch-all `utils.py`.
-
-**Per-file review threads to clear while porting:** module docstrings become high-level (no API
-walkthroughs, no phases/plans); no abbreviations (`sp`→`species`, `f`, `r`, `scs`, `gc`, `i`→`index`);
-missing type hints and `:param:`/`:return:` docs added; inline imports moved to module top; the
-`Tuple[Any, Any, Any]` rule-tree fixtures in `test_backward_inference_integration.py` become a
-small dataclass; the word "live" removed from docstrings.
-
-**New coverage this slice must add:**
-- `classify()` on an empty RDR and on a no-rule-fired case returns `UNSET` (not `None`), and
-  `None` survives as a legitimate conclusion value.
-- Oscillation raises `RDRDidNotConvergeError` carrying the clashing cases and pass count; the
-  partially-fitted model is still saved when `save_path` is set.
-- Termination: a convergent fit ends without any pass cap.
-- Fitting with no expert raises the new typed exception, not `ValueError`.
-- Null-Object progress/save: fitting with an interface that reports no progress makes the same
-  `start/update/finish` calls against the null reporter, and `save()` no-ops without `on_save`.
-- Whether the `SelfReferentialInsertionError` retry loop in `fit_case` is reachable
-  (thread `single_class.py:271`): a HINT-mode test that provokes it. If it cannot be provoked,
-  delete the loop rather than keep untested code.
-
-### 3. `krrood/src/krrood/entity_query_language/rdr/single_class.py`
-
-Port the 554-line module, then apply its review threads:
-
-- `classify()` → `UNSET` when no rule fires (`Any` return, `UNSET` documented).
+- `classify()` → `Any` returning `...`; fix the `-> Optional[Any]` signature
+  defect roadmap §19 handed to this item.
 - Delete `RDRConvergenceWarning` and `max_passes`; `_run_convergence` raises
-  `RDRDidNotConvergeError` (new, in `rdr/exceptions.py`, carrying clashing cases, pass count and
-  save path) on a repeated pending-set signature. Loop until converged or oscillating.
-- Replace `raise ValueError("Expert must be supplied to fit_case")` with a new typed
-  `DataclassException` in `rdr/exceptions.py`.
-- Split `fit_case` (thread `:207`) into three named methods: build the `CaseContext`, resolve
-  target + condition, run the insert loop. Build `CaseContext` once and pass it to
-  `Expert.ask_for_conditions`/`ask_for_rule` — and, per the scope flag above, to the resolver.
-- Move the inline `UnderspecifiedMatch` and `SelfReferentialInsertionError` imports to module top
-  (verified non-circular: `underspecified.py` does not import `single_class`).
-- `from_underspecified(template: Match)` instead of `Any` (`query/match.py`).
-- Keep `_observe` and `_trace`; document exactly when each applies and why `classify` takes the
-  cheap path (the convergence loop calls it per case per pass).
-- Keep `render_tree`'s `-> str` returning `""` for an empty tree, documented as the deliberate
-  null rendering (thread `:191` — my proposed answer, not a settled one: `None` would force every
-  caller to guard a display value). Keep the `*` keyword-only marker and explain it in the PR body.
-- Docstring sweep: drop "live"; stop restating `:param expert:` prose in the method summary; stop
-  naming other methods (`ask_for_rule`) in prose; `:return:` on `conditions_root` and
-  `conclusion_domain`; complete or drop the `species`/`what_do_we_know_about` examples;
-  `:param:` docs on `_insert_rule`.
-- `_FITTING_DESCRIPTION` module global (thread `:67`) → a `ProgressDescription` `StrEnum` in
-  `progress.py` (enum over string, no module global, and it belongs with progress reporting).
+  `RDRDidNotConvergeError` carrying **clashing cases + pass count only** — there
+  is no save path any more — after calling `model_saver.save(self)`.
+- Replace `ValueError("Expert must be supplied to fit_case")` with a typed
+  `DataclassException`.
+- Split `fit_case` into three named methods; build `CaseContext` once and pass
+  it to the expert *and* the resolver.
+- `save_path: Optional[str]` → `model_saver: ModelSaver = field(default_factory=NullModelSaver)`
+  and `progress_reporter: ProgressReporter = field(default_factory=NullProgressReporter)`
+  (`default_factory` — no mutable defaults). Deletes the
+  `expert.interface.on_save = lambda: …` reach-through and every `is not None` guard.
+- `prior_errors` is now `List[DataclassException]` — pass `[e]`.
+- `_FITTING_DESCRIPTION` → `ProgressDescription.FITTING`.
+- Inline `UnderspecifiedMatch` / `SelfReferentialInsertionError` imports to
+  module top; `from_underspecified(template: Match)`; keep `_observe`/`_trace`;
+  keep `render_tree() -> str` returning `""`; docstring sweep.
+- Probe whether the `SelfReferentialInsertionError` retry loop is reachable
+  (HINT-mode test). **If it cannot be provoked, delete it.**
 
-### 4. Supporting modules
+## Standing review lenses for this plan (apply while writing tests)
 
-- `rdr/exceptions.py`: `RDRDidNotConvergeError` + the expert-required exception, following the
-  existing `error_message()`/`suggest_correction()` shape.
+- **Never compare symbolic expressions with `==`** — `__eq__` builds a truthy
+  `Comparator`, so nine assertions asserted nothing (§16). Compare `_id_`.
+- **Do not assert what a declaration, a sibling test, or the language already
+  guarantees** — five such tests were removed under review on #98 (§18, §19).
+- **Mutation-check anything load-bearing**: change the production value and
+  confirm exactly the intended test fails.
+- `scripts/format_docstrings.py` has five recorded deviations here and now
+  mis-parses `...` as a sentence end (§19) — check its output, revert churn.
+- A sweep dirties `query_graph.pdf` / `drawer_explanation.pdf` (tracked *and*
+  gitignored) — revert before committing.
 
-`progress.py`, `interface.py` and `condition_resolver.py` are handed to #98 (see the section
-above). If #98 lands without them, implement them here and say so in the PR body — but check
-#98 first.
+## Standing constraints
 
-### 5. PR
-
-Draft PR against `D-core-expert`, session link in the body, `bug` label not applicable. The body
-carries the answers to every "discuss with me" thread this slice touches (the pattern #98 used),
-and notes which threads were answered on #98 instead. Record the handoff on tracking issue #94 as
-the structural record. Subscribe to the new PR's activity; write the pr-progress note.
-
-## Verification
-
-- `pytest test/krrood_test/test_eql_rdr` — the full RDR suite, expected 144 (from #98) plus the
-  ~100 tests this slice adds.
-- `pytest test/krrood_test/test_eql` and `test_ripple_down_rules` — nothing outside `rdr/` should
-  move; known pre-existing failures in this sandbox are the missing
-  `probabilistic_model…relational.rspn` submodule and the missing `dot` binary (roadmap §9).
-- `grep` that no file in this slice imports `rdr.backend` (that is `d-core-backend`'s slice).
-- `scripts/format_docstrings.py` on every touched file.
-- CI green on the PR before asking for review.
+- Do **not** cascade the stack first; the missing commits are in
+  `code_generation/` while this slice touches only `rdr/` and `test_eql_rdr/`.
+- Do **not** subscribe to PR #159 and arm no timed check-ins (personal notes).
+- Re-draft the PR after every push.
