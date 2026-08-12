@@ -171,6 +171,21 @@ import krrood.ormatic.type_dict
 import numpy
 import pathlib
 import random_events.interval
+import segmind.datastructures.event_plotter
+import segmind.datastructures.events
+import segmind.datastructures.object_tracker
+import segmind.detectors.atomic_event_detectors_nodes
+import segmind.detectors.base
+import segmind.detectors.coarse_event_detector_nodes
+import segmind.detectors.spatial_relation_detector_nodes
+import segmind.episode_player
+import segmind.episode_segmenter
+import segmind.event_logger
+import segmind.players.csv_player
+import segmind.players.data_player
+import segmind.players.json_player
+import segmind.statecharts.segmind_statechart
+import segmind.utils
 import semantic_digital_twin.adapters.fbx
 import semantic_digital_twin.adapters.gazebo
 import semantic_digital_twin.adapters.mesh
@@ -586,6 +601,63 @@ class MonteCarloFreeSpaceSamplerDAO_obstacle_containment_checkers_association(
     target: Mapped[ObstacleContainmentCheckerDAO] = relationship(
         "ObstacleContainmentCheckerDAO",
         foreign_keys=[target_obstaclecontainmentcheckerdao_id],
+        lazy="selectin",
+    )
+
+
+class MontessoriEventMonitorDAO_detectors_association(
+    Base, AssociationDataAccessObject
+):
+    __tablename__ = "_10743417661445661478753100591919665681223921833198516907706759"
+
+    database_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    source_montessorieventmonitordao_id: Mapped[int] = mapped_column(
+        ForeignKey("MontessoriEventMonitorDAO.database_id")
+    )
+    target_abstractdetectordao_id: Mapped[int] = mapped_column(
+        ForeignKey("AbstractDetectorDAO.database_id")
+    )
+
+    target: Mapped[AbstractDetectorDAO] = relationship(
+        "AbstractDetectorDAO",
+        foreign_keys=[target_abstractdetectordao_id],
+        lazy="selectin",
+    )
+
+
+class ShapeInsertionAttemptDAO_events_association(Base, AssociationDataAccessObject):
+    __tablename__ = "_69706606842329876657110589616830391680898478070855815233632983"
+
+    database_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    source_shapeinsertionattemptdao_id: Mapped[int] = mapped_column(
+        ForeignKey("ShapeInsertionAttemptDAO.database_id")
+    )
+    target_detectioneventdao_id: Mapped[int] = mapped_column(
+        ForeignKey("DetectionEventDAO.database_id")
+    )
+
+    target: Mapped[DetectionEventDAO] = relationship(
+        "DetectionEventDAO", foreign_keys=[target_detectioneventdao_id], lazy="selectin"
+    )
+
+
+class ShapeInsertionResultDAO_attempts_association(Base, AssociationDataAccessObject):
+    __tablename__ = "_57718414895713801333241491247282417830931701587101455385843794"
+
+    database_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    source_shapeinsertionresultdao_id: Mapped[int] = mapped_column(
+        ForeignKey("ShapeInsertionResultDAO.database_id")
+    )
+    target_shapeinsertionattemptdao_id: Mapped[int] = mapped_column(
+        ForeignKey("ShapeInsertionAttemptDAO.database_id")
+    )
+
+    target: Mapped[ShapeInsertionAttemptDAO] = relationship(
+        "ShapeInsertionAttemptDAO",
+        foreign_keys=[target_shapeinsertionattemptdao_id],
         lazy="selectin",
     )
 
@@ -1012,6 +1084,44 @@ class QPDataSymbolicDAO_degrees_of_freedom_association(
     target: Mapped[DegreeOfFreedomDAO] = relationship(
         "DegreeOfFreedomDAO",
         foreign_keys=[target_degreeoffreedomdao_id],
+        lazy="selectin",
+    )
+
+
+class SegmindContextDAO_holes_association(Base, AssociationDataAccessObject):
+    __tablename__ = "_43722038121109959550124500021955750110183170782616502747579320"
+
+    database_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    source_segmindcontextdao_id: Mapped[int] = mapped_column(
+        ForeignKey("SegmindContextDAO.database_id")
+    )
+    target_aperturedao_id: Mapped[int] = mapped_column(
+        ForeignKey("ApertureDAO.database_id")
+    )
+
+    target: Mapped[ApertureDAO] = relationship(
+        "ApertureDAO", foreign_keys=[target_aperturedao_id], lazy="selectin"
+    )
+
+
+class BaseContainmentDetectorDAO_additional_candidates_association(
+    Base, AssociationDataAccessObject
+):
+    __tablename__ = "_17544578694423259948118585670410207098954744844767428057880245"
+
+    database_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    source_basecontainmentdetectordao_id: Mapped[int] = mapped_column(
+        ForeignKey("BaseContainmentDetectorDAO.database_id")
+    )
+    target_kinematicstructureentitydao_id: Mapped[int] = mapped_column(
+        ForeignKey("KinematicStructureEntityDAO.database_id")
+    )
+
+    target: Mapped[KinematicStructureEntityDAO] = relationship(
+        "KinematicStructureEntityDAO",
+        foreign_keys=[target_kinematicstructureentitydao_id],
         lazy="selectin",
     )
 
@@ -8162,6 +8272,15 @@ class MontessoriEventMonitorDAO(
     world: Mapped[WorldMappingDAO] = relationship(
         "WorldMappingDAO", uselist=False, foreign_keys=[world_id], post_update=True
     )
+    detectors: Mapped[
+        builtins.list[MontessoriEventMonitorDAO_detectors_association]
+    ] = relationship(
+        "MontessoriEventMonitorDAO_detectors_association",
+        collection_class=builtins.list,
+        cascade="all, delete-orphan",
+        foreign_keys="[MontessoriEventMonitorDAO_detectors_association.source_montessorieventmonitordao_id]",
+        lazy="selectin",
+    )
 
 
 class JointServoTuningDAO(
@@ -8394,6 +8513,35 @@ class NoMatchingHoleErrorDAO(
     )
 
 
+class ShapeInsertionAttemptDAO(
+    Base, DataAccessObject[experiments.montessori.sorting_results.ShapeInsertionAttempt]
+):
+    __tablename__ = "ShapeInsertionAttemptDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    plan_id: Mapped[int] = mapped_column(
+        ForeignKey("PlanMappingDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    plan: Mapped[PlanMappingDAO] = relationship(
+        "PlanMappingDAO", uselist=False, foreign_keys=[plan_id], post_update=True
+    )
+    events: Mapped[builtins.list[ShapeInsertionAttemptDAO_events_association]] = (
+        relationship(
+            "ShapeInsertionAttemptDAO_events_association",
+            collection_class=builtins.list,
+            cascade="all, delete-orphan",
+            foreign_keys="[ShapeInsertionAttemptDAO_events_association.source_shapeinsertionattemptdao_id]",
+            lazy="selectin",
+        )
+    )
+
+
 class ShapeInsertionResultDAO(
     Base, DataAccessObject[experiments.montessori.sorting_results.ShapeInsertionResult]
 ):
@@ -8415,14 +8563,14 @@ class ShapeInsertionResultDAO(
         )
     )
 
-    plan_id: Mapped[int] = mapped_column(
-        ForeignKey("PlanMappingDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    plan: Mapped[PlanMappingDAO] = relationship(
-        "PlanMappingDAO", uselist=False, foreign_keys=[plan_id], post_update=True
+    attempts: Mapped[builtins.list[ShapeInsertionResultDAO_attempts_association]] = (
+        relationship(
+            "ShapeInsertionResultDAO_attempts_association",
+            collection_class=builtins.list,
+            cascade="all, delete-orphan",
+            foreign_keys="[ShapeInsertionResultDAO_attempts_association.source_shapeinsertionresultdao_id]",
+            lazy="selectin",
+        )
     )
 
 
@@ -9577,7 +9725,7 @@ class PredicateGeometryVocabularyDAO(
     )
 
     shapes_by_application: Mapped[
-        builtins.list[PredicateGeometryVocabularyDAO_shapes_by_application_association]
+        builtins.tuple[PredicateGeometryVocabularyDAO_shapes_by_application_association]
     ] = relationship(
         "PredicateGeometryVocabularyDAO_shapes_by_application_association",
         collection_class=builtins.list,
@@ -9586,7 +9734,7 @@ class PredicateGeometryVocabularyDAO(
         lazy="selectin",
     )
     shapes_by_measure: Mapped[
-        builtins.list[PredicateGeometryVocabularyDAO_shapes_by_measure_association]
+        builtins.tuple[PredicateGeometryVocabularyDAO_shapes_by_measure_association]
     ] = relationship(
         "PredicateGeometryVocabularyDAO_shapes_by_measure_association",
         collection_class=builtins.list,
@@ -9887,14 +10035,14 @@ class PredicateVocabularyDAO(
         String(255), nullable=False, use_existing_column=True
     )
 
-    name_rules: Mapped[builtins.list[PredicateVocabularyDAO_name_rules_association]] = (
-        relationship(
-            "PredicateVocabularyDAO_name_rules_association",
-            collection_class=builtins.list,
-            cascade="all, delete-orphan",
-            foreign_keys="[PredicateVocabularyDAO_name_rules_association.source_predicatevocabularydao_id]",
-            lazy="selectin",
-        )
+    name_rules: Mapped[
+        builtins.tuple[PredicateVocabularyDAO_name_rules_association]
+    ] = relationship(
+        "PredicateVocabularyDAO_name_rules_association",
+        collection_class=builtins.list,
+        cascade="all, delete-orphan",
+        foreign_keys="[PredicateVocabularyDAO_name_rules_association.source_predicatevocabularydao_id]",
+        lazy="selectin",
     )
 
     __mapper_args__ = {
@@ -14737,6 +14885,15 @@ class MotionStatechartDAO(
         Integer, primary_key=True, use_existing_column=True
     )
 
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "MotionStatechartDAO",
+    }
+
 
 class StateDAO(
     Base, DataAccessObject[giskardpy.motion_statechart.motion_statechart.State]
@@ -17411,6 +17568,1118 @@ class QPDataPublisherConfigDAO(
     publish_weights: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
     publish_g: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
     publish_debug: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
+
+
+class EventPlotterDAO(
+    Base, DataAccessObject[segmind.datastructures.event_plotter.EventPlotter]
+):
+    __tablename__ = "EventPlotterDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+
+class DetectionEventDAO(
+    Base, DataAccessObject[segmind.datastructures.events.DetectionEvent]
+):
+    __tablename__ = "DetectionEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    timestamp: Mapped[datetime.datetime] = mapped_column(use_existing_column=True)
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "DetectionEventDAO",
+    }
+
+
+class EventWithTrackedObjectsDAO(
+    DetectionEventDAO,
+    DataAccessObject[segmind.datastructures.events.EventWithTrackedObjects],
+):
+    __tablename__ = "EventWithTrackedObjectsDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(DetectionEventDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    tracked_object_id: Mapped[int] = mapped_column(
+        ForeignKey("BodyDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+    with_object_id: Mapped[int] = mapped_column(
+        ForeignKey("KinematicStructureEntityDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    tracked_object: Mapped[BodyDAO] = relationship(
+        "BodyDAO", uselist=False, foreign_keys=[tracked_object_id], post_update=True
+    )
+    with_object: Mapped[KinematicStructureEntityDAO] = relationship(
+        "KinematicStructureEntityDAO",
+        uselist=False,
+        foreign_keys=[with_object_id],
+        post_update=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "EventWithTrackedObjectsDAO",
+        "inherit_condition": database_id == DetectionEventDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class AbstractContactEventDAO(
+    EventWithTrackedObjectsDAO,
+    DataAccessObject[segmind.datastructures.events.AbstractContactEvent],
+):
+    __tablename__ = "AbstractContactEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(EventWithTrackedObjectsDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "AbstractContactEventDAO",
+        "inherit_condition": database_id == EventWithTrackedObjectsDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class ContactEventDAO(
+    AbstractContactEventDAO,
+    DataAccessObject[segmind.datastructures.events.ContactEvent],
+):
+    __tablename__ = "ContactEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractContactEventDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "ContactEventDAO",
+        "inherit_condition": database_id == AbstractContactEventDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class ContainmentEventDAO(
+    EventWithTrackedObjectsDAO,
+    DataAccessObject[segmind.datastructures.events.ContainmentEvent],
+):
+    __tablename__ = "ContainmentEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(EventWithTrackedObjectsDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "ContainmentEventDAO",
+        "inherit_condition": database_id == EventWithTrackedObjectsDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class InsertionEventDAO(
+    EventWithTrackedObjectsDAO,
+    DataAccessObject[segmind.datastructures.events.InsertionEvent],
+):
+    __tablename__ = "InsertionEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(EventWithTrackedObjectsDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    through_hole_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
+        ForeignKey("ApertureDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    through_hole: Mapped[ApertureDAO] = relationship(
+        "ApertureDAO", uselist=False, foreign_keys=[through_hole_id], post_update=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "InsertionEventDAO",
+        "inherit_condition": database_id == EventWithTrackedObjectsDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class LossOfContactEventDAO(
+    AbstractContactEventDAO,
+    DataAccessObject[segmind.datastructures.events.LossOfContactEvent],
+):
+    __tablename__ = "LossOfContactEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractContactEventDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "LossOfContactEventDAO",
+        "inherit_condition": database_id == AbstractContactEventDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class LossOfContainmentEventDAO(
+    EventWithTrackedObjectsDAO,
+    DataAccessObject[segmind.datastructures.events.LossOfContainmentEvent],
+):
+    __tablename__ = "LossOfContainmentEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(EventWithTrackedObjectsDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "LossOfContainmentEventDAO",
+        "inherit_condition": database_id == EventWithTrackedObjectsDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class LossOfSupportEventDAO(
+    EventWithTrackedObjectsDAO,
+    DataAccessObject[segmind.datastructures.events.LossOfSupportEvent],
+):
+    __tablename__ = "LossOfSupportEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(EventWithTrackedObjectsDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "LossOfSupportEventDAO",
+        "inherit_condition": database_id == EventWithTrackedObjectsDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class MotionEventDAO(
+    EventWithTrackedObjectsDAO,
+    DataAccessObject[segmind.datastructures.events.MotionEvent],
+):
+    __tablename__ = "MotionEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(EventWithTrackedObjectsDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    start_pose_id: Mapped[int] = mapped_column(
+        ForeignKey("PoseMappingDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+    current_pose_id: Mapped[int] = mapped_column(
+        ForeignKey("PoseMappingDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    start_pose: Mapped[PoseMappingDAO] = relationship(
+        "PoseMappingDAO", uselist=False, foreign_keys=[start_pose_id], post_update=True
+    )
+    current_pose: Mapped[PoseMappingDAO] = relationship(
+        "PoseMappingDAO",
+        uselist=False,
+        foreign_keys=[current_pose_id],
+        post_update=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "MotionEventDAO",
+        "inherit_condition": database_id == EventWithTrackedObjectsDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class PickUpEventDAO(
+    EventWithTrackedObjectsDAO,
+    DataAccessObject[segmind.datastructures.events.PickUpEvent],
+):
+    __tablename__ = "PickUpEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(EventWithTrackedObjectsDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "PickUpEventDAO",
+        "inherit_condition": database_id == EventWithTrackedObjectsDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class PlacingEventDAO(
+    EventWithTrackedObjectsDAO,
+    DataAccessObject[segmind.datastructures.events.PlacingEvent],
+):
+    __tablename__ = "PlacingEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(EventWithTrackedObjectsDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "PlacingEventDAO",
+        "inherit_condition": database_id == EventWithTrackedObjectsDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class RotationEventDAO(
+    MotionEventDAO, DataAccessObject[segmind.datastructures.events.RotationEvent]
+):
+    __tablename__ = "RotationEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(MotionEventDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "RotationEventDAO",
+        "inherit_condition": database_id == MotionEventDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class StopRotationEventDAO(
+    MotionEventDAO, DataAccessObject[segmind.datastructures.events.StopRotationEvent]
+):
+    __tablename__ = "StopRotationEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(MotionEventDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "StopRotationEventDAO",
+        "inherit_condition": database_id == MotionEventDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class StopTranslationEventDAO(
+    MotionEventDAO, DataAccessObject[segmind.datastructures.events.StopTranslationEvent]
+):
+    __tablename__ = "StopTranslationEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(MotionEventDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "StopTranslationEventDAO",
+        "inherit_condition": database_id == MotionEventDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class SupportEventDAO(
+    EventWithTrackedObjectsDAO,
+    DataAccessObject[segmind.datastructures.events.SupportEvent],
+):
+    __tablename__ = "SupportEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(EventWithTrackedObjectsDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "SupportEventDAO",
+        "inherit_condition": database_id == EventWithTrackedObjectsDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class TranslationEventDAO(
+    MotionEventDAO, DataAccessObject[segmind.datastructures.events.TranslationEvent]
+):
+    __tablename__ = "TranslationEventDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(MotionEventDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "TranslationEventDAO",
+        "inherit_condition": database_id == MotionEventDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class ObjectEventTrackerDAO(
+    Base, DataAccessObject[segmind.datastructures.object_tracker.ObjectEventTracker]
+):
+    __tablename__ = "ObjectEventTrackerDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    context_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
+        ForeignKey("SegmindContextDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+    body_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
+        ForeignKey("BodyDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    context: Mapped[SegmindContextDAO] = relationship(
+        "SegmindContextDAO", uselist=False, foreign_keys=[context_id], post_update=True
+    )
+    body: Mapped[BodyDAO] = relationship(
+        "BodyDAO", uselist=False, foreign_keys=[body_id], post_update=True
+    )
+
+
+class ObjectTrackerFactoryDAO(
+    Base, DataAccessObject[segmind.datastructures.object_tracker.ObjectTrackerFactory]
+):
+    __tablename__ = "ObjectTrackerFactoryDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+
+class AbstractDetectorDAO(
+    MotionStatechartNodeDAO, DataAccessObject[segmind.detectors.base.AbstractDetector]
+):
+    __tablename__ = "AbstractDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(MotionStatechartNodeDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    tracked_object_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
+        ForeignKey("BodyDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    tracked_object: Mapped[BodyDAO] = relationship(
+        "BodyDAO", uselist=False, foreign_keys=[tracked_object_id], post_update=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "AbstractDetectorDAO",
+        "inherit_condition": database_id == MotionStatechartNodeDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class ContactDetectorDAO(
+    AbstractDetectorDAO,
+    DataAccessObject[segmind.detectors.atomic_event_detectors_nodes.ContactDetector],
+):
+    __tablename__ = "ContactDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "ContactDetectorDAO",
+        "inherit_condition": database_id == AbstractDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class LossOfContactDetectorDAO(
+    AbstractDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.atomic_event_detectors_nodes.LossOfContactDetector
+    ],
+):
+    __tablename__ = "LossOfContactDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "LossOfContactDetectorDAO",
+        "inherit_condition": database_id == AbstractDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class MotionDetectorDAO(
+    AbstractDetectorDAO,
+    DataAccessObject[segmind.detectors.atomic_event_detectors_nodes.MotionDetector],
+):
+    __tablename__ = "MotionDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    window_size: Mapped[builtins.int] = mapped_column(use_existing_column=True)
+    rotation_threshold: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "MotionDetectorDAO",
+        "inherit_condition": database_id == AbstractDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class RotationDetectorDAO(
+    MotionDetectorDAO,
+    DataAccessObject[segmind.detectors.atomic_event_detectors_nodes.RotationDetector],
+):
+    __tablename__ = "RotationDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(MotionDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "RotationDetectorDAO",
+        "inherit_condition": database_id == MotionDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class StopRotationDetectorDAO(
+    MotionDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.atomic_event_detectors_nodes.StopRotationDetector
+    ],
+):
+    __tablename__ = "StopRotationDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(MotionDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "StopRotationDetectorDAO",
+        "inherit_condition": database_id == MotionDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class StopTranslationDetectorDAO(
+    MotionDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.atomic_event_detectors_nodes.StopTranslationDetector
+    ],
+):
+    __tablename__ = "StopTranslationDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(MotionDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "StopTranslationDetectorDAO",
+        "inherit_condition": database_id == MotionDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class TranslationDetectorDAO(
+    MotionDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.atomic_event_detectors_nodes.TranslationDetector
+    ],
+):
+    __tablename__ = "TranslationDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(MotionDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "TranslationDetectorDAO",
+        "inherit_condition": database_id == MotionDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class DetectorStateChartDAO(
+    MotionStatechartDAO, DataAccessObject[segmind.detectors.base.DetectorStateChart]
+):
+    __tablename__ = "DetectorStateChartDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(MotionStatechartDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "DetectorStateChartDAO",
+        "inherit_condition": database_id == MotionStatechartDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class SegmindContextDAO(
+    ContextExtensionDAO, DataAccessObject[segmind.detectors.base.SegmindContext]
+):
+    __tablename__ = "SegmindContextDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(ContextExtensionDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    logger_id: Mapped[int] = mapped_column(
+        ForeignKey("EventLoggerDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+    tracker_registry_id: Mapped[int] = mapped_column(
+        ForeignKey("ObjectTrackerFactoryDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    logger: Mapped[EventLoggerDAO] = relationship(
+        "EventLoggerDAO", uselist=False, foreign_keys=[logger_id], post_update=True
+    )
+    holes: Mapped[builtins.list[SegmindContextDAO_holes_association]] = relationship(
+        "SegmindContextDAO_holes_association",
+        collection_class=builtins.list,
+        cascade="all, delete-orphan",
+        foreign_keys="[SegmindContextDAO_holes_association.source_segmindcontextdao_id]",
+        lazy="selectin",
+    )
+    tracker_registry: Mapped[ObjectTrackerFactoryDAO] = relationship(
+        "ObjectTrackerFactoryDAO",
+        uselist=False,
+        foreign_keys=[tracker_registry_id],
+        post_update=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "SegmindContextDAO",
+        "inherit_condition": database_id == ContextExtensionDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class AbstractInteractionDetectorDAO(
+    AbstractDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.coarse_event_detector_nodes.AbstractInteractionDetector
+    ],
+):
+    __tablename__ = "AbstractInteractionDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "AbstractInteractionDetectorDAO",
+        "inherit_condition": database_id == AbstractDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class PickUpDetectorDAO(
+    AbstractInteractionDetectorDAO,
+    DataAccessObject[segmind.detectors.coarse_event_detector_nodes.PickUpDetector],
+):
+    __tablename__ = "PickUpDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractInteractionDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "PickUpDetectorDAO",
+        "inherit_condition": database_id == AbstractInteractionDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class PlacingDetectorDAO(
+    AbstractInteractionDetectorDAO,
+    DataAccessObject[segmind.detectors.coarse_event_detector_nodes.PlacingDetector],
+):
+    __tablename__ = "PlacingDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractInteractionDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "PlacingDetectorDAO",
+        "inherit_condition": database_id == AbstractInteractionDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class BaseContainmentDetectorDAO(
+    AbstractDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.spatial_relation_detector_nodes.BaseContainmentDetector
+    ],
+):
+    __tablename__ = "BaseContainmentDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    containment_threshold: Mapped[builtins.float] = mapped_column(
+        use_existing_column=True
+    )
+
+    additional_candidates: Mapped[
+        builtins.list[BaseContainmentDetectorDAO_additional_candidates_association]
+    ] = relationship(
+        "BaseContainmentDetectorDAO_additional_candidates_association",
+        collection_class=builtins.list,
+        cascade="all, delete-orphan",
+        foreign_keys="[BaseContainmentDetectorDAO_additional_candidates_association.source_basecontainmentdetectordao_id]",
+        lazy="selectin",
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "BaseContainmentDetectorDAO",
+        "inherit_condition": database_id == AbstractDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class ContainmentDetectorDAO(
+    BaseContainmentDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.spatial_relation_detector_nodes.ContainmentDetector
+    ],
+):
+    __tablename__ = "ContainmentDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(BaseContainmentDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "ContainmentDetectorDAO",
+        "inherit_condition": database_id == BaseContainmentDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class HoleContactDetectorDAO(
+    AbstractDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.spatial_relation_detector_nodes.HoleContactDetector
+    ],
+):
+    __tablename__ = "HoleContactDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    overlap_threshold: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "HoleContactDetectorDAO",
+        "inherit_condition": database_id == AbstractDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class InsertionDetectorDAO(
+    AbstractDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.spatial_relation_detector_nodes.InsertionDetector
+    ],
+):
+    __tablename__ = "InsertionDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "InsertionDetectorDAO",
+        "inherit_condition": database_id == AbstractDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class LossOfContainmentDetectorDAO(
+    BaseContainmentDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.spatial_relation_detector_nodes.LossOfContainmentDetector
+    ],
+):
+    __tablename__ = "LossOfContainmentDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(BaseContainmentDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "LossOfContainmentDetectorDAO",
+        "inherit_condition": database_id == BaseContainmentDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class LossOfHoleContactDetectorDAO(
+    AbstractDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.spatial_relation_detector_nodes.LossOfHoleContactDetector
+    ],
+):
+    __tablename__ = "LossOfHoleContactDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    overlap_threshold: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "LossOfHoleContactDetectorDAO",
+        "inherit_condition": database_id == AbstractDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class LossOfSupportDetectorDAO(
+    AbstractDetectorDAO,
+    DataAccessObject[
+        segmind.detectors.spatial_relation_detector_nodes.LossOfSupportDetector
+    ],
+):
+    __tablename__ = "LossOfSupportDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "LossOfSupportDetectorDAO",
+        "inherit_condition": database_id == AbstractDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class SupportDetectorDAO(
+    AbstractDetectorDAO,
+    DataAccessObject[segmind.detectors.spatial_relation_detector_nodes.SupportDetector],
+):
+    __tablename__ = "SupportDetectorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(AbstractDetectorDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "SupportDetectorDAO",
+        "inherit_condition": database_id == AbstractDetectorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class EpisodeSegmenterExecutorDAO(
+    ExecutorDAO, DataAccessObject[segmind.episode_segmenter.EpisodeSegmenterExecutor]
+):
+    __tablename__ = "EpisodeSegmenterExecutorDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(ExecutorDAO.database_id), primary_key=True, use_existing_column=True
+    )
+
+    player_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
+        ForeignKey("EpisodePlayerDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    player: Mapped[EpisodePlayerDAO] = relationship(
+        "EpisodePlayerDAO", uselist=False, foreign_keys=[player_id], post_update=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "EpisodeSegmenterExecutorDAO",
+        "inherit_condition": database_id == ExecutorDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class EventLoggerDAO(Base, DataAccessObject[segmind.event_logger.EventLogger]):
+    __tablename__ = "EventLoggerDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    annotate_events: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
+
+
+class FrameDataDAO(Base, DataAccessObject[segmind.players.data_player.FrameData]):
+    __tablename__ = "FrameDataDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    time: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+    frame_idx: Mapped[builtins.int] = mapped_column(use_existing_column=True)
+
+
+class SegmindStatechartDAO(
+    MotionStatechartDAO,
+    DataAccessObject[segmind.statecharts.segmind_statechart.SegmindStatechart],
+):
+    __tablename__ = "SegmindStatechartDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(MotionStatechartDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "SegmindStatechartDAO",
+        "inherit_condition": database_id == MotionStatechartDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class PropagatingThreadDAO(Base, DataAccessObject[segmind.utils.PropagatingThread]):
+    __tablename__ = "PropagatingThreadDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    polymorphic_type: Mapped[str] = mapped_column(
+        String(255), nullable=False, use_existing_column=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_on": "polymorphic_type",
+        "polymorphic_identity": "PropagatingThreadDAO",
+    }
+
+
+class EpisodePlayerDAO(
+    PropagatingThreadDAO, DataAccessObject[segmind.episode_player.EpisodePlayer]
+):
+    __tablename__ = "EpisodePlayerDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(PropagatingThreadDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    use_realtime: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
+    stop_after_ready: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
+    rdr_viewer: Mapped[types.NoneType] = mapped_column(use_existing_column=True)
+
+    world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
+        ForeignKey("WorldMappingDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    world: Mapped[WorldMappingDAO] = relationship(
+        "WorldMappingDAO", uselist=False, foreign_keys=[world_id], post_update=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "EpisodePlayerDAO",
+        "inherit_condition": database_id == PropagatingThreadDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class DataPlayerDAO(
+    EpisodePlayerDAO, DataAccessObject[segmind.players.data_player.DataPlayer]
+):
+    __tablename__ = "DataPlayerDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(EpisodePlayerDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    sync_robot_only: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "DataPlayerDAO",
+        "inherit_condition": database_id == EpisodePlayerDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class FilePlayerDAO(
+    DataPlayerDAO, DataAccessObject[segmind.players.data_player.FilePlayer]
+):
+    __tablename__ = "FilePlayerDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(DataPlayerDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    file_path: Mapped[builtins.str] = mapped_column(
+        sqlalchemy.sql.sqltypes.Text, use_existing_column=True
+    )
+    models_dir: Mapped[typing.Optional[builtins.str]] = mapped_column(
+        sqlalchemy.sql.sqltypes.Text, use_existing_column=True
+    )
+
+    position_shift_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
+        ForeignKey("Vector3MappingDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    position_shift: Mapped[Vector3MappingDAO] = relationship(
+        "Vector3MappingDAO",
+        uselist=False,
+        foreign_keys=[position_shift_id],
+        post_update=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "FilePlayerDAO",
+        "inherit_condition": database_id == DataPlayerDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class CSVEpisodePlayerDAO(
+    FilePlayerDAO, DataAccessObject[segmind.players.csv_player.CSVEpisodePlayer]
+):
+    __tablename__ = "CSVEpisodePlayerDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(FilePlayerDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "CSVEpisodePlayerDAO",
+        "inherit_condition": database_id == FilePlayerDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class JSONPlayerDAO(
+    FilePlayerDAO, DataAccessObject[segmind.players.json_player.JSONPlayer]
+):
+    __tablename__ = "JSONPlayerDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(FilePlayerDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    scene_id: Mapped[builtins.int] = mapped_column(use_existing_column=True)
+    mesh_scale: Mapped[builtins.float] = mapped_column(use_existing_column=True)
+
+    __mapper_args__ = {
+        "polymorphic_identity": "JSONPlayerDAO",
+        "inherit_condition": database_id == FilePlayerDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
 
 
 class FBXGlobalSettingsDAO(

@@ -1,82 +1,93 @@
-from copy import deepcopy
+"""
+ORM round-trip tests for :mod:`experiments.montessori.sorting_results`: confirms segmind
+events persist through ORMatic with a resolvable reference to the specific insertion
+attempt -- and thus the specific :class:`~coraplex.plans.plan.Plan` -- they were
+detected during, not just loosely grouped under the shape's overall result.
+"""
 
-import pytest
+from __future__ import annotations
+
 from sqlalchemy import select
 
-import experiments.orm.ormatic_interface as ormatic_interface  # type: ignore
-from coraplex.datastructures.dataclasses import Context
-from coraplex.datastructures.enums import Arms
-from coraplex.execution_environment import simulated_robot
-from coraplex.plans.factories import sequential
-from coraplex.robot_plans.actions.core.navigation import NavigateAction
-from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
-from krrood.ormatic.data_access_objects.helper import to_dao
-
+from coraplex.plans.plan import Plan
+from coraplex.plans.plan_node import PlanNode
 from experiments.montessori.sorting_results import (
     InsertionOutcome,
+    ShapeInsertionAttempt,
     ShapeInsertionResult,
     SortingIterationResult,
 )
-from semantic_digital_twin.datastructures.definitions import TorsoState
-from semantic_digital_twin.robots.pr2 import PR2
-from semantic_digital_twin.spatial_types.spatial_types import Pose
+from experiments.orm.ormatic_interface import ShapeInsertionResultDAO
+from krrood.ormatic.data_access_objects.helper import to_dao
+from segmind.datastructures.events import InsertionEvent, PickUpEvent
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world_description.world_entity import Body
+
+# %% events persisted under their own attempt
 
 
-@pytest.fixture
-def three_action_plan(pr2_apartment_world):
+def _minimal_plan() -> Plan:
     """
-    A plan with three sequential actions, mirroring
-    ``test_coraplex_test/test_orm/test_ormatic_designator.py``'s own ``simple_plan``
-    fixture, so persisting it exercises the same multi-node tree that
-    :class:`~experiments.montessori.insert_shape_action.InsertMontessoriShapeAction`
-    expands into (park arms, navigate, pick up, place, park arms again) without
-    depending on a real grasp/placement resolving in simulation.
+    The smallest ``Plan`` :class:`~coraplex.orm.model.PlanMapping` can persist: a bare
+    ``Plan()`` has no nodes, and ``Plan.root`` (which persistence needs) requires
+    exactly one node with no parent, so a single bare node is added.
     """
-    world = deepcopy(pr2_apartment_world)
-    pr2 = world.get_semantic_annotations_by_type(PR2)[0]
-    context = Context(world, pr2)
-
-    return sequential(
-        [
-            NavigateAction(
-                Pose.from_xyz_quaternion(
-                    1.6, 1.9, 0, 0, 0, 0, 1, reference_frame=world.root
-                ),
-                True,
-            ),
-            MoveTorsoAction(TorsoState.HIGH),
-            ParkArmsAction(Arms.BOTH),
-        ],
-        context=context,
-    ).plan
+    plan = Plan()
+    plan.add_node(PlanNode())
+    return plan
 
 
-def test_shape_insertion_result_persists_the_entire_plan_not_just_one_node(
-    three_action_plan, experiments_testing_session
-):
+def test_events_are_persisted_under_their_own_attempt(montessori_results_session):
     """
-    ``ShapeInsertionResult.plan`` must carry the entire realized plan tree an
-    insertion attempt expanded into, not just its own top-level action node, so
-    ``to_dao`` persists every sub-action alongside it rather than a single row.
+    Two attempts at inserting the same shape detect different segmind events (a pick-up
+    on the first, an insertion on the second, each with its own realized Plan); after a
+    round trip through the database, each event must still be reachable only through its
+    own attempt, with that attempt's own distinct plan.
     """
-    with simulated_robot:
-        three_action_plan.perform()
+    session = montessori_results_session
+    tracked_shape = Body(name=PrefixedName("circular_hole_1_shape"))
+    pick_up_event = PickUpEvent(tracked_object=tracked_shape)
+    insertion_event = InsertionEvent(tracked_object=tracked_shape)
 
-    iteration_result = SortingIterationResult(
+    result = SortingIterationResult(
         iteration=1,
         shape_results=[
             ShapeInsertionResult(
-                shape_key="cube",
+                shape_key="circular_hole_1",
                 outcome=InsertionOutcome.FELL_THROUGH,
-                plan=three_action_plan,
+                attempts=[
+                    ShapeInsertionAttempt(plan=_minimal_plan(), events=[pick_up_event]),
+                    ShapeInsertionAttempt(
+                        plan=_minimal_plan(), events=[insertion_event]
+                    ),
+                ],
             )
         ],
     )
 
-    experiments_testing_session.add(to_dao(iteration_result))
-    experiments_testing_session.commit()
+    session.add(to_dao(result))
+    session.commit()
 
-    action_nodes = experiments_testing_session.scalars(
-        select(ormatic_interface.ActionNodeDAO)
-    ).all()
-    assert len(action_nodes) == 3
+    [shape_result] = session.scalars(select(ShapeInsertionResultDAO)).all()
+    attempts = [
+        attempt_association.target for attempt_association in shape_result.attempts
+    ]
+    assert len(attempts) == 2
+
+    def event_type_names(attempt) -> set[str]:
+        return {
+            type(event_association.target).__name__
+            for event_association in attempt.events
+        }
+
+    pick_up_attempt = next(
+        a for a in attempts if event_type_names(a) == {"PickUpEventDAO"}
+    )
+    insertion_attempt = next(
+        a for a in attempts if event_type_names(a) == {"InsertionEventDAO"}
+    )
+
+    assert pick_up_attempt.database_id != insertion_attempt.database_id
+    assert pick_up_attempt.plan_id != insertion_attempt.plan_id
+    assert pick_up_attempt.plan_id is not None
+    assert insertion_attempt.plan_id is not None

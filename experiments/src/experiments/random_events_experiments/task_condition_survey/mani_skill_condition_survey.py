@@ -59,22 +59,20 @@ class ManiSkillPredicateVocabulary(PredicateVocabulary):
     Kinds of the predicates the suite applies most often, keyed by dotted name.
     """
 
-    name_rules: list[PredicateNameRule] = field(
-        default_factory=lambda: [
-            PredicateNameRule("norm", PredicateKind.CONTINUOUS),
-            PredicateNameRule("dist", PredicateKind.CONTINUOUS),
-            PredicateNameRule("angle", PredicateKind.CONTINUOUS),
-            PredicateNameRule("contact_forces", PredicateKind.CONTINUOUS),
-            PredicateNameRule("_thresh", PredicateKind.CONTINUOUS),
-            PredicateNameRule("pose.p", PredicateKind.CONTINUOUS),
-            PredicateNameRule("qpos", PredicateKind.CONTINUOUS),
-            PredicateNameRule("qvel", PredicateKind.CONTINUOUS),
-            PredicateNameRule("is_grasp", PredicateKind.DISCRETE),
-            PredicateNameRule("is_static", PredicateKind.CONTINUOUS),
-            PredicateNameRule("contact", PredicateKind.DISCRETE),
-            PredicateNameRule("is_", PredicateKind.DISCRETE),
-            PredicateNameRule("has_", PredicateKind.DISCRETE),
-        ]
+    name_rules: tuple[PredicateNameRule, ...] = (
+        PredicateNameRule("norm", PredicateKind.CONTINUOUS),
+        PredicateNameRule("dist", PredicateKind.CONTINUOUS),
+        PredicateNameRule("angle", PredicateKind.CONTINUOUS),
+        PredicateNameRule("contact_forces", PredicateKind.CONTINUOUS),
+        PredicateNameRule("_thresh", PredicateKind.CONTINUOUS),
+        PredicateNameRule("pose.p", PredicateKind.CONTINUOUS),
+        PredicateNameRule("qpos", PredicateKind.CONTINUOUS),
+        PredicateNameRule("qvel", PredicateKind.CONTINUOUS),
+        PredicateNameRule("is_grasp", PredicateKind.DISCRETE),
+        PredicateNameRule("is_static", PredicateKind.CONTINUOUS),
+        PredicateNameRule("contact", PredicateKind.DISCRETE),
+        PredicateNameRule("is_", PredicateKind.DISCRETE),
+        PredicateNameRule("has_", PredicateKind.DISCRETE),
     )
     """
     Rules recognising the long tail of per-task predicates by naming convention,

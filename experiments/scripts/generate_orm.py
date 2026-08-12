@@ -3,12 +3,16 @@ from pathlib import Path
 
 import experiments
 import coraplex.orm.ormatic_interface
+import segmind.orm.ormatic_interface
 
 from krrood.ormatic.ormatic import ORMatic
 
 # Create an ORMatic object with the classes to be mapped
 ormatic = ORMatic.from_package(
-    [experiments], [coraplex.orm.ormatic_interface], set(), type_mappings={}
+    [experiments],
+    [coraplex.orm.ormatic_interface, segmind.orm.ormatic_interface],
+    set(),
+    type_mappings={},
 )
 logging.getLogger("krrood").setLevel(logging.DEBUG)
 

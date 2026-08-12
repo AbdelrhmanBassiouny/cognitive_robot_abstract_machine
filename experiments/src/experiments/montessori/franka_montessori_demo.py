@@ -36,6 +36,7 @@ import os
 import threading
 import time
 from collections import Counter, defaultdict
+from datetime import datetime
 from typing import TYPE_CHECKING
 
 import mujoco
@@ -43,6 +44,7 @@ import numpy as np
 from krrood.ormatic.data_access_objects.helper import to_dao
 from krrood.ormatic.utils import create_engine
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.sql.sqltypes import NullType
 from typing_extensions import Optional
 
 from experiments.montessori.event_monitoring import (
@@ -63,11 +65,12 @@ from experiments.montessori.semantics import (
 )
 from experiments.montessori.sorting_results import (
     InsertionOutcome,
+    ShapeInsertionAttempt,
     ShapeInsertionResult,
     SortingIterationResult,
 )
 from experiments.montessori.world import MontessoriWorld
-from segmind.datastructures.events import InsertionEvent, PickUpEvent
+from segmind.datastructures.events import DetectionEvent, InsertionEvent, PickUpEvent
 from semantic_digital_twin.robots.panda import Panda
 from semantic_digital_twin.spatial_types.spatial_types import Point3
 from semantic_digital_twin.utils import rclpy_installed
@@ -440,13 +443,15 @@ def _insert_shape_or_none(
 
 
 def _log_segmind_verdict(
-    shape: MontessoriShape, ground_truth_fell_through: Optional[bool], monitor: MontessoriEventMonitor
+    shape: MontessoriShape,
+    ground_truth_fell_through: Optional[bool],
+    monitor: MontessoriEventMonitor,
 ) -> None:
     """
-    Log segmind's own pick-up/insertion verdict for ``shape`` next to the ground truth
-    :meth:`~experiments.montessori.insert_shape_action.InsertMontessoriShapeAction.has_fallen_through_hole`
-    already computed for it, for comparison while segmind's detectors are still new to
-    this scene.
+    Log segmind's own pick-up/insertion verdict for ``shape`` next to the ground truth :
+    meth:`~experiments.montessori.insert_shape_action.InsertMontessoriShapeAction.has_fa
+    llen_through_hole` already computed for it, for comparison while segmind's detectors
+    are still new to this scene.
 
     :param shape: The shape ``monitor`` was tracking.
     :param ground_truth_fell_through: What :func:`_insert_shape` determined by direct
@@ -465,7 +470,10 @@ def _log_segmind_verdict(
     logger.info(
         "DEBUG segmind raw events for %s: %s",
         shape.name,
-        [(type(e).__name__, getattr(e, "with_object", None), e.timestamp) for e in events],
+        [
+            (type(e).__name__, getattr(e, "with_object", None), e.timestamp)
+            for e in events
+        ],
     )
     logger.info(
         "segmind for %s: pick-up detected=%s, insertion detected=%s "
@@ -475,6 +483,34 @@ def _log_segmind_verdict(
         insertion_detected,
         ground_truth_fell_through,
     )
+
+
+def _partition_events_by_attempt(
+    events: list[DetectionEvent], attempt_start_times: list[datetime]
+) -> list[list[DetectionEvent]]:
+    """
+    Bucket ``events`` by which attempt's time window each one's timestamp falls into.
+
+    Attempt ``i`` owns every event timestamped from ``attempt_start_times[i]`` up to
+    (but not including) ``attempt_start_times[i + 1]``; the last attempt owns everything
+    from its own start onward. An event timestamped before ``attempt_start_times[0]`` --
+    possible if the event monitor's background thread ticks once before the retry loop's
+    first iteration begins -- is clamped into the first attempt's bucket rather than
+    dropped.
+
+    :param events: Events to bucket, in any order.
+    :param attempt_start_times: Each attempt's start time, in attempt order; one bucket
+        is returned per entry.
+    """
+    buckets: list[list[DetectionEvent]] = [[] for _ in attempt_start_times]
+    for event in events:
+        attempt_index = 0
+        for candidate_index, start_time in enumerate(attempt_start_times):
+            if event.timestamp < start_time:
+                break
+            attempt_index = candidate_index
+        buckets[attempt_index].append(event)
+    return buckets
 
 
 def _insert_all_shapes(
@@ -539,6 +575,8 @@ def _insert_all_shapes(
         event_monitor.start()
 
         fell_through = None
+        attempt_start_times: list[datetime] = []
+        actions: list[InsertMontessoriShapeAction] = []
         for attempt in range(1, MAX_INSERTION_ATTEMPTS + 1):
             logger.info(
                 "Inserting %s into its matching hole (attempt %d/%d).",
@@ -546,9 +584,11 @@ def _insert_all_shapes(
                 attempt,
                 MAX_INSERTION_ATTEMPTS,
             )
+            attempt_start_times.append(datetime.now())
             fell_through, action = _insert_shape_or_none(
                 shape, montessori, context, attempt
             )
+            actions.append(action)
             if fell_through is not None:
                 break
 
@@ -571,8 +611,18 @@ def _insert_all_shapes(
             outcome = InsertionOutcome.DID_NOT_FALL_THROUGH
         else:
             outcome = InsertionOutcome.FELL_THROUGH
+
+        event_buckets = _partition_events_by_attempt(
+            event_monitor.events, attempt_start_times
+        )
+        attempts = [
+            ShapeInsertionAttempt(plan=action.plan, events=events)
+            for action, events in zip(actions, event_buckets)
+        ]
         results.append(
-            ShapeInsertionResult(shape_key=shape_key, outcome=outcome, plan=action.plan)
+            ShapeInsertionResult(
+                shape_key=shape_key, outcome=outcome, attempts=attempts
+            )
         )
 
     return results
@@ -682,19 +732,28 @@ def _open_results_session(database_uri: str) -> Session:
     ``database_uri``'s database and role must already exist on the server; see
     :data:`DEFAULT_DATABASE_URI` for how to provision them.
 
+    Skips any table ORMatic could not assign a real column type to (surfaced as
+    SQLAlchemy's ``NullType``, e.g. ``EpisodePlayerDAO.rdr_viewer`` for the
+    ``RDRCaseViewer`` field it doesn't have a mapping for) rather than letting one
+    unrelated, pre-existing gap in the huge generated ``experiments`` schema stop every
+    other table -- including this module's own -- from being created.
+
     :param database_uri: Database to write recorded results to; see
         :data:`DEFAULT_DATABASE_URI`.
     """
     import experiments.orm.ormatic_interface as ormatic_interface
 
     engine = create_engine(database_uri)
-    ormatic_interface.Base.metadata.create_all(engine)
+    creatable_tables = [
+        table
+        for table in ormatic_interface.Base.metadata.tables.values()
+        if not any(isinstance(column.type, NullType) for column in table.columns)
+    ]
+    ormatic_interface.Base.metadata.create_all(engine, tables=creatable_tables)
     return sessionmaker(engine)()
 
 
-def _build_world_and_sort(
-    node, arguments: argparse.Namespace
-) -> tuple[
+def _build_world_and_sort(node, arguments: argparse.Namespace) -> tuple[
     list[ShapeInsertionResult],
     MujocoSim,
     Optional[TFPublisher],

@@ -144,13 +144,13 @@ class PredicateGeometryVocabulary:
     to have.
     """
 
-    shapes_by_application: list[GeometryMarker] = field(default_factory=list)
+    shapes_by_application: tuple[GeometryMarker, ...] = ()
     """
     Shape assigned by what a measure was applied to, consulted before the measure's own
     name because slicing a position changes the dimension of the region it describes.
     """
 
-    shapes_by_measure: list[GeometryMarker] = field(default_factory=list)
+    shapes_by_measure: tuple[GeometryMarker, ...] = ()
     """
     Shape assigned by the name a measure is taken under, consulted in order.
     """
@@ -187,16 +187,14 @@ class RoboCasaPredicateGeometry(PredicateGeometryVocabulary):
     plane except the two gripper clearances, which are taken in space.
     """
 
-    shapes_by_measure: list[GeometryMarker] = field(
-        default_factory=lambda: [
-            GeometryMarker("gripper_obj_far", PredicateGeometry.EUCLIDEAN_BALL),
-            GeometryMarker("gripper_fxtr_far", PredicateGeometry.EUCLIDEAN_BALL),
-            GeometryMarker("norm", PredicateGeometry.EUCLIDEAN_DISC),
-            GeometryMarker("bbox_min_dist", PredicateGeometry.AXIS_ALIGNED),
-            GeometryMarker("abs", PredicateGeometry.AXIS_ALIGNED),
-            GeometryMarker("min", PredicateGeometry.AXIS_ALIGNED),
-            GeometryMarker("max", PredicateGeometry.AXIS_ALIGNED),
-        ]
+    shapes_by_measure: tuple[GeometryMarker, ...] = (
+        GeometryMarker("gripper_obj_far", PredicateGeometry.EUCLIDEAN_BALL),
+        GeometryMarker("gripper_fxtr_far", PredicateGeometry.EUCLIDEAN_BALL),
+        GeometryMarker("norm", PredicateGeometry.EUCLIDEAN_DISC),
+        GeometryMarker("bbox_min_dist", PredicateGeometry.AXIS_ALIGNED),
+        GeometryMarker("abs", PredicateGeometry.AXIS_ALIGNED),
+        GeometryMarker("min", PredicateGeometry.AXIS_ALIGNED),
+        GeometryMarker("max", PredicateGeometry.AXIS_ALIGNED),
     )
     """
     Shape assigned by the name a measure is taken under, consulted in order.
@@ -213,28 +211,24 @@ class ManiSkillPredicateGeometry(PredicateGeometryVocabulary):
     than from the measure's name alone.
     """
 
-    shapes_by_application: list[GeometryMarker] = field(
-        default_factory=lambda: [
-            GeometryMarker(":2]", PredicateGeometry.EUCLIDEAN_DISC),
-            GeometryMarker(":1]", PredicateGeometry.AXIS_ALIGNED),
-        ]
+    shapes_by_application: tuple[GeometryMarker, ...] = (
+        GeometryMarker(":2]", PredicateGeometry.EUCLIDEAN_DISC),
+        GeometryMarker(":1]", PredicateGeometry.AXIS_ALIGNED),
     )
     """
     A distance taken over a position sliced to two axes is a distance in a plane, and
     one sliced to a single axis is a bound on that axis.
     """
 
-    shapes_by_measure: list[GeometryMarker] = field(
-        default_factory=lambda: [
-            GeometryMarker("is_static", PredicateGeometry.AXIS_ALIGNED),
-            GeometryMarker("norm", PredicateGeometry.EUCLIDEAN_BALL),
-            GeometryMarker("abs", PredicateGeometry.AXIS_ALIGNED),
-            GeometryMarker("max", PredicateGeometry.AXIS_ALIGNED),
-            GeometryMarker("min", PredicateGeometry.AXIS_ALIGNED),
-            GeometryMarker("qpos", PredicateGeometry.AXIS_ALIGNED),
-            GeometryMarker("qvel", PredicateGeometry.AXIS_ALIGNED),
-            GeometryMarker("pose.p", PredicateGeometry.AXIS_ALIGNED),
-        ]
+    shapes_by_measure: tuple[GeometryMarker, ...] = (
+        GeometryMarker("is_static", PredicateGeometry.AXIS_ALIGNED),
+        GeometryMarker("norm", PredicateGeometry.EUCLIDEAN_BALL),
+        GeometryMarker("abs", PredicateGeometry.AXIS_ALIGNED),
+        GeometryMarker("max", PredicateGeometry.AXIS_ALIGNED),
+        GeometryMarker("min", PredicateGeometry.AXIS_ALIGNED),
+        GeometryMarker("qpos", PredicateGeometry.AXIS_ALIGNED),
+        GeometryMarker("qvel", PredicateGeometry.AXIS_ALIGNED),
+        GeometryMarker("pose.p", PredicateGeometry.AXIS_ALIGNED),
     )
     """
     Shape assigned by the name a measure is taken under, consulted in order.
@@ -250,11 +244,9 @@ class RLBenchPredicateGeometry(PredicateGeometryVocabulary):
     bound on a single axis, while a deviation from a path is a distance in space.
     """
 
-    shapes_by_measure: list[GeometryMarker] = field(
-        default_factory=lambda: [
-            GeometryMarker("JointCondition", PredicateGeometry.AXIS_ALIGNED),
-            GeometryMarker("FollowCondition", PredicateGeometry.EUCLIDEAN_BALL),
-        ]
+    shapes_by_measure: tuple[GeometryMarker, ...] = (
+        GeometryMarker("JointCondition", PredicateGeometry.AXIS_ALIGNED),
+        GeometryMarker("FollowCondition", PredicateGeometry.EUCLIDEAN_BALL),
     )
     """
     Shape assigned to each of the suite's continuous conditions.

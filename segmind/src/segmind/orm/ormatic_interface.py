@@ -250,9 +250,6 @@ class InsertionEventDAO(
         use_existing_column=True,
     )
 
-    inserted_into_objects: Mapped[
-        typing.List[semantic_digital_twin.world_description.world_entity.Body]
-    ] = mapped_column(JSON, nullable=False, use_existing_column=True)
     through_hole: Mapped[
         typing.Optional[
             semantic_digital_twin.semantic_annotations.semantic_annotations.Aperture
