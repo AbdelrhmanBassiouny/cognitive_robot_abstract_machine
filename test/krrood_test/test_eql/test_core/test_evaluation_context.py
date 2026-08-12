@@ -10,6 +10,8 @@ from ordered_set import OrderedSet
 from krrood.entity_query_language.evaluation_context import (
     ActiveConditionsRoot,
     EvaluatedExpressionIds,
+    EvaluationContext,
+    OutermostQuery,
 )
 
 
@@ -78,6 +80,43 @@ def test_active_conditions_root_has_condition_defaults_false_before_anything_is_
     tracking = ActiveConditionsRoot()
 
     assert not tracking.has_condition
+
+
+def test_is_child_of_truth_value_operator_reflects_only_recorded_nodes():
+    context = EvaluationContext()
+    recorded = _NodeStub()
+    unrecorded = _NodeStub()
+
+    context.truth_value_operator_children.record(recorded._id_)
+
+    assert context.is_child_of_truth_value_operator(recorded)
+    assert not context.is_child_of_truth_value_operator(unrecorded)
+
+
+# %% outermost-query tracking
+
+
+def test_outermost_query_keeps_the_first_query_and_reports_it_as_not_nested():
+    outermost_query = OutermostQuery()
+    first = _NodeStub()
+
+    assert not outermost_query.is_nested(first)
+    assert outermost_query.node is first
+
+
+def test_outermost_query_reports_a_later_different_query_as_nested():
+    outermost_query = OutermostQuery()
+    first = _NodeStub()
+    second = _NodeStub()
+
+    outermost_query.is_nested(first)
+
+    assert outermost_query.is_nested(second)
+    assert outermost_query.node is first
+
+
+def test_outermost_query_has_no_node_before_any_query_is_recorded():
+    assert OutermostQuery().node is None
 
 
 def test_evaluated_expression_ids_records_and_iterates():

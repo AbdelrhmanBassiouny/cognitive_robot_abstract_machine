@@ -1,32 +1,30 @@
-import gc
 import os
 import subprocess
 import sys
 from copy import deepcopy
 from dataclasses import dataclass, field
-from time import sleep
 from uuid import UUID, uuid4
 
 import numpy as np
-import objgraph
 import pytest
 from numpy.testing import assert_raises
 
 from semantic_digital_twin.adapters.urdf import URDFParser
+from semantic_digital_twin.datastructures.joint_state import JointState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.exceptions import (
     DuplicateWorldEntityError,
+    MismatchingPublishChangesAttribute,
     UsageError,
     MissingWorldModificationContextError,
     DofNotInWorldStateError,
     WrongWorldModelVersion,
     NonMonotonicTimeError,
-    WorldEntityNotFoundError,
     BrokenWorldModificationHistoryError,
     WorldEntityNotFoundError,
 )
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
-from semantic_digital_twin.robots.pr2 import PR2
+from semantic_digital_twin.robots.pr2 import PR2, PR2Joint
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Handle,
     Milk,
@@ -39,9 +37,8 @@ from semantic_digital_twin.spatial_types.derivatives import Derivatives, Derivat
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     RotationMatrix,
-    Point3,
 )
-from semantic_digital_twin.testing import world_setup
+from semantic_digital_twin.testing import StateChangeCounter, world_setup
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     PrismaticConnection,
@@ -63,6 +60,9 @@ from semantic_digital_twin.world_description.world_entity import (
     WorldEntityWithClassBasedID,
     WorldEntityWithID,
 )
+from semantic_digital_twin.world_description.world_modification import (
+    AttributeUpdateModification,
+)
 from semantic_digital_twin.world_description.world_state import (
     WorldStateTrajectory,
     WorldState,
@@ -70,7 +70,6 @@ from semantic_digital_twin.world_description.world_state import (
 from semantic_digital_twin.world_description.world_state_trajectory_plotter import (
     WorldStateTrajectoryPlotter,
 )
-from semantic_digital_twin.orm.ormatic_interface import *
 
 
 def test_create_with_root_body_names_the_root_from_a_plain_string():
@@ -81,6 +80,41 @@ def test_create_with_root_body_names_the_root_from_a_plain_string():
 def test_create_with_root_body_defaults_the_root_name_to_map():
     world = World.create_with_root_body()
     assert world.root.name == PrefixedName("map")
+
+
+def test_force_root_name_renames_the_root_body():
+    world = World.create_with_root_body("map")
+    world.force_root_name(PrefixedName("odom"))
+    assert world.root.name == PrefixedName("odom")
+
+
+def test_force_root_name_preserves_root_identity_and_children(world_setup):
+    world, l1, l2, bf, r1, r2 = world_setup
+    root_id = world.root.id
+    bf_connection_before = world.get_connection(world.root, bf)
+
+    world.force_root_name(PrefixedName("new_root", prefix="world"))
+
+    assert world.root.id == root_id
+    assert world.root.name == PrefixedName("new_root", prefix="world")
+    assert world.get_connection(world.root, bf) is bf_connection_before
+    assert world.get_kinematic_structure_entity_by_name(PrefixedName("bf")) is bf
+
+
+def test_force_root_name_records_an_attribute_update_modification():
+    world = World.create_with_root_body("map")
+    root_id = world.root.id
+
+    world.force_root_name(PrefixedName("odom"))
+
+    last_block = world._model_manager.model_modification_blocks[-1]
+    attribute_updates = [
+        modification
+        for modification in last_block.modifications
+        if isinstance(modification, AttributeUpdateModification)
+        and modification.entity_id == root_id
+    ]
+    assert len(attribute_updates) == 1
 
 
 def test_set_state(world_setup):
@@ -94,10 +128,12 @@ def test_set_state(world_setup):
     c3: Connection6DoF = world.get_connection(world.root, bf)
     transform = RotationMatrix.from_rpy(1, 0, 0).to_np()
     transform[0, 3] = 69
-    c3.origin = transform
+    c3.origin = HomogeneousTransformationMatrix(
+        data=transform, reference_frame=world.root, child_frame=bf
+    )
     assert np.allclose(world.compute_forward_kinematics_np(world.root, bf), transform)
 
-    world.set_positions_1DOF_connection({c1: 2})
+    JointState.from_mapping({c1: 2}).apply_to(world)
     assert c1.position == 2.0
 
     transform[0, 3] += c1.position
@@ -231,6 +267,92 @@ def test_nested_with_blocks_illegal_state(world_setup):
         world.add_connection(connection2)
 
 
+# %% batching state changes
+
+
+def test_batching_state_changes_announces_them_once(world_setup):
+    world, l1, l2, _, _, _ = world_setup
+    prismatic_connection = world.get_connection(l1, l2)
+    counter = StateChangeCounter(_world=world)
+
+    with world.batch_state_changes():
+        prismatic_connection.position = 1.0
+        prismatic_connection.position = 2.0
+
+    assert counter.count == 1
+    assert prismatic_connection.position == 2.0
+
+
+def test_state_changes_outside_a_batch_are_announced_individually(world_setup):
+    world, l1, l2, _, _, _ = world_setup
+    prismatic_connection = world.get_connection(l1, l2)
+    counter = StateChangeCounter(_world=world)
+
+    prismatic_connection.position = 1.0
+    prismatic_connection.position = 2.0
+
+    assert counter.count == 2
+
+
+def test_batching_without_a_state_change_announces_nothing(world_setup):
+    world, _, _, _, _, _ = world_setup
+    counter = StateChangeCounter(_world=world)
+
+    with world.batch_state_changes():
+        pass
+
+    assert counter.count == 0
+
+
+def test_nested_batches_of_state_changes_announce_them_once(world_setup):
+    world, l1, l2, _, _, _ = world_setup
+    prismatic_connection = world.get_connection(l1, l2)
+    counter = StateChangeCounter(_world=world)
+
+    with world.batch_state_changes():
+        prismatic_connection.position = 1.0
+        with world.batch_state_changes():
+            prismatic_connection.position = 2.0
+        assert counter.count == 0
+
+    assert counter.count == 1
+
+
+def test_batching_state_changes_forwards_its_publish_changes(world_setup):
+    world, l1, l2, _, _, _ = world_setup
+    prismatic_connection = world.get_connection(l1, l2)
+    counter = StateChangeCounter(_world=world)
+
+    with world.batch_state_changes(publish_changes=False):
+        prismatic_connection.position = 1.0
+
+    assert counter.count == 1
+    assert counter.publish_changes_of_last_call is False
+
+
+def test_a_nested_batch_disagreeing_about_publishing_is_rejected(world_setup):
+    world, _, _, _, _, _ = world_setup
+
+    with pytest.raises(MismatchingPublishChangesAttribute):
+        with world.batch_state_changes(publish_changes=False):
+            with world.batch_state_changes(publish_changes=True):
+                pass
+
+
+def test_a_batch_interrupted_by_an_error_still_announces_its_changes(world_setup):
+    world, l1, l2, _, _, _ = world_setup
+    prismatic_connection = world.get_connection(l1, l2)
+    counter = StateChangeCounter(_world=world)
+
+    with pytest.raises(ZeroDivisionError):
+        with world.batch_state_changes():
+            prismatic_connection.position = 1.0
+            raise ZeroDivisionError
+
+    assert counter.count == 1
+    assert prismatic_connection.position == 1.0
+
+
 def test_compute_fk_connection6dof(world_setup):
     world, _, _, bf, _, _ = world_setup
     fk = world.compute_forward_kinematics_np(world.root, bf)
@@ -346,13 +468,17 @@ def test_compute_relative_pose(world_setup):
 
 def test_compute_relative_pose_both(world_setup):
     world, l1, l2, bf, r1, r2 = world_setup
-    world.get_connection(world.root, bf).origin = np.array(
-        [
-            [0.0, -1.0, 0.0, 1.0],
-            [1.0, 0.0, 0.0, 0.0],
-            [0.0, 0.0, 1.0, 0.0],
-            [0.0, 0.0, 0.0, 1.0],
-        ]
+    world.get_connection(world.root, bf).origin = HomogeneousTransformationMatrix(
+        data=np.array(
+            [
+                [0.0, -1.0, 0.0, 1.0],
+                [1.0, 0.0, 0.0, 0.0],
+                [0.0, 0.0, 1.0, 0.0],
+                [0.0, 0.0, 0.0, 1.0],
+            ]
+        ),
+        reference_frame=world.root,
+        child_frame=bf,
     )
     world.notify_state_change()
 
@@ -493,7 +619,9 @@ def test_merge_with_connection(world_setup, pr2_world_copy):
 
     origin = HomogeneousTransformationMatrix(pose)
 
-    connection = pr2_world_copy.get_connection_by_name("l_gripper_l_finger_joint")
+    connection = pr2_world_copy.get_connection_by_name(
+        PR2Joint.LEFT_GRIPPER_LEFT_FINGER
+    )
     connection_dof_id = connection.dof.id
     pr2_world_copy.state[connection.dof.id].position = 0.55
     pr2_world_copy.notify_state_change()
@@ -710,8 +838,10 @@ def test_copy_world(world_setup):
         original_bf_con.parent, original_bf_con.child
     )
     assert id(copy_connection) != id(original_bf_con)
-    bf.parent_connection.origin = np.array(
-        [[1, 0, 0, 1.5], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    bf.parent_connection.origin = HomogeneousTransformationMatrix(
+        data=np.array([[1, 0, 0, 1.5], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
+        reference_frame=bf.parent_connection.parent,
+        child_frame=bf,
     )
     assert (
         float(
@@ -855,7 +985,7 @@ def test_copy_dof(world_setup):
 
 def test_copy_pr2_world_state_reset(pr2_world_state_reset):
     pr2_world_state_reset.state[
-        pr2_world_state_reset.get_degree_of_freedom_by_name("torso_lift_joint").id
+        pr2_world_state_reset.get_degree_of_freedom_by_name(PR2Joint.TORSO_LIFT).id
     ].position = 0.3
     pr2_world_state_reset.notify_state_change()
     pr2_copy = deepcopy(pr2_world_state_reset)
@@ -895,7 +1025,7 @@ def test_world_same_body_but_different_in_memory(world_setup):
 
 def test_copy_pr2(pr2_world_state_reset):
     pr2_world_state_reset.state[
-        pr2_world_state_reset.get_degree_of_freedom_by_name("torso_lift_joint").id
+        pr2_world_state_reset.get_degree_of_freedom_by_name(PR2Joint.TORSO_LIFT).id
     ].position = 0.3
     pr2_world_state_reset.notify_state_change()
     pr2_copy = deepcopy(pr2_world_state_reset)
@@ -916,14 +1046,14 @@ def test_copy_connections(pr2_world_state_reset):
             connection.origin.to_np(), pr2_copy_connection.origin.to_np(), decimal=3
         )
     pr2_copy.state[
-        pr2_copy.get_degree_of_freedom_by_name("torso_lift_joint").id
+        pr2_copy.get_degree_of_freedom_by_name(PR2Joint.TORSO_LIFT).id
     ].position = 0.3
     pr2_copy.notify_state_change()
     original_torso_state = pr2_world_state_reset.get_connection_by_name(
-        "torso_lift_joint"
+        PR2Joint.TORSO_LIFT
     ).origin
     copied_and_updated_torso_state = pr2_copy.get_connection_by_name(
-        "torso_lift_joint"
+        PR2Joint.TORSO_LIFT
     ).origin
 
     assert_raises(
@@ -1909,3 +2039,34 @@ def test_is_kinematic_structure_entity_in_world_by_name(world_setup):
     world, l1, *_ = world_setup
     assert world.is_kinematic_structure_entity_in_world_by_name("l1")
     assert not world.is_kinematic_structure_entity_in_world_by_name("nonexistent")
+
+
+def test_column_indices_locate_the_requested_degrees_of_freedom(world_setup):
+    world, *_ = world_setup
+    dofs = list(world.degrees_of_freedom)
+    for index, dof in enumerate(dofs):
+        world.state[dof.id].velocity = 0.1 * (index + 1)
+
+    columns = world.state.column_indices(dofs)
+
+    velocities = world.state.velocities
+    assert [velocities[column] for column in columns] == pytest.approx(
+        [0.1 * (index + 1) for index in range(len(dofs))]
+    )
+
+
+def test_column_indices_follow_the_requested_order(world_setup):
+    world, *_ = world_setup
+    dofs = list(world.degrees_of_freedom)
+
+    assert (
+        world.state.column_indices(list(reversed(dofs)))
+        == world.state.column_indices(dofs)[::-1]
+    )
+
+
+def test_column_indices_of_degree_of_freedom_outside_the_state(world_setup):
+    world, *_ = world_setup
+
+    with pytest.raises(DofNotInWorldStateError):
+        world.state.column_indices([DegreeOfFreedom(name=PrefixedName("new_dof"))])
