@@ -2994,6 +2994,7 @@ items:
     title: "Hide deferred items in the dashboard by default, behind their own toggle"
     branch: claude/hidden-deferred-plan-items-6weef1
     track: dashboards
+    pull_request_number: 157
     depends_on: []
     status: in_progress
     session: https://claude.ai/code/session_01Je624Mq716GToQRqtkTXXn

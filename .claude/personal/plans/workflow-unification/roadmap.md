@@ -6234,3 +6234,10 @@ returns `build_dashboard.py` and `templates/dashboard.html`, so this edits lande
 and stands alone. #111 (`shared-pr-state-chips`) is conflict-adjacent - it adds LOC/CI
 chips to the same template - but owns different work and has been `needs-resolution`
 since well before this.
+
+Opened as draft PR #157 off `main`. The wrap-around arrow's parent is settled along
+the way, in favour of what the un-hidden computation already did: it is now carried only
+by the item that actually wraps. The hidden-status half propagated it to every
+descendant, so an item sitting directly beneath its visible parent still claimed to
+continue from an item further up the chain - a latent defect the done toggle already
+had, surfaced by unifying the two computations into one.
