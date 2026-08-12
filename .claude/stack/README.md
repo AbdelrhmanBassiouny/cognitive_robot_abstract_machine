@@ -60,7 +60,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
     **complete** label set to write back, one per line. GitHub's label write replaces the whole set,
     so computing it from the intended change alone silently strips the rest; this is what the
     maintenance skill passes to every label write rather than working it out itself.
-  - `python .claude/stack/stack.py preflight --action push --source B --destination B
+  - `python .claude/stack/stack.py check-move --action push --source B --destination B
     --destination-remote <remote>` - exits `0` when the move is safe and `5` with its reasons on
     stderr when it is not: wrong branch checked out, a push naming different branches on each
     side, a destination that is not the fork, or a push that would make a child an ancestor of its
@@ -74,6 +74,15 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   - `python .claude/stack/stack.py landed` - one `name<TAB>pr` line per open fork PR whose branch
     is already in the upstream base. Reporting only: fast-forwarding the fork's copy of the
     upstream base is what actually closes them.
+- **`maintenance.py`** - the executor: the half of a pass that moves commits, where `stack.py`
+  only derives and prints. `board --write`, `fast-forward`, `restack`, `promote` and
+  `run-report --json`; see [Running a maintenance pass](#running-a-maintenance-pass). It is the
+  command line onto modules named for what they do, so nothing has to be hunted for inside one
+  long file: `maintenance_constants.py` (every value edited by hand),
+  `maintenance_git_commands.py`, `maintenance_board.py`, `maintenance_github.py`,
+  `maintenance_fast_forward.py`, `maintenance_restack_steps.py` and
+  `maintenance_restack_procedure.py` (the steps, and the order that is the procedure),
+  `maintenance_promotion.py`, `maintenance_report.py` and `maintenance_commands.py`.
 - **`.claude/skills/stacked-pr-maintenance/SKILL.md`** - the maintenance instructions, invocable
   as `/stacked-pr-maintenance` from any session and the whole of what a scheduled run executes.
   It takes `fork=` / `upstream=` arguments, falls back to `configuration`, and asks (or, with
