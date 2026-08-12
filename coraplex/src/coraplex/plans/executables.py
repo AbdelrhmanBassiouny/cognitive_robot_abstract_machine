@@ -53,6 +53,49 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass
+class MotionLifeCycleTracker:
+    """
+    Emits plan node callbacks for motion nodes as their giskard tasks change life cycle
+    state during simulated execution.
+    """
+
+    motion_mappings: Dict[MotionNode, Task]
+    """
+    The motion nodes and the giskard tasks realizing them.
+    """
+
+    _last_states: Dict[MotionNode, LifeCycleValues] = field(init=False)
+    """
+    The life cycle state each task had when it was last inspected.
+    """
+
+    def __post_init__(self):
+        self._last_states = {
+            motion_node: LifeCycleValues.NOT_STARTED
+            for motion_node in self.motion_mappings
+        }
+
+    def emit_transitions(self) -> None:
+        """
+        Notify the plan of every motion node whose task started or finished since the
+        last inspection.
+
+        A task that reaches a terminal state without ever being seen running still emits
+        its start first, so every ended motion node was also started.
+        """
+        for motion_node, task in self.motion_mappings.items():
+            last_state = self._last_states[motion_node]
+            current_state = task.life_cycle_state
+            if current_state == last_state:
+                continue
+            self._last_states[motion_node] = current_state
+            if last_state == LifeCycleValues.NOT_STARTED:
+                motion_node.plan.notify_node_started(motion_node)
+            if current_state in (LifeCycleValues.DONE, LifeCycleValues.FAILED):
+                motion_node.plan.notify_node_ended(motion_node)
+
+
+@dataclass
 class Executable:
     """
     Base class for executable units.
@@ -332,6 +375,11 @@ class GiskardExecutable(Executable):
         motion_state_chart = self.motion_state_chart
         executor.compile(motion_state_chart)
 
+        life_cycle_tracker = MotionLifeCycleTracker(
+            motion_mappings=self.motion_mappings
+        )
+        life_cycle_tracker.emit_transitions()
+
         counter = 0
         while counter < len(self.motion_mappings) * 2000:
             # Interrupting and pausing are handled inside the motion state chart by
@@ -345,6 +393,7 @@ class GiskardExecutable(Executable):
 
             executor.tick()
             counter += 1
+            life_cycle_tracker.emit_transitions()
             if executor.motion_statechart.is_end_motion():
                 break
 

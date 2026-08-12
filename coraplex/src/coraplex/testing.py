@@ -31,8 +31,9 @@ from semantic_digital_twin.world_description.connections import (
 )
 from semantic_digital_twin.world_description.world_entity import Body
 
-from coraplex.datastructures.enums import Arms
+from coraplex.datastructures.enums import Arms, VisualizationBackend
 from coraplex.view_manager import ViewManager
+from coraplex.visualization import WorldVisualization
 
 logger = logging.getLogger(__name__)
 
@@ -57,9 +58,7 @@ def start_visualization(world: World) -> None:
     """
     if VizMarkerPublisher is None:
         return
-    rclpy.init()
-    node = rclpy.create_node("viz_marker")
-    VizMarkerPublisher(_world=world, node=node).with_tf_publisher()
+    WorldVisualization(world=world, backend=VisualizationBackend.RVIZ).start()
 
 
 def attach_tool(

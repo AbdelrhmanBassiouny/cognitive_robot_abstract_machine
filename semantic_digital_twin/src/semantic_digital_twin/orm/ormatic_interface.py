@@ -16,8 +16,6 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
 
 import builtins
-import coraplex.datastructures.enums
-import coraplex.orm.model
 import enum
 import krrood.adapters.json_serializer
 import krrood.ormatic.custom_types
@@ -2245,27 +2243,6 @@ class WorldModelModificationBlockDAO_modifications_association(
         "WorldModificationDAO",
         foreign_keys=[target_worldmodificationdao_id],
         lazy="selectin",
-    )
-
-
-class PlanMappingDAO(Base, DataAccessObject[coraplex.orm.model.PlanMapping]):
-    __tablename__ = "PlanMappingDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-    initial_world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
-        ForeignKey("WorldMappingDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    initial_world: Mapped[WorldMappingDAO] = relationship(
-        "WorldMappingDAO",
-        uselist=False,
-        foreign_keys=[initial_world_id],
-        post_update=True,
     )
 
 
@@ -11452,30 +11429,6 @@ class PoseMappingDAO(
     }
 
 
-class GrasPoseMappingDAO(
-    PoseMappingDAO, DataAccessObject[coraplex.orm.model.GrasPoseMapping]
-):
-    __tablename__ = "GrasPoseMappingDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        ForeignKey(PoseMappingDAO.database_id),
-        primary_key=True,
-        use_existing_column=True,
-    )
-
-    arm: Mapped[typing.Optional[coraplex.datastructures.enums.Arms]] = mapped_column(
-        krrood.ormatic.custom_types.PolymorphicEnumType,
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    __mapper_args__ = {
-        "polymorphic_identity": "GrasPoseMappingDAO",
-        "inherit_condition": database_id == PoseMappingDAO.database_id,
-        "polymorphic_load": "selectin",
-    }
-
-
 class Pose2DMappingDAO(
     SpatialTypeDAO, DataAccessObject[semantic_digital_twin.orm.model.Pose2DMapping]
 ):
@@ -12267,110 +12220,6 @@ class IrisSeedingSettingsDAO(
         uselist=False,
         foreign_keys=[iris_options_id],
         post_update=True,
-    )
-
-
-class _MockedConvexSetDAO(
-    Base,
-    DataAccessObject[
-        semantic_digital_twin.world_description.graph_of_convex_sets.polygons._MockedConvexSet
-    ],
-):
-    __tablename__ = "_MockedConvexSetDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-
-class _MockedGcsTrajectoryOptimizationDAO(
-    Base,
-    DataAccessObject[
-        semantic_digital_twin.world_description.graph_of_convex_sets.polygons._MockedGcsTrajectoryOptimization
-    ],
-):
-    __tablename__ = "_MockedGcsTrajectoryOptimizationDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-
-class _MockedHPolyhedronDAO(
-    Base,
-    DataAccessObject[
-        semantic_digital_twin.world_description.graph_of_convex_sets.polygons._MockedHPolyhedron
-    ],
-):
-    __tablename__ = "_MockedHPolyhedronDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-
-class _MockedIrisDAO(
-    Base,
-    DataAccessObject[
-        semantic_digital_twin.world_description.graph_of_convex_sets.polygons._MockedIris
-    ],
-):
-    __tablename__ = "_MockedIrisDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-
-class _MockedIrisOptionsDAO(
-    Base,
-    DataAccessObject[
-        semantic_digital_twin.world_description.graph_of_convex_sets.polygons._MockedIrisOptions
-    ],
-):
-    __tablename__ = "_MockedIrisOptionsDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-
-class _MockedPointDAO(
-    Base,
-    DataAccessObject[
-        semantic_digital_twin.world_description.graph_of_convex_sets.polygons._MockedPoint
-    ],
-):
-    __tablename__ = "_MockedPointDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-
-class _MockedSubgraphDAO(
-    Base,
-    DataAccessObject[
-        semantic_digital_twin.world_description.graph_of_convex_sets.polygons._MockedSubgraph
-    ],
-):
-    __tablename__ = "_MockedSubgraphDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-
-class _MockedVPolytopeDAO(
-    Base,
-    DataAccessObject[
-        semantic_digital_twin.world_description.graph_of_convex_sets.polygons._MockedVPolytope
-    ],
-):
-    __tablename__ = "_MockedVPolytopeDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
     )
 
 
@@ -13704,6 +13553,13 @@ class RerunAdapterDAO(
         sqlalchemy.sql.sqltypes.Text, use_existing_column=True
     )
     state_history: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
+    state_log_stride: Mapped[builtins.int] = mapped_column(use_existing_column=True)
+    send_default_blueprint: Mapped[builtins.bool] = mapped_column(
+        use_existing_column=True
+    )
+    event_log_entity_path: Mapped[builtins.str] = mapped_column(
+        sqlalchemy.sql.sqltypes.Text, use_existing_column=True
+    )
     memory_limit: Mapped[builtins.str] = mapped_column(
         sqlalchemy.sql.sqltypes.Text, use_existing_column=True
     )
