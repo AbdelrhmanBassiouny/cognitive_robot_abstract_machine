@@ -1,5 +1,5 @@
 """
-Tests for the integration builder - upstream main plus every in-flight stack tip.
+Tests for the integration builder - upstream main plus every reviewed in-flight tip.
 
 Nearly everything here is only true of a real repository: which tip a conflict is
 attributed to, whether a replayed resolution is distinguishable from a merge that never
@@ -31,10 +31,12 @@ from integration import (
     ResolutionProvenance,
     TipOutcome,
     TipStatus,
+    UnreviewedBranch,
     build_branch_name,
     build_integration,
     exit_code_for,
     exit_code_for_bisect,
+    select_for_build,
     tips_of,
 )
 
@@ -66,36 +68,47 @@ __all__ = ["fork_checkout"]
 
 
 def a_pull_request(
-    number: int, head: str, base: str, labels: list[str] | None = None
+    number: int,
+    head: str,
+    base: str,
+    labels: list[str] | None = None,
+    draft: bool = False,
 ) -> PullRequest:
     """
     :param number: The fork pull request number.
     :param head: The branch it publishes.
     :param base: The branch it targets, which is its parent in the stack.
     :param labels: The labels it carries.
+    :param draft: Whether its author has yet to review it, which keeps it out of a build.
     :return: The board entry.
     """
     return PullRequest(
         number=number,
         head=head,
         base=base,
-        draft=False,
+        draft=draft,
         labels=list(labels or []),
     )
 
 
-def a_branch(name: str, number: int, parent: str = UPSTREAM_BASE) -> Branch:
+def a_branch(
+    name: str,
+    number: int,
+    parent: str = UPSTREAM_BASE,
+    status: BranchStatus = BranchStatus.READY,
+) -> Branch:
     """
     :param name: The branch name.
     :param number: The fork pull request number.
     :param parent: The branch it sits on, which is its pull request's base.
+    :param status: Its lifecycle position, which decides whether a build may carry it.
     :return: A stack node, for the selection tests that need no repository.
     """
     return Branch(
         name=name,
         parent=parent,
         pull_request_number=number,
-        status=BranchStatus.READY,
+        status=status,
         strategy=IntegrationStrategy.MERGE,
         labels=[],
     )
@@ -192,6 +205,141 @@ def test_tips_are_merged_in_ascending_pull_request_order():
     assert [tip.name for tip in tips] == ["earlier", "middle", "later"]
 
 
+def test_a_draft_branch_is_left_out():
+    """
+    A draft is work its own author has not reviewed yet, and this repository's
+    convention is that leaving draft is that review. A build carries only what has had
+    it.
+    """
+    tips = tips_of(
+        a_stack_of(
+            [
+                a_branch("reviewed", 1),
+                a_branch("unreviewed", 2, status=BranchStatus.DRAFT),
+            ]
+        )
+    )
+
+    assert [tip.name for tip in tips] == ["reviewed"]
+
+
+def test_a_branch_promoted_upstream_is_still_carried():
+    """
+    ``in-review`` takes precedence over ``ready`` in :func:`derive_status`, so a status
+    test written against ``ready`` alone would drop every branch already promoted - the
+    most reviewed work there is, and still not in the base.
+    """
+    tips = tips_of(a_stack_of([a_branch("promoted", 1, status=BranchStatus.IN_REVIEW)]))
+
+    assert [tip.name for tip in tips] == ["promoted"]
+
+
+def test_a_ready_branch_standing_on_a_draft_is_left_out_with_it():
+    """
+    A tip carries its whole stack, so merging one that sits on a draft would put that
+    draft's commits in the build under a ready branch's name - which is the reading of
+    "only ready pull requests" that quietly does the opposite.
+    """
+    tips = tips_of(
+        a_stack_of(
+            [
+                a_branch("unreviewed", 1, status=BranchStatus.DRAFT),
+                a_branch("reviewed", 2, parent="unreviewed"),
+            ]
+        )
+    )
+
+    assert [tip.name for tip in tips] == []
+
+
+def test_the_last_reviewed_branch_below_a_draft_is_the_one_merged():
+    """
+    A stack that goes draft part way up still has reviewed work beneath the draft, and
+    that work is carried: the merge point is the last branch reached before the first
+    draft, not the stack's own tip.
+    """
+    tips = tips_of(
+        a_stack_of(
+            [
+                a_branch("bottom", 1),
+                a_branch("middle", 2, parent="bottom"),
+                a_branch("top", 3, parent="middle", status=BranchStatus.DRAFT),
+            ]
+        )
+    )
+
+    assert [tip.name for tip in tips] == ["middle"]
+
+
+def test_an_unreviewed_branch_is_named_rather_than_silently_dropped():
+    """
+    A build that carries nine of nineteen branches and says so only by omission reads as
+    having covered everything. Each one left out names itself and why.
+    """
+    unreviewed = select_for_build(
+        a_stack_of([a_branch("unreviewed", 7, status=BranchStatus.DRAFT)])
+    ).unreviewed
+
+    assert [
+        (left_out.branch, left_out.pull_request_number) for left_out in unreviewed
+    ] == [("unreviewed", 7)]
+    assert unreviewed[0].unreviewed_ancestor is None
+
+
+def test_a_branch_left_out_for_its_ancestor_names_that_ancestor():
+    """
+    "Your branch was left out" is not actionable when the branch is out of draft and its
+    author can see nothing wrong with it - the draft beneath it is the thing to act on.
+    """
+    unreviewed = select_for_build(
+        a_stack_of(
+            [
+                a_branch("beneath", 1, status=BranchStatus.DRAFT),
+                a_branch("above", 2, parent="beneath"),
+            ]
+        )
+    ).unreviewed
+
+    assert {
+        left_out.branch: left_out.unreviewed_ancestor for left_out in unreviewed
+    } == {
+        "beneath": None,
+        "above": "beneath",
+    }
+
+
+def test_leaving_a_branch_out_as_unreviewed_is_not_a_failed_build():
+    """
+    Excluding a draft is the policy working, not a build going wrong - so it must not
+    reach the exit status that means a tip the build tried to carry did not make it.
+    """
+    status = exit_code_for(
+        a_report(
+            tips=(a_tip("carried", TipStatus.MERGED),),
+            unreviewed=(an_unreviewed_branch("a-draft"),),
+        )
+    )
+
+    assert status is IntegrationExitCode.SUCCESS
+
+
+def test_a_reviewed_branch_whose_only_child_is_a_draft_becomes_the_merge_point():
+    """
+    The same rule with nothing else to carry the parent: it is the deepest reviewed
+    branch, so it is merged itself rather than vanishing behind a child no build takes.
+    """
+    tips = tips_of(
+        a_stack_of(
+            [
+                a_branch("reviewed", 1),
+                a_branch("unreviewed", 2, parent="reviewed", status=BranchStatus.DRAFT),
+            ]
+        )
+    )
+
+    assert [tip.name for tip in tips] == ["reviewed"]
+
+
 # %% the build branch's own name
 
 
@@ -246,6 +394,31 @@ def test_a_build_contains_every_cleanly_merging_tip(fork_checkout: ForkCheckout)
     fork_checkout.run_git("checkout", "--quiet", A_BUILD_BRANCH)
     assert (fork_checkout.project_root / "first-tip-file").exists()
     assert (fork_checkout.project_root / "second-tip-file").exists()
+
+
+def test_a_build_leaves_an_unreviewed_branch_out_and_says_so(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The selection and the report have to be joined up: a build that quietly carried
+    fewer branches than the board holds, and reported only what it did carry, would read
+    as having covered everything.
+    """
+    fork_checkout.branch_from("reviewed", UPSTREAM_BASE)
+    fork_checkout.branch_from("unreviewed", UPSTREAM_BASE)
+
+    report = build(
+        fork_checkout,
+        [
+            a_pull_request(1, "reviewed", UPSTREAM_BASE),
+            a_pull_request(2, "unreviewed", UPSTREAM_BASE, draft=True),
+        ],
+    )
+
+    assert [entry.branch for entry in report.tips] == ["reviewed"]
+    assert [entry.branch for entry in report.unreviewed] == ["unreviewed"]
+    fork_checkout.run_git("checkout", "--quiet", A_BUILD_BRANCH)
+    assert not (fork_checkout.project_root / "unreviewed-file").exists()
 
 
 def test_a_conflicting_tip_is_skipped_and_the_build_continues(
@@ -905,10 +1078,12 @@ def test_a_bisect_report_serialises_what_it_localised(fork_checkout: ForkCheckou
 def a_report(
     tips: tuple[TipOutcome, ...] = (),
     tests_passed: bool | None = None,
+    unreviewed: tuple[UnreviewedBranch, ...] = (),
 ) -> IntegrationReport:
     """
     :param tips: What became of each tip.
     :param tests_passed: Whether the suite passed, or ``None`` if it was not run.
+    :param unreviewed: The branches the build left out as unreviewed.
     :return: A report to read a status off.
     """
     return IntegrationReport(
@@ -916,6 +1091,22 @@ def a_report(
         base=UPSTREAM_BASE,
         tips=tips,
         tests_passed=tests_passed,
+        unreviewed=unreviewed,
+    )
+
+
+def an_unreviewed_branch(
+    branch: str, unreviewed_ancestor: str | None = None
+) -> UnreviewedBranch:
+    """
+    :param branch: The branch left out.
+    :param unreviewed_ancestor: The draft beneath it, if that is why.
+    :return: One entry of a build's unreviewed list.
+    """
+    return UnreviewedBranch(
+        branch=branch,
+        pull_request_number=1,
+        unreviewed_ancestor=unreviewed_ancestor,
     )
 
 

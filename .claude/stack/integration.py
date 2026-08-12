@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Build a personal integration branch: the upstream base plus every in-flight stack tip.
+"""Build a personal integration branch: the upstream base plus every reviewed stack tip.
 
 Pull requests are produced faster than the upstream merges them, so a feature that is
-finished but unreviewed is unusable in daily work, and two in-flight features that
+finished but unmerged is unusable in daily work, and two in-flight features that
 conflict discover it only at the far end of the review queue. This assembles a branch
 that carries all of them at once::
 
@@ -13,6 +13,11 @@ that carries all of them at once::
 The branch exists to be built *from*, not to be history. It is regenerated from scratch
 on every run, nothing is ever merged out of it, and a conflict found on it is fixed in
 the feature branch it belongs to - never here.
+
+Only work its author has reviewed is carried, which this repository records by the pull
+request leaving draft. Read down the whole chain rather than per branch: a tip contains
+its stack, so a reviewed branch standing on a draft would carry that draft's commits
+under its own name. Everything left out says so - see :class:`UnreviewedBranch`.
 
 It gates nothing. Promotion asks whether one branch is ready for review against the
 upstream; integration asks whether the branches coexist. Gating promotion on a clean
@@ -106,6 +111,13 @@ without this.
 
 PROVENANCE_FILENAME = "resolution-authors.json"
 """Where the authorship of recorded resolutions is kept, beside the cache it describes."""
+
+UNREVIEWED_STATUS = "unreviewed"
+"""How a branch left out for want of review is spelled in the printed report.
+
+Not a :class:`TipStatus`: those say what became of a tip the build tried to carry, and
+this says the build never tried.
+"""
 
 
 # %% what became of one tip
@@ -248,12 +260,94 @@ class TipOutcome:
 # %% selecting what to build from
 
 
+@dataclass(frozen=True)
+class UnreviewedBranch:
+    """One branch a build left out because it has not been reviewed by its author.
+
+    Named rather than merely absent: a build that carries nine branches out of nineteen
+    and says so only by omission reads as having covered everything.
+    """
+
+    branch: str
+    """The branch left out."""
+
+    pull_request_number: int
+    """The fork pull request that publishes it."""
+
+    unreviewed_ancestor: str | None
+    """The draft beneath it that keeps it out, or ``None`` when it is itself the draft.
+
+    A branch out of draft whose author can see nothing wrong with it is not told
+    anything actionable by "left out" alone - the draft underneath is what to act on.
+    """
+
+
+@dataclass(frozen=True)
+class BuildSelection:
+    """What a build may carry, and what it leaves behind as unreviewed."""
+
+    carried: tuple[Branch, ...]
+    """Every branch reviewed all the way down to the base, parents before children."""
+
+    unreviewed: tuple[UnreviewedBranch, ...]
+    """Every branch left out, each naming why."""
+
+
+def select_for_build(stack: Stack) -> BuildSelection:
+    """Split the stack into the work a build may carry and the work it may not.
+
+    A build carries only what its author has reviewed, which this repository records by
+    the pull request leaving draft. That cannot be decided per branch, because a tip
+    contains its whole stack: merging a reviewed branch that stands on a draft would put
+    the draft's commits into the build under the reviewed branch's name. So readiness is
+    read down the whole chain, and a stack that is draft at its root is left out entire.
+
+    :param stack: The derived stack.
+    :return: The carried branches and the ones left out.
+    """
+    in_the_stack = {branch.name for branch in stack.branches}
+    carried: list[Branch] = []
+    carried_names: set[str] = set()
+    unreviewed: list[UnreviewedBranch] = []
+    unreviewed_ancestors: dict[str, str] = {}
+    for branch in order(stack):
+        stands_on_carried_work = (
+            branch.parent in carried_names
+            or branch.parent not in in_the_stack
+            or stack.has_landed_upstream(branch.parent)
+        )
+        if branch.status.is_out_of_draft and stands_on_carried_work:
+            carried.append(branch)
+            carried_names.add(branch.name)
+            continue
+        ancestor = (
+            None
+            if not branch.status.is_out_of_draft
+            else unreviewed_ancestors.get(branch.parent, branch.parent)
+        )
+        unreviewed_ancestors[branch.name] = ancestor or branch.name
+        unreviewed.append(
+            UnreviewedBranch(
+                branch=branch.name,
+                pull_request_number=branch.pull_request_number,
+                unreviewed_ancestor=ancestor,
+            )
+        )
+    return BuildSelection(carried=tuple(carried), unreviewed=tuple(unreviewed))
+
+
 def tips_of(stack: Stack) -> list[Branch]:
     """The branches to merge, in the order they are merged.
 
-    Only a stack's tip is taken: a tip already contains its own stack, so merging its
-    parent as well would merge the same commits twice and say nothing new. Anything
-    already in the upstream base is left out for the same reason.
+    Only a tip is taken: a tip already contains its own stack, so merging its parent as
+    well would merge the same commits twice and say nothing new. Anything already in the
+    upstream base is left out for the same reason, and so is anything
+    :func:`carried_by_a_build` rules out.
+
+    A tip here is the deepest branch a build carries, not the stack's own tip. A parent
+    is left out because a child already contains it, so the child has to be one the
+    build takes - asking that of every branch instead would drop a reviewed parent
+    behind a draft child that is never merged and therefore contains nothing.
 
     Order is load-bearing rather than incidental. Once a conflict can skip a tip, the
     order decides *which* tip is skipped, so it is stated: ascending pull request
@@ -262,11 +356,12 @@ def tips_of(stack: Stack) -> list[Branch]:
     :param stack: The derived stack.
     :return: The tips, in merge order.
     """
-    claimed_as_parent = {branch.parent for branch in stack.branches}
+    carried = select_for_build(stack).carried
+    claimed_as_parent = {branch.parent for branch in carried}
     return sorted(
         (
             branch
-            for branch in order(stack)
+            for branch in carried
             if branch.name not in claimed_as_parent
             and not stack.has_landed_upstream(branch.name)
         ),
@@ -417,6 +512,7 @@ def build_integration(
     :param test_command: The suite to run on the finished branch, or ``None`` to skip.
     :return: What the build contains and what it left out.
     """
+    selection = select_for_build(stack)
     tips = tips_of(stack)
     with DetachedCheckout.of(git), RestackWorktree.added_to(git) as assembling:
         build = IntegrationBuild(
@@ -441,6 +537,7 @@ def build_integration(
         base=stack.configuration.upstream_base,
         tips=tuple(outcomes),
         tests_passed=tests_passed,
+        unreviewed=selection.unreviewed,
     )
 
 
@@ -638,6 +735,13 @@ class IntegrationReport:
     """Whether the configured suite passed, or ``None`` when it was not run - which a
     caller has to be able to tell from a suite that ran and passed."""
 
+    unreviewed: tuple[UnreviewedBranch, ...] = ()
+    """The branches left out because their author has not reviewed them yet.
+
+    Kept apart from :attr:`tips` rather than filed among them: a tip left out is a build
+    that did not do what it set out to, and a draft left out is the build doing exactly
+    what it was asked to."""
+
     def as_json(self) -> str:
         """:return: The build as one machine-readable document, led by its status."""
         status = exit_code_for(self)
@@ -753,6 +857,13 @@ def print_build(report: IntegrationReport) -> None:
         )
         collided = f" (with {outcome.collided_with})" if outcome.collided_with else ""
         print(f"{outcome.branch}\t{outcome.status}{collided}\t{detail}")
+    for left_out in report.unreviewed:
+        beneath = (
+            f"under {left_out.unreviewed_ancestor}"
+            if left_out.unreviewed_ancestor
+            else "still a draft"
+        )
+        print(f"{left_out.branch}\t{UNREVIEWED_STATUS}\t{beneath}")
     if report.tests_passed is not None:
         print(
             f"{report.build_branch}\ttests\t{'passed' if report.tests_passed else 'failed'}"

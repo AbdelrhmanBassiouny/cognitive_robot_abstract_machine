@@ -89,8 +89,8 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   `--non-interactive`, stops) when neither answers. Its `routine-prompt.md` is the template to
   register when you want the pass to run unattended.
 - **`integration.py`** - builds the branch you *work from* while the review queue lags: the
-  upstream base with every in-flight stack tip merged on top, regenerated from scratch each time.
-  It writes to no branch and pushes nothing.
+  upstream base with every reviewed in-flight stack tip merged on top, regenerated from scratch
+  each time. It writes to no branch and pushes nothing.
   - `python .claude/stack/integration.py build` - assemble it, then run the suite on the result.
     `--restack` brings stale tips forward first, which pushes to other people's branches and is
     why it is opt-in; `--no-test` skips the suite; `--json` emits the whole build as one document.
@@ -157,6 +157,15 @@ It gates nothing. Promotion asks whether one branch is ready for review; integra
 the branches coexist, and a collision between two of yours is not a reason to hold either back.
 A tip that collides is skipped so the rest still builds, and the report names the **pair** - which
 of the two should change is a judgement, and `/integration-conflict-triage` is where it is made.
+
+**Only branches you have reviewed are carried.** A pull request stays a draft here until its
+author has read it back, so leaving draft is that review, and a build is made of work that has
+had it. Because a tip contains its whole stack, this is read down the entire chain: a reviewed
+branch standing on a draft is left out with it, and the branch merged for a stack is the last one
+reached before its first draft. Everything left out is named in the report - as `unreviewed`,
+distinct from a tip the build tried to carry and could not - so a build that carried nine branches
+out of nineteen says which nine and why, rather than saying so only by omission. Leaving a draft
+out is the rule working, so it is not a failing build and does not change the exit status.
 
 Two branches can also merge perfectly and still not work together - one removing what another's
 test imports, one adding a dependency another's fixture does not provide. No per-branch check can

@@ -467,6 +467,20 @@ class BranchStatus(StrEnum):
     MERGED = "merged"
     """Its own commits are already contained in the upstream base."""
 
+    @property
+    def is_out_of_draft(self) -> bool:
+        """Whether its author has reviewed it themselves.
+
+        This repository's convention is that a pull request stays a draft until its
+        author has read it back, so leaving draft *is* that review. Both statuses beyond
+        draft have had it, and :func:`derive_status` gives ``in-review`` precedence over
+        ``ready`` - so asking for ``ready`` alone silently excludes everything already
+        promoted upstream.
+
+        :return: Whether the branch has been reviewed by its author.
+        """
+        return self in {BranchStatus.READY, BranchStatus.IN_REVIEW}
+
 
 class IntegrationStrategy(StrEnum):
     """How a branch integrates its parent's moved tip during a restack."""
