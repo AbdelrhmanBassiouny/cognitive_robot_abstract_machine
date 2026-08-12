@@ -1286,3 +1286,141 @@ and `query_graph.pdf` (half-answered: the revert landed, untracking the generate
 
 #41 is ready for the steward to merge as the stack bottom; the next pass should cascade it
 through #63–#67/#98.
+
+## 18. Addendum (2026-08-12) — `d-core-expert` (#98): the review round applied; three things it deliberately left
+
+A `/plan-item-resolve` session picked up `d-core-expert`. §14 left it looking finished
+apart from CI. It was not: a **review round on 2026-08-10 21:03–21:06Z had opened six
+threads, none of them answered**, and the item's `notes` — which end at 2026-08-06 —
+never recorded it. Same staleness class as §5's `rdr/why-answer` note and §14's own
+`interface.py:127` finding, for the third time on this plan.
+
+### What the six threads were, and what landed (`c4e297af`)
+
+All six were on this PR's own test files, and three of them are one observation from
+three angles: an assertion that restates something already guaranteed.
+
+- `test_expert.py` — a stray `if __name__ == "__main__": unittest.main()` block had come
+  to sit **mid-file**, with `TestInterfaceCarriesOnlyTheQuestionAndAnswerSurface` defined
+  *after* it. The misplacement is what let the class land there. Both removed.
+  The class's three tests asserted through `hasattr`, i.e. probing for the *absence* of
+  members by name — the negative form of the reach-around AGENTS.md rules out for
+  attribute access. Worth recording that this drops the only negative pin on the
+  `ExpertInterface` segregation §11/§14 argued for; the positive coverage survives in
+  `test_serialization.py`'s `ModelSaver` tests and `test_progress.py`'s
+  `NullProgressReporter` lifecycle test.
+- `test_progress.py` / `test_serialization.py` — `assert isinstance(NullX(), X)` against a
+  base the class declares in its own `class` statement. Both removed, plus the
+  now-unused `ModelSaver` import.
+
+Two threads were **deliberately left unresolved**, per the standing rule that a thread
+answered differently from its ask, or asking a question, is the developer's to close:
+
+- The `pytest.raises(AttributeError)` ask was **superseded 39 seconds later** by the
+  ask to delete the whole class it lived in. Taking the later one means the earlier one
+  was not done as written, so it was replied to explaining the reading rather than
+  silently dropped.
+- "What is this class for?" on `_RecordingReporter` is a question. Answered — it captures
+  `start()`'s arguments so one test can assert a `ProgressDescription` arrives as a plain
+  string — together with the observation that this makes the *test* redundant too, since
+  `test_fitting_description_is_the_label_shown_beside_the_bar` already asserts that
+  equality directly and the rest is `StrEnum`'s own documented semantics. Offered, not
+  applied.
+
+### A vacuous assertion found next door, reported rather than folded in
+
+`test_null_saver_writes_nothing_for_a_fitted_tree` asserts `list(tmp_path.iterdir()) == []`
+while never handing `tmp_path` to `NullModelSaver`. Checked by mutation rather than by
+reading, per §12/§15/§16: swapping in a `FileModelSaver` that genuinely writes a file
+leaves the test **passing**. So it constrains nothing — the same defect class as §16's
+`==`-on-symbolic-expressions finding, which is now the fourth instance of "the assertion
+looked specific and was not." Raised on the PR; not changed, since it was outside the six
+asks.
+
+### Verification — and a container that finally had the dependencies
+
+`test_eql_rdr`: **156 passed / 0 failed before, 151 passed / 0 failed after**, the
+collected-id diff being exactly the five removed tests and nothing else.
+
+This is worth flagging against §12's and §17's standing note. Those sessions ran in
+containers missing the project's dependencies, so their sweeps could only show *no new
+failures*. This container, once given a 3.12 venv plus `krrood`'s requirements, editable
+`random_events`/`probabilistic_model`, and `casadi`, ran the suite **completely green** —
+including the `probabilistic_model…relational.rspn` tests §9/§14/§17 all recorded as an
+unfixable local gap, because the editable install has the submodule the PyPI release
+lacks. The lesson tightens rather than reverses: the gap was always the *container*, not
+the code, and a local sweep is worth setting up properly before concluding it cannot be.
+
+`scripts/format_docstrings.py` again rewrote unrelated docstrings and the import block in
+`test_serialization.py`, where the real change is two deletions; reverted there, kept in
+the other two files where it was a no-op. Fourth recorded instance of the tool wanting its
+own package-wide pass. No `:return:`-space regression this time.
+
+### The CI trigger: the last untried remedy, also tried, also nothing
+
+§14 called this "genuine, unsolved" and "not self-healing"; §17 correctly warned its own
+too-early reading should not be generalised to #98. Both stand. Two things are now
+established that were not:
+
+- **It is not the workflow's triggers.** `ci.yml` on `main` is a bare `on: pull_request:`
+  — no `branches` filter, no `paths` filter — so nothing about this branch excludes it.
+- **It is not a real mergeability problem.** `D-core-support` `8eb7518a` is an ancestor of
+  the head, so `refs/pull/98/merge` is a trivial fast-forward with zero conflicts. Yet
+  GitHub reports `mergeable_state: unknown` on repeated reads.
+
+So the merge ref looks wedged GitHub-side, which is why three — now four — pushes changed
+nothing. **Closing and reopening #98 was tried this session** on that reasoning: it fires
+a `reopened` event, which `ci.yml`'s default type set includes, and forces the ref to be
+rebuilt. As of the end of the session it had **still queued nothing**; the branch's only
+runs remain `a235d4bd` (green) and `b772e959` (the `coraplex` flake). The PR came back as
+a draft, unchanged otherwise.
+
+What is left to try is the steward's cascade retargeting #98's base — a base change is the
+one remaining event class that recreates the merge ref. §11's request for a baseline before
+`d-core-single-class` stacks ~3,500 lines on this branch is therefore **still unmet**, and
+`open_ready` still cannot see it.
+
+### §17's handoff to this item was never recorded on it
+
+§17 and issue #94 comment `5230804492` both say, in terms: *"Carried forward for whoever
+picks up `d-core-expert` and above: the `is UNSET` → `is ...` substitution, the
+parameterizer probe, and …"*. That is recorded in this file and on the tracking issue, and
+**nowhere in the item's own `notes`** — so a session reading the manifest, which is what
+kickoff and resolve both do first, would not find it. Now recorded. The surface is ~20
+sites (`conclusion_domain.py:22,160`, `expert.py:35,149,192`,
+`interface.py:30,58,63,106,111`, `observer.py:24,137,238`, plus tests).
+
+It is not merely pending, it is coupled to the cascade below: the substitution empties
+`rdr/utils.py` of `UNSET`, leaving `AnswerName`/`NamespaceName` in a module whose filename
+AGENTS.md names as a catch-all to avoid — and which `main` no longer has at all. The
+circular-import argument that justified that file (thread `r3689176795`, resolved) assumed
+it existed. Whoever does the substitution should expect to rehome those two enums in the
+same breath, not treat it as a mechanical find-and-replace.
+
+### #41 merged, so the cascade is due — and here is what it actually costs this branch
+
+§17 signed off with "#41 is ready for the steward to merge … the next pass should cascade
+it through #63–#67/#98." **#41 merged to `main` on 2026-08-10T13:32:02Z.** Measured with
+`git merge-tree --write-tree`, and run against `D-core-support` as well so that conflicts
+absorbed lower down are not misattributed here:
+
+| file | conflict | whose |
+|---|---|---|
+| `rdr/utils.py` | modify/delete — deleted on `main` by #41's `efc8a0679`, modified here | **#98's** |
+| `rdr/exceptions.py` | add/add | #67's, recurring at #98 |
+| `rdr/condition_resolver.py` | content — §15/§16's `branch_semantics` vs this PR's `resolve(CaseContext)` | **#98's** |
+| `test_condition_resolver.py` | content, same cause | **#98's** |
+| `function_case.py`, `object_to_source.py`, `base_expressions.py`, `test_backward_inference.py` | content | absorbed at/below #67 |
+
+§16 predicted `rdr/exceptions.py` would be "an additive merge, not a conflict." It is a
+conflict: two files created independently on two branches share no merge base, so git
+cannot auto-merge them however disjoint their contents.
+
+### The dependency regression §14 recorded has not improved
+
+`check_dependency_readiness.py --item d-core-expert` still reports `D-core-support` as
+`open_ready` / `is_ready: true`, while live GitHub shows #67 `mergeable_state: dirty` with
+a `needs-resolution` label, still at `8eb7518a` (2026-07-19) against a base that has since
+moved to `526ed888`. #98 is unaffected — its own base is unchanged and it is a
+fast-forward against it — but the stack cannot land, and neither the manifest nor the
+dashboard can show it, because the readiness rule keys on open + non-draft only.

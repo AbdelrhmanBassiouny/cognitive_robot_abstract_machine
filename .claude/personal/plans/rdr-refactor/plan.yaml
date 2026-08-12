@@ -398,7 +398,35 @@ items:
     comment 5201827158 (interactive.py:231/335/440, magics.py:171).
     Still true: no CI run has ever been queued for this PR since b772e959 (2026-07-30).
     The 28a89ff4 push did not trigger one either, so "push a commit to get a baseline" is
-    not the fix - see roadmap.md section 14.'
+    not the fix - see roadmap.md section 14. 2026-08-12: a /plan-item-resolve session applied the 2026-08-10 review round (six threads,
+    none of which had a reply and which the notes above never recorded). Pushed as c4e297af:
+    removed the stray mid-file `if __name__ == "__main__"` block in test_expert.py and
+    TestInterfaceCarriesOnlyTheQuestionAndAnswerSurface (its hasattr probes were the negative
+    form of the attribute access AGENTS.md rules out; the segregation keeps its positive
+    coverage in the ModelSaver and NullProgressReporter tests), plus the two isinstance-against-
+    a-declared-base tests in test_progress.py and test_serialization.py and the now-unused
+    ModelSaver import. Four threads replied-to and resolved; two deliberately left open - the
+    pytest.raises(AttributeError) one because the developer''s next comment 39s later superseded
+    it by deleting the class, and the "what is this class for?" one on _RecordingReporter
+    because it is a question, answered with a proposal to drop it and its one test as restating
+    StrEnum semantics. Verified before/after in one container: test_eql_rdr 156 passed / 0
+    failed before, 151 / 0 after, collected-id diff exactly the five removed tests - note this
+    container, unlike section 14''s and section 17''s, had a complete dependency set, so this is
+    the first genuinely green local run recorded for this item. Reported separately on the PR,
+    not fixed: test_null_saver_writes_nothing_for_a_fitted_tree asserts nothing - tmp_path is
+    never given to NullModelSaver, and a mutation swapping in a genuinely-writing FileModelSaver
+    still passes. Three things this round did NOT do, all newly recorded in roadmap.md section
+    18. (1) Section 17''s UNSET -> ... substitution, handed to this item on issue #94 comment
+    5230804492 and never recorded here, is still unimplemented (~20 sites across
+    conclusion_domain/expert/interface/observer plus tests). (2) #41 merged to main on
+    2026-08-10, so the steward cascade is now due and lands four conflicts that are this
+    branch''s own, verified by git merge-tree and isolated against D-core-support: rdr/utils.py
+    modify/delete (main deleted it, this branch carries AnswerName/NamespaceName in it),
+    rdr/exceptions.py add/add, and content conflicts in condition_resolver.py and
+    test_condition_resolver.py. (3) The CI trigger is still dead: the c4e297af push queued
+    nothing, and closing and reopening #98 - the one remedy never tried, since ci.yml has an
+    unfiltered on: pull_request and the PR merge is a trivial fast-forward - had queued nothing
+    as of the end of that session either.'
 - id: d-core-single-class
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
   branch: D-core-single-class
