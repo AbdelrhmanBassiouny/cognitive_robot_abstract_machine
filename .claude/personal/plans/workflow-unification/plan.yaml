@@ -723,6 +723,27 @@ items:
       request. The gh/PyGithub pair stays deferred to dev-tooling-github-api-unification as before.
       Session: https://claude.ai/code/session_01DHbsXEZCDRYbegKU4iVGyP
 
+      /plan-item-resolve run 2026-08-12 (session in this manifest's own history at the time of
+      writing): PR #139 itself is not blocked - CI is green on all 21 checks at ebf67734, it is
+      mergeable_state clean against fork main, and review is substantively settled (the two open
+      threads and the PullRequest.ci comment are deliberately deferred elsewhere, not blockers).
+      The "merge conflicts with upstream main" flagged for this resolve is real but latent, verified
+      by direct measurement rather than assumed: fork main is 160 commits behind cram2/main (0
+      ahead) - expected, since stack-tooling-on-main (#106) promoted to cram2 as PR #501
+      (af935a19) and cram2 has moved on since, while fork main's own fast-forward from cram2 is
+      deliberately deferred to routine-cutover's not-yet-built Action. `git merge-tree --write-tree`
+      of cram2/main against this branch's head produces one real content conflict, in
+      .claude/skills/stacked-pr-maintenance/SKILL.md - both sides independently rewrote it (cram2
+      picked up further edits after #501 merged; this branch's own 25-comment round rewrote the
+      same sections). Nothing today is merging cram2/main into this branch, so it blocks nothing
+      now; it will surface as the first restack conflict the moment fork main is fast-forwarded and
+      this branch (or fork main after it merges) is restacked onto the new tip - exactly the
+      needs-resolution flow this PR implements. Recommendation: land #139 as-is; do not
+      pre-emptively resolve against a cram2 main that is still moving, and do not have a session
+      quietly resolve it out of band, which the pass's own design deliberately avoids doing to
+      someone else's conflict. Recorded here for whoever runs the first fast-forward + restack pass
+      (most likely while finishing routine-cutover) so it isn't rediscovered from scratch.
+
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script
     title: "Extract a deterministic setup script from /setup-personal-notes"

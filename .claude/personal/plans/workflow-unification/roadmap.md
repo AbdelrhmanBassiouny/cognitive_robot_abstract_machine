@@ -5845,3 +5845,52 @@ The `greenlet` blocker recorded on 2026-08-10 against this item, #151 and #135 i
 A `test_each_lib` red must be judged on its own evidence rather than against that note. The
 retraction is repeated in the manifest entry and the PR-progress note, because those are the
 two places a session reads before CI.
+
+## Update 2026-08-12 (`plan-item-resolve` on `stack-maintenance-executor`): #139 is not blocked, and the real "upstream conflict" is measured rather than assumed
+
+`/plan-item-resolve workflow-unification stack-maintenance-executor`, prompted with "there's also
+merge conflicts with upstream main." Gathered rather than guessed: #139 (head `ebf67734`) is CI
+green on all 21 checks, `mergeable_state: clean` against fork `main`, and review is settled — the
+two threads left open and the `PullRequest.ci` comment are already correctly deferred to other
+items, not blockers. Nothing about the pull request itself needed resolving.
+
+### The conflict is real, but it is with cram2 `main`, not fork `main`
+
+Measured directly rather than read off a status field, since GitHub's own `mergeable_state` only
+ever answers against a pull request's *own* base (fork `main` here) and has no notion of upstream:
+
+```
+$ git merge-base <cram2/main> <fork/main>
+<fork/main's own tip>                       # fork main is a strict ancestor of cram2 main
+$ git rev-list --left-right --count <cram2/main>...<fork/main>
+160    0                                     # 160 behind, 0 ahead
+$ git merge-tree --write-tree <cram2/main> <#139 head>
+CONFLICT (content): Merge conflict in .claude/skills/stacked-pr-maintenance/SKILL.md
+```
+
+Everything else in the tree (`.claude/stack/README.md`, `.gitignore`) auto-merges clean; one file
+conflicts. The cause is ordinary and already on record in two other places on this roadmap: #106
+promoted to cram2 as PR #501 (`af935a19`, confirmed by walking cram2 `main`'s own log) and cram2
+kept moving — including further edits to `SKILL.md` itself (`102e72ab`, `8b7435bb`) — while #139's
+own 25-comment review round independently rewrote the same document's "what this pass never does"
+and command-reference sections. Two owners, one file, no coordination between them; a conflict is
+the expected outcome, not a defect in either side.
+
+### Why nothing acts on it now
+
+The fork-main fast-forward from cram2 `main` is a deliberately deferred step — `routine-cutover`'s
+own notes gate it on exactly this pair (#106 on cram2 `main`, one fast-forward), owned by an Action
+that does not exist yet. So today nothing is attempting the merge that would hit this conflict, and
+#139 is fully mergeable into the base it actually has. Resolving it pre-emptively here would mean
+resolving against a cram2 `main` that keeps moving before the fast-forward the resolution is *for*
+actually happens - most of the resolution would likely be stale by then. It would also cut against
+this item's own design principle, applied to itself: the executor reports a restack conflict to the
+branch's owner rather than resolving it invisibly, and a resolve session quietly patching around its
+own future conflict is the same shortcut in a different place.
+
+### State
+
+No code or git change on #139's branch — recorded in `plan.yaml`'s `notes` for
+`stack-maintenance-executor` and here, so the first fast-forward + restack pass (most likely as part
+of finishing `routine-cutover`) starts from this measurement instead of rediscovering it live, the
+same way the `restack` conflict-report flow would surface it anyway.
