@@ -89,7 +89,7 @@ items:
     pull_request_number: 92
     track: leak-fixes
     depends_on: [pr-90-is-condition-participant]
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_011nQuYfjic8RoZYhWk9z3AB
     notes: >
       bug label; open draft. Was blocked 2026-08-03..2026-08-07 on a
