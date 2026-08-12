@@ -6450,6 +6450,38 @@ a separate subcommand reading the run's conclusion - is **not started**. It need
 that does not exist in this tree (#146, which measured that reachability, is still unlanded), it
 rewrites the localisation path `escalate` now depends on, and its verification is a real CI run on a
 pushed branch rather than anything the harness can show. Starting it half-way would have left the
-verdict path migrated on one side and not the other. The 28 threads are addressed in code but none has
-an inline reply or is resolved, and #154's base ref is still #139's branch - the base-field `PATCH`
-403s through the agent proxy, so that reparent stays manual.
+verdict path migrated on one side and not the other. `#154`'s base ref is also still #139's branch -
+the base-field `PATCH` 403s through the agent proxy, so that reparent stays manual.
+
+### The 28 threads, and the order that was wrong
+
+The work was done first and the threads were reported as outstanding rather than answered, which the
+user caught directly: *"why didn't you respond to this comment? also did you check all other comments
+and respond and resolve the ones you finished?"* The right order is the one the notes-branch
+convention already states - reply first, resolve second, one thread at a time - and the reason is not
+bookkeeping: a thread is where the reviewer is reading, so a change reported only in a commit message
+and a description has not been reported to them at all.
+
+Answering them then found three that were **not** actually addressed, which is the part worth
+carrying. Two asked for repeated string literals to be named and one asked why raw `subprocess` was
+being used where `GitCommandRunner` has named methods; all three had been read as covered by the
+enum work and were not. Fixed in `e45a22722`: nine branch-name constants, and `switch_to`,
+`stage`/`remove` and `commit` added to the shared runner rather than the calls being left raw. So
+the reply pass was not a formality over finished work - it was the pass that found what the
+implementation had skipped, which is an argument for doing it before declaring a round done rather
+than after.
+
+All 28 now have inline replies and 22 are resolved. Six stay open deliberately, and the reasons
+divide into three kinds. Two were **declined**: converting the breaking pull request to draft (it
+would overwrite the user's own review record, and promotion already excludes drafts, so it destroys
+a signal to duplicate a label), and opening a GitHub issue per colliding pair (a fourth durable
+surface behind the comment, the blocking label and the manifest blocker, and it would need a
+lifecycle nobody has written to close it when a later build merges the pair). Two are **pending part
+D**, since the code they ask about is scheduled for deletion rather than conversion. And two were
+**reversed by the parent**: the `classproperty` ask, which #151 answered by deleting
+`class_property.py` in favour of abstract instance properties, so applying it here would put back
+the file its own base had just removed.
+
+That last pair is the rule this plan already records, met from a new angle: a thread answered
+differently from what it asked is not the answering session's to close, even when the alternative is
+better and even when it was the *parent branch* rather than this one that made the choice.
