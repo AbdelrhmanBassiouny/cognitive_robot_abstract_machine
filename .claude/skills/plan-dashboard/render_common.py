@@ -10,12 +10,17 @@ import it rather than duplicating the logic.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 from urllib.parse import urlsplit
 
 import jinja2
 import markdown as markdown_library
 import nh3
+
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "shared"))
+
+from plan_model import ItemStatus
 
 _ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
 
@@ -42,6 +47,36 @@ _MAXIMUM_HEADING_LEVEL = 6
 """The deepest valid HTML heading level - shifting never produces anything
 past this, even for an already-deep roadmap heading."""
 
+STATUS_DISPLAY_LABELS: dict[ItemStatus, str] = {
+    ItemStatus.NOT_STARTED: "Not started",
+    ItemStatus.IN_PROGRESS: "In progress",
+    ItemStatus.BLOCKED: "Blocked",
+    ItemStatus.DEFERRED: "Deferred",
+    ItemStatus.DONE: "Done",
+}
+"""
+How each plan-item status is labelled on a rendered page.
+
+Keyed by :class:`plan_model.ItemStatus` rather than by its bare string values, so a typo
+in a status literal here would fail import rather than silently mislabel a page. The
+labels themselves stay presentation-only, in this module rather than on the enum itself:
+a hook has no interface to label anything, so wording only a page shows belongs with the
+rendering rather than with the model.
+"""
+
+
+def status_label(status: str) -> str:
+    """
+    Label a plan-item status for display.
+
+    :param status: The status, as a :class:`plan_model.ItemStatus` or its own value -
+        a :class:`~enum.StrEnum` compares and hashes equal to its value, so either form
+        looks itself up.
+    :return: The label the page shows for it.
+    :raises KeyError: If the status has no label, so a new one cannot render blank.
+    """
+    return STATUS_DISPLAY_LABELS[status]
+
 
 def create_template_environment() -> jinja2.Environment:
     """
@@ -56,12 +91,14 @@ def create_template_environment() -> jinja2.Environment:
 
     :return: A configured, ready-to-use Jinja2 environment.
     """
-    return jinja2.Environment(
+    environment = jinja2.Environment(
         loader=jinja2.FileSystemLoader(TEMPLATES_DIRECTORY),
         autoescape=True,
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    environment.filters["status_label"] = status_label
+    return environment
 
 
 def render_markdown_to_html(markdown_text: str) -> str:

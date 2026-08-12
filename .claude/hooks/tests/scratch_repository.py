@@ -23,6 +23,15 @@ HOOKS_SOURCE_DIRECTORY = Path(plan_manifest_tools.__file__).parent
 The real hooks directory the scripts under test are copied from.
 """
 
+SHARED_SOURCE_DIRECTORY = HOOKS_SOURCE_DIRECTORY.parent / "shared"
+"""
+The modules the hooks import from outside their own directory.
+
+Copied alongside whatever is installed rather than on request: they are a transitive
+dependency of the scripts under test, so a scratch layout without them fails at import
+with a message about the wrong file.
+"""
+
 NOTES_BRANCH = "claude/personal-notes"
 """
 The personal-notes branch name the hooks resolve to by default.
@@ -131,6 +140,11 @@ class ScratchRepository:
         # committing here doesn't depend on the environment already having one.
         repository.run_git("config", "user.name", "Scratch Repo")
         repository.run_git("config", "user.email", "scratch-repo@example.com")
+        # A throwaway repository has no reason to sign, and an environment that signs
+        # by default makes every commit here depend on a reachable signing service -
+        # observed failing mid-suite with "signing server returned status 520", on a
+        # different test each run.
+        repository.run_git("config", "commit.gpgsign", "false")
         return repository
 
     def run_git(
@@ -154,10 +168,16 @@ class ScratchRepository:
 
     def install_hook_scripts(self, *script_names: str) -> None:
         """
-        Copy the real hook scripts under test into the scratch layout.
+        Copy the real hook scripts under test, and what they import, into the scratch
+        layout.
 
         :param script_names: File names within the hooks directory.
         """
+        shutil.copytree(
+            SHARED_SOURCE_DIRECTORY,
+            self.project_root / ".claude" / "shared",
+            dirs_exist_ok=True,
+        )
         for script_name in script_names:
             shutil.copy(
                 HOOKS_SOURCE_DIRECTORY / script_name,

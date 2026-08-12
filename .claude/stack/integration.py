@@ -39,7 +39,10 @@ from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import Any, ClassVar
 
-from stack import (
+sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
+
+from exceptions import GitCommandFailed  # noqa: E402
+from stack import (  # noqa: E402
     AmbiguousForkRemoteError,
     Branch,
     Configuration,
@@ -51,18 +54,20 @@ from stack import (
     resolve_ref,
 )
 
-from maintenance_board import BoardExport, MissingPullRequestFieldError
-from maintenance_git_commands import (
-    BranchAncestry,
-    GitCommandFailed,
-    GitCommandRunner,
+from maintenance_board import (  # noqa: E402
+    BoardExport,
+    MissingPullRequestFieldError,
 )
-from maintenance_github import (
+from maintenance_git_commands import (  # noqa: E402
+    BranchAncestry,
+    MaintenanceGitCommandRunner,
+)
+from maintenance_github import (  # noqa: E402
     GitHubCredentialUnavailableError,
     GitHubRepository,
     GitHubRequestFailed,
 )
-from maintenance_restack_procedure import (
+from maintenance_restack_procedure import (  # noqa: E402
     DetachedCheckout,
     RestackWorktree,
     restack,
@@ -281,7 +286,7 @@ def build_branch_name(moment: datetime) -> str:
 class IntegrationBuild:
     """One branch under assembly, and the tips merged into it so far."""
 
-    git: GitCommandRunner
+    git: MaintenanceGitCommandRunner
     """The runner for the worktree the branch is assembled in, with replay turned on."""
 
     configuration: Configuration
@@ -393,7 +398,7 @@ class IntegrationBuild:
 
 def build_integration(
     stack: Stack,
-    git: GitCommandRunner,
+    git: MaintenanceGitCommandRunner,
     build_branch: str,
     provenance: ResolutionProvenance,
     test_command: str | None,
@@ -505,7 +510,7 @@ def exit_code_for_bisect(report: BisectReport) -> IntegrationExitCode:
 
 def bisect_integration(
     stack: Stack,
-    git: GitCommandRunner,
+    git: MaintenanceGitCommandRunner,
     build_branch: str,
     provenance: ResolutionProvenance,
     test_command: str,
@@ -785,7 +790,7 @@ class IntegrationRun:
     configuration: Configuration
     """The resolved configuration naming both repositories and the base."""
 
-    git: GitCommandRunner
+    git: MaintenanceGitCommandRunner
     """The runner every git command goes through."""
 
     def fork(self) -> GitHubRepository:
@@ -826,10 +831,10 @@ class IntegrationRun:
             PROVENANCE_FILENAME
         )
 
-    def replaying(self, working_directory: Path) -> GitCommandRunner:
+    def replaying(self, working_directory: Path) -> MaintenanceGitCommandRunner:
         """:param working_directory: The checkout to run in.
         :return: A runner with resolution replay turned on for its commands alone."""
-        return GitCommandRunner(
+        return MaintenanceGitCommandRunner(
             working_directory=working_directory,
             configuration_overrides=RERERE_SETTINGS,
         )
@@ -1164,7 +1169,7 @@ def _dispatch() -> IntegrationExitCode:
         return requested.run(
             IntegrationRun(
                 configuration=load_configuration(),
-                git=GitCommandRunner(working_directory=Path.cwd()),
+                git=MaintenanceGitCommandRunner(working_directory=Path.cwd()),
             ),
             arguments,
         )

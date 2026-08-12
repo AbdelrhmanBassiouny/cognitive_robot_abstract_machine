@@ -19,7 +19,7 @@ from maintenance_constants import (
     MERGEABLE_STATE_WITH_CONFLICTS,
 )
 from maintenance_board import PullRequestField
-from maintenance_git_commands import GitCommandRunner, ProposedPush
+from maintenance_git_commands import MaintenanceGitCommandRunner, ProposedPush
 from maintenance_github import ForkPullRequests
 from stack import (
     Branch,
@@ -189,7 +189,7 @@ class BranchUnderRestack:
     The derived stack it belongs to.
     """
 
-    git: GitCommandRunner
+    git: MaintenanceGitCommandRunner
     """
     The runner to execute through.
     """

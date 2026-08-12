@@ -44,8 +44,11 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, ClassVar
 
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "shared"))
+
 import yaml
 
+from plan_model import ItemStatus
 from render_common import (
     create_template_environment,
     render_markdown_to_html,
@@ -54,36 +57,6 @@ from render_common import (
 
 MAXIMUM_DEPENDENCY_STACK_LEVEL = 4
 """Same-track dependency chains deeper than this wrap back to indent level 0."""
-
-
-class ItemStatus(StrEnum):
-    """The thin, manually-maintained status a plan.yaml item carries.
-
-    Deliberately thin: everything about a pull request's actual GitHub state
-    (open/draft/merged/CI/review) is never stored here - it is always
-    live-fetched and represented separately by :class:`LiveState`.
-    """
-
-    NOT_STARTED = "not_started"
-    IN_PROGRESS = "in_progress"
-    BLOCKED = "blocked"
-    DEFERRED = "deferred"
-    DONE = "done"
-
-    @property
-    def display_label(self) -> str:
-        """The human-readable label shown in the dashboard UI for this status."""
-        match self:
-            case ItemStatus.NOT_STARTED:
-                return "Not started"
-            case ItemStatus.IN_PROGRESS:
-                return "In progress"
-            case ItemStatus.BLOCKED:
-                return "Blocked"
-            case ItemStatus.DEFERRED:
-                return "Deferred"
-            case ItemStatus.DONE:
-                return "Done"
 
 
 class LiveState(StrEnum):
