@@ -2249,7 +2249,7 @@ items:
     title: "Write the manifest and republish the dashboard before anything else, at every transition"
     branch: claude/plan-manifest-update-priority-ex2zst
     track: personal-data
-    depends_on: []
+    depends_on: [stack-maintenance-executor]
     status: in_progress
     session: https://claude.ai/code/session_01SgGzMvxTxaePhpkT28uuJV
     pull_request_number: 151
