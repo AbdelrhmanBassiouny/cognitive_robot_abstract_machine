@@ -214,7 +214,8 @@ yourself.
   is reported: find the session link in the fork pull request's description, post a comment prefixed
   `🔴 ROUTINE - NEEDS RESOLUTION:` stating the failing check and its conclusion, and label the pull
   request `needs-resolution` via `stack.py labels` so the rest of its labels survive. That comment is
-  the only channel available to you. Never disable a check to go green.
+  the only channel available to you: no session subscribes to a pull request's activity, so it sits
+  on GitHub until the owner reads it - write it to stand alone. Never disable a check to go green.
 - **It never subscribes to learn CI.** Poll with `pull_request_read` → `get_check_runs` /
   `get_status` and read only the success/failure conclusion. A subscription delivers human review
   comments and review threads, not just CI, and turns on the per-event handler that makes you

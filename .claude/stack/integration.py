@@ -51,16 +51,19 @@ from stack import (
     resolve_ref,
 )
 
-from maintenance import (
-    BoardExport,
+from maintenance_board import BoardExport, MissingPullRequestFieldError
+from maintenance_git_commands import (
     BranchAncestry,
-    DetachedCheckout,
     GitCommandFailed,
     GitCommandRunner,
+)
+from maintenance_github import (
     GitHubCredentialUnavailableError,
     GitHubRepository,
     GitHubRequestFailed,
-    MissingPullRequestFieldError,
+)
+from maintenance_restack_procedure import (
+    DetachedCheckout,
     RestackWorktree,
     restack,
 )

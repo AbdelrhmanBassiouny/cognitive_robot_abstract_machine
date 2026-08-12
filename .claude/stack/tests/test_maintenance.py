@@ -22,7 +22,6 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
 from pathlib import Path
-from typing import ClassVar
 
 import pytest
 
@@ -40,40 +39,57 @@ from stack import (
     load_board,
 )
 
-import maintenance
-from maintenance import (
-    CREDENTIAL_VARIABLES,
-    BoardCommand,
+import maintenance_commands
+import maintenance_restack_procedure
+from class_property import classproperty
+from maintenance_board import (
     BoardExport,
-    BranchAncestry,
-    BranchOutcome,
-    COMMANDS,
-    FastForwardOutcome,
-    FastForwardReport,
-    GitCommandFailed,
-    GitCommandRunner,
-    MaintenanceExitCode,
-    MaintenancePass,
-    MaintenanceReport,
     MissingPullRequestFieldError,
     PullRequestField,
-    RestackOutcome,
-    build_report,
-    clear_spent_promotion_labels,
-    description_with_promotion_link,
-    exit_code_for,
-    fast_forward,
-    promote,
-    PROMOTION_LINK_LABEL,
-    ProposedPush,
-    RestackCommand,
-    MaintenanceCommand,
-    RunReportCommand,
-    restack,
     get_session_link_in,
 )
+from maintenance_commands import (
+    COMMANDS,
+    BoardCommand,
+    MaintenanceCommand,
+    MaintenancePass,
+    RestackCommand,
+    RunReportCommand,
+)
+from maintenance_constants import CREDENTIAL_VARIABLES, PROMOTION_LINK_LABEL
+from maintenance_fast_forward import (
+    FastForwardOutcome,
+    FastForwardReport,
+    fast_forward,
+)
+from maintenance_git_commands import (
+    BranchAncestry,
+    GitCommandFailed,
+    GitCommandRunner,
+    ProposedPush,
+)
+from maintenance_github import ForkPullRequests
+from maintenance_promotion import (
+    clear_spent_promotion_labels,
+    description_with_promotion_link,
+    promote,
+)
+from maintenance_report import (
+    MaintenanceExitCode,
+    MaintenanceReport,
+    build_report,
+    exit_code_for,
+)
+from maintenance_restack_procedure import restack
+from maintenance_restack_steps import BranchOutcome, RestackOutcome, RestackStep
 
-MAINTENANCE_SCRIPT = Path(__file__).parent.parent / "maintenance.py"
+STACK_DIRECTORY = Path(__file__).parent.parent
+"""
+The directory the executor's modules live in, which is also what a subprocess running
+one of them resolves its imports against.
+"""
+
+MAINTENANCE_SCRIPT = STACK_DIRECTORY / "maintenance.py"
 """
 The executor under test, invoked as a subprocess wherever an exit status is the
 assertion.
@@ -826,7 +842,7 @@ def test_the_caller_holds_no_branch_while_a_restack_runs(fork_checkout: ForkChec
 
     restack(a_stack(fork_checkout, the_board()), fork_checkout.git, fork)
 
-    assert fork.branch_held_while_restacking == ""
+    assert fork.branches_held_while_restacking == [""]
 
 
 def test_a_restack_gives_back_the_branch_the_caller_lent_it(
@@ -938,8 +954,8 @@ class RecordedDescription:
     """
 
 
-@dataclass
-class RecordingPullRequests:
+@dataclass(frozen=True)
+class RecordingPullRequests(ForkPullRequests):
     """
     Stands in for the fork, recording every write instead of making it.
 
@@ -987,6 +1003,14 @@ class RecordingPullRequests:
     Every description written, in order.
     """
 
+    def open_pull_requests(self) -> list[dict]:
+        """
+        :return: Every pull request this stand-in has been given state for, in number
+            order - the same records reading one of them by number answers with.
+        """
+        known = {*self.states, *self.descriptions, *self.titles, *self.labels}
+        return [self.pull_request(number) for number in sorted(known)]
+
     def pull_request(self, number: int) -> dict:
         """
         :param number: The pull request to read.
@@ -1028,7 +1052,7 @@ class RecordingPullRequests:
         self.descriptions[number] = body
 
 
-@dataclass
+@dataclass(frozen=True)
 class PullRequestsWatchingTheCaller(RecordingPullRequests):
     """
     Reads the invoking checkout at the one moment a pass is provably mid-restack.
@@ -1043,9 +1067,9 @@ class PullRequestsWatchingTheCaller(RecordingPullRequests):
     The invoking checkout to read.
     """
 
-    branch_held_while_restacking: str | None = None
+    branches_held_while_restacking: list[str] = dataclasses_field(default_factory=list)
     """
-    What it had checked out when the write came, unset if no write ever came.
+    What it had checked out at each write, in order, empty if no write ever came.
     """
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:
@@ -1053,7 +1077,7 @@ class PullRequestsWatchingTheCaller(RecordingPullRequests):
         :param number: The pull request to write.
         :param labels: The complete label set to write.
         """
-        self.branch_held_while_restacking = self.caller.checked_out_branch()
+        self.branches_held_while_restacking.append(self.caller.checked_out_branch())
         super().replace_labels(number, labels)
 
 
@@ -1070,7 +1094,7 @@ class ReportingRefused(RuntimeError):
         return "the fork refused the write"
 
 
-@dataclass
+@dataclass(frozen=True)
 class PullRequestsRefusingToReport(RecordingPullRequests):
     """
     A fork whose label writes raise, so a pass dies part-way through a branch.
@@ -1311,9 +1335,11 @@ def test_a_branch_no_step_concludes_is_an_error_rather_than_a_silent_pass(
     means the procedure lost it - which must not read as a branch nothing happened to.
     """
     a_parent_and_child(fork_checkout)
-    monkeypatch.setattr(maintenance, "RESTACK_STEPS", ())
+    monkeypatch.setattr(maintenance_restack_procedure, "RESTACK_STEPS", ())
 
-    with pytest.raises(maintenance.RestackConcludedNothingError) as raised:
+    with pytest.raises(
+        maintenance_restack_procedure.RestackConcludedNothingError
+    ) as raised:
         restack(
             a_stack(fork_checkout, the_board()),
             fork_checkout.git,
@@ -1359,7 +1385,7 @@ def test_a_whole_pass_leaves_no_board_behind(
     a_parent_and_child(fork_checkout)
     board_path = tmp_path / "board.json"
     board_path.write_text("{}")
-    monkeypatch.setattr(maintenance, "BOARD_PATH", board_path)
+    monkeypatch.setattr(maintenance_commands, "BOARD_PATH", board_path)
 
     RunReportCommand().run(
         AlreadyResolvedPass.over(fork_checkout, the_board()),
@@ -1605,18 +1631,80 @@ def test_a_command_names_itself_without_being_instantiated():
     assert isinstance(BoardCommand.description, str)
 
 
-def test_a_command_that_omits_its_name_or_description_is_refused_when_defined():
+def test_a_command_that_omits_its_name_cannot_be_built():
     """
-    Refusing at class definition is earlier than any instance could exist, so a command
-    missing the name --help reads cannot reach the parser at all.
+    A command stays abstract until it says what it is called, and COMMANDS builds every
+    subclass - so one that never says cannot reach the parser at all.
     """
+
+    @dataclass(frozen=True)
+    class CommandWithoutAName(MaintenanceCommand):
+        @classproperty
+        def description(cls) -> str:
+            return "a command that forgot what it is called"
+
+        def run(self, maintenance, arguments):
+            return MaintenanceExitCode.SUCCESS
+
     with pytest.raises(TypeError, match="invoked_as"):
+        CommandWithoutAName()
 
-        class CommandWithoutAName(MaintenanceCommand):
-            description: ClassVar[str] = "a command that forgot what it is called"
 
-            def run(self, maintenance, arguments):
-                return MaintenanceExitCode.SUCCESS
+def test_a_command_answers_with_its_own_name_rather_than_the_one_on_its_base():
+    """
+    An abstract class property answers with itself rather than calling its accessor,
+    which is what leaves a subclass supplying nothing abstract instead of silently
+    answering ``None``.
+    """
+    assert isinstance(MaintenanceCommand.invoked_as, classproperty)
+    assert MaintenanceCommand.invoked_as.__isabstractmethod__
+    assert BoardCommand.invoked_as == "board"
+
+
+def test_a_fork_client_that_cannot_make_one_of_the_writes_cannot_be_built():
+    """
+    The reading and the writing halves are inherited rather than matched by shape, so a
+    client that could not post the comment a conflict is reported in is refused when it
+    is built, rather than when the first conflict needs reporting.
+    """
+
+    @dataclass(frozen=True)
+    class ForkThatCannotComment(ForkPullRequests):
+        def open_pull_requests(self) -> list[dict]:
+            return []
+
+        def pull_request(self, number: int) -> dict:
+            return {}
+
+        def replace_labels(self, number: int, labels: Sequence[str]) -> None:
+            """
+            Recorded nowhere, since this fork is never expected to be built.
+            """
+
+        def set_description(self, number: int, body: str) -> None:
+            """
+            Recorded nowhere, since this fork is never expected to be built.
+            """
+
+    with pytest.raises(TypeError, match="add_comment"):
+        ForkThatCannotComment()
+
+
+def test_every_module_of_the_executor_imports_on_its_own():
+    """
+    The executor is split across modules, and a cycle between two of them shows up only
+    when whichever one a caller imports first is the one that has to be complete.
+    """
+    modules = sorted(path.stem for path in STACK_DIRECTORY.glob("*.py"))
+
+    for module in modules:
+        result = subprocess.run(
+            [sys.executable, "-c", f"import {module}"],
+            cwd=STACK_DIRECTORY,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, f"{module}: {result.stderr}"
 
 
 def test_a_restack_step_that_does_nothing_cannot_be_built():
@@ -1625,7 +1713,8 @@ def test_a_restack_step_that_does_nothing_cannot_be_built():
     would silently pass every branch along to the next step.
     """
 
-    class StepWithoutAnAttempt(maintenance.RestackStep):
+    @dataclass(frozen=True)
+    class StepWithoutAnAttempt(RestackStep):
         pass
 
     with pytest.raises(TypeError, match="attempt"):
