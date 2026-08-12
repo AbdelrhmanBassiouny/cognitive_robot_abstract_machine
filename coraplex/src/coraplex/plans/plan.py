@@ -262,6 +262,24 @@ class Plan:
         result = self.root.perform()
         return result
 
+    def notify_node_started(self, node: PlanNode) -> None:
+        """
+        Notify every registered callback that a node started executing.
+
+        :param node: The node that started.
+        """
+        for callback in self.node_callbacks:
+            callback.on_start(node)
+
+    def notify_node_ended(self, node: PlanNode) -> None:
+        """
+        Notify every registered callback that a node finished executing.
+
+        :param node: The node that ended.
+        """
+        for callback in self.node_callbacks:
+            callback.on_end(node)
+
     def re_perform(self):
         for child in self.root.descendants:
             if child.is_leaf:
@@ -323,7 +341,9 @@ class Plan:
         GraphVisualizerBackend.PLOTLY: InteractiveGraphVisualizer,
         GraphVisualizerBackend.CYTOSCAPE: CytoscapeGraphVisualizer,
     }
-    """The visualizer to use for each rendering backend."""
+    """
+    The visualizer to use for each rendering backend.
+    """
 
     def visualize(
         self,
@@ -333,9 +353,9 @@ class Plan:
         """
         Open an interactive, real-time visualization of the plan graph.
 
-        Nodes appear as the plan is built, are labelled by their type, coloured by execution
-        status and reveal their status and timing when clicked. With the default physics layout
-        the nodes self-organize and bounce as the plan grows.
+        Nodes appear as the plan is built, are labelled by their type, coloured by
+        execution status and reveal their status and timing when clicked. With the
+        default physics layout the nodes self-organize and bounce as the plan grows.
 
         :param backend: The rendering technology to use.
         :param layout: The algorithm used to place the nodes.
