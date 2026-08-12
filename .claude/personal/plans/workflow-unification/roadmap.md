@@ -6450,8 +6450,37 @@ a separate subcommand reading the run's conclusion - is **not started**. It need
 that does not exist in this tree (#146, which measured that reachability, is still unlanded), it
 rewrites the localisation path `escalate` now depends on, and its verification is a real CI run on a
 pushed branch rather than anything the harness can show. Starting it half-way would have left the
-verdict path migrated on one side and not the other. `#154`'s base ref is also still #139's branch -
-the base-field `PATCH` 403s through the agent proxy, so that reparent stays manual.
+verdict path migrated on one side and not the other.
+
+### The reparent was recorded as blocked, and it was neither blocked nor correct
+
+The base ref was carried in this item's notes for two entries as *"still #139's branch; the
+base-field `PATCH` 403s through the agent proxy, so the reparent stays manual"*. Attempted rather
+than restated, and both halves were wrong.
+
+The proxy does not block it. The GitHub MCP tool changed the base immediately - which is precisely
+what `session-safe-pr-reparent` established on throwaway PR #129 in August, that only the raw `curl`
+`PATCH` is refused and the MCP tool is the client that works. That finding had simply not been
+carried into this item's own notes, which described the operation by the *failure mode of the client
+nobody should be using*.
+
+And the reparent is wrong to perform today, which is what the attempt showed rather than the
+reasoning: #151's branch is **159 commits behind `main`** and 17 ahead, so basing #154 on it swelled
+the diff from **45 files to 261**, pulling in the whole of `main` that #151 does not carry. Reverted
+in the same minute. `git merge-base --is-ancestor` confirms this branch already contains #151's head
+and is 0 behind `main`, so `main` is the honest base rather than a placeholder, and the reparent
+becomes correct only once #151 merges `main`.
+
+That is the inflated-diff shape PR #41 cost this plan a whole item to repair, met from the other
+direction - there a child sat on a base that had already landed, here it would have sat on a base
+that had not caught up. Both produce a diff that describes something other than the work.
+
+**The generalizable half is about the manifest, not about git.** A note saying an operation is
+blocked is a claim with an expiry date, and this one had two expiries at once: the client changed
+(the MCP tool works) and the target moved (#139 landed, so `main` overtook #151). It survived two
+entries because each rewrote the sentence around it rather than testing it. Attempting a
+recorded-as-blocked step is worth more than restating it, whenever the attempt is cheap and
+reversible - and a base change is both.
 
 ### The 28 threads, and the order that was wrong
 
