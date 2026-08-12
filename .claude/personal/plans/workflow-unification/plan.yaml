@@ -744,6 +744,58 @@ items:
       someone else's conflict. Recorded here for whoever runs the first fast-forward + restack pass
       (most likely while finishing routine-cutover) so it isn't rediscovered from scratch.
 
+      Second /plan-item-resolve of 2026-08-12, and it supersedes the paragraph above rather than
+      extending it. That entry concluded "#139 is not blocked" and "nothing today is merging cram2/main
+      into this branch", both true when written and both false a few hours later: fork main was
+      fast-forwarded from cram2 (origin/main is now e123c383, 142 commits ahead of this branch's merge
+      base), so the conflict it had measured as latent against cram2 main became live against this pull
+      request's own base. GitHub reported mergeable_state dirty and a maintenance pass labelled #139
+      needs-resolution at 09:49:07Z, naming the same single file the earlier measurement had predicted -
+      .claude/skills/stacked-pr-maintenance/SKILL.md. The prediction was right and the recommendation
+      (wait for the fast-forward rather than pre-resolving against a moving target) cost nothing, since
+      the wait turned out to be hours.
+
+      Resolved by merging origin/main, in 614eaccd. The conflict was small on main's side and large on
+      ours: main had reworded two lines of the conflict-report step when no-pr-subscriptions (#153,
+      upstream #535) landed, while this branch's 25-comment round had rewritten the whole document. Kept
+      this branch's version and folded main's surviving instruction - write the comment to stand alone,
+      because nothing delivers it - into the one bullet that still tells a person to write one. Keeping
+      both mechanically would have been wrong in the other direction: the branch already carries the
+      no-subscription rule twice, so the only content at risk was that clause. .gitignore and
+      .claude/stack/README.md auto-merged. A merge rather than a rebase because #151 and #154 are both
+      based on this branch.
+
+      Three of the four review comments of 2026-08-11 11:06-11:10 applied in ba674d1d. They are a fourth
+      round, not the one the entry above records as applied in ebf67734 - those were the 09:01-09:04
+      comments, and these arrived ninety minutes after that push. The trailing _s on a test name was a
+      possessive that had lost its apostrophe; two test-local stand-ins were plain classes while every
+      neighbour and every real subclass is a frozen dataclass.
+
+      The doc-formatting comment had a cause worth recording, because the obvious fix was not one:
+      scripts/format_docstrings.py reports no change on the flagged file, while docformatter --check
+      disagrees with it on 33 docstrings. The script keeps the plain black-formatted content whenever
+      docformatter's result does not survive a second black pass, which is the case its own module
+      docstring names - and here it is one blank line, after an attribute docstring immediately preceding
+      a decorated definition. So the file was not unformatted through an omission; the repo's own
+      formatter had silently declined it. Four modules plus the test module were on the wrong side of it,
+      not the one flagged. All five are formatted by hand as black then docformatter then black, which is
+      stable: re-running the script afterwards returns them byte-identical, and the only difference
+      docformatter still reports is that blank line. stack.py is in the same state and left alone, since
+      it is main's file and the sweep question belongs to it.
+
+      450 tests pass across the three directories CI runs, which includes main's own arriving with the
+      merge. The one open thread is why the abstract-command refusal is a TypeError rather than a custom
+      error: it is ABCMeta's, and raising our own means dropping the abstractmethod chosen in the
+      previous round, so it is answered with that measurement and left open on the user's call.
+
+      Also repaired, both predicted on this pull request on 2026-08-05 and since realized: the
+      description had been truncated at the literal "## Promote" heading it carried in prose, because
+      description_with_promotion_link partitions on the first occurrence - so the live-fork evidence
+      section ended mid-bullet. Rewritten without a heading that can be partitioned on, and the session
+      link restored: it had been lost, which is why the 09:49 conflict comment says "This pull request's
+      description names no session to address" and reached nobody. Session:
+      https://claude.ai/code/session_01PyGLT8ofaqHShryiut281r
+
   - id: setup-personal-notes-script
     branch: claude/setup-personal-notes-script
     title: "Extract a deterministic setup script from /setup-personal-notes"

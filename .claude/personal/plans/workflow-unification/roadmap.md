@@ -5894,3 +5894,145 @@ No code or git change on #139's branch — recorded in `plan.yaml`'s `notes` for
 `stack-maintenance-executor` and here, so the first fast-forward + restack pass (most likely as part
 of finishing `routine-cutover`) starts from this measurement instead of rediscovering it live, the
 same way the `restack` conflict-report flow would surface it anyway.
+
+## Update 2026-08-12 (resolved): the fast-forward arrived the same day, and the repo's formatter was declining a file
+
+`/plan-item-resolve workflow-unification stack-maintenance-executor`, second run of the day,
+session https://claude.ai/code/session_01PyGLT8ofaqHShryiut281r. Pushed as `614eaccd` (the
+merge) and `ba674d1d` (the review round).
+
+### The entry above was right and is now superseded, which is the useful part
+
+That entry measured the conflict as real but latent — against cram2 `main`, not fork `main` —
+and recommended waiting for the fast-forward rather than resolving against a target still
+moving. Fork `main` was fast-forwarded a few hours later. `origin/main` is `e123c383`, 142
+commits ahead of this branch's merge base, and `git merge-tree` against it names exactly the
+one file the earlier run had predicted: `.claude/skills/stacked-pr-maintenance/SKILL.md`.
+
+So the prediction held and the deferral cost nothing. Worth recording as the *shape* rather
+than the outcome: a measurement of a conflict that nothing is currently attempting is a claim
+with an expiry date attached, and the honest form is to say which event ends it. That entry
+did — "the moment fork main is fast-forwarded" — which is why this run had nothing to
+rediscover.
+
+What it could not do is keep its own conclusion from going stale. `notes` now carried
+"#139 is not blocked" and "nothing today is merging cram2/main into this branch" while GitHub
+carried `dirty` and a `needs-resolution` label. This is the same manifest-currency failure the
+plan has recorded four times, met from a new direction: not review arriving after the last
+write, but the *writer's own* correctly-hedged statement outliving its condition. `#151` does
+not close this half either — the pass writes the blocker it decides, and here the pass did
+label the branch, but nothing reconciles a note that has become wrong.
+
+### The conflict was two lines against a rewrite
+
+`main`'s side is 2 insertions and 2 deletions: `no-pr-subscriptions` (#153, upstream #535)
+rewording the conflict-report step. This branch's side is 117/134 — the 25-comment round having
+rewritten the whole document.
+
+"Keep both" was not available and neither was "take ours" unqualified. The branch's rewrite
+already carries the no-subscription rule twice (the HARD RULE, and *"It never subscribes to
+learn CI"*), so the rule itself was never at risk; what `main` added and the rewrite lacked was
+one instruction — **write the comment to stand alone, because nothing delivers it**. That went
+into the one bullet that still asks a *person* to write such a comment, the red-check case,
+since the executor now writes the conflict one itself.
+
+This is the 2026-08-11 lesson from `#126` applied rather than restated: check that the merged
+tree still honours what the base decided while we were away, not merely that it merges.
+`main`'s other movement since the merge base (`starter-notes.md`, the session-start tests,
+`plan-dashboard`, `regenerate_all_orm.py`) touches nothing this branch owns, confirmed by
+running the whole `test_claude_dev_tooling` suite on the merged tree rather than the stack
+tests alone.
+
+Merged rather than rebased, because #151 and #154 are both based on this branch. Both need a
+restack now; that is on the tracking issue rather than on their pull requests.
+
+### A fourth review round, arriving ninety minutes after the third was applied
+
+The 2026-08-11 entry above records four comments applied in `ebf67734`. Those were the
+09:01–09:04 ones. Four more arrived at 11:06–11:10, after that push, and had gone unanswered
+since. Nothing was wrong in the note — this is the fifth item on this plan where review
+arriving after the last manifest write has no writer, and it is worth stating that the failure
+now shows up as *"the note is accurate about a moment that has passed"* rather than as a note
+that was wrong when written.
+
+Three applied. The trailing `_s` on `test_a_command_answers_with_its_own_name_rather_than_its_base_s`
+was a possessive that lost its apostrophe becoming an identifier, so what survived read as an
+abbreviation of nothing. Two test-local stand-ins were plain classes while every neighbour and
+every real subclass is a frozen dataclass; both were fixed rather than only the one anchored,
+since one omission written twice is not two decisions.
+
+The fourth — why a `TypeError` rather than a custom error — is answered and left open. It is
+`ABCMeta`'s, raised because the third round chose `classproperty` + `abstractmethod`; raising
+our own means dropping the abstractness, since `ABCMeta` refuses before `__init__` can run. The
+user's call this session was to keep it and reply.
+
+### The repo's formatter was silently declining four files, which is why "run the script" was not the fix
+
+The doc-formatting comment is the one worth carrying, because the first thing anyone would do
+about it does nothing. `scripts/format_docstrings.py` reports **no change** on
+`maintenance_board.py`, while `docformatter --check` against the repo's own `pyproject.toml`
+disagrees with it on 33 docstrings — the file opens its summaries on the quote line, and the
+house style is `pre-summary-newline = true`.
+
+The script says why in its own module docstring, and it is exact here: it keeps the plain
+black-formatted content whenever docformatter's result does not survive a second black pass.
+Reproduced rather than inferred — the whole disagreement is one blank line:
+
+```
+     """
+     A list of labels, each given either plainly or as an object carrying a ``name``.
+     """
+-
+
+ @dataclass(frozen=True)
+ class PullRequestFieldSpecification:
+```
+
+An attribute docstring immediately preceding a *decorated* top-level definition. docformatter
+drops the blank line after it, black puts it back, and the script — correctly refusing to loop
+— discards everything docformatter did, including the 33 summaries.
+
+**Four modules and the test module, not the one flagged**: `maintenance_board.py`,
+`maintenance_fast_forward.py`, `maintenance_restack_procedure.py`,
+`maintenance_restack_steps.py`, `tests/test_maintenance.py`. They are formatted by hand as
+`black` → `docformatter` → `black`, and the reason that is takeable rather than a thing to
+redo every commit was measured before it was proposed: re-running `scripts/format_docstrings.py`
+afterwards returns all five **byte-identical**, because the script's stability check discards
+docformatter's output and keeps what is already there.
+
+`stack.py` is in the identical state and is deliberately untouched — it is `main`'s file, and
+whether `main`'s unformatted files get a sweep is still the open half of the earlier
+doc-formatting thread. That question now has an answer to work from: they are not unformatted
+through neglect, they are the files whose shape the formatter cannot converge on.
+
+**Generalizable, and new to this roadmap: a formatter that reports no change is not evidence a
+file is formatted.** This one is honest about it in its docstring and silent at the command
+line, which is the combination that let five files drift while every session that touched them
+ran it and saw nothing.
+
+### The description had been eaten by its own feature
+
+Two defects, both predicted on this pull request on 2026-08-05 and both since realized.
+
+The description carried a literal `## Promote` heading inside prose — quoting the live-run
+evidence — and `description_with_promotion_link` partitions on the first occurrence. A later
+`promote` did exactly what it says it does, and the *"Verified against the live fork"* section
+now ended mid-bullet at `` - `promote` wrote the link under ` `` with a dangling code fence
+after it. Rewritten so the heading it names is not a heading.
+
+And the session link was gone with it, which is why the 09:49 conflict comment says
+verbatim *"This pull request's description names no session to address."* The executor's own
+owner-addressing failed on the executor's own pull request, for the reason its own promotion
+step created. Restored.
+
+Both were flagged at the time and left alone as "not under review"; the cost of that is one
+comment that reached nobody.
+
+### State
+
+`mergeable_state` was `dirty`, is not; `needs-resolution` is left for the next pass to clear
+itself, which is the loop this item exists to close and worth exercising rather than
+short-circuiting by hand. 450 tests across the three directories CI runs. Not re-drafted: the
+user marked this pull request ready themselves on 2026-08-05, and that standing exception
+holds. Pushed to the item's own branch rather than the session's designated one, the same
+override recorded for #115, #121, #133 and #143.
