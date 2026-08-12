@@ -1,9 +1,9 @@
 """
 Running git for a pass, and deciding what a pass is allowed to publish.
 
-Every command a pass runs goes through :class:`GitCommandRunner`, and every push it
-proposes is built as a :class:`ProposedPush` - so whether published history may be
-rewritten is decided in one place rather than at each call site.
+Every command a pass runs goes through :class:`MaintenanceGitCommandRunner`, and every
+push it proposes is built as a :class:`ProposedPush` - so whether published history may
+be rewritten is decided in one place rather than at each call site.
 """
 
 from __future__ import annotations
@@ -12,8 +12,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from git_commands import GitCommandResult
-from git_commands import GitCommandRunner as SharedGitCommandRunner
+from git_commands import GitCommandResult, GitCommandRunner
 from stack import Configuration, IntegrationStrategy, resolve_ref
 
 # %% running git
@@ -68,7 +67,7 @@ class ProposedPush:
 
 
 @dataclass(frozen=True)
-class GitCommandRunner(SharedGitCommandRunner):
+class MaintenanceGitCommandRunner(GitCommandRunner):
     """
     The shared runner, plus the two commands that mean something only to a pass.
 

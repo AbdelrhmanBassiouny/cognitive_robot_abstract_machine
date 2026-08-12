@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from command_line import Command, commands_of
 from maintenance_board import BoardExport
 from maintenance_fast_forward import fast_forward
-from maintenance_git_commands import GitCommandRunner
+from maintenance_git_commands import MaintenanceGitCommandRunner
 from maintenance_github import GitHubRepository
 from maintenance_promotion import clear_spent_promotion_labels, promote
 from maintenance_report import (
@@ -46,7 +46,7 @@ class MaintenancePass:
     The resolved configuration naming both repositories and every label.
     """
 
-    git: GitCommandRunner
+    git: MaintenanceGitCommandRunner
     """
     The runner every git command goes through.
     """

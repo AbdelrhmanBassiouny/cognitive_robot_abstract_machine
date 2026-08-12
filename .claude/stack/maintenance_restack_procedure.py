@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from maintenance_git_commands import BranchAncestry, GitCommandRunner
+from maintenance_git_commands import BranchAncestry, MaintenanceGitCommandRunner
 from maintenance_github import ForkPullRequests
 from maintenance_restack_steps import (
     BranchOutcome,
@@ -74,14 +74,14 @@ class DetachedCheckout:
     restack of their own branch.
     """
 
-    git: GitCommandRunner
+    git: MaintenanceGitCommandRunner
     """The invoking checkout."""
 
     branch: str
     """The branch it was on, empty when it was already detached."""
 
     @classmethod
-    def of(cls, git: GitCommandRunner) -> DetachedCheckout:
+    def of(cls, git: MaintenanceGitCommandRunner) -> DetachedCheckout:
         """:param git: The checkout to detach.
         :return: The detachment, to be used as a context manager so it is undone."""
         return cls(git, git.checked_out_branch())
@@ -121,14 +121,14 @@ class RestackWorktree:
     Its refs are the same refs, so a branch it moves is moved for the whole repository.
     """
 
-    git: GitCommandRunner
+    git: MaintenanceGitCommandRunner
     """The runner every branch switch of a restack goes through."""
 
-    origin: GitCommandRunner
+    origin: MaintenanceGitCommandRunner
     """The invoking checkout, which the worktree is added to and removed from."""
 
     @classmethod
-    def added_to(cls, origin: GitCommandRunner) -> RestackWorktree:
+    def added_to(cls, origin: MaintenanceGitCommandRunner) -> RestackWorktree:
         """Add a worktree, detached at whatever the invoking checkout has.
 
         :param origin: The checkout to add it to.
@@ -136,9 +136,9 @@ class RestackWorktree:
         """
         path = Path(tempfile.mkdtemp(prefix="stack-restack-"))
         origin.run("worktree", "add", "--quiet", "--detach", str(path), "HEAD")
-        return cls(GitCommandRunner(working_directory=path), origin)
+        return cls(MaintenanceGitCommandRunner(working_directory=path), origin)
 
-    def __enter__(self) -> GitCommandRunner:
+    def __enter__(self) -> MaintenanceGitCommandRunner:
         """:return: The runner to restack through."""
         return self.git
 
@@ -162,7 +162,7 @@ class RestackWorktree:
 
 
 def restack(
-    stack: Stack, git: GitCommandRunner, fork: ForkPullRequests
+    stack: Stack, git: MaintenanceGitCommandRunner, fork: ForkPullRequests
 ) -> list[BranchOutcome]:
     """Put every branch whose parent moved through :data:`RESTACK_STEPS`, bottom up.
 
