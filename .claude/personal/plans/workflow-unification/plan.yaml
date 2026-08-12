@@ -3175,7 +3175,9 @@ items:
 
   - id: plan-item-bootstrap-yaml-indent
     title: "Fix plan_item_bootstrap writing item fields at the wrong indentation"
-    branch: null
+    branch: claude/plan-item-bootstrap-yaml-indent-y8qs0m
     track: personal-data
     depends_on: []
     status: in_progress
+    pull_request_number: 160
+    session: https://claude.ai/code/session_0157EHWeTzFSYf1nqHX5J7NC
