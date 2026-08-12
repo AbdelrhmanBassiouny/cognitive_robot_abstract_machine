@@ -109,8 +109,11 @@ def test_the_skill_localises_a_semantic_break_rather_than_judging_it_by_hand():
     wrong. The skill has to reach for the command that does it.
     """
     skill = TRIAGE_SKILL_DOCUMENT.read_text()
+    localiser = next(
+        command for command in COMMANDS if isinstance(command, BisectCommand)
+    )
 
-    assert f"integration.py {BisectCommand.invoked_as}" in skill
+    assert f"integration.py {localiser.invoked_as}" in skill
 
 
 def test_the_skill_says_a_semantic_break_cannot_be_recorded():

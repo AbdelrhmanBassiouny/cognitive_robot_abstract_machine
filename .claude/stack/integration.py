@@ -32,15 +32,16 @@ import shlex
 import subprocess
 import sys
 import tempfile
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import IntEnum, StrEnum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 
+from command_line import Command, commands_of  # noqa: E402
 from exceptions import GitCommandFailed  # noqa: E402
 from stack import (  # noqa: E402
     AmbiguousForkRemoteError,
@@ -888,43 +889,12 @@ class IntegrationRun:
 
 
 @dataclass(frozen=True)
-class IntegrationCommand(ABC):
+class IntegrationCommand(Command):
     """One command this builder answers.
 
-    A command owns its own name, its own flags and what it does, so adding one is
-    writing a subclass - :data:`COMMANDS` finds it, and nothing else has to be told it
-    exists.
+    Adds to the shared :class:`command_line.Command` only what is this builder's own:
+    what a command is handed, and what it answers with.
     """
-
-    invoked_as: ClassVar[str]
-    """The name it is invoked by on the command line."""
-
-    description: ClassVar[str]
-    """What it does, as ``--help`` puts it."""
-
-    REQUIRED_OF_EVERY_COMMAND: ClassVar[tuple[str, ...]] = ("invoked_as", "description")
-    """The class variables a subclass has to supply for the parser to describe it."""
-
-    def __init_subclass__(cls, **keyword_arguments: Any) -> None:
-        """Refuse a command that does not say what it is called or what it does.
-
-        :param keyword_arguments: Passed to the base implementation untouched.
-        :raises TypeError: If the subclass leaves either class variable unset.
-        """
-        super().__init_subclass__(**keyword_arguments)
-        missing = [
-            name
-            for name in cls.REQUIRED_OF_EVERY_COMMAND
-            if not isinstance(getattr(cls, name, None), str)
-        ]
-        if missing:
-            raise TypeError(f"{cls.__name__} must define {' and '.join(missing)}")
-
-    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
-        """Declare this command's own flags.
-
-        :param parser: The subparser to declare them on.
-        """
 
     @abstractmethod
     def run(
@@ -942,8 +912,15 @@ class IntegrationCommand(ABC):
 class BuildCommand(IntegrationCommand):
     """Assembles the upstream base plus every in-flight stack tip."""
 
-    invoked_as: ClassVar[str] = "build"
-    description: ClassVar[str] = "assemble the upstream base plus every in-flight tip"
+    @property
+    def invoked_as(self) -> str:
+        """The name it is invoked by on the command line."""
+        return "build"
+
+    @property
+    def description(self) -> str:
+        """What it does, as ``--help`` puts it."""
+        return "assemble the upstream base plus every in-flight tip"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """:param parser: The subparser to declare this command's flags on."""
@@ -1014,8 +991,15 @@ class BuildCommand(IntegrationCommand):
 class BisectCommand(IntegrationCommand):
     """Finds which tip's arrival breaks a build that merged cleanly."""
 
-    invoked_as: ClassVar[str] = "bisect"
-    description: ClassVar[str] = "find which tip's arrival breaks the suite"
+    @property
+    def invoked_as(self) -> str:
+        """The name it is invoked by on the command line."""
+        return "bisect"
+
+    @property
+    def description(self) -> str:
+        """What it does, as ``--help`` puts it."""
+        return "find which tip's arrival breaks the suite"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """:param parser: The subparser to declare ``--json`` on."""
@@ -1053,8 +1037,15 @@ class StageConflictCommand(IntegrationCommand):
     """Reproduces one pair's collision in a worktree of its own, for a resolution to be
     written into."""
 
-    invoked_as: ClassVar[str] = "stage-conflict"
-    description: ClassVar[str] = "reproduce a pair's collision in a scratch worktree"
+    @property
+    def invoked_as(self) -> str:
+        """The name it is invoked by on the command line."""
+        return "stage-conflict"
+
+    @property
+    def description(self) -> str:
+        """What it does, as ``--help`` puts it."""
+        return "reproduce a pair's collision in a scratch worktree"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """:param parser: The subparser to declare this command's flags on."""
@@ -1087,8 +1078,15 @@ class RecordResolutionCommand(IntegrationCommand):
     """Commits a staged resolution into the replay cache, under the author that wrote
     it."""
 
-    invoked_as: ClassVar[str] = "record-resolution"
-    description: ClassVar[str] = "record a staged resolution, with who wrote it"
+    @property
+    def invoked_as(self) -> str:
+        """The name it is invoked by on the command line."""
+        return "record-resolution"
+
+    @property
+    def description(self) -> str:
+        """What it does, as ``--help`` puts it."""
+        return "record a staged resolution, with who wrote it"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """:param parser: The subparser to declare this command's flags on."""
@@ -1118,9 +1116,7 @@ class RecordResolutionCommand(IntegrationCommand):
         return IntegrationExitCode.SUCCESS
 
 
-COMMANDS: tuple[IntegrationCommand, ...] = tuple(
-    subclass() for subclass in IntegrationCommand.__subclasses__()
-)
+COMMANDS: tuple[IntegrationCommand, ...] = commands_of(IntegrationCommand)
 """Every command this builder answers, found from the subclasses themselves so a command
 cannot exist without being reachable, in the order they are defined."""
 
