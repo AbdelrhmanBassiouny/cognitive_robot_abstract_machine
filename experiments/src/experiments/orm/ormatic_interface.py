@@ -65,6 +65,7 @@ import coraplex.robot_plans.motions.robot_body
 import coraplex.testing
 import coraplex.training_environments.training_environment
 import coraplex.view_manager
+import coraplex.visualization
 import datetime
 import enum
 import experiments.eql_experiments.monitoring_profile
@@ -270,6 +271,7 @@ import semantic_digital_twin.world_description.world_state
 import semantic_digital_twin.world_description.world_state_trajectory_plotter
 import sqlalchemy.sql.sqltypes
 import trimesh.base
+import types
 import typing
 import typing_extensions
 import uuid
@@ -292,6 +294,7 @@ class Base(DeclarativeBase):
         uuid.UUID: sqlalchemy.sql.sqltypes.UUID,
         pathlib.Path: krrood.ormatic.custom_types.PathType,
         krrood.adapters.json_serializer.JSONData: krrood.ormatic.custom_types.JSONDataType,
+        types.NoneType: krrood.ormatic.custom_types.TypeType,
         numpy.ndarray: coraplex.orm.model.NumpyType,
     }
 
@@ -1664,6 +1667,44 @@ class EuclideanBallDAO_simulator_additional_properties_association(
     target: Mapped[SimulatorAdditionalPropertyDAO] = relationship(
         "SimulatorAdditionalPropertyDAO",
         foreign_keys=[target_simulatoradditionalpropertydao_id],
+        lazy="selectin",
+    )
+
+
+class GraphOfConvexPolygonsDAO_obstacles_association(Base, AssociationDataAccessObject):
+    __tablename__ = "_10097511437740384067152589240138880074945231015404257411712969"
+
+    database_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    source_graphofconvexpolygonsdao_id: Mapped[int] = mapped_column(
+        ForeignKey("GraphOfConvexPolygonsDAO.database_id")
+    )
+    target__mockedconvexsetdao_id: Mapped[int] = mapped_column(
+        ForeignKey("_MockedConvexSetDAO.database_id")
+    )
+
+    target: Mapped[_MockedConvexSetDAO] = relationship(
+        "_MockedConvexSetDAO",
+        foreign_keys=[target__mockedconvexsetdao_id],
+        lazy="selectin",
+    )
+
+
+class GraphOfConvexPolygonsDAO_regions_association(Base, AssociationDataAccessObject):
+    __tablename__ = "_21683303155680797721654562863218184758483517575191610116427927"
+
+    database_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+
+    source_graphofconvexpolygonsdao_id: Mapped[int] = mapped_column(
+        ForeignKey("GraphOfConvexPolygonsDAO.database_id")
+    )
+    target__mockedhpolyhedrondao_id: Mapped[int] = mapped_column(
+        ForeignKey("_MockedHPolyhedronDAO.database_id")
+    )
+
+    target: Mapped[_MockedHPolyhedronDAO] = relationship(
+        "_MockedHPolyhedronDAO",
+        foreign_keys=[target__mockedhpolyhedrondao_id],
         lazy="selectin",
     )
 
@@ -3592,6 +3633,47 @@ class UnknownExecutionTypeDAO(
     )
 
 
+class UnknownVisualizationOptionDAO(
+    Base, DataAccessObject[coraplex.exceptions.UnknownVisualizationOption]
+):
+    __tablename__ = "UnknownVisualizationOptionDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    environment_variable: Mapped[builtins.str] = mapped_column(
+        sqlalchemy.sql.sqltypes.Text, use_existing_column=True
+    )
+    value: Mapped[builtins.str] = mapped_column(
+        sqlalchemy.sql.sqltypes.Text, use_existing_column=True
+    )
+
+    valid_values: Mapped[typing.List[builtins.str]] = mapped_column(
+        JSON, nullable=False, use_existing_column=True
+    )
+
+
+class VisualizationBackendUnavailableDAO(
+    Base, DataAccessObject[coraplex.exceptions.VisualizationBackendUnavailable]
+):
+    __tablename__ = "VisualizationBackendUnavailableDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    reason: Mapped[builtins.str] = mapped_column(
+        sqlalchemy.sql.sqltypes.Text, use_existing_column=True
+    )
+
+    backend: Mapped[coraplex.datastructures.enums.VisualizationBackend] = mapped_column(
+        krrood.ormatic.custom_types.PolymorphicEnumType,
+        nullable=False,
+        use_existing_column=True,
+    )
+
+
 class WipingTargetMissingDAO(
     Base, DataAccessObject[coraplex.exceptions.WipingTargetMissing]
 ):
@@ -4305,6 +4387,16 @@ class ModelChangeExecutableDAO(
         "inherit_condition": database_id == ExecutableDAO.database_id,
         "polymorphic_load": "selectin",
     }
+
+
+class MotionLifeCycleTrackerDAO(
+    Base, DataAccessObject[coraplex.plans.executables.MotionLifeCycleTracker]
+):
+    __tablename__ = "MotionLifeCycleTrackerDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
 
 
 class UnderspecifiedExecutableDAO(
@@ -7584,6 +7676,70 @@ class ViewManagerDAO(Base, DataAccessObject[coraplex.view_manager.ViewManager]):
 
     database_id: Mapped[builtins.int] = mapped_column(
         Integer, primary_key=True, use_existing_column=True
+    )
+
+
+class RerunPlanCallbackDAO(
+    PlanCallbackDAO, DataAccessObject[coraplex.visualization.RerunPlanCallback]
+):
+    __tablename__ = "RerunPlanCallbackDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        ForeignKey(PlanCallbackDAO.database_id),
+        primary_key=True,
+        use_existing_column=True,
+    )
+
+    adapter_id: Mapped[int] = mapped_column(
+        ForeignKey("RerunAdapterDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    adapter: Mapped[RerunAdapterDAO] = relationship(
+        "RerunAdapterDAO", uselist=False, foreign_keys=[adapter_id], post_update=True
+    )
+
+    __mapper_args__ = {
+        "polymorphic_identity": "RerunPlanCallbackDAO",
+        "inherit_condition": database_id == PlanCallbackDAO.database_id,
+        "polymorphic_load": "selectin",
+    }
+
+
+class WorldVisualizationDAO(
+    Base, DataAccessObject[coraplex.visualization.WorldVisualization]
+):
+    __tablename__ = "WorldVisualizationDAO"
+
+    database_id: Mapped[builtins.int] = mapped_column(
+        Integer, primary_key=True, use_existing_column=True
+    )
+
+    rerun_target: Mapped[typing.Optional[builtins.str]] = mapped_column(
+        sqlalchemy.sql.sqltypes.Text, use_existing_column=True
+    )
+    state_log_stride: Mapped[builtins.int] = mapped_column(use_existing_column=True)
+
+    backend: Mapped[coraplex.datastructures.enums.VisualizationBackend] = mapped_column(
+        krrood.ormatic.custom_types.PolymorphicEnumType,
+        nullable=False,
+        use_existing_column=True,
+    )
+    rerun_mode: Mapped[semantic_digital_twin.adapters.rerun.RerunMode] = mapped_column(
+        krrood.ormatic.custom_types.PolymorphicEnumType,
+        nullable=False,
+        use_existing_column=True,
+    )
+
+    world_id: Mapped[int] = mapped_column(
+        ForeignKey("WorldMappingDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    world: Mapped[WorldMappingDAO] = relationship(
+        "WorldMappingDAO", uselist=False, foreign_keys=[world_id], post_update=True
     )
 
 
@@ -27010,6 +27166,25 @@ class GraphOfConvexPolygonsDAO(
         use_existing_column=True,
     )
 
+    obstacles: Mapped[builtins.list[GraphOfConvexPolygonsDAO_obstacles_association]] = (
+        relationship(
+            "GraphOfConvexPolygonsDAO_obstacles_association",
+            collection_class=builtins.list,
+            cascade="all, delete-orphan",
+            foreign_keys="[GraphOfConvexPolygonsDAO_obstacles_association.source_graphofconvexpolygonsdao_id]",
+            lazy="selectin",
+        )
+    )
+    regions: Mapped[builtins.list[GraphOfConvexPolygonsDAO_regions_association]] = (
+        relationship(
+            "GraphOfConvexPolygonsDAO_regions_association",
+            collection_class=builtins.list,
+            cascade="all, delete-orphan",
+            foreign_keys="[GraphOfConvexPolygonsDAO_regions_association.source_graphofconvexpolygonsdao_id]",
+            lazy="selectin",
+        )
+    )
+
     __mapper_args__ = {
         "polymorphic_identity": "GraphOfConvexPolygonsDAO",
         "inherit_condition": database_id == GraphOfConvexSetsDAO.database_id,
@@ -27031,6 +27206,19 @@ class IrisSeedingSettingsDAO(
 
     grid_resolution: Mapped[builtins.int] = mapped_column(use_existing_column=True)
     max_regions: Mapped[builtins.int] = mapped_column(use_existing_column=True)
+
+    iris_options_id: Mapped[int] = mapped_column(
+        ForeignKey("_MockedIrisOptionsDAO.database_id", use_alter=True),
+        nullable=True,
+        use_existing_column=True,
+    )
+
+    iris_options: Mapped[_MockedIrisOptionsDAO] = relationship(
+        "_MockedIrisOptionsDAO",
+        uselist=False,
+        foreign_keys=[iris_options_id],
+        post_update=True,
+    )
 
 
 class _MockedConvexSetDAO(
@@ -28363,6 +28551,13 @@ class RerunAdapterDAO(
         sqlalchemy.sql.sqltypes.Text, use_existing_column=True
     )
     state_history: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
+    state_log_stride: Mapped[builtins.int] = mapped_column(use_existing_column=True)
+    send_default_blueprint: Mapped[builtins.bool] = mapped_column(
+        use_existing_column=True
+    )
+    event_log_entity_path: Mapped[builtins.str] = mapped_column(
+        sqlalchemy.sql.sqltypes.Text, use_existing_column=True
+    )
     memory_limit: Mapped[builtins.str] = mapped_column(
         sqlalchemy.sql.sqltypes.Text, use_existing_column=True
     )
