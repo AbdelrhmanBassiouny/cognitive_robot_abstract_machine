@@ -6137,3 +6137,30 @@ intermediate edit of my own and restored — the same failure #139 recorded, met
 side rather than the promoting side, and the tell was that a read-back of the body ended at the
 heading. And the item's `notes` still said "subscribed to its activity", which
 `no-pr-subscriptions` has since inverted; no subscription was in fact armed on this session.
+
+## Update 2026-08-12 (new item): dashboard drift detection has no cross-item check
+
+Found while answering a question about rdr-refactor's D-ui stack, not while working this
+plan directly: `D-ui-splice-fix` (#78) was closed as superseded by a fix that landed
+elsewhere (dag-facade-hardening's `insert-at-ownership-parentage`, #118), yet
+`D-ui-rendering` (#79) and `D-ui` (#76) still depend on it and are still `in_progress` -
+and nothing on the dashboard flagged it. Only a previous session's freeform `notes:`
+sentence recorded the problem, and nothing re-reads or re-verifies freeform notes.
+
+Traced the root cause into `build_dashboard.py`: `_drift_description_of` only ever
+compares an item's own manifest `status` against its own live PR state - it has no
+cross-item check at all. `Item.is_ready_to_unblock_dependents()` already has the correct
+predicate (deferred/closed_unmerged correctly reads as not-ready), but the only caller
+that evaluates it per dependency is `check_dependency_readiness.py`, invoked on demand
+for one named item by `plan-item-kickoff`/`plan-item-resolve` - never proactively across
+the whole graph on a `/plan-dashboard` refresh. `_compute_next_steps` is the other
+consumer, and it only looks at `not_started`/`blocked` items, so an `in_progress` item
+built on a now-dead dependency slips past every existing check.
+
+This is the same defect shape the plan already fixed once, just in the sibling
+stack-tooling codepath: `landed-parent-detection` (#117) taught `restack_plan` to decide
+a parent has landed from git ancestry rather than board membership, after the same "child
+silently left stacked on a dead base" failure. That fix was never ported to
+plan-dashboard's own `depends_on` graph, which has an analogous blind spot. Filed as
+`deferred-dependency-drift-check` in the `dashboards` track, `not_started`, no branch cut
+- left for another session to implement.

@@ -1395,6 +1395,35 @@ items:
       the minimum field set. Draft PR #119, bug label, based on fork main and
       independent of the #101 chain; build_dashboard.py overlap with #103/#105/#111.
 
+  - id: deferred-dependency-drift-check
+    branch: null
+    title: "Flag an item stacked on a deferred/closed dependency instead of leaving it to a stale note"
+    track: dashboards
+    depends_on: []
+    status: not_started
+    notes: >
+      Found 2026-08-12 while investigating rdr-refactor's D-ui stack: D-ui-splice-fix (#78)
+      was closed as superseded (the fix landed elsewhere, via dag-facade-hardening's
+      insert-at-ownership-parentage, #118), but D-ui-rendering (#79) and D-ui (#76) still
+      carry depends_on: [D-ui-splice-fix] and are still in_progress, with no automated
+      signal anywhere that their base is dead - only a previous session's freeform note,
+      which nothing re-reads or re-verifies. Root cause: build_dashboard.py's
+      _drift_description_of only compares an item's own status against its own live PR
+      state; it never checks a dependency's status against the dependent's. Item.
+      is_ready_to_unblock_dependents() has the right predicate already (correctly False
+      for a deferred/closed_unmerged dependency) but is only invoked on demand, per named
+      item, by plan-item-kickoff/plan-item-resolve - never proactively across the whole
+      graph on a dashboard refresh. And _compute_next_steps only evaluates
+      not_started/blocked items, so an in_progress item stacked on a dead dependency is
+      skipped by every existing check. Same defect shape as landed-parent-detection (#117,
+      stack-tooling track): that fix taught restack_plan to decide a parent has landed from
+      git ancestry rather than board membership; this item is the analogous fix for
+      plan-dashboard's own depends_on graph. Proposed fix: a drift check for any item whose
+      status is not deferred/done but whose depends_on includes an item that is itself
+      deferred or closed_unmerged, surfaced the same way other drift is (not a note),
+      ideally naming that dependency's own depends_on as the suggested reparent target.
+      Not implemented here - left for another session.
+
   - id: landed-parent-detection
     branch: claude/stack-landed-parent-detection
     title: "Decide a parent has landed from git ancestry, not board membership"
