@@ -111,7 +111,8 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 import yaml
 
 from command_line import Command, commands_of
-from git_commands import GitCommandFailed, GitCommandRunner
+from exceptions import GitCommandFailed
+from git_commands import GitCommandRunner
 from plan_model import ItemStatus
 
 GITHUB_API_ROOT = "https://api.github.com"

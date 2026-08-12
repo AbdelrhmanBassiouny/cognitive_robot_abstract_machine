@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 from command_line import Command, commands_of
-from errors import ExternalCallFailed
-from git_commands import GitCommandFailed, GitCommandRunner
+from exceptions import ExternalCallFailed, GitCommandFailed
+from git_commands import GitCommandRunner
 from plan_model import ItemStatus
 from scratch_repository import ScratchRepository
 
@@ -80,6 +80,44 @@ def test_a_failure_names_the_call_its_status_and_what_was_said():
 
     assert isinstance(failure, ExternalCallFailed)
     assert str(failure) == "git log failed with 128: bad revision"
+
+
+def test_a_failure_with_no_suggestion_renders_only_its_error_message():
+    """
+    ``suggest_correction`` defaults to empty, so a failure with no advice to give does
+    not grow a trailing suggestion line nobody wrote.
+    """
+    failure = GitCommandFailed(status=1, detail="not a git repository", arguments=())
+
+    assert failure.error_message() == "git  failed with 1: not a git repository"
+    assert failure.suggest_correction() == ""
+    assert str(failure) == failure.error_message()
+
+
+def test_a_failure_with_a_suggestion_appends_it_on_its_own_line():
+    """
+    Mirrors ``krrood``'s ``DataclassException``: a non-empty ``suggest_correction`` is
+    composed onto ``error_message`` as a trailing ``"Suggestion: ..."`` line, so a
+    subclass only has to say what to try rather than reformat the whole message.
+    """
+
+    class FailureWithASuggestion(ExternalCallFailed):
+        """A failure whose subclass has advice to give."""
+
+        @property
+        def call(self) -> str:
+            """:return: A fixed call name, since this test's failure is synthetic."""
+            return "do-the-thing"
+
+        def suggest_correction(self) -> str:
+            """:return: The advice this test asserts gets appended."""
+            return "try again with --force"
+
+    failure = FailureWithASuggestion(status=1, detail="refused")
+
+    assert str(failure) == (
+        "do-the-thing failed with 1: refused\nSuggestion: try again with --force"
+    )
 
 
 # %% commands as classes

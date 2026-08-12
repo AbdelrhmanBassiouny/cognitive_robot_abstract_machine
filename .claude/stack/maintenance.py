@@ -34,7 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 
-from git_commands import GitCommandFailed
+from exceptions import GitCommandFailed
 from maintenance_board import MissingPullRequestFieldError
 from maintenance_commands import COMMANDS, MaintenancePass
 from maintenance_git_commands import GitCommandRunner

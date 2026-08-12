@@ -38,8 +38,44 @@ class ExternalCallFailed(RuntimeError):
         """
         raise NotImplementedError
 
-    def __str__(self) -> str:
+    def error_message(self) -> str:
         """
         :return: The call, its status, and the reason given.
         """
         return f"{self.call} failed with {self.status}: {self.detail}"
+
+    def suggest_correction(self) -> str:
+        """
+        :return: Advice on how to fix the error, or an empty string if there is none.
+        """
+        return ""
+
+    def __str__(self) -> str:
+        """
+        :return: :meth:`error_message`, with :meth:`suggest_correction` appended as a
+            trailing ``"Suggestion: ..."`` line when it has one.
+        """
+        message = self.error_message()
+        correction = self.suggest_correction()
+        if correction:
+            message = f"{message}\nSuggestion: {correction}"
+        return message
+
+
+@dataclass
+class GitCommandFailed(ExternalCallFailed):
+    """
+    Raised when a git command whose result was depended on fails.
+    """
+
+    arguments: tuple[str, ...] = ()
+    """
+    The git subcommand and its arguments, as invoked.
+    """
+
+    @property
+    def call(self) -> str:
+        """
+        :return: The git command line, as invoked.
+        """
+        return f"git {' '.join(self.arguments)}"

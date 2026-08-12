@@ -17,11 +17,6 @@ import argparse
 from abc import ABC, abstractmethod
 from typing import TypeVar
 
-CommandSubclass = TypeVar("CommandSubclass", bound="Command")
-"""
-The concrete command type a caller's own registry is built from.
-"""
-
 
 class Command(ABC):
     """
@@ -54,6 +49,12 @@ class Command(ABC):
 
         :param parser: The subparser to declare them on.
         """
+
+
+CommandSubclass = TypeVar("CommandSubclass", bound=Command)
+"""
+The concrete command type a caller's own registry is built from.
+"""
 
 
 def commands_of(base: type[CommandSubclass]) -> tuple[CommandSubclass, ...]:

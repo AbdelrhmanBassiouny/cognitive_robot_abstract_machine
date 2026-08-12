@@ -13,28 +13,9 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from errors import ExternalCallFailed
+from exceptions import GitCommandFailed
 
 # %% what a finished command says
-
-
-@dataclass
-class GitCommandFailed(ExternalCallFailed):
-    """
-    Raised when a git command whose result was depended on fails.
-    """
-
-    arguments: tuple[str, ...] = ()
-    """
-    The git subcommand and its arguments, as invoked.
-    """
-
-    @property
-    def call(self) -> str:
-        """
-        :return: The git command line, as invoked.
-        """
-        return f"git {' '.join(self.arguments)}"
 
 
 @dataclass(frozen=True)

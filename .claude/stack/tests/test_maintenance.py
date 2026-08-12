@@ -61,7 +61,7 @@ from maintenance_fast_forward import (
     FastForwardReport,
     fast_forward,
 )
-from git_commands import GitCommandFailed
+from exceptions import GitCommandFailed
 from maintenance_git_commands import (
     BranchAncestry,
     GitCommandRunner,
