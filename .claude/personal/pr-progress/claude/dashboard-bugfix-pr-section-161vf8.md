@@ -1,105 +1,32 @@
-## Branch `claude/dashboard-bugfix-pr-section-161vf8` — surface bug-fix PRs on the plan dashboard
+# #120 - sidebar-bug-fix-chips (workflow-unification)
 
-**Goal.** Make bug-fix pull requests visible and filterable in the plan
-dashboard's "What to do next" sidebar.
+## Plan
 
-**Design.** A first attempt at a separate top "Bug fixes" group with a red
-outline was rejected: the sidebar groups by *action*, and being a bug fix is not
-one — such items already sit in ready-to-start, blocker-may-be-cleared or
-ready-to-review — and a fifth outline would collide with the existing per-group
-outlines, which are not mutually exclusive with it. It is an attribute: a `bug`
-chip wherever the item already appears, plus an opt-in filter.
+Resolve the base-merge conflict the 2026-08-12 maintenance pass reported, after
+fork `main` was fast-forwarded from cram2 to `e123c383`.
 
-**Done — two commits, pushed, 206 tests passing.**
-- `Item.is_bug_fix` from the pull request's `bug` label, via a new
-  `_pull_request_record_of` lookup. First real consumer of `PullRequestLabel.BUG`.
-- Four near-identical sidebar blocks collapsed into one `next_step_group` Jinja
-  macro, each `{% call %}` body supplying its own reason line.
-- "Bug fixes only" checkbox: hides non-bug entries and any group left holding
-  none; rendered only when some entry is a bug fix, so it can never empty the
-  card. Per-group counts precomputed and swapped by CSS, matching the done-items
-  toggle rather than doing arithmetic at runtime.
-- Example demonstrates both (`#103` labelled `bug`); all three walkthrough
-  screenshots regenerated, `dashboard-bug-filter.png` new. A test pins that the
-  example keeps producing the chip and the toggle.
-- Docs: `SKILL.md`, hooks README label list, `pr-data-fetching.md`, walkthrough.
+## Done (2026-08-12, `299d1d53`)
 
-**Placement (settled).** Stays on fork `main`, independent of the #101/#106
-chain, like #103/#105/#119. No `bug` label — it surfaces bug fixes, does not fix
-one. `ready-to-promote-upstream-links` now `depends_on` it, since its fifth
-sidebar group is one macro call after this lands and a fifth copied block
-before. Posted on tracking issue #102.
+- Merged `origin/main`. Two conflicts, both predicted on 2026-08-01 as the cost
+  of landing behind #122:
+  - `tests/test_build_dashboard.py` - additive on both sides except the
+    example-locking assertion, which takes #122's now-correct two-entry
+    `ready_to_review`; this branch's bug-chip example test re-appended after it.
+  - `example/screenshots/dashboard-overview.png` - re-rendered from the merged
+    example rather than taken from either side.
+- Checked the merged tree keeps what `main` decided while away:
+  `is_ready_for_dependent_review` survives the auto-merge, and the walkthrough
+  prose carries both sides in order. 399 tests across the three CI directories.
+- Left the other two screenshots alone, verified rather than assumed: the
+  filtered sidebar hides the group that changed, and the action-buttons crop
+  shows cards with no notes to collapse.
+- Replied on the pass's conflict comment, refreshed the description (its
+  `## Promote` link was destroyed by an intermediate edit and restored),
+  recorded the round in `plan.yaml` + `roadmap.md` (`c52a870a`), commented on
+  issue #102, republished the dashboard.
 
-**Open as draft PR #120** (fork `main`, no `bug` label, session link in the
-description, subscribed to activity). No scheduled check-in armed, per the
-no-scheduled-checks rule — reacting to webhook events only.
+## Next
 
-**CI (2026-08-01).** `test_each_lib (semantic_digital_twin)` red, 3 failures in
-`test_adapters/test_multi_sim.py`: the known `test_world_sim_state_sync`
-settling flake plus two texture/material regression tests asserting `'' != ''`.
-Not reachable by this diff (six files, all under `.claude/`), and the other 12
-jobs passed. Complication recorded rather than glossed: main's own run at this
-branch's base `82501888` was green, so these are *not* demonstrably already-red
-on main the way #101/#103's flakes were. The two texture tests are
-self-contained (`tmp_path`), so the job's cached asset directory — the one real
-PR-vs-main difference — does not explain them; a freshly resolved MuJoCo version
-is the plausible environmental candidate. Could not reproduce locally: mujoco
-and the robotics stack are absent from this session's environment. Reported once
-on the PR asking for a re-run.
-
-**CI resolved (2026-08-02).** The branch was restacked onto the new main
-(`9b090fc1`, PR #402) and CI re-ran. Main's *own* run at that commit
-(30760195910) now fails `test_each_lib (semantic_digital_twin)` with exactly the
-two texture assertions, `2 failed, 1048 passed` — so they are a real regression
-on main's tree, and the earlier "cannot call this pre-existing" caveat is
-answered. Green at `82501888` (07-31) → red here (08-01) → red on main (08-02)
-with no repo-side change to those tests, which supports the environmental
-(freshly resolved MuJoCo) hypothesis. `test_world_sim_state_sync` passed on
-main's run, confirming it is the separate flake. A second, new failure on this
-PR — `coraplex/demos/coraplex_real_tracy/test_demo.py` — is a teardown race
-(demo passed, then `rclpy-executor` SIGABRT at interpreter shutdown, exit 134);
-main's Examples-and-Demos run at the same commit was green, so that one is
-flake. Neither is reachable from this branch (11 files, all `.claude/`).
-Reported on the PR; nothing to fix here.
-
-**CI (2026-08-03).** Texture regression fixed on main by LucaKro (`59531f14`
-"Resolve mesh texture paths against the mesh's own directory" + `2f459043`); the
-restack onto `167559c2` pulled both onto this branch. Latest run's new red is
-`coraplex/scripts/test_notebook_examples.sh` — `RuntimeError: Kernel didn't
-respond in 60 seconds`, so nothing under test ran; infrastructure timing, not an
-assertion. Third distinct robotics job to fail across four runs, each a
-different cause — the signature of environmental flakiness. `test_claude_dev_tooling`,
-the only job exercising this PR's code, is green. Reported once on the PR.
-
-**Conflict resolved (2026-08-05), `a55e22a5`.** The routine reported main no
-longer integrating: one conflict, `pr-data-fetching.md`. Real, not textual —
-#119 landed and *replaced* the short "Include `labels`" paragraph this branch
-had extended, with a fuller `## Fields` section (minimum field set,
-`MissingMergeTimestampError`, the null-omission trap). Resolved by taking
-#119's section wholesale as a strict superset and folding this branch's `bug`
-addition into its own `labels` paragraph, so nothing from either side was
-dropped. Everything else auto-merged, `build_dashboard.py` included. Verified
-after merging rather than assumed: 210 plan-dashboard + 49 hooks + 91 stack
-tests green. Description updated, replied on the PR.
-
-**PR is now ready for review** — the user flipped it out of draft themselves
-after this push, so the standing re-draft-after-push rule was deliberately not
-applied: it governs my pushes, and re-drafting would have undone their explicit
-action. `needs-resolution` still on at time of writing; the routine clears it on
-the next pass now that the branch is mergeable again.
-
-**CI (2026-08-05, post-merge run).** 12 of 13 jobs green. `semantic_digital_twin`
-passed — main's texture fix confirmed cleared here — and `test_claude_dev_tooling`
-passed. Sole red is `test_each_lib (segmind)`:
-`test_csv_player.py::test_replay_episode` line 63, `assert not
-file_player.is_alive()` after `stop()` + a hard-coded `sleep(0.5)`; the thread
-was still `PlayerStatus.PLAYING`. Timing assumption about thread teardown on a
-loaded runner, same family as the rclpy abort and the kernel timeout. Fourth
-distinct robotics job across six runs, each a different cause, only one ever a
-real bug (and that one on main). Reported briefly; nothing to fix.
-
-**Spun out, not fixed here.** `_compute_ready_to_review` treats a *merged*
-dependency as not-open, so an item whose dependency fully landed is excluded
-while one whose dependency is merely open is included. Now its own plan item
-`ready-to-review-merged-dependency` (`not_started`), whose first step is
-confirming with the developer that it is an oversight rather than intent.
+Nothing outstanding from this session. `needs-resolution` is deliberately left
+for the next maintenance pass to clear itself. Not re-drafted - the user took
+this pull request out of draft themselves, so this session's job on it ends here.
