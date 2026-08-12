@@ -43,6 +43,15 @@ jobs:
           uv tree --depth 1
           python -c "import sys; print(sys.executable)"
 
+      - name: Install drake
+        if: ${{ inputs.lib == 'semantic_digital_twin' }}
+        env:
+          UV_CACHE_DIR: /opt/ros/.uv_cache
+        run: |
+          cd cognitive_robot_abstract_machine
+          source /opt/ros/cram-env/bin/activate
+          uv pip install drake
+
       - name: Restore cache
         uses: actions/cache/restore@v4
         with:
@@ -54,7 +63,7 @@ jobs:
             ${{ runner.os }}-cache-
 
       - name: Build ORM
-        if: ${{inputs.lib == 'coraplex' || inputs.lib == 'semantic_digital_twin' || inputs.lib == 'experiments'}}
+        if: ${{inputs.lib == 'coraplex' || inputs.lib == 'giskardpy' || inputs.lib == 'semantic_digital_twin' || inputs.lib == 'experiments'}}
         run: |
           cd cognitive_robot_abstract_machine/${{ inputs.lib }}/scripts/
           source /opt/ros/cram-env/bin/activate

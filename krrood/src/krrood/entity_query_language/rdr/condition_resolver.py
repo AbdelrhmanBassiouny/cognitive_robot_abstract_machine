@@ -1,7 +1,7 @@
 """
 Auto-condition resolution for EQL-RDR using backward inference.
 
-When a rule fires with the wrong conclusion and the expert would normally be asked for
+When a rule is applied with the wrong conclusion and the expert would normally be asked for
 differentiating conditions, a :class:`ConditionResolver` can attempt to derive the
 condition automatically from the rule tree's backward-inference knowledge — so the expert
 is only consulted when no automatic resolution is possible.
@@ -20,23 +20,21 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 
 from typing_extensions import TYPE_CHECKING, Any, List, Optional, Type
 
-from krrood.entity_query_language.factories import not_
-from krrood.entity_query_language.rdr.backward_inference import ConclusionKnowledge
+from krrood.entity_query_language.rdr.backward_inference import ConclusionSufficientConditionSets
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import SymbolicExpression
     from krrood.entity_query_language.core.variable import Variable
     from krrood.entity_query_language.rdr.backward_inference import (
-        GuardCondition,
         SufficientConditionSet,
     )
 
 
-class ResolutionMode(Enum):
+class ResolutionMode(StrEnum):
     """Controls how an auto-resolved condition is applied when fitting a case.
 
     See :meth:`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR.fit_case`.
@@ -70,15 +68,15 @@ class ConditionResolver(ABC):
 
     @abstractmethod
     def resolve(
-        self,
-        case: Any,
-        case_variable: Variable,
-        target_conclusion: Any,
-        current_conclusion: Any,
-        corner_case: Any,
-        target_knowledge: ConclusionKnowledge,
-        current_knowledge: ConclusionKnowledge,
-        firing_anchor: Optional[SymbolicExpression] = None,
+            self,
+            case: Any,
+            case_variable: Variable,
+            target_conclusion: Any,
+            current_conclusion: Any,
+            corner_case: Any,
+            target_knowledge: ConclusionSufficientConditionSets,
+            current_knowledge: ConclusionSufficientConditionSets,
+            firing_anchor: Optional[SymbolicExpression] = None,
     ) -> Optional[ResolvedCondition]:
         """Attempt to auto-derive a differentiating condition.
 
@@ -89,22 +87,13 @@ class ConditionResolver(ABC):
         :param corner_case: The case that triggered the firing rule's creation.
         :param target_knowledge: Backward-inference knowledge for ``target_conclusion``.
         :param current_knowledge: Backward-inference knowledge for ``current_conclusion``.
-        :param firing_anchor: Condition expression of the rule that fired, used to
+        :param firing_anchor: Condition expression of the rule that was applied, used to
             identify the active path without re-evaluating the rule tree.
         :return: A :class:`ResolvedCondition`, or ``None`` if resolution is not possible.
         """
 
 
-def _materialize(guard: GuardCondition) -> SymbolicExpression:
-    """Produce the EQL expression for a new rule's condition, applying negation.
-
-    A negated guard is wrapped with ``not_`` so the new rule fires when the guard's
-    expression is False.
-    """
-    return not_(guard.expression) if guard.negated else guard.expression
-
-
-class TargetKnowledgeResolver(ConditionResolver):
+class TargetSufficientConditionsBasedResolver(ConditionResolver):
     """Primary strategy resolver: use backward inference on the target conclusion.
 
     Searches the sufficient condition sets known for ``target`` and returns the first
@@ -113,22 +102,22 @@ class TargetKnowledgeResolver(ConditionResolver):
     """
 
     def resolve(
-        self,
-        case: Any,
-        case_variable: Variable,
-        target_conclusion: Any,
-        current_conclusion: Any,
-        corner_case: Any,
-        target_knowledge: ConclusionKnowledge,
-        current_knowledge: ConclusionKnowledge,
-        firing_anchor: Optional[SymbolicExpression] = None,
+            self,
+            case: Any,
+            case_variable: Variable,
+            target_conclusion: Any,
+            current_conclusion: Any,
+            corner_case: Any,
+            target_knowledge: ConclusionSufficientConditionSets,
+            current_knowledge: ConclusionSufficientConditionSets,
+            firing_anchor: Optional[SymbolicExpression] = None,
     ) -> Optional[ResolvedCondition]:
         for sufficient_condition_set in target_knowledge.sufficient_condition_sets:
             for guard in sufficient_condition_set.conditions:
                 if guard.holds_for(case_variable, case) and not guard.holds_for(
-                    case_variable, corner_case
+                        case_variable, corner_case
                 ):
-                    return ResolvedCondition(_materialize(guard), type(self))
+                    return ResolvedCondition(guard.as_expression, type(self))
         return None
 
 
@@ -138,7 +127,7 @@ class CornerCaseKnowledgeResolver(ConditionResolver):
     For each sufficient condition set of the wrong (current) conclusion that is **not** the
     active path (the path that caused the misclassification), searches for a guard that:
 
-    * holds for the new case — so the new exception rule fires for it, and
+    * holds for the new case — so the new exception rule applies for it, and
     * does **not** hold for the corner case — so the original rule is left undisturbed.
 
     The matching guard is returned without negation, producing a stable positive condition
@@ -146,9 +135,9 @@ class CornerCaseKnowledgeResolver(ConditionResolver):
     """
 
     def _active_path(
-        self,
-        firing_anchor: Optional[SymbolicExpression],
-        current_knowledge: ConclusionKnowledge,
+            self,
+            firing_anchor: Optional[SymbolicExpression],
+            current_knowledge: ConclusionSufficientConditionSets,
     ) -> Optional[SufficientConditionSet]:
         """:return: The sufficient condition set in which ``firing_anchor`` appears as a
         positive (non-negated) guard, or ``None`` if none does.
@@ -162,23 +151,23 @@ class CornerCaseKnowledgeResolver(ConditionResolver):
                 sufficient_condition_set
                 for sufficient_condition_set in current_knowledge.sufficient_condition_sets
                 if any(
-                    guard.expression is firing_anchor and not guard.negated
-                    for guard in sufficient_condition_set.conditions
-                )
+                guard.original_expression is firing_anchor and not guard.negated
+                for guard in sufficient_condition_set.conditions
+            )
             ),
             None,
         )
 
     def resolve(
-        self,
-        case: Any,
-        case_variable: Variable,
-        target_conclusion: Any,
-        current_conclusion: Any,
-        corner_case: Any,
-        target_knowledge: ConclusionKnowledge,
-        current_knowledge: ConclusionKnowledge,
-        firing_anchor: Optional[SymbolicExpression] = None,
+            self,
+            case: Any,
+            case_variable: Variable,
+            target_conclusion: Any,
+            current_conclusion: Any,
+            corner_case: Any,
+            target_knowledge: ConclusionSufficientConditionSets,
+            current_knowledge: ConclusionSufficientConditionSets,
+            firing_anchor: Optional[SymbolicExpression] = None,
     ) -> Optional[ResolvedCondition]:
         """Search non-active paths for a guard that holds for ``case`` but not ``corner_case``.
 
@@ -192,9 +181,9 @@ class CornerCaseKnowledgeResolver(ConditionResolver):
                 continue
             for guard in sufficient_condition_set.conditions:
                 if guard.holds_for(case_variable, case) and not guard.holds_for(
-                    case_variable, corner_case
+                        case_variable, corner_case
                 ):
-                    return ResolvedCondition(_materialize(guard), type(self))
+                    return ResolvedCondition(guard.as_expression, type(self))
         return None
 
 
@@ -206,15 +195,15 @@ class ChainConditionResolver(ConditionResolver):
     """Ordered list of :class:`ConditionResolver` strategies to try, in priority order."""
 
     def resolve(
-        self,
-        case: Any,
-        case_variable: Variable,
-        target_conclusion: Any,
-        current_conclusion: Any,
-        corner_case: Any,
-        target_knowledge: ConclusionKnowledge,
-        current_knowledge: ConclusionKnowledge,
-        firing_anchor: Optional[SymbolicExpression] = None,
+            self,
+            case: Any,
+            case_variable: Variable,
+            target_conclusion: Any,
+            current_conclusion: Any,
+            corner_case: Any,
+            target_knowledge: ConclusionSufficientConditionSets,
+            current_knowledge: ConclusionSufficientConditionSets,
+            firing_anchor: Optional[SymbolicExpression] = None,
     ) -> Optional[ResolvedCondition]:
         """Try each resolver in :attr:`resolvers` in order, returning the first non-``None`` result.
 
@@ -241,4 +230,4 @@ class ChainConditionResolver(ConditionResolver):
         """Return the standard chain: :class:`TargetKnowledgeResolver` then
         :class:`CornerCaseKnowledgeResolver`, in priority order.
         """
-        return cls([TargetKnowledgeResolver(), CornerCaseKnowledgeResolver()])
+        return cls([TargetSufficientConditionsBasedResolver(), CornerCaseKnowledgeResolver()])

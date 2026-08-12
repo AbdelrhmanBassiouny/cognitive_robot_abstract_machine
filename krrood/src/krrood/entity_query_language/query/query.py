@@ -412,7 +412,9 @@ class Query(
         """
         self.build()
         expression = self._conditions_root_
-        SymbolicExpression._symbolic_expression_stack_.append(expression)
+        SymbolicExpression._symbolic_expression_stack_.append(
+            expression._rule_tree_context_()
+        )
         return expression
 
     def build(self) -> Self:
@@ -561,7 +563,7 @@ class Query(
             outermost query of the current evaluation. The first compiled query to evaluate claims the
             outermost role; any other is nested.
         """
-        return evaluation_context.outermost_query_claim.is_nested(self._id_)
+        return evaluation_context.outermost_query.is_nested(self)
 
     def _produce_results_(self, sources: OperationResult) -> Iterator[OperationResult]:
         """
@@ -621,6 +623,17 @@ class Query(
         self.build()
         return self._expression_._result_transformers_
 
+    def _result_is_false_(self, result: OperationResult) -> bool:
+        """
+        :param result: A result this query produced.
+        :return: ``False`` always.
+
+        A query's own binding is its selection rather than a truth claim, so selecting a
+        falsy value says nothing about whether the query was satisfied. A query applies
+        its conditions internally and yields only the results that satisfied them.
+        """
+        return False
+
     def _get_operation_result_(self, child_result: OperationResult) -> OperationResult:
         """
         :param child_result: The child result to construct the operation result from.
@@ -628,7 +641,6 @@ class Query(
         """
         return OperationResult(
             {v._id_: child_result[v._id_] for v in self._selected_variables_},
-            child_result.is_false,
             self,
             child_result,
         )
