@@ -2990,3 +2990,26 @@ items:
       for execution modes - and neither touches prerequisite-check.md, where the gate actually
       lived. Expect textual conflicts in the two plan-item skills and hooks/README.md when those
       land; the resolution is to keep both edits.
+  - id: deferred-items-hidden-by-default
+    title: "Hide deferred items in the dashboard by default, behind their own toggle"
+    branch: claude/hidden-deferred-plan-items-6weef1
+    track: dashboards
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_01Je624Mq716GToQRqtkTXXn
+    notes: >
+      Raised 2026-08-12. A deferred item is intentionally paused or superseded, so it is
+      the same kind of noise on a dashboard as a done one, and done items have been hidden
+      behind a sidebar toggle since the dashboard existed. rdr-refactor is the plan that
+      shows it: eight of its forty-five items are deferred, and they sit inline among the
+      live ones. This gives deferred its own "Show deferred items" checkbox, hidden by
+      default, exactly parallel to "Show done / merged items".
+      The substance is the indentation, not the checkbox. An item's indent level is its
+      depth in the same-track depends_on chain, and the existing toggle already carries a
+      second precomputed level ("as if every done item were not a dependency at all") so a
+      dependent dedents to zero rather than hanging one level in from an invisible parent.
+      A second independent toggle makes that four combinations, not two, so
+      StackedItem stops carrying named pairs of fields and carries one position per filter
+      state instead - keyed by a StatusFilter enum whose value doubles as the page's CSS
+      class and the item's CSS custom-property suffix, so adding a third hidden status
+      later is data, not another pair of fields and another template branch.

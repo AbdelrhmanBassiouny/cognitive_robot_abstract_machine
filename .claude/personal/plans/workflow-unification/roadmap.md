@@ -6196,3 +6196,41 @@ returns all eight touched paths, so this is a change to landed files. #107 (setu
 rewritten over a new script) and #149 (execution modes editing the same step 0 sections)
 are conflict-adjacent but own different work, and neither touches
 `prerequisite-check.md`.
+
+## Update 2026-08-12 (new item): deferred items are hidden by default too
+
+Asked for directly: deferred items should be hidden on a plan dashboard unless a
+checkbox brings them back, "and take care of the indentation of the tasks/chips between
+visible and invisible". The dashboard has hidden done items behind a sidebar toggle from
+the start, and a deferred item is the same kind of noise for the same reason - it is
+intentionally paused or superseded, so it is not something to act on. `rdr-refactor` is
+the plan where it bites: eight of its forty-five items are deferred (`D-core-engine`,
+`rdr-engine-umbrella`, `D-ui-splice-fix`, `rdr-architecture-brief`, `rdr-oo-recognition`,
+`rdr-backend-unification`, `montessori-choice-policies`, `montessori-why-demo`), all
+inline among the live ones.
+
+The checkbox is the easy half. The real work is the one the request calls out: indent
+level. An item's indent is its depth in its track's same-track `depends_on` chain, and
+hiding a parent leaves its dependents indented under nothing. `StackedItem` already
+solved this once for done items by carrying a second precomputed level -
+`indent_level_with_done_hidden`, where a done dependency is treated as no dependency at
+all, so a dependent dedents to zero rather than merely one level - plus a second
+wrap-parent for the past-the-cap wrap-around arrow, guaranteed never to be a hidden item.
+
+A second, independent toggle turns that pair into four states (nothing hidden, done
+hidden, deferred hidden, both hidden), so continuing the named-pair approach would mean
+four fields, four wrap-parent fields, four template branches for the wrap arrow, and a
+fifth of each the next time a status is hidden. It is replaced by one
+`StatusFilter` enum whose members *are* the four states, each item carrying one
+`StackPosition` per member. The enum value doubles as the page's CSS class and the
+item's CSS custom-property suffix, so the template iterates rather than branches and the
+CSS picks a level by specificity, keeping the existing "render both up front, swap
+client-side, never re-render" property the done toggle and the bug-fix filter both rely
+on.
+
+Filed as `deferred-items-hidden-by-default` in the `dashboards` track. The new-vs-change
+test was run rather than eyeballed: `git ls-tree main -- .claude/skills/plan-dashboard/`
+returns `build_dashboard.py` and `templates/dashboard.html`, so this edits landed files
+and stands alone. #111 (`shared-pr-state-chips`) is conflict-adjacent - it adds LOC/CI
+chips to the same template - but owns different work and has been `needs-resolution`
+since well before this.
