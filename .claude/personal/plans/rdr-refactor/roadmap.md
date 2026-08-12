@@ -1639,3 +1639,135 @@ belongs to whichever plan owns `.claude/` tooling, not to this stack.
   kickoff skill relies on for concurrent-change awareness does not work in these containers.
 - The stack is unchanged and still stale: `D-core-support` `8eb7518a` (2026-07-19), `main`
   `be377fdf`. §11's call stands — the cascade is not a prerequisite for working this item.
+
+## 21. Addendum (2026-08-12) — the steward cascade ran: the stack is unblocked, and #98's CI is unwedged
+
+The cascade §17 asked for and §18/§19/§20 kept deferring to ran end to end. Every branch from
+`D-core-aid` to `D-core-single-class` now carries `main` `be377fdf` (#41 merged 2026-08-10):
+
+| PR | branch | was | now |
+|---|---|---|---|
+| #63 | `D-core-aid` | `b241c4ed`, `needs-resolution` | `4e0c2715`, label cleared |
+| #64 | `D-core-underspecified` | `3fda9a99` | `1ad96142` |
+| #65 | `D-core-corner-case` | `2664cae5` | `07545624` |
+| #66 | `D-core-serialization` | `08f2fbdd` | `bd925f70` |
+| #67 | `D-core-support` | `8eb7518a` (2026-07-19), **dirty**, `needs-resolution` | `4d98d0fb`, **unstable**, label cleared |
+| #98 | `D-core-expert` | `e52d74b4` | `82eb69fb` |
+| #159 | `D-core-single-class` | `d5b94c5a` | `621bde53`, **clean** |
+
+Nothing in the stack reads `dirty` any more. `#67` had been frozen in that state since §14
+(2026-08-06) and was the reason the stack could not land.
+
+### The conflicts, and why three of them were not a choice of sides
+
+Seven hops, five of them conflicting. The instructive ones all have the same shape — **this
+stack's own work meeting a rename `main` made under review** — so the resolution is neither
+side wholesale but this stack's structure on `main`'s live API:
+
+- **`base_expressions.py` (at #67).** `main` renamed `ActiveConditionsRoot.claim()` to
+  `set_active_root_if_not_set(root, has_condition)` (`82859a81`, a review asking to *"drop the
+  claim wording"*), and #67 had separately hoisted that call **out** of the
+  `owns_an_evaluation_context` branch so it also runs under a pre-installed context — its own
+  `fa42d2a9`, one of the two core-EQL bugs #67 exists to fix. Taking `main`'s side wholesale
+  re-nests the call and **fails `test_conclusions_fire_with_a_pre_installed_evaluation_context`**;
+  verified by mutation, not by reading, per §12/§15/§16/§18. Kept `main`'s API at #67's placement.
+- **`base_expressions.py`, second hunk.** #67 gated conclusions on
+  `current_result.is_condition_false`; #99's truth unification (`465dd92c`) deleted that accessor.
+  The gate is now `if not is_active_root`, with truth consulted below via `current_result.is_true`.
+  This is the one plan.yaml predicted in 2026-07-31's note (3) and it landed exactly as predicted.
+- **`condition_resolver.py` / `test_condition_resolver.py` (at #98).** Kept #98's `CaseContext`
+  parameter object, on `main`'s names: `ConclusionKnowledge` → `ConclusionSufficientConditionSets`,
+  the module-level `_materialize` helper → the `GuardCondition.as_expression` property, and
+  `TargetKnowledgeResolver` → `TargetSufficientConditionsBasedResolver`. That last one was checked
+  before being applied rather than assumed: `8eb7518a` already carried `TargetKnowledgeResolver`,
+  so it is the **inherited** name and `main` renamed it in `ed7b3766` (*"Tom and Luca Comments"*).
+  #98 never chose it, so nothing of #98's was overridden.
+- **`rdr/exceptions.py`.** §16 predicted an additive merge, §18 corrected that to a conflict, and
+  it conflicted at **three** separate hops (#64, #65, #98) — two independently created files share
+  no merge base however disjoint their contents. Unioned each time; no class name ever collided.
+  Section headers rewritten to the groups the merged file actually has.
+
+### The silent deletion, which git cannot flag and which is now on record twice
+
+`main` deleted `rdr/utils.py` in #41's `efc8a0679`, with the commit message reasoning that
+*"`rdr/utils.py` defined the `UNSET` sentinel but nothing on this branch imported it"*. True of
+`main`; **false of `D-core-support`**, which imports `UNSET` from it in `observer.py` and
+`interface.py`. Because #67 never modified that file, git took the delete as a clean merge — no
+modify/delete conflict, no warning — and the breakage surfaced only as an `ImportError` at test
+collection. Exactly §9's `template_file_creator.py` mechanism, second recorded instance: **a file
+neither side's diff touches is where a merge is silent and wrong.** Worth treating as a standing
+post-cascade check (import the package, don't just count conflicts) rather than a coincidence.
+
+Resolved by doing the `UNSET` → `...` substitution on #67 that §19 had already done on #98 —
+forced rather than chosen, since the module is gone from the base, and restoring it would both
+re-create the modify/delete conflict §19 was pleased to eliminate and reinstate a filename
+`AGENTS.md` rules out. `test_serialization.py` also follows `main`'s rename of
+`what_do_we_know_about` to `get_conclusion_sufficient_conditions_from_a_rule_tree`.
+
+### The CI hypothesis: answered, and §18 had it slightly wrong
+
+§18 named a **base change** as the one remaining event class that recreates #98's wedged merge
+ref, and §19 handed the steward a free test of it. The measurement, with times:
+
+| | |
+|---|---|
+| 20:26:39Z | `D-core-support` pushed — **#98's base moves** |
+| 20:26:45Z | `get_check_runs` on #98 → `total_count: 0` |
+| 20:27:19Z | #67's *own* runs start (its head moved, ordinary `synchronize`) |
+| 20:34:41Z | `D-core-expert` pushed — #98's head moves |
+| 20:34:47Z | #98's first workflow run is created; 21 jobs follow |
+
+So the base change **alone did not do it**: the workflow-run list itself contains no run created
+in the eight minutes between the base moving and the head being pushed, which is stronger evidence
+than the single sample at 20:26:45. What unwedged it was *a push after the base had moved* — and
+the six earlier pushes (§14, §18, §19) all landed while the base was frozen at `8eb7518a` and
+queued nothing. The base move is the necessary ingredient; the push is the trigger. §18's
+hypothesis is upheld in substance and corrected in mechanism.
+
+**#98 has CI for the first time since `b772e959` (2026-07-30)** — 21 jobs, the full `test_each_lib`
+matrix, with `test_claude_dev_tooling` already green. §11's request for a baseline before
+`d-core-single-class` stacks ~3,500 lines on this branch is finally met by something other than a
+local sweep.
+
+The one failure seen anywhere in the pass is `test_each_lib (random_events)` on #67, and it is
+`503 Service Unavailable` fetching `bazel.sh` — infrastructure, not code. The branch's
+`random_events/` tree is byte-identical to `main`'s, checked rather than assumed.
+
+### The readiness rule: decided, and deliberately not changed
+
+`check_dependency_readiness.py` reported #67 as `open_ready` / `is_ready: true` throughout the six
+days it was unmergeable, because `Item.is_ready_to_unblock_dependents()` is
+`is_effectively_done() or live_state is OPEN_READY` — open plus non-draft. §18 asked whether it
+should also consider `mergeable_state`. **It should not**, and the reason is that the two answer
+different questions:
+
+- The rule's own docstring scopes it to *"whether a dependent item can safely start stacking its
+  own branch on this one"*. #67 was unmergeable **against its own base**; #98 was a clean
+  fast-forward on #67. Stacking on it was never unsafe — which is why §11 and §20 both explicitly
+  decided the cascade was not a prerequisite for working `d-core-single-class`, and they were right.
+- Folding `mergeable_state` in would have made the dashboard tell those sessions *not to start*,
+  contradicting a call this plan twice made correctly. That is a false negative bought for a
+  visibility problem.
+
+What was actually missing is visibility of *"this item cannot land"*, and that is **already built
+and in flight**: `workflow-unification`'s `shared-pr-state-chips` (#111) adds a `mergeable` probe
+to `development_tooling/pr_state.py` and renders a per-item `mergeable`/`conflicts` chip in
+`build_dashboard.py`. So no new item is warranted — per the standing rule preferring a change to an
+unlanded PR over a new one. Recorded on issue #102 rather than acted on here.
+
+### Carried forward
+
+- **`main` has two unfinished renames of its own**, found by the cascade and not fixed here since
+  they are `main`'s: `backward_inference.py:180,246` still say `:class:`ConclusionKnowledge`` in
+  docstrings, and `test_backward_inference.py:81-82` still name `what_do_we_know_about` in a test
+  name and its docstring. `AGENTS.md`'s own rule — a rename is finished only when every reader of
+  the old name reads the new one, docstrings included — is the one being broken.
+- **`black` is not clean on this stack, and was not before this pass**: `backward_inference.py`,
+  `test_backward_inference.py` (both already unformatted on `main`) and `serialization.py` (which
+  this pass never touched). Left alone rather than swept in. Sixth entry in the running case for the
+  package-wide formatter pass everyone keeps deferring; `format_docstrings.py` also again produced
+  unrelated docstring rewrapping, reverted, with only `black`'s own output kept.
+- **#98 is no longer a draft.** It was one at the end of §19, so the developer marked it ready
+  themselves. This pass pushed the cascade merge to it anyway, because a steward cascade that stops
+  below `D-core-expert` leaves #159 stranded — but it was **not** re-drafted, per the standing rule
+  that a pull request the developer marked ready is theirs.

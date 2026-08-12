@@ -278,6 +278,7 @@ items:
   depends_on:
   - rdr-backward-inference
   status: in_progress
+  notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged main directly (4e0c2715); two conflicts, AGENTS.md and test_backward_inference.py, both main superseding an older copy of the same rules and the same %% section headers, verified present in main''s later wording before taking its side. mergeable_state dirty -> unstable and the needs-resolution label is cleared.'
 - id: D-core-underspecified
   title: 'RDR engine: underspecified-match adapter'
   branch: D-core-underspecified
@@ -286,6 +287,7 @@ items:
   depends_on:
   - D-core-aid
   status: in_progress
+  notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-aid (1ad96142); one conflict, an add/add on rdr/exceptions.py between this branch''s underspecified-target exceptions and main''s AmbiguousBranchSemanticsError. Unioned - no class name collides - and given %% section headers.'
 - id: D-core-corner-case
   title: 'RDR engine: corner-case provenance store'
   branch: D-core-corner-case
@@ -294,6 +296,7 @@ items:
   depends_on:
   - D-core-underspecified
   status: in_progress
+  notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-underspecified (07545624); the same rdr/exceptions.py add/add recurring, this time also carrying CaseNotSerializableError. Unioned again.'
 - id: D-core-serialization
   title: 'RDR engine: rule-tree unparser (rdr_to_python)'
   branch: D-core-serialization
@@ -318,7 +321,14 @@ items:
     same pre-existing, unrelated probabilistic_model.probabilistic_circuit.relational.rspn
     PyPI/dev-version gap and a missing `dot` (graphviz) binary in this sandbox,
     neither in files this PR touches. Full account in roadmap.md''s 2026-07-31
-    addendum (§9).'
+    addendum (§9).
+    2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
+    (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-corner-case
+    (bd925f70); one conflict, AGENTS.md, where main''s new Naming section supersedes two of the
+    three lines this branch carried. The third - the rule against hardcoding a string literal that
+    duplicates a value with its own source of truth, this branch''s own from c1b24525 - has no
+    equivalent on main, so it was preserved and rehomed into main''s structured-data block rather
+    than dropped with the rest of the hunk.'
 - id: D-core-support
   title: 'RDR engine: observer, rule-tree view, and remaining support modules'
   branch: D-core-support
@@ -340,7 +350,28 @@ items:
     `current_result.is_condition_false` call site at base_expressions.py:410, and eql-truth-unification
     (#99) deletes that accessor — #99''s coordination note lists #89/#90/#92 but not #67. Also: #67''s
     description is stale (claims a conftest.py and an __init__.py export block absent from the current
-    16-file diff).'
+    16-file diff).
+    2026-08-12 steward cascade: the blocker is cleared. Restacked onto D-core-serialization bd925f70
+    as merge 4d98d0fb; mergeable_state dirty -> unstable and the needs-resolution label is removed,
+    after being frozen at 8eb7518a (2026-07-19) since section 14. Three resolutions, none of them a
+    choice of sides. (1) base_expressions.py: main renamed ActiveConditionsRoot.claim() to
+    set_active_root_if_not_set(root, has_condition) in 82859a81, while this branch''s own fa42d2a9
+    had hoisted that call out of the owns_an_evaluation_context branch so it also runs under a
+    pre-installed context. Kept main''s API at this branch''s placement; re-nesting it fails
+    test_conclusions_fire_with_a_pre_installed_evaluation_context, verified by mutation. (2) The
+    is_condition_false gate predicted in the 2026-07-31 note (3) landed exactly as predicted: #99''s
+    465dd92c deleted the accessor, so the gate is now `if not is_active_root` with truth read below
+    via current_result.is_true. (3) main deleted rdr/utils.py in #41''s efc8a0679 on the stated
+    grounds that nothing imported it - true of main, false here, since observer.py and interface.py
+    both did. This branch never touched that file, so git took the delete silently and it surfaced
+    only as an ImportError at collection - the same mechanism as section 9''s
+    template_file_creator.py, now twice recorded. Fixed by doing the UNSET -> ... substitution #98
+    had already done above, plus main''s rename of what_do_we_know_about to
+    get_conclusion_sufficient_conditions_from_a_rule_tree. Verified in a fully provisioned
+    container: test_eql_rdr 114 passed / 0 failed, test_eql 1181 passed / 3 skipped / 0 failed. CI
+    queued 21 jobs; the only failure is test_each_lib (random_events), a 503 fetching bazel.sh, and
+    this branch''s random_events tree is byte-identical to main''s. Full account in roadmap.md
+    section 21.'
 - id: D-core-engine
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
   branch: D-core-engine
@@ -458,7 +489,25 @@ items:
     test. Replied on the thread and resolved it. Lesson for the next round, same class as the
     staleness this plan keeps catching: re-read the PR''s threads immediately before reporting a
     round finished, not only at its start.
-    Full account in roadmap.md section 19.'
+    Full account in roadmap.md section 19.
+    2026-08-12 steward cascade: merged D-core-support into this branch as 82eb69fb. Six conflicts,
+    every one this branch''s own work meeting a rename main made under review, so each resolves to
+    this branch''s structure on main''s live API: condition_resolver.py and
+    test_condition_resolver.py keep the CaseContext parameter object but move to
+    ConclusionSufficientConditionSets, to the GuardCondition.as_expression property in place of the
+    module-level _materialize helper, and to TargetSufficientConditionsBasedResolver - that last
+    name checked before applying, since 8eb7518a already carried TargetKnowledgeResolver, making it
+    inherited rather than this PR''s choice, and main renamed it in ed7b3766; rdr/exceptions.py
+    unioned for the third time; and interface.py, test_observer.py and test_rule_tree_growth.py
+    where both sides had substituted the ... sentinel independently, keeping this branch''s assertIs
+    form. Verified: test_eql_rdr 164 passed / 0 failed (this branch''s 150 plus the 14
+    D-core-support contributes), test_eql 1181 passed / 3 skipped / 0 failed. The CI trigger is
+    fixed: 21 jobs queued, the first run on this PR since b772e959 (2026-07-30), so section 11''s
+    request for a baseline before d-core-single-class stacks on it is finally met. Section 18''s
+    base-change hypothesis is upheld in substance but corrected in mechanism - the base moving alone
+    queued nothing for eight minutes; the push that followed it is what triggered the run, and the
+    six earlier pushes had all landed while the base was frozen. This PR was already out of draft
+    when the cascade reached it, so it was not re-drafted. Full account in roadmap.md section 21.'
 - id: d-core-single-class
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
   branch: D-core-single-class
@@ -480,7 +529,13 @@ items:
     exception in rdr/exceptions.py, and the six engine test files ported from mega-branch e650d968 plus
     a new expert_doubles.py de-duplicating their shared expert stubs. #98 has still never had CI queue a
     run across six pushes, so the baseline required before stacking on it is local, not CI. Do not cascade
-    the stack first. Full account in roadmap.md section 20.'
+    the stack first. Full account in roadmap.md section 20.
+    2026-08-12 steward cascade: restacked onto D-core-expert 82eb69fb as merge 621bde53,
+    conflict-free. Checked for a concurrent port before touching it - the branch still carried only
+    the bootstrap commit and changed no files - and merged rather than force-pushed so a session
+    working locally is unaffected. mergeable_state clean. The port now starts from a base that
+    carries main and has live CI, so the note above about the baseline having to be local no longer
+    applies.'
 - id: d-core-backend
   title: 'RDR engine: underspecified-query RDR backend'
   branch: D-core-backend
