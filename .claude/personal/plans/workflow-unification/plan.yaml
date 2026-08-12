@@ -3172,3 +3172,10 @@ items:
       is one instance of this hazard; pinning closes the rest - the commands a session
       runs by hand and the resume paths - and removes the assumption instead of leaving
       each future step to remember the worktree.
+
+  - id: plan-item-bootstrap-yaml-indent
+    title: "Fix plan_item_bootstrap writing item fields at the wrong indentation"
+    branch: null
+    track: personal-data
+    depends_on: []
+    status: in_progress

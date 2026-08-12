@@ -6514,3 +6514,35 @@ the file its own base had just removed.
 That last pair is the rule this plan already records, met from a new angle: a thread answered
 differently from what it asked is not the answering session's to close, even when the alternative is
 better and even when it was the *parent branch* rather than this one that made the choice.
+
+## Update 2026-08-12 (new item): the bootstrap script wrote item fields at a depth the manifest did not use
+
+`plan-item-bootstrap` (#143) landed `.claude/hooks/plan_item_bootstrap.py`, and the first plan
+outside this one to use it could not be recorded by it. `open` patches `plan.yaml` line by line and
+wrote the four fields it changes — `branch`, `pull_request_number`, `session`, `status` — at a
+hardcoded four-space indent. `rdr-refactor`'s manifest writes its items flush with `items:`, the
+other block sequence style YAML admits, so its fields sit at two. The patched manifest no longer
+parsed and `save-plan.sh` failed inside `plan_manifest_tools.py`'s `yaml.safe_load`. Found on
+2026-08-12 bootstrapping that plan's `d-core-single-class`, worked around there by hand-patching the
+manifest at the right depth; the account is in `rdr-refactor`'s `roadmap.md` §20 and in issue #94
+comment 5269985271.
+
+**Both manifest styles are in use here, which is why an assumption could not hold.** This plan's own
+manifest is written the indented way and `rdr-refactor`'s the flush way — the tests only ever saw the
+first, because the fixture was written alongside the script. `ItemIndentation` now reads the depth off
+the manifest being edited (off the item block's own first line when patching, off the first item when
+appending a new one), and `ManifestKey.render` takes it rather than assuming one, so no call site can
+forget it.
+
+**Two defects in the same path hid the first, and both are worse than the formatting slip.** The save
+ran `save-plan.sh` with `capture_output=True, check=True`, so the script's traceback went nowhere and
+the caller got a bare `CalledProcessError`. And success was printed without anything having checked
+that the write landed, so `{"status": "success", "exit_code": 0}` was a restatement of the request
+rather than evidence. The save now raises `PlanSaveFailedError` carrying what the script said, and
+reads the plan back off the notes branch afterwards, raising `PlanNotWrittenError` when the branch
+does not carry the edit. A report of success now means a save that was checked.
+
+**The generalizable half is about fixtures, not about YAML.** A fixture written in the same session as
+the code it exercises records the author's assumption twice rather than testing it once. The plans
+this tool would meet were sitting on the notes branch the whole time, in both styles, and neither the
+implementation nor its tests looked at them.
