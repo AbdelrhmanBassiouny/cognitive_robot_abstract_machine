@@ -20,6 +20,8 @@ import pytest
 
 from scratch_repository import ScratchRepository
 
+from maintenance_git_commands import GitCommandRunner
+
 from stack import (
     AmbiguousForkRemoteError,
     BOARD_PATH,
@@ -1284,10 +1286,25 @@ class ToolingCheckout:
     The tool in that checkout's working tree, which a branch switch may replace.
     """
 
+    git: GitCommandRunner
+    """
+    The runner every branch switch of this checkout goes through.
+    """
+
+    starting_branch: str
+    """
+    The branch carrying the real tool, checked out until something switches away.
+    """
+
     @classmethod
     def install_into(cls, repository: ScratchRepository) -> ToolingCheckout:
         """
-        Commit this repository's own tooling into a scratch checkout.
+        Commit this repository's own tooling into a scratch checkout, and give it a
+        second branch carrying a version whose commands differ.
+
+        Both versions are committed here so that :meth:`check_out_another_tool_version`
+        is nothing but a branch switch: what replaces the tool in the working tree is
+        then version control alone, which is the whole hazard being reproduced.
 
         :param repository: The checkout to install into.
         :return: The checkout, and where its copy of the tool now sits.
@@ -1296,19 +1313,29 @@ class ToolingCheckout:
         for source in WorkingTreeTooling().files:
             repository.write(str(directory / source.name), source.read_text())
         repository.commit_everything("carry the stack tooling")
-        return cls(repository, repository.project_root / directory / ENTRY_POINT_NAME)
+
+        git = GitCommandRunner(repository.project_root)
+        installed = cls(
+            repository,
+            repository.project_root / directory / ENTRY_POINT_NAME,
+            git,
+            git.checked_out_branch(),
+        )
+        git.checkout(A_BRANCH_CARRYING_ANOTHER_VERSION, "HEAD")
+        installed.tool.write_text(TOOL_WITH_A_DIFFERENT_COMMAND_SET.read_text())
+        repository.commit_everything("carry a tool whose commands differ")
+        git.checkout(installed.starting_branch, installed.starting_branch)
+        return installed
 
     def check_out_another_tool_version(self) -> None:
         """
-        Switch to a branch whose tooling directory holds a version answering other
-        commands - what any branch switch made in the checkout a pass runs from does,
-        whether a step of the pass or the session driving it made the switch.
+        Switch to the branch whose tooling directory holds the other version - what any
+        branch switch made in the checkout a pass runs from does, whether a step of the
+        pass or the session driving it made the switch.
         """
-        self.repository.run_git(
-            "checkout", "--quiet", "-b", A_BRANCH_CARRYING_ANOTHER_VERSION
+        self.git.checkout(
+            A_BRANCH_CARRYING_ANOTHER_VERSION, A_BRANCH_CARRYING_ANOTHER_VERSION
         )
-        self.tool.write_text(TOOL_WITH_A_DIFFERENT_COMMAND_SET.read_text())
-        self.repository.commit_everything("carry a tool whose commands differ")
 
     def pin_the_tool(self) -> Path:
         """
