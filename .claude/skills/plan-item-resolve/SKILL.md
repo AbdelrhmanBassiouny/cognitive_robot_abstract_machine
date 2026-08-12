@@ -15,13 +15,13 @@ code, creates a branch, or pushes anything** — it is a research-and-planning
 skill, not an implementation one. Every invocation starts fresh in the
 current session; it does not try to detect or resume any other session.
 
-## 0. Check the setup is in place, and offer it if not
+## 0. Check the setup is in place, and run it if not
 
 The item's manifest entry and roadmap live on the personal-notes branch, which
 the user may not have set up yet. Follow
 `.claude/skills/setup-personal-notes/prerequisite-check.md` before step 1: run
-the check, and if it reports anything missing, offer `/setup-personal-notes`
-rather than failing on a branch that isn't there.
+the check, and if it reports anything missing, run `/setup-personal-notes`
+without asking first, rather than failing on a branch that isn't there.
 
 ## 1. Resolve the item
 

@@ -18,13 +18,13 @@ session or a fresh one is the user's call, made after they see it; step 6
 runs either way, so the item stops reading as `not_started` the moment it
 isn't.
 
-## 0. Check the setup is in place, and offer it if not
+## 0. Check the setup is in place, and run it if not
 
 The item's manifest entry and roadmap live on the personal-notes branch, which
 the user may not have set up yet. Follow
 `.claude/skills/setup-personal-notes/prerequisite-check.md` before step 1: run
-the check, and if it reports anything missing, offer `/setup-personal-notes`
-rather than failing on a branch that isn't there.
+the check, and if it reports anything missing, run `/setup-personal-notes`
+without asking first, rather than failing on a branch that isn't there.
 
 ## 1. Resolve the item
 
