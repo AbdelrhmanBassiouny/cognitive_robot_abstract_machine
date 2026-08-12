@@ -21,6 +21,10 @@ Three kinds of content, stored the same way and never merged anywhere:
 The PR-progress section appears on any branch that isn't the default branch, a detached `HEAD`, or
 the notes branch itself, as an empty scaffold even before anything has been saved.
 
+Your local Claude Code settings ride along on the same branch too, as a whole file rather than a
+section — see [Syncing your local Claude Code settings](#syncing-your-local-claude-code-settings).
+Every run prints a summary of what it found and wrote, so a session never has to infer it.
+
 ## Quick start
 
 1. Run `/setup-personal-notes` in any Claude Code session on this repo.
@@ -41,6 +45,13 @@ To do the same by hand:
 
 `check-setup.sh` prints one row per check and exits non-zero if anything still needs doing.
 
+Every session start prints its own summary, so neither of the two things below has to be
+remembered. Its `setup:` line runs `check-setup.sh` and names any check that still needs setup;
+its `plan:` line distinguishes *no plans are tracked here* from *plans exist and no item tracks
+this branch* — the second being the cue to add the item before starting work, not after. Both
+lines appear only once a personal-notes branch exists, so a clone that uses none of this stays
+silent.
+
 ## Editing your notes
 
 - **Ask Claude** — *"add \<X\> to my personal notes"*, *"edit my personal notes"*. Nothing else to
@@ -51,6 +62,29 @@ To do the same by hand:
 
 Only content between the markers is ever saved. Headers and markers are regenerated every session,
 so editing them has no effect.
+
+## Syncing your local Claude Code settings
+
+The same branch can carry your personal `.claude/settings.local.json` — the file Claude Code reads
+as this project's local settings (permission rules, environment variables, anything else in its
+settings schema). Store it on the notes branch at `.claude/personal/settings.local.json` and each
+session start copies it into the project root, so permissions you'd otherwise re-grant in every
+fresh clone follow you around. It is gitignored; the committed `.claude/settings.json` stays the
+shared, team-wide one.
+
+It gets no header or markers — strict JSON has nowhere to put them — so the file is copied whole.
+
+**Your local edits are never overwritten.** Claude Code writes to that same file whenever you grant
+a permission with "don't ask again", so the hook writes only when the file is missing or still
+identical to what it last synced (tracked in the gitignored `.claude/.personal-settings-sync-hash`).
+Otherwise it keeps your version and says so in its summary. To push your edits up and let syncing
+resume:
+
+```bash
+"$CLAUDE_PROJECT_DIR/.claude/hooks/save-personal-settings.sh"
+```
+
+Or ask Claude — *"save my Claude settings"* — the same way as your notes.
 
 ## Configuration
 
@@ -108,7 +142,16 @@ the narrative that doesn't belong in structured data.
   every plan. It cross-checks every item against live GitHub PR/CI/review state, so a manifest
   can't silently go stale the way a hand-maintained roadmap doc could.
 - Start or unblock one item → `/plan-item-kickoff <plan-id> <item-id>`,
-  `/plan-item-resolve <plan-id> <item-id>`.
+  `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
+  marks it `in_progress` as soon as its plan is approved — via
+  [`plan_item_bootstrap.py`](./plan_item_bootstrap.py), which you can also run by hand — so the
+  manifest never says `not_started` while the work is underway.
+- Recheck one for updates, without rereading it →
+  [`plan-updates-since.sh`](./plan-updates-since.sh) `<plan-id> [--since <sha>]`. Every
+  `session-start.sh` run stamps the notes-branch commit it just fetched (gitignored, at
+  `.claude/.plan-state-sync-sha`), so this can diff the plan's directory from that stamp and print
+  only the tracking-issue comments newer than it. Needs no Claude Code session: it prefers the `gh`
+  CLI when installed, otherwise `GH_TOKEN`/`GITHUB_TOKEN` with `curl`.
 
 **Auto-discovery.** If your branch is an item in some plan, that plan's `plan.yaml` and `roadmap.md`
 are pulled into `CLAUDE.local.md` too, via a generated branch-to-plan index that `save-plan.sh`
@@ -118,7 +161,11 @@ regenerates from every manifest on each save, so it can't drift.
 
 - `merged` — the changes landed but GitHub's merge API never recorded it (branch pushed directly,
   PR then closed by hand). Treated exactly like a real merge.
-- `in-review`, `bug` — recognized so they don't read as unknown labels; no script acts on them yet.
+- `bug` — marks the item with a `bug` chip in the dashboard's "What to do next" sidebar, in
+  whichever action group it already belongs to, and is what the sidebar's "Bug fixes only" filter
+  keeps. Being a bug fix is a property of the work, not a next action of its own, so it never
+  moves an item into a group or out of one.
+- `in-review` — recognized so it doesn't read as an unknown label; no script acts on it yet.
 
 Any other label is preserved but not interpreted.
 
@@ -126,7 +173,8 @@ Any other label is preserved but not interpreted.
 
 - Does nothing until you create the notes branch: `git fetch` finds nothing, so `CLAUDE.local.md` is
   never written.
-- Never merges and never checks anything out — the hook only reads the branch off `FETCH_HEAD`.
+- Never merges and never checks anything out — the hook and `plan-updates-since.sh` only read the
+  branch off `FETCH_HEAD`.
 - Never touches your current branch or working tree: every script that writes works in a scratch
   worktree.
 - `create-personal-notes-branch.sh` refuses to run if the branch already exists anywhere it can see,
@@ -135,7 +183,11 @@ Any other label is preserved but not interpreted.
   content can leak into what it pushes.
 - PR progress and plans can't be merged into a PR by construction: they're only ever written to the
   notes branch, never to a file tracked on your branch.
-- `CLAUDE.local.md` is gitignored.
+- Synced settings never silently replace local ones: `.claude/settings.local.json` is written only
+  when it's missing or unchanged since the last sync, so "don't ask again" grants survive until you
+  run `save-personal-settings.sh` yourself.
+- `CLAUDE.local.md`, `.claude/settings.local.json` and the recheck stamp
+  `.claude/.plan-state-sync-sha` are all gitignored.
 - Always operates on this repo's project root, resolved from the scripts' own location on disk —
   not the caller's cwd, which a `SessionStart` hook can't rely on.
 - Coexists with your own `SessionStart` hooks: Claude Code concatenates hook arrays across settings

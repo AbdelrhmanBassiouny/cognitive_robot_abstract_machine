@@ -13,6 +13,7 @@ import shutil
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import plan_manifest_tools
@@ -31,6 +32,43 @@ WORK_BRANCH = "some-work-branch"
 """
 The throwaway branch a scratch repository is left checked out on.
 """
+
+SET_UP_CLONE_FIXTURE = Path(__file__).parent / "fixtures" / "set-up-clone"
+"""
+A checked-in clone layout satisfying every check-setup.sh check that reads a file, laid
+out under the same relative paths it will occupy in a scratch project root.
+"""
+
+
+class SetupPrerequisiteFile(StrEnum):
+    """
+    The files check-setup.sh's ``tooling_files`` check requires, relative to the project
+    root.
+
+    Stated here as well as in the fixture tree deliberately. A rename that breaks the
+    check then has to be made in both places, rather than the fixture and the tests
+    following each other silently and asserting nothing.
+    """
+
+    BUILD_DASHBOARD = ".claude/skills/plan-dashboard/build_dashboard.py"
+    """
+    The dashboard builder the plan-dashboard skill runs.
+    """
+
+    REFRESH_DASHBOARD = ".claude/skills/plan-dashboard/refresh_dashboard.sh"
+    """
+    The refresh entry point the same skill runs.
+    """
+
+    DASHBOARD_REQUIREMENTS = ".claude/skills/plan-dashboard/requirements.txt"
+    """
+    The requirements file check-setup.sh also derives the dependency check from.
+    """
+
+    PLAN_SCHEMA = ".claude/skills/plan-dashboard/plan-schema.md"
+    """
+    The manifest field reference.
+    """
 
 
 def initialize_bare_repository(path: Path) -> Path:
@@ -65,6 +103,13 @@ class ScratchRepository:
     The bare repository the notes branch is pushed to and fetched from.
     """
 
+    work_remote_path: Path | None = None
+    """
+    The bare repository standing in for the project's own remote, created only by
+    :meth:`add_work_remote` so a test that never publishes a work branch has no
+    ``origin`` it did not ask for.
+    """
+
     @classmethod
     def create(cls, parent_directory: Path) -> ScratchRepository:
         """
@@ -88,16 +133,19 @@ class ScratchRepository:
         repository.run_git("config", "user.email", "scratch-repo@example.com")
         return repository
 
-    def run_git(self, *arguments: str) -> subprocess.CompletedProcess[str]:
+    def run_git(
+        self, *arguments: str, cwd: Path | None = None
+    ) -> subprocess.CompletedProcess[str]:
         """
         Run git in the project root, failing the test if it reports an error.
 
         :param arguments: The arguments to pass to git.
+        :param cwd: Where to run it, defaulting to the project root.
         :return: The finished subprocess.
         """
         result = subprocess.run(
             ["git", *arguments],
-            cwd=self.project_root,
+            cwd=cwd or self.project_root,
             capture_output=True,
             text=True,
         )
@@ -115,6 +163,41 @@ class ScratchRepository:
                 HOOKS_SOURCE_DIRECTORY / script_name,
                 self.project_root / ".claude" / "hooks" / script_name,
             )
+
+    def write_setup_prerequisites(self) -> None:
+        """
+        Write everything check-setup.sh requires of a set up clone, apart from the
+        personal-notes branch and CLAUDE.local.md.
+
+        Leaves CLAUDE.local.md out deliberately: session-start.sh writes it, so a test
+        of that script must not find it already there - which is why this is a named
+        step rather than part of building the repository.
+        """
+        shutil.copytree(SET_UP_CLONE_FIXTURE, self.project_root, dirs_exist_ok=True)
+
+    def run_hook_script(
+        self, script_name: str, *arguments: str
+    ) -> subprocess.CompletedProcess[str]:
+        """
+        Run one of the installed hook scripts from the project root.
+
+        Returns the finished process rather than asserting on it, since a hook's exit
+        code and stderr are often what a test is about.
+
+        :param script_name: File name within the scratch layout's hooks directory.
+        :param arguments: The arguments to pass to the script.
+        :return: The finished subprocess.
+        """
+        return subprocess.run(
+            [
+                "bash",
+                str(self.project_root / ".claude" / "hooks" / script_name),
+                *arguments,
+            ],
+            cwd=self.project_root,
+            capture_output=True,
+            text=True,
+        )
 
     def write(self, relative_path: str, content: str) -> Path:
         """
@@ -176,6 +259,41 @@ class ScratchRepository:
             str(destination),
         )
         return destination
+
+    def update_notes_branch_file(self, relative_path: str, content: str) -> None:
+        """
+        Change one file on the already-published notes branch, the way an edit made from
+        another clone would reach it.
+
+        :param relative_path: Path relative to the notes branch's root.
+        :param content: The content to commit there.
+        """
+        checkout = self.project_root.parent / "notes-update-checkout"
+        shutil.rmtree(checkout, ignore_errors=True)
+        self.clone_notes_branch(checkout)
+        self.run_git("config", "user.name", "Scratch Repo", cwd=checkout)
+        self.run_git("config", "user.email", "scratch-repo@example.com", cwd=checkout)
+
+        destination = checkout / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(content)
+        self.run_git("add", relative_path, cwd=checkout)
+        self.run_git("commit", "--quiet", "-m", f"Set {relative_path}", cwd=checkout)
+        self.run_git("push", "--quiet", "origin", NOTES_BRANCH, cwd=checkout)
+        shutil.rmtree(checkout)
+
+    def add_work_remote(self) -> Path:
+        """
+        Create a bare repository standing in for the project's own remote and register
+        it as ``origin``, for a hook that publishes a work branch rather than notes.
+
+        :return: The work remote's path.
+        """
+        self.work_remote_path = initialize_bare_repository(
+            self.project_root.parent / "work-remote.git"
+        )
+        self.run_git("remote", "add", "origin", str(self.work_remote_path))
+        return self.work_remote_path
 
     def resolve_notes_remote_to(self, remote: Path | None = None) -> None:
         """

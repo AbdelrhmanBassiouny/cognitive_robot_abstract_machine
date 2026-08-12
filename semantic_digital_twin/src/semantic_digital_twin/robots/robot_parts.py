@@ -55,6 +55,7 @@ from semantic_digital_twin.spatial_types import (
     RotationMatrix,
     HomogeneousTransformationMatrix,
 )
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.spatial_types.derivatives import DerivativeMap
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection,
@@ -281,6 +282,17 @@ class AbstractRobotPart(HasRootBody, HasRobotParts, ABC):
                 return j
         raise NoJointStateWithType(state_type)
 
+    def has_joint_state_of_type(self, state_type: JointStateType) -> bool:
+        """
+        Whether this part can be commanded into the given joint state.
+
+        :param state_type: The state type to search for
+        :return: True if a joint state of that type is defined
+        """
+        return any(
+            joint_state.state_type == state_type for joint_state in self.joint_states
+        )
+
     @classmethod
     def create_with_new_body_in_world(
         cls,
@@ -302,7 +314,7 @@ class AbstractRobotPart(HasRootBody, HasRobotParts, ABC):
         )
 
     @classmethod
-    def get_default_root_specification(
+    def get_default_root_kinematic_structure_entity_specification(
         cls,
         name: Optional[str] = None,
         scale: Optional[Scale] = None,
@@ -800,6 +812,26 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
         except AttributeError:
             pass
 
+    def set_root_pose(self, pose: Pose) -> None:
+        """
+        Place the robot's root at ``pose``.
+
+        A pose that is not already expressed in the root connection's parent frame is
+        converted into it, so the robot lands at ``pose`` no matter how many frames (an
+        ``odom``, for example) sit between that frame and the pose's own.
+
+        ..note:: A drive that cannot represent every degree of freedom applies only what
+            it can, so the root reaches ``pose`` only within the drive's own limits.
+
+        :param pose: The pose the robot's root should end up at.
+        """
+        connection = self.root.parent_connection
+        parent_kinematic_structure_entity = connection.parent
+        if pose.reference_frame is not parent_kinematic_structure_entity:
+            pose = self._world.transform(pose, parent_kinematic_structure_entity)
+
+        connection.origin = pose.to_homogeneous_matrix()
+
     @property
     def _one_dof_connections(self) -> list[ActiveConnection1DOF]:
         """
@@ -889,6 +921,15 @@ class AbstractRobot(Agent, HasRobotParts, ABC):
     def get_torso(self):
         [torso] = [p for p in self._robot_parts if isinstance(p, Torso)]
         return torso
+
+    def get_torso_if_specified(self) -> Optional[Torso]:
+        """
+        :return: The robot's torso, or None for a robot built without one.
+        """
+        for part in self._robot_parts:
+            if isinstance(part, Torso):
+                return part
+        return None
 
     def get_left_arm_if_specified(self) -> Optional[Arm]:
         if isinstance(self, HasLeftRightArm):

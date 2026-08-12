@@ -18,22 +18,9 @@ import pytest
 from scratch_repository import (
     NOTES_BRANCH,
     ScratchRepository,
+    SetupPrerequisiteFile,
     initialize_bare_repository,
 )
-
-# The files check-setup.sh's `tooling_files` check requires, relative to the
-# project root. Kept as literals rather than sourced from
-# resolve-personal-notes-config.sh so a rename that breaks the check has to be
-# made deliberately in both places, instead of the test silently following
-# along and asserting nothing.
-TOOLING_FILES = (
-    ".claude/skills/plan-dashboard/build_dashboard.py",
-    ".claude/skills/plan-dashboard/refresh_dashboard.sh",
-    ".claude/skills/plan-dashboard/requirements.txt",
-    ".claude/skills/plan-dashboard/plan-schema.md",
-)
-
-REQUIREMENTS_FILE = ".claude/skills/plan-dashboard/requirements.txt"
 
 NOTES_PATH = ".claude/personal/cram-notes.md"
 
@@ -143,18 +130,7 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
         "resolve-personal-notes-config.sh", "check-setup.sh"
     )
 
-    for tooling_file in TOOLING_FILES:
-        scratch_repository.write(tooling_file, "placeholder\n")
-    # The dependency check reads this file rather than a hardcoded list, so a
-    # requirement that is certainly installed keeps the fixture's baseline green.
-    scratch_repository.write(REQUIREMENTS_FILE, "pytest>=1\n")
-
-    scratch_repository.write(
-        ".claude/settings.json",
-        '{"hooks": {"SessionStart": [{"hooks": [{"type": "command",'
-        ' "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"}]}]}}\n',
-    )
-    scratch_repository.write(".gitignore", "CLAUDE.local.md\n")
+    scratch_repository.write_setup_prerequisites()
     scratch_repository.write("CLAUDE.local.md", "notes\n")
 
     scratch_repository.commit_everything("initial commit")
@@ -303,20 +279,17 @@ def test_reports_a_setting_resolved_from_the_environment(
 def test_reports_which_tooling_files_this_checkout_is_missing(
     check_setup_repository: ScratchRepository,
 ):
-    (
-        check_setup_repository.project_root
-        / ".claude/skills/plan-dashboard/plan-schema.md"
-    ).unlink()
+    (check_setup_repository.project_root / SetupPrerequisiteFile.PLAN_SCHEMA).unlink()
 
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == 1
     assert report.results[SetupCheck.TOOLING_FILES].status == CheckStatus.NEEDS_SETUP
     assert (
-        ".claude/skills/plan-dashboard/plan-schema.md"
+        SetupPrerequisiteFile.PLAN_SCHEMA
         in report.results[SetupCheck.TOOLING_FILES].detail
     )
     assert (
-        ".claude/skills/plan-dashboard/build_dashboard.py"
+        SetupPrerequisiteFile.BUILD_DASHBOARD
         not in report.results[SetupCheck.TOOLING_FILES].detail
     )
 
@@ -353,7 +326,8 @@ def test_reports_dashboard_requirements_that_are_not_installed(
     check_setup_repository: ScratchRepository,
 ):
     check_setup_repository.write(
-        REQUIREMENTS_FILE, "pytest>=1\nno-such-distribution-exists>=2  # a comment\n"
+        SetupPrerequisiteFile.DASHBOARD_REQUIREMENTS,
+        "pytest>=1\nno-such-distribution-exists>=2  # a comment\n",
     )
 
     report = run_check_setup(check_setup_repository)

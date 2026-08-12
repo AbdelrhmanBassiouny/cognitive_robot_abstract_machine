@@ -22,6 +22,7 @@ from typing_extensions import (
     Iterator,
     List,
     Optional,
+    Set,
     Tuple,
     Type,
     TYPE_CHECKING,
@@ -135,6 +136,39 @@ class ActiveConditionsRoot:
 
 
 @dataclass
+class TruthValueOperatorChildren:
+    """
+    Tracks which nodes were evaluated as a direct child of a
+    :class:`~krrood.entity_query_language.core.base_expressions.TruthValueOperator` during
+    the current evaluation pass.
+
+    Whether a node counts as a condition participant depends on which parent evaluated it
+    in this pass, not on the node's construction history: a node reused elsewhere in the
+    :class:`~krrood.entity_query_language.core.base_expressions.SymbolicExpression`'s own
+    directed acyclic graph of parents keeps a structural parent per position, but only
+    the first-ever attachment is its primary ``_parent_``, which may belong to an
+    unrelated position. Recording the dynamic, per-pass parent here instead of reading
+    the node's primary ``_parent_`` avoids that ambiguity.
+    """
+
+    _ids: Set[uuid.UUID] = field(default_factory=set, init=False)
+    """
+    Identifiers of the nodes evaluated as a direct child of a ``TruthValueOperator`` so
+    far this pass.
+    """
+
+    def record(self, expression_id: uuid.UUID) -> None:
+        """
+        Record *expression_id* as evaluated as a direct child of a
+        ``TruthValueOperator`` during the current pass.
+        """
+        self._ids.add(expression_id)
+
+    def __contains__(self, expression_id: uuid.UUID) -> bool:
+        return expression_id in self._ids
+
+
+@dataclass
 class EvaluatedExpressionIds:
     """
     Tracks every expression id evaluated so far during the current evaluation pass.
@@ -182,7 +216,7 @@ class EvaluatedExpressionIds:
 
 
 @dataclass
-class OutermostQueryClaim:
+class OutermostQuery:
     """
     Tracks which compiled query node is the outermost query for the current evaluation
     pass.
@@ -193,24 +227,24 @@ class OutermostQueryClaim:
     inside it.
     """
 
-    _query_id: Optional[uuid.UUID] = field(default=None, init=False)
+    node: Optional[SymbolicExpression] = field(default=None, init=False)
     """
-    Identifier of the query node that claimed the outermost role, or ``None`` before any
-    node has.
+    The compiled query node holding the outermost role, or ``None`` before any node
+    takes it.
     """
 
-    def is_nested(self, query_id: uuid.UUID) -> bool:
+    def is_nested(self, query: SymbolicExpression) -> bool:
         """
-        Claim *query_id* as the outermost query if none is claimed yet, then report
-        whether *query_id* is nested inside some other, already-claimed outermost query.
+        Record *query* as the outermost query if none is recorded yet, then report
+        whether *query* is nested inside some other, already-recorded outermost query.
 
-        :param query_id: The compiled query node's identifier.
-        :return: Whether *query_id* is a nested subquery (``True``) or the outermost
-            query (``False``).
+        :param query: The compiled query node.
+        :return: Whether *query* is a nested subquery (``True``) or the outermost query
+            (``False``).
         """
-        if self._query_id is None:
-            self._query_id = query_id
-        return self._query_id != query_id
+        if self.node is None:
+            self.node = query
+        return self.node._id_ != query._id_
 
 
 @dataclass
@@ -283,6 +317,14 @@ class EvaluationContext:
     Tracks which node is the active conditions root for the current evaluation pass.
     """
 
+    truth_value_operator_children: TruthValueOperatorChildren = field(
+        default_factory=TruthValueOperatorChildren
+    )
+    """
+    Tracks which nodes were evaluated as a direct child of a ``TruthValueOperator``
+    during the current evaluation pass.
+    """
+
     evaluated_expression_ids: EvaluatedExpressionIds = field(
         default_factory=EvaluatedExpressionIds
     )
@@ -296,9 +338,7 @@ class EvaluationContext:
     ``None`` if unset.
     """
 
-    outermost_query_claim: OutermostQueryClaim = field(
-        default_factory=OutermostQueryClaim
-    )
+    outermost_query: OutermostQuery = field(default_factory=OutermostQuery)
     """
     Tracks which compiled query node is the outermost query for the current evaluation
     pass.
@@ -310,6 +350,14 @@ class EvaluationContext:
     """
     Caches each nested subquery's result stream for the current evaluation pass.
     """
+
+    def is_child_of_truth_value_operator(self, expression: SymbolicExpression) -> bool:
+        """
+        :param expression: The symbolic expression to test.
+        :return: ``True`` if *expression* was evaluated as a direct child of a
+            ``TruthValueOperator`` during the current evaluation pass.
+        """
+        return expression._id_ in self.truth_value_operator_children
 
     def on_evaluate_enter(
         self,

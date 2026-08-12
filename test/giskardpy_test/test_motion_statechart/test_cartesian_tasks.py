@@ -73,6 +73,7 @@ from test.giskardpy_test.test_motion_statechart.debug_expression_helpers import 
     GOAL_COLOR,
     debug_expression_by_name,
 )
+from semantic_digital_twin.robots.pr2 import PR2Joint
 
 
 class TestCartesianPositionTrajectory:
@@ -315,8 +316,63 @@ class TestCartesianTasks:
         assert np.allclose(
             cylinder_bot_world.compute_forward_kinematics(cylinder_bot_world.root, tip),
             goal.goal_pose,
-            atol=goal.threshold,
+            atol=goal.translation_threshold,
         )
+
+    def test_orientation_threshold_decouples_rotation_tolerance(
+        self, cylinder_bot_world: World
+    ):
+        """
+        A residual orientation error above ``threshold`` but below
+        ``orientation_threshold`` must count as goal reached -- a physically tracked arm
+        settles with a small orientation error that a shared position/rotation threshold
+        (meant as a position tolerance in meters) wrongly rejects, leaving the task
+        running forever.
+
+        The goal pose here only differs from the start pose by a 0.05 rad yaw, so on the
+        very first tick the position error is exactly zero while the rotation error is
+        0.05 rad -- isolating the rotation half of the observation.
+
+        The orientation sub-tasks are inspected directly, because the observation of the
+        enclosing :class:`Parallel` only reflects its children on the following tick.
+        """
+        tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
+        goal_pose = Pose.from_xyz_rpy(yaw=0.05, reference_frame=cylinder_bot_world.root)
+
+        motion_statechart = MotionStatechart()
+        motion_statechart.add_nodes(
+            [
+                strict := CartesianPose(
+                    root_link=cylinder_bot_world.root,
+                    tip_link=tip,
+                    goal_pose=goal_pose,
+                    translation_threshold=0.01,
+                    name="strict",
+                ),
+                loose := CartesianPose(
+                    root_link=cylinder_bot_world.root,
+                    tip_link=tip,
+                    goal_pose=goal_pose,
+                    translation_threshold=0.01,
+                    orientation_threshold=0.1,
+                    name="loose",
+                ),
+            ]
+        )
+        motion_statechart.add_node(EndMotion.when_true(loose))
+
+        executor = Executor(MotionStatechartContext(world=cylinder_bot_world))
+        executor.compile(motion_statechart=motion_statechart)
+        executor.tick()
+
+        strict_orientation = next(
+            node for node in strict.nodes if isinstance(node, CartesianOrientation)
+        )
+        loose_orientation = next(
+            node for node in loose.nodes if isinstance(node, CartesianOrientation)
+        )
+        assert strict_orientation.observation_state == ObservationStateValues.FALSE
+        assert loose_orientation.observation_state == ObservationStateValues.TRUE
 
     def test_end_motion_waits_for_convergence(self, cylinder_bot_world: World):
         """
@@ -338,7 +394,7 @@ class TestCartesianTasks:
                     goal_pose=Pose.from_xyz_rpy(
                         x=1, reference_frame=cylinder_bot_world.root
                     ),
-                    threshold=0.5,
+                    translation_threshold=0.5,
                 ),
             ]
         )
@@ -391,23 +447,23 @@ class TestCartesianTasks:
                 JointPositionList(
                     goal_state=JointState.from_str_dict(
                         {
-                            "torso_lift_joint": 0.2999225173357618,
-                            "head_pan_joint": 0.042,
-                            "head_tilt_joint": -0.37,
-                            "r_upper_arm_roll_joint": -0.9487714747527726,
-                            "r_shoulder_pan_joint": -1.0047307505973626,
-                            "r_shoulder_lift_joint": 0.48736790658811985,
-                            "r_forearm_roll_joint": -14.895833882874182,
-                            "r_elbow_flex_joint": -1.392377908925028,
-                            "r_wrist_flex_joint": -0.4548695149411013,
-                            "r_wrist_roll_joint": 0.11426798984097819,
-                            "l_upper_arm_roll_joint": 1.7383062350263658,
-                            "l_shoulder_pan_joint": 1.8799810286792007,
-                            "l_shoulder_lift_joint": 0.011627231224188975,
-                            "l_forearm_roll_joint": 312.67276414458695,
-                            "l_elbow_flex_joint": -2.0300928925694675,
-                            "l_wrist_flex_joint": -0.1,
-                            "l_wrist_roll_joint": -6.062015047706399,
+                            PR2Joint.TORSO_LIFT: 0.2999225173357618,
+                            PR2Joint.HEAD_PAN: 0.042,
+                            PR2Joint.HEAD_TILT: -0.37,
+                            PR2Joint.RIGHT_UPPER_ARM_ROLL: -0.9487714747527726,
+                            PR2Joint.RIGHT_SHOULDER_PAN: -1.0047307505973626,
+                            PR2Joint.RIGHT_SHOULDER_LIFT: 0.48736790658811985,
+                            PR2Joint.RIGHT_FOREARM_ROLL: -14.895833882874182,
+                            PR2Joint.RIGHT_ELBOW_FLEX: -1.392377908925028,
+                            PR2Joint.RIGHT_WRIST_FLEX: -0.4548695149411013,
+                            PR2Joint.RIGHT_WRIST_ROLL: 0.11426798984097819,
+                            PR2Joint.LEFT_UPPER_ARM_ROLL: 1.7383062350263658,
+                            PR2Joint.LEFT_SHOULDER_PAN: 1.8799810286792007,
+                            PR2Joint.LEFT_SHOULDER_LIFT: 0.011627231224188975,
+                            PR2Joint.LEFT_FOREARM_ROLL: 312.67276414458695,
+                            PR2Joint.LEFT_ELBOW_FLEX: -2.0300928925694675,
+                            PR2Joint.LEFT_WRIST_FLEX: -0.1,
+                            PR2Joint.LEFT_WRIST_ROLL: -6.062015047706399,
                         },
                         world=pr2_world_state_reset,
                     )
@@ -460,7 +516,7 @@ class TestCartesianTasks:
         assert np.allclose(
             executor.context.world.compute_forward_kinematics(root, tip),
             expected,
-            atol=cart_goal.threshold,
+            atol=cart_goal.translation_threshold,
         )
 
     def test_front_facing_orientation(self, _hsr_world_setup: World):
@@ -566,7 +622,7 @@ class TestCartesianTasks:
             root, tip
         )
         assert np.allclose(
-            forward_kinematics, tip_goal2.to_np(), atol=cart_goal2.threshold
+            forward_kinematics, tip_goal2.to_np(), atol=cart_goal2.translation_threshold
         )
 
     def test_cart_goal_sequence_on_start(self, pr2_world_state_reset: World):
@@ -619,7 +675,9 @@ class TestCartesianTasks:
             root, tip
         )
         expected = np.eye(4)
-        assert np.allclose(forward_kinematics, expected, atol=cart_goal2.threshold)
+        assert np.allclose(
+            forward_kinematics, expected, atol=cart_goal2.translation_threshold
+        )
 
     def test_CartesianOrientation(self, pr2_world_state_reset: World):
         """
@@ -999,8 +1057,8 @@ class TestCartesianTasks:
 
     def test_soft_trunk_cartesian_position(self):
         """
-        Verifies that Giskardpy can solve and execute a CartesianPosition task
-        for the procedurally built Piecewise Constant Curvature SoftTrunk robot.
+        Verifies that Giskardpy can solve and execute a CartesianPosition task for the
+        procedurally built Piecewise Constant Curvature SoftTrunk robot.
         """
         from semantic_digital_twin.datastructures.soft_trunk import (
             SoftTrunk,
@@ -1089,6 +1147,32 @@ class TestDiffDriveBaseGoal:
             goal_pose,
             atol=1e-2,
         )
+
+    def test_custom_threshold_applies_to_both_translation_and_orientation(
+        self, cylinder_bot_diff_world
+    ):
+        """
+        DifferentialDriveBaseGoal exposes a single ``threshold`` field for its callers,
+        so it must feed both of CartesianPose's translation_threshold and
+        orientation_threshold -- otherwise a caller raising ``threshold`` only relaxes
+        the position tolerance while the rotation tolerance silently stays at
+        CartesianPose's own hardcoded default.
+        """
+        goal_pose = Pose.from_xyz_rpy(
+            x=1, y=1, yaw=np.pi / 4, reference_frame=cylinder_bot_diff_world.root
+        )
+        motion_statechart = MotionStatechart()
+        motion_statechart.add_node(
+            goal := DifferentialDriveBaseGoal(goal_pose=goal_pose, threshold=0.3)
+        )
+        motion_statechart.add_node(EndMotion.when_true(goal))
+
+        executor = Executor(MotionStatechartContext(world=cylinder_bot_diff_world))
+        executor.compile(motion_statechart=motion_statechart)
+
+        for step in goal.nodes[1:]:
+            assert step.translation_threshold == 0.3
+            assert step.orientation_threshold == 0.3
 
 
 class TestVelocityTasks:
@@ -1354,6 +1438,11 @@ class TestDebugExpressions:
         assert current.color == CURRENT_COLOR
 
     def test_cartesian_pose_uses_prefixed_names(self, cylinder_bot_world: World):
+        """
+        CartesianPose is a Parallel over a position and an orientation task, so its
+        debug expressions are registered by those children, each prefixed with its own
+        name.
+        """
         root = cylinder_bot_world.root
         tip = cylinder_bot_world.get_kinematic_structure_entity_by_name("bot")
         task = CartesianPose(
@@ -1362,17 +1451,21 @@ class TestDebugExpressions:
             goal_pose=Pose.from_xyz_rpy(x=1, reference_frame=root),
             name="pose",
         )
+        motion_statechart = MotionStatechart()
+        motion_statechart.add_node(task)
+        motion_statechart.add_node(EndMotion.when_true(task))
 
-        artifacts = task.build(MotionStatechartContext(world=cylinder_bot_world))
+        executor = Executor(MotionStatechartContext(world=cylinder_bot_world))
+        executor.compile(motion_statechart=motion_statechart)
 
-        goal = debug_expression_by_name(artifacts.debug_expressions, "pose/goal")
-        current = debug_expression_by_name(artifacts.debug_expressions, "pose/current")
         names = {
-            debug_expression.name for debug_expression in artifacts.debug_expressions
+            debug_expression.name
+            for child in task.nodes
+            for debug_expression in child.debug_expressions
         }
-        assert names == {"pose/goal", "pose/current"}
-        assert goal.color == GOAL_COLOR
-        assert current.color == CURRENT_COLOR
-        pose_like = (Pose, HomogeneousTransformationMatrix)
-        assert isinstance(goal.expression, pose_like)
-        assert isinstance(current.expression, pose_like)
+        assert names == {
+            "pose/position/goal",
+            "pose/position/current",
+            "pose/orientation/goal",
+            "pose/orientation/current",
+        }
