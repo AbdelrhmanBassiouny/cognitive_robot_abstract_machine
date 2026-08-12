@@ -6546,3 +6546,56 @@ does not carry the edit. A report of success now means a save that was checked.
 the code it exercises records the author's assumption twice rather than testing it once. The plans
 this tool would meet were sitting on the notes branch the whole time, in both styles, and neither the
 implementation nor its tests looked at them.
+
+## Update 2026-08-12 (review round on #158): a runner that had already landed, and a test that was reproducing itself
+
+Two comments, and each turned out to rest on a premise worth measuring rather than accepting.
+
+**"Base this off the branch where we implemented a git command runner."** There is nothing
+to base on: `GitCommandRunner` landed on `main` with #139 hours earlier, at
+`.claude/stack/maintenance_git_commands.py:130`, so the helper simply calls it, and
+`checkout(branch, start_point)` fitted the one raw invocation exactly. The other candidate,
+#151, only *moves* that class to `.claude/shared/`, and `git rev-list --left-right --count`
+puts it 159 behind and 17 ahead of `main` - so basing a standalone bug fix there would have
+pulled the whole of main-that-#151-does-not-carry into the diff, which is the inflation PR
+#41 cost this plan an entire item to repair. Replied and left open, since the literal ask
+was answered differently.
+
+**What applying it found is the part worth carrying.** The helper had created the branch and
+*then written* the other version of the tool, so the file in the working tree changed because
+the test wrote it - not because version control moved it. That is a weaker reproduction than
+the bug being fixed, and it was invisible while the write and the switch sat in the same
+method. Both versions are committed at install time now, and switching branches is the whole
+of the step. Mutation-checked in both directions: with the switch removed the hazard test now
+fails, where before it passed on the write alone.
+
+Worth stating generally, because the shape recurs: **a test that performs the effect it is
+meant to observe cannot fail for the right reason.** Nothing about the raw `run_git` call was
+wrong; adopting a named method just happened to separate "switch branch" from "write file"
+far enough to see that only one of them was load-bearing.
+
+**"Wouldn't fast-forwarding fork main and restacking the whole stack solve this instead?"**
+Answered on the pull request, no change made, and the reasoning is worth keeping because it
+is a general property of fixes that work by making state uniform:
+
+1. *It is circular.* The restack is performed **by** the tool whose version is in question -
+   `board`, `fast-forward` and `restack` are all invocations of it. Uniformity therefore
+   arrives at the end of the pass, and the tool has to be stable at the start of it. A copy
+   is available before anything has run; a restack only after everything has.
+2. *It cannot reach the branches that differ most.* Measured rather than argued: `origin/main`
+   carries `check-move` and `maintenance.py`; #110 and #111 both carry `preflight`, no
+   `check-move`, and **no `maintenance.py` at all**. Both are `needs-resolution`, and a
+   conflicted branch is exactly what `WithholdBranchStillConflicting` withholds - so a restack
+   leaves the dangerous ones untouched by design.
+3. *Some divergence is the work.* A branch whose own diff edits `.claude/stack/` is meant to
+   differ from `main`; no restack makes those equal while the pull request is open.
+
+Two smaller measurements from the same reply: `maintenance_fast_forward.py` contains no
+`checkout` at all, so the fast-forward never refreshes the invoking checkout's working tree;
+and the cost is asymmetric - the proposal is ~20 branch integrations and force-pushes to other
+people's branches as a precondition for *reading* a tool, against a file copy.
+
+One incidental confirmation of this item's own premise, from trying to record this round:
+`plan_item_bootstrap.py update --append-notes` does not exist on `main` - it is #151's, still
+unlanded - so the manifest edit went the landed route instead. The tool's command set differing
+by branch is exactly what this pull request is about, met while writing it up.
