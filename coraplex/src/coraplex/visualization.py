@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     import rclpy.node
 
     from coraplex.plans.plan import Plan
+    from cramera.live.visualization import LiveVisualization
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +187,11 @@ class WorldVisualization:
     The node publishing markers and TF, when the backend is ``RVIZ``.
     """
 
+    cramera_visualization: Optional[LiveVisualization] = field(init=False, default=None)
+    """
+    The live bridge serving the world to the browser, when the backend is ``CRAMERA``.
+    """
+
     @classmethod
     def from_environment(
         cls,
@@ -224,6 +230,8 @@ class WorldVisualization:
                 self._start_rerun()
             case VisualizationBackend.RVIZ:
                 self._start_rviz()
+            case VisualizationBackend.CRAMERA:
+                self._start_cramera()
         return self
 
     def _start_rerun(self) -> None:
@@ -246,17 +254,31 @@ class WorldVisualization:
         self.ros_node = rclpy.create_node("viz_marker")
         VizMarkerPublisher(_world=self.world, node=self.ros_node).with_tf_publisher()
 
+    def _start_cramera(self) -> None:
+        try:
+            from cramera.live.visualization import LiveVisualization
+        except ImportError:
+            raise VisualizationBackendUnavailable(
+                backend=self.backend,
+                reason="cramera is not importable; install the cramera package",
+            )
+        self.cramera_visualization = LiveVisualization(world=self.world).start()
+
     def attach_plan(self, plan: Plan) -> None:
         """
-        Log the plan's node starts and ends onto the Rerun timeline.
+        Publish the plan's execution to the running backend.
 
-        Does nothing for backends without a timeline.
+        On Rerun the plan's node starts and ends appear as text entries on the
+        recording's timeline; on cramera the plan tree, its per-node progress and the
+        executing motion statechart appear in the viewer's panels. Does nothing for
+        backends without a plan display.
         """
-        if self.rerun_adapter is None:
-            return
-        plan.node_callbacks.append(
-            RerunPlanCallback(adapter=self.rerun_adapter, plan=plan)
-        )
+        if self.rerun_adapter is not None:
+            plan.node_callbacks.append(
+                RerunPlanCallback(adapter=self.rerun_adapter, plan=plan)
+            )
+        if self.cramera_visualization is not None:
+            plan.node_callbacks.append(self.cramera_visualization.plan_callback(plan))
 
     def stop(self) -> None:
         """
@@ -267,4 +289,7 @@ class WorldVisualization:
             self.rerun_adapter = None
         if self.ros_node is not None:
             self.ros_node.destroy_node()
+        if self.cramera_visualization is not None:
+            self.cramera_visualization.stop()
+            self.cramera_visualization = None
             self.ros_node = None

@@ -34,7 +34,7 @@ from semantic_digital_twin.world_description.geometry import (
     Sphere,
 )
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import ClassVar, Dict, Iterable, List, Type
+from typing_extensions import ClassVar, Dict, Iterable, List, Optional, Type
 
 from cramera.onboard.bundle_urdf import BundledAssets, BundleReport
 
@@ -148,6 +148,7 @@ class UrdfDocument:
         name: str,
         output_directory: str,
         mesh_subdirectory: str,
+        identity_root: Optional[Body] = None,
     ) -> BundleReport:
         """
         Serialize part of a world -- the bodies no parsed source describes -- as a URDF.
@@ -162,6 +163,9 @@ class UrdfDocument:
         :param name: Output model name, used for ``<output_directory>/<name>.urdf``.
         :param output_directory: Directory the URDF and its ``meshes/`` tree go into.
         :param mesh_subdirectory: Directory bundled meshes nest under.
+        :param identity_root: Body grafted at the origin instead of at its world pose --
+            a robot subtree's base, whose live pose the viewer applies on top of the
+            model.
         """
         os.makedirs(output_directory, exist_ok=True)
         document = cls(
@@ -179,16 +183,24 @@ class UrdfDocument:
             connection = body.parent_connection
             if connection is not None and str(connection.parent.name) in serialized:
                 document.add_joint(connection)
+            elif body is identity_root:
+                document.graft_onto_root(
+                    body, pose=HomogeneousTransformationMatrix()
+                )
             else:
                 document.graft_onto_root(body)
         return document.write(name, bodies)
 
-    def graft_onto_root(self, body: Body) -> None:
+    def graft_onto_root(
+        self, body: Body, pose: Optional[HomogeneousTransformationMatrix] = None
+    ) -> None:
         """
-        Fix a body to :attr:`SYNTHESIZED_ROOT_LINK` at the pose it holds in its world.
+        Fix a body to :attr:`SYNTHESIZED_ROOT_LINK`.
 
         :param body: The body to attach, whose own parent this document does not
             contain.
+        :param pose: The pose the body is fixed at; the pose it holds in its world
+            when not given.
         """
         joint_element = ElementTree.SubElement(
             self.root_element,
@@ -202,7 +214,7 @@ class UrdfDocument:
             joint_element, "parent", {"link": self.SYNTHESIZED_ROOT_LINK}
         )
         ElementTree.SubElement(joint_element, "child", {"link": str(body.name)})
-        self._set_origin(joint_element, body.global_pose)
+        self._set_origin(joint_element, pose if pose is not None else body.global_pose)
         self.joint_names.append(joint_element.attrib["name"])
 
     def write(self, name: str, bodies: Iterable[Body]) -> BundleReport:

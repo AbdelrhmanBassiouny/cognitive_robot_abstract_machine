@@ -358,6 +358,15 @@ class GiskardExecutable(Executable):
             case _:
                 raise UnknownExecutionType(GiskardExecutable.execution_type)
 
+    def _notify_motion_tick(self, statechart: MotionStatechart) -> None:
+        """
+        Notify every plan whose motions this executable realizes of one executor tick.
+
+        :param statechart: The statechart the executor is ticking.
+        """
+        for plan in {motion_node.plan for motion_node in self.motion_mappings or {}}:
+            plan.notify_motion_tick(statechart)
+
     def _execute_simulation(self) -> None:
         """
         Compiles the motion state chart and ticks it in the world of the context until
@@ -394,6 +403,7 @@ class GiskardExecutable(Executable):
             executor.tick()
             counter += 1
             life_cycle_tracker.emit_transitions()
+            self._notify_motion_tick(executor.motion_statechart)
             if executor.motion_statechart.is_end_motion():
                 break
 

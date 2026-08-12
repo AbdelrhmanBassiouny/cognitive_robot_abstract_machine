@@ -1,13 +1,15 @@
 """
-Bundles a live world's *current* state into a throwaway scene.
+Bundles a live world's *current* model into a throwaway scene.
 
-Reuses exactly the bundler every recorded scene already goes through (see
-:func:`~cramera.onboard.bundle_urdf.bundle_model`) instead of serving geometry from
-scratch, so the viewer always shows what the running demo actually looks like right now,
-with no manual onboarding step. A build is idempotent: while nothing it is built from
-changed, the existing bundle is left untouched — a viewer may be downloading its files
-at any moment, and deleting them mid-flight breaks the page that requested the rebuild
-in the first place.
+Serializes the world object the bridge is attached to — the robot subtree as one
+model, everything else as the environment model — through the same
+:class:`~cramera.onboard.world_to_urdf.UrdfDocument` serializer every recorded scene
+goes through. Whatever a demo built its world from, and however it built it, is what
+the viewer shows; no model source tracking or manual onboarding is involved.
+
+A build is idempotent: while the world model is unchanged, the existing bundle is left
+untouched — a viewer may be downloading its files at any moment, and deleting them
+mid-flight breaks the page that requested the rebuild in the first place.
 """
 
 from __future__ import annotations
@@ -20,12 +22,16 @@ from pathlib import Path
 from typing_extensions import Any, Dict, List, Optional
 
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.world_entity import Body
 
 from cramera import paths
 from cramera.generated_json import GeneratedJson
-from cramera.live.bridge import Bridge, ModelBundleContext
-from cramera.onboard.bundle_urdf import BundledModel, bundle_model
-from cramera.robot_parts import PREFIX_PROBE_LINKS, RobotPartAnnotation
+from cramera.live.bridge import Bridge
+from cramera.mesh_format import MeshFormat
+from cramera.onboard.bundle_urdf import BundleReport
+from cramera.onboard.world_to_urdf import UrdfDocument
+from cramera.robot_parts import RobotPartAnnotation
 
 BUILD_LOCK = threading.Lock()
 """
@@ -37,26 +43,33 @@ threading HTTP server and the viewer keeps asking for the live scene while a dem
 up, which makes that overlap routine rather than rare.
 """
 
+ENVIRONMENT_MODEL_NAME = "environment"
+"""
+Name of the model holding every world body outside the robot and the object overlay.
+"""
+
+MESH_SUBDIRECTORY = "live"
+"""
+Directory bundled meshes nest under inside the scene's ``meshes/`` tree.
+"""
+
 
 def build_live_scene(bridge: Bridge) -> Optional[str]:
     """
-    Bundle every model source the live world was built from into a throwaway scene.
+    Bundle the live world's current model into a throwaway scene.
 
     :param bridge: The live bridge whose current world is bundled.
     :return: :data:`cramera.paths.LIVE_SCENE_NAME`, the scene name to navigate the
-        viewer to, or None while the demo has neither parsed a model source nor attached
-        a world yet. A fully procedural world builds a scene without models; its bodies
-        reach the viewer through the object overlay instead.
+        viewer to, or None while no world is attached yet.
     """
-    context = bridge.model_bundle_context()
-    if not context.sources and not context.world_body_names:
+    if bridge.world is None:
         return None
     output_directory = paths.scenes_directory() / paths.LIVE_SCENE_NAME
     with BUILD_LOCK:
-        signature = context.signature()
+        signature = bridge.bundle_signature()
         if _existing_signature(output_directory) == signature:
             return paths.LIVE_SCENE_NAME
-        return _write_bundle(context, output_directory, signature)
+        return _write_bundle(bridge, output_directory, signature)
 
 
 def _existing_signature(output_directory: Path) -> Optional[str]:
@@ -71,53 +84,56 @@ def _existing_signature(output_directory: Path) -> Optional[str]:
     return scene.get("bundleSignature")
 
 
-def _write_bundle(
-    context: ModelBundleContext, output_directory: Path, signature: str
-) -> str:
+def _write_bundle(bridge: Bridge, output_directory: Path, signature: str) -> str:
     """
-    Clear the throwaway scene's directory and write this snapshot into it.
+    Clear the throwaway scene's directory and serialize the world into it.
 
     Only ever called while :data:`BUILD_LOCK` is held.
 
-    :param context: What the bridge reported about its current world.
+    :param bridge: The live bridge whose current world is bundled.
     :param output_directory: Directory the bundle is written to, cleared first.
-    :param signature: The digest of what this bundle is built from, recorded so the next
-        build can tell whether anything changed.
+    :param signature: The digest of the world model this bundle is built from, recorded
+        so the next build can tell whether anything changed.
     """
     if output_directory.exists():
         shutil.rmtree(output_directory)
     output_directory.mkdir(parents=True)
-    models = [
-        bundle_model(
-            tracked.path,
-            tracked.bundler,
-            context.world_body_names,
-            context.base_body,
-            str(output_directory),
-            PREFIX_PROBE_LINKS,
-        )
-        for tracked in context.sources
+    world, robot = bridge.world, bridge.robot
+    robot_bodies = _robot_bodies(world, robot)
+    models: List[Dict[str, Any]] = []
+    environment_bodies = [
+        body
+        for body in world.bodies_topologically_sorted
+        if body not in set(robot_bodies) and not _is_overlay_body(body)
     ]
-    if context.world_body_names:
-        # a long-running process may parse one world after another; the scene shows
-        # only the models the currently executing world contains. Without a world
-        # there is nothing to check against, and the early bundle keeps everything.
-        models = [
-            model
-            for model in models
-            if _model_in_world(model.report.links, context.world_body_names)
-        ]
+    if environment_bodies:
+        report = UrdfDocument.of_bodies(
+            environment_bodies,
+            ENVIRONMENT_MODEL_NAME,
+            str(output_directory),
+            MESH_SUBDIRECTORY,
+        )
+        models.append(_model_payload(report, is_robot=False))
+    if robot_bodies:
+        report = UrdfDocument.of_bodies(
+            robot_bodies,
+            type(robot).__name__.lower(),
+            str(output_directory),
+            MESH_SUBDIRECTORY,
+            identity_root=robot.root,
+        )
+        models.append(_model_payload(report, is_robot=True))
+    missing_assets = sorted({missing for model in models for missing in model.pop("missing")})
     scene = {
         "name": paths.LIVE_SCENE_NAME,
-        "models": [model.to_payload() for model in models],
-        "robot": _robot_payload(context.robot, context.base_body),
+        "models": models,
+        "robot": _robot_payload(robot),
         "objects": [],
         "segments": [],
-        "missingAssets": _missing_assets(models),
-        # whether the demo's world was attached when this bundle was built — without
-        # it the models' instance prefixes and the robot cannot be identified, and the
-        # viewer rebuilds the bundle once the world is there
-        "worldBound": bool(context.world_body_names),
+        "missingAssets": missing_assets,
+        # the world was attached before this bundle was built; kept for the viewer,
+        # which rebuilds a bundle that reports False
+        "worldBound": True,
         # what this bundle was built from; while it is unchanged, /live_scene leaves
         # the bundle untouched instead of deleting files a viewer may be downloading
         "bundleSignature": signature,
@@ -126,50 +142,64 @@ def _write_bundle(
     return paths.LIVE_SCENE_NAME
 
 
-def _model_in_world(links: List[str], world_body_names: List[str]) -> bool:
+def _robot_bodies(world: World, robot: Optional[AbstractRobot]) -> List[Body]:
     """
-    Whether any of a model's first probe links exists in the composed world.
+    The robot's subtree in serialization order, or an empty list without a robot.
 
-    Matches both prefixed (``pr2_1/base_link``) and unprefixed world instances of a
-    link.
-
-    :param links: The model's own link names, in document order.
-    :param world_body_names: Every body name in the composed world.
+    :param world: The world the robot lives in.
+    :param robot: The robot annotation, or None.
     """
-    for link in links[:PREFIX_PROBE_LINKS]:
-        for name in world_body_names:
-            if name == link or name.endswith("/" + link):
-                return True
-    return False
+    if robot is None:
+        return []
+    subtree = set(world.get_kinematic_structure_entities_of_branch(robot.root))
+    return [body for body in world.bodies_topologically_sorted if body in subtree]
 
 
-def _robot_payload(
-    robot: Optional[AbstractRobot], base_body: Optional[str]
-) -> Optional[Dict[str, Any]]:
+def _is_overlay_body(body: Body) -> bool:
+    """
+    Whether the object overlay renders this body instead of the scene bundle.
+
+    Bodies named like mesh files are demo objects that spawn, move and disappear
+    mid-run; the overlay streams their poses live, so baking them into the bundle
+    would show them twice.
+
+    :param body: The body to check.
+    """
+    return MeshFormat.of_path(str(body.name).split("/")[-1]) is not None
+
+
+def _model_payload(report: BundleReport, is_robot: bool) -> Dict[str, Any]:
+    """
+    One entry of the scene's ``models`` list.
+
+    :param report: What the serializer wrote for this model.
+    :param is_robot: Whether the entry is the robot rather than the environment.
+    """
+    return {
+        "name": report.name,
+        "urdf": "%s.urdf" % report.name,
+        "prefix": "",
+        "robot": is_robot,
+        "links": len(report.links),
+        "movableJoints": report.movable_joints,
+        "missing": report.missing,
+    }
+
+
+def _robot_payload(robot: Optional[AbstractRobot]) -> Optional[Dict[str, Any]]:
     """
     The scene's ``robot`` field, or None if no robot is bound.
 
     :param robot: The robot's semantic annotation, or None if no robot is bound.
-    :param base_body: The robot's unprefixed base link name, or None.
     """
     if robot is None:
         return None
     root_name = str(robot.root.name)
-    prefix = root_name.split("/", 1)[0] if "/" in root_name else ""
     part_annotations = RobotPartAnnotation.of_robot(robot)
     return {
         "name": type(robot).__name__.lower(),
-        "prefix": prefix,
-        "baseBody": base_body,
+        "prefix": root_name.split("/", 1)[0] if "/" in root_name else "",
+        "baseBody": root_name.split("/", 1)[-1],
         "parts": {annotation.name: annotation.links for annotation in part_annotations},
         "partAnnotations": [annotation.to_payload() for annotation in part_annotations],
     }
-
-
-def _missing_assets(models: List[BundledModel]) -> List[str]:
-    """
-    Every unresolved mesh reference across all bundled models, sorted and deduplicated.
-
-    :param models: The models just bundled.
-    """
-    return sorted({missing for model in models for missing in model.report.missing})

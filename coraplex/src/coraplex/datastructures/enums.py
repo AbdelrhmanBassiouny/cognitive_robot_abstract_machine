@@ -102,6 +102,10 @@ class VisualizationBackend(Enum):
     """
     RViz2 marker publishing; needs a ROS 2 environment.
     """
+    CRAMERA = auto()
+    """
+    The cramera browser viewer; serves the world over HTTP, needs no ROS.
+    """
 
 
 class Arms(IntEnum):

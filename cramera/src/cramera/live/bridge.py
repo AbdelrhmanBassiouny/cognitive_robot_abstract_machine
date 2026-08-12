@@ -1,18 +1,17 @@
 """
 The live-viz bridge state: what a running demo publishes to the viewer.
 
-This module is free of HTTP and of hook installation — it holds the :class:`Bridge`
-singleton whose snapshot methods run on the *simulation* thread (see
-:mod:`cramera.live.hooks` for why that matters) and whose ``get_*`` accessors hand
-finished, plain-dict snapshots to the HTTP layer.
+This module is free of HTTP — it holds the :class:`Bridge` singleton whose snapshot
+methods run on the *simulation* thread (driven by the world's own callbacks and the
+plan callbacks of :mod:`cramera.live.visualization`) and whose ``get_*`` accessors
+hand finished, plain-dict snapshots to the HTTP layer.
 
 Node status is where the plan and the statechart differ: coraplex only performs the plan
 root (``Plan.perform`` → ``root.perform``); ``ActionNode.notify`` expands its children
 but never performs them, so every inner ``PlanNode`` keeps status ``CREATED`` for the
-whole run. The real per-step progress lives in the giskardpy motion statechart's life
-cycle. ``GiskardExecutable.motion_mappings`` (a ``{MotionNode: Task}`` dict) is the
-bridge between the two — the life cycle of each motion node's task is read and
-propagated up the plan tree; those statuses are flagged ``derived``.
+whole run. The real per-step progress arrives through the plan callbacks, which report
+each motion node's start and end; those statuses are propagated up the plan tree and
+flagged ``derived``.
 """
 
 from __future__ import annotations
@@ -29,14 +28,12 @@ from pathlib import Path
 
 from typing_extensions import (
     Any,
-    Callable,
     ClassVar,
     Dict,
     List,
     Optional,
     Protocol,
     runtime_checkable,
-    Set,
     Tuple,
     TYPE_CHECKING,
 )
@@ -56,18 +53,14 @@ from semantic_digital_twin.world_description.connections import (
 )
 
 from cramera.knowledge.enums import PlanNodeGroup
-from cramera.live.model_source import LiveModelCatalog, TrackedSource
 from cramera.live.shape_catalog import ShapeEntry, served_mesh_file, shape_entry
 from cramera.mesh_format import MeshFormat
-from cramera.onboard.bundle_urdf import BundleReport
 from cramera.palette import ObjectPalette
-from cramera.robot_parts import PREFIX_PROBE_LINKS, RobotPartAnnotation, model_identity
+from cramera.robot_parts import RobotPartAnnotation
 
 if TYPE_CHECKING:
-    from coraplex.plans.executables import GiskardExecutable
     from coraplex.plans.plan import Plan
-    from coraplex.plans.plan_node import PlanNode
-    from giskardpy.motion_statechart.graph_node import Task
+    from coraplex.plans.plan_node import MotionNode, PlanNode
     from giskardpy.motion_statechart.motion_statechart import MotionStatechart
     from semantic_digital_twin.world import World
     from semantic_digital_twin.world_description.world_entity import Body
@@ -123,34 +116,6 @@ class TaskStatusName(StrEnum):
         if status not in cls._value2member_map_:
             return 0
         return cls(status).rank
-
-
-class LiveHook(Enum):
-    """
-    The CRAM classes the live bridge patches to observe a running demo.
-    """
-
-    TICK = "tick"
-    """
-    ``Executor.tick`` — binds the world and snapshots it every simulation step.
-    """
-
-    PLAN = "plan"
-    """
-    ``Plan.perform`` and ``GiskardExecutable.execute`` — follow the plan tree.
-    """
-
-    MESH = "mesh"
-    """
-    ``MeshParser.parse`` — remember which file each object's geometry came from.
-    """
-
-    MODEL_SOURCE = "model_source"
-    """
-    ``URDFParser.from_file``, ``GazeboParser.from_file``, ``MJCFParser.__init__`` —
-    remember every model source the world was built from, so a snapshot of the
-    running demo can be bundled on demand (see :mod:`cramera.live.live_bundle`).
-    """
 
 
 ROBOT_BASE_KEY = "__base__"
@@ -274,14 +239,9 @@ class MotionNodeProgress:
     The plan node this progress belongs to.
     """
 
-    task: Optional[Task] = None
-    """
-    The giskard task while the node's motion group runs, else None.
-    """
-
     status: Optional[TaskStatusName] = None
     """
-    The status pinned when the node's motion group finished, else None.
+    The node's last observed execution status, else None.
     """
 
 
@@ -615,102 +575,6 @@ class BridgeStatus:
         return payload
 
 
-@dataclass(frozen=True)
-class ModelBundleContext:
-    """
-    Everything needed to bundle a snapshot of the live world's current models.
-    """
-
-    sources: List[TrackedSource]
-    """
-    The model sources the world was built from, in load order.
-    """
-
-    world_body_names: List[str]
-    """
-    Every body name in the composed world, used to find each model's prefix.
-    """
-
-    base_body: Optional[str]
-    """
-    The robot's base link name, unprefixed, or None if no robot is bound.
-    """
-
-    robot: Optional[AbstractRobot]
-    """
-    The robot's semantic annotation, or None if no robot is bound.
-    """
-
-    model_prefixes: List[str] = field(default_factory=list)
-    """
-    Each parsed model's world-instance prefix, in parse order, empty where a model's
-    prefix does not resolve. Part of the bundle's change signature.
-    """
-
-    def signature(self) -> str:
-        """
-        A stable digest of everything the live bundle's content is built from.
-
-        Deliberately excludes the world's body list itself: objects spawning or
-        vanishing mid-run change the overlay, not the bundled models, and must not
-        read as a bundle change. The model prefixes stand in for model presence — a
-        model that left the composed world loses its prefix.
-        """
-        return json.dumps(
-            {
-                "sources": [tracked.path for tracked in self.sources],
-                "modelPrefixes": self.model_prefixes,
-                "robot": (
-                    None
-                    if self.robot is None
-                    else {
-                        "name": type(self.robot).__name__.lower(),
-                        "baseBody": self.base_body,
-                    }
-                ),
-                "worldBound": bool(self.world_body_names),
-            },
-            sort_keys=True,
-        )
-
-
-@dataclass(frozen=True)
-class BundledModelInstance:
-    """
-    One parsed model as it lives inside the composed world.
-    """
-
-    prefix: str
-    """
-    The model's world-instance prefix, empty when its bodies are unprefixed.
-    """
-
-    link_basenames: Tuple[str, ...]
-    """
-    The model's own link names, unprefixed, in parse order — the first one is the
-    model's root.
-    """
-
-    def covers(self, world_body_name: str) -> bool:
-        """
-        Whether a world body belongs to this model instance.
-
-        :param world_body_name: The full name of the world body to check.
-        """
-        head, _, basename = world_body_name.rpartition("/")
-        return head == self.prefix and basename in self.link_basenames
-
-    @property
-    def root_name(self) -> str:
-        """
-        The full world name of this model instance's root body.
-        """
-        root_basename = self.link_basenames[0]
-        if not self.prefix:
-            return root_basename
-        return self.prefix + "/" + root_basename
-
-
 @dataclass
 class Bridge:
     """
@@ -795,30 +659,9 @@ class Bridge:
     Guards :attr:`_moves` (written by HTTP threads).
     """
 
-    _mesh_files: Dict[str, str] = field(default_factory=dict)
-    """
-    Mesh basename (lowercase) → absolute path, filled by the mesh hook.
-    """
-
     _mesh_serve: Dict[str, str] = field(default_factory=dict)
     """
     Object key → absolute mesh path served via the ``/mesh`` endpoint.
-    """
-
-    _model_catalog: LiveModelCatalog = field(default_factory=LiveModelCatalog)
-    """
-    URDF/xacro sources the world was built from, served without a bundle.
-    """
-
-    _model_link_sets: List[List[str]] = field(default_factory=list)
-    """
-    Link basenames per parsed model, used to keep bundled bodies out of the overlay.
-    """
-
-    _model_roots: Dict[str, Body] = field(default_factory=dict)
-    """
-    Every bundled model's root body by world-instance prefix, re-discovered on every
-    bind, whose poses are streamed as :attr:`WorldStateSnapshot.model_bases`.
     """
 
     _plan: Optional[Plan] = None
@@ -871,9 +714,9 @@ class Bridge:
     Life-cycle and observation vectors of the last published chart snapshot.
     """
 
-    _installed_hooks: Set[LiveHook] = field(default_factory=set)
+    _model_revision: int = 0
     """
-    Hooks already patched into the CRAM classes (see :meth:`claim_hook`).
+    Counts world attachments and model changes; the live bundle's change signature.
     """
 
     live_server: Optional[ThreadingHTTPServer] = None
@@ -881,23 +724,7 @@ class Bridge:
     The bridge's HTTP server once it is listening, so a second start reuses it.
     """
 
-    # %% one-time installation
-    def claim_hook(self, hook: LiveHook) -> bool:
-        """
-        Claim a hook for installation, reporting whether the caller should install it.
-
-        Patching the same method twice wraps the original a second time, so every
-        snapshot would run once per wrapper.
-
-        :param hook: The hook being claimed.
-        :return: True on the first claim, False once the hook is installed.
-        """
-        if hook in self._installed_hooks:
-            return False
-        self._installed_hooks.add(hook)
-        return True
-
-    # %% what the hooks drive
+    # %% what the visualization drives
     def attach(self, world: World) -> None:
         """
         Bind to the world a demo is executing and publish its geometry catalog.
@@ -905,6 +732,7 @@ class Bridge:
         :param world: The world the demo is executing in.
         """
         self.world = world
+        self._model_revision += 1
         self.bind()
         logger.info(
             "attached to world (robot=%s, %d joints)",
@@ -912,21 +740,45 @@ class Bridge:
             len(self._connections),
         )
 
-    def observe_tick(self, chart: Optional[MotionStatechart]) -> None:
+    def observe_motion_tick(self, chart: MotionStatechart) -> None:
         """
-        Publish everything one simulation tick makes available.
+        Publish everything one motion executor tick makes available.
 
-        Applies queued viewer moves first, because the tick hook runs on the only
-        thread allowed to write to the world.
+        Applies queued viewer moves first, because the executor tick runs on the only
+        thread allowed to write to the world; the world snapshot itself follows from
+        the state change the tick causes.
 
-        :param chart: The motion statechart the executor is currently ticking, if any.
+        :param chart: The motion statechart the executor is ticking.
         """
         self.apply_moves()
-        self.snapshot()
         self.observe_chart(chart)
         self._tick_count += 1
         if self._tick_count % self.plan_snapshot_tick_interval == 0:
             self.snapshot_plan()
+
+    def observe_motion_started(self, node: MotionNode) -> None:
+        """
+        Record that a plan node's motion started running.
+
+        :param node: The node whose motion started.
+        """
+        self._motion_nodes[id(node)] = MotionNodeProgress(
+            node=node, status=TaskStatusName.RUNNING
+        )
+        action_node = node.parent_action_node
+        if action_node is not None and action_node.designator is not None:
+            self._chart_title = type(action_node.designator).__name__
+
+    def observe_motion_ended(self, node: MotionNode) -> None:
+        """
+        Pin the final status of a finished motion node and republish the plan.
+
+        :param node: The node whose motion ended.
+        """
+        self._motion_nodes[id(node)] = MotionNodeProgress(
+            node=node, status=TaskStatusName(node.status.name)
+        )
+        self.snapshot_plan()
 
     def begin_plan(self, plan: Plan) -> None:
         """
@@ -941,44 +793,12 @@ class Bridge:
         self._motion_nodes.clear()
         self.snapshot_plan()
 
-    def remember_mesh_file(self, file_path: str) -> None:
+    def observe_model_change(self) -> None:
         """
-        Remember which file an object's geometry was parsed from.
-
-        The viewer is served the mesh from here, keyed by the file's basename, which
-        is also how the world names the resulting body.
-
-        :param file_path: Path the object's geometry was parsed from.
+        Refresh the catalogs and the bundle signature after a world model change.
         """
-        self._mesh_files[Path(file_path).name.lower()] = file_path
-
-    def remember_model_source(
-        self, file_path: str, bundler: Callable[..., BundleReport]
-    ) -> None:
-        """
-        Remember a model source the world was built from.
-
-        Deliberately does not take :attr:`_lock` — :class:`LiveModelCatalog` guards
-        its own state with its own lock, kept separate so a slow xacro expansion never
-        waits behind (or blocks) the tick hook, which holds :attr:`_lock` while
-        publishing every snapshot.
-
-        :param file_path: Absolute path, or ``package://`` URI, of the source file.
-        :param bundler: Bundles this source's kind into an output directory.
-        """
-        self._model_catalog.remember(file_path, bundler)
-
-    def remember_model_bodies(self, names: List[str]) -> None:
-        """
-        Remember the bodies a freshly parsed model world consists of.
-
-        A bundled model's links are already rendered by the live scene bundle, so the
-        object overlay must not duplicate them. The names are kept per model as
-        unprefixed basenames, because the composed world may re-prefix a merged model.
-
-        :param names: Every body name of the parsed model world.
-        """
-        self._model_link_sets.append([str(name).split("/")[-1] for name in names])
+        self._model_revision += 1
+        self.bind()
 
     def publish_bodies(self, bodies: Dict[str, Body]) -> None:
         """
@@ -1013,45 +833,26 @@ class Bridge:
         with self._lock:
             return self._mesh_serve.get(key)
 
-    def model_bundle_context(self) -> ModelBundleContext:
+    def bundle_signature(self) -> str:
         """
-        Everything :func:`~cramera.live.live_bundle.build_live_scene` needs to bundle
-        a snapshot of the current world: its tracked model sources, every body name in
-        the composed world (to find each model's prefix), and the robot's unprefixed
-        base link name (to tell a robot model apart from an environment model).
+        A stable digest of the world model the live bundle is built from.
 
-        Only the quick read of :attr:`world`/:attr:`robot` takes :attr:`_lock`; the
-        model sources come from :class:`LiveModelCatalog`'s own lock, kept separate so
-        a slow xacro expansion never waits behind (or blocks) the tick hook — see
-        :meth:`remember_model_source`.
+        Changes when a world is attached and on every model change, and deliberately
+        not on state changes: objects moving mid-run change the overlay, not the
+        bundled models, and must not read as a bundle change.
         """
-        with self._lock:
-            world_body_names = (
-                [str(body.name) for body in self.world.bodies]
-                if self.world is not None
-                else []
-            )
-            robot = self.robot
-            base_body = (
-                None if robot is None else str(robot.root.name).split("/", 1)[-1]
-            )
-        return ModelBundleContext(
-            sources=self._model_catalog.snapshot(),
-            world_body_names=world_body_names,
-            robot=robot,
-            base_body=base_body,
-            model_prefixes=[
-                instance.prefix
-                for instance in self._bundled_model_instances(world_body_names)
-            ],
+        robot_name = type(self.robot).__name__.lower() if self.robot else None
+        return "world-%d-model-%d-robot-%s" % (
+            id(self.world),
+            self._model_revision,
+            robot_name,
         )
 
     def status(self) -> Dict[str, Any]:
         """
         What the viewer polls to decide whether a live demo is reachable.
         """
-        # computed before taking the lock — model_bundle_context locks on its own
-        bundle_signature = self.model_bundle_context().signature()
+        bundle_signature = self.bundle_signature()
         with self._lock:
             return BridgeStatus(
                 running=self.world is not None,
@@ -1061,7 +862,7 @@ class Bridge:
                 plan=bool(self.plan_state.nodes),
                 chart=bool(self.chart_state.nodes),
                 sequence_number=self.sequence_number,
-                model_version=len(self._model_catalog.snapshot()),
+                model_version=self._model_revision,
                 bundle_signature=bundle_signature,
                 robot_parts=(
                     RobotPartAnnotation.of_robot(self.robot)
@@ -1180,9 +981,7 @@ class Bridge:
             bodies[ROBOT_BASE_KEY] = self.robot.root
         try:
             bodies_by_name = {str(body.name): body for body in world.bodies}
-            instances = self._bundled_model_instances(list(bodies_by_name))
-            self._model_roots = self._model_root_bodies(instances, bodies_by_name)
-            bodies.update(self._discover_overlay_bodies(bodies_by_name, instances))
+            bodies.update(self._discover_overlay_bodies(bodies_by_name))
         except Exception as error:
             # boundary guard: the world is mid-modification (a body is being spawned
             # or removed) and iterating it is not safe. Keep the previous catalog
@@ -1193,67 +992,17 @@ class Bridge:
                 bodies.setdefault(key, body)
         self.publish_bodies(bodies)
 
-    def _bundled_model_instances(
-        self, world_body_names: List[str]
-    ) -> List[BundledModelInstance]:
-        """
-        Every parsed model located inside the composed world.
-
-        Each model's world-instance prefix is probed from its link names (see
-        :func:`~cramera.robot_parts.model_identity`), so the result survives the
-        composed world re-prefixing a merged model.
-
-        :param world_body_names: Every body name in the composed world.
-        """
-        instances: List[BundledModelInstance] = []
-        for links in self._model_link_sets:
-            prefix, _ = model_identity(
-                links=links,
-                world_body_names=world_body_names,
-                base_body=None,
-                probe_link_count=PREFIX_PROBE_LINKS,
-            )
-            instances.append(
-                BundledModelInstance(prefix=prefix, link_basenames=tuple(links))
-            )
-        return instances
-
-    @staticmethod
-    def _model_root_bodies(
-        instances: List[BundledModelInstance], bodies_by_name: Dict[str, Body]
-    ) -> Dict[str, Body]:
-        """
-        Every bundled model's root body by world-instance prefix.
-
-        A model whose root body is no longer in the world is skipped, as is an
-        unprefixed model — without a prefix there is no key the viewer could match a
-        scene model by.
-
-        :param instances: The parsed models located inside the composed world.
-        :param bodies_by_name: Every world body by its full name.
-        """
-        roots: Dict[str, Body] = {}
-        for instance in instances:
-            root = bodies_by_name.get(instance.root_name)
-            if instance.prefix and root is not None:
-                roots[instance.prefix] = root
-        return roots
-
     def _discover_overlay_bodies(
-        self,
-        bodies_by_name: Dict[str, Body],
-        instances: List[BundledModelInstance],
+        self, bodies_by_name: Dict[str, Body]
     ) -> Dict[str, Body]:
         """
         Every world body the overlay renders, keyed the way it is published.
 
-        Any body with shapes is published under its full name — the way RViz shows
-        whatever the world contains — except bodies a bundled model already renders.
-        Bodies named like mesh files stay published under that basename, with or
-        without shapes.
+        Bodies named like mesh files are the demo's objects — they spawn, get carried
+        and disappear mid-run, so their poses stream through the overlay. Every other
+        body is part of the bundled scene the viewer loads once.
 
         :param bodies_by_name: Every world body by its full name.
-        :param instances: The parsed models located inside the composed world.
         """
         robot_root = self.robot.root if self.robot is not None else None
         bodies: Dict[str, Body] = {}
@@ -1263,10 +1012,6 @@ class Bridge:
             basename = full_name.split("/")[-1]
             if MeshFormat.of_path(basename) is not None:
                 bodies[basename] = body
-            elif not any(
-                instance.covers(full_name) for instance in instances
-            ) and self._body_shapes(body):
-                bodies[full_name] = body
         return bodies
 
     @staticmethod
@@ -1311,20 +1056,6 @@ class Bridge:
         ):
             color = palette.color_for(index)
             object_id = Path(key).stem
-            mesh_path = self._mesh_files.get(key.lower())
-            if mesh_path and Path(mesh_path).is_file():
-                serve[key] = mesh_path
-                catalog.append(
-                    ObjectCatalogEntry(
-                        key=key,
-                        id=object_id,
-                        kind=ObjectKind.MESH,
-                        color=color,
-                        mesh="/mesh?key=" + urllib.parse.quote(key),
-                        format=Path(key).suffix.lstrip(".").lower(),
-                    )
-                )
-                continue
             shapes = self._body_shapes(body)
             if shapes:
                 catalog.append(self._shape_catalog_entry(key, shapes, color, serve))
@@ -1407,9 +1138,6 @@ class Bridge:
                 base_pose = rounded_pose(body)
             else:
                 object_poses[name] = rounded_pose(body)
-        model_bases = {
-            prefix: rounded_pose(body) for prefix, body in self._model_roots.items()
-        }
         with self._lock:
             self.sequence_number += 1
             self.state = WorldStateSnapshot(
@@ -1417,7 +1145,6 @@ class Bridge:
                 frames=frames,
                 base=base_pose,
                 objects=object_poses,
-                model_bases=model_bases,
             )
 
     def get_state(self) -> Dict[str, Any]:
@@ -1428,82 +1155,16 @@ class Bridge:
             return self.state.to_payload()
 
     # %% plan tree
-    def bind_motion_group(self, executable: GiskardExecutable) -> None:
-        """
-        Remember which plan motion node maps to which statechart task.
-
-        Called when a ``GiskardExecutable`` is about to run, so the plan tree can show
-        live per-step progress.
-
-        :param executable: The executable about to run.
-        """
-        for node, task in (executable.motion_mappings or {}).items():
-            self._motion_nodes[id(node)] = MotionNodeProgress(node=node, task=task)
-        self._chart_title = self._motion_group_title(executable)
-
-    @staticmethod
-    def _motion_group_title(executable: GiskardExecutable) -> str:
-        """
-        Name of the action the motion group belongs to, or ``''``.
-
-        :param executable: The executable whose motion group is named.
-        """
-        for node in executable.motion_mappings or {}:
-            action_node = node.parent_action_node
-            if action_node is not None and action_node.designator is not None:
-                return type(action_node.designator).__name__
-        return ""
-
-    def freeze_motion_group(
-        self, executable: GiskardExecutable, status: TaskStatusName
-    ) -> None:
-        """
-        Pin the final status of a finished motion group and republish the plan.
-
-        Reading the tasks' life cycle afterwards is not reliable — the executor cleans
-        its nodes up.
-
-        :param executable: The motion group that finished.
-        :param status: The final status to pin on its nodes.
-        """
-        frozen_nodes = list(executable.motion_mappings or {})
-        frozen_nodes += [
-            condition
-            for condition in (
-                executable.pre_condition_node,
-                executable.post_condition_node,
-            )
-            if condition is not None
-        ]
-        for node in frozen_nodes:
-            self._motion_nodes[id(node)] = MotionNodeProgress(node=node, status=status)
-        self.snapshot_plan()
-
     def _live_motion_status(self, node: PlanNode) -> Optional[str]:
         """
-        Status of one plan node from the statechart, or None.
-
-        A live task wins over a pinned status, so a node that is running again after a
-        previous attempt reports the current life cycle.
+        Status of one plan node as its plan callbacks reported it, or None.
 
         :param node: The plan node whose live status is looked up.
         """
         progress = self._motion_nodes.get(id(node))
         if progress is None:
             return None
-        if progress.task is None:
-            return progress.status
-        from giskardpy.motion_statechart.data_types import LifeCycleValues
-
-        life_cycle_to_status = {
-            LifeCycleValues.NOT_STARTED: TaskStatusName.CREATED,
-            LifeCycleValues.RUNNING: TaskStatusName.RUNNING,
-            LifeCycleValues.PAUSED: TaskStatusName.PAUSE,
-            LifeCycleValues.DONE: TaskStatusName.SUCCEEDED,
-            LifeCycleValues.FAILED: TaskStatusName.FAILED,
-        }
-        life_cycle = LifeCycleValues(int(progress.task.life_cycle_state))
-        return life_cycle_to_status.get(life_cycle)
+        return progress.status
 
     def snapshot_plan(self) -> None:
         """

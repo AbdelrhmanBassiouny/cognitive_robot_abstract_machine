@@ -50,15 +50,25 @@ except ImportError:
     )
 
 
-def start_visualization(world: World) -> None:
+def start_visualization(world: World) -> WorldVisualization:
     """
-    Publish the world to RViz.
+    Start the visualization the ``CORAPLEX_*`` environment variables select.
 
-    Does nothing if ROS is not available.
+    Without a selection, publishes to RViz when ROS is available and shows nothing
+    otherwise, so demos stay headless in CI while ``CORAPLEX_VISUALIZATION`` swaps in
+    any other backend without touching the demo.
+
+    :param world: The world to visualize.
+    :return: The started visualization, so a demo can :meth:`attach_plan` to it.
     """
-    if VizMarkerPublisher is None:
-        return
-    WorldVisualization(world=world, backend=VisualizationBackend.RVIZ).start()
+    default_backend = (
+        VisualizationBackend.RVIZ
+        if VizMarkerPublisher is not None
+        else VisualizationBackend.NONE
+    )
+    return WorldVisualization.from_environment(
+        world, default_backend=default_backend
+    ).start()
 
 
 def attach_tool(

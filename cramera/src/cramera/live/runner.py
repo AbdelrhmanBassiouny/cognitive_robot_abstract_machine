@@ -1,79 +1,66 @@
 """
-Starting the live bridge: as a library call or as the demo wrapper CLI.
+Starting the live viewer: as a library call or as the demo wrapper CLI.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import runpy
 import signal
 import sys
-from http.server import ThreadingHTTPServer
 from pathlib import Path
 
-from typing_extensions import Optional, TYPE_CHECKING
+from typing_extensions import TYPE_CHECKING
 
+from cramera.live.http import DEFAULT_PORT
 from cramera.logging_setup import get_logger
-from cramera.live import hooks
-from cramera.live.bridge import BRIDGE
-from cramera.live.http import DEFAULT_PORT, serve
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world import World
 
+    from cramera.live.visualization import LiveVisualization
+
 logger = get_logger(__name__)
 
+VISUALIZATION_BACKEND_VARIABLE = "CORAPLEX_VISUALIZATION"
+"""
+The coraplex environment variable selecting the visualization backend.
+"""
 
-def start(
-    world: Optional[World] = None, port: int = DEFAULT_PORT
-) -> ThreadingHTTPServer:
+
+def start(world: World, port: int = DEFAULT_PORT) -> LiveVisualization:
     """
-    Start the live bridge, or return the already running one.
+    Serve a world to the browser viewer.
 
-    Safe to call more than once: ``cramera-live demo.py`` starts the bridge and the
-    demo may call this again itself, which must not re-patch the hooks or bind the
-    port a second time.
+    Prefer :func:`coraplex.testing.start_visualization` (or
+    :class:`coraplex.visualization.WorldVisualization` directly) inside demos — this
+    is the cramera-side entry point they delegate to.
 
-    :param world: Bind to this world immediately; without it the bridge attaches to the
-        executing world on the first executor tick.
+    :param world: The world to serve.
     :param port: Port of the bridge's HTTP endpoints.
-    :return: The running HTTP server (a daemon thread).
+    :return: The started visualization.
     """
-    bridge = BRIDGE
-    if bridge.live_server is not None:
-        logger.info("live bridge is already running — reusing it")
-        return bridge.live_server
-    hooks.install_mesh_hook()  # before the demo parses its objects
-    hooks.install_model_source_hooks()  # before the demo parses its world
-    hooks.install_plan_hooks()
-    if world is not None:
-        bridge.world = world
-        bridge.bind()
-        bridge.snapshot()  # single-threaded here, before execution starts
-    hooks.install_tick_hook()
-    bridge.live_server = serve(bridge, port)
-    logger.info(
-        "bridge on http://localhost:%d (the viewer shows a Live button "
-        "while this runs)",
-        port,
-    )
-    return bridge.live_server
+    from cramera.live.visualization import LiveVisualization
+
+    return LiveVisualization(world=world, port=port).start()
 
 
 def main() -> None:
     """
-    ``cramera-live path/to/demo.py`` — run a demo with the live bridge.
+    ``cramera-live path/to/demo.py`` — run a demo with the browser viewer.
 
-    The demo's own directory is put on ``sys.path`` so the demo can import its local
-    helper modules, exactly as if it were started directly. After the demo finishes the
-    bridge stays up for inspection until Ctrl-C.
+    Selects the cramera backend through ``CORAPLEX_VISUALIZATION`` and runs the demo
+    unchanged: the demo's own ``start_visualization`` call picks the backend up. The
+    demo's directory is put on ``sys.path`` so it can import its local helper modules,
+    exactly as if it were started directly. After the demo finishes the bridge stays
+    up for inspection until Ctrl-C.
     """
-    # force: importing the hooks pulls in coraplex, which configures the root logger
     logging.basicConfig(level=logging.INFO, force=True)
     if len(sys.argv) < 2:
         sys.exit("usage: cramera-live path/to/demo.py")
     demo = Path(sys.argv[1]).resolve()
-    start()
+    os.environ.setdefault(VISUALIZATION_BACKEND_VARIABLE, "cramera")
     sys.path.insert(0, str(demo.parent))
     logger.info("running demo: %s", demo)
     runpy.run_path(str(demo), run_name="__main__")
@@ -82,3 +69,7 @@ def main() -> None:
         signal.pause()  # wait for Ctrl-C (SIGINT) instead of a sleep loop
     except KeyboardInterrupt:
         pass
+
+
+if __name__ == "__main__":
+    main()

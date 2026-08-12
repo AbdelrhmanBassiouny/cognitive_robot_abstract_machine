@@ -20,8 +20,9 @@ HTTP endpoints of the live bridge (default port 8765).
 
 Every ``pose`` above is ``[x, y, z, qx, qy, qz, qw]``.
 
-Handlers only ever read finished snapshot dicts — never the world (see
-:mod:`cramera.live.hooks`).
+Handlers only ever read finished snapshot dicts — never the world; the bridge's
+snapshots are produced on the simulation thread by the world and plan callbacks of
+:mod:`cramera.live.visualization`.
 """
 
 from __future__ import annotations
