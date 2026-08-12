@@ -32,9 +32,14 @@ from semantic_digital_twin.spatial_types import (
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Color
+from coraplex.datastructures.enums import VisualizationBackend
+from coraplex.visualization import WorldVisualization
 
 world = setup_world()
 
+visualization = WorldVisualization.from_environment(
+    world, default_backend=VisualizationBackend.CRAMERA
+).start()
 spoon = STLParser(
     os.path.join(
         os.path.dirname(__file__), "..", "..", "resources", "objects", "spoon.stl"

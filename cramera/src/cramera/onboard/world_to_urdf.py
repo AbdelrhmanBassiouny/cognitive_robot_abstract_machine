@@ -10,6 +10,7 @@ it has no notion of the source format.
 from __future__ import annotations
 
 import os
+import warnings
 import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass, field
 
@@ -401,8 +402,8 @@ class UrdfDocument:
         """
         Whether a connection maps onto a URDF joint type.
 
-        A body behind an unsupported connection is grafted onto the document root at
-        its world pose instead.
+        A body behind an unsupported connection is grafted onto the document root at its
+        world pose instead.
 
         :param connection: The connection to check.
         """
@@ -441,7 +442,11 @@ class UrdfDocument:
         :param pose: The pose to express, relative to the frame the element implies.
         """
         matrix = pose.to_np()
-        roll, pitch, yaw = Rotation.from_matrix(matrix[:3, :3]).as_euler("xyz")
+        with warnings.catch_warnings():
+            # at ±90° pitch the Euler decomposition is not unique, but scipy's choice
+            # still reproduces the rotation exactly — the warning is pure noise here
+            warnings.filterwarnings("ignore", message="Gimbal lock detected")
+            roll, pitch, yaw = Rotation.from_matrix(matrix[:3, :3]).as_euler("xyz")
         ElementTree.SubElement(
             element,
             "origin",

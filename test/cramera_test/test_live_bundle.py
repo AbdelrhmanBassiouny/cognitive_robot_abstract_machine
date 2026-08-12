@@ -236,6 +236,11 @@ class TestBuildLiveScene:
         marker = scenes / paths.LIVE_SCENE_NAME / "marker"
         marker.touch()
 
+        world = bridge.world
+        with world.modify_world():
+            world.add_connection(
+                FixedConnection(parent=world.root, child=shaped("laboratory", "shelf"))
+            )
         bridge.observe_model_change()
         build_live_scene(bridge)
 

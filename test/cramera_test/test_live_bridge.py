@@ -572,14 +572,46 @@ class TestBundleSignature:
         assert after != before
         assert after == bridge.bundle_signature()
 
-    def test_a_model_change_changes_the_signature(self):
+    def test_a_new_scene_body_changes_the_signature(self):
         bridge = Bridge()
         bridge.attach(world_with(shaped_body("montessori", "board")))
-        before = bridge.status()["bundleSignature"]
+        before = bridge.bundle_signature()
 
+        world = bridge.world
+        with world.modify_world():
+            world.add_connection(
+                FixedConnection(
+                    parent=world.root, child=shaped_body("montessori", "tray")
+                )
+            )
         bridge.observe_model_change()
 
-        assert bridge.status()["bundleSignature"] != before
+        assert bridge.bundle_signature() != before
+
+    def test_reparenting_an_overlay_object_keeps_the_signature(self):
+        """
+        A demo re-parents a grasped object on every pick and place; the object is
+        rendered by the overlay, not the bundle, so the viewer must not reload the scene
+        for it.
+        """
+        bridge = Bridge()
+        board = shaped_body("montessori", "board")
+        milk = Body(name=PrefixedName("milk.stl", prefix="world"))
+        world = World()
+        root = Body(name=PrefixedName("root", prefix="world"))
+        with world.modify_world():
+            world.add_body(root)
+            world.add_connection(FixedConnection(parent=root, child=board))
+            world.add_connection(FixedConnection(parent=root, child=milk))
+        bridge.attach(world)
+        before = bridge.bundle_signature()
+
+        with world.modify_world():
+            world.remove_connection(milk.parent_connection)
+            world.add_connection(FixedConnection(parent=board, child=milk))
+        bridge.observe_model_change()
+
+        assert bridge.bundle_signature() == before
 
     def test_the_model_version_counts_attachments_and_model_changes(self):
         bridge = Bridge()

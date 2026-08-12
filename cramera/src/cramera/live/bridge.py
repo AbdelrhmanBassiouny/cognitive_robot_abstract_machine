@@ -16,6 +16,7 @@ flagged ``derived``.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import threading
 import time
@@ -716,7 +717,12 @@ class Bridge:
 
     _model_revision: int = 0
     """
-    Counts world attachments and model changes; the live bundle's change signature.
+    Counts world attachments and model changes, reported as the status's model version.
+    """
+
+    _bundle_signature: str = ""
+    """
+    Cached digest of the bundled scene content, recomputed on attach and model change.
     """
 
     live_server: Optional[ThreadingHTTPServer] = None
@@ -734,6 +740,7 @@ class Bridge:
         self.world = world
         self._model_revision += 1
         self.bind()
+        self._refresh_bundle_signature()
         logger.info(
             "attached to world (robot=%s, %d joints)",
             type(self.robot).__name__ if self.robot else "?",
@@ -799,6 +806,7 @@ class Bridge:
         """
         self._model_revision += 1
         self.bind()
+        self._refresh_bundle_signature()
 
     def publish_bodies(self, bodies: Dict[str, Body]) -> None:
         """
@@ -835,18 +843,45 @@ class Bridge:
 
     def bundle_signature(self) -> str:
         """
-        A stable digest of the world model the live bundle is built from.
+        A digest of the bundled scene's content: the identity, parentage and connection
+        type of every body the live bundle serializes, plus the robot's identity.
 
-        Changes when a world is attached and on every model change, and deliberately
-        not on state changes: objects moving mid-run change the overlay, not the
-        bundled models, and must not read as a bundle change.
+        Deliberately excludes the overlay's mesh-named objects — a demo re-parenting a
+        grasped object changes the world model but not the bundled scene, and must not
+        make the viewer reload it. State changes never touch it either.
         """
+        return self._bundle_signature
+
+    def _refresh_bundle_signature(self) -> None:
+        """
+        Recompute the cached bundle signature from the current world model.
+        """
+        if self.world is None:
+            self._bundle_signature = ""
+            return
         robot_name = type(self.robot).__name__.lower() if self.robot else None
-        return "world-%d-model-%d-robot-%s" % (
-            id(self.world),
-            self._model_revision,
-            robot_name,
-        )
+        entries: List[str] = []
+        try:
+            for body in self.world.bodies:
+                name = str(body.name)
+                if MeshFormat.of_path(name.split("/")[-1]) is not None:
+                    continue
+                connection = body.parent_connection
+                entries.append(
+                    "%s<-%s:%s"
+                    % (
+                        name,
+                        str(connection.parent.name) if connection else "",
+                        type(connection).__name__ if connection else "root",
+                    )
+                )
+        except Exception as error:
+            # boundary guard: the world is mid-modification and iterating it is not
+            # safe; keep the previous signature rather than flapping the viewer.
+            logger.debug("signature refresh skipped: %s", error)
+            return
+        digest = hashlib.sha1("|".join(sorted(entries)).encode()).hexdigest()[:16]
+        self._bundle_signature = "world-%s-robot-%s" % (digest, robot_name)
 
     def status(self) -> Dict[str, Any]:
         """

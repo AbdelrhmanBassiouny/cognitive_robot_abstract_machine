@@ -10,7 +10,10 @@ from dataclasses import dataclass
 import pytest
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import Connection6DoF
+from semantic_digital_twin.world_description.connections import (
+    Connection6DoF,
+    FixedConnection,
+)
 from semantic_digital_twin.world_description.world_entity import Body
 
 from coraplex.plans.plan_node import MotionNode
@@ -82,12 +85,19 @@ class TestWorldSync:
 
         assert sync in world.state.state_change_callbacks
 
-    def test_a_model_change_bumps_the_bundle_signature(self, world):
+    def test_a_model_change_refreshes_the_bundle_signature(self, world):
         bridge = Bridge()
         bridge.attach(world)
         sync = WorldModelSync(_world=world, bridge=bridge)
         before = bridge.bundle_signature()
 
+        with world.modify_world():
+            world.add_connection(
+                FixedConnection(
+                    parent=world.root,
+                    child=Body(name=PrefixedName("bench", prefix="laboratory")),
+                )
+            )
         sync.on_model_change()
 
         assert bridge.bundle_signature() != before
