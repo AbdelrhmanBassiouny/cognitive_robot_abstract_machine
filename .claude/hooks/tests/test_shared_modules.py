@@ -10,10 +10,12 @@ from __future__ import annotations
 import argparse
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 from command_line import Command, commands_of
+from dataclass_exception import DataclassException
 from exceptions import ExternalCallFailed, GitCommandFailed
 from git_commands import GitCommandRunner
 from plan_model import ItemStatus
@@ -133,7 +135,8 @@ def test_a_subclass_missing_an_abstract_method_is_refused_at_construction():
     ``BaseException.__new__`` bypasses ``ABCMeta``'s usual instantiation check (proven
     empirically: a plain ``@dataclass class C(RuntimeError, ABC)`` with an unimplemented
     ``@abstractmethod`` builds without error), so this exercises
-    ``ExternalCallFailed.__post_init__``'s own enforcement rather than assuming Python's.
+    ``DataclassException.__post_init__``'s own enforcement, inherited by
+    ``ExternalCallFailed``, rather than assuming Python's.
     """
 
     class MissingErrorMessage(ExternalCallFailed):
@@ -150,6 +153,50 @@ def test_a_subclass_missing_an_abstract_method_is_refused_at_construction():
 
     with pytest.raises(TypeError, match="error_message"):
         MissingErrorMessage(status=1, detail="refused")
+
+
+# %% the generic composition, independent of any one failure's fields
+
+
+def test_a_dataclass_exception_composes_its_message_and_suggestion():
+    """
+    ``DataclassException`` carries no fields of its own - :class:`ExternalCallFailed`
+    adds ``status``/``detail``/``call``, but the composition in ``__str__`` works for any
+    subclass that only supplies ``error_message``/``suggest_correction``.
+    """
+
+    @dataclass
+    class OutOfDisk(DataclassException):
+        """A dataclass exception unrelated to any external call, to prove reuse."""
+
+        bytes_needed: int
+
+        def error_message(self) -> str:
+            """:return: What went wrong, independent of any call/status/detail."""
+            return f"needed {self.bytes_needed} more bytes"
+
+        def suggest_correction(self) -> str:
+            """:return: The advice this test asserts gets appended."""
+            return "free up disk space"
+
+    assert str(OutOfDisk(bytes_needed=1024)) == (
+        "needed 1024 more bytes\nSuggestion: free up disk space"
+    )
+
+
+def test_dataclass_exception_itself_cannot_be_instantiated():
+    """
+    ``DataclassException`` states the contract but answers neither ``error_message`` nor
+    ``suggest_correction`` itself, so it must refuse construction the same way an
+    incomplete subclass does.
+    """
+
+    @dataclass
+    class BareDataclassException(DataclassException):
+        """A subclass adding no fields, to isolate the base's own abstractness."""
+
+    with pytest.raises(TypeError, match="error_message"):
+        BareDataclassException()
 
 
 # %% commands as classes
