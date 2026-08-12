@@ -1600,6 +1600,21 @@ items:
       has landed and a fifth copy of the markup if it has not. Also sequence before
       dev-tooling-python-package, which moves build_dashboard.py wholesale. Opened as
       draft pull request #120 on 2026-08-01, no bug label, subscribed to its activity.
+      State 2026-08-12: no longer a draft - the user took it out of draft themselves, and
+      it carries in-review, so the upstream pull request is open and this session does not
+      re-draft it. The subscription recorded above is gone, per no-pr-subscriptions.
+      Second base merge resolved 2026-08-12 (299d1d53), after fork main was
+      fast-forwarded from cram2 to e123c383, 142 commits past the previous merge base. The
+      two conflicts are the ones predicted for whoever landed second behind #122:
+      test_build_dashboard.py, where both sides added tests at the same point and both are
+      kept, with the example-locking assertion taking #122's now-correct two-entry
+      ready_to_review; and dashboard-overview.png, re-rendered from the merged example
+      rather than taken from either side, so it shows #122's second ready-to-review entry,
+      #124's collapsed notes and this branch's chip and filter together. The other two
+      screenshots were checked and left alone - the filtered sidebar hides the group that
+      changed, and the action-buttons crop shows cards with no notes to collapse.
+      399 tests passing across the three directories CI runs. needs-resolution left for
+      the next maintenance pass to clear itself.
 
   - id: session-start-plan-and-setup-guards
     branch: claude/workflow-unification-setup-jgvs53

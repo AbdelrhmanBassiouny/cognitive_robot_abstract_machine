@@ -6063,3 +6063,77 @@ Outstanding, and not fixed here: #154's base ref on GitHub is still
 `claude/plan-item-kickoff-workflow-koufa6` (#139's branch), so the pull request is not yet
 reparented onto #151's branch. The manifest now states the intended structure; the reparent is
 a separate action on the pull request.
+
+## Update 2026-08-12 (resolved): #120's conflict was the one predicted eleven days earlier
+
+`/plan-item-resolve workflow-unification sidebar-bug-fix-chips`, session
+https://claude.ai/code/session_01VC4FEE6dzpdNtYcXjE5Ed4. Pushed as `299d1d53`.
+
+### A predicted conflict is the cheap kind, and this is what makes it cheap
+
+On 2026-08-01 both this roadmap and the tracking issue recorded that #120 and #122 would
+collide on `example/screenshots/dashboard-overview.png`, that the second to land would
+re-regenerate it, and that this is mechanical because the image is deterministic from the
+committed fixture. Fork `main` was fast-forwarded from cram2 the same morning as this
+resolve (`e123c383`, 142 commits past the merge base), #122 came with it, and the collision
+arrived exactly as described.
+
+The value was not in avoiding the conflict — nothing could have — but in the resolve having
+no diagnosis to do. Contrast the entries above where a conflict had to be measured before it
+could be judged: here the prediction named the file, the mechanism and the remedy, so the
+work was carrying it out. Worth stating as the counterpart to the same day's
+`stack-maintenance-executor` lesson: a measurement of a *future* conflict is a claim with an
+expiry date, and a prediction of one is a claim with instructions attached. Both are worth
+writing down; only the second saves the next session anything.
+
+### The test file: additive on both sides except in one place
+
+Both sides inserted after `test_item_ready_to_review_once_dependency_has_an_open_pull_request`,
+so both blocks are kept. The single non-additive hunk is the tail of
+`test_example_plan_renders_the_counts_and_sections_the_walkthrough_describes`, where #122's
+fix genuinely changes the example's output: `retry-circuit-breaker` now reaches the list
+behind its merged dependency, so **Ready to review (2)** is the true assertion and this
+branch's one-element copy is simply out of date. Took `main`'s, then re-appended this
+branch's `test_example_plan_demonstrates_the_bug_chip_and_its_filter` after it.
+
+This is the second time that test has been the whole content of a conflict, which is the test
+doing its job: its own docstring says it exists so a change to the example fails here rather
+than leaving the walkthrough showing stale numbers.
+
+### The screenshot recipe needed one thing the roadmap had not recorded
+
+Re-rendering to resolve the binary conflict found a gap in the recipe written on 2026-08-01
+(1280px wide, dark theme, 100px bottom margin). The sidebar is
+`position: sticky` with `max-height: calc(100vh - 3rem)`, so at the obvious 900px viewport the
+"What to do next" card **scroll-clips** the moment it grows — and #122's extra entry is
+exactly such growth. The first render came back with the last entry cut off mid-sentence, and
+nothing about the image says it is wrong. Adding to the recipe: the viewport height must
+exceed the sidebar's own height plus `3rem`; 1280×1200 renders this example whole today, and
+the check is `aside.sidebar`'s `scrollHeight === clientHeight`.
+
+`playwright` drives `/opt/pw-browsers/chromium` for this — the browser is already installed in
+the session environment, so nothing is downloaded.
+
+### Two screenshots deliberately not regenerated, checked rather than assumed
+
+The 2026-08-01 lesson is that a committed screenshot goes stale from any change, so the
+default was to regenerate all three. Both remaining ones were then examined and left alone:
+`dashboard-bug-filter.png` shows the sidebar *with the filter applied*, where the
+ready-to-review group holds no bug fix and is hidden either way; `dashboard-action-buttons.png`
+is a 656×259 crop of two item cards, neither carrying notes for #124's collapse to affect.
+Re-rendering them in a different environment would have introduced font differences with no
+content change behind them — which is the same silent-drift problem in the other direction.
+
+### State
+
+`mergeable_state` `dirty` → `unstable`; `needs-resolution` left for the next pass to clear
+itself, as on #139. Not re-drafted: the user took this pull request out of draft themselves,
+and it carries `in-review`, so the upstream pull request is open and the merge updates its head.
+399 tests across the three directories CI runs. Pushed to the item's own branch rather than the
+session's designated one, the usual override.
+
+Two smaller things fixed while here. The description's `## Promote` link was destroyed by an
+intermediate edit of my own and restored — the same failure #139 recorded, met from the writing
+side rather than the promoting side, and the tell was that a read-back of the body ended at the
+heading. And the item's `notes` still said "subscribed to its activity", which
+`no-pr-subscriptions` has since inverted; no subscription was in fact armed on this session.
