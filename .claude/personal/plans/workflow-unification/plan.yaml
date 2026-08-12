@@ -1555,7 +1555,7 @@ items:
     pull_request_number: 121
     track: personal-data
     depends_on: []
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01JSxeoePmxWoA4aETrwhFcx
     notes: >
       Recorded 2026-08-01 from two process failures in the sidebar-bug-fix-chips session,
@@ -1862,7 +1862,7 @@ items:
     pull_request_number: 122
     track: dashboards
     depends_on: []
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01Ltrz1G8qwSHgo6jyfeV1EU
     notes: >
       Found 2026-08-01 while working sidebar-bug-fix-chips, and deliberately left out of
@@ -2581,7 +2581,7 @@ items:
     branch: claude/remove-auto-subscribe-pr-oowwkp
     track: personal-data
     depends_on: []
-    status: in_progress
+    status: done
     pull_request_number: 153
     session: https://claude.ai/code/session_012yfsn1ZZBsUcfKK1zDW1zh
     notes: >
