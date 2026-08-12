@@ -6453,4 +6453,3 @@ pushed branch rather than anything the harness can show. Starting it half-way wo
 verdict path migrated on one side and not the other. The 28 threads are addressed in code but none has
 an inline reply or is resolved, and #154's base ref is still #139's branch - the base-field `PATCH`
 403s through the agent proxy, so that reparent stays manual.
-

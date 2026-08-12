@@ -2716,132 +2716,130 @@ items:
       Designed 2026-08-10; no code exists. Three implementation attempts were blocked in the
       designing session, so this enters the plan as a design with nothing behind it.
 
-      The constraint it addresses is upstream review throughput: pull requests are produced
-      faster than cram2 merges them, so shipped-but-unreviewed features are unusable in daily
-      work, and two in-flight features that conflict only discover it at the far end of the
-      review queue. The answer is a regenerated integration branch - upstream main with every
-      in-flight stack tip merged on top, rebuilt from scratch on demand, existing to be built
-      from rather than to be history. Nothing merges out of it.
+      The constraint it addresses is upstream review throughput: pull requests are produced faster
+      than cram2 merges them, so shipped-but-unreviewed features are unusable in daily work, and two
+      in-flight features that conflict only discover it at the far end of the review queue. The
+      answer is a regenerated integration branch - upstream main with every in-flight stack tip
+      merged on top, rebuilt from scratch on demand, existing to be built from rather than to be
+      history. Nothing merges out of it.
 
-      It gates nothing, and that is a decision rather than an omission. Promotion asks whether
-      a branch is ready for upstream review, judged against upstream main; integration asks
-      whether the branches coexist. Gating promotion on a clean build would block A because B
-      conflicts with it, with no principled reason A is the one that waits.
+      It gates nothing, and that is a decision rather than an omission. Promotion asks whether a
+      branch is ready for upstream review, judged against upstream main; integration asks whether
+      the branches coexist. Gating promotion on a clean build would block A because B conflicts with
+      it, with no principled reason A is the one that waits.
 
       Almost nothing is built from scratch: board.json and GitHubRepository for the open pull
       requests, build_stack/order for the tree, has_landed_upstream for exclusion,
-      maintenance.restack for staleness, GitCommandRunner.merge plus unmerged_paths to tell a
-      real conflict from a refused merge, RestackWorktree for checkout safety, merge-tree for
-      the non-mutating probe, MaintenanceReport and the exit-code mapping for output, and
+      maintenance.restack for staleness, GitCommandRunner.merge plus unmerged_paths to tell a real
+      conflict from a refused merge, RestackWorktree for checkout safety, merge-tree for the
+      non-mutating probe, MaintenanceReport and the exit-code mapping for output, and
       write-personal-notes-file.sh for durable state.
 
-      Based on #139's branch rather than main, because maintenance.py exists only there -
-      git ls-tree main -- .claude/stack/maintenance.py is empty. That makes this a genuine
-      stack on unlanded work rather than an artefact of authoring order.
+      Based on #139's branch rather than main, because maintenance.py exists only there - git
+      ls-tree main -- .claude/stack/maintenance.py is empty. That makes this a genuine stack on
+      unlanded work rather than an artefact of authoring order.
 
-      Decisions taken. No CI gate: it would deadlock against the restack, since restacking
-      rewrites heads, CI re-runs, every restacked branch reads pending, and a green filter
-      yields a near-empty build. A single --test run on the finished branch replaces it and is
-      strictly more informative - it catches semantic conflicts that per-branch CI structurally
-      cannot, such as A renaming a method while B adds a caller, both green, merging clean and
-      breaking on import. Conflicts skip and continue rather than halting the build, reversing
-      the original stop-on-conflict spec, because a build that halts leaves nothing to work
-      from, which is the whole point of the branch. Selection unit is the stack tip, since a
-      tip already contains its stack. Merge order is load-bearing once skips are possible, so
-      it is stable and stated, and the report names the conflicting pair rather than the
-      casualty - "B skipped" is not actionable.
+      Decisions taken. No CI gate: it would deadlock against the restack, since restacking rewrites
+      heads, CI re-runs, every restacked branch reads pending, and a green filter yields a
+      near-empty build. A single --test run on the finished branch replaces it and is strictly more
+      informative - it catches semantic conflicts that per-branch CI structurally cannot, such as A
+      renaming a method while B adds a caller, both green, merging clean and breaking on import.
+      Conflicts skip and continue rather than halting the build, reversing the original
+      stop-on-conflict spec, because a build that halts leaves nothing to work from, which is the
+      whole point of the branch. Selection unit is the stack tip, since a tip already contains its
+      stack. Merge order is load-bearing once skips are possible, so it is stable and stated, and
+      the report names the conflicting pair rather than the casualty - "B skipped" is not
+      actionable.
 
-      Sibling conflicts are the case this hits constantly and the one with no feature-branch
-      fix available: adapting B to an unlanded A makes B depend on unmerged work, which is the
-      stacking this workflow exists to avoid. rerere holds those resolutions in .git/rr-cache,
-      contaminating no branch, persisted to personal-notes as a tarball because containers are
-      ephemeral. It buys a working daily driver, not a discharged upstream obligation, and a
-      replayed merge is always reported as replayed rather than clean.
+      Sibling conflicts are the case this hits constantly and the one with no feature-branch fix
+      available: adapting B to an unlanded A makes B depend on unmerged work, which is the stacking
+      this workflow exists to avoid. rerere holds those resolutions in .git/rr-cache, contaminating
+      no branch, persisted to personal-notes as a tarball because containers are ephemeral. It buys
+      a working daily driver, not a discharged upstream obligation, and a replayed merge is always
+      reported as replayed rather than clean.
 
       Judgement lives in a skill, not the script. integration.py detects, attributes and skips;
-      /integration-conflict-triage reads the JSON conflict report and judges each pair
-      reconcile, stack or defer. Only the first two produce a pull request comment - a deferred
-      collision is a pure FYI, which the comment-routing rule already sends to the manifest
-      rather than to a pull request nobody is watching. No detection-time reporting is built:
-      the maintenance pass's needs-resolution label and IntegrateParent comment already cover
-      landing time, when the target is stable.
+      /integration-conflict-triage reads the JSON conflict report and judges each pair reconcile,
+      stack or defer. Only the first two produce a pull request comment - a deferred collision is a
+      pure FYI, which the comment-routing rule already sends to the manifest rather than to a pull
+      request nobody is watching. No detection-time reporting is built: the maintenance pass's
+      needs-resolution label and IntegrateParent comment already cover landing time, when the target
+      is stable.
 
-      Found while designing and worth telling #139 independently: stack.PullRequest.ci is
-      declared, documented, read by load_board and copied onto Branch by build_stack, but never
-      populated - BoardExport._pull_request sets it from record.get("ci") against a GET /pulls
-      payload carrying no such key, in the one method whose stated contract is that it refuses
-      a missing derived field rather than defaulting it.
+      Found while designing and worth telling #139 independently: stack.PullRequest.ci is declared,
+      documented, read by load_board and copied onto Branch by build_stack, but never populated -
+      BoardExport._pull_request sets it from record.get("ci") against a GET /pulls payload carrying
+      no such key, in the one method whose stated contract is that it refuses a missing derived
+      field rather than defaulting it.
 
       One naming constraint is not cosmetic: builds are integration-<timestamp> with a hyphen,
-      because git stores refs as files, so refs/heads/integration/<timestamp> cannot exist
-      while refs/heads/integration does. The obvious naming is the one git refuses.
+      because git stores refs as files, so refs/heads/integration/<timestamp> cannot exist while
+      refs/heads/integration does. The obvious naming is the one git refuses.
 
-      Open at recording time: whether --restack defaults off locally and on in the Action,
-      whether --test defaults on, whether to comment on #139 about the ci field, and whether
-      the script and skill are one pull request or two (recommendation: one, since a conflict
-      report nothing consumes is half a feature).
+      Open at recording time: whether --restack defaults off locally and on in the Action, whether
+      --test defaults on, whether to comment on #139 about the ci field, and whether the script and
+      skill are one pull request or two (recommendation: one, since a conflict report nothing
+      consumes is half a feature).
 
-      Scope widened 2026-08-10, after recording, on the user's question of whether the skill
-      should resolve conflicts as well as judge them, and whether it should ask when something
-      is unclear or could be harmful. It resolves, but bounded by where the resolution lands
-      rather than by how confident it is - the artifact decides the risk, not the certainty.
+      Scope widened 2026-08-10, after recording, on the user's question of whether the skill should
+      resolve conflicts as well as judge them, and whether it should ask when something is unclear
+      or could be harmful. It resolves, but bounded by where the resolution lands rather than by how
+      confident it is - the artifact decides the risk, not the certainty.
 
-      On a defer verdict it resolves fully, writing into .git/rr-cache. Nothing touches a
-      feature branch, the integration branch is regenerated from scratch on every build, and
-      --test checks the result, so a wrong answer costs one cache entry. This replaces the
-      design's weakest step: resolve --record set up a worktree and expected the developer to
-      fix the files by hand, and defer is both the commonest verdict and the one where the
-      skill has everything it needs - both diffs and both pull request intents. On reconcile it
-      proposes and does not apply, because that is a real code change to a published pull
-      request under review and resetting an approval to apply an unagreed design call is the
-      wrong default. On stack it reports: re-basing is maintenance.py's work, and the
-      base-branch PATCH 403s through the agent proxy regardless. The boundary is restated
-      rather than broken - the script never writes to a branch, the skill writes only to
-      rr-cache, and neither pushes.
+      On a defer verdict it resolves fully, writing into .git/rr-cache. Nothing touches a feature
+      branch, the integration branch is regenerated from scratch on every build, and --test checks
+      the result, so a wrong answer costs one cache entry. This replaces the design's weakest step:
+      resolve --record set up a worktree and expected the developer to fix the files by hand, and
+      defer is both the commonest verdict and the one where the skill has everything it needs - both
+      diffs and both pull request intents. On reconcile it proposes and does not apply, because that
+      is a real code change to a published pull request under review and resetting an approval to
+      apply an unagreed design call is the wrong default. On stack it reports: re-basing is
+      maintenance.py's work, and the base-branch PATCH 403s through the agent proxy regardless. The
+      boundary is restated rather than broken - the script never writes to a branch, the skill
+      writes only to rr-cache, and neither pushes.
 
       Asking is not driven by confidence, which would make the skill a prompt generator whose
-      questions get rubber-stamped. The test is whose decision it is. Uncertainty about facts -
-      what a branch does, whether two things are the same abstraction - is resolved by reading
-      the diffs, the pull requests and the roadmap, never by asking. Uncertainty about intent -
-      which abstraction is right, whether two branches should be one pull request - is asked.
-      That lands almost exactly on reconcile, and it asks before proposing, since the proposal
-      already encodes the choice. #110 and #106 building the same artifact is the precedent for
-      the cost of not asking.
+      questions get rubber-stamped. The test is whose decision it is. Uncertainty about facts - what
+      a branch does, whether two things are the same abstraction - is resolved by reading the diffs,
+      the pull requests and the roadmap, never by asking. Uncertainty about intent - which
+      abstraction is right, whether two branches should be one pull request - is asked. That lands
+      almost exactly on reconcile, and it asks before proposing, since the proposal already encodes
+      the choice. #110 and #106 building the same artifact is the precedent for the cost of not
+      asking.
 
       One hazard follows from the skill authoring resolutions rather than replaying a human's.
-      rerere matches on the conflict preimage and replays automatically, so a resolution that
-      is textually matching but semantically wrong is reapplied unreviewed on every later
-      build. Tolerable when a developer recorded it, different when a skill did, so a recorded
-      resolution carries its provenance and the build report distinguishes skill-authored
-      replays from human-authored ones - the existing rule that a replay is never silent, made
-      auditable by author. A --test failure following a skill-authored resolution reports and
-      stops rather than attempting another, since re-resolving into the same failure is how a
-      build starts thrashing.
+      rerere matches on the conflict preimage and replays automatically, so a resolution that is
+      textually matching but semantically wrong is reapplied unreviewed on every later build.
+      Tolerable when a developer recorded it, different when a skill did, so a recorded resolution
+      carries its provenance and the build report distinguishes skill-authored replays from
+      human-authored ones - the existing rule that a replay is never silent, made auditable by
+      author. A --test failure following a skill-authored resolution reports and stops rather than
+      attempting another, since re-resolving into the same failure is how a build starts thrashing.
 
       Implemented 2026-08-10, same session as the kickoff. The three open questions were closed
-      first: --restack defaults off as a plain opt-in flag (it pushes to other people's branches,
-      so the default path keeps "the script never writes to a branch" true of itself rather than
-      only of a path nobody takes), --test defaults on with --no-test to skip (it is the whole
-      replacement for the CI gate this design dropped), and #139 was told about the ci field on
-      its own pull request rather than only in this manifest, since a defect in code under review
+      first: --restack defaults off as a plain opt-in flag (it pushes to other people's branches, so
+      the default path keeps "the script never writes to a branch" true of itself rather than only
+      of a path nobody takes), --test defaults on with --no-test to skip (it is the whole
+      replacement for the CI gate this design dropped), and #139 was told about the ci field on its
+      own pull request rather than only in this manifest, since a defect in code under review
       materially changes its review context. Script and skill shipped as one pull request.
 
-      A fourth question nobody had asked was settled at kickoff because it is unanswerable from
-      the design as recorded: what --test actually runs. It is an integration_test_command setting
-      in stack.toml, defaulting to the three directories CI's test_claude_dev_tooling job already
-      runs - configurable because the useful suite is a property of the repository rather than of
-      the tool, and defaulted because a flag that is on by default and has nothing to run is worse
-      than one that is off. A build asked for a suite the checkout names none for is refused
-      before anything is built, rather than reading an absent suite as one that passed.
+      A fourth question nobody had asked was settled at kickoff because it is unanswerable from the
+      design as recorded: what --test actually runs. It is an integration_test_command setting in
+      stack.toml, defaulting to the three directories CI's test_claude_dev_tooling job already runs
+      - configurable because the useful suite is a property of the repository rather than of the
+      tool, and defaulted because a flag that is on by default and has nothing to run is worse than
+      one that is off. A build asked for a suite the checkout names none for is refused before
+      anything is built, rather than reading an absent suite as one that passed.
 
       Two failure shapes had to be told apart, and git makes them identical. A merge that fails
       leaving no unmerged paths is not a conflict - unrelated histories, a reference that does not
-      resolve, something in the way - which is #123's false-positive class, inherited before
-      meeting it. A replayed rerere resolution *also* fails leaving no unmerged paths, because the
-      replay has already staged them, and is distinguishable only by what git says on stderr. So
-      the replay marker has to be read before the unmerged-paths rule, and removing it makes every
-      replay report as integration-failed - verified by mutation rather than assumed. Both were
-      probed against real git before a line of the design was committed to.
+      resolve, something in the way - which is #123's false-positive class, inherited before meeting
+      it. A replayed rerere resolution *also* fails leaving no unmerged paths, because the replay
+      has already staged them, and is distinguishable only by what git says on stderr. So the replay
+      marker has to be read before the unmerged-paths rule, and removing it makes every replay
+      report as integration-failed - verified by mutation rather than assumed. Both were probed
+      against real git before a line of the design was committed to.
 
       Verified live against the real fork from a detached worktree: 23 tips, 11 merged, 12 skipped,
       exit tip-left-out (10). Six collided with main itself - stale branches, correctly attributed
@@ -2867,100 +2865,170 @@ items:
       setting that is empty as well as one that is unset, which its own docstring already promised
       and which only became reachable when a defaultable setting existed.
 
-      Extended 2026-08-11, from running it on the real stack at the user's request. The build
-      worked and the run found a defect in this item rather than in the branches: --test caught
-      that the assembled branch does not work, and the skill had no verdict taxonomy for that -
-      it reported tests-failed and stopped. A gap in the item's own deliverable, flagged before
-      the user met it.
+      Extended 2026-08-11, from running it on the real stack at the user's request. The build worked
+      and the run found a defect in this item rather than in the branches: --test caught that the
+      assembled branch does not work, and the skill had no verdict taxonomy for that - it reported
+      tests-failed and stopped. A gap in the item's own deliverable, flagged before the user met it.
 
-      Two things were missing, and only the second was obvious. A failing suite over a dozen
-      merged tips names no branch, so a verdict cannot even be reached without localising it
-      first - and localising it by hand is several worktrees and several suite runs, which this
-      session got wrong once (a reused worktree path let two merges run in the invoking checkout;
-      recovered by git merge --abort, nothing committed). So integration.py gains bisect, which
-      re-assembles the tips in the same order, runs the suite after each, names the tip whose
-      arrival turned it, and narrows to the earlier tip that alone reproduces it. Probes run on a
-      detached head, so a bisect leaves no ref behind - the first version named them after the
-      pair and left one in the clone.
+      Two things were missing, and only the second was obvious. A failing suite over a dozen merged
+      tips names no branch, so a verdict cannot even be reached without localising it first - and
+      localising it by hand is several worktrees and several suite runs, which this session got
+      wrong once (a reused worktree path let two merges run in the invoking checkout; recovered by
+      git merge --abort, nothing committed). So integration.py gains bisect, which re-assembles the
+      tips in the same order, runs the suite after each, names the tip whose arrival turned it, and
+      narrows to the earlier tip that alone reproduces it. Probes run on a detached head, so a
+      bisect leaves no ref behind - the first version named them after the pair and left one in the
+      clone.
 
-      The verdicts for a semantic break are adapt, reconcile and sequence, all proposed rather
-      than applied. What matters more is what is *not* available: rerere replays a merge
-      conflict's resolution, and a semantic break has no conflict to key one on, so nothing can
-      be recorded and every later build carries it until a branch changes. Reasoning by analogy
-      from the merge case is the mistake the section exists to prevent, and a contract test pins
-      that sentence because an agent that recorded a resolution would be reporting a fix that
-      does not exist.
+      The verdicts for a semantic break are adapt, reconcile and sequence, all proposed rather than
+      applied. What matters more is what is *not* available: rerere replays a merge conflict's
+      resolution, and a semantic break has no conflict to key one on, so nothing can be recorded and
+      every later build carries it until a branch changes. Reasoning by analogy from the merge case
+      is the mistake the section exists to prevent, and a contract test pins that sentence because
+      an agent that recorded a resolution would be reporting a fix that does not exist.
 
       The live run is what made this concrete. 22 tips, 10 merged, 12 skipped, then tests-failed:
       #110 alone passes 32 tests, #111 alone is green, merged they fail 18. #111 gives stack.py a
-      module-scope import of the repository-root development_tooling package; #110's scratch
-      fixture builds a minimal project without it, so stack.py configuration dies and every
-      dependent check degrades to "not checked". A clean merge, no textual conflict, and
-      invisible to both pull requests' CI - the exact failure class the design was written
-      against, found on the first real run. Reported on #110 and #111 with the measurements,
-      proposing nothing: which side absorbs it is a design call. bisect then reproduced it
-      independently, naming #111 against #110 and correctly leaving out the innocent tip merged
-      before them.
+      module-scope import of the repository-root development_tooling package; #110's scratch fixture
+      builds a minimal project without it, so stack.py configuration dies and every dependent check
+      degrades to "not checked". A clean merge, no textual conflict, and invisible to both pull
+      requests' CI - the exact failure class the design was written against, found on the first real
+      run. Reported on #110 and #111 with the measurements, proposing nothing: which side absorbs it
+      is a design call. bisect then reproduced it independently, naming #111 against #110 and
+      correctly leaving out the innocent tip merged before them.
 
       479 tests pass across the three directories CI runs, was 470 and 428 before the item. The
       integration branch was pushed to the fork at the user's request, which the tool itself never
       does.
 
-      Review round 2026-08-11, 28 threads. All are answered; none is actioned and none is
-      resolved. The five needing a decision were settled with the user and the implementation was
-      handed to a fresh session on their instruction, so this entry records decisions rather than
-      work. The full plan is in the PR-progress note for the branch, which is what a session's
-      own SessionStart hook loads.
+      Review round 2026-08-11, 28 threads. All are answered; none is actioned and none is resolved.
+      The five needing a decision were settled with the user and the implementation was handed to a
+      fresh session on their instruction, so this entry records decisions rather than work. The full
+      plan is in the PR-progress note for the branch, which is what a session's own SessionStart
+      hook loads.
 
-      The base changes to #151 rather than #139. #151 rebased onto #139 while this round was
-      being worked, so 6fd229ff3 contains ebf67734 and one merge now brings the eleven-module
-      split, class_property.py and the manifest subcommands together. That matters beyond
-      tidiness: most of the round's "you duplicated #139" threads exist only because this branch
-      was cut before that split, so it independently grew its own error base, command classes and
-      git helpers. They are answered by merging the parent, not by writing new abstractions. A
-      conflicted #139 merge was started before the rebase landed and has been aborted.
+      The base changes to #151 rather than #139. #151 rebased onto #139 while this round was being
+      worked, so 6fd229ff3 contains ebf67734 and one merge now brings the eleven-module split,
+      class_property.py and the manifest subcommands together. That matters beyond tidiness: most of
+      the round's "you duplicated #139" threads exist only because this branch was cut before that
+      split, so it independently grew its own error base, command classes and git helpers. They are
+      answered by merging the parent, not by writing new abstractions. A conflicted #139 merge was
+      started before the rebase landed and has been aborted.
 
-      The escalation decision reverses this item's own recorded design. A semantic break was to
-      be reported and left; the skill now pushes a mimic test to the breaking branch, comments,
-      applies a blocking label, writes the manifest and republishes the dashboard, reusing the
-      scripted pipeline rather than restating it as prose. The test belongs on the breaking
-      branch because the relying branch cannot express a test against an import that does not
-      exist on it yet, which is exactly the #111 against #110 shape.
+      The escalation decision reverses this item's own recorded design. A semantic break was to be
+      reported and left; the skill now pushes a mimic test to the breaking branch, comments, applies
+      a blocking label, writes the manifest and republishes the dashboard, reusing the scripted
+      pipeline rather than restating it as prose. The test belongs on the breaking branch because
+      the relying branch cannot express a test against an import that does not exist on it yet,
+      which is exactly the #111 against #110 shape.
 
       The label must be a new one, and the reason is a defect this round found rather than a
-      preference. WithholdBranchStillConflicting clears needs-resolution whenever mergeable_state
-      is not dirty, and a semantic break never makes a pull request dirty, so reusing that label
-      means the next maintenance pass strips it and the loop the label exists to close reopens.
-      The new label still has to block, so Configuration.needs_resolution_label generalises into
-      a collection read by both the withholding step and promotion's exclusion, with the
-      auto-clear left keyed to needs-resolution alone.
+      preference. WithholdBranchStillConflicting clears needs-resolution whenever mergeable_state is
+      not dirty, and a semantic break never makes a pull request dirty, so reusing that label means
+      the next maintenance pass strips it and the loop the label exists to close reopens. The new
+      label still has to block, so Configuration.needs_resolution_label generalises into a
+      collection read by both the withholding step and promotion's exclusion, with the auto-clear
+      left keyed to needs-resolution alone.
 
       Two smaller reversals. A suspect-replay now discards the bad rr-cache entry and triages
-      normally instead of stopping, since stopping left the developer with a poisoned cache and
-      no instruction. And a pull request based on both conflicting branches was proposed and
-      declined: a pull request has one base, so it is a diamond, its diff swells to contain the
-      whole second branch, it cannot promote alone, and restack_plan derives exactly one parent
-      per branch.
+      normally instead of stopping, since stopping left the developer with a poisoned cache and no
+      instruction. And a pull request based on both conflicting branches was proposed and declined:
+      a pull request has one base, so it is a diamond, its diff swells to contain the whole second
+      branch, it cannot promote alone, and restack_plan derives exactly one parent per branch.
 
-      The verdict moves to GitHub CI. build pushes the branch, prints the run URL and exits, and
-      a separate subcommand reads the conclusion; localisation pushes every prefix at once so CI
-      runs them concurrently. integration_test_command, --test and --no-test all go, and the
-      tests-failed status stays with only its source changed. This narrowly reverses the "the
-      tool pushes nothing" property, to a branch the tool owns and regenerates and never to a
-      feature branch. Reachability was not assumed: #146 already measured that actions/runs, jobs
-      and job-logs all answer 200 from a session, and that this fork's queue time is a median of
-      0s.
+      The verdict moves to GitHub CI. build pushes the branch, prints the run URL and exits, and a
+      separate subcommand reads the conclusion; localisation pushes every prefix at once so CI runs
+      them concurrently. integration_test_command, --test and --no-test all go, and the tests-failed
+      status stays with only its source changed. This narrowly reverses the "the tool pushes
+      nothing" property, to a branch the tool owns and regenerates and never to a feature branch.
+      Reachability was not assumed: #146 already measured that actions/runs, jobs and job-logs all
+      answer 200 from a session, and that this fork's queue time is a median of 0s.
 
-      Also retracted here, since this entry is where it was recorded: the greenlet claim. 3.5.5
-      does publish cp312 manylinux wheels and an sdist, so a test_each_lib red must be judged on
-      its own evidence rather than against that note.
+      Also retracted here, since this entry is where it was recorded: the greenlet claim. 3.5.5 does
+      publish cp312 manylinux wheels and an sdist, so a test_each_lib red must be judged on its own
+      evidence rather than against that note.
 
       depends_on corrected 2026-08-12 from stack-maintenance-executor to manifest-currency-first.
       The recorded dependency was the one this item was kicked off against; #151 has since rebased
       onto #139, making the chain #139 to #151 to #154 linear, and the 08-11 review round was
       replanned against #151 as the base for that reason. #139 stays a dependency transitively
-      through #151, so naming it as well would record the same edge twice. Not yet true of the
-      pull request itself: #154's base ref is still #139's branch, so a reparent is outstanding.
+      through #151, so naming it as well would record the same edge twice. Not yet true of the pull
+      request itself: #154's base ref is still #139's branch, so a reparent is outstanding.
+
+      Resolved 2026-08-12 (session https://claude.ai/code/session_01AYLtTRh7uZu64oLpMhGjQR). Four of
+      the handover's five parts are done; part D is not started. 595 tests pass across the three
+      directories CI runs, from 479. All five entry points run standalone.
+
+      The base landed rather than being merged from the sibling: #139 merged into main at 14:36, so
+      the eleven-module split arrived through main and only #151's `.claude/shared/` extraction had
+      to come from the branch. `abb7d994d` merges main, `336b393e2` merges #151, `c3d0d1082` deletes
+      `integration.py`'s own command ABC for `.claude/shared/command_line.py`'s `Command`. Four
+      conflicts were one rename seen from four places, resolved to #151's rename while keeping
+      main's docstring formatting - #151 predates that reformat, so taking its side wholesale would
+      have reverted it.
+
+      Three of the handover's instructions had expired and following them literally would have been
+      wrong. `GitCommandRunner` is `.claude/shared/git_commands.py`, not
+      `maintenance_git_commands.py` (which now holds only `MaintenanceGitCommandRunner`);
+      `maintenance_errors.py` is `.claude/shared/exceptions.py`; and `class_property.py` is deleted
+      in favour of abstract instance properties, so re-adding a `classproperty` would have put back
+      the file its own base had just removed. The lesson is the one this plan already records about
+      basing, met one level down: a handover note is a claim about a moment, and its first step
+      should be re-reading what it points at rather than trusting it.
+
+      Only reviewed work is carried, which was the session's added requirement and is not the
+      one-line filter it reads as. A tip contains its whole stack, so filtering tips would merge
+      ready #36 together with drafts #33, #34 and #35 as its ancestors - the reading of "only ready
+      pull requests" that quietly does the opposite. Readiness is therefore read down the entire
+      chain by `select_for_build`: a stack that is draft at its root is left out entire, and the
+      branch merged for a stack is the last one reached before its first draft.
+      `BranchStatus.is_out_of_draft` covers `IN_REVIEW` as well as `READY`, because `derive_status`
+      gives `in-review` precedence and asking for `READY` alone would drop every branch already
+      promoted upstream. Live board: 22 tips to 9. Everything left out is named in the report as
+      `unreviewed` and does not reach the `tip-left-out` exit status, since a draft excluded is the
+      rule working rather than a build going wrong.
+
+      Two consequences have their own tests because both are easy to get wrong: `claimed_as_parent`
+      ranges over the carried branches only (a parent is left out because a child contains it, and a
+      draft child is never merged), and every branch left out is named with the draft beneath it
+      when that is the reason. A mutation check found a real hole rather than confirming the tests -
+      nothing covered the wiring from the selection into a real build's report, so removing it left
+      the suite green; closed with a scratch-fork test. One test was removed rather than kept,
+      because mutation-checking showed it failed only for reasons its neighbours already covered
+      while its docstring claimed a rule it did not exercise.
+
+      `integration-conflict` is a second blocking label rather than a reuse of `needs-resolution`,
+      and reading the code first is what caught it: `WithholdBlockedBranch` clears
+      `needs-resolution` whenever GitHub stops reporting a pull request as conflicted, and a
+      semantic break never makes one conflicted - so reusing that label means the next maintenance
+      pass strips it, silently reopening the loop the label exists to close.
+      `Configuration.blocking_labels` is read by both the withholding step and promotion's
+      exclusion; only the automatic clearing stays keyed to `needs-resolution`.
+      `WithholdBranchStillConflicting` became `WithholdBlockedBranch` with it.
+
+      `integration.py escalate` localises a break, labels the branch causing it and comments naming
+      what it breaks. `bisect` became `locate-break` throughout, `TipOutcome` became
+      `PullRequestStackTipOutcome`, the report's keys became a `ReportKey` StrEnum and the settings
+      keys a `ConfigurationKey` one, the git configuration pair became a `GitSetting` dataclass, and
+      the test module's repeated literals became named constants with its suite runner extracted to
+      `tests/dataset/check_the_build.py`.
+
+      All 28 review threads have inline replies and 22 are resolved. Six stay open deliberately: the
+      draft conversion (declined, with reasons), the per-pair GitHub issue (left for the user to
+      decide), the `DataclassException` thread and the whole-CI thread (both answered but pending
+      part D), and the two `classproperty` threads (#151 reversed the ask by deleting the file).
+
+      Part D - CI as the verdict - is not started, and the reasons are worth carrying. It needs a
+      GitHub Actions client that does not exist in this tree, since #146 measured the reachability
+      but is unlanded; it rewrites the localisation path that `escalate` now depends on, so a
+      half-migration leaves the verdict split across two mechanisms; and its verification is a real
+      CI run on a pushed branch, which is the one thing everything else on this branch was able to
+      check against real git in the scratch fork. `integration_test_command`, `--test`, `--no-test`,
+      `TestCommandNotConfiguredError` and `_run_tests` all still exist and all still work - part D
+      is what removes them.
+
+      #154's base ref is still #139's branch: the base-field `PATCH` 403s through the agent proxy,
+      so the reparent onto #151's branch remains a manual step in the UI.
   - id: setup-runs-without-asking
     title: "Run the personal-notes setup from the planning skills instead of asking first"
     branch: claude/auto-run-setup-notes-02nhxv
