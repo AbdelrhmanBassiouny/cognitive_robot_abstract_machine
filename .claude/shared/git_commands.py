@@ -69,6 +69,31 @@ class GitCommandResult:
 
 
 @dataclass(frozen=True)
+class GitSetting:
+    """
+    One git configuration entry, passed to a command rather than written to a file.
+
+    A pair of bare strings says nothing about which half is which, and both halves are
+    strings, so nothing catches them being swapped.
+    """
+
+    key: str
+    """
+    The setting's name, as ``git config`` spells it.
+    """
+
+    value: str
+    """
+    What to set it to.
+    """
+
+    @property
+    def as_arguments(self) -> tuple[str, str]:
+        """:return: The pair of arguments git takes this as."""
+        return ("-c", f"{self.key}={self.value}")
+
+
+@dataclass(frozen=True)
 class GitCommandRunner:
     """
     Runs git in one checkout, in whichever of the two contracts the caller needs.
@@ -83,7 +108,7 @@ class GitCommandRunner:
     The checkout every command runs in.
     """
 
-    configuration_overrides: tuple[tuple[str, str], ...] = ()
+    configuration_overrides: tuple[GitSetting, ...] = ()
     """
     Settings passed to every command as ``-c <key>=<value>``, so a run can turn a git
     feature on for itself without writing it into the repository's own configuration -
@@ -100,8 +125,8 @@ class GitCommandRunner:
         """
         overrides = [
             part
-            for key, value in self.configuration_overrides
-            for part in ("-c", f"{key}={value}")
+            for setting in self.configuration_overrides
+            for part in setting.as_arguments
         ]
         completed = subprocess.run(
             ["git", *overrides, *arguments],

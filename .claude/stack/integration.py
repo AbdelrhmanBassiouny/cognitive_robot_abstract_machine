@@ -48,10 +48,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 
 from command_line import Command, commands_of  # noqa: E402
 from exceptions import GitCommandFailed  # noqa: E402
+from git_commands import GitSetting  # noqa: E402
 from stack import (  # noqa: E402
     AmbiguousForkRemoteError,
     Branch,
     Configuration,
+    ConfigurationKey,
     ForkRemoteNotFoundError,
     LabelWrite,
     Stack,
@@ -95,8 +97,8 @@ BUILD_NAME_FORMAT = "%Y%m%d-%H%M%S"
 """How a build's moment is spelled in its branch name."""
 
 RERERE_SETTINGS = (
-    ("rerere.enabled", "true"),
-    ("rerere.autoupdate", "true"),
+    GitSetting("rerere.enabled", "true"),
+    GitSetting("rerere.autoupdate", "true"),
 )
 """Replay of previously recorded conflict resolutions, turned on for the build alone.
 
@@ -115,6 +117,40 @@ without this.
 
 PROVENANCE_FILENAME = "resolution-authors.json"
 """Where the authorship of recorded resolutions is kept, beside the cache it describes."""
+
+
+class ReportKey(StrEnum):
+    """The field names a report's machine-readable document is read by.
+
+    The documents are ``asdict`` of the report dataclasses, so these mirror those field
+    names; naming them here gives a reader one definition to import rather than a string
+    retyped at each access, which nothing keeps in step with a rename.
+    """
+
+    STATUS = "status"
+    """What the run concluded, in the words its exit status carries."""
+
+    EXIT_CODE = "exit_code"
+    """The same conclusion as the number the process exits with."""
+
+    TIPS = "tips"
+    """What became of each tip the build tried to carry."""
+
+    UNREVIEWED = "unreviewed"
+    """The branches left out because their author has not reviewed them."""
+
+    SEMANTIC_BREAK = "semantic_break"
+    """The pair a localised break was narrowed to, absent when nothing was localised."""
+
+    BRANCH = "branch"
+    """Which branch an entry is about."""
+
+    CULPRIT = "culprit"
+    """The tip whose arrival turned the suite."""
+
+    BREAKS_AGAINST = "breaks_against"
+    """The earlier tip the culprit fails against alone."""
+
 
 UNREVIEWED_STATUS = "unreviewed"
 """How a branch left out for want of review is spelled in the printed report.
@@ -229,7 +265,7 @@ class TestCommandNotConfiguredError(ValueError):
 
 
 @dataclass(frozen=True)
-class TipOutcome:
+class PullRequestStackTipOutcome:
     """One tip's fate in one build."""
 
     branch: str
@@ -422,7 +458,9 @@ class IntegrationBuild:
         """
         self.git.run("checkout", "--quiet", "--detach", self.base_reference)
 
-    def merge(self, tip: Branch, already_included: list[str]) -> TipOutcome:
+    def merge(
+        self, tip: Branch, already_included: list[str]
+    ) -> PullRequestStackTipOutcome:
         """Merge one tip, or say why it was left out.
 
         :param tip: The tip to merge.
@@ -431,7 +469,7 @@ class IntegrationBuild:
         """
         result = self.git.merge(self.reference_to(tip.name))
         if result.succeeded:
-            return TipOutcome(
+            return PullRequestStackTipOutcome(
                 branch=tip.name,
                 pull_request_number=tip.pull_request_number,
                 status=TipStatus.MERGED,
@@ -441,13 +479,13 @@ class IntegrationBuild:
         conflicting_paths = self.git.unmerged_paths()
         self.git.abandon(tip.strategy)
         if not conflicting_paths:
-            return TipOutcome(
+            return PullRequestStackTipOutcome(
                 branch=tip.name,
                 pull_request_number=tip.pull_request_number,
                 status=TipStatus.INTEGRATION_FAILED,
                 explanation=result.error_output,
             )
-        return TipOutcome(
+        return PullRequestStackTipOutcome(
             branch=tip.name,
             pull_request_number=tip.pull_request_number,
             status=TipStatus.SKIPPED,
@@ -461,7 +499,9 @@ class IntegrationBuild:
         :return: Whether it applied a resolution out of its cache."""
         return any(RESOLUTION_REPLAY_MARKER in stream for stream in streams)
 
-    def _conclude_replay(self, tip: Branch, already_included: list[str]) -> TipOutcome:
+    def _conclude_replay(
+        self, tip: Branch, already_included: list[str]
+    ) -> PullRequestStackTipOutcome:
         """Commit a merge whose conflicts the replay already resolved.
 
         :param tip: The tip being merged.
@@ -469,7 +509,7 @@ class IntegrationBuild:
         :return: The tip's outcome, reported as replayed rather than as clean.
         """
         self.git.conclude_merge().raise_if_failed()
-        return TipOutcome(
+        return PullRequestStackTipOutcome(
             branch=tip.name,
             pull_request_number=tip.pull_request_number,
             status=TipStatus.REPLAYED,
@@ -527,7 +567,7 @@ def build_integration(
             provenance=provenance,
         )
         build.start(build_branch)
-        outcomes: list[TipOutcome] = []
+        outcomes: list[PullRequestStackTipOutcome] = []
         included: list[str] = []
         for tip in tips:
             outcome = build.merge(tip, included)
@@ -573,11 +613,11 @@ class SemanticBreak:
 
 
 @dataclass(frozen=True)
-class BisectReport:
-    """What one bisect localised."""
+class BreakLocationReport:
+    """What one search for the breaking tip found."""
 
     build_branch: str
-    """The branch the bisect assembled onto."""
+    """The branch the search assembled onto."""
 
     base: str
     """The upstream base it started from."""
@@ -589,20 +629,20 @@ class BisectReport:
     """The break, or ``None`` when every prefix of the build passed."""
 
     def as_json(self) -> str:
-        """:return: The bisect as one machine-readable document, led by its status."""
-        status = exit_code_for_bisect(self)
+        """:return: The search as one machine-readable document, led by its status."""
+        status = exit_code_for_break_location(self)
         return json.dumps(
             {
-                "status": status.name_for_a_caller,
-                "exit_code": int(status),
+                ReportKey.STATUS: status.name_for_a_caller,
+                ReportKey.EXIT_CODE: int(status),
                 **asdict(self),
             },
             indent=2,
         )
 
 
-def exit_code_for_bisect(report: BisectReport) -> IntegrationExitCode:
-    """:param report: What the bisect localised.
+def exit_code_for_break_location(report: BreakLocationReport) -> IntegrationExitCode:
+    """:param report: What the search localised.
     :return: The process exit code, which reports a located break the same way the build
         that failed reported it."""
     if report.semantic_break is None:
@@ -610,13 +650,13 @@ def exit_code_for_bisect(report: BisectReport) -> IntegrationExitCode:
     return IntegrationExitCode.TESTS_FAILED
 
 
-def bisect_integration(
+def locate_semantic_break(
     stack: Stack,
     git: MaintenanceGitCommandRunner,
     build_branch: str,
     provenance: ResolutionProvenance,
     test_command: str,
-) -> BisectReport:
+) -> BreakLocationReport:
     """Find the tip whose arrival breaks a build that merged cleanly.
 
     Assembles the same tips in the same order as :func:`build_integration` and runs the
@@ -652,7 +692,7 @@ def bisect_integration(
             if _run_tests(test_command, build.git.working_directory):
                 included.append(tip.name)
                 continue
-            return BisectReport(
+            return BreakLocationReport(
                 build_branch=build_branch,
                 base=stack.configuration.upstream_base,
                 tips_tested=tuple(included) + (tip.name,),
@@ -665,7 +705,7 @@ def bisect_integration(
                     ),
                 ),
             )
-        return BisectReport(
+        return BreakLocationReport(
             build_branch=build_branch,
             base=stack.configuration.upstream_base,
             tips_tested=tuple(included),
@@ -807,7 +847,7 @@ class IntegrationReport:
     base: str
     """The upstream base it started from."""
 
-    tips: tuple[TipOutcome, ...] = ()
+    tips: tuple[PullRequestStackTipOutcome, ...] = ()
     """What became of each tip, in the order they were merged."""
 
     tests_passed: bool | None = None
@@ -826,20 +866,20 @@ class IntegrationReport:
         status = exit_code_for(self)
         return json.dumps(
             {
-                "status": status.name_for_a_caller,
-                "exit_code": int(status),
+                ReportKey.STATUS: status.name_for_a_caller,
+                ReportKey.EXIT_CODE: int(status),
                 **asdict(self),
             },
             indent=2,
         )
 
     @property
-    def tips_left_out(self) -> tuple[TipOutcome, ...]:
+    def tips_left_out(self) -> tuple[PullRequestStackTipOutcome, ...]:
         """:return: Every tip whose commits are not in the finished branch."""
         return tuple(outcome for outcome in self.tips if not outcome.reached_the_build)
 
     @property
-    def replayed_by_a_skill(self) -> tuple[TipOutcome, ...]:
+    def replayed_by_a_skill(self) -> tuple[PullRequestStackTipOutcome, ...]:
         """:return: Every tip whose merge replayed a machine-written resolution."""
         return tuple(
             outcome
@@ -949,8 +989,8 @@ def print_build(report: IntegrationReport) -> None:
         )
 
 
-def print_bisect(report: BisectReport) -> None:
-    """:param report: The bisect to summarise."""
+def print_break_location(report: BreakLocationReport) -> None:
+    """:param report: The localised break to summarise."""
     localised = report.semantic_break
     if localised is None:
         print(
@@ -1173,18 +1213,20 @@ class BuildCommand(IntegrationCommand):
         if not run_tests:
             return None
         if not configuration.integration_test_command:
-            raise TestCommandNotConfiguredError("integration_test_command")
+            raise TestCommandNotConfiguredError(
+                ConfigurationKey.INTEGRATION_TEST_COMMAND
+            )
         return configuration.integration_test_command
 
 
 @dataclass(frozen=True)
-class BisectCommand(IntegrationCommand):
+class LocateBreakCommand(IntegrationCommand):
     """Finds which tip's arrival breaks a build that merged cleanly."""
 
     @property
     def invoked_as(self) -> str:
         """The name it is invoked by on the command line."""
-        return "bisect"
+        return "locate-break"
 
     @property
     def description(self) -> str:
@@ -1208,7 +1250,7 @@ class BisectCommand(IntegrationCommand):
         test_command = BuildCommand._test_command(run.configuration, run_tests=True)
         fork = run.fork()
         run.refresh_remotes()
-        report = bisect_integration(
+        report = locate_semantic_break(
             stack=run.stack(fork),
             git=run.git,
             build_branch=build_branch_name(datetime.now(timezone.utc)),
@@ -1218,8 +1260,8 @@ class BisectCommand(IntegrationCommand):
         if arguments.json:
             print(report.as_json())
         else:
-            print_bisect(report)
-        return exit_code_for_bisect(report)
+            print_break_location(report)
+        return exit_code_for_break_location(report)
 
 
 @dataclass(frozen=True)
@@ -1260,7 +1302,7 @@ class EscalateCommand(IntegrationCommand):
         test_command = BuildCommand._test_command(run.configuration, run_tests=True)
         fork = run.fork()
         run.refresh_remotes()
-        report = bisect_integration(
+        report = locate_semantic_break(
             stack=run.stack(fork),
             git=run.git,
             build_branch=build_branch_name(datetime.now(timezone.utc)),
@@ -1269,7 +1311,7 @@ class EscalateCommand(IntegrationCommand):
         )
         localised = report.semantic_break
         if localised is None:
-            print_bisect(report)
+            print_break_location(report)
             return IntegrationExitCode.SUCCESS
         comment = escalate_semantic_break(localised, run.configuration, fork)
         if arguments.json:
@@ -1290,7 +1332,7 @@ class EscalateCommand(IntegrationCommand):
                 f"{localised.culprit}\tescalated\t"
                 f"{run.configuration.integration_conflict_label}"
             )
-        return exit_code_for_bisect(report)
+        return exit_code_for_break_location(report)
 
 
 @dataclass(frozen=True)

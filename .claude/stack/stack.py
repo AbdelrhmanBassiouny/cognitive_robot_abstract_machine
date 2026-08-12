@@ -351,6 +351,36 @@ class Configuration:
         return (self.needs_resolution_label, self.integration_conflict_label)
 
 
+class ConfigurationKey(StrEnum):
+    """Every key the configuration files are read by.
+
+    Spelled once here rather than at each ``values.get`` and at each caller that names
+    one back to a reader - two spellings of the same key have nothing to keep them in
+    step, and a mismatch reads as a setting nobody configured.
+    """
+
+    IN_REVIEW_LABEL = "in_review_label"
+    """Marks a branch as promoted to the upstream and under review."""
+
+    REBASE_LABEL = "rebase_label"
+    """Opts a branch into the rebase strategy instead of the default merge."""
+
+    NEEDS_RESOLUTION_LABEL = "needs_resolution_label"
+    """Marks a branch withheld pending resolution of a conflict with its own base."""
+
+    INTEGRATION_CONFLICT_LABEL = "integration_conflict_label"
+    """Marks a branch that breaks a sibling it merges cleanly with."""
+
+    UPSTREAM_REPOSITORY = "upstream_repository"
+    """The repository every fork is forked from."""
+
+    UPSTREAM_BASE = "upstream_base"
+    """The upstream base branch every stack ultimately targets."""
+
+    INTEGRATION_TEST_COMMAND = "integration_test_command"
+    """The suite run against a finished integration branch."""
+
+
 def load_configuration(
     path: Path = CONFIGURATION_PATH,
     fork_repository: Repository | None = None,
@@ -371,23 +401,27 @@ def load_configuration(
     """
     values = _configuration_values(path)
     upstream_repository = upstream_repository or Repository.parse(
-        values["upstream_repository"]
+        values[ConfigurationKey.UPSTREAM_REPOSITORY]
     )
     resolution = resolved_remotes(path, fork_repository, upstream_repository)
     return Configuration(
-        in_review_label=values.get("in_review_label", "in-review"),
-        rebase_label=values.get("rebase_label", "rebase"),
-        needs_resolution_label=values.get("needs_resolution_label", "needs-resolution"),
+        in_review_label=values.get(ConfigurationKey.IN_REVIEW_LABEL, "in-review"),
+        rebase_label=values.get(ConfigurationKey.REBASE_LABEL, "rebase"),
+        needs_resolution_label=values.get(
+            ConfigurationKey.NEEDS_RESOLUTION_LABEL, "needs-resolution"
+        ),
         integration_conflict_label=values.get(
-            "integration_conflict_label", "integration-conflict"
+            ConfigurationKey.INTEGRATION_CONFLICT_LABEL, "integration-conflict"
         ),
         fork_repository=resolution.fork.repository,
         fork_remote=resolution.fork.name,
         upstream_repository=upstream_repository,
         upstream_remote=resolution.upstream_name,
-        upstream_base=values.get("upstream_base", "main"),
+        upstream_base=values.get(ConfigurationKey.UPSTREAM_BASE, "main"),
         upstream_setup_command=resolution.upstream_setup_command,
-        integration_test_command=values.get("integration_test_command", ""),
+        integration_test_command=values.get(
+            ConfigurationKey.INTEGRATION_TEST_COMMAND, ""
+        ),
     )
 
 
@@ -420,7 +454,8 @@ def resolved_remotes(
     configured_fork = values.get("fork_repository")
     return resolve_remotes(
         _remote_urls(),
-        upstream_repository or Repository.parse(values["upstream_repository"]),
+        upstream_repository
+        or Repository.parse(values[ConfigurationKey.UPSTREAM_REPOSITORY]),
         values.get("upstream_remote", "cram2"),
         fork_repository
         or (Repository.parse(configured_fork) if configured_fork else None),

@@ -14,8 +14,9 @@ from pathlib import Path
 
 from integration import (
     COMMANDS,
-    BisectCommand,
     IntegrationExitCode,
+    LocateBreakCommand,
+    RecordResolutionCommand,
     ResolutionAuthor,
     TipStatus,
 )
@@ -104,13 +105,13 @@ def test_every_command_the_skill_tells_the_reader_to_run_exists():
 
 def test_the_skill_localises_a_semantic_break_rather_than_judging_it_by_hand():
     """
-    A failing suite over ten merged tips names nothing on its own, and bisecting it by
+    A failing suite over ten merged tips names nothing on its own, and locating it by
     hand is several worktrees and several suite runs - mechanical, and easy to get subtly
     wrong. The skill has to reach for the command that does it.
     """
     skill = TRIAGE_SKILL_DOCUMENT.read_text()
     localiser = next(
-        command for command in COMMANDS if isinstance(command, BisectCommand)
+        command for command in COMMANDS if isinstance(command, LocateBreakCommand)
     )
 
     assert f"integration.py {localiser.invoked_as}" in skill
@@ -123,11 +124,19 @@ def test_the_skill_says_a_semantic_break_cannot_be_recorded():
     one on, and an agent that recorded one would report a fix that does not exist.
 
     The document has to rule it out where a reader meets it.
+
+    Asserted as what the section may not send a reader to *do* rather than as a sentence
+    it must contain: the hazard is an agent reaching for the recording command, which
+    stays the same however the prose around it is worded. Naming the deferral verdict is
+    not the hazard - the section names it in order to rule it out.
     """
     skill = TRIAGE_SKILL_DOCUMENT.read_text()
     semantic_break_section = skill[skill.index("## Step 4") :]
+    recording = next(
+        command for command in COMMANDS if isinstance(command, RecordResolutionCommand)
+    )
 
-    assert "Nothing can be recorded for a semantic break." in semantic_break_section
+    assert recording.invoked_as not in semantic_break_section
 
 
 def test_the_skill_records_its_own_resolutions_as_machine_written():

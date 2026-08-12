@@ -29,18 +29,21 @@ from integration import (
     IntegrationReport,
     ResolutionAuthor,
     ResolutionProvenance,
+    PullRequestStackTipOutcome,
+    ReportKey,
     SemanticBreak,
-    TipOutcome,
     TipStatus,
     UnreviewedBranch,
     build_branch_name,
     build_integration,
     escalate_semantic_break,
     exit_code_for,
-    exit_code_for_bisect,
+    exit_code_for_break_location,
     select_for_build,
     tips_of,
 )
+
+from maintenance_constants import CREDENTIAL_VARIABLES
 
 from test_maintenance import (
     A_LABEL_THIS_TOOL_NEVER_WRITES,
@@ -77,7 +80,7 @@ __all__ = ["fork_checkout"]
 # %% building the stack the builder consumes
 
 
-def a_pull_request(
+def create_pull_request_object(
     number: int,
     head: str,
     base: str,
@@ -101,7 +104,7 @@ def a_pull_request(
     )
 
 
-def a_branch(
+def create_branch_object(
     name: str,
     number: int,
     parent: str = UPSTREAM_BASE,
@@ -124,7 +127,9 @@ def a_branch(
     )
 
 
-def a_stack_of(branches: list[Branch], landed: frozenset[str] = frozenset()) -> Stack:
+def create_stack_object(
+    branches: list[Branch], landed: frozenset[str] = frozenset()
+) -> Stack:
     """
     :param branches: The stack's nodes.
     :param landed: The branches whose commits are already in the upstream base.
@@ -163,7 +168,18 @@ def build(
     )
 
 
-def outcome_for(report: IntegrationReport, branch: str) -> TipOutcome:
+def branch_names_in(checkout: ForkCheckout) -> set[str]:
+    """
+    :param checkout: The checkout to read.
+    :return: Every branch it holds, whichever one is checked out.
+    """
+    return {
+        line.strip().lstrip("* ")
+        for line in checkout.run_git("branch", "--list").splitlines()
+    }
+
+
+def outcome_for(report: IntegrationReport, branch: str) -> PullRequestStackTipOutcome:
     """
     :param report: The build report.
     :param branch: The tip to look up.
@@ -181,7 +197,12 @@ def test_only_the_tip_of_a_stack_is_merged():
     commits twice and say nothing new.
     """
     tips = tips_of(
-        a_stack_of([a_branch("bottom", 1), a_branch("top", 2, parent="bottom")])
+        create_stack_object(
+            [
+                create_branch_object("bottom", 1),
+                create_branch_object("top", 2, parent="bottom"),
+            ]
+        )
     )
 
     assert [tip.name for tip in tips] == ["top"]
@@ -192,8 +213,8 @@ def test_a_branch_already_landed_upstream_is_left_out():
     Its commits are in the base the build starts from, so merging it adds nothing.
     """
     tips = tips_of(
-        a_stack_of(
-            [a_branch("landed", 1), a_branch("in-flight", 2)],
+        create_stack_object(
+            [create_branch_object("landed", 1), create_branch_object("in-flight", 2)],
             landed=frozenset({"landed"}),
         )
     )
@@ -207,8 +228,12 @@ def test_tips_are_merged_in_ascending_pull_request_order():
     is stated rather than left to whatever order the board happened to arrive in.
     """
     tips = tips_of(
-        a_stack_of(
-            [a_branch("later", 9), a_branch("earlier", 2), a_branch("middle", 5)]
+        create_stack_object(
+            [
+                create_branch_object("later", 9),
+                create_branch_object("earlier", 2),
+                create_branch_object("middle", 5),
+            ]
         )
     )
 
@@ -222,10 +247,10 @@ def test_a_draft_branch_is_left_out():
     it.
     """
     tips = tips_of(
-        a_stack_of(
+        create_stack_object(
             [
-                a_branch("reviewed", 1),
-                a_branch("unreviewed", 2, status=BranchStatus.DRAFT),
+                create_branch_object("reviewed", 1),
+                create_branch_object("unreviewed", 2, status=BranchStatus.DRAFT),
             ]
         )
     )
@@ -239,7 +264,11 @@ def test_a_branch_promoted_upstream_is_still_carried():
     test written against ``ready`` alone would drop every branch already promoted - the
     most reviewed work there is, and still not in the base.
     """
-    tips = tips_of(a_stack_of([a_branch("promoted", 1, status=BranchStatus.IN_REVIEW)]))
+    tips = tips_of(
+        create_stack_object(
+            [create_branch_object("promoted", 1, status=BranchStatus.IN_REVIEW)]
+        )
+    )
 
     assert [tip.name for tip in tips] == ["promoted"]
 
@@ -251,10 +280,10 @@ def test_a_ready_branch_standing_on_a_draft_is_left_out_with_it():
     "only ready pull requests" that quietly does the opposite.
     """
     tips = tips_of(
-        a_stack_of(
+        create_stack_object(
             [
-                a_branch("unreviewed", 1, status=BranchStatus.DRAFT),
-                a_branch("reviewed", 2, parent="unreviewed"),
+                create_branch_object("unreviewed", 1, status=BranchStatus.DRAFT),
+                create_branch_object("reviewed", 2, parent="unreviewed"),
             ]
         )
     )
@@ -269,11 +298,13 @@ def test_the_last_reviewed_branch_below_a_draft_is_the_one_merged():
     draft, not the stack's own tip.
     """
     tips = tips_of(
-        a_stack_of(
+        create_stack_object(
             [
-                a_branch("bottom", 1),
-                a_branch("middle", 2, parent="bottom"),
-                a_branch("top", 3, parent="middle", status=BranchStatus.DRAFT),
+                create_branch_object("bottom", 1),
+                create_branch_object("middle", 2, parent="bottom"),
+                create_branch_object(
+                    "top", 3, parent="middle", status=BranchStatus.DRAFT
+                ),
             ]
         )
     )
@@ -281,13 +312,15 @@ def test_the_last_reviewed_branch_below_a_draft_is_the_one_merged():
     assert [tip.name for tip in tips] == ["middle"]
 
 
-def test_an_unreviewed_branch_is_named_rather_than_silently_dropped():
+def test_create_unreviewed_branch_is_named_rather_than_silently_dropped():
     """
     A build that carries nine of nineteen branches and says so only by omission reads as
     having covered everything. Each one left out names itself and why.
     """
     unreviewed = select_for_build(
-        a_stack_of([a_branch("unreviewed", 7, status=BranchStatus.DRAFT)])
+        create_stack_object(
+            [create_branch_object("unreviewed", 7, status=BranchStatus.DRAFT)]
+        )
     ).unreviewed
 
     assert [
@@ -302,10 +335,10 @@ def test_a_branch_left_out_for_its_ancestor_names_that_ancestor():
     author can see nothing wrong with it - the draft beneath it is the thing to act on.
     """
     unreviewed = select_for_build(
-        a_stack_of(
+        create_stack_object(
             [
-                a_branch("beneath", 1, status=BranchStatus.DRAFT),
-                a_branch("above", 2, parent="beneath"),
+                create_branch_object("beneath", 1, status=BranchStatus.DRAFT),
+                create_branch_object("above", 2, parent="beneath"),
             ]
         )
     ).unreviewed
@@ -324,9 +357,9 @@ def test_leaving_a_branch_out_as_unreviewed_is_not_a_failed_build():
     reach the exit status that means a tip the build tried to carry did not make it.
     """
     status = exit_code_for(
-        a_report(
-            tips=(a_tip("carried", TipStatus.MERGED),),
-            unreviewed=(an_unreviewed_branch("a-draft"),),
+        create_report(
+            tips=(create_tip("carried", TipStatus.MERGED),),
+            unreviewed=(create_unreviewed_branch("a-draft"),),
         )
     )
 
@@ -339,10 +372,12 @@ def test_a_reviewed_branch_whose_only_child_is_a_draft_becomes_the_merge_point()
     branch, so it is merged itself rather than vanishing behind a child no build takes.
     """
     tips = tips_of(
-        a_stack_of(
+        create_stack_object(
             [
-                a_branch("reviewed", 1),
-                a_branch("unreviewed", 2, parent="reviewed", status=BranchStatus.DRAFT),
+                create_branch_object("reviewed", 1),
+                create_branch_object(
+                    "unreviewed", 2, parent="reviewed", status=BranchStatus.DRAFT
+                ),
             ]
         )
     )
@@ -372,7 +407,7 @@ def test_the_pointer_moves_to_the_build_that_finished(fork_checkout: ForkCheckou
     """
     fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
 
-    build(fork_checkout, [a_pull_request(1, "only-tip", UPSTREAM_BASE)])
+    build(fork_checkout, [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)])
 
     assert fork_checkout.run_git(
         "rev-parse", integration.POINTER_BRANCH
@@ -392,8 +427,8 @@ def test_a_build_contains_every_cleanly_merging_tip(fork_checkout: ForkCheckout)
     report = build(
         fork_checkout,
         [
-            a_pull_request(1, "first-tip", UPSTREAM_BASE),
-            a_pull_request(2, "second-tip", UPSTREAM_BASE),
+            create_pull_request_object(1, "first-tip", UPSTREAM_BASE),
+            create_pull_request_object(2, "second-tip", UPSTREAM_BASE),
         ],
     )
 
@@ -406,7 +441,7 @@ def test_a_build_contains_every_cleanly_merging_tip(fork_checkout: ForkCheckout)
     assert (fork_checkout.project_root / "second-tip-file").exists()
 
 
-def test_a_build_leaves_an_unreviewed_branch_out_and_says_so(
+def test_a_build_leaves_create_unreviewed_branch_out_and_says_so(
     fork_checkout: ForkCheckout,
 ):
     """
@@ -420,8 +455,8 @@ def test_a_build_leaves_an_unreviewed_branch_out_and_says_so(
     report = build(
         fork_checkout,
         [
-            a_pull_request(1, "reviewed", UPSTREAM_BASE),
-            a_pull_request(2, "unreviewed", UPSTREAM_BASE, draft=True),
+            create_pull_request_object(1, "reviewed", UPSTREAM_BASE),
+            create_pull_request_object(2, "unreviewed", UPSTREAM_BASE, draft=True),
         ],
     )
 
@@ -448,9 +483,9 @@ def test_a_conflicting_tip_is_skipped_and_the_build_continues(
     report = build(
         fork_checkout,
         [
-            a_pull_request(1, "first-tip", UPSTREAM_BASE),
-            a_pull_request(2, "second-tip", UPSTREAM_BASE),
-            a_pull_request(3, "third-tip", UPSTREAM_BASE),
+            create_pull_request_object(1, "first-tip", UPSTREAM_BASE),
+            create_pull_request_object(2, "second-tip", UPSTREAM_BASE),
+            create_pull_request_object(3, "third-tip", UPSTREAM_BASE),
         ],
     )
 
@@ -474,8 +509,8 @@ def test_a_skipped_tip_names_the_tip_it_collided_with(fork_checkout: ForkCheckou
     report = build(
         fork_checkout,
         [
-            a_pull_request(1, "first-tip", UPSTREAM_BASE),
-            a_pull_request(2, "second-tip", UPSTREAM_BASE),
+            create_pull_request_object(1, "first-tip", UPSTREAM_BASE),
+            create_pull_request_object(2, "second-tip", UPSTREAM_BASE),
         ],
     )
 
@@ -500,7 +535,9 @@ def test_a_tip_conflicting_with_the_base_itself_names_the_base(
     fork_checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
     fork_checkout.run_git("fetch", "--quiet", "cram2")
 
-    report = build(fork_checkout, [a_pull_request(1, "stale-tip", UPSTREAM_BASE)])
+    report = build(
+        fork_checkout, [create_pull_request_object(1, "stale-tip", UPSTREAM_BASE)]
+    )
 
     skipped = outcome_for(report, "stale-tip")
     assert skipped.status is TipStatus.SKIPPED
@@ -522,7 +559,9 @@ def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
     fork_checkout.run_git("push", "--quiet", "origin", "unrelated-tip:unrelated-tip")
     fork_checkout.run_git("fetch", "--quiet", "origin")
 
-    report = build(fork_checkout, [a_pull_request(1, "unrelated-tip", UPSTREAM_BASE)])
+    report = build(
+        fork_checkout, [create_pull_request_object(1, "unrelated-tip", UPSTREAM_BASE)]
+    )
 
     stopped = outcome_for(report, "unrelated-tip")
     assert stopped.status is TipStatus.INTEGRATION_FAILED
@@ -568,8 +607,8 @@ def two_colliding_tips(checkout: ForkCheckout) -> list[PullRequest]:
     checkout.run_git("push", "--quiet", "origin", "second-tip:second-tip")
     checkout.run_git("fetch", "--quiet", "origin")
     return [
-        a_pull_request(1, "first-tip", UPSTREAM_BASE),
-        a_pull_request(2, "second-tip", UPSTREAM_BASE),
+        create_pull_request_object(1, "first-tip", UPSTREAM_BASE),
+        create_pull_request_object(2, "second-tip", UPSTREAM_BASE),
     ]
 
 
@@ -758,7 +797,7 @@ def test_a_build_publishes_nothing(fork_checkout: ForkCheckout):
     fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
     published_before = fork_checkout.commit_on_the_fork("only-tip")
 
-    build(fork_checkout, [a_pull_request(1, "only-tip", UPSTREAM_BASE)])
+    build(fork_checkout, [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)])
 
     assert fork_checkout.commit_on_the_fork("only-tip") == published_before
     assert (
@@ -777,7 +816,7 @@ def test_a_build_leaves_the_invoking_checkout_on_its_own_branch(
     fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
     fork_checkout.run_git("checkout", "--quiet", "only-tip")
 
-    build(fork_checkout, [a_pull_request(1, "only-tip", UPSTREAM_BASE)])
+    build(fork_checkout, [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)])
 
     assert fork_checkout.run_git("branch", "--show-current") == "only-tip"
 
@@ -789,7 +828,7 @@ def test_a_build_leaves_no_worktree_of_its_own_behind(fork_checkout: ForkCheckou
     """
     fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
 
-    build(fork_checkout, [a_pull_request(1, "only-tip", UPSTREAM_BASE)])
+    build(fork_checkout, [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)])
 
     assert "stack-restack-" not in fork_checkout.run_git("worktree", "list")
 
@@ -805,7 +844,7 @@ def test_a_passing_suite_leaves_the_build_a_success(fork_checkout: ForkCheckout)
 
     report = build(
         fork_checkout,
-        [a_pull_request(1, "only-tip", UPSTREAM_BASE)],
+        [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)],
         test_command=f"{sys.executable} -c pass",
     )
 
@@ -824,7 +863,7 @@ def test_a_failing_suite_is_never_reported_as_a_clean_build(
 
     report = build(
         fork_checkout,
-        [a_pull_request(1, "only-tip", UPSTREAM_BASE)],
+        [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)],
         test_command=f"{sys.executable} -c 'raise SystemExit(1)'",
     )
 
@@ -841,7 +880,9 @@ def test_a_suite_that_was_not_run_is_neither_a_pass_nor_a_failure(
     """
     fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
 
-    report = build(fork_checkout, [a_pull_request(1, "only-tip", UPSTREAM_BASE)])
+    report = build(
+        fork_checkout, [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)]
+    )
 
     assert report.tests_passed is None
     assert exit_code_for(report) is IntegrationExitCode.SUCCESS
@@ -898,21 +939,13 @@ def test_a_failing_suite_over_a_machine_written_replay_is_its_own_status(
 # %% localising a semantic break
 
 
-THE_SUITE_RUNNER = """\
-import pathlib
-import sys
-
-# Only a build carrying the test needs the module it imports, which is what makes this
-# fail for a combination of tips rather than for either one of them.
-if pathlib.Path("test_needs_the_module.py").exists():
-    import a_module
-
-    assert a_module.VALUE
-sys.exit(0)
-"""
+BUILD_CHECK_SCRIPT = Path(__file__).parent / "dataset" / "check_the_build.py"
 """
 A suite whose verdict depends on what the build actually contains, so a semantic break
 is reproduced rather than declared. Lives on the base, where every build has it.
+
+Kept as a real Python file rather than a string, so it is syntax-checked and readable as
+the program it is.
 """
 
 
@@ -922,7 +955,7 @@ def two_tips_that_break_only_together(checkout: ForkCheckout) -> list[PullReques
 
     The shape a semantic break really takes: one branch's test comes to depend on
     something another branch removes. Neither is wrong, neither conflicts textually, and
-    only a build carrying both can see it. An innocent tip merges first, so a bisect that
+    only a build carrying both can see it. An innocent tip merges first, so a search that
     blamed everything already in the build would be caught naming it.
 
     :param checkout: The checkout to build them in.
@@ -930,8 +963,10 @@ def two_tips_that_break_only_together(checkout: ForkCheckout) -> list[PullReques
     """
     checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
     (checkout.project_root / "a_module.py").write_text("VALUE = 1\n")
-    (checkout.project_root / "check_the_build.py").write_text(THE_SUITE_RUNNER)
-    checkout.run_git("add", "a_module.py", "check_the_build.py")
+    (checkout.project_root / BUILD_CHECK_SCRIPT.name).write_text(
+        BUILD_CHECK_SCRIPT.read_text()
+    )
+    checkout.run_git("add", "a_module.py", BUILD_CHECK_SCRIPT.name)
     checkout.run_git("commit", "--quiet", "-m", "the module both tips are about")
     checkout.run_git("push", "--quiet", "origin", UPSTREAM_BASE)
     checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
@@ -956,24 +991,24 @@ def two_tips_that_break_only_together(checkout: ForkCheckout) -> list[PullReques
     checkout.run_git("fetch", "--quiet", "origin")
     checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
     return [
-        a_pull_request(1, "innocent-tip", UPSTREAM_BASE),
-        a_pull_request(2, "needs-the-module", UPSTREAM_BASE),
-        a_pull_request(3, "removes-the-module", UPSTREAM_BASE),
+        create_pull_request_object(1, "innocent-tip", UPSTREAM_BASE),
+        create_pull_request_object(2, "needs-the-module", UPSTREAM_BASE),
+        create_pull_request_object(3, "removes-the-module", UPSTREAM_BASE),
     ]
 
 
-def bisect(
+def locate_break(
     checkout: ForkCheckout, pull_requests: list[PullRequest], test_command: str
-) -> integration.BisectReport:
+) -> integration.BreakLocationReport:
     """
-    Run one bisect against the scratch fork.
+    Run one search for the breaking tip against the scratch fork.
 
     :param checkout: The checkout to build in.
     :param pull_requests: The board entries the stack is derived from.
     :param test_command: The suite that decides whether a build works.
     :return: What it localised.
     """
-    return integration.bisect_integration(
+    return integration.locate_semantic_break(
         stack=a_stack(checkout, pull_requests),
         git=checkout.git,
         build_branch=A_BUILD_BRANCH,
@@ -982,13 +1017,13 @@ def bisect(
     )
 
 
-A_SUITE_OVER_THE_BUILD = f"{sys.executable} check_the_build.py"
+A_SUITE_OVER_THE_BUILD = f"{sys.executable} {BUILD_CHECK_SCRIPT.name}"
 """
-The command that runs :data:`THE_SUITE_RUNNER` against whatever a build contains.
+The command that runs :data:`BUILD_CHECK_SCRIPT` against whatever a build contains.
 """
 
 
-def test_a_bisect_names_the_tip_whose_arrival_broke_the_suite(
+def test_the_search_names_the_tip_whose_arrival_broke_the_suite(
     fork_checkout: ForkCheckout,
 ):
     """
@@ -999,13 +1034,13 @@ def test_a_bisect_names_the_tip_whose_arrival_broke_the_suite(
     """
     pull_requests = two_tips_that_break_only_together(fork_checkout)
 
-    report = bisect(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
+    report = locate_break(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
 
     assert report.semantic_break is not None
     assert report.semantic_break.culprit == "removes-the-module"
 
 
-def test_a_bisect_names_the_tip_the_culprit_actually_breaks_against(
+def test_the_search_names_the_tip_the_culprit_actually_breaks_against(
     fork_checkout: ForkCheckout,
 ):
     """
@@ -1014,78 +1049,78 @@ def test_a_bisect_names_the_tip_the_culprit_actually_breaks_against(
     """
     pull_requests = two_tips_that_break_only_together(fork_checkout)
 
-    report = bisect(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
+    report = locate_break(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
 
     assert report.semantic_break.breaks_against == "needs-the-module"
 
 
-def test_a_bisect_of_a_build_that_works_localises_nothing(fork_checkout: ForkCheckout):
+def test_searching_a_build_that_works_localises_nothing(fork_checkout: ForkCheckout):
     """
     There is no break to attribute, and inventing one would send somebody after a branch
     that is fine.
     """
     fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
 
-    report = bisect(
+    report = locate_break(
         fork_checkout,
-        [a_pull_request(1, "only-tip", UPSTREAM_BASE)],
+        [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)],
         f"{sys.executable} -c pass",
     )
 
     assert report.semantic_break is None
-    assert exit_code_for_bisect(report) is IntegrationExitCode.SUCCESS
+    assert exit_code_for_break_location(report) is IntegrationExitCode.SUCCESS
 
 
-def test_a_localised_break_is_never_reported_as_a_clean_bisect(
+def test_a_localised_break_is_never_reported_as_a_clean_search(
     fork_checkout: ForkCheckout,
 ):
     """
-    The exit status is the only half a caller with no model in it reads, and a bisect
+    The exit status is the only half a caller with no model in it reads, and a search
     that found the break is the case it most needs to hear about.
     """
     pull_requests = two_tips_that_break_only_together(fork_checkout)
 
-    report = bisect(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
+    report = locate_break(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
 
-    assert exit_code_for_bisect(report) is IntegrationExitCode.TESTS_FAILED
+    assert exit_code_for_break_location(report) is IntegrationExitCode.TESTS_FAILED
 
 
-def test_a_bisect_leaves_no_branch_of_its_own_behind(fork_checkout: ForkCheckout):
+def test_the_search_leaves_no_branch_of_its_own_behind(fork_checkout: ForkCheckout):
     """
     Narrowing asks one question per candidate, and a branch per question would
     accumulate a ref for every break ever localised. Only the build it assembled is a
     thing anybody meant to keep.
     """
     pull_requests = two_tips_that_break_only_together(fork_checkout)
+    before = branch_names_in(fork_checkout)
 
-    bisect(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
+    report = locate_break(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
 
-    branches = {
-        line.strip().lstrip("* ")
-        for line in fork_checkout.run_git("branch", "--list").splitlines()
-    }
-    assert not {branch for branch in branches if "against" in branch}
+    assert branch_names_in(fork_checkout) - before == {report.build_branch}
 
 
-def test_a_bisect_report_serialises_what_it_localised(fork_checkout: ForkCheckout):
+def test_the_search_report_serialises_what_it_localised(fork_checkout: ForkCheckout):
     """
     ``--json`` is what the triage skill reads, so the pair has to survive the document.
     """
     pull_requests = two_tips_that_break_only_together(fork_checkout)
 
     document = json.loads(
-        bisect(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD).as_json()
+        locate_break(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD).as_json()
     )
 
-    assert document["status"] == "tests-failed"
-    assert document["semantic_break"]["culprit"] == "removes-the-module"
-    assert document["semantic_break"]["breaks_against"] == "needs-the-module"
+    assert (
+        document[ReportKey.STATUS] == IntegrationExitCode.TESTS_FAILED.name_for_a_caller
+    )
+    localised = document[ReportKey.SEMANTIC_BREAK]
+    assert localised[ReportKey.CULPRIT] == "removes-the-module"
+    assert localised[ReportKey.BREAKS_AGAINST] == "needs-the-module"
 
 
 # %% telling the branch that breaks another
 
 
-def a_semantic_break(
+def create_semantic_break(
     culprit: str = "the-breaking-branch",
     number: int = 111,
     breaks_against: str | None = "the-relying-branch",
@@ -1111,7 +1146,7 @@ def test_escalating_a_break_blocks_the_branch_that_causes_it():
     """
     fork = RecordingPullRequests(labels={111: [A_LABEL_THIS_TOOL_NEVER_WRITES]})
 
-    escalate_semantic_break(a_semantic_break(), make_configuration(), fork)
+    escalate_semantic_break(create_semantic_break(), make_configuration(), fork)
 
     assert fork.label_writes == [
         RecordedLabelWrite(
@@ -1128,14 +1163,14 @@ def test_escalating_a_break_names_both_branches_to_the_one_that_broke_it():
     """
     fork = RecordingPullRequests()
 
-    escalate_semantic_break(a_semantic_break(), make_configuration(), fork)
+    escalate_semantic_break(create_semantic_break(), make_configuration(), fork)
 
     posted = fork.comments[0]
     assert posted.pull_request_number == 111
     assert "the-relying-branch" in posted.body
 
 
-def test_a_break_only_the_combination_causes_says_so_rather_than_naming_a_branch():
+def test_a_break_only_the_combination_causes_says_so_rather_than_naming_create_branch_object():
     """
     Narrowing does not always land on a single earlier tip, and reporting the whole
     build as the culprit's partner would send its owner to branches that are innocent.
@@ -1143,7 +1178,7 @@ def test_a_break_only_the_combination_causes_says_so_rather_than_naming_a_branch
     fork = RecordingPullRequests()
 
     escalate_semantic_break(
-        a_semantic_break(breaks_against=None), make_configuration(), fork
+        create_semantic_break(breaks_against=None), make_configuration(), fork
     )
 
     assert "the-relying-branch" not in fork.comments[0].body
@@ -1152,8 +1187,8 @@ def test_a_break_only_the_combination_causes_says_so_rather_than_naming_a_branch
 # %% the exit status every build derives from what it left behind
 
 
-def a_report(
-    tips: tuple[TipOutcome, ...] = (),
+def create_report(
+    tips: tuple[PullRequestStackTipOutcome, ...] = (),
     tests_passed: bool | None = None,
     unreviewed: tuple[UnreviewedBranch, ...] = (),
 ) -> IntegrationReport:
@@ -1172,7 +1207,7 @@ def a_report(
     )
 
 
-def an_unreviewed_branch(
+def create_unreviewed_branch(
     branch: str, unreviewed_ancestor: str | None = None
 ) -> UnreviewedBranch:
     """
@@ -1187,18 +1222,18 @@ def an_unreviewed_branch(
     )
 
 
-def a_tip(
+def create_tip(
     branch: str,
     status: TipStatus,
     resolved_by: ResolutionAuthor | None = None,
-) -> TipOutcome:
+) -> PullRequestStackTipOutcome:
     """
     :param branch: The tip's branch.
     :param status: What became of it.
     :param resolved_by: Who authored the resolution replayed for it, if any.
     :return: The outcome.
     """
-    return TipOutcome(
+    return PullRequestStackTipOutcome(
         branch=branch,
         pull_request_number=1,
         status=status,
@@ -1211,7 +1246,7 @@ def test_a_build_that_merged_everything_is_a_success():
     :return: Nothing; the clean case has to stay clean or every status below is noise.
     """
     assert (
-        exit_code_for(a_report(tips=(a_tip("a", TipStatus.MERGED),)))
+        exit_code_for(create_report(tips=(create_tip("a", TipStatus.MERGED),)))
         is IntegrationExitCode.SUCCESS
     )
 
@@ -1230,7 +1265,7 @@ def test_a_tip_left_out_of_the_build_is_never_reported_as_a_clean_build(
     :param status: A status meaning the tip did not make it into the build.
     """
     assert (
-        exit_code_for(a_report(tips=(a_tip("a", status),)))
+        exit_code_for(create_report(tips=(create_tip("a", status),)))
         is IntegrationExitCode.TIP_LEFT_OUT
     )
 
@@ -1242,7 +1277,7 @@ def test_a_replayed_tip_alone_does_not_spoil_the_status():
     own status rather than the build's.
     """
     assert (
-        exit_code_for(a_report(tips=(a_tip("a", TipStatus.REPLAYED),)))
+        exit_code_for(create_report(tips=(create_tip("a", TipStatus.REPLAYED),)))
         is IntegrationExitCode.SUCCESS
     )
 
@@ -1253,7 +1288,9 @@ def test_a_failing_suite_outranks_a_tip_left_out():
     """
     assert (
         exit_code_for(
-            a_report(tips=(a_tip("a", TipStatus.SKIPPED),), tests_passed=False)
+            create_report(
+                tips=(create_tip("a", TipStatus.SKIPPED),), tests_passed=False
+            )
         )
         is IntegrationExitCode.TESTS_FAILED
     )
@@ -1272,11 +1309,15 @@ def test_the_report_serialises_what_the_build_left_behind():
     ``--json`` is what a caller with no model in it reads, so the document leads with
     the status rather than burying it among the outcomes.
     """
-    document = json.loads(a_report(tips=(a_tip("a-tip", TipStatus.SKIPPED),)).as_json())
+    document = json.loads(
+        create_report(tips=(create_tip("a-tip", TipStatus.SKIPPED),)).as_json()
+    )
 
-    assert document["status"] == "tip-left-out"
-    assert document["exit_code"] == int(IntegrationExitCode.TIP_LEFT_OUT)
-    assert document["tips"][0]["branch"] == "a-tip"
+    assert (
+        document[ReportKey.STATUS] == IntegrationExitCode.TIP_LEFT_OUT.name_for_a_caller
+    )
+    assert document[ReportKey.EXIT_CODE] == int(IntegrationExitCode.TIP_LEFT_OUT)
+    assert document[ReportKey.TIPS][0][ReportKey.BRANCH] == "a-tip"
 
 
 # %% the command line
@@ -1295,7 +1336,7 @@ def run_integration(
     environment = {
         key: value
         for key, value in dict(**subprocess.os.environ).items()
-        if key not in {"GH_TOKEN", "GITHUB_TOKEN"}
+        if key not in set(CREDENTIAL_VARIABLES)
     }
     return subprocess.run(
         [sys.executable, str(INTEGRATION_SCRIPT), *arguments],

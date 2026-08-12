@@ -143,12 +143,12 @@ catch this: neither branch is wrong, and the failure exists only in a tree neith
 **Find the pair before judging it.** A failing suite over ten merged tips names nothing:
 
 ```bash
-python .claude/stack/integration.py bisect --json
+python .claude/stack/integration.py locate-break --json
 ```
 
 It re-assembles the tips in the same order and runs the suite after each, so what it reports
 describes the build that failed. It names the tip whose arrival turned the suite, and narrows
-to the earlier tip that alone reproduces it. Do not bisect by hand - it is several worktrees
+to the earlier tip that alone reproduces it. Do not search by hand - it is several worktrees
 and several suite runs, and getting it subtly wrong is easy.
 
 Confirm what it hands you rather than taking it: each of the two on its own should pass the
