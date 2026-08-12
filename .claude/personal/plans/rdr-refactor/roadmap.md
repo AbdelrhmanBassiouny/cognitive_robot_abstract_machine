@@ -1537,3 +1537,36 @@ the developer's. `parameterizer.py:167`'s `InvalidEllipsis` probe and the
 `D-core-support` (#67) is unchanged since §14 and §18: `mergeable_state: dirty`,
 `needs-resolution`, still `8eb7518a`. #98's own base is that same unmoved SHA, so #98 is
 unaffected; the readiness rule still cannot see it.
+
+### Follow-up the same day: both open threads closed, one of them by this session
+
+The section above reported the two threads §18 left open as "still open and were not answered —
+both are the developer's." That was already stale when written, and the failure is worth
+recording because it is the *same* class this plan keeps catching, turned back on itself.
+
+The developer resolved the `pytest.raises(AttributeError)` thread, and replied **"ok do the
+recommended actions"** on the `_RecordingReporter` thread at **10:27:48Z** — after this session
+read the threads and while it was still mid-round. Nothing re-read them before the round was
+reported finished, so a thread that had become *this session's* to act on was reported back as
+waiting on the developer.
+
+Done as `e52d74b4`: `_RecordingReporter`, its one consumer
+`test_description_is_usable_directly_as_the_start_label`, and the now-unused `ProgressReporter`
+import are gone. The test asserted that a `StrEnum` member arrives at a callee as its plain
+string — `StrEnum`'s own documented semantics, not this code's behaviour — while
+`test_fitting_description_is_the_label_shown_beside_the_bar` already asserts that equality
+directly. `test_progress.py` is left with the two assertions that constrain this PR's code.
+`test_eql_rdr` **151 → 150 passed, 0 failed**, collected-id diff exactly the one removed test.
+Replied on the thread naming the commit, then resolved it, in that order.
+
+That makes **five** review-driven removals of this shape across the last two rounds — three in
+`c4e297af`, two here — all of them assertions that restated something already guaranteed by a
+declaration, a sibling test, or the language. Worth treating as a standing review lens for this
+plan rather than a coincidence.
+
+**The procedural lesson, stated so the next session inherits it:** §5, §14 and §18 each caught a
+*note* that had gone stale between being written and being read. This is the same thing one level
+up — the *live GitHub state* going stale between the gather step and the report step of a single
+session. `/plan-item-resolve` gathers threads at step 2 and reports at the end; on a round that
+takes hours, those are different worlds. Re-read the PR's threads immediately before reporting a
+round finished, not only when starting it.

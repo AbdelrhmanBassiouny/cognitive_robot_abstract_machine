@@ -446,7 +446,18 @@ items:
     failed. format_docstrings.py deviated a fifth time, in a new way - it split
     ConclusionDomain.allows_none''s "``Optional`` / ``... | None``" across a blank line, reading the
     ellipsis as a sentence end - reverted that hunk, kept the rest. PR description rewritten to match;
-    #98 left in draft. The two review threads section 18 left open are still open and untouched.
+    #98 left in draft. Both of section 18''s deliberately-open review threads are now closed: the
+    developer resolved the pytest.raises(AttributeError) one, and replied "ok do the recommended
+    actions" on the _RecordingReporter one at 10:27:48Z - after this session had read the threads
+    and while it was mid-round, so the first report of this round wrongly recorded it as still
+    waiting on the developer. Done as e52d74b4: _RecordingReporter, its one test
+    (test_description_is_usable_directly_as_the_start_label, which asserted StrEnum''s own
+    documented pass-through semantics) and the now-unused ProgressReporter import are gone;
+    test_progress.py keeps only the description''s value and NullProgressReporter''s inert
+    lifecycle. test_eql_rdr 151 -> 150 passed, 0 failed, collected-id diff exactly the one removed
+    test. Replied on the thread and resolved it. Lesson for the next round, same class as the
+    staleness this plan keeps catching: re-read the PR''s threads immediately before reporting a
+    round finished, not only at its start.
     Full account in roadmap.md section 19.'
 - id: d-core-single-class
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
