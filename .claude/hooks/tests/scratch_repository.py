@@ -13,6 +13,7 @@ import shutil
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import plan_manifest_tools
@@ -31,6 +32,43 @@ WORK_BRANCH = "some-work-branch"
 """
 The throwaway branch a scratch repository is left checked out on.
 """
+
+SET_UP_CLONE_FIXTURE = Path(__file__).parent / "fixtures" / "set-up-clone"
+"""
+A checked-in clone layout satisfying every check-setup.sh check that reads a file, laid
+out under the same relative paths it will occupy in a scratch project root.
+"""
+
+
+class SetupPrerequisiteFile(StrEnum):
+    """
+    The files check-setup.sh's ``tooling_files`` check requires, relative to the project
+    root.
+
+    Stated here as well as in the fixture tree deliberately. A rename that breaks the
+    check then has to be made in both places, rather than the fixture and the tests
+    following each other silently and asserting nothing.
+    """
+
+    BUILD_DASHBOARD = ".claude/skills/plan-dashboard/build_dashboard.py"
+    """
+    The dashboard builder the plan-dashboard skill runs.
+    """
+
+    REFRESH_DASHBOARD = ".claude/skills/plan-dashboard/refresh_dashboard.sh"
+    """
+    The refresh entry point the same skill runs.
+    """
+
+    DASHBOARD_REQUIREMENTS = ".claude/skills/plan-dashboard/requirements.txt"
+    """
+    The requirements file check-setup.sh also derives the dependency check from.
+    """
+
+    PLAN_SCHEMA = ".claude/skills/plan-dashboard/plan-schema.md"
+    """
+    The manifest field reference.
+    """
 
 
 def initialize_bare_repository(path: Path) -> Path:
@@ -125,6 +163,41 @@ class ScratchRepository:
                 HOOKS_SOURCE_DIRECTORY / script_name,
                 self.project_root / ".claude" / "hooks" / script_name,
             )
+
+    def write_setup_prerequisites(self) -> None:
+        """
+        Write everything check-setup.sh requires of a set up clone, apart from the
+        personal-notes branch and CLAUDE.local.md.
+
+        Leaves CLAUDE.local.md out deliberately: session-start.sh writes it, so a test
+        of that script must not find it already there - which is why this is a named
+        step rather than part of building the repository.
+        """
+        shutil.copytree(SET_UP_CLONE_FIXTURE, self.project_root, dirs_exist_ok=True)
+
+    def run_hook_script(
+        self, script_name: str, *arguments: str
+    ) -> subprocess.CompletedProcess[str]:
+        """
+        Run one of the installed hook scripts from the project root.
+
+        Returns the finished process rather than asserting on it, since a hook's exit
+        code and stderr are often what a test is about.
+
+        :param script_name: File name within the scratch layout's hooks directory.
+        :param arguments: The arguments to pass to the script.
+        :return: The finished subprocess.
+        """
+        return subprocess.run(
+            [
+                "bash",
+                str(self.project_root / ".claude" / "hooks" / script_name),
+                *arguments,
+            ],
+            cwd=self.project_root,
+            capture_output=True,
+            text=True,
+        )
 
     def write(self, relative_path: str, content: str) -> Path:
         """

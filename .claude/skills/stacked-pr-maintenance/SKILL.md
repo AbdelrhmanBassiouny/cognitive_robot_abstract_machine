@@ -223,8 +223,8 @@ and you do not fix it. Report it to the branch's owner and move on:
 2. Post a comment on the fork pull request, prefixed `🔴 ROUTINE - NEEDS RESOLUTION:`, stating what
    you were doing, what happened (the conflicting files, or the failing check and its conclusion),
    and the ask - that they resolve and push, and you will pick the branch back up once it restacks
-   clean. This comment is the only channel available to you; if that session is still subscribed to
-   its own pull request, it arrives there as a live event rather than text sitting on GitHub.
+   clean. This comment is the only channel available to you: no session subscribes to a pull
+   request's activity, so it sits on GitHub until the owner reads it - write it to stand alone.
 3. Label the pull request `needs-resolution` (via `stack.py labels`, so the rest of its labels
    survive) so the state is visible even if no session is listening, and so you never re-attempt the
    same failing restack every run.
