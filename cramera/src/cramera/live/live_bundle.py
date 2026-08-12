@@ -123,7 +123,9 @@ def _write_bundle(bridge: Bridge, output_directory: Path, signature: str) -> str
             identity_root=robot.root,
         )
         models.append(_model_payload(report, is_robot=True))
-    missing_assets = sorted({missing for model in models for missing in model.pop("missing")})
+    missing_assets = sorted(
+        {missing for model in models for missing in model.pop("missing")}
+    )
     scene = {
         "name": paths.LIVE_SCENE_NAME,
         "models": models,
@@ -159,9 +161,9 @@ def _is_overlay_body(body: Body) -> bool:
     """
     Whether the object overlay renders this body instead of the scene bundle.
 
-    Bodies named like mesh files are demo objects that spawn, move and disappear
-    mid-run; the overlay streams their poses live, so baking them into the bundle
-    would show them twice.
+    Bodies named like mesh files are demo objects that spawn, move and disappear mid-
+    run; the overlay streams their poses live, so baking them into the bundle would show
+    them twice.
 
     :param body: The body to check.
     """

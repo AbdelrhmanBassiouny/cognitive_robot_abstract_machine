@@ -1,86 +1,79 @@
 """
-Unit tests for :func:`cramera.live.runner.start`'s control flow.
-
-``hooks.install_*`` monkey-patches coraplex/giskardpy classes process-globally with no
-uninstall (see :meth:`cramera.live.bridge.Bridge.claim_hook`), so these tests replace
-them with no-ops rather than calling them for real, and substitute a fresh
-:class:`Bridge` for :data:`cramera.live.runner.BRIDGE` so no test touches or dirties the
-real process singleton.
+Unit tests for the live runner: the library entry point and the demo wrapper CLI.
 """
 
 from __future__ import annotations
 
+import os
+import runpy
+import signal
+import sys
+from dataclasses import dataclass, field
+
 from semantic_digital_twin.world import World
+from typing_extensions import Any, Dict, List
 
-from cramera.live import runner
-from cramera.live.bridge import Bridge
+from cramera.live import runner, visualization
 
 
-def install_no_op_hooks(monkeypatch):
+@dataclass
+class StartedVisualization:
     """
-    Replace every hook-installing call ``start()`` makes with a no-op.
+    A visualization recorder standing in for ``LiveVisualization``.
     """
-    monkeypatch.setattr(runner.hooks, "install_mesh_hook", lambda: None)
-    monkeypatch.setattr(runner.hooks, "install_model_source_hooks", lambda: None)
-    monkeypatch.setattr(runner.hooks, "install_plan_hooks", lambda: None)
-    monkeypatch.setattr(runner.hooks, "install_tick_hook", lambda: None)
+
+    world: World
+    port: int
+    started: bool = False
+
+    def start(self):
+        self.started = True
+        return self
 
 
 class TestStart:
-    def test_reuses_the_running_server_without_calling_serve_again(self, monkeypatch):
-        bridge = Bridge()
-        sentinel_server = object()
-        bridge.live_server = sentinel_server
-        monkeypatch.setattr(runner, "BRIDGE", bridge)
-
-        def fail_if_called(*args, **kwargs):
-            raise AssertionError("serve() must not be called when already running")
-
-        monkeypatch.setattr(runner, "serve", fail_if_called)
-
-        assert runner.start() is sentinel_server
-
-    def test_start_installs_hooks_and_serves_the_bound_bridge(self, monkeypatch):
-        bridge = Bridge()
-        monkeypatch.setattr(runner, "BRIDGE", bridge)
-        install_no_op_hooks(monkeypatch)
-        sentinel_server = object()
-        serve_calls = []
-
-        def fake_serve(passed_bridge, port):
-            serve_calls.append((passed_bridge, port))
-            return sentinel_server
-
-        monkeypatch.setattr(runner, "serve", fake_serve)
-
-        result = runner.start(port=1234)
-
-        assert serve_calls == [(bridge, 1234)]
-        assert result is sentinel_server
-        assert bridge.live_server is sentinel_server
-
-    def test_start_binds_and_snapshots_the_given_world(self, monkeypatch):
-        bridge = Bridge()
-        monkeypatch.setattr(runner, "BRIDGE", bridge)
-        install_no_op_hooks(monkeypatch)
-        monkeypatch.setattr(runner, "serve", lambda passed_bridge, port: object())
+    def test_start_serves_the_given_world(self, monkeypatch):
+        monkeypatch.setattr(visualization, "LiveVisualization", StartedVisualization)
         world = World()
 
-        runner.start(world=world)
+        result = runner.start(world, port=1234)
 
-        assert bridge.world is world
-        assert bridge.robot is None  # an empty world has no AbstractRobot
+        assert isinstance(result, StartedVisualization)
+        assert result.world is world
+        assert result.port == 1234
+        assert result.started is True
 
-    def test_start_without_a_world_leaves_the_bridge_unbound(self, monkeypatch):
+
+class TestMain:
+    def test_main_preselects_the_cramera_backend_and_runs_the_demo(self, monkeypatch):
+        run_calls: List[Dict[str, Any]] = []
+        monkeypatch.delenv(runner.VISUALIZATION_BACKEND_VARIABLE, raising=False)
+        monkeypatch.setattr(sys, "argv", ["cramera-live", "/demos/demo.py"])
+        monkeypatch.setattr(
+            runpy,
+            "run_path",
+            lambda path, run_name: run_calls.append(
+                {"path": path, "run_name": run_name}
+            ),
+        )
+        monkeypatch.setattr(signal, "pause", lambda: None)
+
+        runner.main()
+
+        assert os.environ[runner.VISUALIZATION_BACKEND_VARIABLE] == "cramera"
+        assert run_calls == [{"path": "/demos/demo.py", "run_name": "__main__"}]
+        assert "/demos" in sys.path
+
+    def test_main_keeps_an_explicit_backend_choice(self, monkeypatch):
         """
-        ``world=None`` is a real reachable state: the bridge attaches to the executing
-        world on the first executor tick instead.
+        ``CORAPLEX_VISUALIZATION=rerun cramera-live demo.py`` is a deliberate override
+        and must survive.
         """
-        bridge = Bridge()
-        monkeypatch.setattr(runner, "BRIDGE", bridge)
-        install_no_op_hooks(monkeypatch)
-        monkeypatch.setattr(runner, "serve", lambda passed_bridge, port: object())
+        monkeypatch.setenv(runner.VISUALIZATION_BACKEND_VARIABLE, "rerun")
+        monkeypatch.setattr(sys, "argv", ["cramera-live", "/demos/demo.py"])
+        monkeypatch.setattr(runpy, "run_path", lambda path, run_name: None)
+        monkeypatch.setattr(signal, "pause", lambda: None)
 
-        runner.start()
+        runner.main()
 
-        assert bridge.world is None
+        assert os.environ[runner.VISUALIZATION_BACKEND_VARIABLE] == "rerun"

@@ -59,7 +59,7 @@ class WorldModelSync(ModelChangeCallback):
     """
 
     def on_model_change(self, **kwargs) -> None:
-        self.bridge.bind()
+        self.bridge.observe_model_change()
 
 
 # %% plan synchronization
@@ -68,8 +68,8 @@ class WorldModelSync(ModelChangeCallback):
 @dataclass
 class BridgePlanCallback(PlanCallback):
     """
-    Feeds a plan's execution into the live bridge: per-node progress as its nodes
-    start and end, and the executing motion statechart on every executor tick.
+    Feeds a plan's execution into the live bridge: per-node progress as its nodes start
+    and end, and the executing motion statechart on every executor tick.
     """
 
     bridge: Bridge = field(kw_only=True)
@@ -94,6 +94,7 @@ class BridgePlanCallback(PlanCallback):
 
 
 # %% the backend
+
 
 @dataclass
 class LiveVisualization:

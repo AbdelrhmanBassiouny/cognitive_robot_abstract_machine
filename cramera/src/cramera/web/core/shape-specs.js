@@ -21,7 +21,7 @@
      {type, position, quaternion, color, opacity, and per type:
       'box' → size; 'cylinder' → radius, height, rotateXDegrees (the world's cylinders
       run along Z while three.js cylinders run along Y); 'sphere' → radius;
-      'mesh' → url, format, scale}. */
+      'mesh' → url, mtl (companion material URL or null), format, scale}. */
   function buildSpec(shape, objectColor, liveBase) {
     const common = {
       position: shape.position || [0, 0, 0],
@@ -44,6 +44,7 @@
     if (shape.kind === 'mesh' && shape.mesh) {
       common.type = 'mesh';
       common.url = (liveBase || '') + shape.mesh;
+      common.mtl = shape.mtl ? (liveBase || '') + shape.mtl : null;
       common.format = (shape.format || '').toLowerCase();
       common.scale = shape.scale || [1, 1, 1];
       return common;

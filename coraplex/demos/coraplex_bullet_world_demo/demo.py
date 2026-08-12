@@ -33,9 +33,6 @@ from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Color
 
-from cramera.live.runner import start
-
-start()
 world = setup_world()
 
 spoon = STLParser(

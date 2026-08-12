@@ -20,7 +20,6 @@ from semantic_digital_twin.adapters.rerun import RerunAdapter, RerunMode
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.world import World
 
-
 # %% backend selection from the environment
 
 
@@ -114,3 +113,63 @@ def test_rerun_save_records_plan_events(immutable_model_world, tmp_path) -> None
     )
     assert any(path.startswith("/world/") for path in recorded)
     assert any(path.startswith("/plan/") for path in recorded)
+
+
+# %% the cramera backend
+
+
+def test_from_environment_selects_the_cramera_backend(monkeypatch) -> None:
+    monkeypatch.setenv(VISUALIZATION_BACKEND_VARIABLE, "cramera")
+
+    visualization = WorldVisualization.from_environment(World())
+
+    assert visualization.backend == VisualizationBackend.CRAMERA
+
+
+def test_cramera_backend_serves_the_world_and_publishes_plans(monkeypatch) -> None:
+    """
+    Starting the cramera backend binds the live bridge to the world, and attaching a
+    plan appends the bridge's plan callback to it.
+    """
+    cramera_visualization = pytest.importorskip("cramera.live.visualization")
+
+    served = []
+    monkeypatch.setattr(
+        cramera_visualization,
+        "serve",
+        lambda bridge, port: served.append((bridge, port)) or _ShutdownRecorder(),
+    )
+    world = World()
+    visualization = WorldVisualization(
+        world=world, backend=VisualizationBackend.CRAMERA
+    ).start()
+
+    assert visualization.cramera_visualization.bridge.world is world
+    assert [port for _, port in served] == [cramera_visualization.DEFAULT_PORT]
+
+    plan = _RecordingPlan()
+    visualization.attach_plan(plan)
+    assert [type(callback).__name__ for callback in plan.node_callbacks] == [
+        "BridgePlanCallback"
+    ]
+
+    visualization.stop()
+    assert visualization.cramera_visualization is None
+
+
+class _ShutdownRecorder:
+    """
+    Stands in for the bridge's HTTP server during the cramera backend test.
+    """
+
+    def shutdown(self) -> None:
+        pass
+
+
+class _RecordingPlan:
+    """
+    A plan of which ``attach_plan`` only touches the callback list.
+    """
+
+    def __init__(self) -> None:
+        self.node_callbacks = []

@@ -1,43 +1,46 @@
 """
-Unit tests for bundling a live world's *current* state into a throwaway scene.
+Tests of bundling the live world's current model into the throwaway scene.
 """
 
 from __future__ import annotations
 
 import json
 import threading
-from dataclasses import dataclass
+import xml.etree.ElementTree as ElementTree
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from typing_extensions import List
+from typing_extensions import List, Optional
 
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
+from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
 from cramera import paths
 from cramera.live.bridge import Bridge
-from cramera.onboard.bundle_urdf import BundleReport
 from cramera.live.live_bundle import build_live_scene
 
 from .test_robot_parts import ArmPart, NamedBody
 
-ONE_LINK_URDF_TEXT = '<robot name="demo">\n  <link name="base_link"/>\n</robot>\n'
-
-APARTMENT_URDF_TEXT = (
-    '<robot name="apartment">\n  <link name="apartment_root"/>\n</robot>\n'
-)
+# %% fixtures
 
 
 @dataclass
-class RobotWithBase:
+class RobotWithSubtree:
     """
-    A robot mimic exposing only what :func:`build_live_scene` reads off it: a root body
-    (for the base link name) and one arm (for :meth:`RobotPartAnnotation.of_robot`).
+    A robot mimic exposing what :func:`build_live_scene` reads off it: its root body (a
+    real world body, so the robot's subtree can be walked) and one arm (for
+    :meth:`~cramera.robot_parts.RobotPartAnnotation.of_robot`).
     """
 
-    root: NamedBody
-    arm: ArmPart
+    root: Body
+    arm: ArmPart = field(
+        default_factory=lambda: ArmPart(bodies=[NamedBody("robot/arm_link")])
+    )
 
     def get_arms(self):
         return [self.arm]
@@ -49,18 +52,61 @@ class RobotWithBase:
         return None
 
 
-def world_with_prefixed_body(prefix: str, name: str) -> World:
+def shaped(prefix: str, name: str) -> Body:
     """
-    A real world with a single, prefixed body — enough for
-    :func:`~cramera.robot_parts.model_identity` to find a model's prefix.
+    A body carrying one visual box shape.
 
     :param prefix: The body's namespace prefix.
     :param name: The body's local name.
     """
+    return Body(
+        name=PrefixedName(name, prefix=prefix),
+        visual=ShapeCollection(shapes=[Box(scale=Scale(0.1, 0.1, 0.1))]),
+    )
+
+
+def laboratory_world() -> World:
+    """
+    A real world with an environment body, a robot subtree and one overlay object.
+    """
     world = World()
+    root = Body(name=PrefixedName("root", prefix="world"))
+    bench = shaped("laboratory", "bench")
+    robot_base = shaped("robot", "base_link")
+    robot_arm = shaped("robot", "arm_link")
+    milk = shaped("world", "milk.stl")
     with world.modify_world():
-        world.add_body(Body(name=PrefixedName(name=name, prefix=prefix)))
+        world.add_body(root)
+        world.add_connection(FixedConnection(parent=root, child=bench))
+        world.add_connection(
+            FixedConnection(
+                parent=root,
+                child=robot_base,
+                parent_T_connection_expression=(
+                    HomogeneousTransformationMatrix.from_xyz_rpy(1.0, 2.0, 0.0)
+                ),
+            )
+        )
+        world.add_connection(FixedConnection(parent=robot_base, child=robot_arm))
+        world.add_connection(FixedConnection(parent=root, child=milk))
     return world
+
+
+def attached_bridge(with_robot: bool = False) -> Bridge:
+    """
+    A bridge attached to :func:`laboratory_world`.
+
+    :param with_robot: Whether the robot mimic is bound, so the robot subtree is bundled
+        as its own model.
+    """
+    bridge = Bridge()
+    bridge.attach(laboratory_world())
+    if with_robot:
+        robot_base = next(
+            body for body in bridge.world.bodies if str(body.name) == "robot/base_link"
+        )
+        bridge.robot = RobotWithSubtree(root=robot_base)
+    return bridge
 
 
 def use_scratch_scenes_directory(monkeypatch, tmp_path) -> Path:
@@ -75,227 +121,138 @@ def use_scratch_scenes_directory(monkeypatch, tmp_path) -> Path:
     return scenes
 
 
-class TestNothingTrackedYet:
+def scene_payload(scenes: Path) -> dict:
+    """
+    The scene.json the last build wrote.
+
+    :param scenes: The scratch scenes directory.
+    """
+    return json.loads((scenes / paths.LIVE_SCENE_NAME / "scene.json").read_text())
+
+
+# %% nothing attached
+
+
+class TestNothingAttachedYet:
     def test_a_fresh_bridge_bundles_nothing(self, monkeypatch, tmp_path):
         use_scratch_scenes_directory(monkeypatch, tmp_path)
 
         assert build_live_scene(Bridge()) is None
 
 
+# %% bundling the attached world
+
+
 class TestBuildLiveScene:
-    def test_a_tracked_source_is_bundled_under_the_reserved_name(
+    def test_the_world_is_bundled_under_the_reserved_name(self, monkeypatch, tmp_path):
+        scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
+        bridge = attached_bridge()
+
+        assert build_live_scene(bridge) == paths.LIVE_SCENE_NAME
+
+        scene = scene_payload(scenes)
+        assert scene["name"] == paths.LIVE_SCENE_NAME
+        assert scene["worldBound"] is True
+        assert scene["bundleSignature"] == bridge.bundle_signature()
+        assert [model["name"] for model in scene["models"]] == ["environment"]
+        assert (scenes / paths.LIVE_SCENE_NAME / "environment.urdf").is_file()
+
+    def test_overlay_objects_stay_out_of_the_environment_model(
         self, monkeypatch, tmp_path
     ):
         scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
-        urdf = tmp_path / "pr2.urdf"
-        urdf.write_text(ONE_LINK_URDF_TEXT)
-        bridge = Bridge()
-        bridge.remember_model_source(str(urdf), BundleReport.of_source)
-        bridge.world = world_with_prefixed_body("pr2_1", "base_link")
-        bridge.robot = RobotWithBase(
-            root=NamedBody("pr2_1/base_link"),
-            arm=ArmPart(bodies=[NamedBody("pr2_1/l_upper_arm_link")]),
+        build_live_scene(attached_bridge())
+
+        urdf = (scenes / paths.LIVE_SCENE_NAME / "environment.urdf").read_text()
+
+        assert "laboratory/bench" in urdf
+        assert "milk.stl" not in urdf
+
+    def test_the_robot_subtree_becomes_its_own_model(self, monkeypatch, tmp_path):
+        scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
+        bridge = attached_bridge(with_robot=True)
+
+        build_live_scene(bridge)
+
+        scene = scene_payload(scenes)
+        robot_models = [model for model in scene["models"] if model["robot"]]
+        assert [model["name"] for model in robot_models] == ["robotwithsubtree"]
+        robot_urdf = (
+            scenes / paths.LIVE_SCENE_NAME / "robotwithsubtree.urdf"
+        ).read_text()
+        assert "robot/base_link" in robot_urdf
+        assert "robot/arm_link" in robot_urdf
+        environment_urdf = (
+            scenes / paths.LIVE_SCENE_NAME / "environment.urdf"
+        ).read_text()
+        assert "robot/base_link" not in environment_urdf
+
+    def test_the_robot_root_is_grafted_at_the_origin(self, monkeypatch, tmp_path):
+        """
+        The viewer applies the robot's live base pose on top of the model, so the model
+        itself must not bake the spawn pose in.
+        """
+        scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
+        build_live_scene(attached_bridge(with_robot=True))
+
+        robot_urdf = (
+            scenes / paths.LIVE_SCENE_NAME / "robotwithsubtree.urdf"
+        ).read_text()
+
+        document = ElementTree.fromstring(robot_urdf)
+        graft = next(
+            joint
+            for joint in document.iter("joint")
+            if joint.find("child").attrib["link"] == "robot/base_link"
         )
+        assert graft.find("origin").attrib["xyz"] == "0.0 0.0 0.0"
 
-        scene_name = build_live_scene(bridge)
-
-        assert scene_name == paths.LIVE_SCENE_NAME
-        scene = json.loads((scenes / scene_name / "scene.json").read_text())
-        assert scene["models"] == [
-            {
-                "name": "pr2",
-                "urdf": "pr2.urdf",
-                "prefix": "pr2_1",
-                "robot": True,
-                "links": 1,
-                "movableJoints": [],
-            }
-        ]
-        assert scene["robot"]["name"] == "robotwithbase"
-        assert scene["robot"]["prefix"] == "pr2_1"
-        assert scene["robot"]["baseBody"] == "base_link"
-        assert scene["robot"]["parts"] == {"ArmPart": ["l_upper_arm_link"]}
-        assert scene["objects"] == []
-        assert scene["segments"] == []
-        assert "trajectory" not in scene
-
-    def test_the_scene_records_whether_the_world_was_attached_at_build_time(
-        self, monkeypatch, tmp_path
-    ):
-        """
-        A bundle built before the demo's world attached cannot identify the models'
-        prefixes or the robot; the flag lets the viewer rebuild it once the world is
-        there.
-        """
+    def test_the_scene_names_the_robot(self, monkeypatch, tmp_path):
         scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
-        urdf = tmp_path / "pr2.urdf"
-        urdf.write_text(ONE_LINK_URDF_TEXT)
-        bridge = Bridge()
-        bridge.remember_model_source(str(urdf), BundleReport.of_source)
+        build_live_scene(attached_bridge(with_robot=True))
 
-        early_name = build_live_scene(bridge)
-        early = json.loads((scenes / early_name / "scene.json").read_text())
-        assert early["worldBound"] is False
+        robot = scene_payload(scenes)["robot"]
 
-        bridge.world = world_with_prefixed_body("pr2_1", "base_link")
-        bound_name = build_live_scene(bridge)
-        bound = json.loads((scenes / bound_name / "scene.json").read_text())
-        assert bound["worldBound"] is True
-
-    def test_an_attached_world_without_tracked_sources_still_builds_a_scene(
-        self, monkeypatch, tmp_path
-    ):
-        """
-        A fully procedural world (no URDF/Gazebo/MJCF source ever parsed) must still get
-        the viewer onto the live scene — the overlay renders its bodies from there.
-        """
-        scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
-        bridge = Bridge()
-        bridge.world = world_with_prefixed_body("montessori", "board")
-
-        scene_name = build_live_scene(bridge)
-
-        assert scene_name == paths.LIVE_SCENE_NAME
-        scene = json.loads((scenes / scene_name / "scene.json").read_text())
-        assert scene["models"] == []
-        assert scene["robot"] is None
-
-    def test_no_bound_robot_still_bundles_the_environment(self, monkeypatch, tmp_path):
-        scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
-        urdf = tmp_path / "kitchen.urdf"
-        urdf.write_text(ONE_LINK_URDF_TEXT)
-        bridge = Bridge()
-        bridge.remember_model_source(str(urdf), BundleReport.of_source)
-
-        scene_name = build_live_scene(bridge)
-
-        scene = json.loads((scenes / scene_name / "scene.json").read_text())
-        assert scene["models"][0]["robot"] is False
-        assert scene["robot"] is None
-
-    def test_a_model_absent_from_the_current_world_is_not_bundled(
-        self, monkeypatch, tmp_path
-    ):
-        """
-        A long-running process may parse one world after another; the live scene must
-        show only the models the currently executing world contains, not everything the
-        process ever loaded.
-        """
-        scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
-        pr2 = tmp_path / "pr2.urdf"
-        pr2.write_text(ONE_LINK_URDF_TEXT)
-        apartment = tmp_path / "apartment.urdf"
-        apartment.write_text(APARTMENT_URDF_TEXT)
-        bridge = Bridge()
-        bridge.remember_model_source(str(pr2), BundleReport.of_source)
-        bridge.remember_model_source(str(apartment), BundleReport.of_source)
-        bridge.world = world_with_prefixed_body("pr2_1", "base_link")
-
-        scene_name = build_live_scene(bridge)
-
-        scene = json.loads((scenes / scene_name / "scene.json").read_text())
-        assert [model["name"] for model in scene["models"]] == ["pr2"]
-
-    def test_every_model_is_bundled_before_the_world_attaches(
-        self, monkeypatch, tmp_path
-    ):
-        """
-        Without a world there is nothing to check presence against; the early bundle
-        keeps every tracked model and the viewer rebuilds it once the world is there.
-        """
-        scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
-        pr2 = tmp_path / "pr2.urdf"
-        pr2.write_text(ONE_LINK_URDF_TEXT)
-        apartment = tmp_path / "apartment.urdf"
-        apartment.write_text(APARTMENT_URDF_TEXT)
-        bridge = Bridge()
-        bridge.remember_model_source(str(pr2), BundleReport.of_source)
-        bridge.remember_model_source(str(apartment), BundleReport.of_source)
-
-        scene_name = build_live_scene(bridge)
-
-        scene = json.loads((scenes / scene_name / "scene.json").read_text())
-        assert [model["name"] for model in scene["models"]] == ["pr2", "apartment"]
+        assert robot["name"] == "robotwithsubtree"
+        assert robot["baseBody"] == "base_link"
 
     def test_an_unchanged_world_does_not_rebuild_the_bundle(
         self, monkeypatch, tmp_path
     ):
-        """
-        The viewer calls ``/live_scene`` on every attach, and a page reloaded mid-run is
-        still downloading the previous build's meshes at that moment — a rebuild would
-        delete them mid-flight.
-
-        While nothing the bundle is built from changed, the existing bundle must be left
-        untouched.
-        """
         scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
-        urdf = tmp_path / "pr2.urdf"
-        urdf.write_text(ONE_LINK_URDF_TEXT)
-        bridge = Bridge()
-        bridge.remember_model_source(str(urdf), BundleReport.of_source)
-        bridge.world = world_with_prefixed_body("pr2_1", "base_link")
+        bridge = attached_bridge()
         build_live_scene(bridge)
-        sentinel = scenes / paths.LIVE_SCENE_NAME / "in_flight_download.stl"
-        sentinel.write_text("still being served")
+        marker = scenes / paths.LIVE_SCENE_NAME / "marker"
+        marker.touch()
 
-        name = build_live_scene(bridge)
+        build_live_scene(bridge)
 
-        assert name == paths.LIVE_SCENE_NAME
-        assert sentinel.exists()
+        assert marker.exists()
 
-    def test_a_world_attach_after_an_early_build_rebuilds_the_bundle(
-        self, monkeypatch, tmp_path
-    ):
-        """
-        The early bundle (built before the demo's world attached) cannot identify
-        prefixes or the robot; the attach changes what the bundle would be built from,
-        so the next ``/live_scene`` must rebuild it.
-        """
+    def test_a_model_change_rebuilds_the_bundle(self, monkeypatch, tmp_path):
         scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
-        urdf = tmp_path / "pr2.urdf"
-        urdf.write_text(ONE_LINK_URDF_TEXT)
-        bridge = Bridge()
-        bridge.remember_model_source(str(urdf), BundleReport.of_source)
+        bridge = attached_bridge()
         build_live_scene(bridge)
-        sentinel = scenes / paths.LIVE_SCENE_NAME / "stale_marker"
-        sentinel.write_text("from the early build")
+        marker = scenes / paths.LIVE_SCENE_NAME / "marker"
+        marker.touch()
 
-        bridge.world = world_with_prefixed_body("pr2_1", "base_link")
+        bridge.observe_model_change()
         build_live_scene(bridge)
 
-        assert not sentinel.exists()
-        scene = json.loads((scenes / paths.LIVE_SCENE_NAME / "scene.json").read_text())
-        assert scene["worldBound"] is True
+        assert not marker.exists()
 
-    def test_the_output_directory_is_cleared_between_builds(
-        self, monkeypatch, tmp_path
-    ):
-        scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
-        first_urdf = tmp_path / "kitchen.urdf"
-        first_urdf.write_text(ONE_LINK_URDF_TEXT)
-        bridge = Bridge()
-        bridge.remember_model_source(str(first_urdf), BundleReport.of_source)
-        build_live_scene(bridge)
 
-        second_bridge = Bridge()
-        second_urdf = tmp_path / "apartment.urdf"
-        second_urdf.write_text(ONE_LINK_URDF_TEXT)
-        second_bridge.remember_model_source(str(second_urdf), BundleReport.of_source)
-        build_live_scene(second_bridge)
-
-        bundle_directory = scenes / paths.LIVE_SCENE_NAME
-        assert not (bundle_directory / "kitchen.urdf").exists()
-        assert (bundle_directory / "apartment.urdf").exists()
+# %% concurrent builds
 
 
 class TestConcurrentBuilds:
     """
     The bridge serves on a threading HTTP server, and the viewer keeps polling
-    ``/live_scene`` while the demo has not parsed its world yet, so two builds of the
-    same throwaway scene overlap routinely.
+    ``/live_scene`` while a demo starts up, so two builds of the same throwaway scene
+    overlap routinely.
 
-    Each one clears the output directory before writing
-    it -- the directory the other one is deleting and writing at the same time.
+    Each one clears the output directory before writing it -- the directory the other
+    one is deleting and writing at the same time.
     """
 
     VIEWERS_ASKING_AT_ONCE = 8
@@ -310,12 +267,9 @@ class TestConcurrentBuilds:
         self, monkeypatch, tmp_path
     ):
         scenes = use_scratch_scenes_directory(monkeypatch, tmp_path)
-        urdf = tmp_path / "kitchen.urdf"
-        urdf.write_text(ONE_LINK_URDF_TEXT)
-        bridge = Bridge()
-        bridge.remember_model_source(str(urdf), BundleReport.of_source)
+        bridge = attached_bridge()
 
-        names: List[str] = []
+        names: List[Optional[str]] = []
         failures: List[BaseException] = []
         start = threading.Barrier(self.VIEWERS_ASKING_AT_ONCE)
 
@@ -337,6 +291,6 @@ class TestConcurrentBuilds:
 
         assert [type(failure).__name__ for failure in failures] == []
         assert names == [paths.LIVE_SCENE_NAME] * self.VIEWERS_ASKING_AT_ONCE
-        scene = json.loads((scenes / paths.LIVE_SCENE_NAME / "scene.json").read_text())
-        assert [model["name"] for model in scene["models"]] == ["kitchen"]
-        assert (scenes / paths.LIVE_SCENE_NAME / "kitchen.urdf").exists()
+        scene = scene_payload(scenes)
+        assert [model["name"] for model in scene["models"]] == ["environment"]
+        assert (scenes / paths.LIVE_SCENE_NAME / "environment.urdf").exists()

@@ -2,13 +2,10 @@
 Unit tests for the live bridge's serializers and its viewer-facing accessors.
 
 The bridge is exercised against mimics of the duck-typed interfaces it reads, so no
-coraplex import is needed. Translating a life-cycle ordinal to its name/status does
-import giskardpy's real ``LifeCycleValues`` enum (the bridge reuses it rather than
-duplicating its ordinals), so giskardpy must be importable for the statechart and live-
-motion-status tests below. What is covered is the interesting logic: bottom-up status
-aggregation in the plan tree, freeze semantics when a motion group finishes, statechart
-signatures that let the frontend distinguish "re-colour only" from "rebuild", and the
-queue that carries viewer drags onto the simulation thread.
+coraplex import is needed. What is covered is the interesting logic: bottom-up status
+aggregation in the plan tree, the pinning of each motion node's reported status,
+statechart signatures that let the frontend distinguish "re-colour only" from "rebuild",
+and the queue that carries viewer drags onto the simulation thread.
 """
 
 from __future__ import annotations
@@ -49,13 +46,11 @@ from cramera.knowledge.enums import PlanNodeGroup
 from cramera.live.bridge import (
     Bridge,
     ChartEdgeEntry,
-    LiveHook,
     MalformedMoveRequest,
     MoveRequest,
     ROBOT_BASE_KEY,
     TaskStatusName,
 )
-from cramera.onboard.bundle_urdf import BundleReport
 
 from .test_robot_parts import ArmPart, EndEffectorPart, NamedBody, OneArmedRobot
 
@@ -113,26 +108,6 @@ class PublishedBody:
     name: str
     visual: ShapeSet = field(default_factory=ShapeSet)
     collision: ShapeSet = field(default_factory=ShapeSet)
-
-
-@dataclass
-class LifeCycleTask:
-    """
-    A giskard task exposing the life-cycle ordinal the bridge maps to a status.
-    """
-
-    life_cycle_state: int
-
-
-@dataclass
-class MotionGroup:
-    """
-    A giskard executable: the motion nodes it runs plus its condition nodes.
-    """
-
-    motion_mappings: Dict[Any, LifeCycleTask] = field(default_factory=dict)
-    pre_condition_node: Optional[Any] = None
-    post_condition_node: Optional[Any] = None
 
 
 def make_plan_node(
@@ -197,22 +172,27 @@ def nodes_by_kind(bridge: Bridge) -> Dict[str, Dict[str, Any]]:
     return {node["kind"]: node for node in bridge.get_plan()["nodes"]}
 
 
-def running_group(*motion_nodes: Any) -> MotionGroup:
+def end_motion(bridge: Bridge, node: Any, status: TaskStatusName) -> None:
     """
-    A motion group whose nodes are all running.
+    Report a motion node's end with the given final status.
+
+    The node's own status is restored to ``CREATED`` afterwards, so what the tests
+    observe is the status the bridge pinned, not the mimic's attribute.
+
+    :param bridge: The bridge observing the plan.
+    :param node: The plan-node mimic that ended.
+    :param status: The status the node reports while ending.
     """
-    return MotionGroup(
-        motion_mappings={
-            node: LifeCycleTask(life_cycle_state=1) for node in motion_nodes
-        }
-    )
+    node.status = ReportedStatus(name=status)
+    bridge.observe_motion_ended(node)
+    node.status = ReportedStatus(name=TaskStatusName.CREATED)
 
 
 # %% plan tree
 class TestPlanSnapshot:
     def test_running_task_bubbles_up(self, plan_bridge):
         bridge, root, action, condition, motion = plan_bridge
-        bridge.bind_motion_group(running_group(motion))
+        bridge.observe_motion_started(motion)
         bridge.snapshot_plan()
         nodes = nodes_by_kind(bridge)
         assert nodes["MotionNode"]["status"] == TaskStatusName.RUNNING
@@ -254,37 +234,27 @@ class TestPlanSnapshot:
 
     def test_partially_done_parent_is_running_not_succeeded(self, plan_bridge):
         bridge, root, action, condition, motion = plan_bridge
-        bridge.freeze_motion_group(
-            MotionGroup(motion_mappings={motion: None}), TaskStatusName.SUCCEEDED
-        )
+        end_motion(bridge, motion, TaskStatusName.SUCCEEDED)
         assert nodes_by_kind(bridge)["ActionNode"]["status"] == TaskStatusName.RUNNING
 
     def test_fully_done_parent_is_succeeded(self, plan_bridge):
         bridge, root, action, condition, motion = plan_bridge
-        bridge.freeze_motion_group(
-            MotionGroup(motion_mappings={motion: None}, pre_condition_node=condition),
-            TaskStatusName.SUCCEEDED,
-        )
+        end_motion(bridge, motion, TaskStatusName.SUCCEEDED)
+        end_motion(bridge, condition, TaskStatusName.SUCCEEDED)
         assert nodes_by_kind(bridge)["ActionNode"]["status"] == TaskStatusName.SUCCEEDED
 
     def test_failure_outranks_done_sibling(self, plan_bridge):
         bridge, root, action, condition, motion = plan_bridge
-        bridge.freeze_motion_group(
-            MotionGroup(motion_mappings={motion: None}), TaskStatusName.SUCCEEDED
-        )
-        bridge.freeze_motion_group(
-            MotionGroup(motion_mappings={condition: None}), TaskStatusName.FAILED
-        )
+        end_motion(bridge, motion, TaskStatusName.SUCCEEDED)
+        end_motion(bridge, condition, TaskStatusName.FAILED)
         assert nodes_by_kind(bridge)["ActionNode"]["status"] == TaskStatusName.FAILED
 
     def test_signature_is_stable_across_status_changes(self, plan_bridge):
         bridge, root, action, condition, motion = plan_bridge
-        bridge.bind_motion_group(running_group(motion))
+        bridge.observe_motion_started(motion)
         bridge.snapshot_plan()
         while_running = bridge.get_plan()["signature"]
-        bridge.freeze_motion_group(
-            MotionGroup(motion_mappings={motion: None}), TaskStatusName.SUCCEEDED
-        )
+        end_motion(bridge, motion, TaskStatusName.SUCCEEDED)
         assert bridge.get_plan()["signature"] == while_running
 
     def test_structurally_identical_nodes_keep_separate_statuses(self):
@@ -299,9 +269,7 @@ class TestPlanSnapshot:
         second = make_plan_node("MotionNode")
         root = make_plan_node("SequentialNode", children=[first, second])
         bridge.begin_plan(PlanWithRoot(root=root))
-        bridge.freeze_motion_group(
-            MotionGroup(motion_mappings={first: None}), TaskStatusName.FAILED
-        )
+        end_motion(bridge, first, TaskStatusName.FAILED)
         statuses = [
             node["status"]
             for node in bridge.get_plan()["nodes"]
@@ -314,24 +282,9 @@ class TestPlanSnapshot:
         A node's pinned status must not survive into the next plan.
         """
         bridge, root, action, condition, motion = plan_bridge
-        bridge.freeze_motion_group(
-            MotionGroup(motion_mappings={motion: None}), TaskStatusName.SUCCEEDED
-        )
+        end_motion(bridge, motion, TaskStatusName.SUCCEEDED)
         bridge.begin_plan(PlanWithRoot(root=motion))
         assert nodes_by_kind(bridge)["MotionNode"]["status"] == TaskStatusName.CREATED
-
-
-# %% hook installation
-class TestHookClaiming:
-    def test_a_hook_is_claimed_once(self):
-        bridge = Bridge()
-        assert bridge.claim_hook(LiveHook.TICK) is True
-        assert bridge.claim_hook(LiveHook.TICK) is False
-
-    def test_hooks_are_claimed_independently(self):
-        bridge = Bridge()
-        bridge.claim_hook(LiveHook.TICK)
-        assert bridge.claim_hook(LiveHook.MESH) is True
 
 
 # %% viewer -> world
@@ -561,22 +514,20 @@ def shaped_body(prefix: str, name: str) -> Body:
 
 class TestWorldDrivenDiscovery:
     """
-    ``bind`` publishes every body the world can render, the way RViz would: any body
-    with shapes appears, regardless of what its name looks like — only bodies a bundled
-    model already renders stay out.
+    ``bind`` publishes the demo's objects — the mesh-named bodies that spawn, get
+    carried and disappear mid-run.
+
+    Every other body is rendered by the scene bundle the viewer loads once, so the
+    overlay must not duplicate it.
     """
 
-    def test_a_shaped_body_is_published_under_its_full_name(self):
+    def test_a_scene_body_stays_out_of_the_overlay(self):
+        """
+        A body without a mesh-file name is part of the bundled scene the viewer loads
+        once, however it was built.
+        """
         bridge = Bridge()
         bridge.world = world_with(shaped_body("montessori", "board"))
-
-        bridge.bind()
-
-        assert bridge.object_keys() == ["montessori/board"]
-
-    def test_a_shapeless_body_is_not_published(self):
-        bridge = Bridge()
-        bridge.world = world_with(Body(name=PrefixedName("frame", prefix="montessori")))
 
         bridge.bind()
 
@@ -590,117 +541,54 @@ class TestWorldDrivenDiscovery:
 
         assert bridge.object_keys() == ["milk.stl"]
 
-    def test_bodies_of_parsed_models_stay_out_of_the_overlay(self):
-        """
-        A bundled model's links are already rendered by the bundle, so the overlay must
-        not duplicate them — even when the composed world re-prefixed the model (here
-        ``pr2`` became ``pr2_1``), which is why the exclusion probes by link basename
-        rather than comparing full names.
-        """
-        bridge = Bridge()
-        bridge.remember_model_bodies(["pr2/base_link", "pr2/torso_link"])
-        bridge.world = world_with(
-            shaped_body("pr2_1", "base_link"),
-            shaped_body("pr2_1", "torso_link"),
-            shaped_body("montessori", "board"),
-        )
-
-        bridge.bind()
-
-        assert bridge.object_keys() == ["montessori/board"]
-
-    def test_a_procedural_body_sharing_a_model_prefix_is_still_published(self):
-        """
-        The exclusion must not swallow a body that merely lives under the same prefix as
-        a bundled model but is no link of it.
-        """
-        bridge = Bridge()
-        bridge.remember_model_bodies(["pr2/base_link"])
-        bridge.world = world_with(
-            shaped_body("pr2_1", "base_link"),
-            shaped_body("pr2_1", "attached_marker"),
-        )
-
-        bridge.bind()
-
-        assert bridge.object_keys() == ["pr2_1/attached_marker"]
-
     def test_snapshot_streams_the_pose_of_every_published_body(self):
         bridge = Bridge()
-        bridge.world = world_with(shaped_body("montessori", "board"))
+        bridge.world = world_with(
+            Body(
+                name=PrefixedName("milk.stl", prefix="world"),
+                visual=ShapeCollection(shapes=[Box(scale=Scale(0.1, 0.1, 0.1))]),
+            )
+        )
 
         bridge.bind()
         bridge.snapshot()
 
         objects = bridge.get_state()["objects"]
-        assert objects["montessori/board"] == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+        assert objects["milk.stl"] == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
 
 
-class TestModelBasePoses:
-    """
-    Every bundled model's root pose is streamed, so a second robot or a moved
-    environment model animates instead of sticking to where it spawned.
-    """
-
-    def test_each_bundled_model_root_pose_is_streamed(self):
+class TestBundleSignature:
+    def test_attaching_a_world_changes_the_signature(self):
+        """
+        The viewer compares the status signature against its loaded bundle's to notice
+        that the demo switched worlds mid-run.
+        """
         bridge = Bridge()
-        bridge.remember_model_bodies(["pr2/base_link", "pr2/torso_link"])
-        base_link = shaped_body("pr2_1", "base_link")
-        torso_link = shaped_body("pr2_1", "torso_link")
-        world = World()
-        root = Body(name=PrefixedName("root", prefix="world"))
-        with world.modify_world():
-            world.add_body(root)
-            world.add_connection(
-                FixedConnection(
-                    parent=root,
-                    child=base_link,
-                    parent_T_connection_expression=(
-                        HomogeneousTransformationMatrix.from_xyz_rpy(1.0, 2.0, 0.0)
-                    ),
-                )
-            )
-            world.add_connection(FixedConnection(parent=base_link, child=torso_link))
+        before = bridge.status()["bundleSignature"]
 
-        bridge.world = world
-        bridge.bind()
-        bridge.snapshot()
+        bridge.attach(world_with(shaped_body("montessori", "board")))
 
-        model_bases = bridge.get_state()["modelBases"]
-        assert model_bases == {"pr2_1": [1.0, 2.0, 0.0, 0.0, 0.0, 0.0, 1.0]}
+        after = bridge.status()["bundleSignature"]
+        assert after != before
+        assert after == bridge.bundle_signature()
 
-    def test_a_model_whose_root_left_the_world_streams_no_base(self):
+    def test_a_model_change_changes_the_signature(self):
         bridge = Bridge()
-        bridge.remember_model_bodies(["pr2/base_link"])
-        bridge.world = world_with(shaped_body("montessori", "board"))
+        bridge.attach(world_with(shaped_body("montessori", "board")))
+        before = bridge.status()["bundleSignature"]
 
-        bridge.bind()
-        bridge.snapshot()
+        bridge.observe_model_change()
 
-        assert bridge.get_state()["modelBases"] == {}
+        assert bridge.status()["bundleSignature"] != before
 
-
-class TestStatusModelVersion:
-    def test_the_model_version_counts_the_tracked_sources(self):
+    def test_the_model_version_counts_attachments_and_model_changes(self):
         bridge = Bridge()
         assert bridge.status()["modelVersion"] == 0
 
-        bridge.remember_model_source("/robots/pr2.urdf", BundleReport.of_source)
-        bridge.remember_model_source("/scenes/kitchen.urdf", BundleReport.of_source)
+        bridge.attach(world_with(shaped_body("montessori", "board")))
+        bridge.observe_model_change()
 
         assert bridge.status()["modelVersion"] == 2
-
-    def test_the_status_carries_the_current_bundle_signature(self):
-        """
-        The viewer compares this against its loaded bundle's signature to notice that
-        the demo switched worlds mid-run.
-        """
-        bridge = Bridge()
-        bridge.remember_model_source("/robots/pr2.urdf", BundleReport.of_source)
-
-        status_signature = bridge.status()["bundleSignature"]
-
-        assert status_signature == bridge.model_bundle_context().signature()
 
 
 class TestShapeCatalogEntries:
@@ -793,108 +681,6 @@ class TestShapeCatalogEntries:
 
         assert entry["kind"] == "shapes"
         assert entry["shapes"][0]["size"] == [0.5, 0.5, 0.5]
-
-
-# %% model bundle context
-@dataclass
-class RobotWithBase:
-    """
-    A robot mimic exposing only what :meth:`Bridge.model_bundle_context` reads off it.
-    """
-
-    root: PublishedBody
-
-
-def _prefixed_body(world: World, prefix: str, name: str) -> None:
-    """
-    Add a body with a prefixed name to a real world.
-
-    :param world: The world the body is added to.
-    :param prefix: The body's namespace prefix.
-    :param name: The body's local name.
-    """
-    with world.modify_world():
-        world.add_body(Body(name=PrefixedName(name=name, prefix=prefix)))
-
-
-class TestModelBundleContext:
-    def test_a_fresh_bridge_tracks_nothing(self):
-        context = Bridge().model_bundle_context()
-
-        assert context.sources == []
-        assert context.world_body_names == []
-        assert context.base_body is None
-        assert context.robot is None
-
-    def test_a_source_is_remembered_once(self):
-        bridge = Bridge()
-        bridge.remember_model_source("/robots/pr2.urdf", BundleReport.of_source)
-        bridge.remember_model_source("/robots/pr2.urdf", BundleReport.of_source)
-
-        assert len(bridge.model_bundle_context().sources) == 1
-
-    def test_world_body_names_and_base_body_reflect_the_bound_world_and_robot(self):
-        world = World()
-        _prefixed_body(world, "pr2_1", "base_link")
-        bridge = Bridge()
-        bridge.world = world
-        bridge.robot = RobotWithBase(root=PublishedBody(name="pr2_1/base_link"))
-
-        context = bridge.model_bundle_context()
-
-        assert context.world_body_names == ["pr2_1/base_link"]
-        assert context.base_body == "base_link"
-        assert context.robot is bridge.robot
-
-    def test_an_unbound_world_reports_no_bodies_and_no_base_body(self):
-        context = Bridge().model_bundle_context()
-
-        assert context.world_body_names == []
-        assert context.base_body is None
-
-    def test_each_parsed_models_world_prefix_is_probed(self):
-        """
-        The prefixes feed the bundle's change signature: a model whose world-instance
-        prefix resolves differently means the bundle must be rebuilt.
-        """
-        bridge = Bridge()
-        bridge.remember_model_bodies(["pr2/base_link"])
-        world = World()
-        _prefixed_body(world, "pr2_1", "base_link")
-        bridge.world = world
-
-        assert bridge.model_bundle_context().model_prefixes == ["pr2_1"]
-
-    def test_without_a_world_no_prefix_resolves(self):
-        bridge = Bridge()
-        bridge.remember_model_bodies(["pr2/base_link"])
-
-        assert bridge.model_bundle_context().model_prefixes == [""]
-
-
-class TestRememberModelSourceDoesNotBlockTheSimulationLock:
-    """
-    The tick hook holds :attr:`Bridge._lock` while publishing every snapshot; the model-
-    source hooks fire synchronously while the demo parses its world and must never wait
-    on that same lock.
-    """
-
-    def test_remember_model_source_does_not_wait_on_the_bridge_lock(self):
-        bridge = Bridge()
-        bridge._lock.acquire()
-        try:
-            thread = threading.Thread(
-                target=lambda: bridge.remember_model_source(
-                    "/robots/pr2.urdf", BundleReport.of_source
-                )
-            )
-            thread.start()
-            thread.join(timeout=2)
-            finished = not thread.is_alive()
-        finally:
-            bridge._lock.release()
-
-        assert finished
 
 
 # %% motion statechart
@@ -1002,7 +788,6 @@ class TestChartEdgeEntry:
 class TestChartSnapshot:
     def test_structure_and_states(self):
         bridge = Bridge()
-        bridge.bind_motion_group(MotionGroup())
         bridge.observe_chart(make_chart())
         chart = bridge.get_chart()
         assert [node["life_cycle"] for node in chart["nodes"]] == [

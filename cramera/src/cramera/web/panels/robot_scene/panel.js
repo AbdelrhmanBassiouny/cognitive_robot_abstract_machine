@@ -248,6 +248,16 @@ Panels.define('robot-scene', function (root, bus) {
         transparent: shapeSpec.opacity < 1, opacity: shapeSpec.opacity,
       });
     }
+    // any relative resource an OBJ/MTL references (the mtllib line, texture maps) is
+    // fetched as a side asset of the mesh's own /mesh URL, so a live mesh keeps its
+    // authored materials without the bridge serving its whole directory
+    function sideAssetModifier(meshUrl) {
+      return function (url) {
+        if (/^(\/|https?:|data:|blob:)/.test(url)) return url;
+        const resource = url.split('/').pop();
+        return meshUrl + '&side=' + encodeURIComponent(resource);
+      };
+    }
     function loadShapeMesh(shapeSpec, holder) {
       const material = shapeMaterial(shapeSpec);
       const fail = function () {
@@ -260,10 +270,24 @@ Panels.define('robot-scene', function (root, bus) {
         needsRender = true;
       };
       if (shapeSpec.format === 'obj' && THREE.OBJLoader) {
-        new THREE.OBJLoader().load(shapeSpec.url, function (o) {
-          o.traverse(function (c) { if (c.isMesh) c.material = material; });
-          finish(o);
-        }, undefined, fail);
+        const manager = new THREE.LoadingManager();
+        manager.setURLModifier(sideAssetModifier(shapeSpec.url));
+        const loadObj = function (materials) {
+          const objLoader = new THREE.OBJLoader(manager);
+          if (materials) { materials.preload(); objLoader.setMaterials(materials); }
+          objLoader.load(shapeSpec.url, function (o) {
+            if (!materials) {
+              o.traverse(function (c) { if (c.isMesh) c.material = material; });
+            }
+            finish(o);
+          }, undefined, fail);
+        };
+        if (shapeSpec.mtl && THREE.MTLLoader) {
+          new THREE.MTLLoader(manager).load(shapeSpec.mtl, loadObj,
+            undefined, function () { loadObj(null); });
+        } else {
+          loadObj(null);
+        }
       } else if (shapeSpec.format === 'dae' && THREE.ColladaLoader) {
         new THREE.ColladaLoader().load(shapeSpec.url, function (c) { finish(c.scene); },
           undefined, fail);
@@ -524,17 +548,20 @@ Panels.define('robot-scene', function (root, bus) {
   }
 
   // %% materials (identical treatment to the hand-built version)
+  // guards against imported materials that break the scene's lighting (self-glowing
+  // exports, blown-out whites, mirror metals) while leaving authored looks — colors,
+  // satin and metallic finishes — as the model ships them
   function tameMat(mat) {
     if (!mat) return;
     if (mat.emissive) mat.emissive.setRGB(0, 0, 0);
     mat.emissiveIntensity = 0;
     if (mat.color) {
       const lum = (mat.color.r + mat.color.g + mat.color.b) / 3;
-      if (lum > 0.92) mat.color.setRGB(0.82, 0.82, 0.83);
+      if (lum > 0.97) mat.color.setRGB(0.9, 0.9, 0.91);
     }
     if (mat.isMeshPhongMaterial) { mat.shininess = 25; if (mat.specular) mat.specular.setRGB(0.05, 0.05, 0.05); }
-    if ('roughness' in mat) mat.roughness = Math.min(Math.max(mat.roughness || 0.7, 0.4), 0.92);
-    if ('metalness' in mat) mat.metalness = Math.min(mat.metalness || 0, 0.2);
+    if ('roughness' in mat) mat.roughness = Math.min(Math.max(mat.roughness || 0.7, 0.25), 0.95);
+    if ('metalness' in mat) mat.metalness = Math.min(mat.metalness || 0, 0.85);
     if ('envMapIntensity' in mat) mat.envMapIntensity = 0.45;
     mat.needsUpdate = true;
   }

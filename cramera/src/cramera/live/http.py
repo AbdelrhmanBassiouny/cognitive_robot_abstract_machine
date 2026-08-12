@@ -120,9 +120,22 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
 
     def _send_mesh(self) -> None:
         """
-        Serve one object's mesh file (plain file IO, no world access).
+        Serve one object's mesh file, or one of its side assets (plain file IO, no world
+        access).
+
+        A ``side`` query parameter names a file relative to the mesh's own directory —
+        its ``.mtl`` companion or a texture it references. Requests that resolve outside
+        that directory are refused.
         """
-        self._send_file(self.bridge.mesh_path(self._query_value("key") or ""))
+        mesh_path = self.bridge.mesh_path(self._query_value("key") or "")
+        side = self._query_value("side")
+        if mesh_path is None or not side:
+            return self._send_file(mesh_path)
+        mesh_directory = Path(mesh_path).parent.resolve()
+        side_path = (mesh_directory / side).resolve()
+        if not side_path.is_relative_to(mesh_directory):
+            return self._send_json({"error": "side asset outside mesh directory"}, 403)
+        return self._send_file(str(side_path))
 
     def _send_file(self, path: Optional[str]) -> None:
         """

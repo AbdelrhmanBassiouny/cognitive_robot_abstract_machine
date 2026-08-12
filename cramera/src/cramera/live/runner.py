@@ -34,8 +34,8 @@ def start(world: World, port: int = DEFAULT_PORT) -> LiveVisualization:
     Serve a world to the browser viewer.
 
     Prefer :func:`coraplex.testing.start_visualization` (or
-    :class:`coraplex.visualization.WorldVisualization` directly) inside demos — this
-    is the cramera-side entry point they delegate to.
+    :class:`coraplex.visualization.WorldVisualization` directly) inside demos — this is
+    the cramera-side entry point they delegate to.
 
     :param world: The world to serve.
     :param port: Port of the bridge's HTTP endpoints.

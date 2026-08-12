@@ -8,6 +8,7 @@ rebuild the body without knowing how the world was constructed.
 
 from __future__ import annotations
 
+import urllib.parse
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -94,6 +95,11 @@ class ShapeEntry:
     URL the shape's mesh file is served from, set only when :attr:`kind` is ``MESH``.
     """
 
+    mtl: Optional[str] = None
+    """
+    URL of an OBJ mesh's companion ``.mtl`` file, or None when it has none.
+    """
+
     format: Optional[str] = None
     """
     Mesh file extension, set only when :attr:`kind` is ``MESH``.
@@ -138,6 +144,25 @@ def served_mesh_file(shape: Shape) -> Optional[str]:
     if not Path(shape.filename).is_file():
         return None
     return shape.filename
+
+
+def companion_mtl_url(mesh_file: str, mesh_url: str) -> Optional[str]:
+    """
+    The URL an OBJ mesh's companion ``.mtl`` is served from, or None without one.
+
+    The companion is served as a side asset of the mesh itself, so the viewer's material
+    loader can fetch it (and the textures it references) relative to the mesh's own URL.
+
+    :param mesh_file: The mesh file's path on disk.
+    :param mesh_url: The URL the mesh itself is served from.
+    """
+    mesh_path = Path(mesh_file)
+    if mesh_path.suffix.lower() != ".obj":
+        return None
+    companion = mesh_path.with_suffix(".mtl")
+    if not companion.is_file():
+        return None
+    return "%s&side=%s" % (mesh_url, urllib.parse.quote(companion.name))
 
 
 def shape_entry(
@@ -203,6 +228,7 @@ def shape_entry(
             color=color,
             opacity=opacity,
             mesh=mesh_url,
+            mtl=companion_mtl_url(shape.filename, mesh_url),
             format=Path(shape.filename).suffix.lstrip(".").lower(),
             scale=_rounded_axes(shape.scale),
         )

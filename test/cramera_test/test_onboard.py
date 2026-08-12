@@ -33,6 +33,7 @@ from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
     FixedConnection,
+    OmniDrive,
     PrismaticConnection,
 )
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
@@ -1380,3 +1381,59 @@ class TestBundleUrdf:
             bundler.BundleReport.of_source(
                 str(tmp_path / "gone.urdf"), "demo", str(tmp_path)
             )
+
+
+class TestUnsupportedConnections:
+    """
+    A body behind a connection URDF cannot express must survive serialization: it is
+    grafted onto the document root at its world pose instead of crashing the bundle.
+    """
+
+    def drive_world(self):
+        """
+        A world whose robot base hangs on an omnidirectional drive.
+        """
+        world = World()
+        root = Body(name=PrefixedName("root", prefix="world"))
+        base = Body(name=PrefixedName("base_link", prefix="pr2"))
+        with world.modify_world():
+            world.add_body(root)
+            world.add_connection(
+                OmniDrive.create_with_dofs(parent=root, child=base, world=world)
+            )
+        return world, root, base
+
+    def test_an_omnidirectional_drive_becomes_a_floating_joint(self, tmp_path):
+        world, root, base = self.drive_world()
+
+        report = UrdfDocument.of_bodies(
+            bodies=[root, base],
+            name="environment",
+            output_directory=str(tmp_path / "bundle"),
+            mesh_subdirectory="environment",
+        )
+
+        urdf = Path(report.urdf).read_text()
+        assert 'type="floating"' in urdf
+        assert report.movable_joints == [str(base.parent_connection.name)]
+
+    def test_a_connection_without_a_joint_type_grafts_the_child(
+        self, tmp_path, monkeypatch
+    ):
+        world, root, base = self.drive_world()
+        connection_types = dict(UrdfDocument.CONNECTION_JOINT_TYPES)
+        del connection_types[OmniDrive]
+        monkeypatch.setattr(
+            UrdfDocument, "CONNECTION_JOINT_TYPES", connection_types
+        )
+
+        report = UrdfDocument.of_bodies(
+            bodies=[root, base],
+            name="environment",
+            output_directory=str(tmp_path / "bundle"),
+            mesh_subdirectory="environment",
+        )
+
+        urdf = Path(report.urdf).read_text()
+        graft_name = "%s_to_%s" % (UrdfDocument.SYNTHESIZED_ROOT_LINK, "pr2/base_link")
+        assert graft_name in urdf

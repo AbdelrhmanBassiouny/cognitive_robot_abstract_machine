@@ -14,12 +14,16 @@ import urllib.request
 
 import pytest
 
-from cramera import paths
-from cramera.live.bridge import Bridge, ModelBundleContext
-from cramera.live.http import serve
-from cramera.onboard.bundle_urdf import BundleReport
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.world_description.geometry import Mesh
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body
 
-from .test_live_bridge import PublishedBody
+from cramera import paths
+from cramera.live.bridge import Bridge
+from cramera.live.http import serve
+
+from .test_live_bridge import shaped_body, world_with
 from .test_server import get, get_json
 
 
@@ -43,11 +47,16 @@ def publish_mesh_object(
 ):
     """
     Publish one mesh-backed object on ``bridge``, with a real file behind it.
+
+    The object's mesh is served shape by shape, so its serve key is ``<key>#0``.
     """
     mesh_file = tmp_path / key
     mesh_file.write_bytes(content)
-    bridge.remember_mesh_file(str(mesh_file))
-    bridge.publish_bodies({key: PublishedBody(name="world/" + key)})
+    body = Body(
+        name=PrefixedName(key, prefix="world"),
+        visual=ShapeCollection(shapes=[Mesh(filename=str(mesh_file))]),
+    )
+    bridge.publish_bodies({key: body})
     return mesh_file
 
 
@@ -86,9 +95,7 @@ class TestReadOnlyEndpoints:
             "chart": False,
             "sequenceNumber": 0,
             "modelVersion": 0,
-            "bundleSignature": ModelBundleContext(
-                sources=[], world_body_names=[], robot=None, base_body=None
-            ).signature(),
+            "bundleSignature": Bridge().bundle_signature(),
             "partAnnotations": [],
         }
 
@@ -101,7 +108,7 @@ class TestReadOnlyEndpoints:
 class TestMesh:
     def test_a_published_meshs_bytes_are_served(self, server, bridge, tmp_path):
         publish_mesh_object(bridge, tmp_path, content=b"solid milk endsolid")
-        status, body = get(server + "/mesh?key=milk.stl")
+        status, body = get(server + "/mesh?key=milk.stl%230")
         assert status == 200
         assert body == b"solid milk endsolid"
 
@@ -110,22 +117,43 @@ class TestMesh:
             get(server + "/mesh?key=nope.stl")
         assert error.value.code == 404
 
+    def test_a_side_asset_is_served_from_the_meshs_directory(
+        self, server, bridge, tmp_path
+    ):
+        publish_mesh_object(bridge, tmp_path, key="board.obj", content=b"o board")
+        (tmp_path / "board.mtl").write_bytes(b"newmtl paint")
+
+        status, body = get(server + "/mesh?key=board.obj%230&side=board.mtl")
+
+        assert status == 200
+        assert body == b"newmtl paint"
+
+    def test_a_side_asset_outside_the_meshs_directory_is_refused(
+        self, server, bridge, tmp_path
+    ):
+        publish_mesh_object(bridge, tmp_path, key="board.obj", content=b"o board")
+
+        with pytest.raises(urllib.error.HTTPError) as error:
+            get(server + "/mesh?key=board.obj%230&side=..%2Fsecret.txt")
+
+        assert error.value.code == 403
+
 
 class TestLiveScene:
     def test_live_scene_reflects_a_fresh_bridge(self, server):
         assert get_json(server + "/live_scene") == {"scene": None}
 
-    def test_live_scene_bundles_a_remembered_source(
+    def test_live_scene_bundles_the_attached_world(
         self, server, bridge, tmp_path, monkeypatch
     ):
         scenes = tmp_path / "scenes"
         monkeypatch.setenv("CRAMERA_SCENES", str(scenes))
-        urdf = tmp_path / "pr2.urdf"
-        urdf.write_text('<robot name="demo">\n  <link name="base_link"/>\n</robot>\n')
-        bridge.remember_model_source(str(urdf), BundleReport.of_source)
+        bridge.attach(world_with(shaped_body("laboratory", "bench")))
 
         assert get_json(server + "/live_scene") == {"scene": paths.LIVE_SCENE_NAME}
-        assert (scenes / paths.LIVE_SCENE_NAME / "scene.json").is_file()
+        scene_directory = scenes / paths.LIVE_SCENE_NAME
+        assert (scene_directory / "scene.json").is_file()
+        assert (scene_directory / "environment.urdf").is_file()
 
 
 class TestMove:

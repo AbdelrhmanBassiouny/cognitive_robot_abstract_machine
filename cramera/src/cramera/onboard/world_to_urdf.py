@@ -23,6 +23,7 @@ from semantic_digital_twin.world_description.connections import (
     Connection,
     Connection6DoF,
     FixedConnection,
+    OmniDrive,
     PrismaticConnection,
     RevoluteConnection,
 )
@@ -50,6 +51,7 @@ class UrdfDocument:
         RevoluteConnection: JointType.REVOLUTE,
         PrismaticConnection: JointType.PRISMATIC,
         Connection6DoF: JointType.FLOATING,
+        OmniDrive: JointType.FLOATING,
     }
     """
     The joint type a connection class becomes.
@@ -181,12 +183,14 @@ class UrdfDocument:
         for body in bodies:
             document.add_link(body)
             connection = body.parent_connection
-            if connection is not None and str(connection.parent.name) in serialized:
+            if body is identity_root:
+                document.graft_onto_root(body, pose=HomogeneousTransformationMatrix())
+            elif (
+                connection is not None
+                and str(connection.parent.name) in serialized
+                and cls.supports(connection)
+            ):
                 document.add_joint(connection)
-            elif body is identity_root:
-                document.graft_onto_root(
-                    body, pose=HomogeneousTransformationMatrix()
-                )
             else:
                 document.graft_onto_root(body)
         return document.write(name, bodies)
@@ -199,8 +203,8 @@ class UrdfDocument:
 
         :param body: The body to attach, whose own parent this document does not
             contain.
-        :param pose: The pose the body is fixed at; the pose it holds in its world
-            when not given.
+        :param pose: The pose the body is fixed at; the pose it holds in its world when
+            not given.
         """
         joint_element = ElementTree.SubElement(
             self.root_element,
@@ -391,6 +395,18 @@ class UrdfDocument:
         if joint_type in cls.AXIS_JOINT_TYPES:
             return connection.parent_T_connection_expression
         return connection.origin
+
+    @classmethod
+    def supports(cls, connection: Connection) -> bool:
+        """
+        Whether a connection maps onto a URDF joint type.
+
+        A body behind an unsupported connection is grafted onto the document root at
+        its world pose instead.
+
+        :param connection: The connection to check.
+        """
+        return isinstance(connection, tuple(cls.CONNECTION_JOINT_TYPES))
 
     @classmethod
     def _joint_type(cls, connection: Connection) -> JointType:

@@ -64,21 +64,15 @@
     /* Whether the live scene must be rebuilt and reloaded because this page's bundle
        no longer describes the running demo. Two ways that happens:
 
-       - the demo parsed a model the bundle does not contain (a robot or environment
-         loaded mid-run): `info.modelVersion` (the bridge's current source count)
-         exceeds `scene.models.length` (one entry per source known at build time);
+       - the bridge reports a bundle signature (`info.bundleSignature`, a digest of
+         the world model a bundle built right now would serialize) that differs from
+         the one this page's bundle carries (`scene.bundleSignature`) — the demo
+         attached a different world, its model changed mid-run, or anything else that
+         makes the loaded bundle describe a world that no longer runs;
        - the bundle was built before the demo's world was attached
          (`scene.worldBound` not true — a bundle without the flag was written before
-         the flag existed and is just as suspect): without the composed world the
-         models' instance prefixes and the robot cannot be identified, so nothing
-         routes joints or drives the base — the moment `info.running` reports an
-         attached world, the bundle must be rebuilt against it.
-
-       - the bridge reports a bundle signature (`info.bundleSignature`, a digest of
-         what a bundle built right now would contain) that differs from the one this
-         page's bundle carries (`scene.bundleSignature`) — the demo switched to a
-         different world, changed robots, or anything else that makes the loaded
-         bundle describe a world that no longer runs.
+         the flag existed and is just as suspect): the moment `info.running` reports
+         an attached world, the bundle must be rebuilt against it.
 
        Only ever true on the live scene while the stream is attached: anywhere else the
        page is showing a recording, which no live event may reload away. */
@@ -86,9 +80,6 @@
       if (!isLiveScene(sceneName) || !attached || !scene || !info) return false;
       if (typeof scene.bundleSignature === 'string' && typeof info.bundleSignature === 'string'
           && scene.bundleSignature !== info.bundleSignature) return true;
-      const bundledModelCount = scene.models ? scene.models.length : null;
-      if (typeof info.modelVersion === 'number' && typeof bundledModelCount === 'number'
-          && info.modelVersion > bundledModelCount) return true;
       return scene.worldBound !== true && info.running === true;
     },
 

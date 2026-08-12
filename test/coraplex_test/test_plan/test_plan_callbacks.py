@@ -15,7 +15,6 @@ from coraplex.plans.plan_node import MotionNode, PlanNode
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from semantic_digital_twin.datastructures.definitions import TorsoState
 
-
 # %% recording callback
 
 
@@ -75,3 +74,40 @@ def test_perform_notifies_root_and_motion_nodes(immutable_model_world):
         start_index = recorder.events.index(("start", motion_node))
         end_index = recorder.events.index(("end", motion_node))
         assert start_index < end_index
+
+
+# %% simulated execution notifies motion ticks
+
+
+@dataclass
+class MotionTickRecorder(PlanCallback):
+    """
+    Records every statechart the motion executor reports a tick for.
+    """
+
+    statecharts: List[object] = field(default_factory=list)
+    """
+    The reported statecharts in notification order.
+    """
+
+    def on_motion_tick(self, statechart):
+        self.statecharts.append(statechart)
+
+
+def test_simulated_execution_notifies_every_motion_tick(immutable_model_world):
+    """
+    While the simulated executor ticks a plan's motions, every tick is reported with the
+    statechart being executed.
+    """
+    world, robot_view, context = immutable_model_world
+    plan = sequential([MoveTorsoAction(TorsoState.HIGH)], context=context).plan
+    recorder = MotionTickRecorder()
+    plan.node_callbacks.append(recorder)
+
+    with simulated_robot:
+        plan.perform()
+
+    assert len(recorder.statecharts) > 0
+    assert all(
+        statechart is recorder.statecharts[0] for statechart in recorder.statecharts
+    )

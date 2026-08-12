@@ -75,17 +75,10 @@ function boundScene(modelCount) {
   return { models: models, worldBound: true };
 }
 
-test('a model parsed after the bundle was built triggers a reload', function () {
+test('the model count alone never triggers a reload — the signature decides', function () {
   const live = load();
   assert.strictEqual(
     live.needsLiveSceneReload(live.SCENE_NAME, true, boundScene(1), { running: true, modelVersion: 2 }),
-    true);
-});
-
-test('a bundle that already contains every parsed model does not reload', function () {
-  const live = load();
-  assert.strictEqual(
-    live.needsLiveSceneReload(live.SCENE_NAME, true, boundScene(2), { running: true, modelVersion: 2 }),
     false);
   assert.strictEqual(
     live.needsLiveSceneReload(live.SCENE_NAME, true, boundScene(2), { running: true, modelVersion: 1 }),
