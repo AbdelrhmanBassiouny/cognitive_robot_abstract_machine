@@ -2,7 +2,7 @@
 
 Refresh `.claude/skills/stacked-pr-maintenance/routine-prompt.md`, which had drifted
 from SKILL.md since it was last touched (65884bd4, 2026-08-03). Text-only change to
-that one file; no PR opened yet.
+that one file. Draft PR #155.
 
 Three drifts found and fixed:
 1. "Do not summarise it back to me" contradicted SKILL.md's Finish section, which
@@ -28,9 +28,14 @@ reached the default branch, which it has.
 - Set the commit identity from `.claude/personal/git-identity` (the session default
   was the assistant identity AGENTS.md forbids).
 
+- Committed `ed866f36` and pushed the branch.
+- Opened draft PR #155. Not a bug fix, so no `bug` label.
+
 ## Next
 
-- Commit and push to `claude/routine-prompt-refresh-ps5l3z`.
-- No PR requested yet. If one is opened: draft, and this is not a bug fix so no `bug`
-  label.
+- Nothing outstanding. The PR is a draft awaiting review; this session's job on it
+  ends there.
 - Nothing scheduled or subscribed by this session.
+- Unrelated finding worth a separate change: the session started with git configured
+  as `Claude <noreply@anthropic.com>`, which AGENTS.md forbids. Set by hand here from
+  `.claude/personal/git-identity`; session-start.sh does not apply it.
