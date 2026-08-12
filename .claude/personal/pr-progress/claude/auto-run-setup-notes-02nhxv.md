@@ -20,7 +20,25 @@ something missing.
   no-ask path end to end: `dashboard_dependencies` was missing, `/setup-personal-notes`
   ran without being offered, installed markdown/nh3, and the check then exited 0.
 
+**Review round 2026-08-12** (one comment, posted twice as two threads): the
+step-0 section is duplicated across the skills, dedupe it once unless another PR
+already does. It does — #149 collapses the two plan-item copies into
+`plan-dashboard/plan-item-gathering.md` — so the dedup is left there. Replied on
+both threads with the measurement (the procedure is already single-sourced in
+`prerequisite-check.md`; what repeats is a citation plus a per-skill consequence
+clause, the same shape as `scope-decision.md` / `dependency-readiness.md` /
+`pr-data-fetching.md`) and left both open, since the outcome is a deferral.
+
+**Correction that round produced:** the recorded conflict resolution here was
+wrong. #149's `plan-item-gathering.md` and #135's `add-plan-item/SKILL.md` are
+new files still carrying "offer `/setup-personal-notes`", so neither conflicts
+with this branch and nothing flags them at merge time — landing either after
+#156 reinstates the gate. Right resolution for the two plan-item skills: take
+#149's deletion, carry this PR's wording into its shared document. #135 also
+conflicts in `prerequisite-check.md`, where it only adds `add-plan-item` to the
+opening list. Flagged on both PRs; neither branch was pushed to (both are out of
+draft, so both are the user's). Manifest + roadmap corrected, dashboard
+republished, PR description updated.
+
 **Next:** nothing outstanding. The plan's master index was not refreshed
-(`/plan-dashboard` with no argument does that). #107 and #149 will conflict
-textually with this branch in `hooks/README.md` and the two plan-item skills
-when they land; resolution is to keep both edits.
+(`/plan-dashboard` with no argument does that).
