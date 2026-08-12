@@ -84,8 +84,8 @@ def test_a_failure_names_the_call_its_status_and_what_was_said():
 
 def test_a_failure_with_no_suggestion_renders_only_its_error_message():
     """
-    ``suggest_correction`` defaults to empty, so a failure with no advice to give does
-    not grow a trailing suggestion line nobody wrote.
+    ``GitCommandFailed`` answers ``suggest_correction`` with an empty string, so a
+    failure with no advice to give does not grow a trailing suggestion line nobody wrote.
     """
     failure = GitCommandFailed(status=1, detail="not a git repository", arguments=())
 
@@ -109,6 +109,10 @@ def test_a_failure_with_a_suggestion_appends_it_on_its_own_line():
             """:return: A fixed call name, since this test's failure is synthetic."""
             return "do-the-thing"
 
+        def error_message(self) -> str:
+            """:return: The same call/status/detail formula every failure composes."""
+            return f"{self.call} failed with {self.status}: {self.detail}"
+
         def suggest_correction(self) -> str:
             """:return: The advice this test asserts gets appended."""
             return "try again with --force"
@@ -118,6 +122,34 @@ def test_a_failure_with_a_suggestion_appends_it_on_its_own_line():
     assert str(failure) == (
         "do-the-thing failed with 1: refused\nSuggestion: try again with --force"
     )
+
+
+def test_a_subclass_missing_an_abstract_method_is_refused_at_construction():
+    """
+    ``call``, ``error_message`` and ``suggest_correction`` are abstract, so a subclass
+    that forgets one must fail loudly rather than build a failure that raises
+    ``NotImplementedError`` the first time something reads it.
+
+    ``BaseException.__new__`` bypasses ``ABCMeta``'s usual instantiation check (proven
+    empirically: a plain ``@dataclass class C(RuntimeError, ABC)`` with an unimplemented
+    ``@abstractmethod`` builds without error), so this exercises
+    ``ExternalCallFailed.__post_init__``'s own enforcement rather than assuming Python's.
+    """
+
+    class MissingErrorMessage(ExternalCallFailed):
+        """A subclass that never says what went wrong."""
+
+        @property
+        def call(self) -> str:
+            """:return: A fixed call name, since this test's failure is synthetic."""
+            return "do-the-thing"
+
+        def suggest_correction(self) -> str:
+            """:return: No advice, since this test is about the missing method."""
+            return ""
+
+    with pytest.raises(TypeError, match="error_message"):
+        MissingErrorMessage(status=1, detail="refused")
 
 
 # %% commands as classes
