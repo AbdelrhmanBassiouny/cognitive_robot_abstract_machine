@@ -6036,3 +6036,30 @@ short-circuiting by hand. 450 tests across the three directories CI runs. Not re
 user marked this pull request ready themselves on 2026-08-05, and that standing exception
 holds. Pushed to the item's own branch rather than the session's designated one, the same
 override recorded for #115, #121, #133 and #143.
+
+## Update 2026-08-12 (`integration-branch`, #154): the recorded dependency was the kickoff's, not the branch's
+
+`depends_on` corrected from `stack-maintenance-executor` to `manifest-currency-first`, on the
+user's instruction. Nothing about the item changed; the manifest had simply kept the parent
+this item was kicked off against, while the branch it is actually built on moved underneath
+it. The 08-11 round already recorded the move — #151 rebased onto #139, `6fd229ff3` contains
+`ebf67734`, and that round was replanned against #151 as the base *because* of it — but the
+correction was written into the roadmap and never into the field the dashboard reads.
+
+Direct parent only, so #139 is not named alongside it: `manifest-currency-first` already
+depends on `stack-maintenance-executor`, and this manifest states one edge per item
+throughout. Naming both would also have moved the dashboard's indent parent, which is the
+first same-track entry in the list.
+
+The same-shaped correction on #151 is eight days old (its own entry, 08-12: `depends_on` still
+`[]` after the branch had been based on #139 since 08-11). Two items in one plan whose
+recorded dependency lagged a basing decision that was made, acted on, and written up in prose
+— which is the case `manifest-currency-first` itself exists to close, and neither instance was
+caught by a check. `check` compares recorded fields against local git; a `depends_on` naming a
+plan item has no local-git counterpart to contradict it, so nothing in the tooling reads a
+base ref back against the manifest.
+
+Outstanding, and not fixed here: #154's base ref on GitHub is still
+`claude/plan-item-kickoff-workflow-koufa6` (#139's branch), so the pull request is not yet
+reparented onto #151's branch. The manifest now states the intended structure; the reparent is
+a separate action on the pull request.

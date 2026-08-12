@@ -2664,7 +2664,7 @@ items:
     branch: claude/plan-item-kickoff-workflow-ixbvxl
     track: stack-tooling
     depends_on:
-      - stack-maintenance-executor
+      - manifest-currency-first
     status: in_progress
     pull_request_number: 154
     session: https://claude.ai/code/session_01Ue4PvfV5LDxHGRRS5BZB4g
@@ -2910,3 +2910,10 @@ items:
       Also retracted here, since this entry is where it was recorded: the greenlet claim. 3.5.5
       does publish cp312 manylinux wheels and an sdist, so a test_each_lib red must be judged on
       its own evidence rather than against that note.
+
+      depends_on corrected 2026-08-12 from stack-maintenance-executor to manifest-currency-first.
+      The recorded dependency was the one this item was kicked off against; #151 has since rebased
+      onto #139, making the chain #139 to #151 to #154 linear, and the 08-11 review round was
+      replanned against #151 as the base for that reason. #139 stays a dependency transitively
+      through #151, so naming it as well would record the same edge twice. Not yet true of the
+      pull request itself: #154's base ref is still #139's branch, so a reparent is outstanding.
