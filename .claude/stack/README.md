@@ -131,7 +131,7 @@ To run it unattended, register it as a scheduled Routine; the prompt to paste is
   GitHub.
 - **CI is the validator; validate ROS-free first.** Cloud containers have no ROS, so never try
   to run the coraplex/SDT suites locally - poll a PR's CI with the GitHub MCP and treat its
-  red/green as the oracle (leave `subscribe_pr_activity` to an interactive session babysitting
-  that one PR - a scheduled run never subscribes; see the maintenance skill's HARD RULES). A
+  red/green as the oracle (no session subscribes to a PR's activity - scheduled or interactive,
+  CI is learned by polling; see the maintenance skill's HARD RULES). A
   maintenance pass never fixes a failing check: it reports the branch to its owner and moves on.
   Never disable a leak/CI check to go green.
