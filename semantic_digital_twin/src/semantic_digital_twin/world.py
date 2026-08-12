@@ -6,6 +6,7 @@ import inspect
 import logging
 import threading
 import uuid
+from contextlib import contextmanager
 from copy import deepcopy, copy
 from dataclasses import dataclass, field
 from functools import wraps, cached_property
@@ -26,6 +27,7 @@ from typing_extensions import (
     Callable,
     Any,
     Iterable,
+    Iterator,
     TYPE_CHECKING,
     get_args,
 )
@@ -59,7 +61,6 @@ from semantic_digital_twin.exceptions import (
     MismatchingWorld,
 )
 from semantic_digital_twin.mixin import HasSimulatorProperties
-from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_computations.forward_kinematics import (
     ForwardKinematicsManager,
 )
@@ -71,10 +72,8 @@ from semantic_digital_twin.spatial_types import (
     Point3,
 )
 from semantic_digital_twin.spatial_types.derivatives import Derivatives
-from semantic_digital_twin.utils import IDGenerator
 from semantic_digital_twin.world_description.connections import (
     Connection6DoF,
-    ActiveConnection1DOF,
     FixedConnection,
     ActiveConnection,
 )
@@ -121,10 +120,10 @@ from semantic_digital_twin.pipeline.mesh_decomposition.vhacd import VHACDMeshDec
 
 if TYPE_CHECKING:
     from semantic_digital_twin.spatial_types import GenericSpatialType
+    from semantic_digital_twin.robots.robot_parts import AbstractRobot
+
 
 logger = logging.getLogger("semantic_digital_twin")
-
-id_generator = IDGenerator()
 
 GenericSemanticAnnotation = TypeVar(
     "GenericSemanticAnnotation", bound=SemanticAnnotation
@@ -157,6 +156,59 @@ class ResetStateContextManager:
     ) -> None:
         self.world.state._data[:] = self.state
         self.world.notify_state_change()
+
+
+@dataclass
+class WorldStateBatchContextManager:
+    """
+    Context manager collapsing many state changes of a `World` into a single
+    notification.
+
+    Writing a whole configuration one degree of freedom at a time otherwise recomputes
+    the forward kinematics and notifies every observer once per degree of freedom, which
+    turns one logical change into a burst of individual ones.
+
+    A batch interrupted by an error still announces what it wrote before the error,
+    because that state is already live and staying silent would leave the forward
+    kinematics and every observer stale.
+    """
+
+    publish_changes: bool = True
+    """
+    Whether the single notification of this batch publishes the changes it collected.
+    """
+
+    world: World = field(kw_only=True, repr=False)
+    """
+    The world whose state changes are collected.
+    """
+
+    def __enter__(self) -> WorldStateBatchContextManager:
+        if self.world._state_change_batch_depth == 0:
+            self.world._state_change_batch_publishes_changes = self.publish_changes
+        elif self.world._state_change_batch_publishes_changes != self.publish_changes:
+            raise MismatchingPublishChangesAttribute(
+                self.world._state_change_batch_publishes_changes, self.publish_changes
+            )
+        self.world._state_change_batch_depth += 1
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[type],
+        exc_val: Optional[Exception],
+        exc_tb: Optional[type],
+    ) -> None:
+        self.world._state_change_batch_depth -= 1
+        if self.world._state_change_batch_depth > 0:
+            return
+        has_collected_change = self.world._state_change_batch_has_collected_change
+        publish_changes = self.world._state_change_batch_publishes_changes
+        self.world._state_change_batch_has_collected_change = False
+        self.world._state_change_batch_publishes_changes = True
+        if not has_collected_change:
+            return
+        self.world.notify_state_change(publish_changes=publish_changes)
 
 
 @dataclass
@@ -262,12 +314,16 @@ class WorldModelUpdateContextManager:
                 self.world.world_is_being_modified = False
                 model_manager._current_modifications_will_be_published = None
         finally:
-            # keep outside the if block, as it needs to be released as many times as it was acquired
-            self.world._world_lock.release()
-            # Flush deferred publications only after the lock is fully released, so a synchronous
-            # publish does not block the receiving executor that needs the lock to apply/acknowledge.
-            if run_pending_publications:
-                self.world._model_manager.flush_pending_publications()
+            # Claim the turn of this modification in the stream of publications before the
+            # world lock is released, so that a thread waiting for that lock cannot publish
+            # what it then reads before this modification has published its own changes.
+            with self.world._model_manager.publishing_in_order():
+                # keep outside the if block, as it needs to be released as many times as it was acquired
+                self.world._world_lock.release()
+                # Flush deferred publications only after the lock is fully released, so that
+                # the modification they describe is complete and readable by whoever reacts to them.
+                if run_pending_publications:
+                    self.world._model_manager.flush_pending_publications()
 
 
 def atomic_world_modification(func=None, modification: Type[WorldModification] = None):
@@ -390,10 +446,31 @@ class WorldModelManager:
     """
     Network publications deferred while the world is being modified.
 
-    They are flushed (executed) only after ``_world_lock`` has been released, so that a
-    synchronous publish waiting for acknowledgments never blocks the receiving executor
-    that must acquire the lock to apply/ack.
+    They are flushed (executed) only after ``_world_lock`` has been released, so that
+    what they describe is complete by the time it leaves this process.
     """
+
+    _publication_order_lock: threading.RLock = field(
+        init=False, default_factory=threading.RLock, repr=False
+    )
+    """
+    Serializes the publications leaving this world.
+
+    Reentrant, because flushing the deferred publications holds it while each of them
+    publishes.
+    """
+
+    @contextmanager
+    def publishing_in_order(self) -> Iterator[None]:
+        """
+        Claim the turn of the caller in the stream of publications of this world.
+
+        A modification claims its turn before it releases ``_world_lock``, so a thread
+        that was waiting for that lock cannot announce the state it then reads before
+        the model change it belongs to has been published.
+        """
+        with self._publication_order_lock:
+            yield
 
     def update_model_version_and_notify_callbacks(self, **kwargs) -> None:
         """
@@ -410,9 +487,8 @@ class WorldModelManager:
         Execute and clear all publications that were deferred during a world
         modification.
 
-        Must be called *after* ``_world_lock`` is released so that publishing (and, in
-        synchronous mode, waiting for acknowledgments) does not happen while holding the
-        lock.
+        Must be called *after* ``_world_lock`` is released, so that the modification the
+        publications describe is complete.
         """
         pending = self.pending_publications
         self.pending_publications = []
@@ -469,6 +545,25 @@ class World(HasSimulatorProperties):
     world_is_being_modified: bool = False
     """
     Is set to True, when a world.modify_world context is used.
+    """
+
+    _state_change_batch_depth: int = field(default=0, init=False, repr=False)
+    """
+    How many nested :meth:`batch_state_changes` contexts are currently open.
+    """
+
+    _state_change_batch_has_collected_change: bool = field(
+        default=False, init=False, repr=False
+    )
+    """
+    Whether a state change was notified while the current batch is open.
+    """
+
+    _state_change_batch_publishes_changes: bool = field(
+        default=True, init=False, repr=False
+    )
+    """
+    The ``publish_changes`` the currently open batch was entered with.
     """
 
     name: Optional[str] = None
@@ -546,6 +641,28 @@ class World(HasSimulatorProperties):
             ),
         )
         self.collision_manager.add_to_world(self)
+
+    @classmethod
+    def create_with_root_body(cls, root_body_name: str = "map") -> World:
+        """
+        Creates a new instance of the World class with a root body.
+
+        :param root_body_name: The unprefixed name of the root body.
+        """
+        root_body = Body(name=PrefixedName(root_body_name))
+        world = World()
+        with world.modify_world():
+            world.add_body(root_body)
+        return world
+
+    def force_root_name(self, name: PrefixedName) -> None:
+        """
+        Rename the world's root body.
+
+        :param name: The new name for the root body.
+        """
+        with self.modify_world():
+            self.root.update_name(name)
 
     def __hash__(self):
         return hash((id(self), self._model_manager.version))
@@ -636,6 +753,8 @@ class World(HasSimulatorProperties):
 
     @property
     def robot_bodies_with_collision(self) -> List[Body]:
+        from semantic_digital_twin.robots.robot_parts import AbstractRobot
+
         return [
             body
             for robot in self.get_semantic_annotations_by_type(AbstractRobot)
@@ -644,6 +763,8 @@ class World(HasSimulatorProperties):
 
     @property
     def robot_body_to_robot_mapping(self) -> dict[Body, AbstractRobot]:
+        from semantic_digital_twin.robots.robot_parts import AbstractRobot
+
         return {
             body: robot
             for robot in self.get_semantic_annotations_by_type(AbstractRobot)
@@ -1079,6 +1200,32 @@ class World(HasSimulatorProperties):
         actuator.remove_from_world()
         self.actuators.remove(actuator)
 
+    def remove_branch_from_world(self, root: KinematicStructureEntity):
+        """
+        Removes the subtree rooted at ``root`` from the world.
+
+        Removes ``root`` together with all of its descendant kinematic structure
+        entities, every connection within the branch, and the branch's connection to its
+        parent. The removals are performed atomically.
+
+        :param root: The root entity of the branch to be removed.
+        """
+        kinematic_structure_entities = self.get_kinematic_structure_entities_of_branch(
+            root
+        )
+        connections = self.get_connections_of_branch(root)
+        parent_connection = root.parent_connection
+        connections = (
+            connections + [parent_connection]
+            if parent_connection is not None
+            else connections
+        )
+        with self.modify_world():
+            for connection in connections:
+                self.remove_connection(connection)
+            for kinematic_structure_entity in kinematic_structure_entities:
+                self.remove_kinematic_structure_entity(kinematic_structure_entity)
+
     # %% Other Atomic World Modifications
     @atomic_world_modification(modification=SetDofHasHardwareInterface)
     def set_dofs_has_hardware_interface(
@@ -1475,7 +1622,9 @@ class World(HasSimulatorProperties):
         root_connection = self.get_kinematic_structure_entity_by_id(
             other_root_id
         ).parent_connection
-        root_connection.origin = pose
+        root_connection.origin = pose.copy_with_new_reference_frames(
+            new_reference_frame=self.root, new_child_frame=root_connection.child
+        )
 
     def merge_world(
         self,
@@ -1728,7 +1877,15 @@ class World(HasSimulatorProperties):
         """
         If you have changed the state of the world, call this function to trigger
         necessary events and increase the state version.
+
+        Inside a :meth:`batch_state_changes` context the notification is collected and
+        emitted once when that context ends, with the ``publish_changes`` of that
+        context: the setters that write the state cannot know they are part of a batch,
+        so the batch is what decides whether its changes are published.
         """
+        if self._state_change_batch_depth > 0:
+            self._state_change_batch_has_collected_change = True
+            return
         if not self.is_empty():
             self._forward_kinematic_manager.recompute()
         self.state._notify_state_change(publish_changes=publish_changes, **kwargs)
@@ -2127,7 +2284,9 @@ class World(HasSimulatorProperties):
             else self._manually_compute_world_root_T_self(entity_b)
         )
         return HomogeneousTransformationMatrix(
-            (root_T_reference.inverse() @ root_T_target).evaluate()
+            (root_T_reference.inverse() @ root_T_target).evaluate(),
+            reference_frame=entity_a,
+            child_frame=entity_b,
         )
 
     def _manually_compute_world_root_T_self(
@@ -2258,6 +2417,8 @@ class World(HasSimulatorProperties):
         """
         if spatial_object.reference_frame is None:
             raise MissingReferenceFrameError(spatial_object)
+        if spatial_object.reference_frame == target_frame:
+            return spatial_object
         target_frame_T_reference_frame = self.compute_forward_kinematics(
             root=target_frame, tip=spatial_object.reference_frame
         )
@@ -2325,6 +2486,22 @@ class World(HasSimulatorProperties):
             world=self, publish_changes=publish_changes
         )
 
+    def batch_state_changes(
+        self, publish_changes: bool = True
+    ) -> WorldStateBatchContextManager:
+        """
+        Collect the state changes made inside the context into a single notification.
+
+        Use this when writing several degrees of freedom that belong to one logical
+        change, such as a whole configuration.
+
+        :param publish_changes: Whether the resulting notification publishes the
+            changes.
+        """
+        return WorldStateBatchContextManager(
+            world=self, publish_changes=publish_changes
+        )
+
     def reset_state_context(self) -> ResetStateContextManager:
         return ResetStateContextManager(self)
 
@@ -2361,14 +2538,4 @@ class World(HasSimulatorProperties):
                     connection.update_state(dt)
                 case _:
                     pass
-        self.notify_state_change()
-
-    def set_positions_1DOF_connection(
-        self, new_state: Dict[ActiveConnection1DOF, float]
-    ) -> None:
-        """
-        Set the positions of 1DOF connections and notify the world of the state change.
-        """
-        for connection, value in new_state.items():
-            connection.position = value
         self.notify_state_change()

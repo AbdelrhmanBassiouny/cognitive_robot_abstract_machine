@@ -14,7 +14,7 @@ from enum import Enum
 from krrood.entity_query_language.factories import not_, variable
 from krrood.entity_query_language.operators.core_logical_operators import Not
 from krrood.entity_query_language.rdr.backward_inference import (
-    ConclusionKnowledge,
+    ConclusionSufficientConditionSets,
     GuardCondition,
     SufficientConditionSet,
 )
@@ -24,8 +24,7 @@ from krrood.entity_query_language.rdr.condition_resolver import (
     CornerCaseKnowledgeResolver,
     ResolutionMode,
     ResolvedCondition,
-    TargetKnowledgeResolver,
-    _materialize,
+    TargetSufficientConditionsBasedResolver,
 )
 
 
@@ -46,7 +45,7 @@ class Species(Enum):
 
 
 def _empty_knowledge(value):
-    return ConclusionKnowledge(conclusion_value=value, sufficient_condition_sets=())
+    return ConclusionSufficientConditionSets(conclusion_value=value, sufficient_condition_sets=())
 
 
 # %% ResolutionMode / ResolvedCondition
@@ -59,34 +58,34 @@ def test_resolution_mode_has_automatic_and_hint_members():
 
 def test_resolved_condition_carries_expression_and_resolver_type():
     animal = variable(Animal, domain=[])
-    resolved = ResolvedCondition(animal.has_fur, TargetKnowledgeResolver)
+    resolved = ResolvedCondition(animal.has_fur, TargetSufficientConditionsBasedResolver)
 
     assert resolved.expression is animal.has_fur
-    assert resolved.resolver_type is TargetKnowledgeResolver
+    assert resolved.resolver_type is TargetSufficientConditionsBasedResolver
 
 
 # %% _materialize
 
 
-def test_materialize_returns_the_bare_expression_when_not_negated():
+def test_guard_expression_returns_the_bare_expression_when_not_negated():
     animal = variable(Animal, domain=[])
     guard = GuardCondition(animal.has_fur, negated=False)
 
-    assert _materialize(guard) is animal.has_fur
+    assert guard.as_expression is animal.has_fur
 
 
-def test_materialize_wraps_a_negated_guard_in_not():
+def test_guard_expression_wraps_a_negated_guard_in_not():
     animal = variable(Animal, domain=[])
     guard = GuardCondition(animal.has_fur, negated=True)
 
-    materialized = _materialize(guard)
+    guard_expression = guard.as_expression
 
-    assert isinstance(materialized, Not)
-    assert materialized._child_ is animal.has_fur
+    assert isinstance(guard_expression, Not)
+    assert guard_expression._child_ is animal.has_fur
 
     # materialized itself (not_(has_fur)) must be True exactly when has_fur is
     # False, and False when has_fur is True -- the inverse of the bare condition.
-    materialized_guard = GuardCondition(materialized, negated=False)
+    materialized_guard = GuardCondition(guard_expression, negated=False)
     cat = Animal("cat", has_fur=True)
     snake = Animal("snake", has_fur=False)
     assert materialized_guard.holds_for(animal, cat) is False
@@ -98,7 +97,7 @@ def test_materialize_wraps_a_negated_guard_in_not():
 
 def test_target_knowledge_resolver_finds_a_discriminating_guard():
     animal = variable(Animal, domain=[])
-    target_knowledge = ConclusionKnowledge(
+    target_knowledge = ConclusionSufficientConditionSets(
         conclusion_value=Species.BIRD,
         sufficient_condition_sets=(
             SufficientConditionSet(
@@ -110,7 +109,7 @@ def test_target_knowledge_resolver_finds_a_discriminating_guard():
     case = Animal("bat", can_fly=True)
     corner_case = Animal("cat", can_fly=False)
 
-    resolved = TargetKnowledgeResolver().resolve(
+    resolved = TargetSufficientConditionsBasedResolver().resolve(
         case=case,
         case_variable=animal,
         target_conclusion=Species.BIRD,
@@ -121,13 +120,13 @@ def test_target_knowledge_resolver_finds_a_discriminating_guard():
     )
 
     assert resolved is not None
-    assert resolved.resolver_type is TargetKnowledgeResolver
+    assert resolved.resolver_type is TargetSufficientConditionsBasedResolver
     assert resolved.expression is animal.can_fly
 
 
 def test_target_knowledge_resolver_returns_none_when_no_guard_discriminates():
     animal = variable(Animal, domain=[])
-    target_knowledge = ConclusionKnowledge(
+    target_knowledge = ConclusionSufficientConditionSets(
         conclusion_value=Species.BIRD,
         sufficient_condition_sets=(
             SufficientConditionSet(
@@ -140,7 +139,7 @@ def test_target_knowledge_resolver_returns_none_when_no_guard_discriminates():
     case = Animal("bat", can_fly=True)
     corner_case = Animal("eagle", can_fly=True)
 
-    resolved = TargetKnowledgeResolver().resolve(
+    resolved = TargetSufficientConditionsBasedResolver().resolve(
         case=case,
         case_variable=animal,
         target_conclusion=Species.BIRD,
@@ -156,7 +155,7 @@ def test_target_knowledge_resolver_returns_none_when_no_guard_discriminates():
 def test_target_knowledge_resolver_returns_none_with_no_known_paths():
     animal = variable(Animal, domain=[])
 
-    resolved = TargetKnowledgeResolver().resolve(
+    resolved = TargetSufficientConditionsBasedResolver().resolve(
         case=Animal("bat"),
         case_variable=animal,
         target_conclusion=Species.BIRD,
@@ -187,7 +186,7 @@ def _two_path_current_knowledge(animal):
     non_active_path = SufficientConditionSet(
         conditions=(GuardCondition(non_active_guard, negated=False),)
     )
-    knowledge = ConclusionKnowledge(
+    knowledge = ConclusionSufficientConditionSets(
         conclusion_value=Species.MAMMAL,
         sufficient_condition_sets=(active_path, non_active_path),
     )
@@ -347,14 +346,14 @@ def test_chain_resolver_default_order_is_target_then_corner_case():
     chain = ChainConditionResolver.backward_inference_default()
 
     assert [type(resolver) for resolver in chain.resolvers] == [
-        TargetKnowledgeResolver,
+        TargetSufficientConditionsBasedResolver,
         CornerCaseKnowledgeResolver,
     ]
 
 
 def test_chain_resolver_default_prefers_target_knowledge_over_corner_case():
     animal = variable(Animal, domain=[])
-    target_knowledge = ConclusionKnowledge(
+    target_knowledge = ConclusionSufficientConditionSets(
         conclusion_value=Species.BIRD,
         sufficient_condition_sets=(
             SufficientConditionSet(
@@ -379,5 +378,5 @@ def test_chain_resolver_default_prefers_target_knowledge_over_corner_case():
     )
 
     assert resolved is not None
-    assert resolved.resolver_type is TargetKnowledgeResolver
+    assert resolved.resolver_type is TargetSufficientConditionsBasedResolver
     assert resolved.expression is animal.can_fly

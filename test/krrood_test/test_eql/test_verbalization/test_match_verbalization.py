@@ -25,7 +25,7 @@ from krrood.entity_query_language.verbalization.pipeline import (
     VerbalizationPipeline,
     verbalize_expression,
 )
-from krrood.patterns.field_metadata import FieldMetadata, GrammarMetadata
+from krrood.entity_query_language.verbalization.grammar_metadata import GrammarMetadata
 from krrood.entity_query_language.verbalization.rendering.formatter import (
     PlainFormatter,
 )
@@ -324,11 +324,7 @@ class _NamedThing:
 
 @dataclass
 class _Coded:
-    serial: int = field(
-        metadata=FieldMetadata(
-            other_metadata=[GrammarMetadata(is_identifying_field=True)]
-        ).as_dict()
-    )
+    serial: int = field(metadata=GrammarMetadata(is_identifying_field=True).as_dict())
     name: str = ""
 
 

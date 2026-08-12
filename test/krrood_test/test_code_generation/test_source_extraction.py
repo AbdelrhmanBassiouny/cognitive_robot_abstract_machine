@@ -1,9 +1,12 @@
-"""Tests for source extraction in ``krrood.code_generation.source_extraction_utils``."""
+"""
+Tests for source extraction in ``krrood.code_generation.source_extraction_utils``.
+"""
 
 from __future__ import annotations
 
 import ast
 import importlib.util
+import inspect
 
 import pytest
 
@@ -19,82 +22,108 @@ from krrood.exceptions import (
     SourceDataNotProvided,
 )
 
-SOURCE = """
-def alpha(x: int) -> int:
-    return x
-
-
-def beta(y: int) -> int:
-    return y
-
-
-class Gamma:
-    value: int
-"""
+from test.krrood_test.dataset import department_and_employee, example_classes
+from test.krrood_test.dataset.department_and_employee import Department
+from test.krrood_test.dataset.example_classes import module_level_function
 
 
 class TestExtractFunctionSource:
-    """Guarantees for :func:`extract_function_source`."""
+    """
+    Guarantees for :func:`extract_function_source`.
+    """
 
     def test_extracts_named_function(self):
-        result = extract_function_source(["alpha"], source=SOURCE)
-        assert [definition.name for definition in result.definitions] == ["alpha"]
-        assert "def alpha(x: int) -> int:" in result.source_of("alpha")
+        result = extract_function_source(
+            [module_level_function.__name__], file_path=example_classes.__file__
+        )
+        assert [definition.name for definition in result.definitions] == [
+            module_level_function.__name__
+        ]
+        assert f"def {module_level_function.__name__}():" in result.source_of(
+            module_level_function.__name__
+        )
 
     def test_extracts_all_when_names_empty(self):
-        result = extract_function_source([], source=SOURCE)
+        result = extract_function_source([], file_path=example_classes.__file__)
         assert [definition.name for definition in result.definitions] == [
-            "alpha",
-            "beta",
+            module_level_function.__name__
         ]
 
     def test_does_not_extract_classes(self):
-        result = extract_function_source(["Gamma"], source=SOURCE)
+        result = extract_function_source(
+            [Department.__name__], file_path=department_and_employee.__file__
+        )
         assert result.definitions == []
 
     def test_line_span_is_reported(self):
-        result = extract_function_source(["beta"], source=SOURCE)
+        result = extract_function_source(
+            [module_level_function.__name__], file_path=example_classes.__file__
+        )
         line_span = result.definitions[0].line_span
         assert isinstance(line_span, LineSpan)
         assert line_span.start_line <= line_span.end_line
 
     def test_exclude_signature(self):
         result = extract_function_source(
-            ["alpha"], source=SOURCE, include_signature=False
+            [module_level_function.__name__],
+            file_path=example_classes.__file__,
+            include_signature=False,
         )
-        assert "def alpha" not in result.source_of("alpha")
-        assert "return x" in result.source_of("alpha")
+        assert f"def {module_level_function.__name__}" not in result.source_of(
+            module_level_function.__name__
+        )
+        assert "return 1" in result.source_of(module_level_function.__name__)
 
-    def test_join_lines_false_returns_list(self):
-        result = extract_function_source(["alpha"], source=SOURCE, join_lines=False)
-        assert isinstance(result.source_of("alpha"), list)
+    def test_lines_are_reported_individually(self):
+        result = extract_function_source(
+            [module_level_function.__name__], file_path=example_classes.__file__
+        )
+        assert result.definitions[0].lines == [
+            f"def {module_level_function.__name__}():",
+            "    return 1",
+        ]
 
-    def test_reads_from_file(self, tmp_path):
-        file_path = tmp_path / "module.py"
-        file_path.write_text(SOURCE)
-        result = extract_function_source(["alpha"], file_path=str(file_path))
-        assert "def alpha" in result.source_of("alpha")
+    def test_extracts_from_source_string(self):
+        result = extract_function_source(
+            [module_level_function.__name__],
+            source=inspect.getsource(example_classes),
+        )
+        assert f"def {module_level_function.__name__}():" in result.source_of(
+            module_level_function.__name__
+        )
 
     def test_missing_source_raises(self):
         with pytest.raises(SourceDataNotProvided):
-            extract_function_source(["alpha"])
+            extract_function_source([module_level_function.__name__])
 
 
 class TestExtractClassSource:
-    """Guarantees for :func:`extract_class_source`."""
+    """
+    Guarantees for :func:`extract_class_source`.
+    """
 
     def test_extracts_named_class(self):
-        result = extract_class_source(["Gamma"], source=SOURCE)
-        assert [definition.name for definition in result.definitions] == ["Gamma"]
-        assert "class Gamma:" in result.source_of("Gamma")
+        result = extract_class_source(
+            [Department.__name__], file_path=department_and_employee.__file__
+        )
+        assert [definition.name for definition in result.definitions] == [
+            Department.__name__
+        ]
+        assert f"class {Department.__name__}(Symbol):" in result.source_of(
+            Department.__name__
+        )
 
     def test_does_not_extract_functions(self):
-        result = extract_class_source(["alpha"], source=SOURCE)
+        result = extract_class_source(
+            [module_level_function.__name__], file_path=example_classes.__file__
+        )
         assert result.definitions == []
 
 
 class TestExtractImportsFromSource:
-    """Guarantees for :func:`extract_imports_from` given a source string."""
+    """
+    Guarantees for :func:`extract_imports_from` given a source string.
+    """
 
     def test_missing_source_raises(self):
         with pytest.raises(NoSourceDataToParseImportsFrom):
@@ -169,7 +198,9 @@ class TestExtractImportsFromSource:
 
 
 def _import_module_from_file(file_path):
-    """Import *file_path* as a module so :func:`inspect.getsource` can read it back."""
+    """
+    Import *file_path* as a module so :func:`inspect.getsource` can read it back.
+    """
     module_name = file_path.stem
     spec = importlib.util.spec_from_file_location(module_name, file_path)
     module = importlib.util.module_from_spec(spec)
