@@ -426,7 +426,28 @@ items:
     test_condition_resolver.py. (3) The CI trigger is still dead: the c4e297af push queued
     nothing, and closing and reopening #98 - the one remedy never tried, since ci.yml has an
     unfiltered on: pull_request and the PR merge is a trivial fast-forward - had queued nothing
-    as of the end of that session either.'
+    as of the end of that session either.
+    2026-08-12 (later): item (1) above is done. Pushed as acfc0ff4 - UNSET and the _Unset class
+    are gone, ... is the sentinel across all 20 sites (conclusion_domain/expert/interface/observer
+    plus five test modules, docstrings included), and rdr/utils.py is deleted with AnswerName and
+    NamespaceName rehomed to rdr/answer_vocabulary.py. They stay in one module because
+    AnswerName.example_assignment is built over NamespaceName.CASE_VARIABLE and both must sit below
+    interface.py and exceptions.py to avoid a circular import (thread r3689176795); that reasoning
+    moved into the new module docstring rather than dying with the file. Two docstring defects fixed
+    in passing: CaseContext.current_conclusion named the private class _UNSET, and
+    AnswerName.example_assignment used ... as a prose placeholder that now reads as the sentinel.
+    allow_unset and the test_unset_* names deliberately kept - "unset" there names the state, not
+    the identifier. Item (2) is now partly settled as a side effect: git merge-tree against main on
+    both heads shows the rdr/utils.py modify/delete conflict gone and the rest of the conflict set
+    byte-identical - one entry removed, none added. Item (3) is unchanged: the acfc0ff4 push queued
+    nothing, total_count 0, mergeable_state still unknown on the sixth push; no spent remedy retried.
+    Verified before/after in one fully-provisioned container: test_eql_rdr 151 passed / 0 failed on
+    both sides with byte-identical collected-id lists, and test_eql 1058 passed / 3 skipped / 0
+    failed. format_docstrings.py deviated a fifth time, in a new way - it split
+    ConclusionDomain.allows_none''s "``Optional`` / ``... | None``" across a blank line, reading the
+    ellipsis as a sentence end - reverted that hunk, kept the rest. PR description rewritten to match;
+    #98 left in draft. The two review threads section 18 left open are still open and untouched.
+    Full account in roadmap.md section 19.'
 - id: d-core-single-class
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
   branch: D-core-single-class

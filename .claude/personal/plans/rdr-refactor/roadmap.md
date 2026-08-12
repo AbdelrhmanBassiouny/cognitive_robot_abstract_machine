@@ -1424,3 +1424,116 @@ a `needs-resolution` label, still at `8eb7518a` (2026-07-19) against a base that
 moved to `526ed888`. #98 is unaffected — its own base is unchanged and it is a
 fast-forward against it — but the stack cannot land, and neither the manifest nor the
 dashboard can show it, because the readiness rule keys on open + non-draft only.
+
+## 19. Addendum (2026-08-12) — `d-core-expert` (#98): `UNSET` → `...` landed, and `rdr/utils.py` is gone
+
+§18 listed three things its round deliberately left. This round did the first, which turned
+out to also settle a piece of the second.
+
+### What landed (`acfc0ff4`)
+
+The substitution itself was as mechanical as §17 predicted — both sentinels are singletons
+compared with `is`, so every `is UNSET` / `is not UNSET` moved across unchanged, and `...`
+is immutable so it is a legitimate dataclass field default. 20 sites across
+`conclusion_domain.py`, `expert.py`, `interface.py`, `observer.py` and five test modules,
+docstrings included.
+
+Two docstring defects fixed in passing, both of the same kind — prose describing something
+other than the value the field carries:
+
+- `CaseContext.current_conclusion` read "``_UNSET`` if no rule fired", naming the *private
+  class*. That name was never the value even before this change.
+- `AnswerName.example_assignment`'s ``:return:`` used `...` as a **prose placeholder**
+  ("a copy-pasteable example ``conditions = ...`` assignment"). Harmless while `...` meant
+  nothing; once `...` is the sentinel it reads as a literal instruction to leave the
+  conclusion undetermined. Reworded rather than left to be misread.
+
+**Not renamed, deliberately:** `ConclusionDomain.validate(value, allow_unset)`, the
+`ConclusionValidator.allow_unset` field, and the `test_unset_*` names. "Unset" there names
+the *state* the expert left the conclusion in, not the identifier `UNSET`, and it stays
+accurate. Flagged as a cheap follow-up rather than assumed either way.
+
+### The rehome, and why one module
+
+`rdr/utils.py` is **deleted**. With `UNSET` gone it held only `AnswerName` and
+`NamespaceName` — a catch-all filename `AGENTS.md` rules out, on a path `main` no longer has
+at all. Both enums moved to **`rdr/answer_vocabulary.py`**, checked free on `main` first.
+
+They stay in **one** module, and the reason is load-bearing rather than stylistic:
+`AnswerName.example_assignment` is built over `NamespaceName.CASE_VARIABLE`, and both must
+sit below `interface.py` and `exceptions.py` so those two can share them without a circular
+import. That constraint is the entire reason `utils.py` existed (thread `r3689176795`,
+resolved), and it was carried into the new module's docstring rather than deleted with the
+file — §12's lesson about a rationale surviving only on a branch marked for deletion,
+applied prospectively for once.
+
+### The cascade conflict is actually gone — measured, not assumed
+
+§18 measured four conflicts against `main` that are #98's own. Re-measured with
+`git merge-tree --write-tree origin/main <head>` on **both** heads in the same container:
+
+| | `c4e297af` | `acfc0ff4` |
+|---|---|---|
+| `rdr/utils.py` | **CONFLICT (modify/delete)** | *gone* |
+| `rdr/exceptions.py` | CONFLICT (add/add) | unchanged |
+| `condition_resolver.py` | CONFLICT (content) | unchanged |
+| `test_condition_resolver.py` | CONFLICT (content) | unchanged |
+| `AGENTS.md`, `function_case.py`, `object_to_source.py`, `base_expressions.py`, `test_backward_inference.py` | CONFLICT (content) | unchanged |
+
+Exactly one entry removed, none added — so the answer to §18's open question is yes, and it
+cost nothing else. (`AGENTS.md` is new since §18's measurement; `main` moved to `e123c383`.
+It is not this branch's, in the same sense the four lower ones are not.)
+
+### Verification, in a container that again had everything
+
+Rebuilt §18's environment (3.12 venv, `krrood`'s requirements, editable
+`random_events`/`probabilistic_model`, `casadi`) and compared before/after in it:
+
+- `test_eql_rdr`: **151 passed / 0 failed on both sides**, collected-test-id lists
+  **byte-for-byte identical**. That is the right assertion for a behaviour-preserving change
+  — the count alone would not have distinguished it from a rename that silently dropped a
+  test.
+- `test_eql`: **1058 passed, 3 skipped, 0 failed.** One module (`test_quantifier_overload_types.py`)
+  is uncollectable for a missing `mypy`, which is this container, not the code.
+
+Two things worth carrying: the `probabilistic_model…relational.rspn` gap §9/§14/§17 recorded
+as unfixable stayed absent, confirming §18's finding that it was always the container; and
+the `test_eql` sweep dirtied `query_graph.pdf` **and** `drawer_explanation.pdf` again —
+§17's tracked-and-gitignored mechanism, reproduced a second time by accident, and reverted
+before committing. It is still a `main`-level fix nobody has taken.
+
+### A fifth formatter deviation, and a new failure mode
+
+`scripts/format_docstrings.py` rewrote `ConclusionDomain.allows_none`'s docstring — a field
+this change never touched — splitting ``an ``Optional`` / ``... | None`` annotation`` across
+a blank line, i.e. **reading the ellipsis as a sentence end**. That is a new variant: §12's
+and §16's instance was the ``:return: ``True``` space regression, §14's and §18's was bulk
+rewrapping. This one produces genuinely broken RST. Reverted that hunk, kept the rest.
+Sharpened point for the package-wide pass everyone keeps deferring: the tool now has a
+specific quarrel with `...`, which this codebase has just made more common.
+
+### The CI trigger: sixth push, still nothing
+
+Checked immediately after pushing `acfc0ff4`, since it is the one thing nobody had done for
+this particular push: `get_check_runs` returns **`total_count: 0`** and `mergeable_state`
+still reads **`unknown`**. So the answer is plainly no — this push queued nothing either,
+and §18's reasoning survives it intact: `ci.yml`'s trigger is unfiltered, the merge is a
+trivial fast-forward, and the merge ref looks wedged GitHub-side. No spent remedy was
+retried (no close/reopen, no repeat push).
+
+What is different is that the remaining candidate is now *closer*, not just theoretical:
+§18 named a **base change** as the one event class left that recreates the merge ref, and
+this branch has just had its own share of the cascade conflicts reduced from four to three.
+Whoever runs the steward pass gets to test that hypothesis for free.
+
+### Left alone on purpose
+
+The two review threads §18 left open (`pytest.raises(AttributeError)` on `test_expert.py`,
+`_RecordingReporter` on `test_progress.py`) are still open and were not answered — both are
+the developer's. `parameterizer.py:167`'s `InvalidEllipsis` probe and the
+`single_class.classify -> Optional[Any]` signature remain with
+`no-rule-fired-resolution` and `d-core-single-class` respectively.
+
+`D-core-support` (#67) is unchanged since §14 and §18: `mergeable_state: dirty`,
+`needs-resolution`, still `8eb7518a`. #98's own base is that same unmoved SHA, so #98 is
+unaffected; the readiness rule still cannot see it.
