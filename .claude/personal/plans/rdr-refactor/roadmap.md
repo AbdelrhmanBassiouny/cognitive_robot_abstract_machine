@@ -1570,3 +1570,72 @@ up — the *live GitHub state* going stale between the gather step and the repor
 session. `/plan-item-resolve` gathers threads at step 2 and reports at the end; on a round that
 takes hours, those are different worlds. Re-read the PR's threads immediately before reporting a
 round finished, not only when starting it.
+
+## 20. Addendum (2026-08-12) — `d-core-single-class` bootstrapped; the 2026-08-03 plan re-verified
+
+`/plan-item-kickoff rdr-refactor d-core-single-class` ran a second time, nine days after §11's
+planning session. Branch `D-core-single-class` is cut from `origin/D-core-expert` and draft
+**PR #159** is open; the port itself runs in a fresh session, as §11's did not.
+
+### Why a re-plan rather than picking up the saved one
+
+§11's plan was saved to `pr-progress/D-core-single-class.md` and never executed. Five of its
+premises had since changed, each verified live rather than assumed:
+
+| §11 said | now |
+|---|---|
+| Four items **handed to #98**, unimplemented — check before starting | **All four landed** (§14, `28a89ff4`): `ConditionResolver.resolve(CaseContext)`, `ExpertInterface` segregated, `NullProgressReporter`, `ProgressDescription` |
+| `classify()` returns `UNSET` | Sentinel is **`...`** (§17, §19); `rdr/utils.py` deleted, enums rehomed to `answer_vocabulary.py` |
+| Save via `save_path` + `expert.interface.on_save` | RDR holds a **`ModelSaver`** and a **`ProgressReporter`** as its own collaborators |
+| `prior_errors={"conditions": e.message}` | `prior_errors: Optional[List[DataclassException]]` — pass `[e]` |
+| Get a CI baseline on #98 | **Six pushes, zero runs queued** (§14, §18, §19). The baseline has to be local |
+
+Two consequences follow that no review thread decided, so they are recorded as this session's
+assumptions rather than as settled:
+
+- **`RDRDidNotConvergeError` carries no save path.** §11 had it carry "clashing cases, pass count
+  and save path", but `save_path` is gone and `ModelSaver` exposes no destination. It carries the
+  clashing cases and the pass count; the engine calls `model_saver.save(self)` before raising.
+- **`classify()`'s signature defect lands here.** §19 handed `single_class.classify ->
+  Optional[Any]` — annotated *"or `None` if no rule fires"* while returning the sentinel — to this
+  item. It is fixed as part of the port rather than as a separate change.
+
+### The scope check, run rather than assumed
+
+Per the standing new-PR-versus-change-in-flight rule: `git ls-tree origin/D-core-expert` for
+`single_class.py` and all six test files returns **empty** — none exists on the base. This is the
+pre-agreed §6 three-way split, 554 lines of engine and ~3,500 of tests that stand on their own.
+Real stacking, not a fold into #98.
+
+### The branch name, and why not the session's own
+
+`plan.yaml`, every sibling in the stack, and the saved progress note's own filename all say
+`D-core-single-class`. The harness designated `claude/rdr-refactor-d-core-single-class-jld9ol`,
+which stays unused — §15's precedent, confirmed with the developer before pushing rather than
+assumed from it.
+
+### A defect in the plan tooling, found by using it
+
+`.claude/hooks/plan_item_bootstrap.py`'s `open` could not record this item: it patches the
+manifest by line, and writes the fields it changes (`branch`, `pull_request_number`, `status`,
+`session`) at **four-space** indentation inside an item whose other fields sit at two, producing
+YAML that no longer parses. `save-plan.sh` then fails inside `plan_manifest_tools.py`'s
+`yaml.safe_load`.
+
+Two things make it worse than a formatting slip. The subprocess call uses
+`capture_output=True`, so `save-plan.sh`'s traceback is swallowed and the caller sees only a bare
+`CalledProcessError`; and the script still prints `{"status": "success", "exit_code": 0}` on the
+path where the save was stubbed out, so its own report is not evidence the write landed.
+
+Worked around by patching `plan.yaml` by hand at the correct indentation and calling
+`save-plan.sh --manifest --roadmap` directly, per the standing "prefer editing the manifest
+directly and saying so over leaving it stale" rule. **The tooling defect is not fixed here** — it
+belongs to whichever plan owns `.claude/` tooling, not to this stack.
+
+### Also
+
+- Subscribing to tracking issue #94 was refused by the permission classifier, exactly as it
+  refused §11's session and §16's attempt on #41. Third recorded instance; the mechanism the
+  kickoff skill relies on for concurrent-change awareness does not work in these containers.
+- The stack is unchanged and still stale: `D-core-support` `8eb7518a` (2026-07-19), `main`
+  `be377fdf`. §11's call stands — the cascade is not a prerequisite for working this item.

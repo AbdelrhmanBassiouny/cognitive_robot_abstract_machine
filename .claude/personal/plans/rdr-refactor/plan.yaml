@@ -462,22 +462,25 @@ items:
 - id: d-core-single-class
   title: 'RDR engine: EQLSingleClassRDR core inference engine'
   branch: D-core-single-class
-  pull_request_number: null
+  pull_request_number: 159
   track: S0-steward
   depends_on:
   - d-core-expert
-  status: not_started
-  notes: 'single_class.py + engine tests; classify->UNSET, raise+drop max_passes, CaseContext object.
-    2026-08-03: implementation plan approved and saved to
-    .claude/personal/pr-progress/D-core-single-class.md - not started, no branch cut. Scope
-    narrowed: the Null-Object progress/save work, the ConditionResolver CaseContext change and
-    the ProgressDescription enum were handed to d-core-expert (#98), since every target file
-    already exists on D-core-expert; this item consumes them rather than building them. What
-    stays: single_class.py itself, RDRDidNotConvergeError + the expert-required exception in
-    rdr/exceptions.py, and the six engine test files ported from mega-branch e650d968. Before
-    starting, get a CI or local-test baseline on D-core-expert (#98 has no CI runs). Do not
-    cascade the stack first - it is stale but merge-tree-clean and disjoint from this item''s
-    files.'
+  status: in_progress
+  session: https://claude.ai/code/session_01QjvFKyqAynJmr18FPZgVZr
+  notes: 'single_class.py + engine tests. 2026-08-12: branch D-core-single-class cut from D-core-expert,
+    draft PR #159 opened, and the 2026-08-03 plan re-verified against live state and re-saved to .claude/personal/pr-progress/D-core-single-class.md;
+    the port itself runs in a fresh session. The four items that plan handed to #98 have all landed there
+    (28a89ff4), so this slice consumes ConditionResolver.resolve(CaseContext), the segregated ExpertInterface,
+    NullProgressReporter/ProgressDescription and ModelSaver/NullModelSaver/FileModelSaver rather than building
+    them. The sentinel is now ... not UNSET (#98''s acfc0ff4 deleted rdr/utils.py), so classify() returns
+    ... and the -> Optional[Any] signature defect roadmap section 17 handed to this item is fixed as part
+    of the port. save_path is replaced by a ModelSaver, so RDRDidNotConvergeError carries the clashing cases
+    and pass count only. What stays: single_class.py itself, RDRDidNotConvergeError + the expert-required
+    exception in rdr/exceptions.py, and the six engine test files ported from mega-branch e650d968 plus
+    a new expert_doubles.py de-duplicating their shared expert stubs. #98 has still never had CI queue a
+    run across six pushes, so the baseline required before stacking on it is local, not CI. Do not cascade
+    the stack first. Full account in roadmap.md section 20.'
 - id: d-core-backend
   title: 'RDR engine: underspecified-query RDR backend'
   branch: D-core-backend
