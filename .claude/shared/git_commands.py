@@ -182,6 +182,32 @@ class GitCommandRunner:
         """
         return self.run("branch", "--show-current")
 
+    def switch_to(self, branch: str) -> None:
+        """
+        Check out a branch that already exists, leaving where it points alone.
+
+        :param branch: The branch to check out.
+        """
+        self.run("checkout", "--quiet", branch)
+
+    def stage(self, *paths: str) -> None:
+        """
+        :param paths: The paths to add to the index.
+        """
+        self.run("add", *paths)
+
+    def remove(self, *paths: str) -> None:
+        """
+        :param paths: The paths to delete and stage the deletion of.
+        """
+        self.run("rm", "--quiet", *paths)
+
+    def commit(self, message: str) -> None:
+        """
+        :param message: The message to commit what is staged under.
+        """
+        self.run("commit", "--quiet", "-m", message)
+
     def merge(self, reference: str) -> GitCommandResult:
         """
         :param reference: The reference to merge in.

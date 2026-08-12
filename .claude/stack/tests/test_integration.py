@@ -72,6 +72,52 @@ A_BUILD_BRANCH = "integration-20260810-120000"
 A fixed build branch name, so a test asserting on content never depends on the clock.
 """
 
+FIRST_TIP = "first-tip"
+"""
+The tip merged first wherever merge order matters.
+"""
+
+SECOND_TIP = "second-tip"
+"""
+The tip merged after :data:`FIRST_TIP`, and the one a collision between the two skips.
+"""
+
+THIRD_TIP = "third-tip"
+"""
+A third tip, for the cases that need a build to carry on past a skip.
+"""
+
+ONLY_TIP = "only-tip"
+"""
+The single tip of a build whose subject is the build itself rather than a collision.
+"""
+
+STALE_TIP = "stale-tip"
+"""
+A tip whose commits are already in the upstream base.
+"""
+
+UNRELATED_TIP = "unrelated-tip"
+"""
+A tip sharing no history with the base, so merging it fails without conflicting.
+"""
+
+NEEDS_THE_MODULE = "needs-the-module"
+"""
+The tip whose test comes to depend on a module another tip removes.
+"""
+
+REMOVES_THE_MODULE = "removes-the-module"
+"""
+The tip that removes it - the culprit of the semantic break these two make together.
+"""
+
+INNOCENT_TIP = "innocent-tip"
+"""
+A tip merged before the breaking pair, so blaming everything already in the build is
+caught naming it.
+"""
+
 # `fork_checkout` is imported for pytest to collect as a fixture; naming it here keeps
 # linters from reading the import as unused.
 __all__ = ["fork_checkout"]
@@ -405,13 +451,13 @@ def test_the_pointer_moves_to_the_build_that_finished(fork_checkout: ForkCheckou
     The pointer is what a developer checks out, so it names the newest build rather
     than a build having to be looked up by timestamp.
     """
-    fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
+    fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
 
-    build(fork_checkout, [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)])
+    build(fork_checkout, [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)])
 
-    assert fork_checkout.run_git(
-        "rev-parse", integration.POINTER_BRANCH
-    ) == fork_checkout.run_git("rev-parse", A_BUILD_BRANCH)
+    assert fork_checkout.git.commit_at(
+        integration.POINTER_BRANCH
+    ) == fork_checkout.git.commit_at(A_BUILD_BRANCH)
 
 
 # %% merging the tips
@@ -421,14 +467,14 @@ def test_a_build_contains_every_cleanly_merging_tip(fork_checkout: ForkCheckout)
     """
     The whole point of the branch: one checkout carrying every in-flight feature.
     """
-    fork_checkout.branch_from("first-tip", UPSTREAM_BASE)
-    fork_checkout.branch_from("second-tip", UPSTREAM_BASE)
+    fork_checkout.branch_from(FIRST_TIP, UPSTREAM_BASE)
+    fork_checkout.branch_from(SECOND_TIP, UPSTREAM_BASE)
 
     report = build(
         fork_checkout,
         [
-            create_pull_request_object(1, "first-tip", UPSTREAM_BASE),
-            create_pull_request_object(2, "second-tip", UPSTREAM_BASE),
+            create_pull_request_object(1, FIRST_TIP, UPSTREAM_BASE),
+            create_pull_request_object(2, SECOND_TIP, UPSTREAM_BASE),
         ],
     )
 
@@ -436,7 +482,7 @@ def test_a_build_contains_every_cleanly_merging_tip(fork_checkout: ForkCheckout)
         TipStatus.MERGED,
         TipStatus.MERGED,
     ]
-    fork_checkout.run_git("checkout", "--quiet", A_BUILD_BRANCH)
+    fork_checkout.git.switch_to(A_BUILD_BRANCH)
     assert (fork_checkout.project_root / "first-tip-file").exists()
     assert (fork_checkout.project_root / "second-tip-file").exists()
 
@@ -462,7 +508,7 @@ def test_a_build_leaves_create_unreviewed_branch_out_and_says_so(
 
     assert [entry.branch for entry in report.tips] == ["reviewed"]
     assert [entry.branch for entry in report.unreviewed] == ["unreviewed"]
-    fork_checkout.run_git("checkout", "--quiet", A_BUILD_BRANCH)
+    fork_checkout.git.switch_to(A_BUILD_BRANCH)
     assert not (fork_checkout.project_root / "unreviewed-file").exists()
 
 
@@ -473,25 +519,25 @@ def test_a_conflicting_tip_is_skipped_and_the_build_continues(
     A build that halted on the first conflict would leave nothing to work from, which
     is the entire thing the branch exists to provide.
     """
-    fork_checkout.branch_from("first-tip", UPSTREAM_BASE)
-    fork_checkout.commit_on("first-tip", "contested", "what the first tip wrote\n")
-    fork_checkout.run_git("checkout", "--quiet", "-B", "second-tip", UPSTREAM_BASE)
+    fork_checkout.branch_from(FIRST_TIP, UPSTREAM_BASE)
+    fork_checkout.commit_on(FIRST_TIP, "contested", "what the first tip wrote\n")
+    fork_checkout.git.checkout(SECOND_TIP, UPSTREAM_BASE)
     fork_checkout.commit("contested", "what the second tip wrote\n")
-    fork_checkout.run_git("push", "--quiet", "origin", "second-tip:second-tip")
-    fork_checkout.branch_from("third-tip", UPSTREAM_BASE)
+    fork_checkout.git.push_refspec("origin", "second-tip:second-tip")
+    fork_checkout.branch_from(THIRD_TIP, UPSTREAM_BASE)
 
     report = build(
         fork_checkout,
         [
-            create_pull_request_object(1, "first-tip", UPSTREAM_BASE),
-            create_pull_request_object(2, "second-tip", UPSTREAM_BASE),
-            create_pull_request_object(3, "third-tip", UPSTREAM_BASE),
+            create_pull_request_object(1, FIRST_TIP, UPSTREAM_BASE),
+            create_pull_request_object(2, SECOND_TIP, UPSTREAM_BASE),
+            create_pull_request_object(3, THIRD_TIP, UPSTREAM_BASE),
         ],
     )
 
-    assert outcome_for(report, "second-tip").status is TipStatus.SKIPPED
-    assert outcome_for(report, "third-tip").status is TipStatus.MERGED
-    fork_checkout.run_git("checkout", "--quiet", A_BUILD_BRANCH)
+    assert outcome_for(report, SECOND_TIP).status is TipStatus.SKIPPED
+    assert outcome_for(report, THIRD_TIP).status is TipStatus.MERGED
+    fork_checkout.git.switch_to(A_BUILD_BRANCH)
     assert (fork_checkout.project_root / "third-tip-file").exists()
 
 
@@ -500,22 +546,22 @@ def test_a_skipped_tip_names_the_tip_it_collided_with(fork_checkout: ForkCheckou
     "second-tip skipped" is not actionable; the pair is. Neither branch is at fault on
     its own, so the report names both and leaves the judgement to a reader.
     """
-    fork_checkout.branch_from("first-tip", UPSTREAM_BASE)
-    fork_checkout.commit_on("first-tip", "contested", "what the first tip wrote\n")
-    fork_checkout.run_git("checkout", "--quiet", "-B", "second-tip", UPSTREAM_BASE)
+    fork_checkout.branch_from(FIRST_TIP, UPSTREAM_BASE)
+    fork_checkout.commit_on(FIRST_TIP, "contested", "what the first tip wrote\n")
+    fork_checkout.git.checkout(SECOND_TIP, UPSTREAM_BASE)
     fork_checkout.commit("contested", "what the second tip wrote\n")
-    fork_checkout.run_git("push", "--quiet", "origin", "second-tip:second-tip")
+    fork_checkout.git.push_refspec("origin", "second-tip:second-tip")
 
     report = build(
         fork_checkout,
         [
-            create_pull_request_object(1, "first-tip", UPSTREAM_BASE),
-            create_pull_request_object(2, "second-tip", UPSTREAM_BASE),
+            create_pull_request_object(1, FIRST_TIP, UPSTREAM_BASE),
+            create_pull_request_object(2, SECOND_TIP, UPSTREAM_BASE),
         ],
     )
 
-    skipped = outcome_for(report, "second-tip")
-    assert skipped.collided_with == "first-tip"
+    skipped = outcome_for(report, SECOND_TIP)
+    assert skipped.collided_with == FIRST_TIP
     assert skipped.conflicting_paths == ("contested",)
 
 
@@ -527,19 +573,19 @@ def test_a_tip_conflicting_with_the_base_itself_names_the_base(
     naming a sibling that had nothing to do with it would send its owner somewhere
     pointless.
     """
-    fork_checkout.run_git("checkout", "--quiet", "-B", "stale-tip", UPSTREAM_BASE)
+    fork_checkout.git.checkout(STALE_TIP, UPSTREAM_BASE)
     fork_checkout.commit("a-file", "what the stale tip wrote\n")
-    fork_checkout.run_git("push", "--quiet", "origin", "stale-tip:stale-tip")
-    fork_checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
+    fork_checkout.git.push_refspec("origin", "stale-tip:stale-tip")
+    fork_checkout.git.switch_to(UPSTREAM_BASE)
     fork_checkout.commit("a-file", "what the upstream moved on to\n")
-    fork_checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
-    fork_checkout.run_git("fetch", "--quiet", "cram2")
+    fork_checkout.git.push_refspec("cram2", UPSTREAM_BASE)
+    fork_checkout.git.fetch("cram2")
 
     report = build(
-        fork_checkout, [create_pull_request_object(1, "stale-tip", UPSTREAM_BASE)]
+        fork_checkout, [create_pull_request_object(1, STALE_TIP, UPSTREAM_BASE)]
     )
 
-    skipped = outcome_for(report, "stale-tip")
+    skipped = outcome_for(report, STALE_TIP)
     assert skipped.status is TipStatus.SKIPPED
     assert skipped.collided_with == UPSTREAM_BASE
 
@@ -553,17 +599,17 @@ def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
     which are the tip owner's to fix. Reporting them as conflicts is the false-positive
     class the maintenance executor already had to correct once.
     """
-    fork_checkout.run_git("checkout", "--quiet", "--orphan", "unrelated-tip")
-    fork_checkout.run_git("rm", "--quiet", "-rf", ".")
+    fork_checkout.run_git("checkout", "--quiet", "--orphan", UNRELATED_TIP)
+    fork_checkout.git.remove("-rf", ".")
     fork_checkout.commit("its-own-file", "a history sharing no commit\n")
-    fork_checkout.run_git("push", "--quiet", "origin", "unrelated-tip:unrelated-tip")
-    fork_checkout.run_git("fetch", "--quiet", "origin")
+    fork_checkout.git.push_refspec("origin", "unrelated-tip:unrelated-tip")
+    fork_checkout.git.fetch("origin")
 
     report = build(
-        fork_checkout, [create_pull_request_object(1, "unrelated-tip", UPSTREAM_BASE)]
+        fork_checkout, [create_pull_request_object(1, UNRELATED_TIP, UPSTREAM_BASE)]
     )
 
-    stopped = outcome_for(report, "unrelated-tip")
+    stopped = outcome_for(report, UNRELATED_TIP)
     assert stopped.status is TipStatus.INTEGRATION_FAILED
     assert stopped.conflicting_paths == ()
     assert stopped.explanation != ""
@@ -581,7 +627,7 @@ def a_recorded_resolution(checkout: ForkCheckout) -> None:
     """
     checkout.run_git("config", "rerere.enabled", "true")
     checkout.run_git("config", "rerere.autoupdate", "true")
-    checkout.run_git("checkout", "--quiet", "-B", "recording", "origin/first-tip")
+    checkout.git.checkout("recording", "origin/first-tip")
     conflicting = subprocess.run(
         ["git", "merge", "--no-edit", "origin/second-tip"],
         cwd=checkout.project_root,
@@ -590,9 +636,9 @@ def a_recorded_resolution(checkout: ForkCheckout) -> None:
     )
     assert conflicting.returncode != 0, "the tips were meant to collide"
     (checkout.project_root / "contested").write_text("what a resolution chose\n")
-    checkout.run_git("add", "contested")
-    checkout.run_git("commit", "--quiet", "--no-edit")
-    checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
+    checkout.git.stage("contested")
+    checkout.git.conclude_merge().raise_if_failed()
+    checkout.git.switch_to(UPSTREAM_BASE)
 
 
 def two_colliding_tips(checkout: ForkCheckout) -> list[PullRequest]:
@@ -600,15 +646,15 @@ def two_colliding_tips(checkout: ForkCheckout) -> list[PullRequest]:
     :param checkout: The checkout to build the tips in.
     :return: The board entries for two tips that collide on one file.
     """
-    checkout.branch_from("first-tip", UPSTREAM_BASE)
-    checkout.commit_on("first-tip", "contested", "what the first tip wrote\n")
-    checkout.run_git("checkout", "--quiet", "-B", "second-tip", UPSTREAM_BASE)
+    checkout.branch_from(FIRST_TIP, UPSTREAM_BASE)
+    checkout.commit_on(FIRST_TIP, "contested", "what the first tip wrote\n")
+    checkout.git.checkout(SECOND_TIP, UPSTREAM_BASE)
     checkout.commit("contested", "what the second tip wrote\n")
-    checkout.run_git("push", "--quiet", "origin", "second-tip:second-tip")
-    checkout.run_git("fetch", "--quiet", "origin")
+    checkout.git.push_refspec("origin", "second-tip:second-tip")
+    checkout.git.fetch("origin")
     return [
-        create_pull_request_object(1, "first-tip", UPSTREAM_BASE),
-        create_pull_request_object(2, "second-tip", UPSTREAM_BASE),
+        create_pull_request_object(1, FIRST_TIP, UPSTREAM_BASE),
+        create_pull_request_object(2, SECOND_TIP, UPSTREAM_BASE),
     ]
 
 
@@ -625,9 +671,9 @@ def test_a_replayed_resolution_is_never_reported_as_a_clean_merge(
 
     report = build(fork_checkout, pull_requests)
 
-    replayed = outcome_for(report, "second-tip")
+    replayed = outcome_for(report, SECOND_TIP)
     assert replayed.status is TipStatus.REPLAYED
-    assert replayed.collided_with == "first-tip"
+    assert replayed.collided_with == FIRST_TIP
 
 
 def test_a_replayed_resolution_carries_the_author_that_recorded_it(
@@ -644,10 +690,10 @@ def test_a_replayed_resolution_carries_the_author_that_recorded_it(
     report = build(
         fork_checkout,
         pull_requests,
-        provenance=ResolutionProvenance({"second-tip": ResolutionAuthor.SKILL}),
+        provenance=ResolutionProvenance({SECOND_TIP: ResolutionAuthor.SKILL}),
     )
 
-    assert outcome_for(report, "second-tip").resolved_by is ResolutionAuthor.SKILL
+    assert outcome_for(report, SECOND_TIP).resolved_by is ResolutionAuthor.SKILL
 
 
 def test_a_resolution_nobody_claimed_is_read_as_a_developer_s_own(
@@ -663,7 +709,7 @@ def test_a_resolution_nobody_claimed_is_read_as_a_developer_s_own(
 
     report = build(fork_checkout, pull_requests)
 
-    assert outcome_for(report, "second-tip").resolved_by is ResolutionAuthor.HUMAN
+    assert outcome_for(report, SECOND_TIP).resolved_by is ResolutionAuthor.HUMAN
 
 
 def test_provenance_round_trips_through_the_file_it_is_persisted_in(tmp_path: Path):
@@ -707,7 +753,7 @@ def test_a_staged_conflict_is_left_live_for_a_resolution_to_be_written_into(
     """
     two_colliding_tips(fork_checkout)
 
-    staged = a_run(fork_checkout).stage_conflict("first-tip", "second-tip")
+    staged = a_run(fork_checkout).stage_conflict(FIRST_TIP, SECOND_TIP)
 
     assert staged["conflicting_paths"] == ["contested"]
     assert "<<<<<<<" in (Path(staged["worktree"]) / "contested").read_text()
@@ -722,11 +768,11 @@ def test_a_recorded_resolution_is_replayed_by_the_next_build(
     """
     pull_requests = two_colliding_tips(fork_checkout)
     run = a_run(fork_checkout)
-    staged = run.stage_conflict("first-tip", "second-tip")
+    staged = run.stage_conflict(FIRST_TIP, SECOND_TIP)
     (Path(staged["worktree"]) / "contested").write_text("what a resolution chose\n")
     run.record_resolution(
         worktree=Path(staged["worktree"]),
-        tip="second-tip",
+        tip=SECOND_TIP,
         author=ResolutionAuthor.SKILL,
     )
 
@@ -736,7 +782,7 @@ def test_a_recorded_resolution_is_replayed_by_the_next_build(
         provenance=ResolutionProvenance.read(run.provenance_path()),
     )
 
-    replayed = outcome_for(report, "second-tip")
+    replayed = outcome_for(report, SECOND_TIP)
     assert replayed.status is TipStatus.REPLAYED
     assert replayed.resolved_by is ResolutionAuthor.SKILL
 
@@ -748,12 +794,12 @@ def test_recording_a_resolution_leaves_no_worktree_behind(fork_checkout: ForkChe
     """
     two_colliding_tips(fork_checkout)
     run = a_run(fork_checkout)
-    staged = run.stage_conflict("first-tip", "second-tip")
+    staged = run.stage_conflict(FIRST_TIP, SECOND_TIP)
     (Path(staged["worktree"]) / "contested").write_text("what a resolution chose\n")
 
     run.record_resolution(
         worktree=Path(staged["worktree"]),
-        tip="second-tip",
+        tip=SECOND_TIP,
         author=ResolutionAuthor.HUMAN,
     )
 
@@ -772,12 +818,12 @@ def test_recording_a_resolution_keeps_the_claims_already_made(
     ResolutionProvenance({"an-earlier-tip": ResolutionAuthor.SKILL}).write(
         run.provenance_path()
     )
-    staged = run.stage_conflict("first-tip", "second-tip")
+    staged = run.stage_conflict(FIRST_TIP, SECOND_TIP)
     (Path(staged["worktree"]) / "contested").write_text("what a resolution chose\n")
 
     run.record_resolution(
         worktree=Path(staged["worktree"]),
-        tip="second-tip",
+        tip=SECOND_TIP,
         author=ResolutionAuthor.HUMAN,
     )
 
@@ -794,12 +840,12 @@ def test_a_build_publishes_nothing(fork_checkout: ForkCheckout):
     it merges belong to other people. Asserted on the fork's own refs rather than on
     the absence of a push, since a push that changed nothing looks the same either way.
     """
-    fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
-    published_before = fork_checkout.commit_on_the_fork("only-tip")
+    fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
+    published_before = fork_checkout.commit_on_the_fork(ONLY_TIP)
 
-    build(fork_checkout, [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)])
+    build(fork_checkout, [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)])
 
-    assert fork_checkout.commit_on_the_fork("only-tip") == published_before
+    assert fork_checkout.commit_on_the_fork(ONLY_TIP) == published_before
     assert (
         fork_checkout.run_git("ls-remote", "origin", f"refs/heads/{A_BUILD_BRANCH}")
         == ""
@@ -813,12 +859,12 @@ def test_a_build_leaves_the_invoking_checkout_on_its_own_branch(
     A build is something a developer runs while working, so it borrows the checkout's
     branch and gives it back rather than parking them on a build of its own.
     """
-    fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
-    fork_checkout.run_git("checkout", "--quiet", "only-tip")
+    fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
+    fork_checkout.git.switch_to(ONLY_TIP)
 
-    build(fork_checkout, [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)])
+    build(fork_checkout, [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)])
 
-    assert fork_checkout.run_git("branch", "--show-current") == "only-tip"
+    assert fork_checkout.git.checked_out_branch() == ONLY_TIP
 
 
 def test_a_build_leaves_no_worktree_of_its_own_behind(fork_checkout: ForkCheckout):
@@ -826,9 +872,9 @@ def test_a_build_leaves_no_worktree_of_its_own_behind(fork_checkout: ForkCheckou
     Every branch switch happens in a worktree outside the project, which is removed
     whether the build finished or was abandoned.
     """
-    fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
+    fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
 
-    build(fork_checkout, [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)])
+    build(fork_checkout, [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)])
 
     assert "stack-restack-" not in fork_checkout.run_git("worktree", "list")
 
@@ -840,11 +886,11 @@ def test_a_passing_suite_leaves_the_build_a_success(fork_checkout: ForkCheckout)
     """
     The single run on the finished branch is what replaced the per-branch CI gate.
     """
-    fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
+    fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
 
     report = build(
         fork_checkout,
-        [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)],
+        [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)],
         test_command=f"{sys.executable} -c pass",
     )
 
@@ -859,11 +905,11 @@ def test_a_failing_suite_is_never_reported_as_a_clean_build(
     A semantic conflict - one branch renaming what another calls - merges cleanly and
     breaks on import, so a green merge says nothing about whether the result works.
     """
-    fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
+    fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
 
     report = build(
         fork_checkout,
-        [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)],
+        [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)],
         test_command=f"{sys.executable} -c 'raise SystemExit(1)'",
     )
 
@@ -878,10 +924,10 @@ def test_a_suite_that_was_not_run_is_neither_a_pass_nor_a_failure(
     ``--no-test`` has to be distinguishable from a suite that ran and passed, or a
     caller reading the document cannot tell a checked build from an unchecked one.
     """
-    fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
+    fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
 
     report = build(
-        fork_checkout, [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)]
+        fork_checkout, [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)]
     )
 
     assert report.tests_passed is None
@@ -929,7 +975,7 @@ def test_a_failing_suite_over_a_machine_written_replay_is_its_own_status(
     report = build(
         fork_checkout,
         pull_requests,
-        provenance=ResolutionProvenance({"second-tip": ResolutionAuthor.SKILL}),
+        provenance=ResolutionProvenance({SECOND_TIP: ResolutionAuthor.SKILL}),
         test_command=f"{sys.executable} -c 'raise SystemExit(1)'",
     )
 
@@ -961,39 +1007,37 @@ def two_tips_that_break_only_together(checkout: ForkCheckout) -> list[PullReques
     :param checkout: The checkout to build them in.
     :return: The board entries.
     """
-    checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
+    checkout.git.switch_to(UPSTREAM_BASE)
     (checkout.project_root / "a_module.py").write_text("VALUE = 1\n")
     (checkout.project_root / BUILD_CHECK_SCRIPT.name).write_text(
         BUILD_CHECK_SCRIPT.read_text()
     )
-    checkout.run_git("add", "a_module.py", BUILD_CHECK_SCRIPT.name)
-    checkout.run_git("commit", "--quiet", "-m", "the module both tips are about")
-    checkout.run_git("push", "--quiet", "origin", UPSTREAM_BASE)
-    checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
-    checkout.run_git("fetch", "--quiet", "cram2")
+    checkout.git.stage("a_module.py", BUILD_CHECK_SCRIPT.name)
+    checkout.git.commit("the module both tips are about")
+    checkout.git.push_refspec("origin", UPSTREAM_BASE)
+    checkout.git.push_refspec("cram2", UPSTREAM_BASE)
+    checkout.git.fetch("cram2")
 
-    checkout.branch_from("innocent-tip", UPSTREAM_BASE)
+    checkout.branch_from(INNOCENT_TIP, UPSTREAM_BASE)
 
-    checkout.run_git("checkout", "--quiet", "-B", "needs-the-module", UPSTREAM_BASE)
+    checkout.git.checkout(NEEDS_THE_MODULE, UPSTREAM_BASE)
     (checkout.project_root / "test_needs_the_module.py").write_text(
         "import a_module\n\n\ndef test_it_is_there():\n    assert a_module.VALUE\n"
     )
-    checkout.run_git("add", "test_needs_the_module.py")
-    checkout.run_git("commit", "--quiet", "-m", "a test that needs the module")
-    checkout.run_git("push", "--quiet", "origin", "needs-the-module:needs-the-module")
+    checkout.git.stage("test_needs_the_module.py")
+    checkout.git.commit("a test that needs the module")
+    checkout.git.push_refspec("origin", "needs-the-module:needs-the-module")
 
-    checkout.run_git("checkout", "--quiet", "-B", "removes-the-module", UPSTREAM_BASE)
-    checkout.run_git("rm", "--quiet", "a_module.py")
-    checkout.run_git("commit", "--quiet", "-m", "the module goes away")
-    checkout.run_git(
-        "push", "--quiet", "origin", "removes-the-module:removes-the-module"
-    )
-    checkout.run_git("fetch", "--quiet", "origin")
-    checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
+    checkout.git.checkout(REMOVES_THE_MODULE, UPSTREAM_BASE)
+    checkout.git.remove("a_module.py")
+    checkout.git.commit("the module goes away")
+    checkout.git.push_refspec("origin", f"{REMOVES_THE_MODULE}:{REMOVES_THE_MODULE}")
+    checkout.git.fetch("origin")
+    checkout.git.switch_to(UPSTREAM_BASE)
     return [
-        create_pull_request_object(1, "innocent-tip", UPSTREAM_BASE),
-        create_pull_request_object(2, "needs-the-module", UPSTREAM_BASE),
-        create_pull_request_object(3, "removes-the-module", UPSTREAM_BASE),
+        create_pull_request_object(1, INNOCENT_TIP, UPSTREAM_BASE),
+        create_pull_request_object(2, NEEDS_THE_MODULE, UPSTREAM_BASE),
+        create_pull_request_object(3, REMOVES_THE_MODULE, UPSTREAM_BASE),
     ]
 
 
@@ -1037,7 +1081,7 @@ def test_the_search_names_the_tip_whose_arrival_broke_the_suite(
     report = locate_break(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
 
     assert report.semantic_break is not None
-    assert report.semantic_break.culprit == "removes-the-module"
+    assert report.semantic_break.culprit == REMOVES_THE_MODULE
 
 
 def test_the_search_names_the_tip_the_culprit_actually_breaks_against(
@@ -1051,7 +1095,7 @@ def test_the_search_names_the_tip_the_culprit_actually_breaks_against(
 
     report = locate_break(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
 
-    assert report.semantic_break.breaks_against == "needs-the-module"
+    assert report.semantic_break.breaks_against == NEEDS_THE_MODULE
 
 
 def test_searching_a_build_that_works_localises_nothing(fork_checkout: ForkCheckout):
@@ -1059,11 +1103,11 @@ def test_searching_a_build_that_works_localises_nothing(fork_checkout: ForkCheck
     There is no break to attribute, and inventing one would send somebody after a branch
     that is fine.
     """
-    fork_checkout.branch_from("only-tip", UPSTREAM_BASE)
+    fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
 
     report = locate_break(
         fork_checkout,
-        [create_pull_request_object(1, "only-tip", UPSTREAM_BASE)],
+        [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)],
         f"{sys.executable} -c pass",
     )
 
@@ -1113,8 +1157,8 @@ def test_the_search_report_serialises_what_it_localised(fork_checkout: ForkCheck
         document[ReportKey.STATUS] == IntegrationExitCode.TESTS_FAILED.name_for_a_caller
     )
     localised = document[ReportKey.SEMANTIC_BREAK]
-    assert localised[ReportKey.CULPRIT] == "removes-the-module"
-    assert localised[ReportKey.BREAKS_AGAINST] == "needs-the-module"
+    assert localised[ReportKey.CULPRIT] == REMOVES_THE_MODULE
+    assert localised[ReportKey.BREAKS_AGAINST] == NEEDS_THE_MODULE
 
 
 # %% telling the branch that breaks another
@@ -1352,7 +1396,7 @@ def test_a_command_that_exists_is_reachable_from_the_command_line():
     Commands are found from their own subclasses, so one that exists cannot be left
     unreachable by forgetting to list it.
     """
-    assert "build" in {command.invoked_as for command in integration.COMMANDS}
+    assert integration.BuildCommand() in integration.COMMANDS
 
 
 def test_a_missing_credential_is_its_own_exit_status(fork_checkout: ForkCheckout):
