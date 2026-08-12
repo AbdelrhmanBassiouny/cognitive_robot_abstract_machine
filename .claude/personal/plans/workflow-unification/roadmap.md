@@ -6380,3 +6380,77 @@ Either of them first, and #156's own suite fails until it sweeps their copies. N
 depends on anyone remembering a comment. The residual cost is the ordinary one for any new test: a
 branch that lands *without* merging `main` first turns `main` red rather than its own branch, which
 is the same trade every contract test in this repository already makes.
+
+## Update 2026-08-12 (resolved): `integration-branch` takes its base merge, and carries only reviewed work
+
+`/plan-item-resolve workflow-unification integration-branch`, session
+https://claude.ai/code/session_01AYLtTRh7uZu64oLpMhGjQR, prompted with "include in the integration
+branch only pull requests that are open and ready". Four commits pushed; 595 tests across the three
+directories CI runs, from 479 before.
+
+### The handover was executable, and three of its instructions had expired
+
+The 08-11 round settled 28 threads and handed an executable plan to a fresh session. Most of it held.
+What had not is the part that named where things live: #151 moved after that note was written, so
+`GitCommandRunner` is now `.claude/shared/git_commands.py`, `maintenance_errors.py` is
+`.claude/shared/exceptions.py`, and `class_property.py` is deleted in favour of abstract instance
+properties. Following the note literally would have put this branch's two git additions into a class
+that no longer holds them and reintroduced a descriptor the parent had just removed.
+
+This is the same lesson the round itself recorded about basing - *a basing decision is a claim about
+live branches and expires when a sibling moves* - met one level down: a **handover** is the same kind
+of claim. It was written against a parent that then changed, and the check that caught it was reading
+the parent's current tree rather than trusting the note. Worth carrying: a handover note should be
+read as evidence about a moment, not as instructions, and its first step should always be to re-read
+what it points at.
+
+#139 merged at 14:36 the same day, which made the merge simpler than planned rather than harder: the
+eleven-module split arrived through `main`, and only `#151`'s shared extraction had to come from the
+sibling. Four conflicts were one rename seen from four places, resolved to #151's rename while keeping
+`main`'s docstring formatting - #151 predates that reformat, so taking its side wholesale would have
+reverted it.
+
+### "Only open and ready" cannot be asked of a tip
+
+The requirement reads as a one-line filter and is not one. The selection unit is the stack tip, and a
+tip contains its whole stack, so filtering tips would have merged ready #36 together with drafts #33,
+#34 and #35 as its ancestors - the reading that does the opposite of what it says. Readiness is
+therefore read down the entire chain: a stack that is draft at its root is left out entire, and the
+branch merged for a stack is the last one reached before its first draft. On the live board that takes
+a build from 22 tips to 9.
+
+The vocabulary already existed and was reused rather than reinvented: `BranchStatus.DRAFT`/`READY`,
+whose own docstring already said out-of-draft *is* the author's review, and which `build_dashboard.py`
+names `LiveState.OPEN_READY`. `is_out_of_draft` covers `IN_REVIEW` as well, because `derive_status`
+gives it precedence over `READY` - a test written against `READY` alone would have silently dropped
+every branch already promoted upstream, which is the most reviewed work there is.
+
+Two consequences are easy to get wrong and are pinned by their own tests. `claimed_as_parent` has to
+range over the **carried** branches only: a parent is left out because a child contains it, and a
+draft child is never merged, so reading it over every branch drops the reviewed parent as well. And a
+branch left out is *named*, with the draft beneath it when that is the reason - a build carrying nine
+of nineteen and reporting only the nine reads as having covered everything. An excluded draft is the
+rule working, so it is kept out of `tips` and does not reach the `tip-left-out` exit status.
+
+A mutation check found a real hole rather than confirming the tests: nothing covered the wiring from
+the selection into a real build's report, so removing it entirely left the suite green. Closed with a
+scratch-fork test before the work was called done.
+
+### One test was removed rather than kept
+
+Mutation-checking showed one of the five new selection tests failing only for reasons its neighbours
+already covered, while its docstring claimed to pin the carried-parents rule it did not actually
+exercise. Removed rather than reworded: a test whose stated reason is not its real one is worse than
+no test, because the next reader trusts it.
+
+### Left undone, and why
+
+Part D of the handover - the verdict moving from a local suite to GitHub CI, with `build` pushing and
+a separate subcommand reading the run's conclusion - is **not started**. It needs an Actions client
+that does not exist in this tree (#146, which measured that reachability, is still unlanded), it
+rewrites the localisation path `escalate` now depends on, and its verification is a real CI run on a
+pushed branch rather than anything the harness can show. Starting it half-way would have left the
+verdict path migrated on one side and not the other. The 28 threads are addressed in code but none has
+an inline reply or is resolved, and #154's base ref is still #139's branch - the base-field `PATCH`
+403s through the agent proxy, so that reparent stays manual.
+
