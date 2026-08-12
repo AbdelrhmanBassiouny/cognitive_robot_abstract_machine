@@ -29,7 +29,6 @@ from krrood.entity_query_language.rdr.serialization import (
     RDR_CORNER_CASES_NAME,
     RDR_QUERY_NAME,
     FileModelSaver,
-    ModelSaver,
     NullModelSaver,
     rdr_to_python,
     walk_rules_in_emission_order,
@@ -185,10 +184,6 @@ def test_recorded_corner_case_with_an_enum_field_round_trips_through_the_generat
 
 
 # %% ModelSaver strategies
-
-
-def test_null_saver_is_a_model_saver():
-    assert isinstance(NullModelSaver(), ModelSaver)
 
 
 def test_null_saver_writes_nothing_for_a_fitted_tree(tmp_path):

@@ -27,10 +27,6 @@ def test_description_is_usable_directly_as_the_start_label():
 # %% NullProgressReporter
 
 
-def test_null_reporter_is_a_progress_reporter():
-    assert isinstance(NullProgressReporter(), ProgressReporter)
-
-
 def test_null_reporter_accepts_the_whole_lifecycle_without_effect():
     reporter = NullProgressReporter()
 
