@@ -39,12 +39,10 @@ class RealsenseCameraConfig(
 
     topic_color: str = "/camera/color/image_raw/compressed"
 
-    topic_cam_info: str = "/camera/color/camera_info"
+    topic_camera_info: str = "/camera/color/camera_info"
 
-    tf_from: str = "/camera_color_optical_frame"
+    tf_from: str = "camera_color_optical_frame"
 
-    tf_to: str = "/map"
+    tf_to: str = "map"
 
     filterBlurredImages: bool = False
-
-    lookup_viewpoint: bool = False

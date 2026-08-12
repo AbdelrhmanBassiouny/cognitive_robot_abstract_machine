@@ -31,7 +31,12 @@ import threading
 from dataclasses import dataclass
 from typing import Callable, List, Optional
 
-from robocasa.models.scenes.scene_registry import LayoutType, StyleType
+from semantic_digital_twin.adapters.robocasa_dataset.mujoco_compat import (
+    robocasa_version_assertions_relaxed,
+)
+
+with robocasa_version_assertions_relaxed():
+    from robocasa.models.scenes.scene_registry import LayoutType, StyleType
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import Arms, ApproachDirection, VerticalAlignment

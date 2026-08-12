@@ -1,6 +1,11 @@
 #!/usr/bin/env python3
 
 from __future__ import annotations
+from robokudo.io.ros import get_node
+from robokudo.world import world_instance
+from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
+    VizMarkerPublisher,
+)
 
 import argparse
 import logging
@@ -18,7 +23,7 @@ import rclpy.impl.logging_severity
 import rclpy.logging
 from py_trees.blackboard import Blackboard
 from py_trees.common import Status
-from rclpy.executors import SingleThreadedExecutor, MultiThreadedExecutor
+from rclpy.executors import MultiThreadedExecutor, SingleThreadedExecutor
 from rclpy.parameter import Parameter
 from typing_extensions import TYPE_CHECKING
 
@@ -31,6 +36,8 @@ from robokudo.io.ros import init_node
 from robokudo.utils.logging_configuration import configure_logging
 from robokudo.utils.module_loader import ModuleLoader
 from robokudo.utils.tree import setup_with_descendants_rk
+from robokudo.vis.cv_visualizer import CVVisualizer
+from robokudo.vis.ros_visualizer import AllAnnotatorROSVisualizer, SharedROSVisualizer
 
 if TYPE_CHECKING:
     from py_trees_ros.trees import BehaviourTree
@@ -54,7 +61,7 @@ def run_ae(
     blackboard.set("CAS", None)
     tick_count = 0
 
-    def tick_tree() -> None:
+    def tick_tree() -> bool:
         nonlocal tick_count
         try:
             logger.debug(f"--------- Tick {tick_count} ---------")
@@ -68,21 +75,25 @@ def run_ae(
             ):
                 # If your top-level child fails, maybe shut down
                 rclpy.shutdown()
+                return False
             tick_count += 1
         except Exception as e:
             logger.error(f"Exception: {e}")
             logger.error("Traceback:\n" + traceback.format_exc())
+        return True
 
     interval = 1.0 / tickrate
-    next_tick = time.monotonic()
+    last_tick = time.monotonic()
 
     while True:
         current_time = time.monotonic()
-        elapsed = current_time - next_tick
+        elapsed = current_time - last_tick
 
         if elapsed >= interval:
-            tick_tree()
-            next_tick = current_time
+            if not tick_tree():
+                break
+
+            last_tick = current_time
         else:
             time.sleep(interval - elapsed)
 
@@ -116,6 +127,16 @@ def main() -> None:
         "_headless", action="store_true", help="If set, runs without a GUI."
     )
     parser.set_defaults(headless=False)
+    parser.add_argument(
+        "_no3d",
+        action="store_true",
+        help=(
+            "If set, runs the GUI without the Open3D viewer, keeping the OpenCV and "
+            "ROS visualizers. Use this if the Open3D viewer crashes in your display "
+            "environment."
+        ),
+    )
+    parser.set_defaults(no3d=False)
     parser.add_argument(
         "_nodesuffix",
         dest="nodesuffix",
@@ -206,12 +227,24 @@ def main() -> None:
 
     # 8. Build your Behavior Tree from the loaded AE
     #    (Assuming loaded_ae.implementation() returns a py_trees root or something similar)
+    visualizer_types = None
+    if args.no3d:
+        visualizer_types = [
+            CVVisualizer,
+            SharedROSVisualizer,
+            AllAnnotatorROSVisualizer,
+        ]
     ae_root = grow_tree(
-        loaded_ae.implementation(), node=node1, include_gui=not args.headless
+        loaded_ae.implementation(),
+        node=node1,
+        include_gui=not args.headless,
+        visualizer_types=visualizer_types,
     )
 
     # If you have a custom version of `setup_with_descendants`, call it:
     setup_with_descendants_rk(ae_root)
+
+    viz = VizMarkerPublisher(_world=world_instance(), node=get_node())
 
     try:
         # 9. Start ticking the Behavior Tree

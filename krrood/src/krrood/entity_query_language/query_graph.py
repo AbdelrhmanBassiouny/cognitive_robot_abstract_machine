@@ -35,11 +35,9 @@ from krrood.entity_query_language.core.mapped_variable import (
 )
 from krrood.entity_query_language.operators.comparator import Comparator
 
-from krrood.rustworkx_utils import (
-    GraphVisualizer,
-    RWXNode as RXUtilsNode,
-    ColorLegend as RXUtilsColorLegend,
-)
+from krrood.rustworkx_utils.graph_visualizer import GraphVisualizer
+from krrood.rustworkx_utils.rxnode import RWXNode as RXUtilsNode
+from krrood.rustworkx_utils.utils import ColorLegend as RXUtilsColorLegend
 
 import rustworkx as rx
 
@@ -53,12 +51,13 @@ def _is_faded_gate(node, satisfied_condition_ids: OrderedSet[UUID]) -> bool:
     Such nodes act as "gates" that the BFS in
     :meth:`QueryGraph._propagate_faded_subtrees` refuses to traverse through.
     """
-    expr = node.data
-    if expr is None:
+    expression = node.data
+    if expression is None:
         return False
-    if not is_condition_participant(expr):
+    parent_expression = node.parent.data if node.parent is not None else None
+    if not is_condition_participant(expression, parent=parent_expression):
         return False
-    return expr._id_ not in satisfied_condition_ids
+    return expression._id_ not in satisfied_condition_ids
 
 
 @dataclass
@@ -223,6 +222,8 @@ class QueryGraph:
         """
         Construct the graph representation of the query, used for visualization and
         introspection.
+
+        :param expression: The expression to add, defaulting to the query's root.
         """
         expression = expression if expression is not None else self.query._root_
 
@@ -231,7 +232,6 @@ class QueryGraph:
 
         is_satisfied = (
             self.satisfied_condition_ids is not None
-            and is_condition_participant(expression)
             and expression._id_ in self.satisfied_condition_ids
         )
         node = QueryNode(
@@ -302,7 +302,6 @@ class ColorLegend(RXUtilsColorLegend):
             case Variable():
                 color = "cornflowerblue"
             case Concatenation():
-                name = "Union"
                 color = "#949292"
             case MappedVariable():
                 name = "DomainMapping"

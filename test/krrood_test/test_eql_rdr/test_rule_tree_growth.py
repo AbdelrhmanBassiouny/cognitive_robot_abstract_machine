@@ -49,7 +49,9 @@ class TestRuleTreeGrowth(unittest.TestCase):
 
         # Bird does not fire yet.
         self.assertIs(
-            classify_case(query, animal, animal.species, first(Species.bird)).conclusion,
+            classify_case(
+                query, animal, animal.species, first(Species.bird)
+            ).conclusion,
             ...,
         )
 

@@ -271,6 +271,20 @@ class SymbolicCallable(Symbol, Verbalizable, HasBoundValue, ABC):
         Evaluate the operation for the supplied values.
         """
 
+    @classmethod
+    def _example_operand_values_(cls) -> Dict[str, Any]:
+        """
+        A literal example value for each field that is never bound to a symbolic operand
+        in real usage -- only ever a literal (e.g. ``HasType.types_``, since
+        ``isinstance`` needs a concrete type at evaluation time). Consulted only when
+        generating or verifying a committed verbalization result, never during ordinary
+        rendering.
+
+        :return: The example value to substitute for each such field, keyed by field
+            name. Empty by default.
+        """
+        return {}
+
 
 @dataclass(eq=False)
 class Predicate(SymbolicCallable, ABC):
@@ -438,6 +452,10 @@ class HasType(Triple):
             DisjunctivePhrase(fields["types_"]),
         )
 
+    @classmethod
+    def _example_operand_values_(cls) -> Dict[str, Any]:
+        return {"types_": int}
+
 
 @dataclass(eq=False)
 class HasTypes(HasType):
@@ -455,6 +473,10 @@ class HasTypes(HasType):
     """
     A tuple containing Type objects that are associated with this instance.
     """
+
+    @classmethod
+    def _example_operand_values_(cls) -> Dict[str, Any]:
+        return {"types_": (int, str)}
 
 
 @dataclass(eq=False)

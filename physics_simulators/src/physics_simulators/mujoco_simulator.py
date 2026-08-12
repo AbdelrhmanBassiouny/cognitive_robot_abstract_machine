@@ -362,6 +362,55 @@ class MujocoSimulator(BaseSimulator):
         )
 
     @BaseSimulator.simulator_callback
+    def get_geom_friction(self, geom_name: str) -> SimulatorCallbackResult:
+        """
+        Get a geom's contact friction (sliding, torsional, rolling) by its name.
+
+        :param geom_name: The name of the geom
+        :return: A SimulatorCallbackResult with a numpy array of shape (3,) representing
+            the (sliding, torsional, rolling) friction coefficients as the result
+        """
+        geom_id = mujoco.mj_name2id(
+            m=self._mj_model, type=mujoco.mjtObj.mjOBJ_GEOM, name=geom_name
+        )
+        if geom_id == -1:
+            return SimulatorCallbackResult(
+                type=SimulatorCallbackResult.ResultType.FAILURE_WITHOUT_EXECUTION,
+                info=f"Geom {geom_name} not found",
+            )
+        return SimulatorCallbackResult(
+            type=SimulatorCallbackResult.ResultType.SUCCESS_WITHOUT_EXECUTION,
+            info=f"Getting geom {geom_name} friction",
+            result=self._mj_model.geom_friction[geom_id],
+        )
+
+    @BaseSimulator.simulator_callback
+    def set_geom_friction(
+        self, geom_name: str, friction: numpy.ndarray
+    ) -> SimulatorCallbackResult:
+        """
+        Set a geom's contact friction (sliding, torsional, rolling) by its name.
+
+        :param geom_name: The name of the geom
+        :param friction: The (sliding, torsional, rolling) friction coefficients
+        :return: A SimulatorCallbackResult indicating the success or failure of the
+            operation
+        """
+        geom_id = mujoco.mj_name2id(
+            m=self._mj_model, type=mujoco.mjtObj.mjOBJ_GEOM, name=geom_name
+        )
+        if geom_id == -1:
+            return SimulatorCallbackResult(
+                type=SimulatorCallbackResult.ResultType.FAILURE_WITHOUT_EXECUTION,
+                info=f"Geom {geom_name} not found",
+            )
+        self._mj_model.geom_friction[geom_id] = friction
+        return SimulatorCallbackResult(
+            type=SimulatorCallbackResult.ResultType.SUCCESS_AFTER_EXECUTION_ON_DATA,
+            info=f"Set geom {geom_name} friction to {friction}",
+        )
+
+    @BaseSimulator.simulator_callback
     def set_body_position(
         self, body_name: str, position: numpy.ndarray
     ) -> SimulatorCallbackResult:
@@ -1455,12 +1504,13 @@ class MujocoSimulator(BaseSimulator):
         :param width: The width of the image to capture.
         :return: A SimulatorCallbackResult object with the captured RGB data.
         """
-        with mujoco.Renderer(self._mj_model, height, width) as renderer:
-            if camera_name is not None:
-                renderer.update_scene(self._mj_data, camera_name)
-            else:
-                renderer.update_scene(self._mj_data)
-            rgb = renderer.render()
+        with self._model_lock:
+            with mujoco.Renderer(self._mj_model, height, width) as renderer:
+                if camera_name is not None:
+                    renderer.update_scene(self._mj_data, camera_name)
+                else:
+                    renderer.update_scene(self._mj_data)
+                rgb = renderer.render()
         return SimulatorCallbackResult(
             type=SimulatorCallbackResult.ResultType.SUCCESS_WITHOUT_EXECUTION,
             info="Captured RGB data",
@@ -1480,13 +1530,14 @@ class MujocoSimulator(BaseSimulator):
         :param width: The width of the image to capture.
         :return: A SimulatorCallbackResult object with the captured depth data.
         """
-        with mujoco.Renderer(self._mj_model, height, width) as renderer:
-            renderer.enable_depth_rendering()
-            if camera_name is not None:
-                renderer.update_scene(self._mj_data, camera_name)
-            else:
-                renderer.update_scene(self._mj_data)
-            depth = renderer.render()
+        with self._model_lock:
+            with mujoco.Renderer(self._mj_model, height, width) as renderer:
+                renderer.enable_depth_rendering()
+                if camera_name is not None:
+                    renderer.update_scene(self._mj_data, camera_name)
+                else:
+                    renderer.update_scene(self._mj_data)
+                depth = renderer.render()
         return SimulatorCallbackResult(
             type=SimulatorCallbackResult.ResultType.SUCCESS_WITHOUT_EXECUTION,
             info="Captured depth data",
@@ -1509,13 +1560,15 @@ class MujocoSimulator(BaseSimulator):
         :return: A SimulatorCallbackResult object with the segmentation data as the
             result.
         """
-        with mujoco.Renderer(self._mj_model, height, width) as renderer:
-            renderer.enable_segmentation_rendering()
-            if camera_name is not None:
-                renderer.update_scene(self._mj_data, camera_name)
-            else:
-                renderer.update_scene(self._mj_data)
-            segmentation = renderer.render()
+
+        with self._model_lock:
+            with mujoco.Renderer(self._mj_model, height, width) as renderer:
+                renderer.enable_segmentation_rendering()
+                if camera_name is not None:
+                    renderer.update_scene(self._mj_data, camera_name)
+                else:
+                    renderer.update_scene(self._mj_data)
+                segmentation = renderer.render()
         return SimulatorCallbackResult(
             type=SimulatorCallbackResult.ResultType.SUCCESS_WITHOUT_EXECUTION,
             info="Captured segmentation data",

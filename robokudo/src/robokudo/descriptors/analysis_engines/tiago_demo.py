@@ -26,8 +26,10 @@ from robokudo.annotators.image_preprocessor import ImagePreprocessorAnnotator
 from robokudo.annotators.plane import PlaneAnnotator
 from robokudo.annotators.pointcloud_cluster_extractor import PointCloudClusterExtractor
 from robokudo.annotators.pointcloud_crop import PointcloudCropAnnotator
-from robokudo.annotators.query import QueryReply, GenerateQueryResult, QueryAnnotator
-from robokudo.descriptors import CrDescriptorFactory
+from robokudo.annotators.query import GenerateQueryResult, QueryAnnotator
+from robokudo.descriptors.factories.cr_descriptor_factory import (
+    CollectionReaderDescriptorFactory,
+)
 from robokudo.idioms import pipeline_init
 from robokudo.pipeline import Pipeline
 
@@ -84,7 +86,7 @@ class AnalysisEngine(AnalysisEngineInterface):
 
         :return: The configured pipeline for TIAGo perception
         """
-        tiago_config = CrDescriptorFactory.create_descriptor("tiago")
+        tiago_config = CollectionReaderDescriptorFactory.create_descriptor("tiago")
 
         # pc_crop_config = PointcloudCropAnnotator.Descriptor()
         # pc_crop_config.parameters.
@@ -102,7 +104,6 @@ class AnalysisEngine(AnalysisEngineInterface):
                 # ClusterPoseBBAnnotator(),
                 ClusterPosePCAAnnotator(),
                 GenerateQueryResult(),
-                QueryReply(),
             ]
         )
         return seq

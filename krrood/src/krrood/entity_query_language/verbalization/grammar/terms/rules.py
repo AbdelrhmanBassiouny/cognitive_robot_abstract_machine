@@ -19,7 +19,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
     PhraseFragment,
     RoleFragment,
 )
-from krrood.patterns.field_metadata import FieldMetadata, GrammarMetadata
+from krrood.entity_query_language.verbalization.grammar_metadata import GrammarMetadata
 from krrood.entity_query_language.verbalization.fragments.features import (
     Definiteness,
     GrammaticalNumber,
@@ -35,6 +35,7 @@ from krrood.entity_query_language.verbalization.grammar.framework.phrase_rule im
     PhraseRule,
     RuleContext,
 )
+from krrood.entity_query_language.verbalization.value_lexicon import type_members
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Conjunctions,
     FallbackNouns,
@@ -58,8 +59,9 @@ _PRIMITIVE_VALUE_TYPES = (int, float, str, bool)
 
 class VariableRule(PhraseRule):
     """
-    *"a/an Robot"* (first mention), *"the Robot"* (subsequent), or *"Robot N"*
-    (numbered).
+    *"a/an Robot"* (first mention) or *"the Robot"* (subsequent) — a determiner-
+    distinguished form (*"another Robot"* / *"a second Robot"*) when its noun is shared
+    with another referent is decided later, by the coreference pass.
 
     >>> verbalize_expression(variable(Robot, []))
     'a Robot'
@@ -68,7 +70,7 @@ class VariableRule(PhraseRule):
     construct = Variable
 
     def build(self, node: Variable, context: RuleContext) -> VerbalizationFragment:
-        """:return: The variable noun phrase (*"a Robot"* / *"the Robot"* / *"Robot N"*)."""
+        """:return: The variable noun phrase (*"a Robot"* / *"the Robot"*)."""
         if context.as_value:
             choice = self._domain_choice(node, context)
             if choice is not None:
@@ -76,8 +78,18 @@ class VariableRule(PhraseRule):
         if context.number is GrammaticalNumber.PLURAL:
             return self._plural(node, context)
         noun_form = context.refer.noun_for_parts(node)
+        if noun_form.type_alternatives:
+            first, *rest = noun_form.type_alternatives
+            head = RoleFragment.for_type(first)
+            additional_heads = [
+                RoleFragment.for_type(alternative) for alternative in rest
+            ]
+        else:
+            head = RoleFragment.for_variable(noun_form.label, node)
+            additional_heads = []
         return NounPhrase(
-            head=RoleFragment.for_variable(noun_form.label, node),
+            head=head,
+            additional_heads=additional_heads,
             definiteness=noun_form.definiteness,
             referent_id=node._id_,
         )
@@ -115,23 +127,13 @@ class VariableRule(PhraseRule):
         Bare plural variable noun phrase (*"Robots"*); the determiner phase drops the
         article and the morphology pass inflects the head.
 
-        A numbered label (*"Robot 2"*) is surface-final — kept singular and bare; a plain type
-        name is a plural indefinite noun phrase (the concord table renders it bare-then-pluralised).
-
         >>> verbalize_expression(count(variable(Robot, [])))
         'the number of Robots'
         """
-        numbered = context.refer.numbered_label(node)
         return NounPhrase(
-            head=RoleFragment.for_variable(numbered.text, node),
-            number=(
-                GrammaticalNumber.SINGULAR
-                if numbered.is_numbered
-                else GrammaticalNumber.PLURAL
-            ),
-            definiteness=(
-                Definiteness.BARE if numbered.is_numbered else Definiteness.INDEFINITE
-            ),
+            head=RoleFragment.for_variable(context.refer.head_noun_of(node), node),
+            number=GrammaticalNumber.PLURAL,
+            definiteness=Definiteness.INDEFINITE,
             referent_id=node._id_,
         )
 
@@ -162,25 +164,13 @@ class LiteralRule(PhraseRule):
             return self._concrete_object(node, context)
         if isinstance(value, type):
             return RoleFragment.for_type(value)
-        type_members = self._type_members(value)
-        if type_members is not None:
+        class_members = type_members(value)
+        if class_members is not None:
             return oxford_comma(
-                [RoleFragment.for_type(member) for member in type_members],
+                [RoleFragment.for_type(member) for member in class_members],
                 Conjunctions.AND.as_fragment(),
             )
         return RoleFragment.for_literal(value)
-
-    @staticmethod
-    def _type_members(value: Any) -> Optional[List[type]]:
-        """:return: the classes of a non-empty tuple/list of types, or ``None`` when *value* is not
-        such a sequence."""
-        if (
-            isinstance(value, (tuple, list))
-            and value
-            and all(isinstance(member, type) for member in value)
-        ):
-            return list(value)
-        return None
 
     def _concrete_object(
         self, node: Literal, context: RuleContext
