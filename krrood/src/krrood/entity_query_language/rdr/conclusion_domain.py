@@ -19,7 +19,6 @@ from krrood.entity_query_language.rdr.exceptions import (
     ConclusionWrongType,
 )
 from krrood.entity_query_language.rdr.interface import AnswerValidator
-from krrood.entity_query_language.rdr.utils import UNSET
 from krrood.exceptions import DataclassException
 
 #: The runtime type of ``None``, used to detect ``Optional`` / ``... | None`` annotations.
@@ -146,7 +145,7 @@ class ConclusionValidator(AnswerValidator):
 
     def validate(self, value: Any) -> Optional[DataclassException]:
         """
-        Checks layer in order: an *unset* answer (the ``UNSET`` sentinel) is acceptable
+        Checks layer in order: an *unset* answer (the ``...`` sentinel) is acceptable
         only when :attr:`allow_unset` (a current conclusion already stands and is not
         known to be wrong); ``None`` only when the domain admits it; an enumerable
         domain requires membership; otherwise the value must be an instance of the
@@ -157,7 +156,7 @@ class ConclusionValidator(AnswerValidator):
         :return: The exception describing why ``value`` is unacceptable, or ``None``.
         """
         domain = self.domain
-        if value is UNSET:
+        if value is ...:
             return None if self.allow_unset else ConclusionRequired(domain=domain)
         if value is None:
             return None if domain.allows_none else ConclusionMayNotBeNone(domain=domain)

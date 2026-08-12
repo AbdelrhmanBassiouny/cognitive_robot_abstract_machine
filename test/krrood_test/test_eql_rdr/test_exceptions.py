@@ -21,7 +21,7 @@ from krrood.entity_query_language.rdr.exceptions import (
     NoConditionsProvided,
     WrongConclusionProvided,
 )
-from krrood.entity_query_language.rdr.utils import AnswerName
+from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
 
 from .animal import Animal, Species, make_animal
 

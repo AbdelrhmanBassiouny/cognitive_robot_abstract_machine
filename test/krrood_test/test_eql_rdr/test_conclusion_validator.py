@@ -3,7 +3,7 @@ Tests for the domain-aware conclusion validator and the answer-default plumbing.
 
 Covers each layer of :meth:`ConclusionDomain.validator` (unset / None / enumerable /
 isinstance / open) and that ``AnswerRequest.default`` seeds the namespace (so the
-conclusion can be seeded with ``UNSET``, distinct from a deliberate ``None``).
+conclusion can be seeded with ``...``, distinct from a deliberate ``None``).
 """
 
 from __future__ import annotations
@@ -19,7 +19,10 @@ from krrood.entity_query_language.rdr.interface import (
     CaseContext,
     FunctionInterface,
 )
-from krrood.entity_query_language.rdr.utils import UNSET, AnswerName, NamespaceName
+from krrood.entity_query_language.rdr.answer_vocabulary import (
+    AnswerName,
+    NamespaceName,
+)
 
 from .animal import Animal, Species
 from .test_conclusion_domain import Colour, Doc, Light, RequiredColour, Tag
@@ -57,13 +60,13 @@ class TestConclusionValidatorEnumerable(unittest.TestCase):
 
     def test_unset_rejected_when_not_allowed(self):
         validate = self.domain.validator(allow_unset=False)
-        error = validate(UNSET)
+        error = validate(...)
         self.assertIsNotNone(error)
         self.assertIn("No rule fired", str(error))
 
     def test_unset_accepted_when_allowed(self):
         validate = self.domain.validator(allow_unset=True)
-        self.assertIsNone(validate(UNSET))
+        self.assertIsNone(validate(...))
 
 
 class TestConclusionValidatorRequiredEnum(unittest.TestCase):
@@ -135,10 +138,10 @@ class TestAnswerDefaultPlumbing(unittest.TestCase):
             name=AnswerName.CONCLUSION,
             validate=_AlwaysValid(),
             example="x",
-            default=UNSET,
+            default=...,
         )
         namespace = interface._build_namespace(context, [request])
-        self.assertIs(namespace[AnswerName.CONCLUSION], UNSET)
+        self.assertIs(namespace[AnswerName.CONCLUSION], ...)
         self.assertIn(NamespaceName.CASE_INSTANCE, namespace)
 
     def test_case_context_defaults(self):

@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from typing_extensions import TYPE_CHECKING, Any, Tuple, Type
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.rdr.utils import AnswerName
+from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
 from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:

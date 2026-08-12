@@ -26,7 +26,6 @@ from krrood.entity_query_language.rdr.rule_tree import (
     insert_alternative,
     insert_refinement,
 )
-from krrood.entity_query_language.rdr.utils import UNSET
 from krrood.entity_query_language.exceptions import SelfReferentialInsertionError
 
 from .animal import Animal, Species, make_animal
@@ -49,9 +48,9 @@ class TestRuleTreeGrowth(unittest.TestCase):
         query.build()
 
         # Bird does not fire yet.
-        self.assertTrue(
-            classify_case(query, animal, animal.species, first(Species.bird)).conclusion
-            is UNSET
+        self.assertIs(
+            classify_case(query, animal, animal.species, first(Species.bird)).conclusion,
+            ...,
         )
 
         insert_alternative(
@@ -400,7 +399,7 @@ class TestBareAttributeWhereCondition(unittest.TestCase):
     follow the clobbered ``_parent_`` up to ``Comparator`` (which has no Filter ancestor),
     returning ``Comparator`` as the anchor instead of ``attr``.  The resulting
     ``Alternative(Comparator, Comparator)`` was never connected to ``Where``, leaving
-    ``Where._child_ = attr`` (bare) and all conclusions unreachable → UNSET for every case.
+    ``Where._child_ = attr`` (bare) and all conclusions unreachable → ``...`` for every case.
     """
 
     def test_alternative_with_bare_attr_where_condition(self):

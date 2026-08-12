@@ -23,7 +23,6 @@ from krrood.entity_query_language.rdr.exceptions import (
     ConclusionRequired,
     ConclusionWrongType,
 )
-from krrood.entity_query_language.rdr.utils import UNSET
 
 from .animal import Animal, Species
 
@@ -143,9 +142,9 @@ class TestConclusionDomainHelpers(unittest.TestCase):
 class TestConclusionDomainValidate(unittest.TestCase):
     def test_unset_accepted_only_when_allowed(self):
         domain = resolve_conclusion_domain(Animal, "species")
-        self.assertIsNone(domain.validate(UNSET, allow_unset=True))
+        self.assertIsNone(domain.validate(..., allow_unset=True))
         self.assertIsInstance(
-            domain.validate(UNSET, allow_unset=False), ConclusionRequired
+            domain.validate(..., allow_unset=False), ConclusionRequired
         )
 
     def test_none_accepted_only_when_domain_allows_it(self):

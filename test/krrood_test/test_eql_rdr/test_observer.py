@@ -15,7 +15,6 @@ from krrood.entity_query_language.factories import (
     variable,
 )
 from krrood.entity_query_language.rdr.observer import classify_case
-from krrood.entity_query_language.rdr.utils import UNSET
 
 from .animal import Animal, Species, make_animal
 from .zoo_loader import load_zoo_animals
@@ -70,7 +69,7 @@ class TestConclusionObserver(unittest.TestCase):
         observer = classify_case(
             query, animal, species, _first_with_target(Species.insect)
         )
-        self.assertTrue(observer.conclusion is UNSET)
+        self.assertIs(observer.conclusion, ...)
         self.assertEqual(observer.fired, [])
 
     def test_refinement_overrides_parent_conclusion(self):
@@ -163,7 +162,7 @@ class TestAttributeConditionTruthiness(unittest.TestCase):
     def test_attribute_condition_does_not_fire_when_false(self):
         animal, species, query = self._build_attribute_query()
         observer = classify_case(query, animal, species, self.has_no_milk)
-        self.assertIs(observer.conclusion, UNSET)
+        self.assertIs(observer.conclusion, ...)
 
     def test_comparator_condition_fires_when_true(self):
         animal, species, query = self._build_comparator_query()
@@ -173,4 +172,4 @@ class TestAttributeConditionTruthiness(unittest.TestCase):
     def test_comparator_condition_does_not_fire_when_false(self):
         animal, species, query = self._build_comparator_query()
         observer = classify_case(query, animal, species, self.has_no_milk)
-        self.assertIs(observer.conclusion, UNSET)
+        self.assertIs(observer.conclusion, ...)

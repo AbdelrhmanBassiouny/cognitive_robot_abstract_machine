@@ -32,7 +32,7 @@ from krrood.entity_query_language.rdr.interface import (
     ExpertAbort,
     ExpertInterface,
 )
-from krrood.entity_query_language.rdr.utils import UNSET, AnswerName, NamespaceName
+from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName, NamespaceName
 from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
@@ -146,7 +146,7 @@ class Expert:
             is ``None`` when the expert kept the current conclusion (nothing to insert).
         """
         conclusion = self._ask_for_conclusion(context)
-        if conclusion is UNSET or conclusion == context.current_conclusion:
+        if conclusion is ... or conclusion == context.current_conclusion:
             return RuleAnswer(conclusion=context.current_conclusion, conditions=None)
         conditions = self.ask_for_conditions(
             replace(context, target_conclusion=conclusion)
@@ -159,7 +159,7 @@ class Expert:
 
         :param context: The case being labelled; must carry a resolved
             :attr:`~CaseContext.conclusion_domain`.
-        :return: The chosen conclusion, or ``UNSET`` meaning "keep the current one".
+        :return: The chosen conclusion, or ``...`` meaning "keep the current one".
         """
         domain = context.conclusion_domain
         validator = domain.validator(allow_unset=context.has_current_conclusion)
@@ -183,10 +183,10 @@ class Expert:
         :param context: The case being labelled, carrying the aids to consult.
         :param validator: The conclusion validator; a suggestion is only offered when it
             validates.
-        :return: The first aid suggestion that validates, else ``UNSET`` (no pre-seed).
+        :return: The first aid suggestion that validates, else ``...`` (no pre-seed).
         """
         for aid in self.aids:
             suggestion = aid.suggest(context)
             if suggestion is not None and validator(suggestion) is None:
                 return suggestion
-        return UNSET
+        return ...

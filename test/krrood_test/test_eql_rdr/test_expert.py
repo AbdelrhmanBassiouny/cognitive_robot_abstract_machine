@@ -23,7 +23,7 @@ from krrood.entity_query_language.rdr.interface import (
     ExpertInterface,
     FunctionInterface,
 )
-from krrood.entity_query_language.rdr.utils import UNSET, NamespaceName
+from krrood.entity_query_language.rdr.answer_vocabulary import NamespaceName
 
 from .animal import Animal, Species, make_animal
 
@@ -93,7 +93,7 @@ class TestAskForRule(unittest.TestCase):
 
         expert = Expert(interface=FunctionInterface(answer_function=answer))
         context = _context(
-            case, case_variable, current_conclusion=UNSET, conclusion_domain=self.domain
+            case, case_variable, current_conclusion=..., conclusion_domain=self.domain
         )
 
         result = expert.ask_for_rule(context)
@@ -128,7 +128,7 @@ class TestAskForRule(unittest.TestCase):
 
         def answer(context, requests):
             calls.append([r.name for r in requests])
-            return {AnswerName.CONCLUSION: UNSET}
+            return {AnswerName.CONCLUSION: ...}
 
         expert = Expert(interface=FunctionInterface(answer_function=answer))
         context = _context(
@@ -147,9 +147,7 @@ class TestAskForRule(unittest.TestCase):
     def test_raises_no_conclusion_provided_for_conclusion_on_abort(self):
         case = make_animal("orca")
         expert = Expert(interface=AbortingInterface())
-        context = _context(
-            case, current_conclusion=UNSET, conclusion_domain=self.domain
-        )
+        context = _context(case, current_conclusion=..., conclusion_domain=self.domain)
 
         with self.assertRaises(NoConclusionProvided) as raised:
             expert.ask_for_rule(context)
@@ -200,7 +198,7 @@ class TestSuggestedConclusion(unittest.TestCase):
         expert = Expert(interface=FunctionInterface(answer_function=lambda c, r: {}))
         context = _context(make_animal("gecko"), conclusion_domain=self.domain)
 
-        self.assertIs(expert._suggested_conclusion(context, self.validator), UNSET)
+        self.assertIs(expert._suggested_conclusion(context, self.validator), ...)
 
 
 class TestAnswerName(unittest.TestCase):
