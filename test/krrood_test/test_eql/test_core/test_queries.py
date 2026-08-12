@@ -61,7 +61,6 @@ from krrood.entity_query_language.query.quantifiers import (
 from krrood.entity_query_language.utils import (
     cartesian_product_while_passing_the_bindings_around,
 )
-from krrood.entity_query_language.core.base_expressions import OperationResult
 from ...dataset.example_classes import (
     KRROODVectorsWithProperty,
 )
@@ -719,7 +718,7 @@ def test_is_same_entity_predicate_in_query(handles_and_containers_world):
     matches = query.tolist()
     assert len(matches) == 1
     assert isinstance(matches[0], IsSameSemanticEntity)
-    assert matches[0].entity_1 is target
+    assert matches[0].first_entity is target
 
 
 def test_literal_predicate(handles_and_containers_world):
@@ -1525,9 +1524,11 @@ def test_presentation_example():
 
 def test_empty_data_to_aggregator():
     data = variable(int, [])
+
     @symbolic_function
     def x_value(x_):
         return x_
+
     key = lambda x: x_value(x)
     min_ = entity(eql.min(data, key=key))
     assert min_.tolist() == [None]

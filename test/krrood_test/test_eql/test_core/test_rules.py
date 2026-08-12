@@ -22,6 +22,7 @@ from krrood.entity_query_language.core.base_expressions import (
 from krrood.entity_query_language.evaluation import create_default_evaluation_context
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.rules.conclusion import Add
+from krrood.entity_query_language.rules.conclusion_selector import Refinement
 from ...dataset.eql_rule_tree_doc_example import (
     ExampleConnection,
     ExampleView,
@@ -72,6 +73,121 @@ def test_generate_drawers_from_direct_condition(handles_and_containers_world):
     assert all_solutions[0][drawers].container.name == "Container3"
     assert all_solutions[1][drawers].handle.name == "Handle1"
     assert all_solutions[1][drawers].container.name == "Container1"
+
+
+def test_conditions_root_resolves_for_a_condition_shared_by_two_queries():
+    container = variable(Container, domain=[])
+    fixed_connection = variable(FixedConnection, domain=[])
+    shared_condition = container == fixed_connection.parent
+
+    first_drawers = deduced_variable(Drawer)
+    first_query = an(entity(first_drawers).where(shared_condition))
+    first_query.build()
+
+    second_drawers = deduced_variable(Drawer)
+    second_query = an(entity(second_drawers).where(shared_condition))
+    second_query.build()
+
+    assert len(shared_condition._parents_) == 2, (
+        "the condition must be a direct child of both queries' Where filters for this "
+        "to exercise conditions-root resolution on a genuinely shared node"
+    )
+    assert shared_condition._conditions_root_ is shared_condition
+
+
+def test_conditions_root_resolves_for_a_subexpression_shared_by_two_compound_conditions():
+    body = variable(Body, domain=[])
+    handle = variable(Handle, domain=[])
+    fixed_connection = variable(FixedConnection, domain=[])
+    shared_subexpression = handle == fixed_connection.child
+
+    first_drawers = deduced_variable(Drawer)
+    first_compound = and_(body == fixed_connection.parent, shared_subexpression)
+    first_query = an(entity(first_drawers).where(first_compound))
+    first_query.build()
+
+    second_drawers = deduced_variable(Drawer)
+    second_query = an(
+        entity(second_drawers).where(and_(body.size > 1, shared_subexpression))
+    )
+    second_query.build()
+
+    assert len(shared_subexpression._parents_) == 2, (
+        "the subexpression must be a direct child of both queries' AND compounds for "
+        "this to exercise conditions-root resolution on a node shared two hops below "
+        "its owning filters"
+    )
+    assert shared_subexpression._conditions_root_ is first_compound, (
+        "the subexpression's primary parent was fixed at its first attachment (to "
+        "first_compound), so resolution must land on first_query's own AND compound, "
+        "never second_query's"
+    )
+
+
+def test_conditions_root_resolves_for_a_rule_condition_reused_as_another_querys_filter():
+    body = variable(Body, domain=[])
+    handle = variable(Handle, domain=[])
+    fixed_connection = variable(FixedConnection, domain=[])
+    views = deduced_variable(View)
+    query = an(entity(views).where(body == fixed_connection.parent))
+
+    with query:
+        Add(views, inference(Door)(handle=handle, body=body))
+        refinement_condition = body.size > 1
+        with refinement(refinement_condition):
+            Add(views, inference(Door)(handle=handle, body=body))
+
+    assert len(refinement_condition._parents_) == 1
+
+    other_views = deduced_variable(View)
+    other_query = an(entity(other_views).where(refinement_condition))
+    other_query.build()
+
+    assert len(refinement_condition._parents_) == 2, (
+        "the refinement's condition must also be a direct child of the second query's "
+        "Where filter for this to exercise conditions-root resolution on a rule "
+        "condition reused outside its own rule tree"
+    )
+    assert refinement_condition._conditions_root_ is query._conditions_root_, (
+        "the refinement condition's primary parent chain was fixed at its first "
+        "attachment inside query's own rule tree, so resolution must land on query's "
+        "own conditions root (its rule tree's Refinement), never other_query's"
+    )
+
+
+def test_conditions_root_resolves_after_insert_at_clones_an_already_parented_condition():
+    body = variable(Body, domain=[])
+    handle = variable(Handle, domain=[])
+    fixed_connection = variable(FixedConnection, domain=[])
+
+    views = deduced_variable(View)
+    query = an(entity(views).where(body == fixed_connection.parent))
+    with query:
+        Add(views, inference(Door)(handle=handle, body=body))
+    anchor = query._conditions_root_
+
+    other_views = deduced_variable(View)
+    other_query = an(entity(other_views).where(handle == fixed_connection.child))
+    with other_query:
+        Add(other_views, inference(Door)(handle=handle, body=body))
+    already_parented_condition = other_query._conditions_root_
+
+    # This is the live-growth API (the one insert_refinement/insert_alternative call) rather
+    # than the with-refinement(...) DSL, so it exercises _node_for_new_position_'s cloning
+    # branch directly: already_parented_condition already has a parent (other_query's Where),
+    # so insert_at must splice in a clone rather than reusing the node in place.
+    new_condition = Refinement.insert_at(anchor, already_parented_condition)
+
+    assert new_condition is not already_parented_condition
+    assert already_parented_condition._conditions_root_ is already_parented_condition, (
+        "the original condition must be unaffected by the splice and still resolve "
+        "within its own, untouched query"
+    )
+    assert new_condition._conditions_root_ is query._conditions_root_, (
+        "the splice attaches new_condition into query's (the anchor's) own rule tree, "
+        "so its primary parent chain must resolve to query's own (now-grown) "
+        "conditions root"
+    )
 
 
 def test_generate_drawers_from_query(handles_and_containers_world):
@@ -628,6 +744,69 @@ def test_rule_tree_anchors_when_where_condition_is_reused_in_a_sibling():
     }
 
 
+# %% shared-anchor splice parentage
+
+
+def test_splice_keeps_an_earlier_branchs_comparator_operand_intact():
+    """
+    Splicing under a shared anchor must not rewire an unrelated earlier operand.
+
+    ``drawer.correct`` is a shared-identity singleton. Using it first inside
+    ``alternative(drawer.correct == False)`` makes that ``Comparator`` its primary
+    ``_parent_``, so a nested refinement anchored on the later bare
+    ``refinement(drawer.correct)`` must splice above the parent that branch owns it by,
+    not above the comparator.
+    """
+    drawer = variable(Drawer, domain=[])
+    views = deduced_variable(View)
+    query = an(entity(views).where(drawer.container))
+
+    with query:
+        add(views, inference(Door)(handle=drawer.handle, body=drawer.container))
+        with alternative(drawer.correct == False) as earlier_comparator:
+            add(views, inference(Door)(handle=drawer.handle, body=drawer.container))
+        with refinement(drawer.correct):
+            add(views, inference(Door)(handle=drawer.handle, body=drawer.container))
+            with refinement(drawer.handle):
+                add(views, inference(Door)(handle=drawer.handle, body=drawer.container))
+
+    assert earlier_comparator.left is drawer.correct
+
+
+def test_nested_refinement_fires_when_its_anchor_was_attached_in_an_earlier_branch():
+    """
+    A refinement nested under a reused anchor must stay in the rule tree and fire.
+
+    The splice that drags the nested branch above an earlier sibling's comparator
+    detaches it from the rule tree, so its conclusion never replaces the one it refines.
+    """
+    correct_drawer = Drawer(
+        handle=Handle("Handle1"), container=Container("Container1"), correct=True
+    )
+    incorrect_drawer = Drawer(
+        handle=Handle("Handle2"), container=Container("Container2"), correct=False
+    )
+    drawer = variable(Drawer, domain=[correct_drawer, incorrect_drawer])
+    views = deduced_variable(View)
+    query = an(entity(views).where(drawer.container))
+
+    with query:
+        add(views, inference(Door)(handle=drawer.handle, body=drawer.container))
+        with alternative(drawer.correct == False):
+            add(views, inference(Door)(handle=drawer.handle, body=drawer.container))
+        with refinement(drawer.correct):
+            add(
+                views,
+                inference(Drawer)(handle=drawer.handle, container=drawer.container),
+            )
+            with refinement(drawer.handle.name == "Handle1"):
+                add(views, inference(Cabinet)(container=drawer.container))
+
+    all_solutions = list(query.evaluate())
+
+    assert any(isinstance(view, Cabinet) for view in all_solutions)
+
+
 def test_conclusions_fire_without_an_active_evaluation_context(
     handles_and_containers_world,
 ):
@@ -679,10 +858,11 @@ def test_conclusions_fire_with_a_pre_installed_evaluation_context(
 
     Callers like RDR's ``classify_case``/``trace_case`` install an ``EvaluationContext``
     before calling ``.evaluate()``, so ``_evaluate_``'s ``owns_an_evaluation_context``
-    is ``False`` for every node in that pass. ``active_conditions_root.claim()`` must
-    still run in that case -- previously it was skipped entirely (nested inside the
-    ``owns_an_evaluation_context`` branch), so the conditions root was never claimed and
-    conclusions never fired under RDR classification.
+    is ``False`` for every node in that pass.
+    ``active_conditions_root.set_active_root_if_not_set()`` must still run in that case --
+    previously it was skipped entirely (nested inside the ``owns_an_evaluation_context``
+    branch), so the active conditions root was never set and conclusions never fired
+    under RDR classification.
     """
     world = handles_and_containers_world
     container = variable(Container, domain=world.bodies)
@@ -712,16 +892,14 @@ def test_conclusions_fire_with_a_pre_installed_evaluation_context(
 
 def test_conclusions_respect_a_bare_attribute_conditions_root_truthiness():
     """
-    A conclusion gated on a bare-attribute conditions root must use
-    ``is_condition_false``.
+    A conclusion gated on a bare-attribute conditions root must respect that root's own
+    truth value.
 
     When the conditions root is itself a bare attribute Comparator acting as a Filter
     condition (rather than a logical combinator like ``AND``/``OR``/``NOT``), the gate
-    in ``_evaluate_conclusions_and_update_bindings_`` previously checked
-    ``current_result.is_false``, which does not reflect the comparator's own truth value
-    for a bare-attribute root and stayed ``False`` regardless of the attribute's actual
-    value -- ``is_condition_false`` is the property documented as the canonical check
-    for this.
+    in ``_evaluate_conclusions_and_update_bindings_`` must reflect the comparator's own
+    truth value for the case being evaluated, rather than staying constant regardless of
+    the attribute's actual value.
     """
     milk_true = Body(name="milk_true")
     milk_false = Body(name="milk_false")

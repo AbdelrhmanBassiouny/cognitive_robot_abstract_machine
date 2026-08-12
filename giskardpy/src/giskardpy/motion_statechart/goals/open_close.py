@@ -19,10 +19,12 @@ from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList, Joi
 @dataclass(eq=False, repr=False)
 class Open(Goal):
     """
-    Open a container in an environment.
+    Open a 1-dof mechanism in an environment by driving its degree of freedom towards
+    its upper limit while keeping the end effector fixed relative to the grasped part.
 
-    Only works with the environment was added as urdf. Assumes that a handle has already
-    been grasped. Can only handle containers with 1 dof, e.g. drawers or doors.
+    Assumes that the grasped part (e.g. a handle or a bottle cap) has already been
+    grasped. Works with any mechanism whose grasped part hangs below an
+    :class:`ActiveConnection1DOF`, e.g. drawers, doors, or screw caps.
     """
 
     tip_link: KinematicStructureEntity = field(kw_only=True)
@@ -42,7 +44,9 @@ class Open(Goal):
     default is maximum joint state.
     """
 
-    weight: float = field(default=DefaultWeights.WEIGHT_ABOVE_CA, kw_only=True)
+    weight: float = field(
+        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
+    )
 
     def expand(self, context: MotionStatechartContext) -> None:
         self.connection = self.environment_link.get_first_parent_connection_of_type(
@@ -74,7 +78,7 @@ class Open(Goal):
             ]
         )
 
-    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
+    def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(
             observation=trinary_logic_and(
                 *[node.observation_variable for node in self.nodes]
@@ -85,10 +89,12 @@ class Open(Goal):
 @dataclass(eq=False, repr=False)
 class Close(Open):
     """
-    Open a container in an environment.
+    Close a 1-dof mechanism in an environment by driving its degree of freedom towards
+    its lower limit while keeping the end effector fixed relative to the grasped part.
 
-    Only works with the environment was added as urdf. Assumes that a handle has already
-    been grasped. Can only handle containers with 1 dof, e.g. drawers or doors.
+    Assumes that the grasped part (e.g. a handle or a bottle cap) has already been
+    grasped. Works with any mechanism whose grasped part hangs below an
+    :class:`ActiveConnection1DOF`, e.g. drawers, doors, or screw caps.
     """
 
     tip_link: KinematicStructureEntity = field(kw_only=True)
@@ -103,12 +109,14 @@ class Close(Open):
 
     goal_joint_state: Optional[float] = field(default=None, kw_only=True)
     """
-    Goal state for the container.
+    Goal state for the mechanism.
 
-    default is maximum joint state.
+    default is minimum joint state.
     """
 
-    weight: float = field(default=DefaultWeights.WEIGHT_ABOVE_CA, kw_only=True)
+    weight: float = field(
+        default=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE, kw_only=True
+    )
 
     def expand(self, context: MotionStatechartContext) -> None:
         self.connection = self.environment_link.get_first_parent_connection_of_type(
@@ -140,7 +148,7 @@ class Close(Open):
             ]
         )
 
-    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
+    def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(
             observation=trinary_logic_and(
                 *[node.observation_variable for node in self.nodes]

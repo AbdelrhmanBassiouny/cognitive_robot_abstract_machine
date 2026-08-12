@@ -3,9 +3,10 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
+
 from typing_extensions import TextIO, TYPE_CHECKING
 
-from krrood.code_generation.formatting import run_black_on_file
+from krrood.code_generation.formatting import run_ruff_format_on_file
 from krrood.code_generation.generator import CodeGenerator
 
 if TYPE_CHECKING:
@@ -52,5 +53,5 @@ class SQLAlchemyGenerator:
         # Write the output to the file
         file.write(output)
 
-        # format the output with black
-        run_black_on_file(str(file.name))
+        # format the output with ruff
+        run_ruff_format_on_file(str(file.name))
