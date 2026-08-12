@@ -40,5 +40,20 @@ opening list. Flagged on both PRs; neither branch was pushed to (both are out of
 draft, so both are the user's). Manifest + roadmap corrected, dashboard
 republished, PR description updated.
 
-**Next:** nothing outstanding. The plan's master index was not refreshed
+**Enforcement added (85feee6d)**, so the hazard above no longer needs anyone to
+remember it: `test_setup_prerequisite_documents.py` sweeps every markdown
+document under `.claude/skills/` for a verb of offering governing
+`/setup-personal-notes`. Discovered not listed, an absence assertion, plus a
+vacuity guard. Mutation-checked: 0 offenders here (15 docs), 4 on `main`, 3 on
+#149, 5 on #135. Landing order now stops mattering — whichever lands second goes
+red instead of silently reinstating the gate. 464 tests pass across the three CI
+directories (92 hooks, 194 plan-dashboard, 178 stack); pytest is installable in
+this container after all (`pip install pytest`), so the suite did run.
+
+**Awaiting a decision:** whether to push the one-word fix to #149 and #135
+directly (plain fast-forward, no force-push — but both are out of draft and
+carry `in-review`, so it re-triggers their upstream review), or leave the guard
+to force it at merge time. Recommended the latter.
+
+**Next:** nothing else outstanding. The plan's master index was not refreshed
 (`/plan-dashboard` with no argument does that).
