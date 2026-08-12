@@ -2961,3 +2961,32 @@ items:
       replanned against #151 as the base for that reason. #139 stays a dependency transitively
       through #151, so naming it as well would record the same edge twice. Not yet true of the
       pull request itself: #154's base ref is still #139's branch, so a reparent is outstanding.
+  - id: setup-runs-without-asking
+    title: "Run the personal-notes setup from the planning skills instead of asking first"
+    branch: claude/auto-run-setup-notes-02nhxv
+    track: personal-data
+    depends_on: []
+    status: in_progress
+    pull_request_number: 156
+    session: https://claude.ai/code/session_01RydZutnNtFBYeT73Qt4Bxv
+    notes: >
+      Raised 2026-08-12. Every planning skill defers its step 0 to one shared document,
+      prerequisite-check.md, which told the session to run check-setup.sh and then ask, via
+      AskUserQuestion, whether to run /setup-personal-notes. So a clone missing any part of the
+      setup - in practice a fresh container, where the dashboard dependencies are never installed
+      - opened every /plan-dashboard, /plan-create and /plan-item-* invocation with a yes/no
+      question before doing any of the work asked for. The user's decision removes that gate:
+      state what is missing, invoke the skill, re-run the check, carry on.
+      The questions that survive are the ones inside /setup-personal-notes itself, and they are a
+      different kind: which remote holds the notes, what the notes start out saying, whether to
+      create the merged/bug/in-review labels, whether to restore a diverged tracked file. Each
+      picks a destination to write to rather than deciding whether to act, and guessing one pushes
+      personal notes somewhere the user did not choose. Only "shall I run this at all" is gone,
+      which had exactly one useful answer from a user who had already invoked the skill.
+      Standalone rather than stacked, checked mechanically: all eight touched paths exist on main,
+      so this edits landed files, not an unlanded PR's. Two open pull requests are conflict-
+      adjacent without owning this work - #107 rewrites setup-personal-notes/SKILL.md into a thin
+      wrapper over a new script, and #149 edits step 0 of plan-item-kickoff and plan-item-resolve
+      for execution modes - and neither touches prerequisite-check.md, where the gate actually
+      lived. Expect textual conflicts in the two plan-item skills and hooks/README.md when those
+      land; the resolution is to keep both edits.

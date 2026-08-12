@@ -6164,3 +6164,35 @@ silently left stacked on a dead base" failure. That fix was never ported to
 plan-dashboard's own `depends_on` graph, which has an analogous blind spot. Filed as
 `deferred-dependency-drift-check` in the `dashboards` track, `not_started`, no branch cut
 - left for another session to implement.
+
+## Update 2026-08-12 (new item): the setup prerequisite stops asking permission
+
+Reported as an everyday annoyance rather than found in the code: sessions started with a
+planning skill "always ask if they should run the setup personal notes script or skill".
+The cause is one document, not four - `plan-create`, `plan-dashboard`, `plan-item-kickoff`
+and `plan-item-resolve` all defer step 0 to
+`setup-personal-notes/prerequisite-check.md`, whose step 2 was an `AskUserQuestion` gate
+over `/setup-personal-notes`. Its stated reasoning was that the check is read-only while
+the setup is not: it writes git config, creates a branch on a remote and installs
+packages, "none a thing to do to someone's clone because they happened to type
+`/plan-dashboard`".
+
+That reasoning holds for *where* the setup writes and not for *whether* it runs, and the
+new wording splits the two. A user who invoked a planning skill has already asked for the
+thing the setup is a precondition of, so the yes/no question has one useful answer and
+costs a turn to collect. The questions inside `/setup-personal-notes` - the notes remote,
+the notes content, the labels, restoring a diverged tracked file - each choose a
+destination, and those stay exactly as they were.
+
+Worth noting how often the gate actually fired here: this environment reconstructs the
+container per session, so `dashboard_dependencies` (`markdown`, `nh3`) is reported
+`needs-setup` on essentially every fresh session, and that row alone is enough to trip a
+check that then asks about the whole setup. The one row that fires most is also the one
+that is purely mechanical.
+
+Filed as `setup-runs-without-asking` in the `personal-data` track, `in_progress`, as draft
+PR #156 off `main`. The new-vs-change test was run rather than eyeballed: `git ls-tree main`
+returns all eight touched paths, so this is a change to landed files. #107 (setup skill
+rewritten over a new script) and #149 (execution modes editing the same step 0 sections)
+are conflict-adjacent but own different work, and neither touches
+`prerequisite-check.md`.
