@@ -114,6 +114,7 @@ def make_configuration() -> Configuration:
         in_review_label="in-review",
         rebase_label="rebase",
         needs_resolution_label="needs-resolution",
+        integration_conflict_label="integration-conflict",
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
@@ -1216,6 +1217,61 @@ def test_a_branch_that_no_longer_conflicts_has_its_label_cleared_and_is_restacke
     assert fork.label_writes == [RecordedLabelWrite(41, ())]
 
 
+def test_a_branch_breaking_another_is_withheld_though_it_merges_cleanly(
+    fork_checkout: ForkCheckout,
+):
+    """
+    Two branches can merge with no conflict at all and still not work together, so the
+    branch carrying such a break is never ``dirty``. Withholding on the mergeable state
+    alone would let it straight back into the pass.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    fork = RecordingPullRequests(states={41: "clean"})
+
+    outcomes = restack(
+        a_stack(
+            fork_checkout,
+            the_board(labels=[make_configuration().integration_conflict_label]),
+        ),
+        fork_checkout.git,
+        fork,
+    )
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.WITHHELD
+    assert fork.label_writes == []
+
+
+def test_the_pass_never_clears_the_label_it_did_not_apply(fork_checkout: ForkCheckout):
+    """
+    ``needs-resolution`` is cleared by the mergeable state because the pass applied it
+    for a conflict that state describes. A break between two branches is not visible
+    there at all, so clearing it on the same evidence would drop it on the next pass and
+    reopen the re-reporting loop the label exists to close.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    configuration = make_configuration()
+    fork = RecordingPullRequests(states={41: "clean"})
+
+    restack(
+        a_stack(
+            fork_checkout,
+            the_board(
+                labels=[
+                    configuration.needs_resolution_label,
+                    configuration.integration_conflict_label,
+                ]
+            ),
+        ),
+        fork_checkout.git,
+        fork,
+    )
+
+    assert fork.label_writes == []
+
+
 # %% promotion
 
 
@@ -1271,6 +1327,23 @@ def test_a_branch_labelled_needs_resolution_during_this_pass_is_not_promoted(
     assert promoted == []
     assert fork.description_writes == []
     assert fork.label_writes == []
+
+
+def test_a_branch_breaking_another_is_not_promoted(fork_checkout: ForkCheckout):
+    """
+    Both labels withhold a branch, so both have to reach promotion's exclusion - one
+    reading only ``needs-resolution`` would send a branch upstream that this pass has
+    just established does not work beside a sibling.
+    """
+    a_parent_and_child(fork_checkout)
+    fork = RecordingPullRequests(
+        labels={40: [make_configuration().integration_conflict_label]}
+    )
+
+    promoted = promote(a_stack(fork_checkout, the_board()), fork)
+
+    assert promoted == []
+    assert fork.description_writes == []
 
 
 def test_the_promotion_label_write_keeps_a_label_added_since_the_board_was_taken(

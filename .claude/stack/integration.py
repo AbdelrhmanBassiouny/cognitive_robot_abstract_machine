@@ -53,6 +53,7 @@ from stack import (  # noqa: E402
     Branch,
     Configuration,
     ForkRemoteNotFoundError,
+    LabelWrite,
     Stack,
     build_stack,
     load_configuration,
@@ -63,12 +64,15 @@ from stack import (  # noqa: E402
 from maintenance_board import (  # noqa: E402
     BoardExport,
     MissingPullRequestFieldError,
+    PullRequestField,
+    get_session_link_in,
 )
 from maintenance_git_commands import (  # noqa: E402
     BranchAncestry,
     MaintenanceGitCommandRunner,
 )
 from maintenance_github import (  # noqa: E402
+    ForkPullRequests,
     GitHubCredentialUnavailableError,
     GitHubRepository,
     GitHubRequestFailed,
@@ -715,6 +719,81 @@ def _run_tests(command: str | None, working_directory: Path) -> bool | None:
     )
 
 
+# %% telling the branch that breaks another
+
+
+SEMANTIC_BREAK_COMMENT_PREFIX = "🔴 INTEGRATION - BREAKS ANOTHER BRANCH:"
+"""Opens the comment a semantic break is reported in.
+
+Its own prefix rather than the restack's, because the two ask for different things: a
+restack conflict is resolved by merging a moved parent, and this cannot be resolved on
+this branch alone at all.
+"""
+
+
+def semantic_break_comment(localised: SemanticBreak, session: str | None) -> str:
+    """Write the comment telling a branch's owner that their branch breaks another.
+
+    Names the branch it breaks, which is the half its owner cannot see: both pull
+    requests pass their own checks, and the failure exists only in a tree neither of them
+    is.
+
+    :param localised: The break, as the localiser narrowed it.
+    :param session: The session named in the pull request's description, if any.
+    :return: The comment body.
+    """
+    partner = (
+        f"`{localised.breaks_against}`"
+        if localised.breaks_against
+        else "the combination of branches merged before it, no single one of which "
+        "reproduces it alone"
+    )
+    addressed = (
+        f"\n\n{session}"
+        if session
+        else "\n\nThis pull request's description names no session to address."
+    )
+    return (
+        f"{SEMANTIC_BREAK_COMMENT_PREFIX} `{localised.culprit}` merges cleanly with "
+        f"{partner} and the suite fails on the result.\n\n"
+        f"Neither pull request is wrong on its own, and neither one's checks can see "
+        f"this - the failure exists only in a tree neither branch is. Nothing can be "
+        f"recorded for it either: a replay is keyed on a merge conflict's preimage, and "
+        f"there is no conflict here, so every later build carries the break until one "
+        f"of the two branches changes.\n\n"
+        f"This branch is labelled `integration-conflict` so later passes withhold it "
+        f"rather than promoting it. Nothing clears that label automatically."
+        f"{addressed}"
+    )
+
+
+def escalate_semantic_break(
+    localised: SemanticBreak,
+    configuration: Configuration,
+    fork: ForkPullRequests,
+) -> str:
+    """Block the branch that breaks another, and tell its owner why.
+
+    :param localised: The break, as the localiser narrowed it.
+    :param configuration: The resolved configuration, naming the label to apply.
+    :param fork: The fork to label and comment on.
+    :return: The comment posted.
+    """
+    number = localised.culprit_pull_request_number
+    pull_request = fork.pull_request(number)
+    body = PullRequestField.BODY.read(pull_request, number)
+    fork.replace_labels(
+        number,
+        LabelWrite.replacing(
+            PullRequestField.LABELS.read(pull_request, number),
+            added=[configuration.integration_conflict_label],
+        ).labels,
+    )
+    comment = semantic_break_comment(localised, get_session_link_in(body))
+    fork.add_comment(number, comment)
+    return comment
+
+
 # %% the report a caller renders or acts on
 
 
@@ -1021,7 +1100,7 @@ class IntegrationCommand(Command):
 
 @dataclass(frozen=True)
 class BuildCommand(IntegrationCommand):
-    """Assembles the upstream base plus every in-flight stack tip."""
+    """Assembles the upstream base plus every reviewed in-flight stack tip."""
 
     @property
     def invoked_as(self) -> str:
@@ -1031,7 +1110,7 @@ class BuildCommand(IntegrationCommand):
     @property
     def description(self) -> str:
         """What it does, as ``--help`` puts it."""
-        return "assemble the upstream base plus every in-flight tip"
+        return "assemble the upstream base plus every reviewed in-flight tip"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """:param parser: The subparser to declare this command's flags on."""
@@ -1144,6 +1223,77 @@ class BisectCommand(IntegrationCommand):
 
 
 @dataclass(frozen=True)
+class EscalateCommand(IntegrationCommand):
+    """Blocks the branch that breaks another, and tells its owner what it breaks."""
+
+    @property
+    def invoked_as(self) -> str:
+        """The name it is invoked by on the command line."""
+        return "escalate"
+
+    @property
+    def description(self) -> str:
+        """What it does, as ``--help`` puts it."""
+        return "block the branch that breaks another, and say what it breaks"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare this command's flags on."""
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """Localise the break, then block and report the branch that causes it.
+
+        Localised here rather than taken as an argument, so the branch that gets blocked
+        is the one the suite actually turned on rather than the one a caller believed it
+        would be.
+
+        :param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        test_command = BuildCommand._test_command(run.configuration, run_tests=True)
+        fork = run.fork()
+        run.refresh_remotes()
+        report = bisect_integration(
+            stack=run.stack(fork),
+            git=run.git,
+            build_branch=build_branch_name(datetime.now(timezone.utc)),
+            provenance=ResolutionProvenance.read(run.provenance_path()),
+            test_command=test_command,
+        )
+        localised = report.semantic_break
+        if localised is None:
+            print_bisect(report)
+            return IntegrationExitCode.SUCCESS
+        comment = escalate_semantic_break(localised, run.configuration, fork)
+        if arguments.json:
+            print(
+                json.dumps(
+                    {
+                        "escalated": localised.culprit,
+                        "pull_request_number": localised.culprit_pull_request_number,
+                        "breaks_against": localised.breaks_against,
+                        "label": run.configuration.integration_conflict_label,
+                        "comment": comment,
+                    },
+                    indent=2,
+                )
+            )
+        else:
+            print(
+                f"{localised.culprit}\tescalated\t"
+                f"{run.configuration.integration_conflict_label}"
+            )
+        return exit_code_for_bisect(report)
+
+
+@dataclass(frozen=True)
 class StageConflictCommand(IntegrationCommand):
     """Reproduces one pair's collision in a worktree of its own, for a resolution to be
     written into."""
@@ -1238,7 +1388,7 @@ def _argument_parser() -> argparse.ArgumentParser:
         prog="integration.py",
         description=(
             "Build a personal integration branch: the upstream base plus every "
-            "in-flight stack tip."
+            "reviewed in-flight stack tip."
         ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)

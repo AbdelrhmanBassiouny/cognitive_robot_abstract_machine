@@ -29,18 +29,28 @@ from integration import (
     IntegrationReport,
     ResolutionAuthor,
     ResolutionProvenance,
+    SemanticBreak,
     TipOutcome,
     TipStatus,
     UnreviewedBranch,
     build_branch_name,
     build_integration,
+    escalate_semantic_break,
     exit_code_for,
     exit_code_for_bisect,
     select_for_build,
     tips_of,
 )
 
-from test_maintenance import ForkCheckout, a_stack, fork_checkout, make_configuration
+from test_maintenance import (
+    A_LABEL_THIS_TOOL_NEVER_WRITES,
+    ForkCheckout,
+    RecordedLabelWrite,
+    RecordingPullRequests,
+    a_stack,
+    fork_checkout,
+    make_configuration,
+)
 
 INTEGRATION_SCRIPT = Path(__file__).parent.parent / "integration.py"
 """
@@ -1070,6 +1080,73 @@ def test_a_bisect_report_serialises_what_it_localised(fork_checkout: ForkCheckou
     assert document["status"] == "tests-failed"
     assert document["semantic_break"]["culprit"] == "removes-the-module"
     assert document["semantic_break"]["breaks_against"] == "needs-the-module"
+
+
+# %% telling the branch that breaks another
+
+
+def a_semantic_break(
+    culprit: str = "the-breaking-branch",
+    number: int = 111,
+    breaks_against: str | None = "the-relying-branch",
+) -> SemanticBreak:
+    """
+    :param culprit: The tip whose arrival turned the suite.
+    :param number: The pull request that publishes it.
+    :param breaks_against: The earlier tip it fails against alone.
+    :return: A localised break to escalate.
+    """
+    return SemanticBreak(
+        culprit=culprit,
+        culprit_pull_request_number=number,
+        already_included=("an-innocent-tip", "the-relying-branch"),
+        breaks_against=breaks_against,
+    )
+
+
+def test_escalating_a_break_blocks_the_branch_that_causes_it():
+    """
+    The point of escalating: the branch is held out of promotion until somebody acts,
+    which the label is what does.
+    """
+    fork = RecordingPullRequests(labels={111: [A_LABEL_THIS_TOOL_NEVER_WRITES]})
+
+    escalate_semantic_break(a_semantic_break(), make_configuration(), fork)
+
+    assert fork.label_writes == [
+        RecordedLabelWrite(
+            111,
+            (A_LABEL_THIS_TOOL_NEVER_WRITES, "integration-conflict"),
+        )
+    ]
+
+
+def test_escalating_a_break_names_both_branches_to_the_one_that_broke_it():
+    """
+    "Your branch was skipped" is not actionable. The comment has to name what the branch
+    breaks, since that is the half its owner cannot see from their own checks.
+    """
+    fork = RecordingPullRequests()
+
+    escalate_semantic_break(a_semantic_break(), make_configuration(), fork)
+
+    posted = fork.comments[0]
+    assert posted.pull_request_number == 111
+    assert "the-relying-branch" in posted.body
+
+
+def test_a_break_only_the_combination_causes_says_so_rather_than_naming_a_branch():
+    """
+    Narrowing does not always land on a single earlier tip, and reporting the whole
+    build as the culprit's partner would send its owner to branches that are innocent.
+    """
+    fork = RecordingPullRequests()
+
+    escalate_semantic_break(
+        a_semantic_break(breaks_against=None), make_configuration(), fork
+    )
+
+    assert "the-relying-branch" not in fork.comments[0].body
 
 
 # %% the exit status every build derives from what it left behind

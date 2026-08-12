@@ -302,7 +302,18 @@ class Configuration:
     """Fork-PR label opting a branch into the rebase strategy instead of the default merge."""
 
     needs_resolution_label: str
-    """Fork-PR label marking a branch withheld from promotion pending conflict resolution."""
+    """Fork-PR label marking a branch withheld from promotion pending conflict resolution.
+
+    Applied when a branch conflicts with its own base, and cleared again by the pass that
+    applied it once GitHub stops reporting the pull request as conflicted."""
+
+    integration_conflict_label: str
+    """Fork-PR label marking a branch that breaks a sibling it merges cleanly with.
+
+    Separate from :attr:`needs_resolution_label` because a break between two branches
+    never makes either pull request conflicted, so the state that clears that label says
+    nothing here - and clearing it on the same evidence would drop it on the very next
+    pass. Nothing removes this one automatically."""
 
     fork_repository: Repository
     """The fork that holds the full stack, as GitHub names it."""
@@ -327,6 +338,17 @@ class Configuration:
 
     Empty when this checkout's configuration names none, which the integration build
     refuses rather than reading as a suite that passed."""
+
+    @property
+    def blocking_labels(self) -> tuple[str, ...]:
+        """The labels that hold a branch out of a pass and out of promotion.
+
+        One collection rather than a check per label, so a branch withheld from the pass
+        and a branch excluded from promotion can never be decided by different rules.
+
+        :return: Every label that blocks a branch.
+        """
+        return (self.needs_resolution_label, self.integration_conflict_label)
 
 
 def load_configuration(
@@ -356,6 +378,9 @@ def load_configuration(
         in_review_label=values.get("in_review_label", "in-review"),
         rebase_label=values.get("rebase_label", "rebase"),
         needs_resolution_label=values.get("needs_resolution_label", "needs-resolution"),
+        integration_conflict_label=values.get(
+            "integration_conflict_label", "integration-conflict"
+        ),
         fork_repository=resolution.fork.repository,
         fork_remote=resolution.fork.name,
         upstream_repository=upstream_repository,

@@ -6,10 +6,16 @@ allowed-tools: Bash, Read, Grep, Edit, Write, AskUserQuestion, mcp__github__pull
 
 # Integration conflict triage
 
-The integration branch is the upstream base with every in-flight stack tip merged on top,
-rebuilt from scratch on demand. It exists to be built *from* while the upstream review queue
-lags. It is not history: nothing is ever merged out of it, and a conflict found on it is fixed
-in the feature branch it belongs to - never here.
+The integration branch is the upstream base with every reviewed in-flight stack tip merged on
+top, rebuilt from scratch on demand. It exists to be built *from* while the upstream review
+queue lags. It is not history: nothing is ever merged out of it.
+
+**A conflict is fixed in the feature branch it belongs to; the integration branch is never
+where a fix lives.** That is about feature branches and the build - it is not a rule against
+writing anything at all. A *defer* verdict records its resolution in the replay cache, which
+is a throwaway artifact belonging to your clone, contaminates no branch, and is thrown away
+with the next rebuild. Keep the two apart: no feature branch is ever edited here, and the cache
+is written to routinely.
 
 `integration.py` builds it. It detects a collision, attributes it to the **pair** of branches
 it is between, skips the later one and carries on. It makes no judgement about what the
@@ -178,11 +184,46 @@ Whichever it is, say plainly that the integration branch is red until somebody a
 area of the suite is affected - a developer can still work from a branch whose breakage they
 know the shape of, and cannot from one they do not.
 
+### Step 5 - escalate it, because a comment alone is missed
+
+A break nobody acts on is carried by every later build. So the branch that causes it is
+**blocked**, not merely mentioned, and the escalation is one command rather than four steps
+done by hand:
+
+```bash
+python .claude/stack/integration.py escalate --json
+```
+
+It applies the `integration-conflict` label to the breaking branch's pull request and comments
+on it naming the branch it breaks, addressed to the session in its description. Both halves
+matter: `needs-resolution` is cleared automatically once a pull request stops reporting a
+conflict, and a semantic break never makes one conflicted - so reusing that label would have
+the very next maintenance pass strip it, silently reopening the loop the label exists to close.
+`integration-conflict` blocks through the same code path and nothing clears it automatically.
+
+Then make the break reproducible and record it where the plan's state lives:
+
+1. **Push a failing test to the *breaking* branch.** Not to the branch that relies on the
+   thing: it cannot express a test against an import that does not exist on it yet. The worked
+   case is a branch adding a module-scope import of a package another branch's fixture does not
+   build - which is testable on the breaking branch alone, with no merge involved.
+2. **Record it on the item**, with `plan_item_bootstrap.py block --branch <branch>`, so the
+   dashboard shows the branch as blocked rather than leaving the fact in a comment.
+3. **Republish**, with `/plan-dashboard <plan-id>`, in the same turn - a dashboard older than
+   the manifest behind it is worse than none.
+
+This is the one place the workflow writes to somebody else's branch, and it is deliberate: a
+test that reproduces the break is not a design decision, and it is the only artifact that makes
+the break visible from inside the branch that causes it. It is a test and nothing else - never
+a fix, which is a design call and stays proposed.
+
 ## What this never does
 
-- **It never writes to a feature branch, and it never pushes.** Every branch in this collision
-  belongs to somebody. The only thing you write is a resolution into the replay cache, which
-  contaminates no branch and is thrown away with the next rebuild.
+- **It never writes a fix to a feature branch.** Every branch in this collision belongs to
+  somebody, and which of them should change is their call. The two things it does write are
+  bounded and neither is a fix: a resolution into the replay cache, which contaminates no
+  branch and is thrown away with the next rebuild, and a failing test onto the branch that
+  breaks another, which makes the break reproducible without deciding anything.
 - **It never treats the integration branch as work.** Nothing is merged out of it; it is
   regenerated from scratch every time. A fix that lives only there is not a fix.
 - **It never gates promotion on a clean build.** Promotion asks whether one branch is ready for
