@@ -23,9 +23,25 @@ Branch off `main`, draft, `bug` label. One root cause, no unrelated cleanup.
 - 163 tests pass in `.claude/stack/tests/`, 253 across the three directories CI runs.
 - Draft PR #158 opened, `bug` label applied, plan item and roadmap saved.
 
+## Review round 2026-08-12 (applied in 0c7eef93)
+
+- Inline comment (use the GitCommandRunner class from the branch that has it): applied
+  using main's copy - #139 landed it hours earlier at
+  `.claude/stack/maintenance_git_commands.py:130`, so there was nothing to base on.
+  Declined basing on #151 (unlanded, 159 behind main). Replied, left open, since the
+  literal ask was answered differently.
+- Applying it exposed that the helper wrote the other tool version itself, so the file
+  changed because the test wrote it rather than because git moved it. Both versions are
+  committed at install time now and the step is only a branch switch; mutation-checked
+  that removing the switch fails the hazard test, where before the write masked it.
+- Review-level question (fast-forward main and restack everything instead): answered on
+  the PR, no change - circular (the restack is run by the tool in question), skips the
+  branches that differ most (#110/#111 are needs-resolution and carry `preflight`, no
+  `check-move`, no `maintenance.py`), and a branch editing the tooling is meant to differ.
+- 471 tests across the three CI directories. Manifest notes, roadmap entry and dashboard
+  all updated; PR description corrected (it had said 253, which was two directories).
+
 ## Next
 
-- Nothing outstanding in this session. CI has not reported yet on the pushed head.
-- Note for whoever reviews: the pinned path is a placeholder (`<pinned>`) in the skill
-  rather than a shell variable, because a variable does not survive between the commands
-  a session runs.
+- Nothing outstanding. Two review threads exist; both replied to, one deliberately left
+  open for the user to close.
