@@ -3029,6 +3029,28 @@ items:
 
       #154's base ref is still #139's branch: the base-field `PATCH` 403s through the agent proxy,
       so the reparent onto #151's branch remains a manual step in the UI.
+
+      Correction to the paragraph immediately above, made minutes after writing it by actually
+      attempting the reparent rather than restating the recorded claim. Both halves of it were
+      wrong. The base-field change is not blocked by the agent proxy - the GitHub MCP tool performs
+      it, which is exactly what #143 recorded on throwaway PR #129 (only the raw `curl` `PATCH`
+      403s), and it succeeded here twice. And the reparent itself is wrong to do today: #151's
+      branch is 159 commits behind `main` and 17 ahead, so basing #154 on it swelled the diff from
+      45 files to 261, adding the whole of `main` that #151 does not carry. Reverted immediately;
+      the pull request is back to `main`, 45 files, 28 commits, still a draft.
+
+      So `main` is the honest base rather than a placeholder: this branch is 0 behind `main`, and
+      `git merge-base --is-ancestor` confirms it already contains #151's head, so nothing is lost by
+      sitting on `main` while its parent is unlanded. The reparent becomes correct once #151 merges
+      `main`, and not before. That is the inflated-diff shape PR #41 cost this plan a whole item to
+      repair, met from the other direction - there a child sat on a base that had landed, here a
+      child would have sat on a base that had not caught up.
+
+      The generalizable half is about the manifest rather than about git: a note saying an operation
+      is blocked is a claim with an expiry date, and this one had two expiries at once - the client
+      changed (#143 found the MCP tool works) and the target moved (#139 landed, so `main` overtook
+      #151). It had been carried forward verbatim through two entries. Attempting a
+      recorded-as-blocked step, when it is cheap and reversible, is worth more than restating it.
   - id: setup-runs-without-asking
     title: "Run the personal-notes setup from the planning skills instead of asking first"
     branch: claude/auto-run-setup-notes-02nhxv
