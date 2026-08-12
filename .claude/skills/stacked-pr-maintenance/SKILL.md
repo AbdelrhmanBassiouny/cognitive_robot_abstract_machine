@@ -51,10 +51,11 @@ Nothing below names a repository or a remote. Resolve both here, once, and use w
 whole run. Do not inspect, guess at, or rename remotes yourself - a remote's name carries no meaning,
 and a wrong guess points every push at the wrong repository.
 
-**a. Make the tooling present rather than assuming it.** Every step shells out to
-`.claude/stack/`, and a failure in a later step lands after an earlier one has already changed pull
-requests. If `ls .claude/stack/maintenance.py` fails, `git fetch` the ref you were told to resolve
-this document from and restore it **into the working tree only**:
+**a. Make the tooling present rather than assuming it.** The whole pass shells out to the tooling in
+`.claude/stack/` - directly here, and through the copy (c) takes from it afterwards - and a failure
+in a later step lands after an earlier one has already changed pull requests. If
+`ls .claude/stack/maintenance.py` fails, `git fetch` the ref you were told to resolve this document
+from and restore it **into the working tree only**:
 
 ```bash
 git restore --source=<ref> --worktree -- .claude/stack/
@@ -103,6 +104,26 @@ you invoked it from keeps its branch and its files.
 
 Any other non-zero exit is a stop-and-report, not something to work around.
 
+**c. Pin the tooling, the moment `configuration` has answered.** Everything after this point runs
+from a copy of the tooling that no branch carries:
+
+```bash
+python .claude/stack/stack.py pin-tooling
+```
+
+It prints one path: the copy's `stack.py`, in a directory outside this checkout, with
+`maintenance.py` and every module beside it. **Every command below written as `<pinned>/…` means
+that directory** - substitute the real path in each time you run one, since a shell variable does
+not survive from one command to the next.
+
+Pin rather than keep calling `.claude/stack/`, because that path is tracked content: the copy in the
+working tree is whichever version the checked-out branch carries, and the branches of a stack differ
+- several of them are rewriting this very directory. So any branch switch made here, by a step of
+this document or by you resolving something by hand, can put a different tool behind the same path
+mid-run. A command step 0 validated then fails as an unknown choice - or worse, answers with
+semantics this document does not describe. The pinned copy is the one that resolved the
+configuration above, and it stays that copy until the pass ends.
+
 ## Step 1 - reparent every orphaned child, before anything moves
 
 Do this first, and before step 2. Retargeting a pull request whose base has landed is what lets the
@@ -122,7 +143,7 @@ below are the mirror image: they have no MCP tool, so they do need curl.
 Export the board first - every step below derives from it, and this one is no exception:
 
 ```bash
-python .claude/stack/maintenance.py board --write
+python <pinned>/maintenance.py board --write
 ```
 
 Never assemble that file by hand - a fetch that drops a field produces a board that is wrong rather
@@ -131,7 +152,7 @@ than obviously incomplete.
 Then run:
 
 ```bash
-python .claude/stack/stack.py reparents
+python <pinned>/stack.py reparents
 ```
 
 It prints one `branch<TAB>pr<TAB>current base<TAB>target base` line per open pull request whose base
@@ -170,7 +191,7 @@ leave the rest untouched, and report it: this is a preview API, so never improvi
 The rest of the pass is one command:
 
 ```bash
-python .claude/stack/maintenance.py run-report --json
+python <pinned>/maintenance.py run-report --json
 ```
 
 It performs the fast-forward, the restack and the promotion, and emits the whole run as one
@@ -213,7 +234,7 @@ yourself.
 - **It never debugs or fixes a red check.** Report it to the branch's owner the same way a conflict
   is reported: find the session link in the fork pull request's description, post a comment prefixed
   `🔴 ROUTINE - NEEDS RESOLUTION:` stating the failing check and its conclusion, and label the pull
-  request `needs-resolution` via `stack.py labels` so the rest of its labels survive. That comment is
+  request `needs-resolution` via `<pinned>/stack.py labels` so the rest of its labels survive. That comment is
   the only channel available to you: no session subscribes to a pull request's activity, so it sits
   on GitHub until the owner reads it - write it to stand alone. Never disable a check to go green.
 - **It never subscribes to learn CI.** Poll with `pull_request_read` → `get_check_runs` /
@@ -231,7 +252,7 @@ guaranteed to be seen.
 
 The **top** of the finish summary must list all pending upstream create-links: any built this run,
 and any fork pull request still carrying `cram2-link-sent` but not yet `in-review` (re-listed from
-prior runs, its link rebuilt with `promotion-link`). This section appears at the top even when
+prior runs, its link rebuilt with `<pinned>/stack.py promotion-link`). This section appears at the top even when
 nothing new was built, as long as any are pending - a scheduled run is configured to email its
 summary, so the summary *is* the delivery. List each pull request's number, title, branch and
 one-click link.
@@ -247,13 +268,14 @@ plus anything you stopped on.
 ## Command reference - resuming a partial run
 
 Step 2 performs all of these in order. Reach for one directly only when a run stopped partway, or
-when a single step has to be re-run:
+when a single step has to be re-run. `<pinned>` is still step 0c's copy; a session resuming somebody
+else's run pins its own first, since the path the other run printed is not in front of you:
 
 ```bash
-python .claude/stack/maintenance.py board --write   # export the fork's open pull requests
-python .claude/stack/maintenance.py fast-forward    # move the fork's base onto the upstream
-python .claude/stack/maintenance.py restack         # integrate every moved parent, publish, report
-python .claude/stack/maintenance.py promote         # build and record every upstream link
+python <pinned>/maintenance.py board --write   # export the fork's open pull requests
+python <pinned>/maintenance.py fast-forward    # move the fork's base onto the upstream
+python <pinned>/maintenance.py restack         # integrate every moved parent, publish, report
+python <pinned>/maintenance.py promote         # build and record every upstream link
 ```
 
 Each prints what it did and exits with the same statuses as the whole pass. Run `--help` for a
@@ -267,7 +289,7 @@ Never move commits from memory, and never judge the move yourself. The executor 
 it makes; you invoke this only for a push you are making yourself:
 
 ```bash
-python .claude/stack/stack.py check-move \
+python <pinned>/stack.py check-move \
   --action push --source <branch> --destination <branch> --destination-remote <fork-remote>
 ```
 
