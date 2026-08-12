@@ -26,6 +26,8 @@ Bug fix off `main`, workflow-unification item `plan-item-bootstrap-yaml-indent`
 
 ## Next
 
-- Nothing outstanding on my side. CI on #160 has not been read yet; the PR is the
-  user's to review. Left alone deliberately: `rdr-refactor`'s §20 account still says the
-  defect is unfixed - it belongs to that plan's roadmap, not this branch.
+- Nothing outstanding on my side. `test_claude_dev_tooling` (the job that runs
+  `.claude/hooks/tests`) is green on #160; the unrelated per-library jobs were still
+  running when this was written and are not being watched. The PR is the user's to review.
+- Left alone deliberately: `rdr-refactor`'s §20 account still says the defect is unfixed -
+  correcting it belongs to that plan's roadmap, not this branch.
