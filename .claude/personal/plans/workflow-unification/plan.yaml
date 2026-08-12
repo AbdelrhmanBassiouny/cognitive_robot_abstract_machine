@@ -3014,3 +3014,40 @@ items:
       state instead - keyed by a StatusFilter enum whose value doubles as the page's CSS
       class and the item's CSS custom-property suffix, so adding a third hidden status
       later is data, not another pair of fields and another template branch.
+
+  - id: pinned-stack-tooling
+    title: "Pin the stack tooling for the length of a maintenance pass"
+    branch: claude/stack-tooling-pinning-qf5r2m
+    track: stack-tooling
+    pull_request_number: 158
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_016DukdvsJzggwAAF3CkKaDZ
+    notes: >
+      Bug found while running /stacked-pr-maintenance on 2026-08-12, and fixed at the
+      source rather than worked around. The skill invoked the tooling by its in-tree path
+      for a whole run, which assumes .claude/stack/ is the same file from step 0 to the
+      end - and it is not, since that path is tracked content and a pass switches branch
+      in the checkout it runs from. The failure is either loud (a command validated in
+      step 0 comes back as an argparse invalid choice, which is exactly what the
+      preflight -> check-move rename produces) or quiet (the same command name answering
+      with semantics the skill does not describe). In the reported run it produced a
+      string of spurious failures partway through a restack pass, survived only because
+      the operator hand-copied the tool to a stable path and continued from there.
+      stack.py pin-tooling copies the modules and stack.toml - not board.json, which
+      belongs to the pass that exported it - to a digest-named directory outside every
+      checkout and prints the copy's stack.py. Digest naming makes pinning idempotent per
+      version and stops a later pass overwriting the copy an earlier one is still
+      running; the copy is staged beside its destination and moved there whole, so a
+      caller never invokes a half-written one. SKILL.md step 0 gains part c, pinning the
+      moment configuration answers, and every command after it names the pinned copy.
+      Deterministic rather than a note to remember: it is a subcommand, and a test asserts
+      the skill runs nothing else from the working tree.
+      New rather than a change to something in flight, tested mechanically:
+      git ls-tree main -- .claude/stack/stack.py .claude/skills/stacked-pr-maintenance/
+      returns both, so this edits files #106 and #139 already landed. #110 is the only
+      in-flight branch touching .claude/stack/ and owns setup, not the maintenance pass.
+      #139's RestackWorktree already isolates the executor's own branch switching, which
+      is one instance of this hazard; pinning closes the rest - the commands a session
+      runs by hand and the resume paths - and removes the assumption instead of leaving
+      each future step to remember the worktree.

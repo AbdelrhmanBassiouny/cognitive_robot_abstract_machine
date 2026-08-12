@@ -6241,3 +6241,56 @@ by the item that actually wraps. The hidden-status half propagated it to every
 descendant, so an item sitting directly beneath its visible parent still claimed to
 continue from an item further up the chain - a latent defect the done toggle already
 had, surfaced by unifying the two computations into one.
+
+## Update 2026-08-12 (new item): the tool a pass runs is whatever the checked-out branch carries
+
+A `/stacked-pr-maintenance` run hit a string of spurious failures partway through a
+restack pass: `check-move` calls coming back as argparse `invalid choice`. The cause is
+not in any of them. `SKILL.md` invoked the tooling as `python .claude/stack/stack.py …`
+throughout a run, and that path is tracked content - so which version of the tool answers
+is decided by whichever branch the checkout is on at that moment. Step 2 fast-forwards
+the fork's base onto the upstream, which is how a newer `.claude/stack/` arrives in the
+first place; this repository has already had one such rewrite land, renaming `preflight`
+to `check-move` and splitting the single file into `maintenance_*` modules. Once a run
+has branches at two different versions in play, the tool changes underneath it.
+
+The loud half of that is survivable - an unknown subcommand is at least a failure. The
+quiet half is not: the same command name answering with semantics step 0 never validated,
+in a pass whose steps push branches and write labels. No harm was done only because the
+operator noticed and hand-pinned a copy of the tool outside the repository before
+continuing, which is the fix this item makes the tool do for itself.
+
+`stack.py pin-tooling` copies the tool - every module and `stack.toml`, leaving
+`board.json` behind because it is one pass's snapshot and a copy would be stale for every
+pass after - into a directory named for its own content digest under the system temp root,
+and prints the copy's `stack.py`. Digest naming buys two properties worth having: pinning
+the same version twice keeps one copy, and two versions in flight at once each keep their
+own, so a later pass cannot overwrite the copy an earlier one is still running. The copy
+is staged beside its destination and moved there whole, so nobody can invoke one that is
+half written. `WorkingTreeTooling` and `PinnedTooling` name the two sides of the problem:
+the tool where a checkout can replace it, and the copy where nothing can.
+
+`SKILL.md`'s step 0 gains part **c** - pin the moment `configuration` has answered - and
+every invocation after it names `<pinned>/…`. Only `configuration` and `pin-tooling`
+still run from the working tree, since at that point there is nothing else to run, and a
+test asserts exactly that set rather than trusting the document to stay that way. The
+skill also had to stop promising that "every step shells out to `.claude/stack/`", which
+my change makes false.
+
+The deliberate limit is that a shell variable does not survive between the commands a
+session runs, so the document uses a `<pinned>` placeholder and tells the reader to
+substitute the printed path each time, rather than pretending `$PINNED` will still be set.
+
+`#139`'s `RestackWorktree` had already solved one instance of this - the executor's own
+branch switching happens in a worktree of its own precisely because checking a branch out
+"deletes the tooling the rest of the pass needs". This item generalizes that from a rule
+each future step must remember into a property of the run: whatever the executor and the
+session do to the checkout afterwards, the tool driving the pass is a file no branch
+carries.
+
+Filed as `pinned-stack-tooling` in the `stack-tooling` track, opened as draft PR #158 off
+`main` with the `bug` label. New-vs-change was tested rather than assumed:
+`git ls-tree main -- .claude/stack/stack.py .claude/skills/stacked-pr-maintenance/`
+returns both paths, so this edits files that #106 and #139 have already landed. #110 is
+the only in-flight branch touching `.claude/stack/`, and it owns setup rather than the
+maintenance pass.
