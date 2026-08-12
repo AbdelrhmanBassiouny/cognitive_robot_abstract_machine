@@ -6342,3 +6342,41 @@ invisible to every branch that has *forked* that document into a new file of its
 only cover the copies that already exist; the ones being created in parallel need a reader. The
 cheap check, when changing a rule that several skills cite, is to grep the unlanded branches for
 the old wording rather than only the merge base.
+
+### The follow-up: the rule stops being prose
+
+Flagging the two branches is coordination, and coordination is what had already failed once —
+the rule was stated in `prerequisite-check.md`, cited by four skills, and two branches
+independently forked the superseded sentence into documents of their own without anything
+noticing. So the same round added the enforcement:
+`.claude/hooks/tests/test_setup_prerequisite_documents.py` sweeps every markdown document under
+`.claude/skills/` for a verb of offering governing `/setup-personal-notes`.
+
+Three properties, each chosen against a failure this plan has already recorded:
+
+- **Discovered, not listed.** The case it exists for is a document that does not exist yet, which
+  a list cannot cover — the same reason `COMMANDS` is derived from its subclasses in #139 rather
+  than enumerated.
+- **An absence, computed.** It asserts what no document may contain, which is the shape of the one
+  prose test #106 kept when it deleted eighteen others, and the reason that one cannot fail from a
+  rewording.
+- **Guarded against vacuity.** A second test asserts the sweep found documents at all, so a moved
+  or renamed directory fails loudly instead of passing with nothing to check — #110 hit the
+  opposite case, where a check silently had zero candidates.
+
+Deliberately narrow, and the docstring says so: it catches the sentence the rule replaced, not
+every paraphrase of asking, and it must not fire on the prose that *explains* the rule, since
+`prerequisite-check.md`'s own rationale section discusses offering and asking throughout. A
+sentence-level "mentions the command near the word asked" rule was written first and rejected for
+exactly that reason — it flagged the source document.
+
+Verified by mutation rather than assumed: it passes over 15 documents on this branch, and flags 4
+on `main`, 3 on #149 (including its new `plan-item-gathering.md`) and 5 on #135 (including its new
+`add-plan-item/SKILL.md`) — the two files that were the whole problem, both invisible to git.
+
+**What it buys is that landing order stops mattering.** #156 first, and the other two go red the
+moment they merge `main`, which they do routinely, so the one-word fix is forced before they land.
+Either of them first, and #156's own suite fails until it sweeps their copies. Neither outcome
+depends on anyone remembering a comment. The residual cost is the ordinary one for any new test: a
+branch that lands *without* merging `main` first turns `main` red rather than its own branch, which
+is the same trade every contract test in this repository already makes.

@@ -3009,6 +3009,18 @@ items:
       conflicts in prerequisite-check.md itself, where it only adds add-plan-item to the opening
       list, so there the resolution is this rewrite plus that one name. Both were flagged on
       their own pull requests, each being a change to what that pull request ships.
+
+      That flagging is coordination, which nothing enforces, so the rule stopped being prose
+      only: test_setup_prerequisite_documents.py sweeps every markdown document under
+      .claude/skills for a verb of offering governing /setup-personal-notes. Discovered
+      rather than listed, because the case it exists for is a document that does not exist
+      yet - #149's plan-item-gathering.md and #135's add-plan-item/SKILL.md are both new
+      files, so no merge flags either. Narrow by design: it catches the sentence the rule
+      replaced rather than every paraphrase of asking, and must not fire on the prose that
+      explains the rule, since prerequisite-check.md discusses offering and asking
+      throughout. Passes here over 15 documents and flags 4 on main, 3 on #149 and 5 on
+      #135, which is the mutation check. What it buys is that landing order stops mattering:
+      whichever lands second goes red rather than silently reinstating the gate.
   - id: deferred-items-hidden-by-default
     title: "Hide deferred items in the dashboard by default, behind their own toggle"
     branch: claude/hidden-deferred-plan-items-6weef1
