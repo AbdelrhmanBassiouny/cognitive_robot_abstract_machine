@@ -753,7 +753,7 @@ class PredicateVocabulary:
     Kind of each name the suite states outright, keyed by dotted name.
     """
 
-    name_rules: tuple[PredicateNameRule, ...] = ()
+    name_rules: list[PredicateNameRule] = field(default_factory=list)
     """
     Rules recognising the suite's remaining names by naming convention, consulted in
     order once no exact name matched.

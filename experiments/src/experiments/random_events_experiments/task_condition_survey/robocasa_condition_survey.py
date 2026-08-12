@@ -60,18 +60,20 @@ class RoboCasaPredicateVocabulary(PredicateVocabulary):
     Kinds of the predicates the suite applies most often, keyed by dotted name.
     """
 
-    name_rules: tuple[PredicateNameRule, ...] = (
-        PredicateNameRule("_far", PredicateKind.CONTINUOUS),
-        PredicateNameRule("_dist", PredicateKind.CONTINUOUS),
-        PredicateNameRule("norm", PredicateKind.CONTINUOUS),
-        PredicateNameRule("close_to", PredicateKind.CONTINUOUS),
-        PredicateNameRule("check_", PredicateKind.DISCRETE),
-        PredicateNameRule("is_", PredicateKind.DISCRETE),
-        PredicateNameRule("has_", PredicateKind.DISCRETE),
-        PredicateNameRule("get_state", PredicateKind.DISCRETE),
-        PredicateNameRule("_state", PredicateKind.DISCRETE),
-        PredicateNameRule("inside_of", PredicateKind.DISCRETE),
-        PredicateNameRule("_on_", PredicateKind.DISCRETE),
+    name_rules: list[PredicateNameRule] = field(
+        default_factory=lambda: [
+            PredicateNameRule("_far", PredicateKind.CONTINUOUS),
+            PredicateNameRule("_dist", PredicateKind.CONTINUOUS),
+            PredicateNameRule("norm", PredicateKind.CONTINUOUS),
+            PredicateNameRule("close_to", PredicateKind.CONTINUOUS),
+            PredicateNameRule("check_", PredicateKind.DISCRETE),
+            PredicateNameRule("is_", PredicateKind.DISCRETE),
+            PredicateNameRule("has_", PredicateKind.DISCRETE),
+            PredicateNameRule("get_state", PredicateKind.DISCRETE),
+            PredicateNameRule("_state", PredicateKind.DISCRETE),
+            PredicateNameRule("inside_of", PredicateKind.DISCRETE),
+            PredicateNameRule("_on_", PredicateKind.DISCRETE),
+        ]
     )
     """
     Rules recognising the long tail of per-fixture predicates by naming convention,

@@ -15,7 +15,7 @@ Run with (the ``experiments`` package must be importable)::
     python -m experiments.montessori.franka_montessori_demo --iterations 100
 
 Every run's per-shape results are recorded, one :class:`~experiments.montessori.sorting_results.SortingIterationResult` (with
-its :class:`~experiments.montessori.sorting_results.ShapeInsertionResult` rows) per iteration, to a local SQLite database via
+its :class:`~experiments.montessori.sorting_results.ShapeInsertionResult` rows) per iteration, to a Postgres database via
 ORMatic; see ``--database-uri`` and :data:`DEFAULT_DATABASE_URI`.
 
 .. note::
@@ -85,12 +85,23 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_DATABASE_URI = "sqlite:///franka_montessori_sorting_results.db"
+DEFAULT_DATABASE_URI = (
+    "postgresql+psycopg://semantic_digital_twin:montessori@localhost:5432/"
+    "franka_montessori_sorting_results"
+)
 """
 Database URI used when neither ``--database-uri`` nor
-``FRANKA_MONTESSORI_SORTING_DATABASE_URI`` is given: a local SQLite file in the current
-directory, matching :mod:`experiments.montessori.generate_insertion_experience`'s own
-default.
+``FRANKA_MONTESSORI_SORTING_DATABASE_URI`` is given.
+
+Reuses the ``semantic_digital_twin`` role already provisioned on this host for the other
+demos/experiments in this workspace (see ``coraplex_panda_demo/demo3.py``'s own
+``DATABASE_URI``); only the database itself, ``franka_montessori_sorting_results``, is
+dedicated to this demo. Uses the ``psycopg`` (v3) driver explicitly since only that, not
+``psycopg2``, is installed in this environment.
+
+Provision the role and this database once, before the first run, with
+``semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql``
+(see that script's own header for its ``psql`` invocation).
 """
 
 NODE_NAME = "franka_montessori_demo"
@@ -654,7 +665,7 @@ def _parse_arguments() -> argparse.Namespace:
         help=(
             "Database URI every iteration's SortingIterationResult (with its "
             "per-shape ShapeInsertionResult rows) is recorded to via ORMatic, one "
-            "commit per iteration. Defaults to a local SQLite file (see "
+            "commit per iteration. Defaults to a local Postgres database (see "
             "DEFAULT_DATABASE_URI), overridable via FRANKA_MONTESSORI_SORTING_DATABASE_URI."
         ),
     )
@@ -667,6 +678,9 @@ def _open_results_session(database_uri: str) -> Session:
     :class:`~experiments.montessori.sorting_results.SortingIterationResult` and
     :class:`~experiments.montessori.sorting_results.ShapeInsertionResult`'s tables first
     if they don't already exist.
+
+    ``database_uri``'s database and role must already exist on the server; see
+    :data:`DEFAULT_DATABASE_URI` for how to provision them.
 
     :param database_uri: Database to write recorded results to; see
         :data:`DEFAULT_DATABASE_URI`.
@@ -882,7 +896,7 @@ def main() -> None:
     multi_sim = None
     tf_publisher = None
     viz_marker_publisher = None
-#    results_session = _open_results_session(arguments.database_uri)
+    results_session = _open_results_session(arguments.database_uri)
     logger.info("Recording results to '%s'.", arguments.database_uri)
     try:
         for iteration in range(
@@ -902,8 +916,8 @@ def main() -> None:
                 iteration=iteration, shape_results=shape_results
             )
             iteration_results.append(iteration_result)
-            #results_session.add(to_dao(iteration_result))
-            #results_session.commit()
+            results_session.add(to_dao(iteration_result))
+            results_session.commit()
 
             if keep_simulation_running:
                 break
@@ -926,7 +940,7 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
-        #results_session.close()
+        results_session.close()
         if multi_sim is not None:
             multi_sim.stop_simulation()
         if viz_marker_publisher is not None:

@@ -46,6 +46,7 @@ import semantic_digital_twin.semantic_annotations.semantic_annotations
 import semantic_digital_twin.world_description.degree_of_freedom
 import semantic_digital_twin.world_description.world_entity
 import sqlalchemy.sql.sqltypes
+import types
 import typing
 import typing_extensions
 import uuid
@@ -68,6 +69,7 @@ class Base(DeclarativeBase):
         uuid.UUID: sqlalchemy.sql.sqltypes.UUID,
         pathlib.Path: krrood.ormatic.custom_types.PathType,
         krrood.adapters.json_serializer.JSONData: krrood.ormatic.custom_types.JSONDataType,
+        types.NoneType: krrood.ormatic.custom_types.TypeType,
     }
 
 
@@ -1068,7 +1070,7 @@ class EpisodePlayerDAO(
 
     use_realtime: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
     stop_after_ready: Mapped[builtins.bool] = mapped_column(use_existing_column=True)
-    rdr_viewer: Mapped[builtins.NoneType] = mapped_column(use_existing_column=True)
+    rdr_viewer: Mapped[types.NoneType] = mapped_column(use_existing_column=True)
 
     world_id: Mapped[typing.Optional[builtins.int]] = mapped_column(
         ForeignKey("WorldMappingDAO.database_id", use_alter=True),

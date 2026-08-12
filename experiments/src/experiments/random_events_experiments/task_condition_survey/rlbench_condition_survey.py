@@ -71,7 +71,7 @@ class RLBenchPredicateVocabulary(PredicateVocabulary):
         reason a contact check is.
     """
 
-    name_rules: tuple[PredicateNameRule, ...] = ()
+    name_rules: list[PredicateNameRule] = field(default_factory=list)
     """
     No naming convention is consulted, since the suite's conditions are a closed set.
     """
