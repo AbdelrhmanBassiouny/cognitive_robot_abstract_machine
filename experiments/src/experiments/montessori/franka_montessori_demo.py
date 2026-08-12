@@ -734,9 +734,13 @@ def _open_results_session(database_uri: str) -> Session:
 
     Skips any table ORMatic could not assign a real column type to (surfaced as
     SQLAlchemy's ``NullType``, e.g. ``EpisodePlayerDAO.rdr_viewer`` for the
-    ``RDRCaseViewer`` field it doesn't have a mapping for) rather than letting one
+    ``RDRCaseViewer`` field it doesn't have a mapping for), together with every table
+    that depends on a skipped table through a foreign key (transitively, since joined-
+    table inheritance chains more than one table deep) -- rather than letting one
     unrelated, pre-existing gap in the huge generated ``experiments`` schema stop every
-    other table -- including this module's own -- from being created.
+    other table -- including this module's own -- from being created. A table left out
+    here purely because it depends on a skipped one would otherwise fail with an
+    "undefined table" error the moment ``CREATE TABLE`` tried to reference it.
 
     :param database_uri: Database to write recorded results to; see
         :data:`DEFAULT_DATABASE_URI`.
@@ -744,10 +748,28 @@ def _open_results_session(database_uri: str) -> Session:
     import experiments.orm.ormatic_interface as ormatic_interface
 
     engine = create_engine(database_uri)
+    all_tables = ormatic_interface.Base.metadata.tables
+    excluded_table_names = {
+        name
+        for name, table in all_tables.items()
+        if any(isinstance(column.type, NullType) for column in table.columns)
+    }
+    newly_excluded = True
+    while newly_excluded:
+        newly_excluded = False
+        for name, table in all_tables.items():
+            if name in excluded_table_names:
+                continue
+            if any(
+                foreign_key.column.table.name in excluded_table_names
+                for foreign_key in table.foreign_keys
+            ):
+                excluded_table_names.add(name)
+                newly_excluded = True
     creatable_tables = [
         table
-        for table in ormatic_interface.Base.metadata.tables.values()
-        if not any(isinstance(column.type, NullType) for column in table.columns)
+        for name, table in all_tables.items()
+        if name not in excluded_table_names
     ]
     ormatic_interface.Base.metadata.create_all(engine, tables=creatable_tables)
     return sessionmaker(engine)()
