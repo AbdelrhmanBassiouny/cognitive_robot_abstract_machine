@@ -26,6 +26,9 @@ from semantic_digital_twin.spatial_types import (
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.connections import FixedConnection
 
+from cramera.live.runner import start
+
+start()
 world = setup_world()
 
 spoon = STLParser(
@@ -120,3 +123,4 @@ plan = sequential(
 
 with simulated_robot:
     plan.perform()
+

@@ -17,6 +17,7 @@ propagated up the plan tree; those statuses are flagged ``derived``.
 
 from __future__ import annotations
 
+import json
 import threading
 import time
 import urllib.parse
@@ -28,6 +29,7 @@ from pathlib import Path
 
 from typing_extensions import (
     Any,
+    Callable,
     ClassVar,
     Dict,
     List,
@@ -47,22 +49,19 @@ from semantic_digital_twin.spatial_types import (
     RotationMatrix,
 )
 from cramera.logging_setup import get_logger
-from cramera.body_geometry import (
-    measure_body,
-    POSE_PRECISION,
-    rounded_pose,
-    rounded_scale,
-)
+from cramera.body_geometry import POSE_PRECISION, rounded_pose
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
     Connection6DoF,
 )
 
 from cramera.knowledge.enums import PlanNodeGroup
-from cramera.live.model_source import LiveModelCatalog
+from cramera.live.model_source import LiveModelCatalog, TrackedSource
+from cramera.live.shape_catalog import ShapeEntry, served_mesh_file, shape_entry
 from cramera.mesh_format import MeshFormat
+from cramera.onboard.bundle_urdf import BundleReport
 from cramera.palette import ObjectPalette
-from cramera.robot_parts import RobotPartAnnotation
+from cramera.robot_parts import PREFIX_PROBE_LINKS, RobotPartAnnotation, model_identity
 
 if TYPE_CHECKING:
     from coraplex.plans.executables import GiskardExecutable
@@ -146,10 +145,11 @@ class LiveHook(Enum):
     ``MeshParser.parse`` — remember which file each object's geometry came from.
     """
 
-    URDF_SOURCE = "urdf_source"
+    MODEL_SOURCE = "model_source"
     """
-    ``URDFParser.from_file`` — remember which URDF/xacro files the world was built
-    from, so their geometry can be served to the viewer without a bundle.
+    ``URDFParser.from_file``, ``GazeboParser.from_file``, ``MJCFParser.__init__`` —
+    remember every model source the world was built from, so a snapshot of the
+    running demo can be bundled on demand (see :mod:`cramera.live.live_bundle`).
     """
 
 
@@ -293,6 +293,7 @@ class ObjectKind(StrEnum):
 
     MESH = "mesh"
     BOX = "box"
+    SHAPES = "shapes"
 
 
 @dataclass(frozen=True)
@@ -334,6 +335,11 @@ class ObjectCatalogEntry:
     size: Optional[List[float]] = None
     """
     Box extent in metres, set only when :attr:`kind` is ``BOX``.
+    """
+
+    shapes: Optional[List[ShapeEntry]] = None
+    """
+    The body's shapes, set only when :attr:`kind` is ``SHAPES``.
     """
 
 
@@ -546,12 +552,19 @@ class WorldStateSnapshot:
     Loose-object pose by mesh key, in the same 7-element form as :attr:`base`.
     """
 
+    model_bases: Dict[str, List[float]] = field(default_factory=dict)
+    """
+    Every bundled model's root pose by world-instance prefix, in the same 7-element
+    form as :attr:`base`, so a second robot or a moved environment model animates.
+    """
+
     def to_payload(self) -> Dict[str, Any]:
         """
         The snapshot in the camel-cased JSON shape the viewer reads.
         """
         payload = asdict(self)
         payload["sequenceNumber"] = payload.pop("sequence_number")
+        payload["modelBases"] = payload.pop("model_bases")
         return payload
 
 
@@ -568,6 +581,19 @@ class BridgeStatus:
     plan: bool
     chart: bool
     sequence_number: int
+    model_version: int = 0
+    """
+    How many model sources the demo has parsed so far; the viewer reloads the live
+    scene when this grows, so a model loaded mid-run appears.
+    """
+
+    bundle_signature: str = ""
+    """
+    Digest of what a live bundle built right now would contain (see
+    :meth:`ModelBundleContext.signature`); the viewer reloads the live scene when it
+    no longer matches the one its loaded bundle carries.
+    """
+
     robot_parts: List[RobotPartAnnotation] = field(default_factory=list)
     """
     The arms and end effectors of the live robot, as sem_dt annotates them.
@@ -580,11 +606,109 @@ class BridgeStatus:
         """
         payload = asdict(self)
         payload["sequenceNumber"] = payload.pop("sequence_number")
+        payload["modelVersion"] = payload.pop("model_version")
+        payload["bundleSignature"] = payload.pop("bundle_signature")
         payload.pop("robot_parts")
         payload["partAnnotations"] = [
             annotation.to_payload() for annotation in self.robot_parts
         ]
         return payload
+
+
+@dataclass(frozen=True)
+class ModelBundleContext:
+    """
+    Everything needed to bundle a snapshot of the live world's current models.
+    """
+
+    sources: List[TrackedSource]
+    """
+    The model sources the world was built from, in load order.
+    """
+
+    world_body_names: List[str]
+    """
+    Every body name in the composed world, used to find each model's prefix.
+    """
+
+    base_body: Optional[str]
+    """
+    The robot's base link name, unprefixed, or None if no robot is bound.
+    """
+
+    robot: Optional[AbstractRobot]
+    """
+    The robot's semantic annotation, or None if no robot is bound.
+    """
+
+    model_prefixes: List[str] = field(default_factory=list)
+    """
+    Each parsed model's world-instance prefix, in parse order, empty where a model's
+    prefix does not resolve. Part of the bundle's change signature.
+    """
+
+    def signature(self) -> str:
+        """
+        A stable digest of everything the live bundle's content is built from.
+
+        Deliberately excludes the world's body list itself: objects spawning or
+        vanishing mid-run change the overlay, not the bundled models, and must not
+        read as a bundle change. The model prefixes stand in for model presence — a
+        model that left the composed world loses its prefix.
+        """
+        return json.dumps(
+            {
+                "sources": [tracked.path for tracked in self.sources],
+                "modelPrefixes": self.model_prefixes,
+                "robot": (
+                    None
+                    if self.robot is None
+                    else {
+                        "name": type(self.robot).__name__.lower(),
+                        "baseBody": self.base_body,
+                    }
+                ),
+                "worldBound": bool(self.world_body_names),
+            },
+            sort_keys=True,
+        )
+
+
+@dataclass(frozen=True)
+class BundledModelInstance:
+    """
+    One parsed model as it lives inside the composed world.
+    """
+
+    prefix: str
+    """
+    The model's world-instance prefix, empty when its bodies are unprefixed.
+    """
+
+    link_basenames: Tuple[str, ...]
+    """
+    The model's own link names, unprefixed, in parse order — the first one is the
+    model's root.
+    """
+
+    def covers(self, world_body_name: str) -> bool:
+        """
+        Whether a world body belongs to this model instance.
+
+        :param world_body_name: The full name of the world body to check.
+        """
+        head, _, basename = world_body_name.rpartition("/")
+        return head == self.prefix and basename in self.link_basenames
+
+    @property
+    def root_name(self) -> str:
+        """
+        The full world name of this model instance's root body.
+        """
+        root_basename = self.link_basenames[0]
+        if not self.prefix:
+            return root_basename
+        return self.prefix + "/" + root_basename
 
 
 @dataclass
@@ -604,11 +728,6 @@ class Bridge:
     DEFAULT_OBJECT_SIZE: ClassVar[Tuple[float, float, float]] = (0.06, 0.06, 0.12)
     """
     Fallback size for an object whose shapes carry no scale, in metres.
-    """
-
-    SIZE_PRECISION: ClassVar[int] = 4
-    """
-    Decimal places object sizes are rounded to before publishing.
     """
 
     world: Optional[World] = None
@@ -689,6 +808,17 @@ class Bridge:
     _model_catalog: LiveModelCatalog = field(default_factory=LiveModelCatalog)
     """
     URDF/xacro sources the world was built from, served without a bundle.
+    """
+
+    _model_link_sets: List[List[str]] = field(default_factory=list)
+    """
+    Link basenames per parsed model, used to keep bundled bodies out of the overlay.
+    """
+
+    _model_roots: Dict[str, Body] = field(default_factory=dict)
+    """
+    Every bundled model's root body by world-instance prefix, re-discovered on every
+    bind, whose poses are streamed as :attr:`WorldStateSnapshot.model_bases`.
     """
 
     _plan: Optional[Plan] = None
@@ -822,18 +952,33 @@ class Bridge:
         """
         self._mesh_files[Path(file_path).name.lower()] = file_path
 
-    def remember_urdf_source(self, file_path: str) -> None:
+    def remember_model_source(
+        self, file_path: str, bundler: Callable[..., BundleReport]
+    ) -> None:
         """
-        Remember a URDF/xacro file the world was built from.
+        Remember a model source the world was built from.
 
         Deliberately does not take :attr:`_lock` — :class:`LiveModelCatalog` guards
         its own state with its own lock, kept separate so a slow xacro expansion never
         waits behind (or blocks) the tick hook, which holds :attr:`_lock` while
         publishing every snapshot.
 
-        :param file_path: Absolute path of the source file.
+        :param file_path: Absolute path, or ``package://`` URI, of the source file.
+        :param bundler: Bundles this source's kind into an output directory.
         """
-        self._model_catalog.remember(file_path)
+        self._model_catalog.remember(file_path, bundler)
+
+    def remember_model_bodies(self, names: List[str]) -> None:
+        """
+        Remember the bodies a freshly parsed model world consists of.
+
+        A bundled model's links are already rendered by the live scene bundle, so the
+        object overlay must not duplicate them. The names are kept per model as
+        unprefixed basenames, because the composed world may re-prefix a merged model.
+
+        :param names: Every body name of the parsed model world.
+        """
+        self._model_link_sets.append([str(name).split("/")[-1] for name in names])
 
     def publish_bodies(self, bodies: Dict[str, Body]) -> None:
         """
@@ -868,13 +1013,17 @@ class Bridge:
         with self._lock:
             return self._mesh_serve.get(key)
 
-    def live_models(self) -> List[Dict[str, Any]]:
+    def model_bundle_context(self) -> ModelBundleContext:
         """
-        Every tracked model source, with its world-instance prefix and robot flag.
+        Everything :func:`~cramera.live.live_bundle.build_live_scene` needs to bundle
+        a snapshot of the current world: its tracked model sources, every body name in
+        the composed world (to find each model's prefix), and the robot's unprefixed
+        base link name (to tell a robot model apart from an environment model).
 
         Only the quick read of :attr:`world`/:attr:`robot` takes :attr:`_lock`; the
-        catalog lookup itself (a cache miss re-expands a xacro file, which can take
-        seconds) deliberately runs outside it — see :meth:`remember_urdf_source`.
+        model sources come from :class:`LiveModelCatalog`'s own lock, kept separate so
+        a slow xacro expansion never waits behind (or blocks) the tick hook — see
+        :meth:`remember_model_source`.
         """
         with self._lock:
             world_body_names = (
@@ -882,48 +1031,27 @@ class Bridge:
                 if self.world is not None
                 else []
             )
-            base_body = self._base_body()
-        models = self._model_catalog.models(world_body_names, base_body)
-        return [
-            {"index": index, "prefix": model.prefix, "robot": model.robot}
-            for index, model in enumerate(models)
-        ]
-
-    def model_urdf_text(self, index: int) -> Optional[str]:
-        """
-        A tracked model's URDF text, with mesh references rewritten to servable URLs.
-
-        See :meth:`remember_urdf_source` for why this does not take :attr:`_lock`.
-
-        :param index: Position of the model, as reported by :meth:`live_models`.
-        """
-        return self._model_catalog.urdf_text(index)
-
-    def model_mesh_path(self, index: int, reference_index: int) -> Optional[str]:
-        """
-        Absolute path a tracked model's mesh reference resolves to.
-
-        See :meth:`remember_urdf_source` for why this does not take :attr:`_lock`.
-
-        :param index: Position of the model, as reported by :meth:`live_models`.
-        :param reference_index: Position of the reference, as
-            :meth:`model_urdf_text` numbered it.
-        """
-        return self._model_catalog.mesh_path(index, reference_index)
-
-    def _base_body(self) -> Optional[str]:
-        """
-        The bound robot's base link name, unprefixed, or None if no robot is bound.
-        """
-        if self.robot is None:
-            return None
-        root_name = str(self.robot.root.name)
-        return root_name.split("/", 1)[1] if "/" in root_name else root_name
+            robot = self.robot
+            base_body = (
+                None if robot is None else str(robot.root.name).split("/", 1)[-1]
+            )
+        return ModelBundleContext(
+            sources=self._model_catalog.snapshot(),
+            world_body_names=world_body_names,
+            robot=robot,
+            base_body=base_body,
+            model_prefixes=[
+                instance.prefix
+                for instance in self._bundled_model_instances(world_body_names)
+            ],
+        )
 
     def status(self) -> Dict[str, Any]:
         """
         What the viewer polls to decide whether a live demo is reachable.
         """
+        # computed before taking the lock — model_bundle_context locks on its own
+        bundle_signature = self.model_bundle_context().signature()
         with self._lock:
             return BridgeStatus(
                 running=self.world is not None,
@@ -933,6 +1061,8 @@ class Bridge:
                 plan=bool(self.plan_state.nodes),
                 chart=bool(self.chart_state.nodes),
                 sequence_number=self.sequence_number,
+                model_version=len(self._model_catalog.snapshot()),
+                bundle_signature=bundle_signature,
                 robot_parts=(
                     RobotPartAnnotation.of_robot(self.robot)
                     if self.robot is not None
@@ -1033,7 +1163,7 @@ class Bridge:
     # %% world discovery
     def bind(self) -> None:
         """
-        Discover the robot, joints and loose objects of the current world.
+        Discover the robot, joints and publishable bodies of the current world.
 
         Re-run periodically because demos modify their world (objects get spawned and
         removed mid-run).
@@ -1049,11 +1179,10 @@ class Bridge:
         if self.robot is not None:
             bodies[ROBOT_BASE_KEY] = self.robot.root
         try:
-            # loose objects by convention: bodies named like mesh files
-            for body in world.bodies:
-                basename = str(body.name).split("/")[-1]
-                if MeshFormat.of_path(basename) is not None:
-                    bodies[basename] = body
+            bodies_by_name = {str(body.name): body for body in world.bodies}
+            instances = self._bundled_model_instances(list(bodies_by_name))
+            self._model_roots = self._model_root_bodies(instances, bodies_by_name)
+            bodies.update(self._discover_overlay_bodies(bodies_by_name, instances))
         except Exception as error:
             # boundary guard: the world is mid-modification (a body is being spawned
             # or removed) and iterating it is not safe. Keep the previous catalog
@@ -1063,6 +1192,94 @@ class Bridge:
             for key, body in self._bodies.items():
                 bodies.setdefault(key, body)
         self.publish_bodies(bodies)
+
+    def _bundled_model_instances(
+        self, world_body_names: List[str]
+    ) -> List[BundledModelInstance]:
+        """
+        Every parsed model located inside the composed world.
+
+        Each model's world-instance prefix is probed from its link names (see
+        :func:`~cramera.robot_parts.model_identity`), so the result survives the
+        composed world re-prefixing a merged model.
+
+        :param world_body_names: Every body name in the composed world.
+        """
+        instances: List[BundledModelInstance] = []
+        for links in self._model_link_sets:
+            prefix, _ = model_identity(
+                links=links,
+                world_body_names=world_body_names,
+                base_body=None,
+                probe_link_count=PREFIX_PROBE_LINKS,
+            )
+            instances.append(
+                BundledModelInstance(prefix=prefix, link_basenames=tuple(links))
+            )
+        return instances
+
+    @staticmethod
+    def _model_root_bodies(
+        instances: List[BundledModelInstance], bodies_by_name: Dict[str, Body]
+    ) -> Dict[str, Body]:
+        """
+        Every bundled model's root body by world-instance prefix.
+
+        A model whose root body is no longer in the world is skipped, as is an
+        unprefixed model — without a prefix there is no key the viewer could match a
+        scene model by.
+
+        :param instances: The parsed models located inside the composed world.
+        :param bodies_by_name: Every world body by its full name.
+        """
+        roots: Dict[str, Body] = {}
+        for instance in instances:
+            root = bodies_by_name.get(instance.root_name)
+            if instance.prefix and root is not None:
+                roots[instance.prefix] = root
+        return roots
+
+    def _discover_overlay_bodies(
+        self,
+        bodies_by_name: Dict[str, Body],
+        instances: List[BundledModelInstance],
+    ) -> Dict[str, Body]:
+        """
+        Every world body the overlay renders, keyed the way it is published.
+
+        Any body with shapes is published under its full name — the way RViz shows
+        whatever the world contains — except bodies a bundled model already renders.
+        Bodies named like mesh files stay published under that basename, with or
+        without shapes.
+
+        :param bodies_by_name: Every world body by its full name.
+        :param instances: The parsed models located inside the composed world.
+        """
+        robot_root = self.robot.root if self.robot is not None else None
+        bodies: Dict[str, Body] = {}
+        for full_name, body in bodies_by_name.items():
+            if body is robot_root:
+                continue
+            basename = full_name.split("/")[-1]
+            if MeshFormat.of_path(basename) is not None:
+                bodies[basename] = body
+            elif not any(
+                instance.covers(full_name) for instance in instances
+            ) and self._body_shapes(body):
+                bodies[full_name] = body
+        return bodies
+
+    @staticmethod
+    def _body_shapes(body: Body) -> List[Any]:
+        """
+        The shapes a body is rendered from: its visual ones, else its collision ones.
+
+        :param body: The body whose shapes are read.
+        """
+        for shape_collection in (body.visual, body.collision):
+            if shape_collection.shapes:
+                return list(shape_collection.shapes)
+        return []
 
     @staticmethod
     def _actuated_connections(world: World) -> List[ActiveConnection1DOF]:
@@ -1081,8 +1298,8 @@ class Bridge:
         """
         Rebuild the geometry catalog the viewer spawns live objects from.
 
-        Each object gets either a mesh URL (served by the bridge) or a box size, so
-        objects the viewer does not know yet can appear mid-run.
+        Each object gets a mesh URL (served by the bridge), its real shapes, or a
+        fallback box size, so objects the viewer does not know yet can appear mid-run.
 
         :param bodies: The current published bodies, keyed by mesh key.
         """
@@ -1107,29 +1324,65 @@ class Bridge:
                         format=Path(key).suffix.lstrip(".").lower(),
                     )
                 )
-            else:
-                catalog.append(
-                    ObjectCatalogEntry(
-                        key=key,
-                        id=object_id,
-                        kind=ObjectKind.BOX,
-                        color=color,
-                        size=self._box_size(body) or list(self.DEFAULT_OBJECT_SIZE),
-                    )
+                continue
+            shapes = self._body_shapes(body)
+            if shapes:
+                catalog.append(self._shape_catalog_entry(key, shapes, color, serve))
+                continue
+            catalog.append(
+                ObjectCatalogEntry(
+                    key=key,
+                    id=object_id,
+                    kind=ObjectKind.BOX,
+                    color=color,
+                    size=list(self.DEFAULT_OBJECT_SIZE),
                 )
+            )
         self._mesh_serve = serve
         with self._lock:
             self.object_metadata = catalog
 
-    @classmethod
-    def _box_size(cls, body: Body) -> Optional[List[float]]:
+    def _shape_catalog_entry(
+        self,
+        key: str,
+        shapes: List[Any],
+        fallback_color: str,
+        serve: Dict[str, str],
+    ) -> ObjectCatalogEntry:
         """
-        Size of a body's geometry in metres, or None when no shape reports one.
+        The catalog entry of a body published shape by shape.
 
-        :param body: The body whose geometry is measured.
+        Mesh shapes are registered in the serve map under a composite key, so each of
+        a body's meshes is downloadable on its own.
+
+        :param key: The body's published key.
+        :param shapes: The body's shapes, as :meth:`_body_shapes` selects them.
+        :param fallback_color: Palette colour used for shapes without one of their own.
+        :param serve: The serve map being built, extended with this body's mesh files.
         """
-        extent = measure_body(body)
-        return rounded_scale(extent, cls.SIZE_PRECISION) if extent else None
+        entries: List[ShapeEntry] = []
+        for shape_index, shape in enumerate(shapes):
+            mesh_url = None
+            mesh_file = served_mesh_file(shape)
+            if mesh_file is not None:
+                serve_key = "%s#%d" % (key, shape_index)
+                serve[serve_key] = mesh_file
+                mesh_url = "/mesh?key=" + urllib.parse.quote(serve_key, safe="")
+            entries.append(
+                shape_entry(
+                    shape,
+                    mesh_url,
+                    fallback_size=list(self.DEFAULT_OBJECT_SIZE),
+                    fallback_color=fallback_color,
+                )
+            )
+        return ObjectCatalogEntry(
+            key=key,
+            id=Path(key).stem,
+            kind=ObjectKind.SHAPES,
+            color=entries[0].color,
+            shapes=entries,
+        )
 
     # %% world snapshot
     def snapshot(self) -> None:
@@ -1154,6 +1407,9 @@ class Bridge:
                 base_pose = rounded_pose(body)
             else:
                 object_poses[name] = rounded_pose(body)
+        model_bases = {
+            prefix: rounded_pose(body) for prefix, body in self._model_roots.items()
+        }
         with self._lock:
             self.sequence_number += 1
             self.state = WorldStateSnapshot(
@@ -1161,6 +1417,7 @@ class Bridge:
                 frames=frames,
                 base=base_pose,
                 objects=object_poses,
+                model_bases=model_bases,
             )
 
     def get_state(self) -> Dict[str, Any]:
@@ -1357,17 +1614,20 @@ class Bridge:
 
     def _designator_target(self, designator: Any) -> Optional[str]:
         """
-        Name of the published object a designator refers to, if any.
+        Published key of the object a designator refers to, if any.
+
+        Matched by basename, because designators name world entities with their full
+        prefixed name while some objects are published under a basename key.
 
         :param designator: The designator to search for a world-entity reference.
         """
-        known = set(self._bodies)
+        keys_by_basename = {key.split("/")[-1]: key for key in self._bodies}
         for value in vars(designator).values():
             if not isinstance(value, NamesAWorldEntity):
                 continue
             basename = str(value.name).split("/")[-1]
-            if basename in known:
-                return basename
+            if basename in keys_by_basename:
+                return keys_by_basename[basename]
         return None
 
     def get_plan(self) -> Dict[str, Any]:

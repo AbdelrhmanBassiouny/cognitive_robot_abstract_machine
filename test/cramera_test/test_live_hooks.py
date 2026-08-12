@@ -16,6 +16,8 @@ from typing_extensions import Any, List, Optional, Tuple
 
 from cramera.live.bridge import TaskStatusName
 from cramera.live.hooks import LiveHooks
+from cramera.onboard.bundle_urdf import BundleReport
+from cramera.onboard.bundle_world import BundledWorld
 
 
 # %% mimics of the interfaces the hooks read
@@ -32,7 +34,8 @@ class FakeBridge:
     bound_motion_groups: List[Any] = field(default_factory=list)
     frozen_motion_groups: List[Tuple[Any, Any]] = field(default_factory=list)
     remembered_mesh_files: List[str] = field(default_factory=list)
-    remembered_urdf_sources: List[str] = field(default_factory=list)
+    remembered_model_sources: List[Tuple[str, Any]] = field(default_factory=list)
+    remembered_model_bodies: List[List[str]] = field(default_factory=list)
     raise_on_observe_tick: bool = False
 
     def attach(self, world: Any) -> None:
@@ -56,8 +59,11 @@ class FakeBridge:
     def remember_mesh_file(self, file_path: str) -> None:
         self.remembered_mesh_files.append(file_path)
 
-    def remember_urdf_source(self, file_path: str) -> None:
-        self.remembered_urdf_sources.append(file_path)
+    def remember_model_source(self, file_path: str, bundler: Any) -> None:
+        self.remembered_model_sources.append((file_path, bundler))
+
+    def remember_model_bodies(self, names: List[str]) -> None:
+        self.remembered_model_bodies.append(list(names))
 
 
 @dataclass
@@ -103,8 +109,8 @@ class TestObserveTick:
         assert bridge.attached == ["the-world"]
         assert bridge.observed_charts == ["chart"]
 
-    def test_an_already_bound_world_is_not_reattached(self):
-        bridge = FakeBridge(world="already-bound")
+    def test_the_executing_world_is_not_reattached(self):
+        bridge = FakeBridge(world="the-world")
         hooks = LiveHooks(bridge=bridge)
         executor = FakeExecutor(
             context=FakeExecutorContext(world="the-world"), motion_statechart="chart"
@@ -113,6 +119,21 @@ class TestObserveTick:
         hooks._observe_tick(lambda executor: None, executor)
 
         assert bridge.attached == []
+
+    def test_a_new_executing_world_replaces_the_old_binding(self):
+        """
+        A demo may build a second world and execute there; the bridge must follow it, or
+        it keeps snapshotting a world that no longer runs.
+        """
+        bridge = FakeBridge(world="old-world")
+        hooks = LiveHooks(bridge=bridge)
+        executor = FakeExecutor(
+            context=FakeExecutorContext(world="new-world"), motion_statechart="chart"
+        )
+
+        hooks._observe_tick(lambda executor: None, executor)
+
+        assert bridge.attached == ["new-world"]
 
     def test_a_bridge_failure_does_not_stop_the_tick(self):
         """
@@ -200,7 +221,7 @@ class TestRememberMeshFile:
         assert bridge.remembered_mesh_files == []
 
 
-# %% urdf source hook
+# %% model source hooks
 class TestRememberUrdfSource:
     def test_the_urdf_source_is_remembered_before_parsing(self):
         bridge = FakeBridge()
@@ -210,5 +231,72 @@ class TestRememberUrdfSource:
             lambda cls, file_path, **kwargs: "a-parser", "the-cls", "robot.urdf"
         )
 
-        assert bridge.remembered_urdf_sources == ["robot.urdf"]
+        assert bridge.remembered_model_sources == [
+            ("robot.urdf", BundleReport.of_source)
+        ]
         assert result == "a-parser"
+
+
+class TestRememberGazeboSource:
+    def test_the_gazebo_source_is_remembered_before_parsing(self):
+        bridge = FakeBridge()
+        hooks = LiveHooks(bridge=bridge)
+
+        result = hooks._remember_gazebo_source(
+            lambda cls, file_path, **kwargs: "a-parser", "the-cls", "apartment.world"
+        )
+
+        assert bridge.remembered_model_sources == [
+            ("apartment.world", BundledWorld.of_gazebo_source)
+        ]
+        assert result == "a-parser"
+
+
+class TestRememberMjcfSource:
+    def test_the_mjcf_source_is_remembered_before_initializing(self):
+        bridge = FakeBridge()
+        hooks = LiveHooks(bridge=bridge)
+
+        result = hooks._remember_mjcf_source(
+            lambda mjcf_parser, file_path, **kwargs: "initialized",
+            "the-parser",
+            "scene.xml",
+        )
+
+        assert bridge.remembered_model_sources == [
+            ("scene.xml", BundledWorld.of_mjcf_source)
+        ]
+        assert result == "initialized"
+
+
+# %% model body hook
+@dataclass
+class ParsedBody:
+    """
+    A body of a freshly parsed model world, of which the hook reads only the name.
+    """
+
+    name: str
+
+
+@dataclass
+class ParsedWorld:
+    """
+    A parsed model world, of which the hook reads only the bodies.
+    """
+
+    bodies: List[ParsedBody]
+
+
+class TestRememberModelBodies:
+    def test_the_parsed_bodies_are_remembered_after_parsing(self):
+        bridge = FakeBridge()
+        hooks = LiveHooks(bridge=bridge)
+        parsed = ParsedWorld(
+            bodies=[ParsedBody("pr2/base_link"), ParsedBody("pr2/torso_link")]
+        )
+
+        result = hooks._remember_model_bodies(lambda parser: parsed, "the-parser")
+
+        assert result is parsed
+        assert bridge.remembered_model_bodies == [["pr2/base_link", "pr2/torso_link"]]

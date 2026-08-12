@@ -182,6 +182,12 @@ class RobotPartAnnotation:
 
 
 # %% identifying a model within a world
+PREFIX_PROBE_LINKS = 12
+"""
+How many of a model's links are probed to find its prefix in a composed world.
+"""
+
+
 def model_identity(
     links: List[str],
     world_body_names: List[str],

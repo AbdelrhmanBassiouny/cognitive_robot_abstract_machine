@@ -91,9 +91,11 @@ def attach_tool(
 def setup_world() -> World:
     logger.setLevel(logging.DEBUG)
 
+    print("setup_world: parsing PR2 URDF (xacro expansion, this is the slow step)...")
     pr2_sem_world = URDFParser.from_file(
         "package://iai_pr2_description/robots/pr2_with_ft2_cableguide.xacro"
     ).parse()
+    print("setup_world: parsing apartment URDF...")
     apartment_world = URDFParser.from_file(
         os.path.join(
             os.path.dirname(__file__),
@@ -104,6 +106,7 @@ def setup_world() -> World:
             "apartment.urdf",
         )
     ).parse()
+    print("setup_world: parsing object meshes...")
     milk_world = STLParser(
         os.path.join(
             os.path.dirname(__file__), "..", "..", "resources", "objects", "milk.stl"
@@ -119,6 +122,7 @@ def setup_world() -> World:
             "breakfast_cereal.stl",
         )
     ).parse()
+    print("setup_world: merging worlds...")
     # apartment_world.merge_world(pr2_sem_world)
     apartment_world.merge_world(milk_world)
     apartment_world.merge_world(cereal_world)
@@ -131,6 +135,7 @@ def setup_world() -> World:
         )
         apartment_world.merge_world(pr2_sem_world, c_root_bf)
         c_root_bf.origin = HomogeneousTransformationMatrix.from_xyz_rpy(1.5, 2.5, 0)
+    print("setup_world: done")
 
     apartment_world.get_body_by_name("milk.stl").parent_connection.origin = (
         HomogeneousTransformationMatrix.from_xyz_rpy(

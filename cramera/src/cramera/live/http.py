@@ -8,11 +8,10 @@ HTTP endpoints of the live bridge (default port 8765).
     GET /state   {sequenceNumber, frames: {prefixed_joint: position},
                   base: pose, objects: {mesh_key: pose}}
     GET /objects geometry catalog (mesh served via /mesh?key=)
-    GET /models  [{index, prefix, robot}] (URDF served via /model_urdf?model=,
-                  mesh served via /model_mesh/<model>/<ref>.<ext> — the real
-                  extension has to be the URL's own trailing characters, since the
-                  frontend's URDF loader dispatches to a mesh format by regex-
-                  matching it, not by any query parameter)
+    GET /live_scene  {scene}  bundles the running demo's *current* world into a
+                      throwaway scene (see :mod:`cramera.live.live_bundle`) and names
+                      it, or {scene: null} when nothing is tracked yet; the viewer
+                      loads the named scene exactly like any other
     GET /plan    {signature, nodes: [{id, parent, kind, label, status, derived}]}
     GET /chart   {signature, title,
                   nodes: [{id, parent, name, class_name, life_cycle, observation}],
@@ -30,16 +29,17 @@ from __future__ import annotations
 import functools
 import json
 import os
-import re
+import sys
 import threading
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from typing_extensions import Any, Dict, Optional
+from typing_extensions import Any, ClassVar, Dict, Optional, Tuple, Type
 
-from cramera.logging_setup import get_logger
 from cramera.live.bridge import Bridge, MalformedMoveRequest, MoveRequest
+from cramera.live.live_bundle import build_live_scene
+from cramera.logging_setup import get_logger
 
 logger = get_logger(__name__)
 
@@ -49,13 +49,6 @@ DEFAULT_PORT = int(os.environ.get("LIVE_VIZ_PORT", "8765"))
 class BridgeRequestHandler(BaseHTTPRequestHandler):
     """
     Serves the bridge's snapshots and accepts viewer moves.
-    """
-
-    MODEL_MESH_PATH_PATTERN = re.compile(r"^/model_mesh/(\d+)/(\d+)\.[A-Za-z0-9]+$")
-    """
-    ``/model_mesh/<model index>/<reference index>.<extension>`` — the extension is
-    read only by the frontend to pick a mesh loader; the server resolves purely from
-    the two numeric indices.
     """
 
     def __init__(self, *args: Any, bridge: Bridge, **kwargs: Any) -> None:
@@ -107,12 +100,8 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_json({"objects": self.bridge.object_catalog()})
         if self.path.startswith("/mesh"):
             return self._send_mesh()
-        if self.path.startswith("/models"):
-            return self._send_json({"models": self.bridge.live_models()})
-        if self.path.startswith("/model_urdf"):
-            return self._send_model_urdf()
-        if self.path.startswith("/model_mesh"):
-            return self._send_model_mesh()
+        if self.path.startswith("/live_scene"):
+            return self._send_json({"scene": build_live_scene(self.bridge)})
         if self.path.startswith("/info"):
             return self._send_json(self.bridge.status())
         self.send_response(404)
@@ -128,56 +117,11 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         values = query.get(name)
         return values[0] if values else None
 
-    def _query_int(self, name: str) -> Optional[int]:
-        """
-        One query-string parameter's value, parsed as an int, or None if it is absent or
-        not a valid int.
-
-        :param name: The parameter's name.
-        """
-        value = self._query_value(name)
-        try:
-            return int(value) if value is not None else None
-        except ValueError:
-            return None
-
     def _send_mesh(self) -> None:
         """
         Serve one object's mesh file (plain file IO, no world access).
         """
         self._send_file(self.bridge.mesh_path(self._query_value("key") or ""))
-
-    def _send_model_urdf(self) -> None:
-        """
-        Serve one tracked model's URDF text, mesh references rewritten to servable URLs.
-        """
-        index = self._query_int("model")
-        text = self.bridge.model_urdf_text(index) if index is not None else None
-        if text is None:
-            self.send_response(404)
-            self.end_headers()
-            return
-        body = text.encode("utf-8")
-        self.send_response(200)
-        self.send_header("Content-Type", "application/xml")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Cache-Control", "no-store")
-        self.end_headers()
-        self.wfile.write(body)
-
-    def _send_model_mesh(self) -> None:
-        """
-        Serve one tracked model's mesh reference, resolved to an absolute path (plain
-        file IO, no world access).
-        """
-        match = self.MODEL_MESH_PATH_PATTERN.match(self.path)
-        path = (
-            self.bridge.model_mesh_path(int(match.group(1)), int(match.group(2)))
-            if match
-            else None
-        )
-        self._send_file(path)
 
     def _send_file(self, path: Optional[str]) -> None:
         """
@@ -259,7 +203,38 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         logger.debug(format, *args)
 
 
-def serve(bridge: Bridge, port: int = DEFAULT_PORT) -> ThreadingHTTPServer:
+class BridgeServer(ThreadingHTTPServer):
+    """
+    The bridge's HTTP server, which treats a client hanging up as the end of a request.
+
+    A browser aborts requests routinely -- the viewer polls on an interval, and
+    navigating away cancels whatever is in flight -- so the socket is regularly gone
+    before the response is written. ``socketserver`` reports that like any other fault,
+    one traceback per occurrence, which buries the log a real fault would have to be
+    found in.
+    """
+
+    CLIENT_HUNG_UP: ClassVar[Tuple[Type[BaseException], ...]] = (
+        BrokenPipeError,
+        ConnectionResetError,
+    )
+    """
+    Exceptions that mean the client is gone rather than that the server misbehaved.
+    """
+
+    def handle_error(self, request: Any, client_address: Any) -> None:
+        """
+        Report a failed request, unless it failed because the client hung up.
+
+        :param request: The request being handled, as ``socketserver`` passes it.
+        :param client_address: Address of the client whose request failed.
+        """
+        if isinstance(sys.exc_info()[1], self.CLIENT_HUNG_UP):
+            return
+        super().handle_error(request, client_address)
+
+
+def serve(bridge: Bridge, port: int = DEFAULT_PORT) -> BridgeServer:
     """
     Start an HTTP server on a daemon thread, serving ``bridge``.
 
@@ -268,6 +243,6 @@ def serve(bridge: Bridge, port: int = DEFAULT_PORT) -> ThreadingHTTPServer:
     :return: The running server.
     """
     handler = functools.partial(BridgeRequestHandler, bridge=bridge)
-    server = ThreadingHTTPServer(("0.0.0.0", port), handler)
+    server = BridgeServer(("0.0.0.0", port), handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
     return server

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 import threading
+import urllib.parse
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -27,9 +28,19 @@ from semantic_digital_twin.spatial_types import (
     RotationMatrix,
 )
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import Connection6DoF
+from semantic_digital_twin.world_description.connections import (
+    Connection6DoF,
+    FixedConnection,
+)
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
-from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Color,
+    Cylinder,
+    Mesh,
+    Scale,
+    Sphere,
+)
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Any, Dict, List, Optional, Tuple
@@ -44,30 +55,9 @@ from cramera.live.bridge import (
     ROBOT_BASE_KEY,
     TaskStatusName,
 )
+from cramera.onboard.bundle_urdf import BundleReport
 
 from .test_robot_parts import ArmPart, EndEffectorPart, NamedBody, OneArmedRobot
-
-ONE_LINK_URDF_TEXT = '<robot name="demo">\n  <link name="base_link"/>\n</robot>\n'
-"""
-A URDF with one link and no mesh references.
-"""
-
-ONE_MESH_URDF_TEXT = (
-    '<robot name="demo">\n'
-    '  <link name="base_link"/>\n'
-    '  <link name="cup_link">\n'
-    "    <visual><geometry>\n"
-    '      <mesh filename="meshes/cup.stl"/>\n'
-    "    </geometry></visual>\n"
-    "  </link>\n"
-    '  <joint name="cup_joint" type="fixed">\n'
-    '    <parent link="base_link"/><child link="cup_link"/>\n'
-    "  </joint>\n"
-    "</robot>\n"
-)
-"""
-A URDF referencing exactly one mesh, relative to the URDF's own directory.
-"""
 
 
 # %% mimics of the interfaces the bridge reads
@@ -502,28 +492,6 @@ class TestViewerAccessors:
         )
         assert bridge.object_keys() == ["milk.stl"]
 
-    def test_an_object_without_a_mesh_is_catalogued_as_a_sized_box(self):
-        """
-        An object the viewer has no mesh for still needs a spawnable size.
-
-        A real ``Body`` registered in its own ``World`` is required here, not the
-        ``ShapeSet`` mimic: ``_box_size`` measures through ``ShapeCollection.scale``,
-        which transforms each shape's bounding box through its reference frame, and that
-        frame must belong to an actual world.
-        """
-        bridge = Bridge()
-        scaled = Body(
-            name=PrefixedName("cube.stl"),
-            visual=ShapeCollection(shapes=[Box(scale=Scale(0.2, 0.3, 0.4))]),
-        )
-        world = World()
-        with world.modify_world():
-            world.add_body(scaled)
-        bridge.publish_bodies({"cube.stl": scaled})
-        entry = bridge.object_catalog()[0]
-        assert entry["kind"] == "box"
-        assert entry["size"] == [0.2, 0.3, 0.4]
-
     def test_an_object_with_unscaled_shapes_falls_back_to_the_default_size(self):
         bridge = Bridge()
         bridge.publish_bodies({"blob.stl": PublishedBody(name="world/blob.stl")})
@@ -562,11 +530,276 @@ class TestViewerAccessors:
         ] == ["ArmPart", "EndEffectorPart"]
 
 
-# %% live model geometry
+# %% world-driven overlay discovery
+def world_with(*bodies: Body) -> World:
+    """
+    A real world containing the given bodies, each fixed to a shared root.
+
+    :param bodies: The bodies the world is built from.
+    """
+    world = World()
+    root = Body(name=PrefixedName("root", prefix="world"))
+    with world.modify_world():
+        world.add_body(root)
+        for body in bodies:
+            world.add_connection(FixedConnection(parent=root, child=body))
+    return world
+
+
+def shaped_body(prefix: str, name: str) -> Body:
+    """
+    A body carrying one visual box shape, so the overlay publishes it.
+
+    :param prefix: The body's namespace prefix.
+    :param name: The body's local name.
+    """
+    return Body(
+        name=PrefixedName(name, prefix=prefix),
+        visual=ShapeCollection(shapes=[Box(scale=Scale(0.1, 0.1, 0.1))]),
+    )
+
+
+class TestWorldDrivenDiscovery:
+    """
+    ``bind`` publishes every body the world can render, the way RViz would: any body
+    with shapes appears, regardless of what its name looks like — only bodies a bundled
+    model already renders stay out.
+    """
+
+    def test_a_shaped_body_is_published_under_its_full_name(self):
+        bridge = Bridge()
+        bridge.world = world_with(shaped_body("montessori", "board"))
+
+        bridge.bind()
+
+        assert bridge.object_keys() == ["montessori/board"]
+
+    def test_a_shapeless_body_is_not_published(self):
+        bridge = Bridge()
+        bridge.world = world_with(Body(name=PrefixedName("frame", prefix="montessori")))
+
+        bridge.bind()
+
+        assert bridge.object_keys() == []
+
+    def test_a_mesh_named_body_is_published_even_without_shapes(self):
+        bridge = Bridge()
+        bridge.world = world_with(Body(name=PrefixedName("milk.stl", prefix="world")))
+
+        bridge.bind()
+
+        assert bridge.object_keys() == ["milk.stl"]
+
+    def test_bodies_of_parsed_models_stay_out_of_the_overlay(self):
+        """
+        A bundled model's links are already rendered by the bundle, so the overlay must
+        not duplicate them — even when the composed world re-prefixed the model (here
+        ``pr2`` became ``pr2_1``), which is why the exclusion probes by link basename
+        rather than comparing full names.
+        """
+        bridge = Bridge()
+        bridge.remember_model_bodies(["pr2/base_link", "pr2/torso_link"])
+        bridge.world = world_with(
+            shaped_body("pr2_1", "base_link"),
+            shaped_body("pr2_1", "torso_link"),
+            shaped_body("montessori", "board"),
+        )
+
+        bridge.bind()
+
+        assert bridge.object_keys() == ["montessori/board"]
+
+    def test_a_procedural_body_sharing_a_model_prefix_is_still_published(self):
+        """
+        The exclusion must not swallow a body that merely lives under the same prefix as
+        a bundled model but is no link of it.
+        """
+        bridge = Bridge()
+        bridge.remember_model_bodies(["pr2/base_link"])
+        bridge.world = world_with(
+            shaped_body("pr2_1", "base_link"),
+            shaped_body("pr2_1", "attached_marker"),
+        )
+
+        bridge.bind()
+
+        assert bridge.object_keys() == ["pr2_1/attached_marker"]
+
+    def test_snapshot_streams_the_pose_of_every_published_body(self):
+        bridge = Bridge()
+        bridge.world = world_with(shaped_body("montessori", "board"))
+
+        bridge.bind()
+        bridge.snapshot()
+
+        objects = bridge.get_state()["objects"]
+        assert objects["montessori/board"] == [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+
+
+class TestModelBasePoses:
+    """
+    Every bundled model's root pose is streamed, so a second robot or a moved
+    environment model animates instead of sticking to where it spawned.
+    """
+
+    def test_each_bundled_model_root_pose_is_streamed(self):
+        bridge = Bridge()
+        bridge.remember_model_bodies(["pr2/base_link", "pr2/torso_link"])
+        base_link = shaped_body("pr2_1", "base_link")
+        torso_link = shaped_body("pr2_1", "torso_link")
+        world = World()
+        root = Body(name=PrefixedName("root", prefix="world"))
+        with world.modify_world():
+            world.add_body(root)
+            world.add_connection(
+                FixedConnection(
+                    parent=root,
+                    child=base_link,
+                    parent_T_connection_expression=(
+                        HomogeneousTransformationMatrix.from_xyz_rpy(1.0, 2.0, 0.0)
+                    ),
+                )
+            )
+            world.add_connection(FixedConnection(parent=base_link, child=torso_link))
+
+        bridge.world = world
+        bridge.bind()
+        bridge.snapshot()
+
+        model_bases = bridge.get_state()["modelBases"]
+        assert model_bases == {"pr2_1": [1.0, 2.0, 0.0, 0.0, 0.0, 0.0, 1.0]}
+
+    def test_a_model_whose_root_left_the_world_streams_no_base(self):
+        bridge = Bridge()
+        bridge.remember_model_bodies(["pr2/base_link"])
+        bridge.world = world_with(shaped_body("montessori", "board"))
+
+        bridge.bind()
+        bridge.snapshot()
+
+        assert bridge.get_state()["modelBases"] == {}
+
+
+class TestStatusModelVersion:
+    def test_the_model_version_counts_the_tracked_sources(self):
+        bridge = Bridge()
+        assert bridge.status()["modelVersion"] == 0
+
+        bridge.remember_model_source("/robots/pr2.urdf", BundleReport.of_source)
+        bridge.remember_model_source("/scenes/kitchen.urdf", BundleReport.of_source)
+
+        assert bridge.status()["modelVersion"] == 2
+
+    def test_the_status_carries_the_current_bundle_signature(self):
+        """
+        The viewer compares this against its loaded bundle's signature to notice that
+        the demo switched worlds mid-run.
+        """
+        bridge = Bridge()
+        bridge.remember_model_source("/robots/pr2.urdf", BundleReport.of_source)
+
+        status_signature = bridge.status()["bundleSignature"]
+
+        assert status_signature == bridge.model_bundle_context().signature()
+
+
+class TestShapeCatalogEntries:
+    """
+    A shape-published body's catalog entry carries every shape as the viewer builds it:
+
+    kind, dimensions, colour and the shape's local pose within the body.
+    """
+
+    def test_primitive_shapes_carry_dimensions_colors_and_local_poses(self):
+        body = Body(
+            name=PrefixedName("tower", prefix="scene"),
+            visual=ShapeCollection(
+                shapes=[
+                    Box(
+                        scale=Scale(0.2, 0.3, 0.4),
+                        color=Color(0.8, 0.2, 0.2),
+                        origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                            0.1, 0.0, 0.05
+                        ),
+                    ),
+                    Cylinder(width=0.1, height=0.3, color=Color(0.0, 0.5, 1.0)),
+                    Sphere(radius=0.05),
+                ]
+            ),
+        )
+        bridge = Bridge()
+        bridge.publish_bodies({"scene/tower": body})
+
+        entry = bridge.object_catalog()[0]
+
+        assert entry["kind"] == "shapes"
+        assert entry["color"] == "#cc3333"
+        box, cylinder, sphere = entry["shapes"]
+        assert box["kind"] == "box"
+        assert box["size"] == [0.2, 0.3, 0.4]
+        assert box["color"] == "#cc3333"
+        assert box["position"] == [0.1, 0.0, 0.05]
+        assert box["quaternion"] == [0.0, 0.0, 0.0, 1.0]
+        assert cylinder["kind"] == "cylinder"
+        assert cylinder["radius"] == 0.05
+        assert cylinder["height"] == 0.3
+        assert cylinder["color"] == "#0080ff"
+        assert sphere["kind"] == "sphere"
+        assert sphere["radius"] == 0.05
+
+    def test_a_mesh_shape_is_served_from_its_exported_file(self, tmp_path):
+        mesh_file = tmp_path / "board.obj"
+        mesh_file.write_text("o board\n")
+        body = Body(
+            name=PrefixedName("board", prefix="montessori"),
+            visual=ShapeCollection(
+                shapes=[Mesh(filename=str(mesh_file), scale=Scale(1.0, 2.0, 3.0))]
+            ),
+        )
+        bridge = Bridge()
+        bridge.publish_bodies({"montessori/board": body})
+
+        shape = bridge.object_catalog()[0]["shapes"][0]
+
+        serve_key = "montessori/board#0"
+        assert shape["kind"] == "mesh"
+        assert shape["format"] == "obj"
+        assert shape["mesh"] == "/mesh?key=" + urllib.parse.quote(serve_key, safe="")
+        assert shape["scale"] == [1.0, 2.0, 3.0]
+        assert bridge.mesh_path(serve_key) == str(mesh_file)
+
+    def test_a_mesh_shape_whose_file_vanished_becomes_a_default_box(self):
+        body = Body(
+            name=PrefixedName("board", prefix="montessori"),
+            visual=ShapeCollection(shapes=[Mesh(filename="/gone/board.obj")]),
+        )
+        bridge = Bridge()
+        bridge.publish_bodies({"montessori/board": body})
+
+        shape = bridge.object_catalog()[0]["shapes"][0]
+
+        assert shape["kind"] == "box"
+        assert shape["size"] == list(Bridge.DEFAULT_OBJECT_SIZE)
+
+    def test_collision_shapes_stand_in_when_a_body_has_no_visual_ones(self):
+        body = Body(
+            name=PrefixedName("guard", prefix="scene"),
+            collision=ShapeCollection(shapes=[Box(scale=Scale(0.5, 0.5, 0.5))]),
+        )
+        bridge = Bridge()
+        bridge.publish_bodies({"scene/guard": body})
+
+        entry = bridge.object_catalog()[0]
+
+        assert entry["kind"] == "shapes"
+        assert entry["shapes"][0]["size"] == [0.5, 0.5, 0.5]
+
+
+# %% model bundle context
 @dataclass
 class RobotWithBase:
     """
-    A robot mimic exposing only what :meth:`Bridge.live_models` reads off it.
+    A robot mimic exposing only what :meth:`Bridge.model_bundle_context` reads off it.
     """
 
     root: PublishedBody
@@ -584,103 +817,82 @@ def _prefixed_body(world: World, prefix: str, name: str) -> None:
         world.add_body(Body(name=PrefixedName(name=name, prefix=prefix)))
 
 
-class TestLiveModels:
-    def test_no_models_before_any_source_is_remembered(self):
-        assert Bridge().live_models() == []
+class TestModelBundleContext:
+    def test_a_fresh_bridge_tracks_nothing(self):
+        context = Bridge().model_bundle_context()
+
+        assert context.sources == []
+        assert context.world_body_names == []
+        assert context.base_body is None
+        assert context.robot is None
 
     def test_a_source_is_remembered_once(self):
         bridge = Bridge()
-        bridge.remember_urdf_source("/robots/pr2.urdf")
-        bridge.remember_urdf_source("/robots/pr2.urdf")
-        assert len(bridge.live_models()) == 1
+        bridge.remember_model_source("/robots/pr2.urdf", BundleReport.of_source)
+        bridge.remember_model_source("/robots/pr2.urdf", BundleReport.of_source)
 
-    def test_the_robot_source_is_flagged_and_prefixed(self, tmp_path):
-        urdf = tmp_path / "pr2.urdf"
-        urdf.write_text(ONE_LINK_URDF_TEXT)
+        assert len(bridge.model_bundle_context().sources) == 1
+
+    def test_world_body_names_and_base_body_reflect_the_bound_world_and_robot(self):
         world = World()
         _prefixed_body(world, "pr2_1", "base_link")
-
         bridge = Bridge()
         bridge.world = world
         bridge.robot = RobotWithBase(root=PublishedBody(name="pr2_1/base_link"))
-        bridge.remember_urdf_source(str(urdf))
 
-        assert bridge.live_models() == [{"index": 0, "prefix": "pr2_1", "robot": True}]
+        context = bridge.model_bundle_context()
 
-    def test_model_urdf_text_rewrites_the_mesh_reference(self, tmp_path):
-        urdf = tmp_path / "pr2.urdf"
-        urdf.write_text(ONE_MESH_URDF_TEXT)
-        bridge = Bridge()
-        bridge.remember_urdf_source(str(urdf))
+        assert context.world_body_names == ["pr2_1/base_link"]
+        assert context.base_body == "base_link"
+        assert context.robot is bridge.robot
 
-        text = bridge.model_urdf_text(0)
+    def test_an_unbound_world_reports_no_bodies_and_no_base_body(self):
+        context = Bridge().model_bundle_context()
 
-        assert 'filename="model_mesh/0/0.stl"' in text
+        assert context.world_body_names == []
+        assert context.base_body is None
 
-    def test_an_out_of_range_model_has_no_urdf_text(self):
-        assert Bridge().model_urdf_text(0) is None
-
-    def test_model_mesh_path_resolves_the_reference(self, tmp_path):
-        (tmp_path / "meshes").mkdir()
-        mesh = tmp_path / "meshes" / "cup.stl"
-        mesh.write_text("solid cup\nendsolid cup\n")
-        urdf = tmp_path / "pr2.urdf"
-        urdf.write_text(ONE_MESH_URDF_TEXT)
-        bridge = Bridge()
-        bridge.remember_urdf_source(str(urdf))
-
-        assert bridge.model_mesh_path(0, 0) == str(mesh)
-
-    def test_an_out_of_range_model_has_no_mesh_path(self):
-        assert Bridge().model_mesh_path(0, 0) is None
-
-
-class TestLiveModelsDoNotBlockTheSimulationLock:
-    """
-    The tick hook holds :attr:`Bridge._lock` while publishing every snapshot; serving
-    live model geometry (a slow xacro expansion, on a cache miss) must never wait on
-    that same lock, or attaching live would stall the running demo.
-    """
-
-    def _call_with_the_bridge_lock_held(self, bridge, call):
+    def test_each_parsed_models_world_prefix_is_probed(self):
         """
-        Run ``call`` on a background thread while this thread holds ``bridge._lock``,
-        and return whether it finished within a short timeout.
-
-        :param bridge: The bridge whose lock is held for the duration.
-        :param call: A zero-argument callable run on the background thread.
+        The prefixes feed the bundle's change signature: a model whose world-instance
+        prefix resolves differently means the bundle must be rebuilt.
         """
+        bridge = Bridge()
+        bridge.remember_model_bodies(["pr2/base_link"])
+        world = World()
+        _prefixed_body(world, "pr2_1", "base_link")
+        bridge.world = world
+
+        assert bridge.model_bundle_context().model_prefixes == ["pr2_1"]
+
+    def test_without_a_world_no_prefix_resolves(self):
+        bridge = Bridge()
+        bridge.remember_model_bodies(["pr2/base_link"])
+
+        assert bridge.model_bundle_context().model_prefixes == [""]
+
+
+class TestRememberModelSourceDoesNotBlockTheSimulationLock:
+    """
+    The tick hook holds :attr:`Bridge._lock` while publishing every snapshot; the model-
+    source hooks fire synchronously while the demo parses its world and must never wait
+    on that same lock.
+    """
+
+    def test_remember_model_source_does_not_wait_on_the_bridge_lock(self):
+        bridge = Bridge()
         bridge._lock.acquire()
         try:
-            thread = threading.Thread(target=call)
+            thread = threading.Thread(
+                target=lambda: bridge.remember_model_source(
+                    "/robots/pr2.urdf", BundleReport.of_source
+                )
+            )
             thread.start()
             thread.join(timeout=2)
-            return not thread.is_alive()
+            finished = not thread.is_alive()
         finally:
             bridge._lock.release()
-
-    def test_model_urdf_text_does_not_wait_on_the_bridge_lock(self, tmp_path):
-        urdf = tmp_path / "pr2.urdf"
-        urdf.write_text(ONE_MESH_URDF_TEXT)
-        bridge = Bridge()
-        bridge.remember_urdf_source(str(urdf))
-        result = []
-
-        finished = self._call_with_the_bridge_lock_held(
-            bridge, lambda: result.append(bridge.model_urdf_text(0))
-        )
-
-        assert finished
-        assert 'filename="model_mesh/0/0.stl"' in result[0]
-
-    def test_remember_urdf_source_does_not_wait_on_the_bridge_lock(self, tmp_path):
-        urdf = tmp_path / "pr2.urdf"
-        urdf.write_text(ONE_MESH_URDF_TEXT)
-        bridge = Bridge()
-
-        finished = self._call_with_the_bridge_lock_held(
-            bridge, lambda: bridge.remember_urdf_source(str(urdf))
-        )
 
         assert finished
 

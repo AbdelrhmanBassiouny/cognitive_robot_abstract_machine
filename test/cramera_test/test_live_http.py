@@ -14,8 +14,10 @@ import urllib.request
 
 import pytest
 
-from cramera.live.bridge import Bridge
+from cramera import paths
+from cramera.live.bridge import Bridge, ModelBundleContext
 from cramera.live.http import serve
+from cramera.onboard.bundle_urdf import BundleReport
 
 from .test_live_bridge import PublishedBody
 from .test_server import get, get_json
@@ -56,6 +58,7 @@ class TestReadOnlyEndpoints:
             "frames": {},
             "base": None,
             "objects": {},
+            "modelBases": {},
         }
 
     def test_plan_reflects_a_fresh_bridge(self, server):
@@ -82,6 +85,10 @@ class TestReadOnlyEndpoints:
             "plan": False,
             "chart": False,
             "sequenceNumber": 0,
+            "modelVersion": 0,
+            "bundleSignature": ModelBundleContext(
+                sources=[], world_body_names=[], robot=None, base_body=None
+            ).signature(),
             "partAnnotations": [],
         }
 
@@ -104,70 +111,21 @@ class TestMesh:
         assert error.value.code == 404
 
 
-class TestModels:
-    def test_models_reflects_a_fresh_bridge(self, server):
-        assert get_json(server + "/models") == {"models": []}
+class TestLiveScene:
+    def test_live_scene_reflects_a_fresh_bridge(self, server):
+        assert get_json(server + "/live_scene") == {"scene": None}
 
-    def test_models_reports_a_remembered_source(self, server, bridge, tmp_path):
+    def test_live_scene_bundles_a_remembered_source(
+        self, server, bridge, tmp_path, monkeypatch
+    ):
+        scenes = tmp_path / "scenes"
+        monkeypatch.setenv("CRAMERA_SCENES", str(scenes))
         urdf = tmp_path / "pr2.urdf"
         urdf.write_text('<robot name="demo">\n  <link name="base_link"/>\n</robot>\n')
-        bridge.remember_urdf_source(str(urdf))
+        bridge.remember_model_source(str(urdf), BundleReport.of_source)
 
-        assert get_json(server + "/models") == {
-            "models": [{"index": 0, "prefix": "", "robot": False}]
-        }
-
-    def test_model_urdf_serves_the_rewritten_text(self, server, bridge, tmp_path):
-        urdf = tmp_path / "pr2.urdf"
-        urdf.write_text(
-            '<robot name="demo">\n'
-            '  <link name="base_link">\n'
-            "    <visual><geometry>\n"
-            '      <mesh filename="meshes/cup.stl"/>\n'
-            "    </geometry></visual>\n"
-            "  </link>\n"
-            "</robot>\n"
-        )
-        bridge.remember_urdf_source(str(urdf))
-
-        status, body = get(server + "/model_urdf?model=0")
-
-        assert status == 200
-        assert b'filename="model_mesh/0/0.stl"' in body
-
-    def test_an_out_of_range_model_urdf_is_404(self, server):
-        with pytest.raises(urllib.error.HTTPError) as error:
-            get(server + "/model_urdf?model=0")
-        assert error.value.code == 404
-
-    def test_model_mesh_serves_the_resolved_file(self, server, bridge, tmp_path):
-        (tmp_path / "meshes").mkdir()
-        (tmp_path / "meshes" / "cup.stl").write_bytes(b"solid cup endsolid")
-        urdf = tmp_path / "pr2.urdf"
-        urdf.write_text(
-            '<robot name="demo">\n'
-            '  <link name="base_link">\n'
-            "    <visual><geometry>\n"
-            '      <mesh filename="meshes/cup.stl"/>\n'
-            "    </geometry></visual>\n"
-            "  </link>\n"
-            "</robot>\n"
-        )
-        bridge.remember_urdf_source(str(urdf))
-
-        status, body = get(server + "/model_mesh/0/0.stl")
-
-        assert status == 200
-        assert body == b"solid cup endsolid"
-
-    def test_an_out_of_range_model_mesh_is_404(self, server, bridge, tmp_path):
-        urdf = tmp_path / "pr2.urdf"
-        urdf.write_text('<robot name="demo">\n  <link name="base_link"/>\n</robot>\n')
-        bridge.remember_urdf_source(str(urdf))
-
-        with pytest.raises(urllib.error.HTTPError) as error:
-            get(server + "/model_mesh/0/9.stl")
-        assert error.value.code == 404
+        assert get_json(server + "/live_scene") == {"scene": paths.LIVE_SCENE_NAME}
+        assert (scenes / paths.LIVE_SCENE_NAME / "scene.json").is_file()
 
 
 class TestMove:
@@ -237,3 +195,51 @@ class TestTwoIndependentBridges:
         finally:
             first_server.shutdown()
             second_server.shutdown()
+
+
+class TestClientDisconnects:
+    """
+    A browser aborts requests as a matter of course: the viewer polls on an interval and
+    navigating away cancels whatever is in flight.
+
+    The socket is then gone before the response is written, which surfaces as a
+    ``BrokenPipeError`` out of the write. That is the client's normal behaviour, not a
+    server fault, and printing a traceback per occurrence buries the log a real fault
+    would show up in.
+    """
+
+    def raise_and_report(self, server, failure: BaseException) -> None:
+        """
+        Report ``failure`` to the server the way ``socketserver`` does, from inside an
+        active exception handler.
+
+        :param server: The running server whose error reporting is exercised.
+        :param failure: The exception to report.
+        """
+        try:
+            raise failure
+        except type(failure):
+            server.handle_error(None, ("127.0.0.1", 36976))
+
+    def test_a_client_that_hung_up_is_not_reported(self, bridge, capsys):
+        httpd = serve(bridge, 0)
+        try:
+            self.raise_and_report(httpd, BrokenPipeError(32, "Broken pipe"))
+            self.raise_and_report(httpd, ConnectionResetError(104, "Connection reset"))
+        finally:
+            httpd.shutdown()
+
+        assert capsys.readouterr().err == ""
+
+    def test_a_real_fault_is_still_reported(self, bridge, capsys):
+        """
+        The quiet path must stay narrow: anything that is not the client hanging up has
+        to keep reaching the log.
+        """
+        httpd = serve(bridge, 0)
+        try:
+            self.raise_and_report(httpd, ValueError("a real bug"))
+        finally:
+            httpd.shutdown()
+
+        assert "ValueError: a real bug" in capsys.readouterr().err

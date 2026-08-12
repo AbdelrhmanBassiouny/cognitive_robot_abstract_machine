@@ -15,7 +15,7 @@ import pytest
 from typing_extensions import List
 
 from cramera.knowledge.eql_session import EqlSession
-from cramera.paths import WEB_ROOT
+from cramera.paths import LIVE_SCENE_NAME, WEB_ROOT
 
 JS_DIR = Path(__file__).parent / "js"
 
@@ -162,6 +162,29 @@ class TestJsUnits:
 
     def test_joint_routing(self):
         self.run_node("test_joint_routing.js")
+
+    def test_live_mode(self):
+        self.run_node("test_live_mode.js")
+
+    def test_shape_specs(self):
+        self.run_node("test_shape_specs.js")
+
+
+class TestLiveSceneName:
+    """
+    The reserved live scene is named on both sides of the wire: the bridge bundles the
+    running demo into it, and the frontend decides from that name whether the live pose
+    stream may attach at all.
+
+    A rename on one side alone would leave the viewer treating the live scene as an
+    ordinary recording.
+    """
+
+    LIVE_SCENE_NAME_PATTERN = re.compile(r"const SCENE_NAME = '([^']+)'")
+
+    def test_the_frontend_and_the_backend_name_the_same_scene(self):
+        [declared] = self.LIVE_SCENE_NAME_PATTERN.findall(read("core/live-mode.js"))
+        assert declared == LIVE_SCENE_NAME
 
 
 class TestQueryPanelHints:

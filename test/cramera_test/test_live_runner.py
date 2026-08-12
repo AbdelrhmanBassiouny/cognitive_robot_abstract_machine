@@ -21,7 +21,7 @@ def install_no_op_hooks(monkeypatch):
     Replace every hook-installing call ``start()`` makes with a no-op.
     """
     monkeypatch.setattr(runner.hooks, "install_mesh_hook", lambda: None)
-    monkeypatch.setattr(runner.hooks, "install_urdf_source_hook", lambda: None)
+    monkeypatch.setattr(runner.hooks, "install_model_source_hooks", lambda: None)
     monkeypatch.setattr(runner.hooks, "install_plan_hooks", lambda: None)
     monkeypatch.setattr(runner.hooks, "install_tick_hook", lambda: None)
 

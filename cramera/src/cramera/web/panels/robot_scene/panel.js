@@ -37,6 +37,7 @@ Panels.define('robot-scene', function (root, bus) {
     '    <label class="lp-row"><input type="checkbox" id="lyr-objects" checked><span>Bench objects</span></label>' +
     '    <label class="lp-row"><input type="checkbox" id="lyr-labels"><span>Object labels</span></label>' +
     '    <label class="lp-row"><input type="checkbox" id="lyr-floor" checked><span>Floor shadow</span></label>' +
+    '    <label class="lp-row" title="Attach to a running demo whenever one is reachable — including the next run after this one ends — instead of only once per page"><input type="checkbox" id="lyr-auto-live" checked><span>Auto-attach live</span></label>' +
     '    <div class="lp-legend" id="lp-legend"></div>' +
     '  </div>' +
     '  <div id="live-indicator" class="live-indicator">● LIVE</div>' +
@@ -183,12 +184,7 @@ Panels.define('robot-scene', function (root, bus) {
   let sceneBase = null;          // static/scenes/<name>/
   let traj = null;
   const models = [];              // {name, prefix, robot, obj}
-  let robotModel = null;          // active robot entry: recorded, or live once attached
-  let recordedRobotModel = null;  // the bundle's own robot entry, restored on detach
-  let activeModelSet = models;    // the models a frame's joints are looked up in
-  const liveModels = [];          // model entries loaded from the live bridge itself
-  let liveModelsLoaded = false;   // true once every live /models entry has loaded
-  let loadingLiveModels = false;
+  let robotModel = null;          // the bundle's own robot entry
   const objectMeshes = {};       // mesh key ('milk.stl') -> THREE.Group
   const objectLabels = {};       // mesh key -> label sprite
   const liveSpawned = {};        // mesh key -> true for objects added by live mode
@@ -198,8 +194,10 @@ Panels.define('robot-scene', function (root, bus) {
   const _objLoader = new THREE.STLLoader();   // no manager: for live/on-demand loads
 
   // add one draggable object to the scene (bundle load or live spawn). spec:
-  // {id, key, color, meshUrl?, format?  |  box:[x,y,z]}. Any mesh format the
-  // vendored loaders support (stl/obj/dae) works; unknown → placeholder box.
+  // {id, key, color, meshUrl?, format?  |  box:[x,y,z]  |  shapes:[ShapeSpecs spec]}.
+  // Any mesh format the vendored loaders support (stl/obj/dae) works; unknown →
+  // placeholder box. `shapes` is how the live bridge publishes an arbitrary world
+  // body: every shape with its own local pose, dimensions and colour.
   function addObject(spec) {
     // present, or its mesh is still in flight — the live reconcile runs at 15 Hz
     // and would otherwise re-request the same STL dozens of times before it lands
@@ -240,6 +238,65 @@ Panels.define('robot-scene', function (root, bus) {
       if (!centered) geometry.translate(0, 0, s[2] / 2);
       place(new THREE.Mesh(geometry, mat));
     }
+    // a body published shape by shape: primitives build synchronously, meshes stream
+    // into their pose-carrying holders as they load — the group (and so the object's
+    // pose updates) exists immediately either way
+    function shapeMaterial(shapeSpec) {
+      return new THREE.MeshStandardMaterial({
+        color: new THREE.Color(shapeSpec.color),
+        roughness: 0.5, metalness: 0.05, envMapIntensity: 0.7,
+        transparent: shapeSpec.opacity < 1, opacity: shapeSpec.opacity,
+      });
+    }
+    function loadShapeMesh(shapeSpec, holder) {
+      const material = shapeMaterial(shapeSpec);
+      const fail = function () {
+        holder.add(new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.05, 0.05), material));
+        needsRender = true;
+      };
+      const finish = function (content3d) {
+        content3d.scale.set(shapeSpec.scale[0], shapeSpec.scale[1], shapeSpec.scale[2]);
+        holder.add(content3d);
+        needsRender = true;
+      };
+      if (shapeSpec.format === 'obj' && THREE.OBJLoader) {
+        new THREE.OBJLoader().load(shapeSpec.url, function (o) {
+          o.traverse(function (c) { if (c.isMesh) c.material = material; });
+          finish(o);
+        }, undefined, fail);
+      } else if (shapeSpec.format === 'dae' && THREE.ColladaLoader) {
+        new THREE.ColladaLoader().load(shapeSpec.url, function (c) { finish(c.scene); },
+          undefined, fail);
+      } else {
+        _objLoader.load(shapeSpec.url, function (geom) {
+          finish(new THREE.Mesh(geom, material));
+        }, undefined, fail);
+      }
+    }
+    function shapes(shapeSpecs) {
+      const content = new THREE.Group();
+      shapeSpecs.forEach(function (shapeSpec) {
+        const holder = new THREE.Group();
+        holder.position.set(shapeSpec.position[0], shapeSpec.position[1], shapeSpec.position[2]);
+        holder.quaternion.set(shapeSpec.quaternion[0], shapeSpec.quaternion[1],
+          shapeSpec.quaternion[2], shapeSpec.quaternion[3]);
+        content.add(holder);
+        if (shapeSpec.type === 'box') {
+          const s = shapeSpec.size;
+          holder.add(new THREE.Mesh(new THREE.BoxGeometry(s[0], s[1], s[2]), shapeMaterial(shapeSpec)));
+        } else if (shapeSpec.type === 'cylinder') {
+          const geometry = new THREE.CylinderGeometry(shapeSpec.radius, shapeSpec.radius, shapeSpec.height, 24);
+          geometry.rotateX(shapeSpec.rotateXDegrees * Math.PI / 180);
+          holder.add(new THREE.Mesh(geometry, shapeMaterial(shapeSpec)));
+        } else if (shapeSpec.type === 'sphere') {
+          holder.add(new THREE.Mesh(new THREE.SphereGeometry(shapeSpec.radius, 24, 16), shapeMaterial(shapeSpec)));
+        } else if (shapeSpec.type === 'mesh') {
+          loadShapeMesh(shapeSpec, holder);
+        }
+      });
+      place(content);
+    }
+    if (spec.shapes) { shapes(ShapeSpecs.buildSpecs(spec.shapes, spec.color, spec.liveBase)); return; }
     if (spec.box) { box(spec.box, true); return; }
     const fmt = (spec.format || (spec.meshUrl || '').split('?')[0].split('.').pop() || '').toLowerCase();
     if (fmt === 'obj' && THREE.OBJLoader) {
@@ -301,10 +358,8 @@ Panels.define('robot-scene', function (root, bus) {
   let finalized = false;
 
   const manager = new THREE.LoadingManager();
-  const liveManager = new THREE.LoadingManager();   // separate: live loads must not
-                                                     // retrigger the bundle's onLoad
-  function makeUrdfLoader(mgr) {
-    const loader = new URDFLoader(mgr || manager);
+  function makeUrdfLoader() {
+    const loader = new URDFLoader(manager);
     loader.packages = {};
     loader.parseCollision = false;
     const def = loader.defaultMeshLoader.bind(loader);
@@ -335,6 +390,7 @@ Panels.define('robot-scene', function (root, bus) {
     return loader;
   }
 
+  const LIVE_SCENE_NAME = LiveMode.SCENE_NAME;
   // the landing page (no explicit ?scene=) auto-attaches to a live demo the moment
   // one is reachable, instead of requiring a manual click; a URL that names a
   // specific recorded scene is a deliberate choice and is never overridden by this
@@ -367,6 +423,9 @@ Panels.define('robot-scene', function (root, bus) {
     const robotSel = $('robot-select'), envSel = $('environment-select');
     const robotPicker = $('robot-picker'), envPicker = $('environment-picker');
     if (!robotSel || !envSel) return;
+    // picking either dropdown navigates away from the live scene, which the
+    // dropdowns should never do while watching a running demo
+    if (activeName === LIVE_SCENE_NAME) return;
     const robots = ScenePicker.robots(scenes);
     if (robots.length < 2 && ScenePicker.environments(scenes, robots[0]).length < 2) return;
     const active = ScenePicker.describe(scenes, activeName) || {};
@@ -402,17 +461,6 @@ Panels.define('robot-scene', function (root, bus) {
     envSel.addEventListener('change', function () { navigateTo(envSel.value); });
   }
 
-  // load one URDF model and add it to the scene; onDone gets the {name, prefix,
-  // robot, obj} entry once it has loaded
-  function loadModel(urdfUrl, name, prefix, isRobot, mgr, onDone) {
-    makeUrdfLoader(mgr).load(urdfUrl, function (obj) {
-      const entry = { name: name, prefix: prefix || '', robot: !!isRobot, obj: obj };
-      worldRoot.add(obj);
-      needsRender = true;
-      onDone(entry);
-    });
-  }
-
   function loadScene(sc) {
     SCENE = sc;
     if (statusEl) statusEl.textContent = 'Loading ' + sc.name + '…';
@@ -422,9 +470,12 @@ Panels.define('robot-scene', function (root, bus) {
     for (const part in parts) parts[part].forEach(function (l) { linkToPart[l] = part; });
 
     sc.models.forEach(function (m) {
-      loadModel(sceneBase + m.urdf, m.name, m.prefix, m.robot, manager, function (entry) {
+      makeUrdfLoader().load(sceneBase + m.urdf, function (obj) {
+        const entry = { name: m.name, prefix: m.prefix || '', robot: !!m.robot, obj: obj };
         models.push(entry);
-        if (entry.robot) { robotModel = entry; recordedRobotModel = entry; }
+        if (m.robot) robotModel = entry;
+        worldRoot.add(obj);
+        needsRender = true;
       });
     });
 
@@ -559,7 +610,7 @@ Panels.define('robot-scene', function (root, bus) {
     const F = traj.frames, i0 = Math.floor(f), i1 = Math.min(i0 + 1, F.length - 1), t = f - i0;
     const f0 = F[i0], f1 = F[i1];
     for (const k in f0) {
-      const j = JointRouting.jointFor(activeModelSet, k);
+      const j = JointRouting.jointFor(models, k);
       if (j) j.setJointValue(f0[k] + ((f1[k] !== undefined ? f1[k] : f0[k]) - f0[k]) * t);
     }
     if (robotModel && traj.base && traj.base[i0]) {
@@ -979,7 +1030,22 @@ Panels.define('robot-scene', function (root, bus) {
   // of the recording. The button appears whenever a bridge responds.
   const liveBtn = $('live-btn');
   const liveDot = $('live-indicator');   // red badge over the view
+  // a recorded scene cannot be driven live, so the control says it switches views there
+  if (liveBtn) {
+    liveBtn.textContent = LiveMode.labelFor(SceneContext.name(), false);
+    liveBtn.title = LiveMode.titleFor(SceneContext.name());
+  }
   let liveOn = false, liveTimer = null, liveFails = 0, lastSeq = -1;
+  // "always live": keep attaching whenever a demo is reachable, not just once per
+  // page. Persisted, because live mode reloads the page whenever its bundle changes.
+  const AUTO_LIVE_KEY = 'cramera-auto-live';
+  function autoLiveOn() {
+    try { return localStorage.getItem(AUTO_LIVE_KEY) !== '0'; } catch (e) { return true; }
+  }
+  function setAutoLive(on) {
+    try { localStorage.setItem(AUTO_LIVE_KEY, on ? '1' : '0'); } catch (e) {}
+  }
+  let manualLiveDetach = false;  // the user clicked detach; holds off auto-live for this demo
   const liveCbs = [];                  // notified on attach/detach (graph tabs)
   let liveDraggedKey = null;           // object being dragged (poll must not fight it)
   let lastMovePost = 0;
@@ -1004,22 +1070,73 @@ Panels.define('robot-scene', function (root, bus) {
     fetch(liveUrl() + '/info').then(function (r) { return r.json(); })
       .then(function (info) {
         if (liveBtn && !liveOn) liveBtn.style.display = info ? '' : 'none';
-        // landing on the page with no explicit ?scene= attaches the moment a bridge
-        // is reachable, instead of waiting for a manual click
-        if (info && noExplicitScene && !liveOn && !autoAttachedLive) {
+        // landing with no explicit ?scene=, or already on the live scene, attaches
+        // the moment a bridge is reachable, instead of waiting for a manual click;
+        // with auto-live on this keeps re-attaching (e.g. to the next demo run) —
+        // unless the user detached this demo by hand
+        if (info && LiveMode.shouldAutoAttach(
+            SceneContext.name(), !noExplicitScene, liveOn, autoAttachedLive,
+            autoLiveOn() && !manualLiveDetach)) {
           autoAttachedLive = true;
-          setLive(true);
+          goLiveOrAttach();
         }
+        if (info) reloadIfBundleIsStale(info);
       })
-      .catch(function () { if (liveBtn && !liveOn) liveBtn.style.display = 'none'; });
+      .catch(function () {
+        manualLiveDetach = false;    // the demo went away; the next one attaches again
+        if (liveBtn && !liveOn) liveBtn.style.display = 'none';
+      });
+  }
+  // this page's bundle no longer describes the running demo — a model was parsed
+  // after the bundle was built, or the bundle predates the world attach and so knows
+  // neither the models' prefixes nor the robot (see LiveMode.needsLiveSceneReload):
+  // rebundle the live scene, then reload onto it
+  let liveReloadRequested = false;
+  // attaching means "show the running demo": the toggle path never touches
+  // /live_scene, so a page already sitting on the live scene would otherwise keep a
+  // bundle from a previous run (or one built before the world attached) forever.
+  // Rebuild the bundle against the demo's current world and reload if this page was
+  // built from a different one.
+  function verifyLiveBundle() {
+    if (liveReloadRequested || !LiveMode.isLiveScene(SceneContext.name())) return;
+    fetch(liveUrl() + '/live_scene').then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.scene) return;
+        return fetch(SCENES + d.scene + '/scene.json', { cache: 'no-store' })
+          .then(function (r) { return r.ok ? r.json() : null; })
+          .then(function (fresh) {
+            if (!LiveMode.sameBundle(SCENE, fresh)) {
+              liveReloadRequested = true;
+              window.location.reload();
+            }
+          });
+      })
+      .catch(function () {});
+  }
+  function reloadIfBundleIsStale(info) {
+    if (liveReloadRequested
+        || !LiveMode.needsLiveSceneReload(SceneContext.name(), liveOn, SCENE, info)) return;
+    liveReloadRequested = true;
+    fetch(liveUrl() + '/live_scene').then(function (r) {
+      if (r.ok) window.location.reload();
+      else liveReloadRequested = false;        // bundling failed — try again next probe
+    }).catch(function () { liveReloadRequested = false; });
   }
   function applyLive(st) {
     if (!st || !st.frames) return;
     for (const k in st.frames) {
-      const j = JointRouting.jointFor(activeModelSet, k);
+      const j = JointRouting.jointFor(models, k);
       if (j) j.setJointValue(st.frames[k]);
     }
     if (robotModel && st.base) setPose(robotModel.obj, st.base, st.base, 0);
+    // every bundled model root the bridge streams: a second robot drives, a moved
+    // environment model follows (the primary robot's entry re-applies st.base)
+    const modelBases = st.modelBases || {};
+    for (const prefix in modelBases) {
+      models.forEach(function (m) {
+        if (m.prefix === prefix) setPose(m.obj, modelBases[prefix], modelBases[prefix], 0);
+      });
+    }
     let unknown = false;
     liveStateKeys = st.objects || {};
     for (const key in liveStateKeys) {
@@ -1065,7 +1182,8 @@ Panels.define('robot-scene', function (root, bus) {
             return;
           }
           const spec = { id: o.id, key: o.key, color: o.color };
-          if (o.kind === 'mesh' && o.mesh) { spec.meshUrl = liveUrl() + o.mesh; spec.format = o.format; }
+          if (o.kind === 'shapes' && o.shapes) { spec.shapes = o.shapes; spec.liveBase = liveUrl(); }
+          else if (o.kind === 'mesh' && o.mesh) { spec.meshUrl = liveUrl() + o.mesh; spec.format = o.format; }
           else spec.box = o.size || [0.06, 0.06, 0.1];
           liveSpawned[o.key] = true;
           addObject(spec);
@@ -1085,88 +1203,59 @@ Panels.define('robot-scene', function (root, bus) {
       .then(function () { liveSyncing = false; });
   }
 
-  // load the live world's own robot/environment geometry instead of overlaying poses
-  // onto whatever recorded scene happens to be loaded — a no-op if the bridge never
-  // saw a URDF source (e.g. start() was called after the demo built its world), in
-  // which case attaching keeps overlaying the recorded scene, unchanged.
-  var LIVE_MODELS_RETRY_MS = 1000;
-  function attachLiveModels() {
-    if (loadingLiveModels || liveModelsLoaded || !liveOn) return;
-    fetch(liveUrl() + '/models').then(function (r) { return r.json(); })
+  // watching a running demo "live" always means being on the reserved live scene,
+  // which the bridge bundles fresh from the demo's *current* world on every attach
+  // (see cramera.live.live_bundle) — this just gets the browser there, or, once
+  // already there, toggles the plain pose overlay below exactly like any scene.
+  var LIVE_SCENE_RETRY_MS = 1000;
+  function goLiveOrAttach() {
+    if (LiveMode.actionFor(SceneContext.name()) === LiveMode.TOGGLE) {
+      // detaching by hand must stick even with auto-live on — until this demo goes
+      // away, after which the next run is fair game again
+      manualLiveDetach = liveOn;
+      setLive(!liveOn);
+      return;
+    }
+    fetch(liveUrl() + '/live_scene').then(function (r) { return r.json(); })
       .then(function (d) {
-        const entries = d.models || [];
-        if (!entries.length) {
+        if (d && d.scene) {
+          const params = new URLSearchParams(window.location.search);
+          params.set('scene', d.scene);
+          window.location.search = params.toString();
+        } else {
           // the bridge is up (the button is visible at all) but the demo hasn't
-          // parsed its world yet — keep checking until it has, or until detach
-          if (liveOn) setTimeout(attachLiveModels, LIVE_MODELS_RETRY_MS);
-          return;
+          // parsed its world yet — keep checking until it has
+          setTimeout(goLiveOrAttach, LIVE_SCENE_RETRY_MS);
         }
-        loadingLiveModels = true;
-        let pending = entries.length;
-        entries.forEach(function (m) {
-          loadModel(
-            liveUrl() + '/model_urdf?model=' + m.index, 'live_' + m.index,
-            m.prefix, m.robot, liveManager,
-            function (entry) {
-              if (!liveOn) {                 // detach already happened — discard it
-                worldRoot.remove(entry.obj);
-                if (--pending === 0) loadingLiveModels = false;
-                return;
-              }
-              liveModels.push(entry);
-              if (--pending === 0) {
-                loadingLiveModels = false;
-                liveModelsLoaded = true;
-                activeModelSet = liveModels;
-                const liveRobot = liveModels.filter(function (e) { return e.robot; })[0];
-                if (liveRobot) robotModel = liveRobot;
-                // the recorded scene's own models would otherwise sit frozen in
-                // place, doubled up with the live ones now animating on top
-                models.forEach(function (m) { m.obj.visible = false; });
-              }
-            }
-          );
-        });
-      }).catch(function () {
-        if (liveOn) setTimeout(attachLiveModels, LIVE_MODELS_RETRY_MS);
-      });
-  }
-
-  function disposeLiveModels() {
-    liveModels.forEach(function (entry) {
-      worldRoot.remove(entry.obj);
-      entry.obj.traverse(function (c) {
-        if (c.geometry) c.geometry.dispose();
-        if (c.material) {
-          (Array.isArray(c.material) ? c.material : [c.material]).forEach(function (m) {
-            if (m.map) m.map.dispose();
-            m.dispose();
-          });
-        }
-      });
-    });
-    liveModels.length = 0;
-    liveModelsLoaded = false;
-    activeModelSet = models;
-    robotModel = recordedRobotModel;
-    models.forEach(function (m) { m.obj.visible = true; });
+      }).catch(function () {});
   }
 
   function setLive(on) {
+    // A recorded scene and the running demo are separate worlds; the stream replacing a
+    // recording's object poses would silently overwrite whatever was arranged here, so it
+    // only ever drives the live scene. Reaching this from anywhere else is a wiring
+    // mistake, not a user action — goLiveOrAttach navigates instead.
+    const sceneName = SceneContext.name();
+    if (on && !LiveMode.attachable(sceneName)) {
+      console.error('[robot-scene] refusing to attach the live stream to "%s" — '
+        + 'only "%s" can be driven live', sceneName, LiveMode.SCENE_NAME);
+      return;
+    }
     liveOn = on;
     liveCbs.forEach(function (cb) { try { cb(on); } catch (e) {} });
     if (liveDot) liveDot.classList.toggle('on', on);
     if (liveBtn) {
       liveBtn.classList.toggle('on', on);
-      liveBtn.textContent = on ? '◉ LIVE — attached' : '◉ Live';
+      liveBtn.textContent = LiveMode.labelFor(sceneName, on);
+      liveBtn.title = LiveMode.titleFor(sceneName);
     }
     if (on) {
       playing = false;
       lastSeq = -1;
       liveStateKeys = {};
       livePolls = 0;
+      verifyLiveBundle();
       syncLiveObjects();
-      attachLiveModels();
       liveTimer = setInterval(livePoll, 66);          // ~15 Hz render updates
     } else if (liveTimer) {
       clearInterval(liveTimer);
@@ -1174,12 +1263,11 @@ Panels.define('robot-scene', function (root, bus) {
       // remove objects that only existed for the live world, restore the rest
       for (const key in liveSpawned) removeObject(key);
       for (const key in objectMeshes) objectMeshes[key].visible = true;
-      disposeLiveModels();
       if (traj) applyFrame(playhead);                 // back to the recording
     }
     needsRender = true;
   }
-  if (liveBtn) liveBtn.addEventListener('click', function () { setLive(!liveOn); });
+  if (liveBtn) liveBtn.addEventListener('click', goLiveOrAttach);
   const probeTimer = setInterval(probeLive, LIVE_PROBE_INTERVAL_MS);
   probeLive();
 
@@ -1315,6 +1403,12 @@ Panels.define('robot-scene', function (root, bus) {
   bindLayer('lyr-objects', 'setPropsVisible');
   bindLayer('lyr-labels', 'setLabelsAlways');
   bindLayer('lyr-floor', 'setFloorVisible');
+  const autoLiveEl = $('lyr-auto-live');
+  autoLiveEl.checked = autoLiveOn();
+  autoLiveEl.addEventListener('change', function () {
+    setAutoLive(autoLiveEl.checked);
+    if (autoLiveEl.checked) probeLive();     // take effect now, not at the next probe tick
+  });
   RobotView.onReady(function () {
     const legend = $('lp-legend');
     const scene = RobotView.getScene();

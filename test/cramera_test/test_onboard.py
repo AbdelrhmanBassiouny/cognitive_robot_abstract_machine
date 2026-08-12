@@ -40,6 +40,7 @@ from semantic_digital_twin.world_description.shape_collection import ShapeCollec
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Any, Dict, List, Optional
 
+from cramera import paths
 from cramera.onboard import bundle_urdf as bundler
 from cramera.onboard.bundle_world import BundledWorld
 from cramera.onboard.world_to_urdf import UrdfDocument
@@ -461,6 +462,20 @@ class TestSceneIndexEntry:
 
     def test_a_directory_without_a_scene_file_is_skipped(self, tmp_path):
         (tmp_path / "not_a_bundle").mkdir()
+
+        assert SceneIndexEntry.of_directory(tmp_path) == []
+
+    def test_the_reserved_live_scene_name_is_skipped(self, tmp_path):
+        """
+        A live-attach snapshot (:mod:`cramera.live.live_bundle`) is a throwaway bundle
+        rebuilt on every attach, never something a user onboarded — it must never show
+        up as a robot/environment choice in the real picker.
+        """
+        bundle = tmp_path / paths.LIVE_SCENE_NAME
+        bundle.mkdir()
+        (bundle / "scene.json").write_text(
+            json.dumps({"robot": {"name": "pr2"}, "models": []})
+        )
 
         assert SceneIndexEntry.of_directory(tmp_path) == []
 

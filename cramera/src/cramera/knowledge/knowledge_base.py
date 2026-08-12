@@ -53,11 +53,32 @@ class EpisodeKnowledgeBase:
         """
         The knowledge base of one scene, built on first use and cached per scene.
 
+        A cached instance is served only while its bundle is unchanged: the live
+        scene's ``scene.json`` is rewritten by the bridge on every attach, and a
+        knowledge base built from the old bundle would keep answering for a world that
+        no longer exists.
+
         :param scene: Name of the scene to build against, or None for the active one.
         """
-        if scene not in cls._instances:
+        cached = cls._instances.get(scene)
+        if cached is None or cached.bundle_signature != cls._bundle_signature(scene):
             cls._instances[scene] = cls(scene)
         return cls._instances[scene]
+
+    @classmethod
+    def _bundle_signature(cls, scene: Optional[str]) -> Optional[int]:
+        """
+        Modification stamp of a scene's ``scene.json``, or None when it does not exist.
+
+        :param scene: Name of the scene, or None for the active one.
+        """
+        directory = SceneBundle.directory_of(scene)
+        if directory is None:
+            return None
+        scene_path = directory / "scene.json"
+        if not scene_path.is_file():
+            return None
+        return scene_path.stat().st_mtime_ns
 
     @classmethod
     def reset(cls) -> None:
@@ -73,6 +94,11 @@ class EpisodeKnowledgeBase:
     """
     Name of the scene this knowledge base was built from, or None for the active one.
     """
+    bundle_signature: Optional[int]
+    """
+    Modification stamp of the bundle this instance was built from, compared by
+    :meth:`of_scene` to serve a rewritten bundle fresh.
+    """
 
     def __init__(self, scene_name: Optional[str] = None) -> None:
         """
@@ -83,6 +109,7 @@ class EpisodeKnowledgeBase:
             one.
         """
         self.scene_name = scene_name
+        self.bundle_signature = self._bundle_signature(scene_name)
         bundle = SceneBundle.of_scene(scene_name)
         scene, trajectory = bundle.scene, bundle.trajectory
         frames_per_second = scene.get("framesPerSecond", 30)
@@ -251,7 +278,6 @@ class EpisodeKnowledgeBase:
             lookups.
         :param place_area: The scene's place-area object, if any.
         """
-
         episodes = []
         for index, segment in enumerate(scene.get("segments") or []):
             picks = objects_by_id.get(segment.get("picks"))
@@ -395,4 +421,3 @@ class EpisodeKnowledgeBase:
         if "right" in lowered or lowered.startswith("r_"):
             return Arms.RIGHT
         return None
-

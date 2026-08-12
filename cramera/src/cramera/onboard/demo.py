@@ -78,9 +78,14 @@ from cramera.body_geometry import (
 )
 from cramera.live.bridge import ROBOT_BASE_KEY
 from cramera.monkey_patch import MethodPatch
-from cramera.robot_parts import RobotPartAnnotation, model_identity
+from cramera.robot_parts import RobotPartAnnotation
 from cramera.mesh_format import MeshFormat
-from cramera.onboard.bundle_urdf import BundledAssets, BundleReport
+from cramera.onboard.bundle_urdf import (
+    BundledAssets,
+    BundledModel,
+    BundleReport,
+    bundle_model,
+)
 from cramera.onboard.bundle_world import BundledWorld
 from cramera.onboard.world_to_urdf import UrdfDocument
 from cramera.palette import ObjectPalette
@@ -737,46 +742,6 @@ class Recorder:
         return entry
 
 
-@dataclass
-class BundledModel:
-    """
-    One bundled model source, as the ``models`` list of ``scene.json`` records it.
-    """
-
-    name: str
-    """
-    Model name, which is also its URDF's basename inside the bundle.
-    """
-
-    prefix: str
-    """
-    The model's world-name prefix in the composed world, or ``""`` when none was found.
-    """
-
-    is_robot: bool
-    """
-    Whether this model is the recorded robot rather than an environment model.
-    """
-
-    report: BundleReport
-    """
-    What the bundler wrote for this model.
-    """
-
-    def to_payload(self) -> Dict[str, Any]:
-        """
-        The JSON-serializable shape the viewer's model list expects.
-        """
-        return {
-            "name": self.name,
-            "urdf": "%s.urdf" % self.name,
-            "prefix": self.prefix,
-            "robot": self.is_robot,
-            "links": len(self.report.links),
-            "movableJoints": self.report.movable_joints,
-        }
-
-
 # %% post-processing the recording
 @dataclass
 class RecordingAnalysis:
@@ -1108,31 +1073,14 @@ class SceneBuilder:
             from an environment model.
         :return: The model's ``models`` scene entry, and the bundler's report.
         """
-        base_name = os.path.splitext(os.path.basename(source))[0]
-        report = bundler(
-            source, base_name, self.output_directory, hints=self.recorder.resolutions
-        )
-        model_prefix, is_robot = model_identity(
-            links=report.links,
-            world_body_names=world_body_names,
-            base_body=base_body,
-            probe_link_count=self.PREFIX_PROBE_LINKS,
-        )
-        log(
-            "bundled %-28s prefix=%-12s robot=%s meshes=%d missing=%d"
-            % (
-                base_name,
-                model_prefix or "-",
-                is_robot,
-                report.meshes_copied,
-                len(report.missing),
-            )
-        )
-        return BundledModel(
-            name=base_name,
-            prefix=model_prefix,
-            is_robot=is_robot,
-            report=report,
+        return bundle_model(
+            source,
+            bundler,
+            world_body_names,
+            base_body,
+            self.output_directory,
+            self.PREFIX_PROBE_LINKS,
+            hints=self.recorder.resolutions,
         )
 
     def _bundle_unclaimed_bodies(
@@ -1513,6 +1461,8 @@ class SceneIndexEntry:
         """
         entries = []
         for bundle_directory in sorted(scenes_directory.iterdir()):
+            if bundle_directory.name == paths.LIVE_SCENE_NAME:
+                continue  # a live-attach snapshot, never something a user onboarded
             scene_path = bundle_directory / "scene.json"
             if not scene_path.is_file():
                 continue

@@ -27,7 +27,16 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from typing_extensions import Any, Callable, ClassVar, Dict, List, Optional, Pattern, Set
+from typing_extensions import (
+    Any,
+    Callable,
+    ClassVar,
+    Dict,
+    List,
+    Optional,
+    Pattern,
+    Set,
+)
 
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -424,6 +433,96 @@ class BundleReport:
             references_rewritten=rewritten,
             missing=assets.missing,
         )
+
+
+# %% a bundled model within a composed world
+@dataclass
+class BundledModel:
+    """
+    One bundled model source, as the ``models`` list of ``scene.json`` records it.
+    """
+
+    name: str
+    """
+    Model name, which is also its URDF's basename inside the bundle.
+    """
+
+    prefix: str
+    """
+    The model's world-name prefix in the composed world, or ``""`` when none was found.
+    """
+
+    is_robot: bool
+    """
+    Whether this model is the recorded robot rather than an environment model.
+    """
+
+    report: BundleReport
+    """
+    What the bundler wrote for this model.
+    """
+
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The JSON-serializable shape the viewer's model list expects.
+        """
+        return {
+            "name": self.name,
+            "urdf": "%s.urdf" % self.name,
+            "prefix": self.prefix,
+            "robot": self.is_robot,
+            "links": len(self.report.links),
+            "movableJoints": self.report.movable_joints,
+        }
+
+
+def bundle_model(
+    source: str,
+    bundler: Callable[..., BundleReport],
+    world_body_names: List[str],
+    base_body: Optional[str],
+    output_directory: str,
+    probe_link_count: int,
+    hints: Optional[Dict[str, str]] = None,
+) -> BundledModel:
+    """
+    Bundle one model source and turn its report into a ``models`` scene entry.
+
+    Shared by onboarding (bundling a finished recording to disk) and live model
+    serving (bundling a running demo's *current* world to disk) — the two differ only
+    in where ``world_body_names``/``base_body``/``hints`` come from.
+
+    :param source: Path or URI of the model's source file.
+    :param bundler: Bundles the source into ``output_directory``
+        (:meth:`BundleReport.of_source`, or one of :class:`~cramera.onboard.
+        bundle_world.BundledWorld`'s Gazebo/MJCF equivalents).
+    :param world_body_names: Every body name in the composed world, used to find the
+        model's prefix.
+    :param base_body: The robot's base link name, used to tell a robot model apart
+        from an environment model, or None when no robot is bound.
+    :param output_directory: Directory the model's URDF and meshes are written into.
+    :param probe_link_count: How many of the model's first links to check for a
+        prefix (see :func:`~cramera.robot_parts.model_identity`).
+    :param hints: Resolutions recorded while a demo ran, which win over any search.
+    :return: The model's ``models`` scene entry.
+    """
+    base_name = os.path.splitext(os.path.basename(source))[0]
+    report = bundler(source, base_name, output_directory, hints=hints)
+    prefix, is_robot = model_identity(
+        links=report.links,
+        world_body_names=world_body_names,
+        base_body=base_body,
+        probe_link_count=probe_link_count,
+    )
+    logger.info(
+        "bundled %-28s prefix=%-12s robot=%s meshes=%d missing=%d",
+        base_name,
+        prefix or "-",
+        is_robot,
+        report.meshes_copied,
+        len(report.missing),
+    )
+    return BundledModel(name=base_name, prefix=prefix, is_robot=is_robot, report=report)
 
 
 def main() -> None:

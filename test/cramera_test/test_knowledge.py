@@ -3,6 +3,7 @@ Tests for the scene-driven knowledge base and its graph-panel payloads.
 """
 
 import json
+import os
 
 import pytest
 
@@ -50,6 +51,35 @@ from cramera.robot_parts import (  # noqa: E402
 def fresh_knowledge_base(fixture_scene):
     EpisodeKnowledgeBase.reset()
     return EpisodeKnowledgeBase.of_active_scene()
+
+
+class TestKnowledgeBaseFreshness:
+    """
+    The per-scene cache must serve a rebuilt bundle fresh: the live scene's
+    ``scene.json`` is rewritten by the bridge on every attach, and a knowledge base
+    built from the old bundle would keep answering for a world that no longer exists.
+    """
+
+    def test_an_unchanged_bundle_stays_cached(self, fixture_scene):
+        EpisodeKnowledgeBase.reset()
+        first = EpisodeKnowledgeBase.of_scene("fixture")
+
+        assert EpisodeKnowledgeBase.of_scene("fixture") is first
+
+    def test_a_rewritten_bundle_rebuilds_the_knowledge_base(self, fixture_scene):
+        EpisodeKnowledgeBase.reset()
+        first = EpisodeKnowledgeBase.of_scene("fixture")
+        scene_path = fixture_scene / "scenes" / "fixture" / "scene.json"
+        scene = json.loads(scene_path.read_text())
+        scene["robot"]["name"] = "renamed_robot"
+        scene_path.write_text(json.dumps(scene))
+        stat = scene_path.stat()
+        os.utime(scene_path, ns=(stat.st_atime_ns, stat.st_mtime_ns + 1_000_000))
+
+        rebuilt = EpisodeKnowledgeBase.of_scene("fixture")
+
+        assert rebuilt is not first
+        assert rebuilt.robot.name == "renamed_robot"
 
 
 class TestEpisodeKnowledgeBase:
@@ -188,7 +218,9 @@ class TestArmSideInference:
         )
         EpisodeKnowledgeBase.reset()
         center_arm = next(
-            arm for arm in EpisodeKnowledgeBase.of_active_scene().arms if arm.name == "center_arm"
+            arm
+            for arm in EpisodeKnowledgeBase.of_active_scene().arms
+            if arm.name == "center_arm"
         )
         assert center_arm.side is None
 
@@ -277,7 +309,9 @@ class TestRecordedMeasurements:
         )
         EpisodeKnowledgeBase.reset()
         milk = next(
-            entry for entry in EpisodeKnowledgeBase.of_active_scene().objects if entry.name == "milk"
+            entry
+            for entry in EpisodeKnowledgeBase.of_active_scene().objects
+            if entry.name == "milk"
         )
         assert milk.height_metres == 0.23
 
@@ -472,8 +506,8 @@ class TestPresetSafety:
         self, fixture_scene, monkeypatch
     ):
         """
-        ``Preset.of_scene()`` must escape object names, not splice them raw into
-        EQL source.
+        ``Preset.of_scene()`` must escape object names, not splice them raw into EQL
+        source.
         """
         bundle = SceneBundle.of_active_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
@@ -485,9 +519,7 @@ class TestPresetSafety:
             lambda scene_name=None: SceneBundle(scene, trajectory),
         )
         EpisodeKnowledgeBase.reset()
-        preset = next(
-            p for p in Preset.of_scene() if "scene_object.name" in p.code
-        )
+        preset = next(p for p in Preset.of_scene() if "scene_object.name" in p.code)
         result = EqlSession.of_active_scene().run(preset.code)
         assert result.ok and result.rows[0]["__entity__"] == "o'brien"
 
@@ -857,9 +889,7 @@ class TestSceneSelection:
         scene = json.loads((source / "scene.json").read_text())
         scene["robot"]["name"] = "second_robot"
         (other / "scene.json").write_text(json.dumps(scene))
-        (other / "trajectory.json").write_text(
-            (source / "trajectory.json").read_text()
-        )
+        (other / "trajectory.json").write_text((source / "trajectory.json").read_text())
         EpisodeKnowledgeBase.reset()
         return "second"
 
@@ -890,8 +920,7 @@ class TestSceneSelection:
 class TestPresetSmoke:
     def test_every_preset_runs_and_returns_rows(self, fixture_scene):
         """
-        Every preset ``Preset.of_scene()`` hands to the EQL panel must actually
-        run.
+        Every preset ``Preset.of_scene()`` hands to the EQL panel must actually run.
 
         Replaces the module's former ``if __name__ == "__main__":`` smoke script, which
         logged OK/FAIL per preset instead of asserting anything.

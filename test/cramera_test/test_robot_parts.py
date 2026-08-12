@@ -77,6 +77,11 @@ class OneArmedRobot:
 
     arm: ArmPart
 
+    root: NamedBody = field(default_factory=lambda: NamedBody("robot/base_link"))
+    """
+    The robot's root body, read for the base link name.
+    """
+
     def get_arms(self) -> List[ArmPart]:
         return [self.arm]
 
