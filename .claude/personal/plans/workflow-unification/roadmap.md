@@ -6294,3 +6294,51 @@ Filed as `pinned-stack-tooling` in the `stack-tooling` track, opened as draft PR
 returns both paths, so this edits files that #106 and #139 have already landed. #110 is
 the only in-flight branch touching `.claude/stack/`, and it owns setup rather than the
 maintenance pass.
+
+## Update 2026-08-12 (review round): a citation is not a duplicate, and the dedup already has an owner
+
+One comment on #156, posted twice as two threads, against `plan-item-resolve/SKILL.md`'s step 0:
+the section looks duplicated across the skills, so define it once and share it — *unless another
+pull request already does that, in which case leave it there.*
+
+The escape clause is the operative half, and the condition holds. **#149 already collapses this
+exact section** — both plan-item copies — into `plan-dashboard/plan-item-gathering.md`, together
+with the item resolution, the tracking-issue subscription and the roadmap read. Deduplicating it
+here would be two branches restructuring the same paragraphs at once, which is the
+same-artifact-twice pattern this roadmap has now recorded five times.
+
+The rest of the answer is a measurement rather than a judgement. The paragraph appears four times
+on `main` and five once #135 lands, but the *procedure* is already single sourced:
+`prerequisite-check.md` is the shared document, and what repeats in each skill is a one-line
+citation of it plus a skill-specific consequence clause ("rather than failing on a branch that
+isn't there" / "on a missing branch or an `ImportError`"). That is the repo's established shape for
+a shared procedure — `scope-decision.md`, `dependency-readiness.md` and `pr-data-fetching.md` are
+all cited exactly the same way by several skills each. So what the comment saw as duplication is
+the citation layer, and removing it would mean each skill saying less about why it stops, not the
+system holding fewer copies of the rule.
+
+### The hazard the review turned up, which is the part that needed doing
+
+Looking properly at #149 to answer the comment found something neither pull request would have
+caught on its own: `plan-item-gathering.md:12-19` still says *"offer `/setup-personal-notes`"*, and
+`add-plan-item/SKILL.md:24-28` on #135 says the same. Both are **new files on their own branches**,
+so neither conflicts with #156 and nothing flags them at merge time — landing either one after
+#156 silently reinstates the gate #156 exists to remove, for two of the skills in the first case
+and for the fifth caller in the second.
+
+This corrects the resolution `setup-runs-without-asking`'s own notes had recorded, which said to
+keep both edits when the two plan-item skills conflict. That is wrong: the right resolution is to
+take #149's *deletion* of the section and carry #156's wording into its shared document. #135
+additionally conflicts in `prerequisite-check.md` itself, where it only adds `add-plan-item` to the
+opening list, so there the resolution is #156's rewrite plus that one name.
+
+Both were flagged on their own pull requests rather than only here, per the comment-routing rule:
+each is a change to what that pull request ships, not an FYI. Neither branch was pushed to — both
+are out of draft, so both are the user's. The two review threads were replied to and left open,
+since the outcome is a deferral rather than a change.
+
+**Generalizable, and new to this roadmap:** a wording change that lands in a shared document is
+invisible to every branch that has *forked* that document into a new file of its own. Git conflicts
+only cover the copies that already exist; the ones being created in parallel need a reader. The
+cheap check, when changing a rule that several skills cite, is to grep the unlanded branches for
+the old wording rather than only the merge base.

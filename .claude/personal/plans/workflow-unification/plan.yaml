@@ -2984,12 +2984,31 @@ items:
       personal notes somewhere the user did not choose. Only "shall I run this at all" is gone,
       which had exactly one useful answer from a user who had already invoked the skill.
       Standalone rather than stacked, checked mechanically: all eight touched paths exist on main,
-      so this edits landed files, not an unlanded PR's. Two open pull requests are conflict-
-      adjacent without owning this work - #107 rewrites setup-personal-notes/SKILL.md into a thin
+      so this edits landed files, not an unlanded PR's. Two open pull requests are
+      conflict-adjacent without owning this work - #107 rewrites setup-personal-notes/SKILL.md into a thin
       wrapper over a new script, and #149 edits step 0 of plan-item-kickoff and plan-item-resolve
       for execution modes - and neither touches prerequisite-check.md, where the gate actually
-      lived. Expect textual conflicts in the two plan-item skills and hooks/README.md when those
-      land; the resolution is to keep both edits.
+      lived.
+
+      Review round 2026-08-12, one comment posted twice: the step 0 section is duplicated across
+      the skills, so define it once and share it - unless another pull request already does that,
+      in which case leave it there. It does: #149 collapses the two plan-item copies into
+      plan-dashboard/plan-item-gathering.md, so the deduplication is left with it rather than two
+      branches restructuring the same paragraphs. Answered with the measurement rather than a
+      judgement: the procedure is already single sourced in prerequisite-check.md, and what
+      repeats is a one line citation plus a per-skill consequence clause - the same shape
+      scope-decision.md, dependency-readiness.md and pr-data-fetching.md already have. Both
+      threads replied to and left open, the outcome being a deferral rather than a change.
+
+      That review corrected this entry's own conflict resolution, which was wrong. #149's
+      plan-item-gathering.md and #135's add-plan-item/SKILL.md are both new files carrying the
+      superseded "offer /setup-personal-notes" wording, so neither conflicts with this branch and
+      nothing flags them at merge time - landing either afterwards silently reinstates the gate
+      this item removes. For the two plan-item skills the resolution is to take #149's deletion
+      and carry this item's wording into its shared document, not to keep both edits. #135 also
+      conflicts in prerequisite-check.md itself, where it only adds add-plan-item to the opening
+      list, so there the resolution is this rewrite plus that one name. Both were flagged on
+      their own pull requests, each being a change to what that pull request ships.
   - id: deferred-items-hidden-by-default
     title: "Hide deferred items in the dashboard by default, behind their own toggle"
     branch: claude/hidden-deferred-plan-items-6weef1
