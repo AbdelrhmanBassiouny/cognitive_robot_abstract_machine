@@ -3181,3 +3181,12 @@ items:
     status: in_progress
     pull_request_number: 160
     session: https://claude.ai/code/session_0157EHWeTzFSYf1nqHX5J7NC
+    notes: >
+      Bug fix off main, found by using #143's script on rdr-refactor: open patched the
+      item's fields at a hardcoded four-space indent, which does not parse in a manifest
+      whose items are written flush with items: (rdr-refactor's style), so save-plan.sh
+      failed in yaml.safe_load. The depth is now read off the manifest being edited. Two
+      defects in the same path fixed with it: the save swallowed save-plan.sh's output,
+      and reported success without checking the write landed - it now raises with the
+      script's own message, and reads the plan back off the notes branch afterwards.
+      This item's own entry was written by the fixed script.
