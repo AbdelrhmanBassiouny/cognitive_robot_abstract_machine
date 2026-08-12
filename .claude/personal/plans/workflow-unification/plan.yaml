@@ -380,7 +380,7 @@ items:
     pull_request_number: 139
     track: stack-tooling
     depends_on: [stack-tooling-on-main]
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_014E9nB1MUvm4jwgC2UTN5GT
     notes: >
       User's proposal, 2026-08-03: automate the stacking pass with a deterministic script that
@@ -1594,7 +1594,7 @@ items:
     pull_request_number: 120
     track: dashboards
     depends_on: []
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01UkRVjgoWouwbndZa1siY29
     notes: >
       Started 2026-08-01 to surface bug-fix pull requests in the plan dashboard's "What
