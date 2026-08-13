@@ -6,9 +6,9 @@
     ]
   },
   "41": {
+    "title": "[DevTools] A title written for the upstream, not the fork",
     "points": [
       "The child branch, summarised for the upstream reviewer."
-    ],
-    "title": "A title written for the upstream, not the fork"
+    ]
   }
 }

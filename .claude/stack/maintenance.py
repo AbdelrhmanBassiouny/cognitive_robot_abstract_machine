@@ -37,10 +37,7 @@ from maintenance_board import MissingPullRequestFieldError
 from maintenance_commands import COMMANDS, MaintenancePass
 from maintenance_git_commands import GitCommandFailed, GitCommandRunner
 from maintenance_github import GitHubCredentialUnavailableError, GitHubRequestFailed
-from maintenance_promotion import (
-    EmptyPromotionSummaryError,
-    RecordedPromotionLinkMissingError,
-)
+from maintenance_promotion import RecordedPromotionLinkMissingError
 from maintenance_report import MaintenanceExitCode
 from stack import (
     AmbiguousForkRemoteError,
@@ -114,7 +111,6 @@ def _dispatch() -> MaintenanceExitCode:
         MissingPullRequestFieldError,
         ContradictoryLabelWriteError,
         PromotionLinkTooLongError,
-        EmptyPromotionSummaryError,
         RecordedPromotionLinkMissingError,
     ) as error:
         print(f"{error}", file=sys.stderr)

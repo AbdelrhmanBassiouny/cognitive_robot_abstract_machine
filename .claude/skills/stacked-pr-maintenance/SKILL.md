@@ -34,7 +34,7 @@ agents pushing the same branch. Use plain git plus the GitHub MCP server. Never 
 that has an open upstream pull request unless it carries the `rebase` label.
 
 HARD RULES so you never drift into review work:
-- NEVER call `subscribe_pr_activity`, and never stay subscribed - you learn CI by POLLING (step 2).
+- NEVER call `subscribe_pr_activity`, and never stay subscribed - you learn CI by POLLING.
 - If a review, review-comment, issue-comment, or any `<github-webhook-activity>` event is ever delivered
   to you, your ONLY valid action is to END THE TURN immediately: do not investigate it, do not draft or
   post a plan, do not reply, do not ask the developer to confirm anything. The one exception is a CI/check
@@ -126,7 +126,7 @@ configuration above, and it stays that copy until the pass ends.
 
 ## Step 1 - reparent every orphaned child, before anything moves
 
-Do this first, and before step 2. Retargeting a pull request whose base has landed is what lets the
+Do this first, before anything else moves. Retargeting a pull request whose base has landed is what lets the
 next step finish it, and a child left on a landed base cannot reach the upstream base at all - it is
 closed outright the moment that base branch is deleted. The inflated diff such a child shows is a
 symptom, not the problem.
@@ -175,7 +175,7 @@ with that version header. For exactly those children the reparent becomes:
 3. `update_pull_request` each orphaned child's base, which succeeds once the stack is gone. The child
    keeps its number, its labels and its review thread - never close it and open a replacement, which
    loses all three for a base change that is available to you.
-4. Restack normally (step 2's local merge/rebase plus push).
+4. Restack normally (the pass's own local merge/rebase plus push).
 5. Re-create the stack: `POST /repos/{owner}/{repo}/stacks` with `{"pull_requests": [...]}` - the
    recorded list minus landed and closed members, bottom to top - then `GET` it back and confirm
    every member reports the stack.
@@ -186,12 +186,58 @@ stack's trunk, moving it desynchronises the stack's recorded `base.sha` from its
 call in this sequence fails or answers with something not described here, stop work on that stack,
 leave the rest untouched, and report it: this is a preview API, so never improvise around it.
 
-## Step 2 - run the pass
+## Step 2 - write what each promotable branch's upstream pull request opens with
+
+The pass builds a compare-and-create link for every branch ready to go upstream, and
+prefills the pull request that link opens. Everything about that prefill is computed - the
+title, the link back to the fork pull request, the encoding, the length budget - except
+the one thing a script cannot produce: the points the upstream reviewer reads, which are a
+reading of the diff.
+
+**So write them before running the pass.** A run that supplies none still promotes, and the
+upstream pull request then opens with the link back and nothing else - which is right for a
+scheduled run with no model in it, and a waste of the one thing you can do that it cannot.
+
+Name the branches that will promote:
+
+```bash
+python <pinned>/stack.py next --porcelain
+```
+
+One `branch<TAB>pull request` line each. Read each of those pull requests, then write one
+JSON document keyed by fork pull request number:
+
+```json
+{
+  "<fork pull request number>": {
+    "title": "[TopicName] Catchy minimal relatable title",
+    "points": [
+      "What the change does, in terms of the problem it solves.",
+      "Anything it deliberately does not do."
+    ]
+  }
+}
+```
+
+- **`title` follows the upstream's own convention**, which fork titles do not: a topic in
+  square brackets, then a short memorable title - `Agents`, `DevTools`, `Basstler`, `EQL`,
+  `Ormatic` are the kind of topic meant. Omit it and the fork pull request's title is
+  copied through unchanged, which is the mechanical fallback rather than a conforming
+  title, so write one.
+- **`points` is a list, not prose and not markdown.** The bullets are rendered from it, so
+  writing a paragraph produces one bullet containing a paragraph rather than a summary.
+- **The link back to the fork pull request is never yours to write.** It is appended to
+  every prefill, which is what lets the summary stay short.
+
+Write the document outside the checkout - it is one pass's working note, and no branch
+should ever carry it.
+
+## Step 3 - run the pass
 
 Everything mechanical is one command:
 
 ```bash
-python <pinned>/maintenance.py run-report --json
+python <pinned>/maintenance.py run-report --json --summaries <the document you wrote>
 ```
 
 It performs the fast-forward, the restack and the promotion, and emits the whole run as one
@@ -203,18 +249,18 @@ it, and do not run the individual commands as well - that does the same work twi
 | status | what you do |
 |---|---|
 | `success` | render the summary |
-| `awaiting-promotion-summary` | nothing is wrong; go to step 3 and write what those branches are waiting for |
 | `not-fast-forward` | report it - the fork's base is behind the upstream, which every branch is measured against |
 | `move-refused` | stop and look; the reasons are in the document |
 | `branch-needs-attention` | carry every branch it names into the summary |
 
 A non-zero run also prints its status in words, so you never have to look a number up.
 
-**Then read what it left you.** Two entries ask something of you. `reparents` is one: a base change
-is the one write this credential is refused, so step 1 of the next pass is where it gets made.
-`awaiting_summary` is the other, and step 3 is where it gets written. Everything else -
-`fast_forward`, `landed`, `restacked`, `promoted`,
-`promotion_labels_cleared` - is what happened, for the summary. A `restacked` entry other than
+**Then read what it left you.** `reparents` is the only entry that asks anything of you: a base
+change is the one write this credential is refused, so step 1 of the next pass is where it gets
+made. Everything else - `fast_forward`, `landed`, `restacked`, `promoted`,
+`promotion_labels_cleared` - is what happened, for the summary. Each `promoted` entry carries its
+own outcome, so a branch left alone because it already carries the link label, or withheld because
+it is conflicted, says so rather than going unmentioned. A `restacked` entry other than
 `pushed` or `up-to-date` is a branch the pass could not publish; the executor has already labelled
 and commented on it, so name it in the summary and move on.
 
@@ -226,44 +272,6 @@ summary as yours rather than the branch owner's, and never label the branch for 
 
 If a landed pull request is somehow still open after the pass, report it rather than closing it
 yourself.
-
-## Step 3 - write what each promotable branch is waiting for
-
-Every branch the document lists under `awaiting_summary` is one the pass would have promoted and
-held back, for the single thing it cannot compute: the points the upstream reviewer reads. That
-list does not exist until the pass has run, which is why this is a second invocation rather than a
-flag on the first.
-
-Read each of those branches' fork pull requests, and write one JSON document keyed by fork pull
-request number:
-
-```json
-{
-  "<fork pull request number>": {
-    "points": [
-      "What the change does, in terms of the problem it solves.",
-      "Anything it deliberately does not do."
-    ]
-  }
-}
-```
-
-- **`points` is a list, not prose and not markdown.** The bullets are rendered from it, so writing
-  a paragraph produces one bullet containing a paragraph rather than a summary.
-- **`title` is optional**, and replaces the fork pull request's own title for that one branch. Omit
-  it and the fork title is copied through.
-- **The link back to the fork pull request is never yours to write.** It is appended to every
-  prefill, which is what lets the summary stay short.
-
-Write the document outside the checkout - it is one pass's working note, and no branch should ever
-carry it. Then promote:
-
-```bash
-python <pinned>/maintenance.py promote --summaries <the document you wrote>
-```
-
-A branch you deliberately do not want promoted yet is one you simply write no entry for; it is
-reported as awaiting a summary again on the next pass, which is a state, not a failure.
 
 ## What this pass never does
 
@@ -317,7 +325,7 @@ plus anything you stopped on.
 
 ## Command reference - resuming a partial run
 
-Step 2 performs all of these in order. Reach for one directly only when a run stopped partway, or
+Step 3 performs all of these in order. Reach for one directly only when a run stopped partway, or
 when a single step has to be re-run. `<pinned>` is still step 0c's copy; a session resuming somebody
 else's run pins its own first, since the path the other run printed is not in front of you:
 
