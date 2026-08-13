@@ -58,6 +58,7 @@
 <script src="core/live-mode.js"></script>
 <script src="core/shape-specs.js"></script>
 <script src="core/panel-visibility.js"></script>
+<script src="core/panel-arrangement.js"></script>
 <script src="config.js"></script>
 
 <!-- panels — each defines itself in the registry; config.js decides mounting -->
@@ -66,7 +67,7 @@
 <script src="panels/graph/graph.js"></script>
 <script src="panels/graph/panel.js"></script>
 
-<script>Panels.boot(); PanelVisibility.init();</script>
+<script>PanelArrangement.install(); Panels.boot(); PanelArrangement.init(); PanelVisibility.init();</script>
 <script src="core/split-resize.js"></script>
 </body>
 </html>

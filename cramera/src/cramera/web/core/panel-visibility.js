@@ -87,12 +87,21 @@
     }
   }
 
+  let currentState = null;
+  /* The ticked state the page runs with, kept for refresh() after layout moves. */
+
+  /* Re-apply the current selection, e.g. after a panel moved to another slot. */
+  function refresh() {
+    if (currentState) apply(currentState);
+  }
+
   /* Build the topbar View menu and apply the stored selection. */
   function init() {
     const layout = (global.CRAMERA_CONFIG || {}).layout || {};
     const actions = document.querySelector('.topbar-actions');
     if (!actions || !Object.keys(layout).length) return;
     const state = read(global.localStorage, configuredIds(layout));
+    currentState = state;
 
     const menu = document.createElement('div');
     menu.className = 'view-menu';
@@ -141,5 +150,6 @@
     visibleSlots: visibleSlots,
     labelOf: labelOf,
     init: init,
+    refresh: refresh,
   };
 })(typeof window !== 'undefined' ? window : this);

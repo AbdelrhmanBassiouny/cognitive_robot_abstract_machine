@@ -383,3 +383,8 @@ body.graph-full-open{overflow:hidden}
   background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);
   box-shadow:var(--shadow);padding:10px 14px;display:flex;flex-direction:column;gap:2px;
 }
+
+/* %% panel drag & drop */
+.panel.dragging{opacity:.45}
+.panel.drop-before{box-shadow:0 -3px 0 var(--accent)}
+.slot.drop-end{box-shadow:inset 0 -3px 0 var(--accent)}
