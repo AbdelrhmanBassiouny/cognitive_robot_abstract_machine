@@ -10,14 +10,19 @@ from __future__ import annotations
 
 import json
 import sys
-from collections.abc import Sequence
+from collections.abc import Iterable, Sequence
 from dataclasses import asdict, dataclass
-from enum import IntEnum
+from enum import IntEnum, StrEnum
 from pathlib import Path
 
 from maintenance_board import BoardExport
 from maintenance_fast_forward import FastForwardOutcome, FastForwardReport
-from maintenance_promotion import Promotion
+from maintenance_promotion import (
+    BranchAwaitingSummary,
+    PendingPromotion,
+    Promotion,
+    PromotionRound,
+)
 from maintenance_restack_steps import BranchOutcome, RestackOutcome
 from stack import Reparent, Stack, landed_branches, promotion_order, reparents
 
@@ -55,6 +60,12 @@ class MaintenanceReport:
     promotion_labels_cleared: tuple[str, ...] = ()
     """
     The branches whose spent link label was removed this pass.
+    """
+
+    awaiting_summary: tuple[BranchAwaitingSummary, ...] = ()
+    """
+    The branches this pass would have promoted, held back because nobody had written the
+    summary their upstream pull request is to open with.
     """
 
     reparents: tuple[Reparent, ...] = ()
@@ -105,7 +116,7 @@ def build_report(
     stack: Stack,
     fast_forward_report: FastForwardReport | None,
     restacked: Sequence[BranchOutcome],
-    promoted: Sequence[Promotion] = (),
+    promotion: PromotionRound = PromotionRound(),
     promotion_labels_cleared: Sequence[str] = (),
 ) -> MaintenanceReport:
     """
@@ -114,15 +125,16 @@ def build_report(
     :param stack: The derived stack, read for what the caller still has to do.
     :param fast_forward_report: What became of the fork's base branch, if attempted.
     :param restacked: What became of each branch in the restack plan.
-    :param promoted: The branches whose upstream link was built this pass.
+    :param promotion: What the promotion promoted, and what it left waiting.
     :param promotion_labels_cleared: The branches whose spent link label was removed.
     :return: The report.
     """
     return MaintenanceReport(
         fast_forward=fast_forward_report,
         restacked=tuple(restacked),
-        promoted=tuple(promoted),
+        promoted=promotion.promoted,
         promotion_labels_cleared=tuple(promotion_labels_cleared),
+        awaiting_summary=promotion.awaiting_summary,
         reparents=tuple(reparents(stack)),
         landed=tuple(branch.name for branch in landed_branches(stack)),
         promotable=tuple(branch.name for branch in promotion_order(stack)),
@@ -165,19 +177,95 @@ def print_restack(outcomes: Sequence[BranchOutcome]) -> None:
         print(f"{outcome.branch}\t{outcome.outcome}\t{detail}")
 
 
-def print_promotions(promoted: Sequence[Promotion], cleared: Sequence[str]) -> None:
-    """:param promoted: The branches whose link was built this pass.
+AWAITING_SUMMARY_MARKER = "awaiting-summary"
+"""
+Stands where a promoted branch prints its link, for a branch that has none yet.
+"""
+
+
+def print_promotions(promotion: PromotionRound, cleared: Sequence[str]) -> None:
+    """:param promotion: What was promoted, and what is waiting on a summary.
     :param cleared: The branches whose spent link label was removed."""
-    for promotion in promoted:
-        print(f"{promotion.branch}\t#{promotion.pull_request_number}\t{promotion.url}")
-        if promotion.body_was_truncated:
+    for promoted in promotion.promoted:
+        print(f"{promoted.branch}\t#{promoted.pull_request_number}\t{promoted.url}")
+        if promoted.body_was_truncated:
             print(
-                f"{promotion.branch}: the prefilled description was shortened to fit "
+                f"{promoted.branch}: the prefilled description was shortened to fit "
                 f"the URL limit",
                 file=sys.stderr,
             )
+    for waiting in promotion.awaiting_summary:
+        print(
+            f"{waiting.branch}\t#{waiting.pull_request_number}\t"
+            f"{AWAITING_SUMMARY_MARKER}"
+        )
     for branch in cleared:
         print(f"{branch}\tlink-label-cleared\t")
+
+
+class PendingPromotionColumn(StrEnum):
+    """
+    The columns of the table of links still waiting to be opened, in order.
+
+    Header and row are rendered from the same members, so a column cannot be added to
+    one and forgotten in the other.
+    """
+
+    PULL_REQUEST = "Pull request"
+    """
+    The fork pull request the link was built from.
+    """
+
+    TITLE = "Title"
+    """
+    Its title.
+    """
+
+    BRANCH = "Branch"
+    """
+    Its branch.
+    """
+
+    LINK = "Link"
+    """
+    The recorded link, ready to open.
+    """
+
+    def read(self, pending: PendingPromotion) -> str:
+        """
+        :param pending: The promotion to render this column of.
+        :return: The cell's text.
+        """
+        match self:
+            case PendingPromotionColumn.PULL_REQUEST:
+                return f"#{pending.pull_request_number}"
+            case PendingPromotionColumn.TITLE:
+                return pending.title
+            case PendingPromotionColumn.BRANCH:
+                return f"`{pending.branch}`"
+            case _:
+                return f"[open]({pending.url})"
+
+
+def print_pending_promotions(pending: Sequence[PendingPromotion]) -> None:
+    """
+    Print the links still waiting to be opened, as a table to paste as it stands.
+
+    :param pending: The pending promotions.
+    """
+    if not pending:
+        print("no upstream links are waiting to be opened")
+        return
+    print(_table_row(column for column in PendingPromotionColumn))
+    print(_table_row("---" for _ in PendingPromotionColumn))
+    for entry in pending:
+        print(_table_row(column.read(entry) for column in PendingPromotionColumn))
+
+
+def _table_row(cells: Iterable[str]) -> str:
+    """:param cells: The row's cells, in column order.
+    :return: The row, as markdown."""
+    return f"| {' | '.join(cells)} |"
 
 
 # %% the exit status
@@ -241,6 +329,16 @@ class MaintenanceExitCode(IntEnum):
     act on - a conflict, a withheld branch, or a push the fork rejected. Distinct from
     a move check refusal, which is a fault in the move rather than in the branch."""
 
+    AWAITING_PROMOTION_SUMMARY = 11
+    """
+    The pass ran cleanly and held at least one branch back for its summary to be
+    written.
+
+    Distinct from a branch needing attention: nothing is wrong with the branch,
+    and this is the expected result of the run that tells a caller which branches to
+    write for.
+    """
+
     @property
     def name_for_a_caller(self) -> str:
         """
@@ -273,4 +371,6 @@ def exit_code_for(report: MaintenanceReport) -> MaintenanceExitCode:
         return MaintenanceExitCode.MOVE_REFUSED
     if unpublished:
         return MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
+    if report.awaiting_summary:
+        return MaintenanceExitCode.AWAITING_PROMOTION_SUMMARY
     return MaintenanceExitCode.SUCCESS
