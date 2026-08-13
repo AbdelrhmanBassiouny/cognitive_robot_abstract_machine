@@ -51,10 +51,12 @@
     if (!file) return;
     statusEl.textContent = 'loading ' + file.name + '…';
     file.text().then(function (text) {
+      // the file travels as text: python's JSON reader accepts the Infinity/NaN
+      // literals circuit files carry, the browser's JSON.parse does not
       return fetch('/api/models/load', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: JSON.parse(text), name: file.name }),
+        body: JSON.stringify({ model_text: text, name: file.name }),
       });
     }).then(ResponseUtil.parseJson).then(function (state) {
       if (!state.ok) {

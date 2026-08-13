@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 
 from probabilistic_model.distributions.distributions import SymbolicDistribution
+from probabilistic_model.distributions.gaussian import GaussianDistribution
 from probabilistic_model.distributions.uniform import UniformDistribution
 from probabilistic_model.probabilistic_circuit.rx.probabilistic_circuit import (
     ProbabilisticCircuit,
@@ -213,6 +214,31 @@ class TestModelsEndpoints:
 
         mode = post_json(server + "/api/models/mode", {"evidence": []})
         assert mode["likelihood"] == pytest.approx(0.7)
+
+    def test_a_file_with_infinity_literals_loads_as_text(self, server):
+        """
+        Circuit files carry ``Infinity`` bounds python writes and the browser's JSON
+        parser rejects, so the tab uploads the file verbatim as ``model_text`` and the
+        server parses it.
+        """
+        circuit = ProbabilisticCircuit()
+        leaf(
+            GaussianDistribution(variable=Continuous("x"), location=0.0, scale=1.0),
+            circuit,
+        )
+        model_text = json.dumps(circuit.to_json())
+        assert "Infinity" in model_text
+
+        loaded = post_json(
+            server + "/api/models/load",
+            {"model_text": model_text, "name": "gaussian.json"},
+        )
+
+        assert loaded["loaded"] is True
+        posterior = post_json(
+            server + "/api/models/posterior", {"variables": ["x"], "evidence": []}
+        )
+        assert posterior["ok"] is True and posterior["figures"]["x"]["data"]
 
     def test_an_unknown_variable_is_reported_as_an_error(self, server):
         post_json(

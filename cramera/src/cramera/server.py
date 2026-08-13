@@ -269,10 +269,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             body = self._request_body()
             workbench = ModelWorkbench.active()
             if route == "/api/models/load":
+                # ``model_text`` is the uploaded file verbatim: python's JSON reader
+                # accepts the Infinity/NaN literals circuit files carry, which the
+                # browser's own parser would reject
+                model_data = body.get("model")
+                if model_data is None:
+                    model_data = json.loads(body.get("model_text") or "{}")
                 return self._send_json(
-                    workbench.load_model(
-                        body.get("model") or {}, name=body.get("name") or ""
-                    )
+                    workbench.load_model(model_data, name=body.get("name") or "")
                 )
             if route == "/api/models/probability":
                 return self._send_json(
