@@ -3213,3 +3213,72 @@ items:
       and reported success without checking the write landed - it now raises with the
       script's own message, and reads the plan back off the notes branch afterwards.
       This item's own entry was written by the fixed script.
+
+  - id: promotion-summaries-and-table
+    title: "Promote with a written summary, and report the links as a table rather than a notification"
+    branch: null
+    track: stack-tooling
+    depends_on:
+    - stack-maintenance-executor
+    - pinned-stack-tooling
+    status: not_started
+    notes: >
+      User's request, 2026-08-13, about the promotion phase of a maintenance pass: the
+      compare-and-create link must be built by the script rather than assembled by the
+      session; the upstream pull request must open with a title (the fork pull request's
+      own, unless the caller overrides it) and with a body that always links back to the
+      fork pull request and otherwise carries text the caller supplies; the skill must
+      always supply that text as a point-based summary; neither the skill nor the Routine
+      may send a notification; and every promoted branch must be reported as a table, in
+      the session the pass ran in, with its link ready to open.
+
+      Three of those already have a home. PromotionLink.build takes a title and a body and
+      encodes the URL; maintenance_promotion.promote passes the fork pull request's title
+      through unchanged; and _prefilled_description already appends the "Full detail" link
+      back to the fork pull request. What is missing is the body itself. promote derives
+      it with promotion_summary, which takes the fork description's first paragraph
+      verbatim - so the upstream reader gets whatever that description happened to open
+      with, and a description opening with a heading, a badge or a link opens the upstream
+      pull request with that. Nobody has written a word for the upstream reader.
+
+      The body cannot be derived, which is what makes this the one model-shaped step in an
+      otherwise mechanical pass: the script owns the title, the fork link, the encoding,
+      the length budget and the table, and the session supplies only the bullets. Proposed
+      interface, to settle at kickoff - promote and run-report read the summaries from a
+      file keyed by fork pull request number, and a promotable branch with no entry is
+      reported as awaiting one rather than promoted with a body nobody wrote (the report
+      already carries promotable, so the session has the list it must write for). Two
+      invocations is the honest shape, since a summary cannot exist before the pass has
+      decided a branch is promotable: run the pass, read promotable, write the bullets,
+      promote. Whether that is worth collapsing into one is the kickoff's call.
+
+      The table replaces a hand-assembly the skill asks for today. SKILL.md's Finish
+      section already wants every pending create-link listed - built this pass, plus every
+      fork pull request still carrying cram2-link-sent without in-review, its link rebuilt
+      with promotion-link - and leaves the session to compose it. That is a rendering, so
+      it belongs to the executor: a command emitting one markdown row per pending
+      promotion (number, title, branch, link), which the session pastes. maintenance.py's
+      commands are auto-discovered MaintenanceCommand subclasses, so adding one is writing
+      a subclass and nothing else has to be told it exists.
+
+      Notifications off is the reason the table has to exist. SKILL.md's Finish section
+      currently rests on "a scheduled run is configured to email its summary, so the
+      summary *is* the delivery", and that premise goes. The link also stays written into
+      the fork pull request's own description under the Promote heading, which is what
+      makes a summary nobody reads harmless. Open question, not to be invented: an already
+      registered Routine's notification setting has no field on update_trigger, so whether
+      it can be changed in place or needs re-registering has to be checked before
+      routine-prompt.md tells anyone how to do it.
+
+      New-vs-change was tested rather than judged. git ls-tree main returns
+      .claude/stack/maintenance_promotion.py, .claude/skills/stacked-pr-maintenance/SKILL.md
+      and the skill's routine-prompt.md, so this edits files #106 and #139 have landed.
+      Two in-flight branches overlap. #158 (pinned-stack-tooling) rewrites every command
+      invocation in SKILL.md and asserts the exact set still run from the working tree, so
+      a command added here must be pinned too - a real ordering dependency, recorded above.
+      #155 (claude/routine-prompt-refresh-ps5l3z, untracked by any plan item, unlanded,
+      carrying cram2-link-sent but not in-review) is what introduces "turn its completion
+      email on" - the one paragraph this item reverses. Under the fold rule that paragraph
+      is #155's own work while #155 is unlanded, so check at kickoff whether its upstream
+      pull request has been created yet: if not, fold the reversal into #155 and leave
+      everything else here, which stands alone either way.

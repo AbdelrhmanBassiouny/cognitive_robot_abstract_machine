@@ -6599,3 +6599,64 @@ One incidental confirmation of this item's own premise, from trying to record th
 `plan_item_bootstrap.py update --append-notes` does not exist on `main` - it is #151's, still
 unlanded - so the manifest edit went the landed route instead. The tool's command set differing
 by branch is exactly what this pull request is about, met while writing it up.
+
+## Update 2026-08-13 (new item): the upstream pull request opens with nobody's words
+
+The promotion phase of a maintenance pass builds a compare-and-create link that opens the
+upstream pull request prefilled. The title is the fork pull request's own, and the body is
+whatever `promotion_summary` finds: the first paragraph of the fork description, taken
+verbatim, plus the "Full detail" link back. That is derivation standing in for writing. A
+fork description opening with a heading, a badge, a status line or a link opens the
+upstream pull request with that, and in every case the upstream reviewer - the one person
+the text exists for - is reading a paragraph written for somebody else.
+
+The user's request is that the body always be a point-based summary, and that the script
+own everything around it: the title (copied from the fork pull request unless the caller
+overrides it), the link back to the fork pull request, which is never optional, and the
+caller's text. That splits the step cleanly along the line where judgment actually starts.
+The bullets cannot be computed - they are a reading of a diff - so the session writes them
+and nothing else; the title, the fork link, the percent-encoding, the 8 KiB URL budget and
+the truncation marker are all mechanical and stay in `PromotionLink`. "As scripted and as
+model-based as possible" is not a compromise between the two: it is one boundary drawn in
+the one place it belongs.
+
+The proposed interface is a summaries file keyed by fork pull request number, read by
+`promote` and `run-report`, where a promotable branch with no entry is reported as awaiting
+a summary rather than promoted with a body nobody wrote. Failing loudly is the point:
+falling back to the first paragraph is exactly today's behaviour, so a fallback would make
+the new interface optional and the old defect reachable. Two invocations follow from the
+data rather than from taste - the report's `promotable` list is what tells the session
+which branches need bullets, and it does not exist until the pass has run.
+
+The second half is the delivery. `SKILL.md`'s Finish section asks the session to assemble
+the pending create-links by hand: those built this run, plus every fork pull request still
+carrying `cram2-link-sent` without `in-review`, each link rebuilt with `promotion-link`. It
+then justifies that with "a scheduled run is configured to email its summary, so the
+summary *is* the delivery", and #155 completes the thought by telling whoever registers the
+Routine to turn its completion email on. The user wants no notification from either, so
+that premise is withdrawn and the pass reports a table instead - one row per pending
+promotion, with its number, title, branch and ready link - in whichever session ran it.
+Rendering is mechanical, so the executor emits the table and the session pastes it;
+`maintenance.py` finds its commands from `MaintenanceCommand.__subclasses__()`, so this is
+a subclass and no registry to update. Nothing is lost when a summary goes unread, because
+the link is still written into the fork pull request's own description under `## Promote`,
+which is where it survives the session that built it.
+
+One thing is deliberately unanswered rather than guessed: `update_trigger` has no
+notification field, so whether an already-registered Routine's completion email can be
+turned off in place or only by re-registering has to be checked before `routine-prompt.md`
+instructs anyone. Inventing the answer would put a wrong instruction in the one document a
+scheduled run is configured from.
+
+Filed as `promotion-summaries-and-table` in the `stack-tooling` track, `not_started`, no
+branch yet - the user asked for the plan only. New-vs-change was tested rather than
+assumed: `git ls-tree main` returns `.claude/stack/maintenance_promotion.py`,
+`.claude/skills/stacked-pr-maintenance/SKILL.md` and the skill's `routine-prompt.md`, so
+this edits landed files. It depends on `pinned-stack-tooling` for a concrete reason rather
+than a topical one: #158 rewrites every command invocation in `SKILL.md` and asserts the
+exact set of invocations still allowed to run from the working tree, so a command added
+here has to be pinned in the same document. And #155 - untracked by any plan item, unlanded,
+`cram2-link-sent` without `in-review` - is what introduces the "turn its completion email
+on" paragraph this item reverses; under the fold rule that paragraph belongs to #155 while
+#155 is unlanded, so kickoff checks whether its upstream pull request exists yet and folds
+the reversal there if it does not. The rest of the item stands alone in either case.
