@@ -30,15 +30,12 @@ from integration import (
     ResolutionAuthor,
     ResolutionProvenance,
     PullRequestStackTipOutcome,
+    IntegrationTestFailure,
     ReportKey,
-    SemanticBreak,
     TipStatus,
-    UnreviewedBranch,
     build_branch_name,
     build_integration,
-    escalate_semantic_break,
     exit_code_for,
-    exit_code_for_break_location,
     select_for_build,
     tips_of,
 )
@@ -109,7 +106,7 @@ The tip whose test comes to depend on a module another tip removes.
 
 REMOVES_THE_MODULE = "removes-the-module"
 """
-The tip that removes it - the culprit of the semantic break these two make together.
+The tip that removes it - the culprit of the integration test failure these two make together.
 """
 
 INNOCENT_TIP = "innocent-tip"
@@ -358,7 +355,7 @@ def test_the_last_reviewed_branch_below_a_draft_is_the_one_merged():
     assert [tip.name for tip in tips] == ["middle"]
 
 
-def test_create_unreviewed_branch_is_named_rather_than_silently_dropped():
+def test_an_unreviewed_branch_is_named_rather_than_silently_dropped():
     """
     A build that carries nine of nineteen branches and says so only by omission reads as
     having covered everything. Each one left out names itself and why.
@@ -372,7 +369,23 @@ def test_create_unreviewed_branch_is_named_rather_than_silently_dropped():
     assert [
         (left_out.branch, left_out.pull_request_number) for left_out in unreviewed
     ] == [("unreviewed", 7)]
-    assert unreviewed[0].unreviewed_ancestor is None
+    assert unreviewed[0].attributed_to is None
+
+
+def test_a_branch_nobody_reviewed_carries_the_status_that_says_so():
+    """
+    A branch left out for want of review is one of the outcomes a build reports, not a
+    separate kind of thing - so it says what happened to it in the same vocabulary, and
+    that status says the build never carried it.
+    """
+    unreviewed = select_for_build(
+        create_stack_object(
+            [create_branch_object("unreviewed", 7, status=BranchStatus.DRAFT)]
+        )
+    ).unreviewed
+
+    assert unreviewed[0].status is TipStatus.UNREVIEWED
+    assert not unreviewed[0].reached_the_build
 
 
 def test_a_branch_left_out_for_its_ancestor_names_that_ancestor():
@@ -389,9 +402,7 @@ def test_a_branch_left_out_for_its_ancestor_names_that_ancestor():
         )
     ).unreviewed
 
-    assert {
-        left_out.branch: left_out.unreviewed_ancestor for left_out in unreviewed
-    } == {
+    assert {left_out.branch: left_out.attributed_to for left_out in unreviewed} == {
         "beneath": None,
         "above": "beneath",
     }
@@ -561,7 +572,7 @@ def test_a_skipped_tip_names_the_tip_it_collided_with(fork_checkout: ForkCheckou
     )
 
     skipped = outcome_for(report, SECOND_TIP)
-    assert skipped.collided_with == FIRST_TIP
+    assert skipped.attributed_to == FIRST_TIP
     assert skipped.conflicting_paths == ("contested",)
 
 
@@ -587,7 +598,7 @@ def test_a_tip_conflicting_with_the_base_itself_names_the_base(
 
     skipped = outcome_for(report, STALE_TIP)
     assert skipped.status is TipStatus.SKIPPED
-    assert skipped.collided_with == UPSTREAM_BASE
+    assert skipped.attributed_to == UPSTREAM_BASE
 
 
 def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
@@ -673,7 +684,7 @@ def test_a_replayed_resolution_is_never_reported_as_a_clean_merge(
 
     replayed = outcome_for(report, SECOND_TIP)
     assert replayed.status is TipStatus.REPLAYED
-    assert replayed.collided_with == FIRST_TIP
+    assert replayed.attributed_to == FIRST_TIP
 
 
 def test_a_replayed_resolution_carries_the_author_that_recorded_it(
@@ -902,7 +913,8 @@ def test_a_failing_suite_is_never_reported_as_a_clean_build(
     fork_checkout: ForkCheckout,
 ):
     """
-    A semantic conflict - one branch renaming what another calls - merges cleanly and
+    A failure between two cleanly merging branches - one renaming what another calls - merges
+    cleanly and
     breaks on import, so a green merge says nothing about whether the result works.
     """
     fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
@@ -982,12 +994,12 @@ def test_a_failing_suite_over_a_machine_written_replay_is_its_own_status(
     assert exit_code_for(report) is IntegrationExitCode.SUSPECT_REPLAY
 
 
-# %% localising a semantic break
+# %% localising an integration test failure
 
 
 BUILD_CHECK_SCRIPT = Path(__file__).parent / "dataset" / "check_the_build.py"
 """
-A suite whose verdict depends on what the build actually contains, so a semantic break
+A suite whose verdict depends on what the build actually contains, so an integration test failure
 is reproduced rather than declared. Lives on the base, where every build has it.
 
 Kept as a real Python file rather than a string, so it is syntax-checked and readable as
@@ -999,7 +1011,7 @@ def two_tips_that_break_only_together(checkout: ForkCheckout) -> list[PullReques
     """
     Build tips that each pass alone, merge cleanly, and fail the suite together.
 
-    The shape a semantic break really takes: one branch's test comes to depend on
+    The shape an integration test failure really takes: one branch's test comes to depend on
     something another branch removes. Neither is wrong, neither conflicts textually, and
     only a build carrying both can see it. An innocent tip merges first, so a search that
     blamed everything already in the build would be caught naming it.
@@ -1052,13 +1064,13 @@ def locate_break(
     :param test_command: The suite that decides whether a build works.
     :return: What it localised.
     """
-    return integration.locate_semantic_break(
+    return integration.FailureLocation(
         stack=a_stack(checkout, pull_requests),
         git=checkout.git,
         build_branch=A_BUILD_BRANCH,
         provenance=ResolutionProvenance({}),
         test_command=test_command,
-    )
+    ).find()
 
 
 A_SUITE_OVER_THE_BUILD = f"{sys.executable} {BUILD_CHECK_SCRIPT.name}"
@@ -1080,8 +1092,8 @@ def test_the_search_names_the_tip_whose_arrival_broke_the_suite(
 
     report = locate_break(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
 
-    assert report.semantic_break is not None
-    assert report.semantic_break.culprit == REMOVES_THE_MODULE
+    assert report.integration_test_failure is not None
+    assert report.integration_test_failure.culprit == REMOVES_THE_MODULE
 
 
 def test_the_search_names_the_tip_the_culprit_actually_breaks_against(
@@ -1095,7 +1107,7 @@ def test_the_search_names_the_tip_the_culprit_actually_breaks_against(
 
     report = locate_break(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
 
-    assert report.semantic_break.breaks_against == NEEDS_THE_MODULE
+    assert report.integration_test_failure.breaks_against == NEEDS_THE_MODULE
 
 
 def test_searching_a_build_that_works_localises_nothing(fork_checkout: ForkCheckout):
@@ -1111,8 +1123,8 @@ def test_searching_a_build_that_works_localises_nothing(fork_checkout: ForkCheck
         f"{sys.executable} -c pass",
     )
 
-    assert report.semantic_break is None
-    assert exit_code_for_break_location(report) is IntegrationExitCode.SUCCESS
+    assert report.integration_test_failure is None
+    assert report.exit_code is IntegrationExitCode.SUCCESS
 
 
 def test_a_localised_break_is_never_reported_as_a_clean_search(
@@ -1126,7 +1138,7 @@ def test_a_localised_break_is_never_reported_as_a_clean_search(
 
     report = locate_break(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
 
-    assert exit_code_for_break_location(report) is IntegrationExitCode.TESTS_FAILED
+    assert report.exit_code is IntegrationExitCode.TESTS_FAILED
 
 
 def test_the_search_leaves_no_branch_of_its_own_behind(fork_checkout: ForkCheckout):
@@ -1156,7 +1168,7 @@ def test_the_search_report_serialises_what_it_localised(fork_checkout: ForkCheck
     assert (
         document[ReportKey.STATUS] == IntegrationExitCode.TESTS_FAILED.name_for_a_caller
     )
-    localised = document[ReportKey.SEMANTIC_BREAK]
+    localised = document[ReportKey.INTEGRATION_TEST_FAILURE]
     assert localised[ReportKey.CULPRIT] == REMOVES_THE_MODULE
     assert localised[ReportKey.BREAKS_AGAINST] == NEEDS_THE_MODULE
 
@@ -1164,18 +1176,18 @@ def test_the_search_report_serialises_what_it_localised(fork_checkout: ForkCheck
 # %% telling the branch that breaks another
 
 
-def create_semantic_break(
+def create_integration_test_failure(
     culprit: str = "the-breaking-branch",
     number: int = 111,
     breaks_against: str | None = "the-relying-branch",
-) -> SemanticBreak:
+) -> IntegrationTestFailure:
     """
     :param culprit: The tip whose arrival turned the suite.
     :param number: The pull request that publishes it.
     :param breaks_against: The earlier tip it fails against alone.
-    :return: A localised break to escalate.
+    :return: A localised failure to block a branch for.
     """
-    return SemanticBreak(
+    return IntegrationTestFailure(
         culprit=culprit,
         culprit_pull_request_number=number,
         already_included=("an-innocent-tip", "the-relying-branch"),
@@ -1190,7 +1202,9 @@ def test_escalating_a_break_blocks_the_branch_that_causes_it():
     """
     fork = RecordingPullRequests(labels={111: [A_LABEL_THIS_TOOL_NEVER_WRITES]})
 
-    escalate_semantic_break(create_semantic_break(), make_configuration(), fork)
+    create_integration_test_failure().block_the_branch_that_causes_it(
+        make_configuration(), fork
+    )
 
     assert fork.label_writes == [
         RecordedLabelWrite(
@@ -1207,7 +1221,9 @@ def test_escalating_a_break_names_both_branches_to_the_one_that_broke_it():
     """
     fork = RecordingPullRequests()
 
-    escalate_semantic_break(create_semantic_break(), make_configuration(), fork)
+    create_integration_test_failure().block_the_branch_that_causes_it(
+        make_configuration(), fork
+    )
 
     posted = fork.comments[0]
     assert posted.pull_request_number == 111
@@ -1221,9 +1237,9 @@ def test_a_break_only_the_combination_causes_says_so_rather_than_naming_create_b
     """
     fork = RecordingPullRequests()
 
-    escalate_semantic_break(
-        create_semantic_break(breaks_against=None), make_configuration(), fork
-    )
+    create_integration_test_failure(
+        breaks_against=None
+    ).block_the_branch_that_causes_it(make_configuration(), fork)
 
     assert "the-relying-branch" not in fork.comments[0].body
 
@@ -1234,7 +1250,7 @@ def test_a_break_only_the_combination_causes_says_so_rather_than_naming_create_b
 def create_report(
     tips: tuple[PullRequestStackTipOutcome, ...] = (),
     tests_passed: bool | None = None,
-    unreviewed: tuple[UnreviewedBranch, ...] = (),
+    unreviewed: tuple[PullRequestStackTipOutcome, ...] = (),
 ) -> IntegrationReport:
     """
     :param tips: What became of each tip.
@@ -1253,16 +1269,17 @@ def create_report(
 
 def create_unreviewed_branch(
     branch: str, unreviewed_ancestor: str | None = None
-) -> UnreviewedBranch:
+) -> PullRequestStackTipOutcome:
     """
     :param branch: The branch left out.
     :param unreviewed_ancestor: The draft beneath it, if that is why.
     :return: One entry of a build's unreviewed list.
     """
-    return UnreviewedBranch(
+    return PullRequestStackTipOutcome(
         branch=branch,
         pull_request_number=1,
-        unreviewed_ancestor=unreviewed_ancestor,
+        status=TipStatus.UNREVIEWED,
+        attributed_to=unreviewed_ancestor,
     )
 
 
@@ -1340,12 +1357,46 @@ def test_a_failing_suite_outranks_a_tip_left_out():
     )
 
 
+def test_every_status_says_whether_its_tip_is_in_the_build():
+    """
+    Whether a tip's commits reached the branch is the status's own answer rather than a
+    set of the statuses that count, so a status added later cannot default to being
+    reported as left out without anybody deciding that.
+    """
+    assert {status for status in TipStatus if status.carried} == {
+        TipStatus.MERGED,
+        TipStatus.REPLAYED,
+    }
+
+
 def test_every_status_names_itself_for_a_caller():
     """
     A process exit status can only be an integer, so the name accompanies the number
     rather than a caller having to decode one.
     """
     assert IntegrationExitCode.TIP_LEFT_OUT.name_for_a_caller == "tip-left-out"
+
+
+def test_the_report_keys_are_the_ones_a_caller_parses():
+    """
+    The one place this document's wire format is pinned, because everything else reads
+    the enum on both sides and a rename there changes writer and reader identically.
+
+    Most keys are a dataclass field name that ``asdict`` produces, so a rename of those
+    fails wherever they are read. ``status`` and ``exit_code`` are not - ``as_json``
+    injects them through this enum - so they are pinned by nothing else, and they are the
+    two ``/integration-conflict-triage`` matches on first.
+    """
+    assert {key.name: str(key) for key in ReportKey} == {
+        "STATUS": "status",
+        "EXIT_CODE": "exit_code",
+        "TIPS": "tips",
+        "UNREVIEWED": "unreviewed",
+        "INTEGRATION_TEST_FAILURE": "integration_test_failure",
+        "BRANCH": "branch",
+        "CULPRIT": "culprit",
+        "BREAKS_AGAINST": "breaks_against",
+    }
 
 
 def test_the_report_serialises_what_the_build_left_behind():

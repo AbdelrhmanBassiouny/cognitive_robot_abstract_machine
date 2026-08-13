@@ -2,7 +2,7 @@
 A suite whose verdict depends on what the build under test actually contains.
 
 Copied onto the base of the scratch fork, where every build carries it, and run against
-the finished integration branch. Its point is that a semantic break is *reproduced*
+the finished integration branch. Its point is that the failure is *reproduced*
 rather than declared: the assertion holds for either tip alone and fails only for a tree
 carrying both, which is the failure per-branch checks structurally cannot see.
 """

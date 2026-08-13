@@ -133,7 +133,7 @@ verdict to the owner of the branch that should change.
 
 **stack - report.** Say which branch should sit on which. Do not retarget anything.
 
-## Step 4 - a `tests-failed` build: the collision the merge could not see
+## Step 4 - a `tests-failed` build: the failure the merge could not see
 
 Two branches can each pass their own checks, merge with no conflict at all, and not work
 together - one renames what the other calls, one removes what the other's test imports, one
@@ -143,7 +143,7 @@ catch this: neither branch is wrong, and the failure exists only in a tree neith
 **Find the pair before judging it.** A failing suite over ten merged tips names nothing:
 
 ```bash
-python .claude/stack/integration.py locate-break --json
+python .claude/stack/integration.py locate-failure --json
 ```
 
 It re-assembles the tips in the same order and runs the suite after each, so what it reports
@@ -157,11 +157,11 @@ its owner that instead.
 
 ### The one thing that is different here
 
-**Nothing can be recorded for a semantic break.** `rerere` replays *merge conflict*
-resolutions, and a semantic break has no conflict and therefore no preimage to key one on. So
+**Nothing can be recorded for an integration test failure.** `rerere` replays *merge conflict*
+resolutions, and this has no conflict and therefore no preimage to key one on. So
 the `defer` verdict from step 3 does not exist here, and reaching for it is the mistake this
 section is written to prevent. Until one of the two branches changes, **every future build
-carries the break**. Rebuilding does not help, and saying it might would be a lie with a delay
+carries the failure**. Rebuilding does not help, and saying it might would be a lie with a delay
 attached.
 
 ### The verdicts
@@ -176,7 +176,7 @@ launders your guess as their decision.
 **reconcile** - as in step 3. A break can reveal a duplicated abstraction just as a conflict
 can, and it is worth looking for before settling for `adapt`.
 
-**sequence** - the break exists only because both are unlanded. Once the first lands, fixing
+**sequence** - the failure exists only because both are unlanded. Once the first lands, fixing
 the second is ordinary work on a normal base, with a real review behind it. Nothing to do now
 but record it where the plan's state lives, and say which order makes it go away.
 
@@ -184,24 +184,25 @@ Whichever it is, say plainly that the integration branch is red until somebody a
 area of the suite is affected - a developer can still work from a branch whose breakage they
 know the shape of, and cannot from one they do not.
 
-### Step 5 - escalate it, because a comment alone is missed
+### Step 5 - block the branch, because a comment alone is missed
 
-A break nobody acts on is carried by every later build. So the branch that causes it is
-**blocked**, not merely mentioned, and the escalation is one command rather than four steps
-done by hand:
+A failure nobody acts on is carried by every later build. So the branch that causes it is
+**blocked**, not merely mentioned, and blocking it is one command rather than four steps done
+by hand:
 
 ```bash
-python .claude/stack/integration.py escalate --json
+python .claude/stack/integration.py block-branch --json
 ```
 
 It applies the `integration-conflict` label to the breaking branch's pull request and comments
 on it naming the branch it breaks, addressed to the session in its description. Both halves
 matter: `needs-resolution` is cleared automatically once a pull request stops reporting a
-conflict, and a semantic break never makes one conflicted - so reusing that label would have
+conflict, and a failure between two cleanly merging branches never makes one conflicted - so
+reusing that label would have
 the very next maintenance pass strip it, silently reopening the loop the label exists to close.
 `integration-conflict` blocks through the same code path and nothing clears it automatically.
 
-Then make the break reproducible and record it where the plan's state lives:
+Then make the failure reproducible and record it where the plan's state lives:
 
 1. **Push a failing test to the *breaking* branch.** Not to the branch that relies on the
    thing: it cannot express a test against an import that does not exist on it yet. The worked
@@ -213,8 +214,8 @@ Then make the break reproducible and record it where the plan's state lives:
    the manifest behind it is worse than none.
 
 This is the one place the workflow writes to somebody else's branch, and it is deliberate: a
-test that reproduces the break is not a design decision, and it is the only artifact that makes
-the break visible from inside the branch that causes it. It is a test and nothing else - never
+test that reproduces the failure is not a design decision, and it is the only artifact that
+makes the failure visible from inside the branch that causes it. It is a test and nothing else - never
 a fix, which is a design call and stays proposed.
 
 ## What this never does
@@ -223,7 +224,7 @@ a fix, which is a design call and stays proposed.
   somebody, and which of them should change is their call. The two things it does write are
   bounded and neither is a fix: a resolution into the replay cache, which contaminates no
   branch and is thrown away with the next rebuild, and a failing test onto the branch that
-  breaks another, which makes the break reproducible without deciding anything.
+  breaks another, which makes the failure reproducible without deciding anything.
 - **It never treats the integration branch as work.** Nothing is merged out of it; it is
   regenerated from scratch every time. A fix that lives only there is not a fix.
 - **It never gates promotion on a clean build.** Promotion asks whether one branch is ready for
@@ -240,6 +241,7 @@ a fix, which is a design call and stays proposed.
 Report every pair, with its verdict and the reason. For a *defer*, say that the resolution is
 recorded and that the collision is still live for whoever lands second - a replay buys a working
 daily driver, not a discharged obligation upstream. For a *reconcile* or a *stack*, say which
-branch you took it to. For a semantic break, say that the branch stays red until somebody acts,
+branch you took it to. For an integration test failure, say that the branch stays red until
+somebody acts,
 since nothing can be recorded for it. Name anything you left undecided, and why, rather than
 picking to be finished.

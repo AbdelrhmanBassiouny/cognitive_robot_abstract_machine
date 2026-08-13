@@ -17,7 +17,7 @@ the feature branch it belongs to - never here.
 Only work its author has reviewed is carried, which this repository records by the pull
 request leaving draft. Read down the whole chain rather than per branch: a tip contains
 its stack, so a reviewed branch standing on a draft would carry that draft's commits
-under its own name. Everything left out says so - see :class:`UnreviewedBranch`.
+under its own name. Everything left out says so, naming the draft that keeps it out.
 
 It gates nothing. Promotion asks whether one branch is ready for review against the
 upstream; integration asks whether the branches coexist. Gating promotion on a clean
@@ -139,8 +139,8 @@ class ReportKey(StrEnum):
     UNREVIEWED = "unreviewed"
     """The branches left out because their author has not reviewed them."""
 
-    SEMANTIC_BREAK = "semantic_break"
-    """The pair a localised break was narrowed to, absent when nothing was localised."""
+    INTEGRATION_TEST_FAILURE = "integration_test_failure"
+    """The pair a localised failure was narrowed to, absent when nothing was localised."""
 
     BRANCH = "branch"
     """Which branch an entry is about."""
@@ -152,33 +152,64 @@ class ReportKey(StrEnum):
     """The earlier tip the culprit fails against alone."""
 
 
-UNREVIEWED_STATUS = "unreviewed"
-"""How a branch left out for want of review is spelled in the printed report.
-
-Not a :class:`TipStatus`: those say what became of a tip the build tried to carry, and
-this says the build never tried.
-"""
-
-
 # %% what became of one tip
 
 
-class TipStatus(StrEnum):
-    """What a build did with one stack tip."""
+@dataclass(frozen=True)
+class TipStatusSpecification:
+    """What one status is called, and whether the tip it describes is in the build."""
 
-    MERGED = "merged"
+    spelling: str
+    """How the status is written in the report a caller reads."""
+
+    carried: bool
+    """Whether the tip's commits reached the finished branch.
+
+    Carried by the status itself rather than by a set of the statuses that count: a
+    status added later is answered by having to give this a value, where a set is
+    answered by nothing and silently reports the new status as not carried.
+    """
+
+
+class TipStatus(StrEnum):
+    """What a build did with one branch it considered.
+
+    Each member carries a :class:`TipStatusSpecification` rather than inheriting from
+    one, which was the shape asked for: :class:`~enum.StrEnum` builds its members with
+    its own ``__new__``, so a specification base takes that over and the member stops
+    being a ``str`` - which is what the report's ``json.dumps`` and every
+    ``document[key] == TipStatus.X`` comparison rely on.
+    """
+
+    def __new__(cls, specification: TipStatusSpecification) -> TipStatus:
+        """:param specification: What this status is called and whether it is carried.
+        :return: The member, still a ``str`` of its own spelling."""
+        member = str.__new__(cls, specification.spelling)
+        member._value_ = specification.spelling
+        member.carried = specification.carried
+        return member
+
+    carried: bool
+    """Whether a tip with this status has its commits in the finished branch."""
+
+    MERGED = TipStatusSpecification("merged", carried=True)
     """It merged cleanly and is in the build."""
 
-    REPLAYED = "replayed"
+    REPLAYED = TipStatusSpecification("replayed", carried=True)
     """It is in the build, but only because a recorded resolution was replayed - so the
     collision it hides is still there for whoever lands second."""
 
-    SKIPPED = "skipped"
+    SKIPPED = TipStatusSpecification("skipped", carried=False)
     """It conflicted and was left out, so the rest of the build could go on."""
 
-    INTEGRATION_FAILED = "integration-failed"
+    INTEGRATION_FAILED = TipStatusSpecification("integration-failed", carried=False)
     """The merge refused before it began - unrelated histories, a reference that does
     not resolve, something in the way. The build's own environment, not the tip's."""
+
+    UNREVIEWED = TipStatusSpecification("unreviewed", carried=False)
+    """Its author has not reviewed it, or has not reviewed something beneath it, so the
+    build never tried to merge it. Left out by the rule working rather than by a build
+    going wrong, which is why it is reported apart from the tips a build attempted."""
 
 
 class ResolutionAuthor(StrEnum):
@@ -266,7 +297,13 @@ class TestCommandNotConfiguredError(ValueError):
 
 @dataclass(frozen=True)
 class PullRequestStackTipOutcome:
-    """One tip's fate in one build."""
+    """What one build did with one branch, and which other branch explains it.
+
+    Every branch a build considered is one of these, whether it was merged, left out
+    after a collision, or never attempted because nobody had reviewed it. One type
+    because the question a reader asks is the same in all three cases - what happened,
+    and which other branch is it about.
+    """
 
     branch: str
     """The tip's branch."""
@@ -277,10 +314,14 @@ class PullRequestStackTipOutcome:
     status: TipStatus
     """What became of it."""
 
-    collided_with: str | None = None
-    """The branch already in the build that it conflicts with, or the base when it is
-    simply stale. Named because the pair is what is actionable - which of the two should
-    change is a judgement neither branch's own state answers."""
+    attributed_to: str | None = None
+    """The other branch this outcome is about, when there is one.
+
+    The branch already in the build it conflicts with, the base when it is simply stale,
+    or the draft beneath it when nobody has reviewed that. Named because the pair is
+    what is actionable - "this one was left out" answers nothing on its own, and which
+    of the two should change is a judgement neither branch's own state settles.
+    """
 
     conflicting_paths: tuple[str, ...] = ()
     """The paths the conflict was on."""
@@ -294,32 +335,10 @@ class PullRequestStackTipOutcome:
     @property
     def reached_the_build(self) -> bool:
         """:return: Whether the tip's commits are in the finished branch."""
-        return self.status in {TipStatus.MERGED, TipStatus.REPLAYED}
+        return self.status.carried
 
 
 # %% selecting what to build from
-
-
-@dataclass(frozen=True)
-class UnreviewedBranch:
-    """One branch a build left out because it has not been reviewed by its author.
-
-    Named rather than merely absent: a build that carries nine branches out of nineteen
-    and says so only by omission reads as having covered everything.
-    """
-
-    branch: str
-    """The branch left out."""
-
-    pull_request_number: int
-    """The fork pull request that publishes it."""
-
-    unreviewed_ancestor: str | None
-    """The draft beneath it that keeps it out, or ``None`` when it is itself the draft.
-
-    A branch out of draft whose author can see nothing wrong with it is not told
-    anything actionable by "left out" alone - the draft underneath is what to act on.
-    """
 
 
 @dataclass(frozen=True)
@@ -329,8 +348,12 @@ class BuildSelection:
     carried: tuple[Branch, ...]
     """Every branch reviewed all the way down to the base, parents before children."""
 
-    unreviewed: tuple[UnreviewedBranch, ...]
-    """Every branch left out, each naming why."""
+    unreviewed: tuple[PullRequestStackTipOutcome, ...]
+    """Every branch left out, each naming the draft that keeps it out.
+
+    Named rather than merely absent: a build that carries nine branches out of nineteen
+    and says so only by omission reads as having covered everything.
+    """
 
 
 def select_for_build(stack: Stack) -> BuildSelection:
@@ -348,7 +371,7 @@ def select_for_build(stack: Stack) -> BuildSelection:
     in_the_stack = {branch.name for branch in stack.branches}
     carried: list[Branch] = []
     carried_names: set[str] = set()
-    unreviewed: list[UnreviewedBranch] = []
+    unreviewed: list[PullRequestStackTipOutcome] = []
     unreviewed_ancestors: dict[str, str] = {}
     for branch in order(stack):
         stands_on_carried_work = (
@@ -367,10 +390,11 @@ def select_for_build(stack: Stack) -> BuildSelection:
         )
         unreviewed_ancestors[branch.name] = ancestor or branch.name
         unreviewed.append(
-            UnreviewedBranch(
+            PullRequestStackTipOutcome(
                 branch=branch.name,
                 pull_request_number=branch.pull_request_number,
-                unreviewed_ancestor=ancestor,
+                status=TipStatus.UNREVIEWED,
+                attributed_to=ancestor,
             )
         )
     return BuildSelection(carried=tuple(carried), unreviewed=tuple(unreviewed))
@@ -489,7 +513,7 @@ class IntegrationBuild:
             branch=tip.name,
             pull_request_number=tip.pull_request_number,
             status=TipStatus.SKIPPED,
-            collided_with=self._collided_with(tip, already_included),
+            attributed_to=self._attribution_for(tip, already_included),
             conflicting_paths=conflicting_paths,
         )
 
@@ -513,11 +537,11 @@ class IntegrationBuild:
             branch=tip.name,
             pull_request_number=tip.pull_request_number,
             status=TipStatus.REPLAYED,
-            collided_with=self._collided_with(tip, already_included),
+            attributed_to=self._attribution_for(tip, already_included),
             resolved_by=self.provenance.author_for(tip.name),
         )
 
-    def _collided_with(self, tip: Branch, already_included: list[str]) -> str:
+    def _attribution_for(self, tip: Branch, already_included: list[str]) -> str:
         """Attribute a collision to the pair it is between.
 
         Probed with ``merge-tree`` rather than by merging, so identifying the partner
@@ -585,12 +609,21 @@ def build_integration(
     )
 
 
-# %% localising a break the merge could not see
+# %% the failure a merge could not see
+
+
+FAILURE_COMMENT_PREFIX = "🔴 INTEGRATION - BREAKS ANOTHER BRANCH:"
+"""Opens the comment an integration test failure is reported in.
+
+Its own prefix rather than the restack's, because the two ask for different things: a
+restack conflict is resolved by merging a moved parent, and this cannot be resolved on
+this branch alone at all.
+"""
 
 
 @dataclass(frozen=True)
-class SemanticBreak:
-    """Two tips that each work, merge cleanly, and do not work together.
+class IntegrationTestFailure:
+    """Two tips that each pass their own suite, merge cleanly, and fail together.
 
     Nothing about the merge can find this: there was no conflict, so there is no pair to
     attribute and no preimage to key a recorded resolution on. It is found by adding tips
@@ -611,10 +644,67 @@ class SemanticBreak:
     """The single earlier tip the culprit fails against alone, or ``None`` when only the
     combination fails - which is a materially different thing to tell somebody."""
 
+    def comment(self, session: str | None) -> str:
+        """Write the comment telling a branch's owner that their branch breaks another.
+
+        Names the branch it breaks, which is the half its owner cannot see: both pull
+        requests pass their own checks, and the failure exists only in a tree neither of
+        them is.
+
+        :param session: The session named in the pull request's description, if any.
+        :return: The comment body.
+        """
+        partner = (
+            f"`{self.breaks_against}`"
+            if self.breaks_against
+            else "the combination of branches merged before it, no single one of which "
+            "reproduces it alone"
+        )
+        addressed = (
+            f"\n\n{session}"
+            if session
+            else "\n\nThis pull request's description names no session to address."
+        )
+        return (
+            f"{FAILURE_COMMENT_PREFIX} `{self.culprit}` merges cleanly with "
+            f"{partner} and the suite fails on the result.\n\n"
+            f"Neither pull request is wrong on its own, and neither one's checks can "
+            f"see this - the failure exists only in a tree neither branch is. Nothing "
+            f"can be recorded for it either: a replay is keyed on a merge conflict's "
+            f"preimage, and there is no conflict here, so every later build carries the "
+            f"failure until one of the two branches changes.\n\n"
+            f"This branch is labelled `integration-conflict` so later passes withhold "
+            f"it rather than promoting it. Nothing clears that label automatically."
+            f"{addressed}"
+        )
+
+    def block_the_branch_that_causes_it(
+        self, configuration: Configuration, fork: ForkPullRequests
+    ) -> str:
+        """Label the branch that breaks another, and tell its owner why.
+
+        :param configuration: The resolved configuration, naming the label to apply.
+        :param fork: The fork to label and comment on.
+        :return: The comment posted.
+        """
+        number = self.culprit_pull_request_number
+        pull_request = fork.pull_request(number)
+        body = PullRequestField.BODY.read(pull_request, number)
+        fork.replace_labels(
+            number,
+            LabelWrite.replacing(
+                PullRequestField.LABELS.read(pull_request, number),
+                added=[configuration.integration_conflict_label],
+            ).labels,
+        )
+        comment = self.comment(get_session_link_in(body))
+        fork.add_comment(number, comment)
+        return comment
+
 
 @dataclass(frozen=True)
-class BreakLocationReport:
-    """What one search for the breaking tip found."""
+class FailureLocationReport:
+    """What one search for the tip that turned the suite found."""
 
     build_branch: str
     """The branch the search assembled onto."""
@@ -625,39 +715,32 @@ class BreakLocationReport:
     tips_tested: tuple[str, ...] = ()
     """The tips that reached the build and had the suite run over them, in order."""
 
-    semantic_break: SemanticBreak | None = None
-    """The break, or ``None`` when every prefix of the build passed."""
+    integration_test_failure: IntegrationTestFailure | None = None
+    """The failure, or ``None`` when every prefix of the build passed."""
+
+    @property
+    def exit_code(self) -> IntegrationExitCode:
+        """:return: The process exit code, which reports a localised failure the same way
+        the build that failed reported it."""
+        if self.integration_test_failure is None:
+            return IntegrationExitCode.SUCCESS
+        return IntegrationExitCode.TESTS_FAILED
 
     def as_json(self) -> str:
         """:return: The search as one machine-readable document, led by its status."""
-        status = exit_code_for_break_location(self)
         return json.dumps(
             {
-                ReportKey.STATUS: status.name_for_a_caller,
-                ReportKey.EXIT_CODE: int(status),
+                ReportKey.STATUS: self.exit_code.name_for_a_caller,
+                ReportKey.EXIT_CODE: int(self.exit_code),
                 **asdict(self),
             },
             indent=2,
         )
 
 
-def exit_code_for_break_location(report: BreakLocationReport) -> IntegrationExitCode:
-    """:param report: What the search localised.
-    :return: The process exit code, which reports a located break the same way the build
-        that failed reported it."""
-    if report.semantic_break is None:
-        return IntegrationExitCode.SUCCESS
-    return IntegrationExitCode.TESTS_FAILED
-
-
-def locate_semantic_break(
-    stack: Stack,
-    git: MaintenanceGitCommandRunner,
-    build_branch: str,
-    provenance: ResolutionProvenance,
-    test_command: str,
-) -> BreakLocationReport:
-    """Find the tip whose arrival breaks a build that merged cleanly.
+@dataclass(frozen=True)
+class FailureLocation:
+    """The search for the tip whose arrival breaks a build that merged cleanly.
 
     Assembles the same tips in the same order as :func:`build_integration` and runs the
     suite after each one that reaches the build, so what it localises describes the build
@@ -666,80 +749,104 @@ def locate_semantic_break(
 
     Slow by construction - one suite run per tip, plus one per candidate while narrowing.
     It is a diagnosis, not part of a build.
-
-    :param stack: The derived stack, whose tips this merges.
-    :param git: The runner naming the checkout to add the worktree to.
-    :param build_branch: The branch to assemble onto.
-    :param provenance: Who wrote each recorded resolution.
-    :param test_command: The suite that decides whether a build works.
-    :return: What it localised.
     """
-    tips = tips_of(stack)
-    by_name = {tip.name: tip for tip in tips}
-    with DetachedCheckout.of(git), RestackWorktree.added_to(git) as assembling:
-        build = IntegrationBuild(
-            git=dataclasses.replace(
-                assembling, configuration_overrides=RERERE_SETTINGS
-            ),
-            configuration=stack.configuration,
-            provenance=provenance,
-        )
-        build.start(build_branch)
-        included: list[str] = []
-        for tip in tips:
-            if not build.merge(tip, included).reached_the_build:
-                continue
-            if _run_tests(test_command, build.git.working_directory):
-                included.append(tip.name)
-                continue
-            return BreakLocationReport(
-                build_branch=build_branch,
-                base=stack.configuration.upstream_base,
-                tips_tested=tuple(included) + (tip.name,),
-                semantic_break=SemanticBreak(
-                    culprit=tip.name,
-                    culprit_pull_request_number=tip.pull_request_number,
-                    already_included=tuple(included),
-                    breaks_against=_breaks_against(
-                        build, tip, included, by_name, test_command
-                    ),
+
+    stack: Stack
+    """The derived stack, whose tips this merges."""
+
+    git: MaintenanceGitCommandRunner
+    """The runner naming the checkout to add the worktree to."""
+
+    build_branch: str
+    """The branch to assemble onto."""
+
+    provenance: ResolutionProvenance
+    """Who wrote each recorded resolution."""
+
+    test_command: str
+    """The suite that decides whether a build works."""
+
+    def find(self) -> FailureLocationReport:
+        """:return: What the search localised."""
+        tips = tips_of(self.stack)
+        by_name = {tip.name: tip for tip in tips}
+        with DetachedCheckout.of(self.git), RestackWorktree.added_to(
+            self.git
+        ) as assembling:
+            build = IntegrationBuild(
+                git=dataclasses.replace(
+                    assembling, configuration_overrides=RERERE_SETTINGS
                 ),
+                configuration=self.stack.configuration,
+                provenance=self.provenance,
             )
-        return BreakLocationReport(
-            build_branch=build_branch,
-            base=stack.configuration.upstream_base,
-            tips_tested=tuple(included),
+            build.start(self.build_branch)
+            included: list[str] = []
+            for tip in tips:
+                if not build.merge(tip, included).reached_the_build:
+                    continue
+                if self._suite_passes(build):
+                    included.append(tip.name)
+                    continue
+                return self._report(
+                    tips_tested=tuple(included) + (tip.name,),
+                    failure=IntegrationTestFailure(
+                        culprit=tip.name,
+                        culprit_pull_request_number=tip.pull_request_number,
+                        already_included=tuple(included),
+                        breaks_against=self._narrow(build, tip, included, by_name),
+                    ),
+                )
+            return self._report(tips_tested=tuple(included))
+
+    def _report(
+        self,
+        tips_tested: tuple[str, ...],
+        failure: IntegrationTestFailure | None = None,
+    ) -> FailureLocationReport:
+        """:param tips_tested: The tips the suite was run over, in order.
+        :param failure: What was localised, when anything was.
+        :return: The search's report."""
+        return FailureLocationReport(
+            build_branch=self.build_branch,
+            base=self.stack.configuration.upstream_base,
+            tips_tested=tips_tested,
+            integration_test_failure=failure,
         )
 
+    def _narrow(
+        self,
+        build: IntegrationBuild,
+        culprit: Branch,
+        already_included: list[str],
+        by_name: dict[str, Branch],
+    ) -> str | None:
+        """Narrow a failure to the one earlier tip that reproduces it on its own.
 
-def _breaks_against(
-    build: IntegrationBuild,
-    culprit: Branch,
-    already_included: list[str],
-    by_name: dict[str, Branch],
-    test_command: str,
-) -> str | None:
-    """Narrow a break to the one earlier tip that reproduces it on its own.
+        Naming everything that was in the build is not actionable when only one of them
+        is involved. Asked most-recent-first, the same way a merge conflict's partner is.
 
-    Naming everything that was in the build is not actionable when only one of them is
-    involved. Asked most-recent-first, the same way a merge conflict's partner is.
+        :param build: The build under assembly, whose worktree the probes run in.
+        :param culprit: The tip whose arrival turned the suite.
+        :param already_included: The tips in the build when it turned, in merge order.
+        :param by_name: Every tip, keyed by branch name.
+        :return: The tip it fails against alone, or ``None`` when only the combination
+            does.
+        """
+        for candidate in reversed(already_included):
+            build.start_unnamed()
+            if not build.merge(by_name[candidate], []).reached_the_build:
+                continue
+            if not build.merge(culprit, [candidate]).reached_the_build:
+                continue
+            if not self._suite_passes(build):
+                return candidate
+        return None
 
-    :param build: The build under assembly, whose worktree the probes run in.
-    :param culprit: The tip whose arrival turned the suite.
-    :param already_included: The tips in the build when it turned, in merge order.
-    :param by_name: Every tip, keyed by branch name.
-    :param test_command: The suite that decides whether a build works.
-    :return: The tip it fails against alone, or ``None`` when only the combination does.
-    """
-    for candidate in reversed(already_included):
-        build.start_unnamed()
-        if not build.merge(by_name[candidate], []).reached_the_build:
-            continue
-        if not build.merge(culprit, [candidate]).reached_the_build:
-            continue
-        if not _run_tests(test_command, build.git.working_directory):
-            return candidate
-    return None
+    def _suite_passes(self, build: IntegrationBuild) -> bool | None:
+        """:param build: The assembly to run the suite against.
+        :return: Whether it passed."""
+        return _run_tests(self.test_command, build.git.working_directory)
 
 
 def _run_tests(command: str | None, working_directory: Path) -> bool | None:
@@ -757,81 +864,6 @@ def _run_tests(command: str | None, working_directory: Path) -> bool | None:
         ).returncode
         == 0
     )
-
-
-# %% telling the branch that breaks another
-
-
-SEMANTIC_BREAK_COMMENT_PREFIX = "🔴 INTEGRATION - BREAKS ANOTHER BRANCH:"
-"""Opens the comment a semantic break is reported in.
-
-Its own prefix rather than the restack's, because the two ask for different things: a
-restack conflict is resolved by merging a moved parent, and this cannot be resolved on
-this branch alone at all.
-"""
-
-
-def semantic_break_comment(localised: SemanticBreak, session: str | None) -> str:
-    """Write the comment telling a branch's owner that their branch breaks another.
-
-    Names the branch it breaks, which is the half its owner cannot see: both pull
-    requests pass their own checks, and the failure exists only in a tree neither of them
-    is.
-
-    :param localised: The break, as the localiser narrowed it.
-    :param session: The session named in the pull request's description, if any.
-    :return: The comment body.
-    """
-    partner = (
-        f"`{localised.breaks_against}`"
-        if localised.breaks_against
-        else "the combination of branches merged before it, no single one of which "
-        "reproduces it alone"
-    )
-    addressed = (
-        f"\n\n{session}"
-        if session
-        else "\n\nThis pull request's description names no session to address."
-    )
-    return (
-        f"{SEMANTIC_BREAK_COMMENT_PREFIX} `{localised.culprit}` merges cleanly with "
-        f"{partner} and the suite fails on the result.\n\n"
-        f"Neither pull request is wrong on its own, and neither one's checks can see "
-        f"this - the failure exists only in a tree neither branch is. Nothing can be "
-        f"recorded for it either: a replay is keyed on a merge conflict's preimage, and "
-        f"there is no conflict here, so every later build carries the break until one "
-        f"of the two branches changes.\n\n"
-        f"This branch is labelled `integration-conflict` so later passes withhold it "
-        f"rather than promoting it. Nothing clears that label automatically."
-        f"{addressed}"
-    )
-
-
-def escalate_semantic_break(
-    localised: SemanticBreak,
-    configuration: Configuration,
-    fork: ForkPullRequests,
-) -> str:
-    """Block the branch that breaks another, and tell its owner why.
-
-    :param localised: The break, as the localiser narrowed it.
-    :param configuration: The resolved configuration, naming the label to apply.
-    :param fork: The fork to label and comment on.
-    :return: The comment posted.
-    """
-    number = localised.culprit_pull_request_number
-    pull_request = fork.pull_request(number)
-    body = PullRequestField.BODY.read(pull_request, number)
-    fork.replace_labels(
-        number,
-        LabelWrite.replacing(
-            PullRequestField.LABELS.read(pull_request, number),
-            added=[configuration.integration_conflict_label],
-        ).labels,
-    )
-    comment = semantic_break_comment(localised, get_session_link_in(body))
-    fork.add_comment(number, comment)
-    return comment
 
 
 # %% the report a caller renders or acts on
@@ -854,7 +886,7 @@ class IntegrationReport:
     """Whether the configured suite passed, or ``None`` when it was not run - which a
     caller has to be able to tell from a suite that ran and passed."""
 
-    unreviewed: tuple[UnreviewedBranch, ...] = ()
+    unreviewed: tuple[PullRequestStackTipOutcome, ...] = ()
     """The branches left out because their author has not reviewed them yet.
 
     Kept apart from :attr:`tips` rather than filed among them: a tip left out is a build
@@ -922,7 +954,7 @@ class IntegrationExitCode(IntEnum):
 
     TESTS_FAILED = 11
     """The branch was built and the suite failed on it. This is what catches the
-    semantic conflict per-branch checks structurally cannot: two branches that each pass
+    failure per-branch checks structurally cannot: two branches that each pass
     alone, merge cleanly, and break together."""
 
     SUSPECT_REPLAY = 12
@@ -974,27 +1006,27 @@ def print_build(report: IntegrationReport) -> None:
             or outcome.explanation
             or (outcome.resolved_by or "")
         )
-        collided = f" (with {outcome.collided_with})" if outcome.collided_with else ""
+        collided = f" (with {outcome.attributed_to})" if outcome.attributed_to else ""
         print(f"{outcome.branch}\t{outcome.status}{collided}\t{detail}")
     for left_out in report.unreviewed:
         beneath = (
-            f"under {left_out.unreviewed_ancestor}"
-            if left_out.unreviewed_ancestor
+            f"under {left_out.attributed_to}"
+            if left_out.attributed_to
             else "still a draft"
         )
-        print(f"{left_out.branch}\t{UNREVIEWED_STATUS}\t{beneath}")
+        print(f"{left_out.branch}\t{left_out.status}\t{beneath}")
     if report.tests_passed is not None:
         print(
             f"{report.build_branch}\ttests\t{'passed' if report.tests_passed else 'failed'}"
         )
 
 
-def print_break_location(report: BreakLocationReport) -> None:
-    """:param report: The localised break to summarise."""
-    localised = report.semantic_break
+def print_failure_location(report: FailureLocationReport) -> None:
+    """:param report: The localised failure to summarise."""
+    localised = report.integration_test_failure
     if localised is None:
         print(
-            f"{report.build_branch}\tno-break-localised\t{len(report.tips_tested)} tip(s)"
+            f"{report.build_branch}\tno-failure-localised\t{len(report.tips_tested)} tip(s)"
         )
         return
     against = localised.breaks_against or "the combination before it"
@@ -1220,13 +1252,13 @@ class BuildCommand(IntegrationCommand):
 
 
 @dataclass(frozen=True)
-class LocateBreakCommand(IntegrationCommand):
+class LocateFailureCommand(IntegrationCommand):
     """Finds which tip's arrival breaks a build that merged cleanly."""
 
     @property
     def invoked_as(self) -> str:
         """The name it is invoked by on the command line."""
-        return "locate-break"
+        return "locate-failure"
 
     @property
     def description(self) -> str:
@@ -1250,28 +1282,28 @@ class LocateBreakCommand(IntegrationCommand):
         test_command = BuildCommand._test_command(run.configuration, run_tests=True)
         fork = run.fork()
         run.refresh_remotes()
-        report = locate_semantic_break(
+        report = FailureLocation(
             stack=run.stack(fork),
             git=run.git,
             build_branch=build_branch_name(datetime.now(timezone.utc)),
             provenance=ResolutionProvenance.read(run.provenance_path()),
             test_command=test_command,
-        )
+        ).find()
         if arguments.json:
             print(report.as_json())
         else:
-            print_break_location(report)
-        return exit_code_for_break_location(report)
+            print_failure_location(report)
+        return report.exit_code
 
 
 @dataclass(frozen=True)
-class EscalateCommand(IntegrationCommand):
+class BlockBranchCommand(IntegrationCommand):
     """Blocks the branch that breaks another, and tells its owner what it breaks."""
 
     @property
     def invoked_as(self) -> str:
         """The name it is invoked by on the command line."""
-        return "escalate"
+        return "block-branch"
 
     @property
     def description(self) -> str:
@@ -1289,7 +1321,7 @@ class EscalateCommand(IntegrationCommand):
     def run(
         self, run: IntegrationRun, arguments: argparse.Namespace
     ) -> IntegrationExitCode:
-        """Localise the break, then block and report the branch that causes it.
+        """Localise the failure, then block and report the branch that causes it.
 
         Localised here rather than taken as an argument, so the branch that gets blocked
         is the one the suite actually turned on rather than the one a caller believed it
@@ -1302,23 +1334,23 @@ class EscalateCommand(IntegrationCommand):
         test_command = BuildCommand._test_command(run.configuration, run_tests=True)
         fork = run.fork()
         run.refresh_remotes()
-        report = locate_semantic_break(
+        report = FailureLocation(
             stack=run.stack(fork),
             git=run.git,
             build_branch=build_branch_name(datetime.now(timezone.utc)),
             provenance=ResolutionProvenance.read(run.provenance_path()),
             test_command=test_command,
-        )
-        localised = report.semantic_break
+        ).find()
+        localised = report.integration_test_failure
         if localised is None:
-            print_break_location(report)
+            print_failure_location(report)
             return IntegrationExitCode.SUCCESS
-        comment = escalate_semantic_break(localised, run.configuration, fork)
+        comment = localised.block_the_branch_that_causes_it(run.configuration, fork)
         if arguments.json:
             print(
                 json.dumps(
                     {
-                        "escalated": localised.culprit,
+                        "blocked": localised.culprit,
                         "pull_request_number": localised.culprit_pull_request_number,
                         "breaks_against": localised.breaks_against,
                         "label": run.configuration.integration_conflict_label,
@@ -1329,10 +1361,10 @@ class EscalateCommand(IntegrationCommand):
             )
         else:
             print(
-                f"{localised.culprit}\tescalated\t"
+                f"{localised.culprit}\tblocked\t"
                 f"{run.configuration.integration_conflict_label}"
             )
-        return exit_code_for_break_location(report)
+        return report.exit_code
 
 
 @dataclass(frozen=True)

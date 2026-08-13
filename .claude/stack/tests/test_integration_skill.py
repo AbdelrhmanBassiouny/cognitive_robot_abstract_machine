@@ -15,7 +15,7 @@ from pathlib import Path
 from integration import (
     COMMANDS,
     IntegrationExitCode,
-    LocateBreakCommand,
+    LocateFailureCommand,
     RecordResolutionCommand,
     ResolutionAuthor,
     TipStatus,
@@ -103,7 +103,7 @@ def test_every_command_the_skill_tells_the_reader_to_run_exists():
     assert named <= answered, f"names commands that do not exist: {named - answered}"
 
 
-def test_the_skill_localises_a_semantic_break_rather_than_judging_it_by_hand():
+def test_the_skill_localises_the_failure_rather_than_judging_it_by_hand():
     """
     A failing suite over ten merged tips names nothing on its own, and locating it by
     hand is several worktrees and several suite runs - mechanical, and easy to get subtly
@@ -111,16 +111,16 @@ def test_the_skill_localises_a_semantic_break_rather_than_judging_it_by_hand():
     """
     skill = TRIAGE_SKILL_DOCUMENT.read_text()
     localiser = next(
-        command for command in COMMANDS if isinstance(command, LocateBreakCommand)
+        command for command in COMMANDS if isinstance(command, LocateFailureCommand)
     )
 
     assert f"integration.py {localiser.invoked_as}" in skill
 
 
-def test_the_skill_says_a_semantic_break_cannot_be_recorded():
+def test_the_skill_says_an_integration_test_failure_cannot_be_recorded():
     """
     The dangerous mistake here is reasoning by analogy from a merge collision:
-    ``rerere`` replays a *conflict* resolution, a semantic break has no conflict to key
+    ``rerere`` replays a *conflict* resolution, this failure has no conflict to key
     one on, and an agent that recorded one would report a fix that does not exist.
 
     The document has to rule it out where a reader meets it.
@@ -131,12 +131,12 @@ def test_the_skill_says_a_semantic_break_cannot_be_recorded():
     not the hazard - the section names it in order to rule it out.
     """
     skill = TRIAGE_SKILL_DOCUMENT.read_text()
-    semantic_break_section = skill[skill.index("## Step 4") :]
+    failure_section = skill[skill.index("## Step 4") :]
     recording = next(
         command for command in COMMANDS if isinstance(command, RecordResolutionCommand)
     )
 
-    assert recording.invoked_as not in semantic_break_section
+    assert recording.invoked_as not in failure_section
 
 
 def test_the_skill_records_its_own_resolutions_as_machine_written():

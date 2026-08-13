@@ -351,6 +351,28 @@ class Configuration:
         return (self.needs_resolution_label, self.integration_conflict_label)
 
 
+class DefaultLabel(StrEnum):
+    """Every label this workflow writes, as a fork spells it before configuring anything.
+
+    A checkout may rename any of them in its own configuration; these are what it gets
+    when it does not. Spelled once because the same word is a default here, an expected
+    value in a test and a label a fork's owner has to create by hand - and three
+    spellings of one label have nothing keeping them in step.
+    """
+
+    IN_REVIEW = "in-review"
+    """Marks a branch as promoted to the upstream and under review."""
+
+    REBASE = "rebase"
+    """Opts a branch into the rebase strategy instead of the default merge."""
+
+    NEEDS_RESOLUTION = "needs-resolution"
+    """Marks a branch withheld pending resolution of a conflict with its own base."""
+
+    INTEGRATION_CONFLICT = "integration-conflict"
+    """Marks a branch that breaks a sibling it merges cleanly with."""
+
+
 class ConfigurationKey(StrEnum):
     """Every key the configuration files are read by.
 
@@ -405,13 +427,16 @@ def load_configuration(
     )
     resolution = resolved_remotes(path, fork_repository, upstream_repository)
     return Configuration(
-        in_review_label=values.get(ConfigurationKey.IN_REVIEW_LABEL, "in-review"),
-        rebase_label=values.get(ConfigurationKey.REBASE_LABEL, "rebase"),
+        in_review_label=values.get(
+            ConfigurationKey.IN_REVIEW_LABEL, DefaultLabel.IN_REVIEW
+        ),
+        rebase_label=values.get(ConfigurationKey.REBASE_LABEL, DefaultLabel.REBASE),
         needs_resolution_label=values.get(
-            ConfigurationKey.NEEDS_RESOLUTION_LABEL, "needs-resolution"
+            ConfigurationKey.NEEDS_RESOLUTION_LABEL, DefaultLabel.NEEDS_RESOLUTION
         ),
         integration_conflict_label=values.get(
-            ConfigurationKey.INTEGRATION_CONFLICT_LABEL, "integration-conflict"
+            ConfigurationKey.INTEGRATION_CONFLICT_LABEL,
+            DefaultLabel.INTEGRATION_CONFLICT,
         ),
         fork_repository=resolution.fork.repository,
         fork_remote=resolution.fork.name,
