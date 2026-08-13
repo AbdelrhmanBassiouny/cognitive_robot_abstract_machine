@@ -6732,3 +6732,87 @@ has not been created. Under the fold rule that paragraph is #155's own work, so 
 reversal is pushed onto #155's branch rather than carried here, and #162 carries none of
 it. Everything else in the item stands alone either way, which is what the item's `notes`
 predicted.
+
+## Update 2026-08-13 (review round): a summary stops gating a promotion, and every GitHub link gets one home
+
+Eleven threads on #162, applied in `c5f174d2`. Three reshaped the design, and the first reverses
+what this item was built to do.
+
+### The Action, not the session, decides whether a summary can be required
+
+As built, a promotable branch nobody had written points for was reported `awaiting-promotion-summary`
+and held back. The user's instruction - *"both arguments should be optional so that when we do this
+using an action instead of a routine it works out, but when using a skill the skill should give them
+and abide by the standards"*, then *"yes promote but only add the fork pr link in the body in that
+case"* - settles it the other way, and the reason is `routine-cutover`'s endgame rather than
+convenience: that item ends on a plain scheduled Action with **no model in it**, which can never
+read a diff. A promotion that required a written summary would leave the Action unable to promote
+anything at all, forever.
+
+So both halves of a summary are optional, and a branch nobody wrote for is promoted with the link
+back to its fork pull request and nothing else. `EmptyPromotionSummaryError` and the
+`AWAITING_PROMOTION_SUMMARY` exit status are deleted with the concept.
+
+**What replaces the gate is where it always belonged - the skill.** Writing the summaries moved from
+step 3 (after the pass, acting on what it held back) to step 2 (before it), because the pass now
+promotes whatever it is given. The promotable branches come from `stack.py next --porcelain`, which
+answers off the board step 1 has already exported, so the reordering costs no extra command.
+
+Worth carrying as a shape: *this item's own argument against a fallback was right about the
+mechanism and wrong about the scope.* "A fallback makes the new interface optional and today's
+defect reachable" holds for **deriving** a body from the fork description, which is what produced a
+badge or a heading for the upstream reviewer. It does not hold for **omitting** one, which produces
+a body that is short and correct. The two were conflated because both are "what happens with no
+summary".
+
+### The upstream's title convention, which fork titles do not follow
+
+Recorded from the review: an upstream title is always `[TopicName] Catchy Minimal Relatable Title` -
+`Agents`, `DevTools`, `Basstler`, `EQL`, `Ormatic` are the kind of topic. Fork titles are ordinary
+sentences ("Pin the stack tooling for the length of a maintenance pass"), so copying one through
+produces a non-conforming upstream title nearly every time. `SKILL.md` states the pattern and says
+the fork-title fallback is mechanical rather than conforming; the script still accepts no title, for
+the Action's sake.
+
+### Promotion reports per branch, mirroring the restack
+
+The reviewer asked whether the awaiting state should be a `Branch` attribute with a status
+`StrEnum`. It cannot be a `BranchStatus` member: that enum is `derive_status`'s output, computed
+from labels and git ancestry, and whether anybody has read a diff is not in the board - a `Branch`
+field would hang pass-time state off a model whose whole contract is that it is derived.
+
+But the *shape* was already in this module, in its restack half. `promote` now returns one
+`BranchPromotion` per branch with a `PromotionOutcome` - `promoted`, `already-linked`, `withheld`,
+`link-label-cleared` - exactly as `restack` returns `BranchOutcome` with a `RestackOutcome`. Two of
+those a pass used to drop in silence. The enum also absorbed both hardcoded markers
+`print_promotions` carried, which is the "or a new one with other related members" thread answered:
+looking for the related members is what found the second marker.
+
+### One statement of every GitHub link, which is also how the read-back got tightened
+
+Four sites composed a `github.com` URL: `PromotionLink.build`, the hand-written
+`RECORDED_PROMOTION_LINK_PATTERN`, `_fork_pull_request_link`, and the tests. `GitHubLinks`
+(`.claude/stack/github_links.py`) is now the one statement of the host and both formats, and
+`stack.py` composes through it - `Repository` is a `TYPE_CHECKING`-only import there, so the sibling
+import is not a cycle, and `quote` left `stack.py` with the encoding.
+
+The payoff is not tidiness. `promotion_link_in` derives its pattern with
+`re.escape(comparison_with(base))`, so **what a recorded link looks like comes from what builds
+one** - and a link is now recognised by the host, the configured upstream repository and the base
+branch, where before any `https://` URL under the heading qualified. A hand-written regex for a
+format another module composes is a second copy of that format, which is the general case of the
+duplication the same reviewer flagged in the tests.
+
+### Left open deliberately
+
+The shared dataclass-exception base, twice. `DataclassException` lives only in `.claude/shared/` on
+#151, which is **159 commits behind `main`** while this branch is 0 behind - so rebasing there is
+the inflated-diff mistake #154 made and reverted on 2026-08-12 (45 files to 261). Measured rather
+than argued: all 14 exceptions under `.claude/stack/` use the plain `@dataclass` + `__str__` idiom
+today, `ExternalCallFailed` included, whose own docstring says it mirrors krrood's idiom "without
+importing it". Converting 2 of 14 here would leave 12 inconsistent, so whichever item lands
+`.claude/shared/` converts the set in one pass. The user's call, and worth pairing with a test that
+every exception derives from the base - which can only be written once the base exists.
+
+And the two asking whether `or` returns a bool. It does not - it evaluates to one of its operands -
+so both are answered with the measurement and no change.
