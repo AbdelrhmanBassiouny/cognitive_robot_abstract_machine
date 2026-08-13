@@ -404,3 +404,17 @@ body.graph-full-open{overflow:hidden}
   background:var(--bg2);color:var(--ink);border:1px solid var(--line2);
   border-radius:var(--radius);padding:4px 8px;font-size:12px;font-family:var(--font);
 }
+
+/* %% marker settings (inside the layers panel) */
+.marker-gear{
+  margin-left:auto;background:transparent;border:none;color:var(--faint);
+  cursor:pointer;font-size:13px;padding:0 2px;
+}
+.marker-gear:hover{color:var(--accent)}
+.marker-settings{
+  margin:4px 0 6px 22px;padding-left:9px;border-left:1px solid var(--line);
+  display:flex;flex-direction:column;gap:1px;max-height:220px;overflow:auto;
+}
+.ms-title{font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--faint);margin:6px 0 2px}
+.ms-row{font-size:11.5px;overflow-wrap:anywhere}
+.ms-note{font-size:11.5px;color:var(--faint);padding:4px 0}

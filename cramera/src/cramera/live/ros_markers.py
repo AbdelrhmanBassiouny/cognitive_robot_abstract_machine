@@ -80,6 +80,11 @@ class RosMarkerListener:
     The listener's own ROS node, while started.
     """
 
+    _subscriptions: dict = field(init=False, default_factory=dict)
+    """
+    The live subscriptions by topic, so the viewer can add and remove them.
+    """
+
     _executor: object = field(init=False, default=None)
     """
     The executor spinning the node on a daemon thread, while started.
@@ -107,18 +112,54 @@ class RosMarkerListener:
         if not rclpy.ok():
             rclpy.init()
         self._node = rclpy.create_node("cramera_markers")
-        durable = QoSProfile(
-            depth=SUBSCRIPTION_QUEUE_DEPTH,
-            durability=DurabilityPolicy.TRANSIENT_LOCAL,
-        )
         for topic in self.topics:
-            self._node.create_subscription(
-                MarkerArray, topic, self._on_markers(topic), durable
-            )
+            self.subscribe(topic)
         self._executor = SingleThreadedExecutor()
         self._executor.add_node(self._node)
         threading.Thread(target=self._executor.spin, daemon=True).start()
         logger.info("watching markers on %s", ", ".join(self.topics))
+
+    def subscribe(self, topic: str) -> None:
+        """
+        Start watching one marker topic; already watched topics stay as they are.
+
+        :param topic: The topic to watch.
+        """
+        if topic in self._subscriptions:
+            return
+        durable = QoSProfile(
+            depth=SUBSCRIPTION_QUEUE_DEPTH,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL,
+        )
+        self._subscriptions[topic] = self._node.create_subscription(
+            MarkerArray, topic, self._on_markers(topic), durable
+        )
+
+    def unsubscribe(self, topic: str) -> None:
+        """
+        Stop watching one marker topic.
+
+        :param topic: The topic to stop watching.
+        """
+        subscription = self._subscriptions.pop(topic, None)
+        if subscription is not None:
+            self._node.destroy_subscription(subscription)
+
+    def subscribed_topics(self) -> List[str]:
+        """
+        The topics currently being watched.
+        """
+        return sorted(self._subscriptions)
+
+    def available_marker_topics(self) -> List[str]:
+        """
+        Every ``MarkerArray`` topic currently advertised in the ROS graph.
+        """
+        return sorted(
+            name
+            for name, types in self._node.get_topic_names_and_types()
+            if any(type_name.endswith("/MarkerArray") for type_name in types)
+        )
 
     def _on_markers(self, topic: str):
         """

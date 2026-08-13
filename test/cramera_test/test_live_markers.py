@@ -210,3 +210,77 @@ class TestBridgeMarkerOverlay:
         bridge.snapshot()
 
         assert bridge.get_markers() is first
+
+
+# %% the viewer's marker settings
+
+
+@dataclass
+class RecordingListener:
+    """
+    A marker listener mimic recording what the settings ask of it.
+    """
+
+    topics: List[str] = field(default_factory=lambda: ["/semworld/viz_marker"])
+
+    def subscribe(self, topic: str) -> None:
+        if topic not in self.topics:
+            self.topics.append(topic)
+
+    def unsubscribe(self, topic: str) -> None:
+        if topic in self.topics:
+            self.topics.remove(topic)
+
+    def subscribed_topics(self) -> List[str]:
+        return sorted(self.topics)
+
+    def available_marker_topics(self) -> List[str]:
+        return ["/coraplex/viz_marker", "/semworld/viz_marker"]
+
+
+class TestMarkerTopicSettings:
+    def test_without_ros_the_settings_report_it(self):
+        payload = Bridge().marker_topics_payload()
+
+        assert payload == {"ok": True, "ros": False, "subscribed": [], "available": []}
+
+    def test_the_settings_list_subscribed_and_available_topics(self):
+        bridge = Bridge()
+        bridge.marker_listener = RecordingListener()
+
+        payload = bridge.marker_topics_payload()
+
+        assert payload["subscribed"] == ["/semworld/viz_marker"]
+        assert payload["available"] == ["/coraplex/viz_marker", "/semworld/viz_marker"]
+
+    def test_watching_a_topic_subscribes_it(self):
+        bridge = Bridge()
+        bridge.marker_listener = RecordingListener()
+
+        payload = bridge.set_marker_topic("/coraplex/viz_marker", True)
+
+        assert payload["subscribed"] == ["/coraplex/viz_marker", "/semworld/viz_marker"]
+
+    def test_dropping_a_topic_clears_its_markers(self):
+        bridge = Bridge()
+        bridge.attach(marker_world())
+        bridge.marker_listener = RecordingListener()
+        bridge.observe_ros_markers("/semworld/viz_marker", [MimicMarker()])
+        bridge.snapshot()
+        version_before = bridge.get_markers()["version"]
+
+        bridge.set_marker_topic("/semworld/viz_marker", False)
+        bridge.snapshot()
+
+        payload = bridge.get_markers()
+        assert payload["markers"] == []
+        assert payload["version"] > version_before
+
+    def test_a_topic_must_be_absolute(self):
+        bridge = Bridge()
+        bridge.marker_listener = RecordingListener()
+
+        assert bridge.set_marker_topic("nope", True)["ok"] is False
+
+    def test_without_ros_watching_is_refused(self):
+        assert Bridge().set_marker_topic("/x", True)["ok"] is False

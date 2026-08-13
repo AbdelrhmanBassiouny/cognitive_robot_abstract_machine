@@ -732,6 +732,12 @@ class Bridge:
     The ROS debug markers per subscribed topic (see :mod:`cramera.live.ros_markers`).
     """
 
+    marker_listener: Optional[Any] = None
+    """
+    The ROS subscription feeding the marker overlay, while one runs — the viewer's
+    marker settings manage its topics through the bridge.
+    """
+
     marker_state: Dict[str, Any] = field(
         default_factory=lambda: {"version": 0, "markers": []}
     )
@@ -742,6 +748,12 @@ class Bridge:
     _published_marker_revision: int = -1
     """
     The aggregate store revision :attr:`marker_state` was built from.
+    """
+
+    _marker_state_version: int = 0
+    """
+    Monotonic version of :attr:`marker_state`; the sum of store revisions can revisit
+    an old value after a topic is dropped, this never does.
     """
 
     _bundle_signature: str = ""
@@ -875,8 +887,12 @@ class Bridge:
                     continue
                 markers.append(self._marker_payload(topic, entry))
         self._published_marker_revision = revision
+        self._marker_state_version += 1
         with self._lock:
-            self.marker_state = {"version": revision, "markers": markers}
+            self.marker_state = {
+                "version": self._marker_state_version,
+                "markers": markers,
+            }
 
     def _marker_payload(self, topic: str, entry: MarkerEntry) -> Dict[str, Any]:
         """
@@ -944,6 +960,47 @@ class Bridge:
         """
         with self._lock:
             return self.marker_state
+
+    def marker_topics_payload(self) -> Dict[str, Any]:
+        """
+        The marker settings the viewer offers: what is watched and what the ROS graph
+        advertises.
+        """
+        if self.marker_listener is None:
+            return {"ok": True, "ros": False, "subscribed": [], "available": []}
+        subscribed = self.marker_listener.subscribed_topics()
+        return {
+            "ok": True,
+            "ros": True,
+            "subscribed": subscribed,
+            "available": sorted(
+                set(self.marker_listener.available_marker_topics()) | set(subscribed)
+            ),
+        }
+
+    def set_marker_topic(self, topic: str, subscribed: bool) -> Dict[str, Any]:
+        """
+        Start or stop watching one marker topic, as the viewer's settings ask.
+
+        Stopping also drops the topic's markers, the way removing an RViz display
+        clears what it showed.
+
+        :param topic: The topic to watch or drop.
+        :param subscribed: Whether the topic should be watched.
+        """
+        if self.marker_listener is None:
+            return {"ok": False, "error": "no ROS in the demo process"}
+        if not topic.startswith("/"):
+            return {"ok": False, "error": "a topic starts with '/'"}
+        if subscribed:
+            self.marker_listener.subscribe(topic)
+        else:
+            self.marker_listener.unsubscribe(topic)
+            store = self._marker_stores.pop(topic, None)
+            if store is not None and store.entries:
+                # force the next snapshot to rebuild without this topic
+                self._published_marker_revision = -1
+        return self.marker_topics_payload()
 
     def publish_bodies(self, bodies: Dict[str, Body]) -> None:
         """

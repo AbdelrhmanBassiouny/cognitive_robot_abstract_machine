@@ -165,7 +165,21 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         Entry point :class:`~http.server.BaseHTTPRequestHandler` dispatches a ``POST``
         request to, found by name as ``"do_" + self.command``.
         """
+        if self.path.startswith("/marker_topics"):
+            return self.set_marker_topic()
         self.queue_requested_move()
+
+    def set_marker_topic(self) -> None:
+        """
+        Watch or drop a marker topic, as the viewer's marker settings ask.
+        """
+        length = int(self.headers.get("Content-Length") or 0)
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        self._send_json(
+            self.bridge.set_marker_topic(
+                str(payload.get("topic") or ""), bool(payload.get("subscribed", True))
+            )
+        )
 
     def queue_requested_move(self) -> None:
         """

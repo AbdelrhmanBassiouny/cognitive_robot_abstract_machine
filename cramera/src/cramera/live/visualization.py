@@ -148,6 +148,7 @@ class LiveVisualization:
         self.state_sync = WorldStateSync(_world=self.world, bridge=self.bridge)
         self.model_sync = WorldModelSync(_world=self.world, bridge=self.bridge)
         self.marker_listener = RosMarkerListener.start_if_available(self.bridge)
+        self.bridge.marker_listener = self.marker_listener
         if self.bridge.live_server is None:
             self.bridge.live_server = serve(self.bridge, self.port)
         return self
@@ -178,6 +179,7 @@ class LiveVisualization:
         if self.marker_listener is not None:
             self.marker_listener.stop()
             self.marker_listener = None
+            self.bridge.marker_listener = None
         if self.bridge.live_server is not None:
             self.bridge.live_server.shutdown()
             self.bridge.live_server = None

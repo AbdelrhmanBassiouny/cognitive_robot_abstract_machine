@@ -165,6 +165,9 @@ class TestJsUnits:
     def test_marker_specs(self):
         self.run_node("test_marker_specs.js")
 
+    def test_marker_settings(self):
+        self.run_node("test_marker_settings.js")
+
     def test_response_util(self):
         self.run_node("test_response_util.js")
 

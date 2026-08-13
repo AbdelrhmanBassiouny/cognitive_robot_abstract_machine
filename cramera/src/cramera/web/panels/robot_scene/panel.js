@@ -35,7 +35,8 @@ Panels.define('robot-scene', function (root, bus) {
     '  <div id="layers-panel" class="layers-panel">' +
     '    <div class="lp-title">Layers</div>' +
     '    <label class="lp-row"><input type="checkbox" id="lyr-objects" checked><span>Bench objects</span></label>' +
-    '    <label class="lp-row" title="debug markers the CRAM system publishes (collisions, costmaps, spatial types)"><input type="checkbox" id="lyr-markers" checked><span>ROS markers</span></label>' +
+    '    <label class="lp-row" title="debug markers the CRAM system publishes (collisions, costmaps, spatial types)"><input type="checkbox" id="lyr-markers" checked><span>ROS markers</span><button id="marker-gear" class="marker-gear" title="marker topics and namespaces">⚙</button></label>' +
+    '    <div id="marker-settings" class="marker-settings hidden"></div>' +
     '    <label class="lp-row"><input type="checkbox" id="lyr-labels"><span>Object labels</span></label>' +
     '    <label class="lp-row"><input type="checkbox" id="lyr-floor" checked><span>Floor shadow</span></label>' +
     '    <label class="lp-row" title="Attach to a running demo whenever one is reachable — including the next run after this one ends — instead of only once per page"><input type="checkbox" id="lyr-auto-live" checked><span>Auto-attach live</span></label>' +
@@ -1154,16 +1155,24 @@ Panels.define('robot-scene', function (root, bus) {
   }
   // %% the CRAM debug-marker overlay
   let lastMarkersVersion = -1;
+  let lastMarkerPayload = null;         // for re-filtering without a refetch
+  let hiddenMarkerNs = MarkerSettings.hiddenNamespaces(window.localStorage);
   function refreshMarkers() {
     fetch(liveUrl() + '/markers').then(function (r) { return r.json(); })
       .then(function (payload) {
-        clearMarkers();
-        (payload.markers || []).forEach(function (marker) {
-          const built = buildMarker(marker);
-          if (built) markerRoot.add(built);
-        });
-        needsRender = true;
+        lastMarkerPayload = payload;
+        rebuildMarkers();
+        renderMarkerNamespaces();
       }).catch(function () {});
+  }
+  function rebuildMarkers() {
+    clearMarkers();
+    const markers = lastMarkerPayload ? lastMarkerPayload.markers : [];
+    MarkerSettings.visibleMarkers(markers, hiddenMarkerNs).forEach(function (marker) {
+      const built = buildMarker(marker);
+      if (built) markerRoot.add(built);
+    });
+    needsRender = true;
   }
   function clearMarkers() {
     while (markerRoot.children.length) {
@@ -1373,6 +1382,7 @@ Panels.define('robot-scene', function (root, bus) {
       lastMarkersVersion = -1;
       liveStateKeys = {};
       livePolls = 0;
+      applyMarkerTopicOverrides();
       verifyLiveBundle();
       syncLiveObjects();
       liveTimer = setInterval(livePoll, 66);          // ~15 Hz render updates
@@ -1526,6 +1536,91 @@ Panels.define('robot-scene', function (root, bus) {
     markerRoot.visible = markersLayerEl.checked;
     needsRender = true;
   });
+
+  // %% marker settings (topics like RViz displays, namespaces like its checkboxes)
+  const markerSettingsEl = $('marker-settings');
+  const markerGearEl = $('marker-gear');
+  markerGearEl.addEventListener('click', function (event) {
+    event.preventDefault();
+    markerSettingsEl.classList.toggle('hidden');
+    if (!markerSettingsEl.classList.contains('hidden')) renderMarkerSettings();
+  });
+
+  function renderMarkerSettings() {
+    fetch(liveUrl() + '/marker_topics').then(function (r) { return r.json(); })
+      .then(function (settings) {
+        markerSettingsEl.innerHTML = '';
+        if (!settings.ros) {
+          markerSettingsEl.innerHTML = '<div class="ms-note">no ROS in the demo process</div>';
+          renderMarkerNamespaces();
+          return;
+        }
+        const title = document.createElement('div');
+        title.className = 'ms-title';
+        title.textContent = 'topics';
+        markerSettingsEl.appendChild(title);
+        (settings.available || []).forEach(function (topic) {
+          const row = document.createElement('label');
+          row.className = 'lp-row ms-row';
+          const box = document.createElement('input');
+          box.type = 'checkbox';
+          box.checked = settings.subscribed.indexOf(topic) !== -1;
+          box.addEventListener('change', function () {
+            MarkerSettings.setTopicOverride(window.localStorage, topic, box.checked);
+            fetch(liveUrl() + '/marker_topics', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ topic: topic, subscribed: box.checked }),
+            }).then(function () { renderMarkerSettings(); }).catch(function () {});
+          });
+          row.appendChild(box);
+          row.appendChild(document.createTextNode(topic));
+          markerSettingsEl.appendChild(row);
+        });
+        const nsHolder = document.createElement('div');
+        nsHolder.id = 'marker-namespaces';
+        markerSettingsEl.appendChild(nsHolder);
+        renderMarkerNamespaces();
+      }).catch(function () {});
+  }
+
+  function renderMarkerNamespaces() {
+    const holder = markerSettingsEl.querySelector('#marker-namespaces');
+    if (!holder) return;
+    holder.innerHTML = '';
+    const namespaces = MarkerSettings.namespacesOf(lastMarkerPayload ? lastMarkerPayload.markers : []);
+    if (!namespaces.length) return;
+    const title = document.createElement('div');
+    title.className = 'ms-title';
+    title.textContent = 'namespaces';
+    holder.appendChild(title);
+    namespaces.forEach(function (ns) {
+      const row = document.createElement('label');
+      row.className = 'lp-row ms-row';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = !hiddenMarkerNs[ns];
+      box.addEventListener('change', function () {
+        hiddenMarkerNs = MarkerSettings.setNamespaceHidden(window.localStorage, ns, !box.checked);
+        rebuildMarkers();
+      });
+      row.appendChild(box);
+      row.appendChild(document.createTextNode(ns));
+      holder.appendChild(row);
+    });
+  }
+
+  // the demo process starts from its default topics; re-apply the user's choices
+  function applyMarkerTopicOverrides() {
+    const overrides = MarkerSettings.topicOverrides(window.localStorage);
+    Object.keys(overrides).forEach(function (topic) {
+      fetch(liveUrl() + '/marker_topics', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: topic, subscribed: overrides[topic] }),
+      }).catch(function () {});
+    });
+  }
   bindLayer('lyr-labels', 'setLabelsAlways');
   bindLayer('lyr-floor', 'setFloorVisible');
   const autoLiveEl = $('lyr-auto-live');
