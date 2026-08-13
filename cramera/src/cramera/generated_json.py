@@ -32,7 +32,12 @@ class GeneratedJson:
     def read(self) -> Optional[Any]:
         """
         The artifact's content, or None when it is missing or unreadable.
+
+        A missing file is a normal state (nothing was generated yet) and stays silent;
+        only an unreadable or corrupt file is worth a warning.
         """
+        if not self.path.is_file():
+            return None
         try:
             return json.loads(self.path.read_text(encoding="utf-8", errors="replace"))
         except (OSError, ValueError) as error:

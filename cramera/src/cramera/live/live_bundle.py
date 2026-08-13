@@ -78,11 +78,7 @@ def _existing_signature(output_directory: Path) -> Optional[str]:
 
     :param output_directory: Directory the previous bundle was written to.
     """
-    scene_file = output_directory / "scene.json"
-    if not scene_file.is_file():
-        # the normal first build: nothing was bundled yet, nothing to warn about
-        return None
-    scene = GeneratedJson(scene_file).read()
+    scene = GeneratedJson(output_directory / "scene.json").read()
     if not isinstance(scene, dict):
         return None
     return scene.get("bundleSignature")

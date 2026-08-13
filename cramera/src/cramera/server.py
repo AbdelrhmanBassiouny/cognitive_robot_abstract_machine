@@ -99,10 +99,16 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         """
         Route the per-request access log through logging.
 
+        The page polls for the live scene while no demo runs; those misses would
+        flood the console every second and are not news, so they stay out of the log.
+
         :param format:``printf``-style log message format.
         :param args: Values to interpolate into ``format``.
         """
-        logger.info("  " + format, *args)
+        message = format % args if args else format
+        if paths.LIVE_SCENE_NAME in message and " 404 " in message:
+            return
+        logger.info("  %s", message)
 
     # %% helpers
     def _send_json(self, payload: Any, code: int = 200) -> None:
