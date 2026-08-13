@@ -39,6 +39,11 @@ from urllib.parse import parse_qs, urlparse
 
 from cramera import paths
 from cramera.logging_setup import get_logger
+from cramera.models_workbench import (
+    ModelWorkbench,
+    NO_MODELS_MESSAGE,
+    PROBABILISTIC_MODELS_AVAILABLE,
+)
 from cramera.payload import CrameraPayload
 
 logger = get_logger(__name__)
@@ -206,6 +211,10 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         if route == "/api/knowledge/expand":
             node = (self._query_parameters().get("node") or [""])[0]
             return self._guarded(lambda: self._expanded_node(node, scene))
+        if route == "/api/models/state":
+            if not PROBABILISTIC_MODELS_AVAILABLE:
+                return self._send_error(NO_MODELS_MESSAGE)
+            return self._guarded(lambda: ModelWorkbench.active().state())
         return super().do_GET()
 
     @staticmethod
@@ -221,15 +230,23 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         """
-        Execute an EQL query (the only write-ish endpoint).
+        Route the write-ish endpoints: EQL queries and the models workbench.
         """
-        if self.path.split("?")[0] != "/api/eql":
-            return self._send_error("unknown endpoint", 404)
+        route = self.path.split("?")[0]
+        if route == "/api/eql":
+            return self._run_eql()
+        if route.startswith("/api/models/"):
+            return self._run_models_request(route)
+        return self._send_error("unknown endpoint", 404)
+
+    def _run_eql(self) -> None:
+        """
+        Execute an EQL query.
+        """
         if not EQL_AVAILABLE:
             return self._send_error(self.NO_EQL_MESSAGE)
         try:
-            length = int(self.headers.get("Content-Length") or 0)
-            request_body = json.loads(self.rfile.read(length) or b"{}")
+            request_body = self._request_body()
             code = (request_body.get("code") or "").strip()
             if not code:
                 return self._send_error("empty query")
@@ -239,6 +256,48 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         except Exception as error:
             # a SyntaxError from the query is named by its own type, like any other
             return self._send_exception(error)
+
+    def _run_models_request(self, route: str) -> None:
+        """
+        Answer one models-workbench request.
+
+        :param route: The request path below ``/api/models/``.
+        """
+        if not PROBABILISTIC_MODELS_AVAILABLE:
+            return self._send_error(NO_MODELS_MESSAGE)
+        try:
+            body = self._request_body()
+            workbench = ModelWorkbench.active()
+            if route == "/api/models/load":
+                return self._send_json(
+                    workbench.load_model(
+                        body.get("model") or {}, name=body.get("name") or ""
+                    )
+                )
+            if route == "/api/models/probability":
+                return self._send_json(
+                    workbench.probability(
+                        body.get("query") or [], body.get("evidence") or []
+                    )
+                )
+            if route == "/api/models/posterior":
+                return self._send_json(
+                    workbench.posterior(
+                        body.get("variables") or [], body.get("evidence") or []
+                    )
+                )
+            if route == "/api/models/mode":
+                return self._send_json(workbench.mode(body.get("evidence") or []))
+            return self._send_error("unknown endpoint", 404)
+        except Exception as error:
+            return self._send_exception(error)
+
+    def _request_body(self) -> Dict[str, Any]:
+        """
+        The request's JSON body, or an empty mapping without one.
+        """
+        length = int(self.headers.get("Content-Length") or 0)
+        return json.loads(self.rfile.read(length) or b"{}")
 
     def _send_error(self, message: str, code: int = 200) -> None:
         """

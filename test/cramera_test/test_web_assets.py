@@ -51,23 +51,40 @@ def panel_scripts() -> List[Path]:
     return sorted(WEB_ROOT.glob("panels/**/*.js"))
 
 
+PAGES = ["index.html", "models.html"]
+"""
+Every page the server ships; each must reference only files that exist.
+"""
+
+
 class TestAssetConsistency:
     def test_every_included_script_exists(self):
-        for source in SCRIPT_PATTERN.findall(read("index.html")):
-            assert (WEB_ROOT / source).is_file(), source
+        for page in PAGES:
+            for source in SCRIPT_PATTERN.findall(read(page)):
+                assert (WEB_ROOT / source).is_file(), source
 
     def test_stylesheet_and_slots_exist(self):
+        for page in PAGES:
+            for href in STYLESHEET_PATTERN.findall(read(page)):
+                assert (WEB_ROOT / href).is_file(), href
         html = read("index.html")
-        for href in STYLESHEET_PATTERN.findall(html):
-            assert (WEB_ROOT / href).is_file(), href
         assert 'data-slot="left"' in html and 'data-slot="right"' in html
+
+    def test_the_pages_link_each_other(self):
+        """
+        The Scene and Models tabs switch through topbar links; a broken link strands the
+        user on one page.
+        """
+        assert 'href="models.html"' in read("index.html")
+        assert 'href="index.html"' in read("models.html")
 
     def test_every_referenced_image_exists(self):
         """
         A missing image is invisible at runtime, so it has to fail here.
         """
-        for source in IMAGE_PATTERN.findall(read("index.html")):
-            assert (WEB_ROOT / source).is_file(), source
+        for page in PAGES:
+            for source in IMAGE_PATTERN.findall(read(page)):
+                assert (WEB_ROOT / source).is_file(), source
 
     def test_every_css_url_resolves(self):
         """
@@ -135,6 +152,9 @@ class TestJsUnits:
 
     def test_graph_panel(self):
         self.run_node("test_graph_panel.js")
+
+    def test_model_constraints(self):
+        self.run_node("test_model_constraints.js")
 
     def test_response_util(self):
         self.run_node("test_response_util.js")
