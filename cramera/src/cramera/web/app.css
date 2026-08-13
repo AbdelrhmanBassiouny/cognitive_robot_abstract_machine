@@ -357,3 +357,19 @@ body.graph-full-open{overflow:hidden}
 .bound-control{display:inline-flex;align-items:center;gap:8px}
 .bound-control input[type=range]{width:150px;accent-color:var(--accent)}
 .bound-control input[type=number]{width:96px}
+
+/* %% models page readability: larger type than the dense scene panels */
+.models-page{font-size:14.5px}
+.models-page .lp-title{font-size:12.5px}
+.models-page .variable-item{font-size:14px;padding:9px 12px}
+.models-page .variable-item span{font-size:13px}
+.models-page .tool-tabs button{font-size:14.5px;padding:8px 18px}
+.models-page .constraint-row{font-size:14px;padding:10px 12px}
+.models-page .constraint-row select,.models-page .constraint-row input{font-size:14px;padding:6px 10px}
+.models-page .row-add{font-size:13.5px;padding:7px 14px}
+.models-page .run-btn{font-size:14.5px}
+.models-page .probability-result{font-size:20px}
+.models-page .mode-assignment{font-size:14px;padding:5px 0}
+.models-page .mode-assignment code{font-size:13.5px}
+.models-page .posterior-variables .lp-row{font-size:14px}
+.models-page .answer-empty,.models-page .qerr{font-size:13.5px}
