@@ -182,8 +182,13 @@ Panels.define('robot-scene', function (root, bus) {
   let SCENE = null;              // scene.json payload
   let sceneBase = null;          // static/scenes/<name>/
   let traj = null;
-  const models = [];             // {name, prefix, robot, obj}
-  let robotModel = null;
+  const models = [];              // {name, prefix, robot, obj}
+  let robotModel = null;          // active robot entry: recorded, or live once attached
+  let recordedRobotModel = null;  // the bundle's own robot entry, restored on detach
+  let activeModelSet = models;    // the models a frame's joints are looked up in
+  const liveModels = [];          // model entries loaded from the live bridge itself
+  let liveModelsLoaded = false;   // true once every live /models entry has loaded
+  let loadingLiveModels = false;
   const objectMeshes = {};       // mesh key ('milk.stl') -> THREE.Group
   const objectLabels = {};       // mesh key -> label sprite
   const liveSpawned = {};        // mesh key -> true for objects added by live mode
@@ -296,8 +301,10 @@ Panels.define('robot-scene', function (root, bus) {
   let finalized = false;
 
   const manager = new THREE.LoadingManager();
-  function makeUrdfLoader() {
-    const loader = new URDFLoader(manager);
+  const liveManager = new THREE.LoadingManager();   // separate: live loads must not
+                                                     // retrigger the bundle's onLoad
+  function makeUrdfLoader(mgr) {
+    const loader = new URDFLoader(mgr || manager);
     loader.packages = {};
     loader.parseCollision = false;
     const def = loader.defaultMeshLoader.bind(loader);
@@ -327,6 +334,12 @@ Panels.define('robot-scene', function (root, bus) {
     };
     return loader;
   }
+
+  // the landing page (no explicit ?scene=) auto-attaches to a live demo the moment
+  // one is reachable, instead of requiring a manual click; a URL that names a
+  // specific recorded scene is a deliberate choice and is never overridden by this
+  const noExplicitScene = !SceneContext.name();
+  let autoAttachedLive = false;
 
   fetch(SCENES + 'index.json')
     .then(function (r) { return r.ok ? r.json() : { default: null, scenes: [] }; })
@@ -389,6 +402,17 @@ Panels.define('robot-scene', function (root, bus) {
     envSel.addEventListener('change', function () { navigateTo(envSel.value); });
   }
 
+  // load one URDF model and add it to the scene; onDone gets the {name, prefix,
+  // robot, obj} entry once it has loaded
+  function loadModel(urdfUrl, name, prefix, isRobot, mgr, onDone) {
+    makeUrdfLoader(mgr).load(urdfUrl, function (obj) {
+      const entry = { name: name, prefix: prefix || '', robot: !!isRobot, obj: obj };
+      worldRoot.add(obj);
+      needsRender = true;
+      onDone(entry);
+    });
+  }
+
   function loadScene(sc) {
     SCENE = sc;
     if (statusEl) statusEl.textContent = 'Loading ' + sc.name + '…';
@@ -398,12 +422,9 @@ Panels.define('robot-scene', function (root, bus) {
     for (const part in parts) parts[part].forEach(function (l) { linkToPart[l] = part; });
 
     sc.models.forEach(function (m) {
-      makeUrdfLoader().load(sceneBase + m.urdf, function (obj) {
-        const entry = { name: m.name, prefix: m.prefix || '', robot: !!m.robot, obj: obj };
+      loadModel(sceneBase + m.urdf, m.name, m.prefix, m.robot, manager, function (entry) {
         models.push(entry);
-        if (m.robot) robotModel = entry;
-        worldRoot.add(obj);
-        needsRender = true;
+        if (entry.robot) { robotModel = entry; recordedRobotModel = entry; }
       });
     });
 
@@ -533,20 +554,12 @@ Panels.define('robot-scene', function (root, bus) {
     _q0.set(a[3], a[4], a[5], a[6]); _q1.set(b[3], b[4], b[5], b[6]);
     obj.quaternion.copy(_q0).slerp(_q1, t);
   }
-  function modelByPrefix(prefix) {
-    for (let i = 0; i < models.length; i++) if (models[i].prefix === prefix) return models[i];
-    return null;
-  }
-
   function applyFrame(f) {
     if (!traj) return;
     const F = traj.frames, i0 = Math.floor(f), i1 = Math.min(i0 + 1, F.length - 1), t = f - i0;
     const f0 = F[i0], f1 = F[i1];
     for (const k in f0) {
-      const cut = k.indexOf('/');
-      const m = modelByPrefix(cut < 0 ? '' : k.slice(0, cut));
-      if (!m) continue;
-      const j = m.obj.joints[cut < 0 ? k : k.slice(cut + 1)];
+      const j = JointRouting.jointFor(activeModelSet, k);
       if (j) j.setJointValue(f0[k] + ((f1[k] !== undefined ? f1[k] : f0[k]) - f0[k]) * t);
     }
     if (robotModel && traj.base && traj.base[i0]) {
@@ -991,16 +1004,19 @@ Panels.define('robot-scene', function (root, bus) {
     fetch(liveUrl() + '/info').then(function (r) { return r.json(); })
       .then(function (info) {
         if (liveBtn && !liveOn) liveBtn.style.display = info ? '' : 'none';
+        // landing on the page with no explicit ?scene= attaches the moment a bridge
+        // is reachable, instead of waiting for a manual click
+        if (info && noExplicitScene && !liveOn && !autoAttachedLive) {
+          autoAttachedLive = true;
+          setLive(true);
+        }
       })
       .catch(function () { if (liveBtn && !liveOn) liveBtn.style.display = 'none'; });
   }
   function applyLive(st) {
     if (!st || !st.frames) return;
     for (const k in st.frames) {
-      const cut = k.indexOf('/');
-      const m = modelByPrefix(cut < 0 ? '' : k.slice(0, cut));
-      if (!m) continue;
-      const j = m.obj.joints[cut < 0 ? k : k.slice(cut + 1)];
+      const j = JointRouting.jointFor(activeModelSet, k);
       if (j) j.setJointValue(st.frames[k]);
     }
     if (robotModel && st.base) setPose(robotModel.obj, st.base, st.base, 0);
@@ -1069,6 +1085,73 @@ Panels.define('robot-scene', function (root, bus) {
       .then(function () { liveSyncing = false; });
   }
 
+  // load the live world's own robot/environment geometry instead of overlaying poses
+  // onto whatever recorded scene happens to be loaded — a no-op if the bridge never
+  // saw a URDF source (e.g. start() was called after the demo built its world), in
+  // which case attaching keeps overlaying the recorded scene, unchanged.
+  var LIVE_MODELS_RETRY_MS = 1000;
+  function attachLiveModels() {
+    if (loadingLiveModels || liveModelsLoaded || !liveOn) return;
+    fetch(liveUrl() + '/models').then(function (r) { return r.json(); })
+      .then(function (d) {
+        const entries = d.models || [];
+        if (!entries.length) {
+          // the bridge is up (the button is visible at all) but the demo hasn't
+          // parsed its world yet — keep checking until it has, or until detach
+          if (liveOn) setTimeout(attachLiveModels, LIVE_MODELS_RETRY_MS);
+          return;
+        }
+        loadingLiveModels = true;
+        let pending = entries.length;
+        entries.forEach(function (m) {
+          loadModel(
+            liveUrl() + '/model_urdf?model=' + m.index, 'live_' + m.index,
+            m.prefix, m.robot, liveManager,
+            function (entry) {
+              if (!liveOn) {                 // detach already happened — discard it
+                worldRoot.remove(entry.obj);
+                if (--pending === 0) loadingLiveModels = false;
+                return;
+              }
+              liveModels.push(entry);
+              if (--pending === 0) {
+                loadingLiveModels = false;
+                liveModelsLoaded = true;
+                activeModelSet = liveModels;
+                const liveRobot = liveModels.filter(function (e) { return e.robot; })[0];
+                if (liveRobot) robotModel = liveRobot;
+                // the recorded scene's own models would otherwise sit frozen in
+                // place, doubled up with the live ones now animating on top
+                models.forEach(function (m) { m.obj.visible = false; });
+              }
+            }
+          );
+        });
+      }).catch(function () {
+        if (liveOn) setTimeout(attachLiveModels, LIVE_MODELS_RETRY_MS);
+      });
+  }
+
+  function disposeLiveModels() {
+    liveModels.forEach(function (entry) {
+      worldRoot.remove(entry.obj);
+      entry.obj.traverse(function (c) {
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) {
+          (Array.isArray(c.material) ? c.material : [c.material]).forEach(function (m) {
+            if (m.map) m.map.dispose();
+            m.dispose();
+          });
+        }
+      });
+    });
+    liveModels.length = 0;
+    liveModelsLoaded = false;
+    activeModelSet = models;
+    robotModel = recordedRobotModel;
+    models.forEach(function (m) { m.obj.visible = true; });
+  }
+
   function setLive(on) {
     liveOn = on;
     liveCbs.forEach(function (cb) { try { cb(on); } catch (e) {} });
@@ -1083,6 +1166,7 @@ Panels.define('robot-scene', function (root, bus) {
       liveStateKeys = {};
       livePolls = 0;
       syncLiveObjects();
+      attachLiveModels();
       liveTimer = setInterval(livePoll, 66);          // ~15 Hz render updates
     } else if (liveTimer) {
       clearInterval(liveTimer);
@@ -1090,6 +1174,7 @@ Panels.define('robot-scene', function (root, bus) {
       // remove objects that only existed for the live world, restore the rest
       for (const key in liveSpawned) removeObject(key);
       for (const key in objectMeshes) objectMeshes[key].visible = true;
+      disposeLiveModels();
       if (traj) applyFrame(playhead);                 // back to the recording
     }
     needsRender = true;

@@ -14,6 +14,7 @@ queue that carries viewer drags onto the simulation thread.
 from __future__ import annotations
 
 import math
+import threading
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -45,6 +46,28 @@ from cramera.live.bridge import (
 )
 
 from .test_robot_parts import ArmPart, EndEffectorPart, NamedBody, OneArmedRobot
+
+ONE_LINK_URDF_TEXT = '<robot name="demo">\n  <link name="base_link"/>\n</robot>\n'
+"""
+A URDF with one link and no mesh references.
+"""
+
+ONE_MESH_URDF_TEXT = (
+    '<robot name="demo">\n'
+    '  <link name="base_link"/>\n'
+    '  <link name="cup_link">\n'
+    "    <visual><geometry>\n"
+    '      <mesh filename="meshes/cup.stl"/>\n'
+    "    </geometry></visual>\n"
+    "  </link>\n"
+    '  <joint name="cup_joint" type="fixed">\n'
+    '    <parent link="base_link"/><child link="cup_link"/>\n'
+    "  </joint>\n"
+    "</robot>\n"
+)
+"""
+A URDF referencing exactly one mesh, relative to the URDF's own directory.
+"""
 
 
 # %% mimics of the interfaces the bridge reads
@@ -537,6 +560,129 @@ class TestViewerAccessors:
         assert [
             annotation["name"] for annotation in bridge.status()["partAnnotations"]
         ] == ["ArmPart", "EndEffectorPart"]
+
+
+# %% live model geometry
+@dataclass
+class RobotWithBase:
+    """
+    A robot mimic exposing only what :meth:`Bridge.live_models` reads off it.
+    """
+
+    root: PublishedBody
+
+
+def _prefixed_body(world: World, prefix: str, name: str) -> None:
+    """
+    Add a body with a prefixed name to a real world.
+
+    :param world: The world the body is added to.
+    :param prefix: The body's namespace prefix.
+    :param name: The body's local name.
+    """
+    with world.modify_world():
+        world.add_body(Body(name=PrefixedName(name=name, prefix=prefix)))
+
+
+class TestLiveModels:
+    def test_no_models_before_any_source_is_remembered(self):
+        assert Bridge().live_models() == []
+
+    def test_a_source_is_remembered_once(self):
+        bridge = Bridge()
+        bridge.remember_urdf_source("/robots/pr2.urdf")
+        bridge.remember_urdf_source("/robots/pr2.urdf")
+        assert len(bridge.live_models()) == 1
+
+    def test_the_robot_source_is_flagged_and_prefixed(self, tmp_path):
+        urdf = tmp_path / "pr2.urdf"
+        urdf.write_text(ONE_LINK_URDF_TEXT)
+        world = World()
+        _prefixed_body(world, "pr2_1", "base_link")
+
+        bridge = Bridge()
+        bridge.world = world
+        bridge.robot = RobotWithBase(root=PublishedBody(name="pr2_1/base_link"))
+        bridge.remember_urdf_source(str(urdf))
+
+        assert bridge.live_models() == [{"index": 0, "prefix": "pr2_1", "robot": True}]
+
+    def test_model_urdf_text_rewrites_the_mesh_reference(self, tmp_path):
+        urdf = tmp_path / "pr2.urdf"
+        urdf.write_text(ONE_MESH_URDF_TEXT)
+        bridge = Bridge()
+        bridge.remember_urdf_source(str(urdf))
+
+        text = bridge.model_urdf_text(0)
+
+        assert 'filename="model_mesh/0/0.stl"' in text
+
+    def test_an_out_of_range_model_has_no_urdf_text(self):
+        assert Bridge().model_urdf_text(0) is None
+
+    def test_model_mesh_path_resolves_the_reference(self, tmp_path):
+        (tmp_path / "meshes").mkdir()
+        mesh = tmp_path / "meshes" / "cup.stl"
+        mesh.write_text("solid cup\nendsolid cup\n")
+        urdf = tmp_path / "pr2.urdf"
+        urdf.write_text(ONE_MESH_URDF_TEXT)
+        bridge = Bridge()
+        bridge.remember_urdf_source(str(urdf))
+
+        assert bridge.model_mesh_path(0, 0) == str(mesh)
+
+    def test_an_out_of_range_model_has_no_mesh_path(self):
+        assert Bridge().model_mesh_path(0, 0) is None
+
+
+class TestLiveModelsDoNotBlockTheSimulationLock:
+    """
+    The tick hook holds :attr:`Bridge._lock` while publishing every snapshot; serving
+    live model geometry (a slow xacro expansion, on a cache miss) must never wait on
+    that same lock, or attaching live would stall the running demo.
+    """
+
+    def _call_with_the_bridge_lock_held(self, bridge, call):
+        """
+        Run ``call`` on a background thread while this thread holds ``bridge._lock``,
+        and return whether it finished within a short timeout.
+
+        :param bridge: The bridge whose lock is held for the duration.
+        :param call: A zero-argument callable run on the background thread.
+        """
+        bridge._lock.acquire()
+        try:
+            thread = threading.Thread(target=call)
+            thread.start()
+            thread.join(timeout=2)
+            return not thread.is_alive()
+        finally:
+            bridge._lock.release()
+
+    def test_model_urdf_text_does_not_wait_on_the_bridge_lock(self, tmp_path):
+        urdf = tmp_path / "pr2.urdf"
+        urdf.write_text(ONE_MESH_URDF_TEXT)
+        bridge = Bridge()
+        bridge.remember_urdf_source(str(urdf))
+        result = []
+
+        finished = self._call_with_the_bridge_lock_held(
+            bridge, lambda: result.append(bridge.model_urdf_text(0))
+        )
+
+        assert finished
+        assert 'filename="model_mesh/0/0.stl"' in result[0]
+
+    def test_remember_urdf_source_does_not_wait_on_the_bridge_lock(self, tmp_path):
+        urdf = tmp_path / "pr2.urdf"
+        urdf.write_text(ONE_MESH_URDF_TEXT)
+        bridge = Bridge()
+
+        finished = self._call_with_the_bridge_lock_held(
+            bridge, lambda: bridge.remember_urdf_source(str(urdf))
+        )
+
+        assert finished
 
 
 # %% motion statechart

@@ -64,6 +64,9 @@ function makeRoot() {
     '#gt-live': makeElement(),
     '#graph': makeElement(),
     '#legend': makeElement(),
+    '#graph-zoom-in': makeButton(),
+    '#graph-zoom-out': makeButton(),
+    '#graph-zoom-fit': makeButton(),
   };
   const buttons = ['knowledge', 'kinematics', 'plan', 'chart'].map(makeButton);
   byId['#graph-tabs'] = { querySelectorAll() { return buttons; } };
@@ -71,6 +74,7 @@ function makeRoot() {
     innerHTML: '',
     querySelector(selector) { return byId[selector]; },
     buttons: buttons,
+    control(selector) { return byId[selector]; },
   };
 }
 
@@ -108,10 +112,12 @@ function loadPanel(responses, search) {
   let lastBuild = null;
   const requested = [];
   const Panels = { define(id, f) { factory = f; } };
+  const zooms = [];
   const Graph = {
     attach() {}, build(payload) { lastBuild = payload; },
     onSelect() {}, onDoubleSelect() {}, highlight() {}, reset() {},
     setStatuses() { return false; },
+    zoomBy(factor) { zooms.push(factor); }, fit() { zooms.push('fit'); },
   };
   new Function('Panels', 'Graph', 'fetch', 'ResponseUtil', 'SceneContext', SOURCE)(
     Panels, Graph, makeFetch(responses, requested), loadResponseUtil(), loadSceneContext(search)
@@ -120,6 +126,7 @@ function loadPanel(responses, search) {
     factory: factory,
     lastBuild: function () { return lastBuild; },
     requested: requested,
+    zooms: zooms,
   };
 }
 
@@ -245,6 +252,30 @@ test('every api request carries the scene the url names', async function () {
       '/api/knowledge?scene=lab',
       '/api/knowledge/view?name=kinematics&scene=lab',
     ]);
+  } finally {
+    instance.destroy();
+  }
+});
+
+// %% on-screen zoom controls
+// a laptop touchpad is the awkward case for any gesture, so zooming must also be
+// reachable without one
+test('the zoom controls step the graph in, out and back to a full fit', async function () {
+  const panel = loadPanel({ '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} } });
+  const root = makeRoot();
+  const instance = panel.factory(root, makeBus());
+  try {
+    await flush();
+    root.control('#graph-zoom-in').click();
+    root.control('#graph-zoom-out').click();
+    root.control('#graph-zoom-fit').click();
+
+    assert.strictEqual(panel.zooms.length, 3);
+    assert.ok(panel.zooms[0] > 1, 'zoom in must magnify, got ' + panel.zooms[0]);
+    assert.ok(panel.zooms[1] < 1, 'zoom out must shrink, got ' + panel.zooms[1]);
+    // stepping out undoes stepping in
+    assert.ok(Math.abs(panel.zooms[0] * panel.zooms[1] - 1) < 1e-12);
+    assert.strictEqual(panel.zooms[2], 'fit');
   } finally {
     instance.destroy();
   }

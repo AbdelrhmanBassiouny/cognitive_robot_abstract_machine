@@ -52,9 +52,16 @@ class UrdfDocument:
         Connection6DoF: JointType.FLOATING,
     }
     """
-    The joint type a connection class becomes. A :class:`RevoluteConnection` additionally
-    becomes :attr:`JointType.CONTINUOUS` when its degree of freedom has no position
+    The joint type a connection class becomes.
+
+    A :class:`RevoluteConnection` additionally becomes :attr:`JointType.CONTINUOUS` when its degree of freedom has no position
     limits.
+    """
+
+    SYNTHESIZED_ROOT_LINK: ClassVar[str] = "world_root"
+    """
+    Name of the link :meth:`of_bodies` roots its document in, which belongs to no body
+    of the world it serializes part of.
     """
 
     COORDINATE_PRECISION: ClassVar[int] = 6
@@ -134,6 +141,70 @@ class UrdfDocument:
                 document.add_joint(body.parent_connection)
         return document.write(name, bodies)
 
+    @classmethod
+    def of_bodies(
+        cls,
+        bodies: List[Body],
+        name: str,
+        output_directory: str,
+        mesh_subdirectory: str,
+    ) -> BundleReport:
+        """
+        Serialize part of a world -- the bodies no parsed source describes -- as a URDF.
+
+        Connections *within* the subset are kept, so a drawer stays prismatic and keeps
+        following its recorded positions. A body whose parent lies outside the subset
+        has no joint to inherit and is fixed to :attr:`SYNTHESIZED_ROOT_LINK` at the
+        pose it holds in the world, which is also what leaves the document with a single
+        root.
+
+        :param bodies: The bodies to serialize, in the order they should appear.
+        :param name: Output model name, used for ``<output_directory>/<name>.urdf``.
+        :param output_directory: Directory the URDF and its ``meshes/`` tree go into.
+        :param mesh_subdirectory: Directory bundled meshes nest under.
+        """
+        os.makedirs(output_directory, exist_ok=True)
+        document = cls(
+            output_directory=output_directory,
+            mesh_subdirectory=mesh_subdirectory,
+            root_element=ElementTree.Element("robot", {"name": name}),
+            assets=BundledAssets(bundle_root=output_directory),
+        )
+        ElementTree.SubElement(
+            document.root_element, "link", {"name": cls.SYNTHESIZED_ROOT_LINK}
+        )
+        serialized = {str(body.name) for body in bodies}
+        for body in bodies:
+            document.add_link(body)
+            connection = body.parent_connection
+            if connection is not None and str(connection.parent.name) in serialized:
+                document.add_joint(connection)
+            else:
+                document.graft_onto_root(body)
+        return document.write(name, bodies)
+
+    def graft_onto_root(self, body: Body) -> None:
+        """
+        Fix a body to :attr:`SYNTHESIZED_ROOT_LINK` at the pose it holds in its world.
+
+        :param body: The body to attach, whose own parent this document does not
+            contain.
+        """
+        joint_element = ElementTree.SubElement(
+            self.root_element,
+            "joint",
+            {
+                "name": "%s_to_%s" % (self.SYNTHESIZED_ROOT_LINK, str(body.name)),
+                "type": JointType.FIXED.name.lower(),
+            },
+        )
+        ElementTree.SubElement(
+            joint_element, "parent", {"link": self.SYNTHESIZED_ROOT_LINK}
+        )
+        ElementTree.SubElement(joint_element, "child", {"link": str(body.name)})
+        self._set_origin(joint_element, body.global_pose)
+        self.joint_names.append(joint_element.attrib["name"])
+
     def write(self, name: str, bodies: Iterable[Body]) -> BundleReport:
         """
         Write the assembled document to disk and report what it contains.
@@ -175,9 +246,7 @@ class UrdfDocument:
             self._add_geometry(visual_element, shape)
             self._add_material(visual_element, shape)
 
-    def _add_geometry(
-        self, visual_element: ElementTree.Element, shape: Shape
-    ) -> None:
+    def _add_geometry(self, visual_element: ElementTree.Element, shape: Shape) -> None:
         """
         Add the ``geometry`` a shape describes, copying a mesh's file into the bundle
         first if the shape is one.
@@ -226,9 +295,7 @@ class UrdfDocument:
             },
         )
 
-    def _add_material(
-        self, visual_element: ElementTree.Element, shape: Shape
-    ) -> None:
+    def _add_material(self, visual_element: ElementTree.Element, shape: Shape) -> None:
         """
         Add the ``material`` a shape's colour describes.
 
@@ -264,7 +331,7 @@ class UrdfDocument:
         ElementTree.SubElement(
             joint_element, "child", {"link": str(connection.child.name)}
         )
-        self._set_origin(joint_element, connection.origin)
+        self._set_origin(joint_element, self._joint_origin(connection, joint_type))
 
         if joint_type in self.AXIS_JOINT_TYPES:
             ElementTree.SubElement(
@@ -290,6 +357,28 @@ class UrdfDocument:
         self.joint_names.append(str(connection.name))
         if joint_type is not JointType.FIXED:
             self.movable_joint_names.append(str(connection.name))
+
+    @classmethod
+    def _joint_origin(
+        cls, connection: Connection, joint_type: JointType
+    ) -> HomogeneousTransformationMatrix:
+        """
+        The parent-to-child pose a joint's ``origin`` states.
+
+        URDF reads a joint as its origin followed by the joint's own displacement, so a
+        joint whose displacement is supplied from outside -- the axis-driven types,
+        which a recording or a live bridge drives -- must be written at its zero. Its
+        :attr:`Connection.origin` is the pose at the *current* value, which would bake
+        that value in and have the supplied one applied on top of it. Every other joint
+        type carries no value of its own, so its full origin is the only thing placing
+        its child.
+
+        :param connection: The connection the joint describes.
+        :param joint_type: The joint type the connection becomes.
+        """
+        if joint_type in cls.AXIS_JOINT_TYPES:
+            return connection.parent_T_connection_expression
+        return connection.origin
 
     @classmethod
     def _joint_type(cls, connection: Connection) -> JointType:

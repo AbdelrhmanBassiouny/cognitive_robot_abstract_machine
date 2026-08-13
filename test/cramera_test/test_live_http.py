@@ -104,6 +104,72 @@ class TestMesh:
         assert error.value.code == 404
 
 
+class TestModels:
+    def test_models_reflects_a_fresh_bridge(self, server):
+        assert get_json(server + "/models") == {"models": []}
+
+    def test_models_reports_a_remembered_source(self, server, bridge, tmp_path):
+        urdf = tmp_path / "pr2.urdf"
+        urdf.write_text('<robot name="demo">\n  <link name="base_link"/>\n</robot>\n')
+        bridge.remember_urdf_source(str(urdf))
+
+        assert get_json(server + "/models") == {
+            "models": [{"index": 0, "prefix": "", "robot": False}]
+        }
+
+    def test_model_urdf_serves_the_rewritten_text(self, server, bridge, tmp_path):
+        urdf = tmp_path / "pr2.urdf"
+        urdf.write_text(
+            '<robot name="demo">\n'
+            '  <link name="base_link">\n'
+            "    <visual><geometry>\n"
+            '      <mesh filename="meshes/cup.stl"/>\n'
+            "    </geometry></visual>\n"
+            "  </link>\n"
+            "</robot>\n"
+        )
+        bridge.remember_urdf_source(str(urdf))
+
+        status, body = get(server + "/model_urdf?model=0")
+
+        assert status == 200
+        assert b'filename="model_mesh/0/0.stl"' in body
+
+    def test_an_out_of_range_model_urdf_is_404(self, server):
+        with pytest.raises(urllib.error.HTTPError) as error:
+            get(server + "/model_urdf?model=0")
+        assert error.value.code == 404
+
+    def test_model_mesh_serves_the_resolved_file(self, server, bridge, tmp_path):
+        (tmp_path / "meshes").mkdir()
+        (tmp_path / "meshes" / "cup.stl").write_bytes(b"solid cup endsolid")
+        urdf = tmp_path / "pr2.urdf"
+        urdf.write_text(
+            '<robot name="demo">\n'
+            '  <link name="base_link">\n'
+            "    <visual><geometry>\n"
+            '      <mesh filename="meshes/cup.stl"/>\n'
+            "    </geometry></visual>\n"
+            "  </link>\n"
+            "</robot>\n"
+        )
+        bridge.remember_urdf_source(str(urdf))
+
+        status, body = get(server + "/model_mesh/0/0.stl")
+
+        assert status == 200
+        assert body == b"solid cup endsolid"
+
+    def test_an_out_of_range_model_mesh_is_404(self, server, bridge, tmp_path):
+        urdf = tmp_path / "pr2.urdf"
+        urdf.write_text('<robot name="demo">\n  <link name="base_link"/>\n</robot>\n')
+        bridge.remember_urdf_source(str(urdf))
+
+        with pytest.raises(urllib.error.HTTPError) as error:
+            get(server + "/model_mesh/0/9.stl")
+        assert error.value.code == 404
+
+
 class TestMove:
     def test_a_valid_move_is_queued_on_the_injected_bridge(self, server, bridge):
         request = urllib.request.Request(

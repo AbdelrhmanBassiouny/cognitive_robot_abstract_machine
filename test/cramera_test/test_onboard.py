@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 
 import inspect
 import json
+import xml.etree.ElementTree as ElementTree
 from pathlib import Path
 
 import pytest
@@ -23,16 +24,33 @@ from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.api import BodySpecification
 from semantic_digital_twin.world_description.geometry import Box, Color, Scale
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Vector3,
+)
+from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import (
+    Connection6DoF,
+    FixedConnection,
+    PrismaticConnection,
+)
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
+from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Any, Dict, List, Optional
 
 from cramera.onboard import bundle_urdf as bundler
 from cramera.onboard.bundle_world import BundledWorld
+from cramera.onboard.world_to_urdf import UrdfDocument
 from cramera.onboard.demo import (
     BundledModel,
+    SceneBuilder,
     SceneIndexEntry,
     Recorder,
     RecordingAnalysis,
     SpawnedBox,
+    split_passthrough_arguments,
 )
 
 RESTING = [0.0, 0.0, 1.0, 0, 0, 0, 1]
@@ -105,6 +123,34 @@ class TestRecorderMutableDefaults:
             assert getattr(first, field_name) is not getattr(second, field_name)
 
 
+# %% CLI argument passthrough
+class TestSplitPassthroughArguments:
+    """
+    ``cramera-onboard`` forwards a demo file's own CLI arguments unchanged, so a demo
+    that parses its own ``sys.argv`` can still be onboarded.
+    """
+
+    def test_no_separator_keeps_everything_as_cramera_onboards_own(self):
+        split = split_passthrough_arguments(["demo.py", "--name", "kitchen"])
+
+        assert split.own == ["demo.py", "--name", "kitchen"]
+        assert split.passthrough == []
+
+    def test_separator_splits_into_own_and_passthrough(self):
+        split = split_passthrough_arguments(
+            ["demo.py", "--name", "kitchen", "--", "--robot", "pr2"]
+        )
+
+        assert split.own == ["demo.py", "--name", "kitchen"]
+        assert split.passthrough == ["--robot", "pr2"]
+
+    def test_separator_at_the_end_leaves_passthrough_empty(self):
+        split = split_passthrough_arguments(["demo.py", "--name", "kitchen", "--"])
+
+        assert split.own == ["demo.py", "--name", "kitchen"]
+        assert split.passthrough == []
+
+
 # %% asset and tick hooks
 class TestAssetHookMethods:
     """
@@ -157,6 +203,7 @@ class TestAssetHookMethods:
 
 
 # %% movement detection
+
 
 # %% spawned primitive boxes
 @dataclass
@@ -268,6 +315,7 @@ class TestRememberSpawnedBox:
         )
 
         assert recorder.spawned_boxes == []
+
 
 # %% remembering non-URDF model sources
 class TestModelSourceHooks:
@@ -400,7 +448,10 @@ class TestSceneIndexEntry:
         bundle.mkdir()
         (bundle / "scene.json").write_text(
             json.dumps(
-                {"robot": {"name": "tracy"}, "models": [{"name": "tracy", "robot": True}]}
+                {
+                    "robot": {"name": "tracy"},
+                    "models": [{"name": "tracy", "robot": True}],
+                }
             )
         )
 
@@ -454,28 +505,390 @@ class TestBundleParsedWorld:
         The viewer only knows how to load URDF, so an MJCF source has to come out the
         other side as one, with its kinematics preserved.
         """
-        report = BundledWorld.of_mjcf_source(mjcf_source, "lab", str(tmp_path / "bundle"))
+        report = BundledWorld.of_mjcf_source(
+            mjcf_source, "lab", str(tmp_path / "bundle")
+        )
 
         assert report.links == ["world", "table", "lid"]
         assert report.movable_joints == ["hinge"]
         urdf = Path(report.urdf).read_text()
         assert bundler.BundleReport.LINK_PATTERN.findall(urdf) == report.links
-        assert dict(bundler.BundleReport.JOINT_PATTERN.findall(urdf))["hinge"] == "revolute"
+        assert (
+            dict(bundler.BundleReport.JOINT_PATTERN.findall(urdf))["hinge"]
+            == "revolute"
+        )
 
     def test_the_report_names_the_source_it_was_built_from(self, mjcf_source, tmp_path):
-        report = BundledWorld.of_mjcf_source(mjcf_source, "lab", str(tmp_path / "bundle"))
+        report = BundledWorld.of_mjcf_source(
+            mjcf_source, "lab", str(tmp_path / "bundle")
+        )
 
         assert report.source == mjcf_source
 
     def test_a_missing_source_is_reported_as_such(self, tmp_path):
         with pytest.raises(FileNotFoundError, match="MJCF source not found"):
-            BundledWorld.of_mjcf_source(str(tmp_path / "gone.xml"), "lab", str(tmp_path / "bundle"))
+            BundledWorld.of_mjcf_source(
+                str(tmp_path / "gone.xml"), "lab", str(tmp_path / "bundle")
+            )
 
     def test_a_missing_gazebo_source_names_its_own_format(self, tmp_path):
         with pytest.raises(FileNotFoundError, match="Gazebo source not found"):
             BundledWorld.of_gazebo_source(
                 str(tmp_path / "gone.sdf"), "world", str(tmp_path / "bundle")
             )
+
+
+# %% serializing bodies that no source claimed
+class TestSerializeUnclaimedBodies:
+    """
+    A world built in code -- bodies constructed directly instead of parsed out of a
+    URDF, MJCF or SDF file -- leaves no source to bundle, so the bodies themselves have
+    to become a model.
+
+    Only the bodies no parsed model already claims are serialized, which
+    is what makes a root of their own necessary: their parent may be a body this document
+    does not contain.
+    """
+
+    @pytest.fixture()
+    def hand_built_world(self) -> World:
+        """
+        A world whose floor belongs to a parsed model, with a table and its drawer built
+        in code on top of it.
+        """
+        world = World()
+        floor = Body(name=PrefixedName("floor"))
+        table = Body(
+            name=PrefixedName("table"),
+            visual=ShapeCollection(shapes=[Box(scale=Scale(1.0, 0.6, 0.7))]),
+        )
+        drawer = Body(
+            name=PrefixedName("drawer"),
+            visual=ShapeCollection(shapes=[Box(scale=Scale(0.3, 0.3, 0.2))]),
+        )
+        drawer_dof = DegreeOfFreedom(name=PrefixedName("drawer_dof"))
+        with world.modify_world():
+            world.add_kinematic_structure_entity(floor)
+            world.add_kinematic_structure_entity(table)
+            world.add_kinematic_structure_entity(drawer)
+            world.add_degree_of_freedom(drawer_dof)
+            world.add_connection(
+                FixedConnection(
+                    parent=floor,
+                    child=table,
+                    parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                        x=0.4, y=0.2, z=0.0
+                    ),
+                )
+            )
+            world.add_connection(
+                PrismaticConnection(
+                    parent=table,
+                    child=drawer,
+                    axis=Vector3.from_iterable([1, 0, 0]),
+                    raw_dof=drawer_dof,
+                )
+            )
+        return world
+
+    def serialize(self, world: World, tmp_path) -> bundler.BundleReport:
+        """
+        Serialize everything but the floor, as a bundler would for a world whose only
+        parsed source claimed the floor.
+        """
+        return UrdfDocument.of_bodies(
+            bodies=[
+                world.get_body_by_name("table"),
+                world.get_body_by_name("drawer"),
+            ],
+            name="environment",
+            output_directory=str(tmp_path / "bundle"),
+            mesh_subdirectory="environment",
+        )
+
+    def test_the_subset_becomes_a_urdf_rooted_in_one_link(
+        self, hand_built_world, tmp_path
+    ):
+        report = self.serialize(hand_built_world, tmp_path)
+
+        urdf = Path(report.urdf).read_text()
+        assert bundler.BundleReport.LINK_PATTERN.findall(urdf) == [
+            UrdfDocument.SYNTHESIZED_ROOT_LINK,
+            "table",
+            "drawer",
+        ]
+
+    def test_a_connection_inside_the_subset_keeps_animating(
+        self, hand_built_world, tmp_path
+    ):
+        """
+        The drawer's joint is what the recorded connection positions drive, so it has to
+        survive as a prismatic joint under the name the recording keys it by.
+        """
+        report = self.serialize(hand_built_world, tmp_path)
+
+        # the key Recorder.record_frame writes the drawer's position under
+        recorded_key = str(
+            hand_built_world.get_body_by_name("drawer").parent_connection.name
+        )
+        assert report.movable_joints == [recorded_key]
+        urdf = Path(report.urdf).read_text()
+        assert dict(bundler.BundleReport.JOINT_PATTERN.findall(urdf))[recorded_key] == (
+            "prismatic"
+        )
+
+    def test_a_body_whose_parent_is_absent_is_grafted_on_at_its_world_pose(
+        self, hand_built_world, tmp_path
+    ):
+        """
+        The table's parent is the floor, which this document does not contain, so the
+        table hangs off the synthesized root -- and has to keep the place it stood in.
+        """
+        report = self.serialize(hand_built_world, tmp_path)
+
+        urdf = ElementTree.fromstring(Path(report.urdf).read_text())
+        graft = [
+            joint
+            for joint in urdf.findall("joint")
+            if joint.find("child").attrib["link"] == "table"
+        ]
+        assert len(graft) == 1
+        assert graft[0].attrib["type"] == "fixed"
+        assert graft[0].find("parent").attrib["link"] == (
+            UrdfDocument.SYNTHESIZED_ROOT_LINK
+        )
+        table_position = hand_built_world.get_body_by_name("table").global_pose.to_np()[
+            :3, 3
+        ]
+        assert [
+            float(value) for value in graft[0].find("origin").attrib["xyz"].split()
+        ] == pytest.approx(list(table_position))
+
+    def test_the_written_urdf_parses_back_into_a_world(
+        self, hand_built_world, tmp_path
+    ):
+        """
+        The viewer only ever loads URDF, so the document has to be a well-formed one:
+
+        a single root, and no joint naming a link it does not contain.
+        """
+        report = self.serialize(hand_built_world, tmp_path)
+
+        reparsed = URDFParser.from_file(report.urdf).parse()
+
+        assert sorted(str(body.name).split("/")[-1] for body in reparsed.bodies) == (
+            sorted(["table", "drawer", UrdfDocument.SYNTHESIZED_ROOT_LINK])
+        )
+
+    def test_a_joint_at_a_nonzero_position_is_written_at_its_zero(
+        self, hand_built_world, tmp_path
+    ):
+        """
+        URDF reads a joint as ``origin`` followed by the joint's own displacement, and
+        the viewer supplies that displacement from the recording.
+
+        So a world whose joints are already displaced when it is bundled -- an MJCF
+        keyframe puts the Panda's arm in a home pose, for instance -- must still be
+        written at its zero, or the recorded value is applied on top of the displacement
+        that is already baked in and the joint ends up moving from the wrong place.
+        """
+        drawer = hand_built_world.get_body_by_name("drawer")
+        drawer.parent_connection.position = 0.25
+        zero_origin = drawer.parent_connection.parent_T_connection_expression.to_np()
+
+        report = self.serialize(hand_built_world, tmp_path)
+
+        urdf = ElementTree.fromstring(Path(report.urdf).read_text())
+        [joint] = [
+            element
+            for element in urdf.findall("joint")
+            if element.find("child").attrib["link"] == "drawer"
+        ]
+        written = [float(value) for value in joint.find("origin").attrib["xyz"].split()]
+        assert written == pytest.approx(list(zero_origin[:3, 3]), abs=1e-6)
+
+    def test_the_report_claims_the_real_bodies_only(self, hand_built_world, tmp_path):
+        """
+        The report's links say which bodies are now covered by a model, so the
+        synthesized root -- which is no body of the world -- must not appear among them.
+        """
+        report = self.serialize(hand_built_world, tmp_path)
+
+        assert report.links == ["table", "drawer"]
+
+
+# %% loose objects of a world built in code
+class TestFreeFloatingObjects:
+    """
+    A world built in code loads no mesh file and spawns no box, so nothing tells the
+    recorder which of its bodies are the loose ones.
+
+    The world itself does: a body it
+    holds by a ``Connection6DoF`` is one it lets move freely.
+    """
+
+    def world_with(self, *, mobile_robot: bool) -> World:
+        """
+        A world with a fixed table, a free-floating cube, and a robot base that is
+        either bolted down or free to drive.
+        """
+        world = World()
+        floor = Body(name=PrefixedName("floor"))
+        table = Body(
+            name=PrefixedName("table"),
+            visual=ShapeCollection(shapes=[Box(scale=Scale(1.0, 0.6, 0.7))]),
+        )
+        cube = Body(
+            name=PrefixedName("cube", prefix="montessori"),
+            visual=ShapeCollection(shapes=[Box(scale=Scale(0.05, 0.05, 0.05))]),
+        )
+        robot_base = Body(name=PrefixedName("base_link"))
+        with world.modify_world():
+            for body in (floor, table, cube, robot_base):
+                world.add_kinematic_structure_entity(body)
+            world.add_connection(FixedConnection(parent=floor, child=table))
+            world.add_connection(
+                Connection6DoF.create_with_dofs(parent=floor, child=cube, world=world)
+            )
+            if mobile_robot:
+                world.add_connection(
+                    Connection6DoF.create_with_dofs(
+                        parent=floor, child=robot_base, world=world
+                    )
+                )
+            else:
+                world.add_connection(FixedConnection(parent=floor, child=robot_base))
+        return world
+
+    def test_a_freely_connected_body_is_a_loose_object(self):
+        recorder = Recorder()
+        recorder.world = self.world_with(mobile_robot=False)
+
+        assert [str(body.name) for body in recorder.free_floating_bodies()] == [
+            "montessori/cube"
+        ]
+
+    def test_the_key_drops_the_world_prefix(self):
+        """
+        Poses are filed under the same bare key a mesh file or a spawned box would use,
+        so the viewer looks every object up the same way.
+        """
+        recorder = Recorder()
+        recorder.world = self.world_with(mobile_robot=False)
+
+        [cube] = recorder.free_floating_bodies()
+        assert recorder.object_key(cube) == "cube"
+
+    def test_a_driving_robot_is_not_mistaken_for_an_object(self):
+        """
+        A mobile base is free-floating too, and it is recorded as the robot rather than
+        as something the robot manipulates.
+        """
+        world = self.world_with(mobile_robot=True)
+        recorder = Recorder()
+        recorder.world = world
+
+        class StationaryAnnotation:
+            """
+            Stands in for the robot annotation, which only has to name its bodies.
+            """
+
+            bodies = [world.get_body_by_name("base_link")]
+
+        recorder.robot = StationaryAnnotation()
+
+        assert [str(body.name) for body in recorder.free_floating_bodies()] == [
+            "montessori/cube"
+        ]
+
+
+# %% the model synthesized for bodies no source described
+class TestBundleUnclaimedBodies:
+    """
+    Every model comes from a recorded source, so a world built in code produces none and
+    the viewer draws an empty scene.
+
+    The bodies left over after the recorded sources have claimed theirs become one model
+    of their own.
+    """
+
+    @pytest.fixture()
+    def builder(self, tmp_path) -> SceneBuilder:
+        world = World()
+        floor = Body(name=PrefixedName("floor"))
+        table = Body(
+            name=PrefixedName("table"),
+            visual=ShapeCollection(shapes=[Box(scale=Scale(1.0, 0.6, 0.7))]),
+        )
+        cube = Body(
+            name=PrefixedName("cube"),
+            visual=ShapeCollection(shapes=[Box(scale=Scale(0.05, 0.05, 0.05))]),
+        )
+        with world.modify_world():
+            for body in (floor, table, cube):
+                world.add_kinematic_structure_entity(body)
+            world.add_connection(FixedConnection(parent=floor, child=table))
+            world.add_connection(FixedConnection(parent=floor, child=cube))
+        recorder = recording([{}])
+        recorder.world = world
+        return SceneBuilder(recorder, "scene", str(tmp_path / "bundle"), 1)
+
+    def parsed_model(self, links: List[str]) -> BundledModel:
+        """
+        A model as bundling a recorded source would report it.
+        """
+        return BundledModel(
+            name="robot",
+            prefix="",
+            is_robot=True,
+            report=bundler.BundleReport(
+                name="robot",
+                urdf="robot.urdf",
+                source="robot.urdf",
+                links=links,
+                joints=[],
+                movable_joints=[],
+                meshes_copied=0,
+                mesh_suffixes=[],
+                references_rewritten=0,
+                missing=[],
+            ),
+        )
+
+    def test_the_bodies_no_source_described_become_one_model(self, builder):
+        environment = builder._bundle_unclaimed_bodies(
+            [self.parsed_model(["floor"])], objects=[]
+        )
+
+        assert environment is not None
+        assert environment.name == SceneBuilder.ENVIRONMENT_MODEL_NAME
+        assert environment.is_robot is False
+        # the URDF states its own tree through joints, so link order carries no meaning
+        assert sorted(environment.report.links) == ["cube", "table"]
+
+    def test_a_world_a_source_fully_described_gets_no_extra_model(self, builder):
+        """
+        A demo that loads its world from files must keep bundling exactly the models it
+        loaded, with nothing synthesized beside them.
+        """
+        assert (
+            builder._bundle_unclaimed_bodies(
+                [self.parsed_model(["floor", "table", "cube"])], objects=[]
+            )
+            is None
+        )
+
+    def test_a_tracked_object_is_left_out_of_the_environment(self, builder):
+        """
+        A tracked object is drawn from its own geometry and moved every frame, so
+        leaving it in the environment as well would draw a second, motionless copy of
+        it.
+        """
+        environment = builder._bundle_unclaimed_bodies(
+            [self.parsed_model(["floor"])], objects=[{"key": "cube"}]
+        )
+
+        assert environment.report.links == ["table"]
 
 
 # %% the executed plan tree

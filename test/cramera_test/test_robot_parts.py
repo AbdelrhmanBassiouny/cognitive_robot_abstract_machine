@@ -6,7 +6,12 @@ from dataclasses import dataclass, field
 
 from typing_extensions import Any, List, Optional
 
-from cramera.robot_parts import ArmSide, RobotPartAnnotation, RobotPartRole
+from cramera.robot_parts import (
+    ArmSide,
+    RobotPartAnnotation,
+    RobotPartRole,
+    model_identity,
+)
 
 # %% mimics standing in for the sem_dt annotations of a world
 
@@ -179,3 +184,63 @@ class TestRobotPartAnnotationPayload:
             name="StretchArm", role=RobotPartRole.ARM, side=None
         )
         assert RobotPartAnnotation.from_payload(annotation.to_payload()) == annotation
+
+
+# %% identifying a model within a world
+class TestModelIdentity:
+    """
+    Telling a model's role (robot or environment) and world-instance prefix apart from
+    its link names alone, shared by onboarding and live model serving.
+    """
+
+    def test_a_model_whose_links_include_the_robot_base_is_the_robot(self):
+        prefix, is_robot = model_identity(
+            links=["base_link", "arm_link"],
+            world_body_names=["pr2_1/base_link", "pr2_1/arm_link"],
+            base_body="base_link",
+            probe_link_count=12,
+        )
+
+        assert is_robot is True
+        assert prefix == "pr2_1"
+
+    def test_a_model_without_the_robot_base_is_an_environment_model(self):
+        prefix, is_robot = model_identity(
+            links=["table", "lid"],
+            world_body_names=["lab_1/table", "lab_1/lid"],
+            base_body="base_link",
+            probe_link_count=12,
+        )
+
+        assert is_robot is False
+        assert prefix == "lab_1"
+
+    def test_an_unprefixed_world_has_no_prefix(self):
+        prefix, is_robot = model_identity(
+            links=["table"],
+            world_body_names=["table"],
+            base_body="base_link",
+            probe_link_count=12,
+        )
+
+        assert prefix == ""
+
+    def test_only_the_first_probe_link_count_links_are_checked_for_a_prefix(self):
+        prefix, _ = model_identity(
+            links=["a", "b", "c"],
+            world_body_names=["lab_1/c"],
+            base_body="base_link",
+            probe_link_count=2,
+        )
+
+        assert prefix == ""
+
+    def test_no_bound_robot_means_nothing_is_the_robot(self):
+        _, is_robot = model_identity(
+            links=["base_link"],
+            world_body_names=["base_link"],
+            base_body=None,
+            probe_link_count=12,
+        )
+
+        assert is_robot is False

@@ -32,6 +32,7 @@ class FakeBridge:
     bound_motion_groups: List[Any] = field(default_factory=list)
     frozen_motion_groups: List[Tuple[Any, Any]] = field(default_factory=list)
     remembered_mesh_files: List[str] = field(default_factory=list)
+    remembered_urdf_sources: List[str] = field(default_factory=list)
     raise_on_observe_tick: bool = False
 
     def attach(self, world: Any) -> None:
@@ -54,6 +55,9 @@ class FakeBridge:
 
     def remember_mesh_file(self, file_path: str) -> None:
         self.remembered_mesh_files.append(file_path)
+
+    def remember_urdf_source(self, file_path: str) -> None:
+        self.remembered_urdf_sources.append(file_path)
 
 
 @dataclass
@@ -194,3 +198,17 @@ class TestRememberMeshFile:
         )
 
         assert bridge.remembered_mesh_files == []
+
+
+# %% urdf source hook
+class TestRememberUrdfSource:
+    def test_the_urdf_source_is_remembered_before_parsing(self):
+        bridge = FakeBridge()
+        hooks = LiveHooks(bridge=bridge)
+
+        result = hooks._remember_urdf_source(
+            lambda cls, file_path, **kwargs: "a-parser", "the-cls", "robot.urdf"
+        )
+
+        assert bridge.remembered_urdf_sources == ["robot.urdf"]
+        assert result == "a-parser"

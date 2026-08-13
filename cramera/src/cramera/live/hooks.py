@@ -23,6 +23,7 @@ from coraplex.plans.executables import GiskardExecutable
 from coraplex.plans.plan import Plan
 from giskardpy.executor import Executor
 from semantic_digital_twin.adapters.mesh import MeshParser
+from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.world import World
 
 from cramera.logging_setup import get_logger
@@ -130,6 +131,24 @@ class LiveHooks:
             self.bridge.remember_mesh_file(mesh_parser.file_path)
         return original(mesh_parser, *args, **kwargs)
 
+    def _remember_urdf_source(
+        self,
+        original: Callable[..., URDFParser],
+        cls: type,
+        file_path: str,
+        **kwargs: Any,
+    ) -> URDFParser:
+        """
+        Parse as usual, but remember this URDF/xacro source file.
+
+        :param original: The real, unpatched ``URDFParser.from_file`` classmethod.
+        :param cls: The ``URDFParser`` class the method is bound to.
+        :param file_path: Path of the URDF/xacro source file being parsed.
+        :param kwargs: Keyword arguments forwarded to the wrapped call.
+        """
+        self.bridge.remember_urdf_source(file_path)
+        return original(cls, file_path, **kwargs)
+
 
 _LIVE_HOOKS = LiveHooks(bridge=BRIDGE)
 
@@ -174,3 +193,18 @@ def install_mesh_hook() -> None:
         logger.debug("mesh hook already installed")
         return
     MethodPatch(MeshParser, "parse").install(_LIVE_HOOKS._remember_mesh_file)
+
+
+def install_urdf_source_hook() -> None:
+    """
+    Remember every URDF/xacro file the world is built from, so the bridge can serve its
+    geometry to the viewer without a bundle.
+
+    Must be installed before the demo parses its world, same as
+    :func:`install_mesh_hook` — a source parsed before this hook is installed is never
+    seen.
+    """
+    if not BRIDGE.claim_hook(LiveHook.URDF_SOURCE):
+        logger.debug("urdf source hook already installed")
+        return
+    MethodPatch(URDFParser, "from_file").install(_LIVE_HOOKS._remember_urdf_source)
