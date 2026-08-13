@@ -1,12 +1,13 @@
 /* ============================================================================
  * core/panel-visibility.js — which panels the Scene page shows, and where.
  *
- * The topbar's View menu lists every configured panel with a region choice:
- * a column to sit in, or Hidden. A hidden panel stays mounted (re-showing is
- * instant), a slot whose panels are all hidden collapses so the remaining column
- * takes the full width, and choosing a column moves the panel there (see
- * core/panel-arrangement.js). Both choices persist in the browser's localStorage,
- * so every reload comes back to the same view.
+ * The topbar's View menu lists every configured panel with a checkbox (shown or
+ * not) and a region choice (which column it sits in). A disabled panel stays
+ * mounted and remembers its region, a slot whose panels are all hidden collapses
+ * so the remaining column takes the full width, and choosing a column moves the
+ * panel there (see core/panel-arrangement.js). Both choices persist in the
+ * browser's localStorage, and the menu's "Reload now" button restarts the page
+ * onto the stored layout.
  *
  * The state rules (defaults, persistence format, slot collapsing) are pure and
  * testable under node; only init() touches the page.
@@ -121,38 +122,45 @@
     menu.appendChild(list);
     actions.appendChild(menu);
 
-    const HIDDEN_CHOICE = 'hidden';
     configuredIds(layout).forEach(function (id) {
       const row = document.createElement('label');
       row.className = 'view-menu-row';
+      const shown = document.createElement('input');
+      shown.type = 'checkbox';
+      shown.checked = state[id] !== false;
+      shown.title = 'show or hide this panel';
+      shown.addEventListener('change', function () {
+        state[id] = shown.checked;
+        write(global.localStorage, state);
+        apply(state);
+      });
       const name = document.createElement('span');
       name.textContent = labelOf(id);
       const region = document.createElement('select');
+      region.title = 'which column this panel sits in';
       Object.keys(layout).forEach(function (slotName) {
         const option = document.createElement('option');
         option.value = slotName;
         option.textContent = slotLabel(slotName);
         region.appendChild(option);
       });
-      const hiddenOption = document.createElement('option');
-      hiddenOption.value = HIDDEN_CHOICE;
-      hiddenOption.textContent = 'Hidden';
-      region.appendChild(hiddenOption);
-      region.value = state[id] === false ? HIDDEN_CHOICE : slotOf(id);
+      region.value = slotOf(id);
       region.addEventListener('change', function () {
-        if (region.value === HIDDEN_CHOICE) {
-          state[id] = false;
-        } else {
-          state[id] = true;
-          if (global.PanelArrangement) global.PanelArrangement.place(id, region.value);
-        }
-        write(global.localStorage, state);
+        if (global.PanelArrangement) global.PanelArrangement.place(id, region.value);
         apply(state);
       });
+      row.appendChild(shown);
       row.appendChild(name);
       row.appendChild(region);
       list.appendChild(row);
     });
+
+    const reload = document.createElement('button');
+    reload.className = 'view-menu-reload';
+    reload.textContent = '⟳ Reload now';
+    reload.title = 'restart the page onto the chosen layout';
+    reload.addEventListener('click', function () { global.location.reload(); });
+    list.appendChild(reload);
 
     function slotOf(id) {
       const current = (global.CRAMERA_CONFIG || {}).layout || {};
