@@ -307,14 +307,12 @@ body.graph-full-open{overflow:hidden}
   background:var(--panel2);font-size:12.5px;
 }
 .variable-item span{color:var(--muted);font-size:11.5px;text-align:right;overflow-wrap:anywhere}
-.tool-tabs{display:flex;gap:4px;padding:12px 14px;border-bottom:1px solid var(--line)}
-.tool-tabs button{
-  padding:7px 16px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;
-  color:var(--muted);background:transparent;border:1px solid transparent;
-}
-.tool-tabs button:hover{color:var(--ink);background:rgba(255,255,255,.04)}
-.tool-tabs button.active{color:var(--accent);border-color:var(--line2);background:rgba(57,213,200,.08)}
-.tool{padding:14px;display:flex;flex-direction:column;gap:16px;align-items:flex-start}
+.models-tools{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;min-height:0}
+.models-tools .tool{overflow:auto}
+.tool{padding:0 0 14px;display:flex;flex-direction:column;gap:16px;align-items:flex-start}
+.tool>.panel-head{width:100%}
+.tool>*:not(.panel-head){margin:0 14px}
+.tool .tool-section,.tool .tool-result,.tool .posterior-plots{width:auto;align-self:stretch}
 .tool-section{width:100%;display:flex;flex-direction:column;gap:8px;align-items:flex-start}
 .constraint-rows{display:flex;flex-direction:column;gap:8px;width:100%}
 .constraint-row{
@@ -363,7 +361,6 @@ body.graph-full-open{overflow:hidden}
 .models-page .lp-title{font-size:12.5px}
 .models-page .variable-item{font-size:14px;padding:9px 12px}
 .models-page .variable-item span{font-size:13px}
-.models-page .tool-tabs button{font-size:14.5px;padding:8px 18px}
 .models-page .constraint-row{font-size:14px;padding:10px 12px}
 .models-page .constraint-row select,.models-page .constraint-row input{font-size:14px;padding:6px 10px}
 .models-page .row-add{font-size:13.5px;padding:7px 14px}

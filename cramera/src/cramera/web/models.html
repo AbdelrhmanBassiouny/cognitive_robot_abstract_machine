@@ -35,14 +35,9 @@
     </div>
   </aside>
 
-  <section class="panel models-main">
-    <div class="tool-tabs">
-      <button data-tool="query" class="active">Query</button>
-      <button data-tool="posterior">Posterior</button>
-      <button data-tool="mode">Mode</button>
-    </div>
-
-    <div id="tool-query" class="tool">
+  <section class="models-tools">
+    <div id="tool-query" class="panel tool">
+      <div class="panel-head"><h2>Query</h2></div>
       <div class="tool-section">
         <div class="lp-title">Query event</div>
         <div id="query-rows" class="constraint-rows"></div>
@@ -57,7 +52,8 @@
       <div id="query-result" class="tool-result"></div>
     </div>
 
-    <div id="tool-posterior" class="tool hidden">
+    <div id="tool-posterior" class="panel tool">
+      <div class="panel-head"><h2>Posterior</h2></div>
       <div class="tool-section">
         <div class="lp-title">Query variables</div>
         <div id="posterior-variables" class="posterior-variables"></div>
@@ -71,7 +67,8 @@
       <div id="posterior-plots" class="posterior-plots"></div>
     </div>
 
-    <div id="tool-mode" class="tool hidden">
+    <div id="tool-mode" class="panel tool">
+      <div class="panel-head"><h2>Mode</h2></div>
       <div class="tool-section">
         <div class="lp-title">Evidence</div>
         <div id="mode-evidence-rows" class="constraint-rows"></div>

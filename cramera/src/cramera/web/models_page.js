@@ -199,19 +199,6 @@
     button.addEventListener('click', function () { addRow(button.dataset.rows); });
   });
 
-  // %% tool switching
-
-  document.querySelectorAll('.tool-tabs button').forEach(function (button) {
-    button.addEventListener('click', function () {
-      document.querySelectorAll('.tool-tabs button').forEach(function (other) {
-        other.classList.toggle('active', other === button);
-      });
-      document.querySelectorAll('.tool').forEach(function (tool) {
-        tool.classList.toggle('hidden', tool.id !== 'tool-' + button.dataset.tool);
-      });
-    });
-  });
-
   // %% query
 
   document.getElementById('query-run').addEventListener('click', function () {
