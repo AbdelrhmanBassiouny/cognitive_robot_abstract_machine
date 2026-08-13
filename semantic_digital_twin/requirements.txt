@@ -4,6 +4,7 @@ numpy
 trimesh>=4.11.1
 typing_extensions
 urdf-parser-py
+xacro
 matplotlib
 casadi~=3.7.0
 hypothesis!=6.156.6  # 6.156.6 ships no linux-x86_64 wheel; skip it so uv sync resolves
@@ -33,3 +34,6 @@ plyfile
 huggingface-hub
 vhacdx
 rerun-sdk[datafusion]
+imageio
+imageio-ffmpeg
+psutil~=5.9.0

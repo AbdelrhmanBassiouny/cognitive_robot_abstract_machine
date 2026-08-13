@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from robocasa.models.scenes.scene_registry import LayoutType, StyleType
 
 from semantic_digital_twin.adapters.mjcf import MJCFParser
+from semantic_digital_twin.adapters.multi_sim import GeomVisibilityAndCollisionType
 from semantic_digital_twin.adapters.robocasa_dataset.exceptions import (
     RoboCasaApplianceNotFoundError,
     RoboCasaObjectAssetsNotFoundError,
@@ -55,9 +56,14 @@ logger = logging.getLogger(__name__)
 try:
     import robosuite
     import yaml
-    from robocasa.environments.kitchen.kitchen import Kitchen
-    from robocasa.models.scenes.kitchen_arena import KitchenArena
-    from robocasa.models.scenes import scene_builder, scene_registry
+    from semantic_digital_twin.adapters.robocasa_dataset.mujoco_compat import (
+        robocasa_version_assertions_relaxed,
+    )
+
+    with robocasa_version_assertions_relaxed():
+        from robocasa.environments.kitchen.kitchen import Kitchen
+        from robocasa.models.scenes.kitchen_arena import KitchenArena
+        from robocasa.models.scenes import scene_builder, scene_registry
     from robosuite.environments.base import REGISTERED_ENVS
     from robosuite.models.tasks import ManipulationTask
 except ImportError:
@@ -125,6 +131,33 @@ def _mjcf_document_from_element_copy(element: ET.Element) -> str:
     worldbody = ET.SubElement(root, "worldbody")
     worldbody.append(copy.deepcopy(element))
     return ET.tostring(root, encoding="unicode")
+
+
+def _parse_robosuite_mjcf(parser: MJCFParser) -> World:
+    """
+    Relabels a robosuite/RoboCasa-composed MJCF parser's collision-only geoms, then
+    parses it.
+
+    Robosuite's own convention (its ``robosuite.utils.mjcf_utils.sort_elements``) treats a geom
+    with an unset or ``0``-valued ``group`` as collision-only ("contact_geoms"), reserving
+    ``group 1`` for visual geoms ("visual_geoms") - the opposite of this project's own MJCF
+    convention, where :attr:`~GeomVisibilityAndCollisionType.VISIBLE_AND_COLLIDABLE_1` (group 0)
+    is visible. MuJoCo compiles an omitted ``group`` attribute to 0 either way, so the two
+    conventions are indistinguishable by group number alone once parsed: RoboCasa's own
+    collision-decomposition proxy geoms (arbitrary debug colors, never meant to be rendered)
+    must be relabelled to this project's :attr:`~GeomVisibilityAndCollisionType.ONLY_COLLIDABLE`
+    group before the shared, convention-agnostic :class:`MJCFParser` sees them, or they would be
+    parsed as visible and rendered on top of the real materials.
+
+    :param parser: The parser, already constructed from a robosuite/RoboCasa-composed MJCF
+        document, to relabel and parse.
+    :return: The parsed world.
+    """
+    for body in parser.spec.bodies:
+        for geom in body.geoms:
+            if geom.group == GeomVisibilityAndCollisionType.VISIBLE_AND_COLLIDABLE_1:
+                geom.group = GeomVisibilityAndCollisionType.ONLY_COLLIDABLE
+    return parser.parse()
 
 
 def _category_from_class_name(class_name: str) -> str:
@@ -264,7 +297,7 @@ class RoboCasaDatasetLoader:
             mujoco_objects=list(kitchen_appliances.values()),
         )
 
-        world = MJCFParser.from_xml_string(task.get_xml()).parse()
+        world = _parse_robosuite_mjcf(MJCFParser.from_xml_string(task.get_xml()))
         self._apply_kitchen_appliance_semantics(world, kitchen_appliances)
         return world
 
@@ -290,6 +323,34 @@ class RoboCasaDatasetLoader:
         :raises RoboCasaTaskNotFoundError: if ``task_name`` is not a registered RoboCasa kitchen
             task.
         """
+        environment = self.build_task_environment(task_name, layout_id, style_id)
+        return self.load_task_from_environment(environment)
+
+    def build_task_environment(
+        self,
+        task_name: str,
+        layout_id: LayoutType,
+        style_id: StyleType,
+    ) -> Any:
+        """
+        Build and reset the RoboCasa/robosuite environment a task's scene is composed
+        in, without parsing it into a World yet.
+
+        Exposed on its own, rather than folded into :meth:`load_task`, so a caller that
+        needs ground truth :meth:`load_task` does not read (for example a placement
+        sampler's resolved region, or a success condition's resolved threshold) can read
+        it from the exact same reset environment :meth:`load_task_from_environment`
+        would otherwise have discarded, instead of building a second, independently
+        sampled one.
+
+        :param task_name: The name of a registered RoboCasa kitchen task environment
+            (for example ``"TurnOnMicrowave"``).
+        :param layout_id: A member of ``robocasa.models.scenes.scene_registry.LayoutType``.
+        :param style_id: A member of ``robocasa.models.scenes.scene_registry.StyleType``.
+        :return: The reset environment.
+        :raises RoboCasaTaskNotFoundError: if ``task_name`` is not a registered RoboCasa kitchen
+            task.
+        """
         if task_name not in self._available_task_names():
             raise RoboCasaTaskNotFoundError(task_name, self._available_task_names())
 
@@ -305,14 +366,24 @@ class RoboCasaDatasetLoader:
             ignore_done=True,
         )
         environment.reset()
+        return environment
 
+    def load_task_from_environment(self, environment: Any) -> RoboCasaTask:
+        """
+        Parse an already built and reset task environment into a
+        :class:`RoboCasaTask`.
+
+        :param environment: A reset RoboCasa/robosuite task environment, typically
+            obtained from :meth:`build_task_environment`.
+        :return: The task bound to the world it is defined over.
+        """
         episode_metadata = environment.get_ep_meta()
         object_world_poses = self._object_world_poses(environment)
         stripped_document = self._strip_robot_and_bake_object_poses(
             environment.sim.model.get_xml(), object_world_poses
         )
 
-        world = MJCFParser.from_xml_string(stripped_document).parse()
+        world = _parse_robosuite_mjcf(MJCFParser.from_xml_string(stripped_document))
         self._apply_kitchen_appliance_semantics(world, environment.fixtures)
         manipulated_objects = self._apply_task_object_semantics(
             world, environment.object_cfgs, environment.objects
@@ -476,7 +547,7 @@ class RoboCasaDatasetLoader:
         :raises RoboCasaApplianceNotFoundError: if no layout contains a fixture of ``category``.
         """
         appliance = self._find_configured_appliance(category, style_id)
-        world = MJCFParser.from_xml_string(appliance.get_xml()).parse()
+        world = _parse_robosuite_mjcf(MJCFParser.from_xml_string(appliance.get_xml()))
         self._apply_kitchen_appliance_semantics(world, {appliance.name: appliance})
         return world
 
@@ -569,7 +640,7 @@ class RoboCasaDatasetLoader:
                 objects_directory,
             )
 
-        world = MJCFParser(str(model_files[instance_index])).parse()
+        world = _parse_robosuite_mjcf(MJCFParser(str(model_files[instance_index])))
         self._apply_object_semantics(world, category)
         return world
 

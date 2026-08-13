@@ -15,6 +15,8 @@ Key features:
 * Visualization of detected clusters
 """
 
+from __future__ import annotations
+
 import copy
 from timeit import default_timer
 
@@ -22,12 +24,13 @@ import cv2
 import numpy as np
 import open3d as o3d
 from py_trees.common import Status
-from typing_extensions import Optional, TYPE_CHECKING, Tuple, Dict
+from typing_extensions import TYPE_CHECKING, Dict, Optional, Tuple
 
 from robokudo.annotators.core import BaseAnnotator
 from robokudo.cas import CASViews
+from robokudo.exceptions import ColorToDepthRatioMissing, ImageContourMissing
 from robokudo.types.scene import ObjectHypothesis
-from robokudo.utils.annotator_helper import scale_cam_intrinsics
+from robokudo.utils.annotator_helper import scale_camera_intrinsics
 from robokudo.utils.cv_helper import get_scaled_color_image_for_depth_image
 from robokudo.utils.error_handling import catch_and_raise_to_blackboard
 
@@ -103,9 +106,13 @@ class ImageClusterExtractor(BaseAnnotator):
                     "hsv_min": (150, 130, 85),
                     "hsv_max": (200, 255, 255),
                 }
+                # Red sits at the hue wheel's 0/255 seam, so its hue wraps around rather
+                # than falling in one contiguous range: hsv_min's hue exceeding hsv_max's
+                # signals that to _threshold_hsv, which then matches [0, hsv_max hue] OR
+                # [hsv_min hue, 255] instead of a single contiguous range.
                 self.color_name_to_hsv_range["red"] = {
-                    "hsv_min": (215, 150, 95),
-                    "hsv_max": (280, 255, 255),
+                    "hsv_min": (245, 150, 95),
+                    "hsv_max": (15, 255, 255),
                 }
 
                 self.outlier_removal: bool = True
@@ -133,14 +140,14 @@ class ImageClusterExtractor(BaseAnnotator):
     def __init__(
         self,
         name: str = "ImageClusterExtractor",
-        descriptor: "ImageClusterExtractor.Descriptor" = Descriptor(),
+        descriptor: ImageClusterExtractor.Descriptor | None = None,
     ) -> None:
         super().__init__(name, descriptor)
         self.rk_logger.debug("%s.__init__()" % self.__class__.__name__)
         self.color: Optional[npt.NDArray] = None
         self.depth: Optional[npt.NDArray] = None
         self.query = None
-        self.cam_intrinsics = None
+        self.camera_intrinsics = None
 
         # TODO Refactor this to new RPC method without using ROS
         # Add variables (name, description, default value, min, max, edit_method)
@@ -201,6 +208,39 @@ class ImageClusterExtractor(BaseAnnotator):
             self.descriptor.parameters.color_name_to_hsv_range[color]["hsv_max"]
         )
 
+    def _threshold_hsv(
+        self,
+        hsv_min: Tuple[int, int, int],
+        hsv_max: Tuple[int, int, int],
+    ) -> npt.NDArray:
+        """
+        Threshold ``self.hsv`` to the given bounds, wrapping the hue channel around the
+        0/255 seam when ``hsv_min``'s hue exceeds ``hsv_max``'s.
+
+        True red sits exactly at that seam, so a single contiguous hue range only ever
+        catches one side of it (confirmed live: a plain ``[215,255]`` range matched 124
+        of 101760 pixels on a red object; wrapping recovered 1748 by also matching the
+        pixels that wrapped to just above 0).
+
+        :param hsv_min: Lower HSV bound.
+        :param hsv_max: Upper HSV bound. A hue lower than ``hsv_min``'s signals wraparound.
+        :return: Binary mask of pixels within the (possibly wrapped) bounds.
+        """
+        if hsv_min[0] <= hsv_max[0]:
+            return cv2.inRange(self.hsv, hsv_min, hsv_max)
+
+        low = cv2.inRange(
+            self.hsv,
+            (0, hsv_min[1], hsv_min[2]),
+            (hsv_max[0], hsv_max[1], hsv_max[2]),
+        )
+        high = cv2.inRange(
+            self.hsv,
+            (hsv_min[0], hsv_min[1], hsv_min[2]),
+            (255, hsv_max[1], hsv_max[2]),
+        )
+        return cv2.bitwise_or(low, high)
+
     @catch_and_raise_to_blackboard
     def update(self) -> Status:
         """
@@ -216,13 +256,15 @@ class ImageClusterExtractor(BaseAnnotator):
         * Generates visualization output
 
         :return: SUCCESS if clusters found, FAILURE if no clusters
-        :raises Exception: If no contours found or processing fails
+        :raises ImageContourMissing: If no contours are found
         """
         start_timer = default_timer()
 
         self.color = self.get_cas().get(CASViews.COLOR_IMAGE)
         self.depth = self.get_cas().get(CASViews.DEPTH_IMAGE)
-        self.cam_intrinsics = copy.deepcopy(self.get_cas().get(CASViews.CAM_INTRINSIC))
+        self.camera_intrinsics = copy.deepcopy(
+            self.get_cas().get(CASViews.CAMERA_INTRINSIC)
+        )
 
         # Scale the image down so that it matches the depth image size
         resized_color = None
@@ -230,22 +272,19 @@ class ImageClusterExtractor(BaseAnnotator):
             resized_color = get_scaled_color_image_for_depth_image(
                 self.get_cas(), self.color
             )
-            scale_cam_intrinsics(self)
-        except RuntimeError as e:
+            scale_camera_intrinsics(self)
+        except ColorToDepthRatioMissing:
             self.rk_logger.error(
                 "No color to depth ratio set by your camera driver! Can't scale image for Point Cloud creation."
             )
-            raise Exception(
-                "No color to depth ratio set by your camera driver! Can't scale image for Point Cloud creation."
-            )
+            raise
 
         self.hsv = cv2.cvtColor(resized_color, cv2.COLOR_BGR2HSV_FULL)
 
         self.adjust_hsv_threshold_to_query()
 
         # Apply the HSV threshold on the image and find contours on the resultant binary image
-        hsv_mask = cv2.inRange(
-            self.hsv,
+        hsv_mask = self._threshold_hsv(
             self.descriptor.parameters.hsv_min,
             self.descriptor.parameters.hsv_max,
         )
@@ -255,7 +294,7 @@ class ImageClusterExtractor(BaseAnnotator):
 
         if len(contours) == 0:
             # Fail if no contours have been found
-            raise Exception(f"Couldn't find contour")
+            raise ImageContourMissing(context="image cluster extraction")
 
         # Visualization purposes
         result = copy.deepcopy(resized_color)
@@ -327,7 +366,7 @@ class ImageClusterExtractor(BaseAnnotator):
             )
 
             cloud = o3d.geometry.PointCloud.create_from_rgbd_image(
-                rgbd_image, self.cam_intrinsics
+                rgbd_image, self.camera_intrinsics
             )
 
             if self.descriptor.parameters.outlier_removal:

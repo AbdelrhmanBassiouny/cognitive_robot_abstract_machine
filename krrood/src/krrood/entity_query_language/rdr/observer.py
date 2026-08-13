@@ -21,7 +21,6 @@ from krrood.entity_query_language.core.base_expressions import (
     SymbolicExpression,
 )
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
-from krrood.entity_query_language.rdr.utils import UNSET
 from krrood.entity_query_language.rules.conclusion import Add
 from krrood.entity_query_language.evaluation import (
     EvaluationContext,
@@ -129,12 +128,12 @@ class ConclusionObserver(EvaluationObserver):
     @property
     def conclusion(self) -> Any:
         """
-        The single inferred value, or ``UNSET`` if no rule fired.
+        The single inferred value, or ``...`` if no rule fired.
 
         Single-class RDR conclusions are mutually exclusive, so all captured conclusions
         for one case carry the same value; we return the last one.
         """
-        return self.fired[-1].value if self.fired else UNSET
+        return self.fired[-1].value if self.fired else ...
 
     @property
     def distinct_conclusions(self) -> List[Any]:
@@ -235,9 +234,9 @@ class ClassificationTrace:
     The condition node of the rule that produced the winning conclusion.
     """
 
-    conclusion: Any = UNSET
+    conclusion: Any = ...
     """
-    The inferred conclusion (``UNSET`` if no rule fired).
+    The inferred conclusion (``...`` if no rule fired).
     """
 
     @property

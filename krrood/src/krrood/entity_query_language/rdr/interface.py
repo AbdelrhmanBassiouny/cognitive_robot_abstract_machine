@@ -27,7 +27,6 @@ from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
 from krrood.entity_query_language.rdr.exceptions import ExpertAbort
-from krrood.entity_query_language.rdr.utils import UNSET
 from krrood.entity_query_language.scope import get_definition_scope
 
 if TYPE_CHECKING:
@@ -67,12 +66,12 @@ class CaseContext:
     The shared EQL variable the rule tree ranges over; conditions are built over it.
     """
 
-    current_conclusion: Any = UNSET
+    current_conclusion: Any = ...
     """
-    What the RDR currently concludes for the case (``_UNSET`` if no rule fired).
+    What the RDR currently concludes for the case (``...`` if no rule fired).
     """
 
-    target_conclusion: Any = UNSET
+    target_conclusion: Any = ...
     """
     The known correct conclusion, or absent (sentinel) when the expert must label it.
     """
@@ -115,12 +114,12 @@ class CaseContext:
     @property
     def has_target(self) -> bool:
         """:return: True when a ground-truth ``target_conclusion`` was supplied."""
-        return self.target_conclusion is not UNSET
+        return self.target_conclusion is not ...
 
     @property
     def has_current_conclusion(self) -> bool:
         """:return: True when the RDR has concluded a conclusion for the case."""
-        return self.current_conclusion is not UNSET
+        return self.current_conclusion is not ...
 
 
 @dataclass
@@ -149,7 +148,7 @@ class AnswerRequest:
     default: Any = None
     """
     The value the answer name is seeded with in the namespace before the expert edits it
-    (e.g. ``UNSET`` to distinguish "left unset" from a deliberate ``None``, or a pre-
+    (e.g. ``...`` to distinguish "left unset" from a deliberate ``None``, or a pre-
     seeded suggestion).
     """
 

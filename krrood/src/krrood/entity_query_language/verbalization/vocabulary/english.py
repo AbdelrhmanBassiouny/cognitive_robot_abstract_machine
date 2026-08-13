@@ -42,6 +42,7 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 )
 from krrood.entity_query_language.verbalization.fragments.roles import SemanticRole
 from krrood.entity_query_language.verbalization.fragments.features import Spacing
+from krrood.entity_query_language.verbalization.value_lexicon import type_noun
 from krrood.entity_query_language.verbalization.vocabulary.words import (
     AggregationWord,
     KeyWord,
@@ -717,15 +718,25 @@ class RankingWords(VocabEnum):
 
 class Articles(VocabEnum):
     """
-    Definite articles (THE, THE UNIQUE) and a static helper for indefinite
-    articles.
+    Definite articles (THE, THE UNIQUE), the fused *another* / *the other* alternative
+    determiners, and a static helper for indefinite articles.
     """
 
+    A = PlainWord("a")
+    AN = PlainWord("an")
     THE = PlainWord("the")
     THE_UNIQUE = PlainWord("the unique")
+    ANOTHER = PlainWord("another")
+    """The fused indefinite alternative determiner — a second, distinct, freshly-introduced
+    same-noun referent (*"another Robot"*), not *"an other Robot"* (:class:`NounPhrase.alternative`
+    on first mention). Reference: :cite:t:`gundel1993givenness` — the given/new status of an
+    indefinite alternative."""
+    THE_OTHER = PlainWord("the other")
+    """The definite alternative determiner — the same referent once the pair is discourse-old
+    (:class:`NounPhrase.alternative` on repeat mention)."""
 
-    @staticmethod
-    def indefinite(following_word: str) -> WordFragment:
+    @classmethod
+    def indefinite(cls, following_word: str) -> WordFragment:
         """
         :param following_word: The word immediately following the article.
         :return: A word fragment containing *"a"* or *"an"* based on the phonological context of
@@ -736,7 +747,11 @@ class Articles(VocabEnum):
         >>> Articles.indefinite("robot").text
         'a'
         """
-        text = morphology.indefinite_article(following_word) if following_word else "a"
+        text = (
+            morphology.indefinite_article(following_word)
+            if following_word
+            else cls.A.text
+        )
         return WordFragment(text=text)
 
 
@@ -746,7 +761,7 @@ class ExistentialPhrase(VocabEnum):
     TypeNames"*).
     """
 
-    THERE_IS_A = SingularExistential("there's")
+    THERE_IS = SingularExistential("there's")
     THERE_ARE = PluralExistential("there are")
 
     @classmethod
@@ -758,7 +773,7 @@ class ExistentialPhrase(VocabEnum):
         >>> ExistentialPhrase.for_number(GrammaticalNumber.SINGULAR).text
         "there's"
         """
-        return cls.THERE_ARE if number is GrammaticalNumber.PLURAL else cls.THERE_IS_A
+        return cls.THERE_ARE if number is GrammaticalNumber.PLURAL else cls.THERE_IS
 
     def build_phrase(
         self, type_name: str, referent_id: Optional[uuid.UUID] = None
@@ -771,10 +786,10 @@ class ExistentialPhrase(VocabEnum):
         :return: Existential phrase fragment.
 
         >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text
-        >>> flatten_fragment_to_plain_text(ExistentialPhrase.THERE_IS_A.build_phrase("Apple"))
+        >>> flatten_fragment_to_plain_text(ExistentialPhrase.THERE_IS.build_phrase("Apple"))
         "there's an Apple"
         """
-        if referent_id is not None and self is ExistentialPhrase.THERE_IS_A:
+        if referent_id is not None and self is ExistentialPhrase.THERE_IS:
             return self.value.build_phrase(type_name, referent_id=referent_id)
         return self.value.build_phrase(type_name)
 
@@ -799,9 +814,9 @@ class FallbackNouns(VocabEnum):
     def name_of(self, node: object) -> str:
         """
         :param node: A variable/entity-like node, or ``None``.
-        :return: *node*'s type name (``_type_.__name__``), or this fallback noun's text when *node*
-            is ``None`` or carries no type. Centralises the one optional-``_type_`` read every
-            planner/assembler would otherwise repeat.
+        :return: *node*'s type noun (:func:`~…value_lexicon.type_noun`), or this fallback noun's
+            text when *node* is ``None`` or carries no type. Centralises the one optional-
+            ``_type_`` read every planner/assembler would otherwise repeat.
 
         >>> FallbackNouns.ENTITY.name_of(variable(Robot, []))
         'Robot'
@@ -809,7 +824,7 @@ class FallbackNouns(VocabEnum):
         'entity'
         """
         node_type = node._type_ if isinstance(node, Selectable) else None
-        return node_type.__name__ if node_type is not None else self.text
+        return type_noun(node_type) if node_type is not None else self.text
 
 
 class GroupKeyPhrases(VocabEnum):
