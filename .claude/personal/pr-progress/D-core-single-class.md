@@ -22,13 +22,23 @@ re-verified below, with the five premises that had gone stale corrected.
 
 ## Next
 
-1. **Local baseline on `D-core-expert` before any code.** CI has queued nothing
-   on that branch across six pushes, so the baseline cannot come from CI. Use
-   §18/§19's recipe: `/usr/bin/python3.12` venv (the default `python3` is 3.11
-   and fails in `class_diagram.py` on `make_dataclass(module=…)`), `krrood`'s
-   requirements, editable `random_events`/`probabilistic_model`, `casadi`, and
-   `--confcutdir=test/krrood_test`. Expect `test_eql_rdr` **150 passed / 0
-   failed**. Record the collected test ids, not just the count.
+1. ~~**Local baseline on `D-core-expert` before any code.**~~ **Done — and the
+   expected count in this note was stale.** §18/§19's recipe rebuilt cleanly
+   (`/usr/bin/python3.12` venv, `krrood`'s requirements, editable
+   `random_events`/`probabilistic_model`, `casadi`, `--confcutdir=test/krrood_test`,
+   `PYTHONPATH=<worktree>/krrood/src`). `test_eql_rdr` on `D-core-expert`
+   `82eb69fb` is **164 passed / 0 failed in 2.51s**, not the 150 this note
+   predicted: 150 was `e52d74b4`, before §21's cascade merged `D-core-support`
+   (+14). §21 already records 164; this note was written before it. Collected ids
+   saved to `scratchpad/baseline_expert_ids.txt`, 164 across 15 files —
+   `test_aid` 3, `test_backward_inference` 18, `test_branch_semantics` 12,
+   `test_conclusion_domain` 18, `test_conclusion_validator` 15,
+   `test_condition_resolver` 16, `test_corner_case` 9, `test_exceptions` 12,
+   `test_expert` 11, `test_observer` 12, `test_progress` 2,
+   `test_rule_tree_growth` 10, `test_serialization` 10,
+   `test_underspecified_match` 9, `test_zoo_loader` 7.
+   Note `-o addopts=` is required: the repo-root `pytest.ini` sets `-sv`, which
+   suppresses the `::`-form ids `--collect-only` otherwise prints.
 2. **Tests first.** Port six files from mega-branch `e650d968`:
    `test_single_class_rdr.py` (1079), `test_condition_resolver_integration.py`
    (831), `test_ask_for_rule.py` (518), `test_backward_inference_integration.py`
