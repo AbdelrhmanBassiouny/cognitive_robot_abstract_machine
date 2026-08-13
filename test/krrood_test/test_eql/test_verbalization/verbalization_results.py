@@ -9,6 +9,8 @@ before committing an intentional wording change.
 
 from __future__ import annotations
 
+from krrood.entity_query_language.testing.result_verification import VerbalizationResult
+from typing_extensions import Tuple
 from krrood.entity_query_language.factories import (
     AttributeOwnerClass,
     IsClass,
@@ -21,7 +23,6 @@ from krrood.entity_query_language.factories import (
     RuntimeType,
 )
 from krrood.entity_query_language.predicate import HasType, HasTypes, Is, Length
-from krrood.entity_query_language.testing.result_verification import VerbalizationResult
 from krrood.entity_query_language.verbalization._example_domain import (
     IsReachable,
     WorksIn,
@@ -29,7 +30,7 @@ from krrood.entity_query_language.verbalization._example_domain import (
 from krrood.inheritance_path_length import InheritancePathLength
 from krrood.patterns.role_predicates import IsSameSemanticEntity
 
-results: tuple[VerbalizationResult, ...] = (
+results: Tuple[VerbalizationResult, ...] = (
     VerbalizationResult(
         AttributeOwnerClass, "the attribute owner class of an Attribute"
     ),
