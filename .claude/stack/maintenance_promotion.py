@@ -5,11 +5,12 @@ The upstream pull request is not opened here - the credential has no write acces
 What is written is the link that opens it prefilled, into the fork pull request's own
 description, plus the label that stops a later pass rebuilding it.
 
-The one thing this cannot compute is the prefilled description: it is a reading of a
-diff, written for the upstream reviewer. So the caller supplies it, and everything around
-it - the title, the link back to the fork pull request, the encoding, the length budget -
-stays here. A branch nobody has written one for is reported as awaiting it rather than
-promoted with a body nobody wrote.
+The one thing this cannot compute is what the upstream reviewer reads: it is a reading of
+a diff. So a caller who has one supplies it, and everything around it - the title, the
+link back to the fork pull request, the encoding, the length budget - stays here. A
+caller with no reading of the diff to offer, which is any run with no model in it,
+promotes just the same and the upstream pull request opens with the link back and nothing
+else.
 """
 
 from __future__ import annotations
@@ -21,11 +22,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from maintenance_constants import (
-    PROMOTION_HEADING,
-    PROMOTION_LINK_LABEL,
-    RECORDED_PROMOTION_LINK_PATTERN,
-)
+from github_links import GitHubLinks
+from maintenance_constants import PROMOTION_HEADING, PROMOTION_LINK_LABEL
 from maintenance_board import PullRequestField
 from maintenance_github import ForkPullRequests, PullRequestReader, PullRequestWriter
 from stack import (
@@ -56,39 +54,20 @@ class PromotionSummaryField(StrEnum):
     """
 
 
-@dataclass
-class EmptyPromotionSummaryError(ValueError):
-    """
-    Raised when a summary is present but says nothing.
-
-    An entry with no points is indistinguishable in its effect from no entry at all, and
-    the difference matters: one is a branch still waiting to be written for, the other is
-    a branch somebody has declared finished.
-    """
-
-    pull_request_number: int
-    """
-    The pull request whose summary is empty.
-    """
-
-    def __str__(self) -> str:
-        """:return: Which summary says nothing, and what it needs."""
-        return (
-            f"the summary for pull request {self.pull_request_number} has no "
-            f"'{PromotionSummaryField.POINTS}'; write the points the upstream reviewer "
-            f"is meant to read"
-        )
-
-
 @dataclass(frozen=True)
 class PromotionSummary:
     """
-    What one upstream pull request opens with, as its author wrote it.
+    What one upstream pull request opens with, as far as its author has written it.
+
+    Both halves are optional, and a caller supplying neither is the ordinary case for a
+    run with no model in it: what is left is the link back to the fork pull request,
+    which is never the caller's to supply. A session promoting through the maintenance
+    skill supplies both, since it can read the diff and the upstream cannot.
     """
 
-    points: tuple[str, ...]
+    points: tuple[str, ...] = ()
     """
-    The points, rendered as a bullet each.
+    The points, rendered as a bullet each; empty when nobody has written them.
     """
 
     title: str | None = None
@@ -97,19 +76,17 @@ class PromotionSummary:
     """
 
     @classmethod
-    def from_json(cls, data: Mapping[str, Any], number: int) -> PromotionSummary:
+    def from_json(cls, data: Mapping[str, Any]) -> PromotionSummary:
         """
         Read one summary out of the summaries document.
 
         :param data: The entry as it was written.
-        :param number: The pull request it was written for, named in any rejection.
         :return: The summary.
-        :raises EmptyPromotionSummaryError: If it carries no points.
         """
-        points = tuple(data.get(PromotionSummaryField.POINTS) or ())
-        if not points:
-            raise EmptyPromotionSummaryError(number)
-        return cls(points=points, title=data.get(PromotionSummaryField.TITLE))
+        return cls(
+            points=tuple(data.get(PromotionSummaryField.POINTS) or ()),
+            title=data.get(PromotionSummaryField.TITLE),
+        )
 
     @property
     def as_markdown(self) -> str:
@@ -119,7 +96,7 @@ class PromotionSummary:
         Rendering rather than transcribing is what makes "a point-based summary" hold:
         the caller supplies points, so prose cannot arrive dressed as one.
 
-        :return: One bullet per point.
+        :return: One bullet per point, empty when there are none.
         """
         return "\n".join(f"- {point}" for point in self.points)
 
@@ -142,7 +119,6 @@ class PromotionSummaries:
 
         :param path: The document to read, or ``None`` when none was given.
         :return: The summaries.
-        :raises EmptyPromotionSummaryError: If any entry carries no points.
         """
         if path is None:
             return cls()
@@ -155,60 +131,65 @@ class PromotionSummaries:
 
         :param data: The document, keyed by fork pull request number.
         :return: The summaries.
-        :raises EmptyPromotionSummaryError: If any entry carries no points.
         """
         return cls(
             {
-                int(number): PromotionSummary.from_json(entry, int(number))
+                int(number): PromotionSummary.from_json(entry)
                 for number, entry in data.items()
             }
         )
 
-    def for_pull_request(self, number: int) -> PromotionSummary | None:
-        """:param number: The fork pull request to look up.
-        :return: Its summary, or ``None`` if nobody has written one."""
-        return self.by_pull_request.get(number)
+    def for_pull_request(self, number: int) -> PromotionSummary:
+        """
+        Answer for a pull request whether or not anybody wrote for it.
+
+        An absent entry and an empty one mean the same thing here - nobody has read this
+        diff for the upstream - so both answer with the summary that adds nothing.
+
+        :param number: The fork pull request to look up.
+        :return: Its summary, empty when none was written.
+        """
+        return self.by_pull_request.get(number, PromotionSummary())
 
 
-# %% what one pass's promotion did, and left
+# %% what one pass's promotion did to each branch
+
+
+class PromotionOutcome(StrEnum):
+    """
+    What became of one branch during a promotion.
+    """
+
+    PROMOTED = "promoted"
+    """
+    Its link was built and recorded, and the label applied.
+    """
+
+    ALREADY_LINKED = "already-linked"
+    """
+    It carries the link label already, so a link was built for it on an earlier pass.
+    """
+
+    WITHHELD = "withheld"
+    """
+    It is conflicted against its base, so it was left for its owner rather than promoted.
+    """
+
+    LINK_LABEL_CLEARED = "link-label-cleared"
+    """
+    Its link has been acted on, so the label that stopped it being rebuilt is spent.
+    """
 
 
 @dataclass(frozen=True)
-class Promotion:
+class BranchPromotion:
     """
-    One branch's compare-and-create link, and where it was recorded.
+    What became of one branch, in terms the caller of a pass can act on.
     """
 
     branch: str
     """
-    The branch promoted.
-    """
-
-    pull_request_number: int
-    """
-    Its fork pull request.
-    """
-
-    url: str
-    """
-    The compare-and-create link opening the upstream pull request.
-    """
-
-    body_was_truncated: bool
-    """
-    Whether the prefilled description had to be shortened to fit the URL limit.
-    """
-
-
-@dataclass(frozen=True)
-class BranchAwaitingSummary:
-    """
-    A branch that would have been promoted, had anybody written its summary.
-    """
-
-    branch: str
-    """
-    The branch waiting.
+    The branch, which is what identifies it.
     """
 
     pull_request_number: int
@@ -216,26 +197,19 @@ class BranchAwaitingSummary:
     Its fork pull request, which is the key a summary is written under.
     """
 
-    title: str
+    outcome: PromotionOutcome
     """
-    Its title, so a caller can tell which branch they are writing for.
-    """
-
-
-@dataclass(frozen=True)
-class PromotionRound:
-    """
-    What one pass's promotion promoted, and what it left for somebody to write.
+    What became of it.
     """
 
-    promoted: tuple[Promotion, ...] = ()
+    url: str | None = None
     """
-    The branches whose link was built and recorded.
+    The compare-and-create link, absent for a branch no link was built for this pass.
     """
 
-    awaiting_summary: tuple[BranchAwaitingSummary, ...] = ()
+    body_was_truncated: bool = False
     """
-    The branches held back because nobody had written their summary.
+    Whether the prefilled description had to be shortened to fit the URL limit.
     """
 
 
@@ -254,29 +228,34 @@ def description_with_promotion_link(description: str, url: str) -> str:
     return f"{before.rstrip()}\n\n{PROMOTION_HEADING}\n\n{url}\n"
 
 
-def promotion_link_in(description: str) -> str | None:
+def promotion_link_in(description: str, configuration: Configuration) -> str | None:
     """
     Read back the promotion link a previous pass recorded in a description.
 
     The inverse of :func:`description_with_promotion_link`, so a caller reporting a
     pending link reports the one a reader will actually open rather than a freshly
-    computed one that could differ from it.
+    computed one that could differ from it. What a link looks like comes from the same
+    builder that composes one, so the two cannot drift.
 
     :param description: The pull request's description.
+    :param configuration: The resolved configuration, naming the upstream compared with.
     :return: The recorded link, or ``None`` if the description carries none.
     """
     _, heading, after = description.partition(PROMOTION_HEADING)
     if not heading:
         return None
-    found = RECORDED_PROMOTION_LINK_PATTERN.search(after)
+    pattern = GitHubLinks(configuration.upstream_repository).comparison_pattern(
+        configuration.upstream_base
+    )
+    found = pattern.search(after)
     return found.group(0) if found else None
 
 
 def promote(
     stack: Stack, fork: ForkPullRequests, summaries: PromotionSummaries
-) -> PromotionRound:
+) -> list[BranchPromotion]:
     """
-    Build and record the upstream link for every branch whose summary is written.
+    Build and record the upstream link for every branch ready to be promoted.
 
     The upstream pull request is not opened here - the app has no write access there, so
     that call fails every time. What is written is the link that opens it prefilled, into
@@ -290,29 +269,34 @@ def promote(
 
     :param stack: The derived stack.
     :param fork: The fork to read descriptions from and write links back to.
-    :param summaries: What each branch's upstream pull request is to open with.
-    :return: What was promoted, and what is waiting on a summary.
+    :param summaries: What each upstream pull request is to open with, where anybody has
+        written it.
+    :return: One entry per branch considered, in dependency order.
     """
-    promoted: list[Promotion] = []
-    awaiting: list[BranchAwaitingSummary] = []
+    promotions: list[BranchPromotion] = []
     withheld = stack.configuration.needs_resolution_label
     for branch in promotion_order(stack):
         number = branch.pull_request_number
         pull_request = fork.pull_request(number)
         labels = PullRequestField.LABELS.read(pull_request, number)
-        if PROMOTION_LINK_LABEL in labels or withheld in labels:
+        if PROMOTION_LINK_LABEL in labels:
+            promotions.append(
+                BranchPromotion(branch.name, number, PromotionOutcome.ALREADY_LINKED)
+            )
             continue
-        title = str(PullRequestField.TITLE.read(pull_request, number) or branch.name)
+        if withheld in labels:
+            promotions.append(
+                BranchPromotion(branch.name, number, PromotionOutcome.WITHHELD)
+            )
+            continue
         summary = summaries.for_pull_request(number)
-        if summary is None:
-            awaiting.append(BranchAwaitingSummary(branch.name, number, title))
-            continue
         description = str(PullRequestField.BODY.read(pull_request, number) or "")
         link = PromotionLink.build(
             stack.configuration,
             branch.name,
-            summary.title or title,
-            _prefilled_description(summary, number, stack),
+            summary.title
+            or str(PullRequestField.TITLE.read(pull_request, number) or branch.name),
+            _prefilled_description(summary, number, stack.configuration),
         )
         fork.set_description(
             number,
@@ -322,54 +306,46 @@ def promote(
             number,
             LabelWrite.replacing(labels, added=[PROMOTION_LINK_LABEL]).labels,
         )
-        promoted.append(
-            Promotion(
+        promotions.append(
+            BranchPromotion(
                 branch=branch.name,
                 pull_request_number=number,
+                outcome=PromotionOutcome.PROMOTED,
                 url=link.url,
                 body_was_truncated=link.body_was_truncated,
             )
         )
-    return PromotionRound(tuple(promoted), tuple(awaiting))
+    return promotions
 
 
 def _prefilled_description(
-    summary: PromotionSummary, pull_request_number: int, stack: Stack
+    summary: PromotionSummary, pull_request_number: int, configuration: Configuration
 ) -> str:
     """
     Build what the upstream pull request opens with.
 
-    :param summary: The points its author wrote for the upstream reviewer.
+    :param summary: What its author wrote for the upstream reviewer, if anything.
     :param pull_request_number: The fork pull request, to link back to.
-    :param stack: The derived stack, naming the fork.
-    :return: The points, plus a link back to the full detail.
-    """
-    return f"{summary.as_markdown}\n\n{_fork_pull_request_link(pull_request_number, stack.configuration)}"
-
-
-def _fork_pull_request_link(
-    pull_request_number: int, configuration: Configuration
-) -> str:
-    """
-    :param pull_request_number: The fork pull request to link to.
     :param configuration: The resolved configuration, naming the fork.
-    :return: The line linking the upstream reviewer back to the whole story.
+    :return: The points where there are any, and always the link back to the full story.
     """
-    return (
-        f"Full detail: https://github.com/{configuration.fork_repository}"
-        f"/pull/{pull_request_number}"
+    detail = (
+        f"Full detail: "
+        f"{GitHubLinks(configuration.fork_repository).pull_request(pull_request_number)}"
     )
+    points = summary.as_markdown
+    return f"{points}\n\n{detail}" if points else detail
 
 
 def clear_spent_promotion_labels(
     stack: Stack, fork: PullRequestWriter
-) -> tuple[str, ...]:
+) -> list[BranchPromotion]:
     """
     Drop the link label from every branch whose link has already been acted on.
 
     :param stack: The derived stack.
     :param fork: The fork to write to.
-    :return: The branches whose label was cleared.
+    :return: One entry per branch whose label was cleared.
     """
     spent = [
         branch
@@ -382,7 +358,14 @@ def clear_spent_promotion_labels(
             branch.pull_request_number,
             LabelWrite.replacing(branch.labels, removed=[PROMOTION_LINK_LABEL]).labels,
         )
-    return tuple(branch.name for branch in spent)
+    return [
+        BranchPromotion(
+            branch.name,
+            branch.pull_request_number,
+            PromotionOutcome.LINK_LABEL_CLEARED,
+        )
+        for branch in spent
+    ]
 
 
 # %% the links still waiting to be opened
@@ -449,7 +432,7 @@ def pending_promotions(
     that did not run the pass - which is the point of it, since the pass discards its
     board when it finishes.
 
-    :param configuration: The resolved configuration, naming the labels.
+    :param configuration: The resolved configuration, naming the labels and the upstream.
     :param fork: The fork to read from.
     :return: The pending promotions, in pull request number order.
     :raises RecordedPromotionLinkMissingError: If one carries the label but no link.
@@ -463,7 +446,9 @@ def pending_promotions(
             or configuration.in_review_label in labels
         ):
             continue
-        url = promotion_link_in(str(PullRequestField.BODY.read(record, number) or ""))
+        url = promotion_link_in(
+            str(PullRequestField.BODY.read(record, number) or ""), configuration
+        )
         if url is None:
             raise RecordedPromotionLinkMissingError(number)
         pending.append(

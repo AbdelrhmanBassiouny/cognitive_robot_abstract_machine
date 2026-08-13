@@ -17,12 +17,7 @@ from pathlib import Path
 
 from maintenance_board import BoardExport
 from maintenance_fast_forward import FastForwardOutcome, FastForwardReport
-from maintenance_promotion import (
-    BranchAwaitingSummary,
-    PendingPromotion,
-    Promotion,
-    PromotionRound,
-)
+from maintenance_promotion import BranchPromotion, PendingPromotion
 from maintenance_restack_steps import BranchOutcome, RestackOutcome
 from stack import Reparent, Stack, landed_branches, promotion_order, reparents
 
@@ -52,20 +47,14 @@ class MaintenanceReport:
     What became of each branch in the restack plan.
     """
 
-    promoted: tuple[Promotion, ...] = ()
+    promoted: tuple[BranchPromotion, ...] = ()
     """
-    The branches whose upstream link was built and recorded this pass.
+    What became of each branch the promotion considered.
     """
 
-    promotion_labels_cleared: tuple[str, ...] = ()
+    promotion_labels_cleared: tuple[BranchPromotion, ...] = ()
     """
     The branches whose spent link label was removed this pass.
-    """
-
-    awaiting_summary: tuple[BranchAwaitingSummary, ...] = ()
-    """
-    The branches this pass would have promoted, held back because nobody had written the
-    summary their upstream pull request is to open with.
     """
 
     reparents: tuple[Reparent, ...] = ()
@@ -116,8 +105,8 @@ def build_report(
     stack: Stack,
     fast_forward_report: FastForwardReport | None,
     restacked: Sequence[BranchOutcome],
-    promotion: PromotionRound = PromotionRound(),
-    promotion_labels_cleared: Sequence[str] = (),
+    promoted: Sequence[BranchPromotion] = (),
+    promotion_labels_cleared: Sequence[BranchPromotion] = (),
 ) -> MaintenanceReport:
     """
     Assemble one pass's outcomes and its leftovers into a single report.
@@ -125,16 +114,15 @@ def build_report(
     :param stack: The derived stack, read for what the caller still has to do.
     :param fast_forward_report: What became of the fork's base branch, if attempted.
     :param restacked: What became of each branch in the restack plan.
-    :param promotion: What the promotion promoted, and what it left waiting.
+    :param promoted: What became of each branch the promotion considered.
     :param promotion_labels_cleared: The branches whose spent link label was removed.
     :return: The report.
     """
     return MaintenanceReport(
         fast_forward=fast_forward_report,
         restacked=tuple(restacked),
-        promoted=promotion.promoted,
+        promoted=tuple(promoted),
         promotion_labels_cleared=tuple(promotion_labels_cleared),
-        awaiting_summary=promotion.awaiting_summary,
         reparents=tuple(reparents(stack)),
         landed=tuple(branch.name for branch in landed_branches(stack)),
         promotable=tuple(branch.name for branch in promotion_order(stack)),
@@ -177,30 +165,22 @@ def print_restack(outcomes: Sequence[BranchOutcome]) -> None:
         print(f"{outcome.branch}\t{outcome.outcome}\t{detail}")
 
 
-AWAITING_SUMMARY_MARKER = "awaiting-summary"
-"""
-Stands where a promoted branch prints its link, for a branch that has none yet.
-"""
-
-
-def print_promotions(promotion: PromotionRound, cleared: Sequence[str]) -> None:
-    """:param promotion: What was promoted, and what is waiting on a summary.
+def print_promotions(
+    promoted: Sequence[BranchPromotion], cleared: Sequence[BranchPromotion]
+) -> None:
+    """:param promoted: What became of each branch the promotion considered.
     :param cleared: The branches whose spent link label was removed."""
-    for promoted in promotion.promoted:
-        print(f"{promoted.branch}\t#{promoted.pull_request_number}\t{promoted.url}")
-        if promoted.body_was_truncated:
+    for promotion in [*promoted, *cleared]:
+        print(
+            f"{promotion.branch}\t{promotion.outcome}\t"
+            f"#{promotion.pull_request_number}\t{promotion.url or ''}"
+        )
+        if promotion.body_was_truncated:
             print(
-                f"{promoted.branch}: the prefilled description was shortened to fit "
+                f"{promotion.branch}: the prefilled description was shortened to fit "
                 f"the URL limit",
                 file=sys.stderr,
             )
-    for waiting in promotion.awaiting_summary:
-        print(
-            f"{waiting.branch}\t#{waiting.pull_request_number}\t"
-            f"{AWAITING_SUMMARY_MARKER}"
-        )
-    for branch in cleared:
-        print(f"{branch}\tlink-label-cleared\t")
 
 
 class PendingPromotionColumn(StrEnum):
@@ -329,16 +309,6 @@ class MaintenanceExitCode(IntEnum):
     act on - a conflict, a withheld branch, or a push the fork rejected. Distinct from
     a move check refusal, which is a fault in the move rather than in the branch."""
 
-    AWAITING_PROMOTION_SUMMARY = 11
-    """
-    The pass ran cleanly and held at least one branch back for its summary to be
-    written.
-
-    Distinct from a branch needing attention: nothing is wrong with the branch,
-    and this is the expected result of the run that tells a caller which branches to
-    write for.
-    """
-
     @property
     def name_for_a_caller(self) -> str:
         """
@@ -371,6 +341,4 @@ def exit_code_for(report: MaintenanceReport) -> MaintenanceExitCode:
         return MaintenanceExitCode.MOVE_REFUSED
     if unpublished:
         return MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
-    if report.awaiting_summary:
-        return MaintenanceExitCode.AWAITING_PROMOTION_SUMMARY
     return MaintenanceExitCode.SUCCESS
