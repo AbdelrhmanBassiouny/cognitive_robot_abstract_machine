@@ -109,3 +109,65 @@ No PR opened yet — all work is local on `montessori_merge_db_creation`.
   `test_franka_panda_equipment.py` still fails to import (`PANDA_SCENE_BODIES_TO_DISCARD`).
 - Note: those five insert-shape-action tests passed earlier in this branch's history and
   now fail at HEAD — worth a look, unrelated to this work.
+
+### Round 3 — episodic memory, preset groups, two viewer bugs (all TDD)
+
+16. **Loose objects (bug: picked shapes frozen in the viewer).** `Bridge.bind()` only
+    published bodies *named like mesh files*, so the montessori world published none —
+    the viewer was showing the recorded bundle's static shapes forever. Extracted
+    `cramera/loose_objects.py` (`LooseObjects.keyed_bodies/mesh_named_bodies/
+    free_floating_bodies/key_of`), which the onboarder's duplicate `free_floating_bodies`
+    now delegates to, so recorder and bridge key objects identically. Also
+    `body_geometry.mesh_file_of` + `Bridge._servable_mesh_path`, so a procedurally built
+    object is served from its own `Mesh.filename` (and `format` comes from that path, not
+    from the key). Verified: all 5 montessori shapes publish with the exact keys the
+    bundle uses.
+17. **Rebind on a rebuilt world (bug: restart leaves the viewer dead).** `_observe_tick`
+    attached only `if bridge.world is None`, and `runner.start()` returned early when
+    already serving — so after Restart the bridge kept snapshotting the abandoned world.
+    Now `attach()` is called whenever the executing world differs, `_forget_previous_world`
+    drops the dead plan/chart, and `start(world=...)` rebinds. The existing hook test
+    encoded the bug and was rewritten. Frontend half: `core/live_attach.js`
+    (`shouldAttach`) replaces the `autoAttachedLive` latch, so a viewer that lost the
+    bridge re-attaches; only an explicit click off sticks.
+18. **Answer table.** `core/answer_table.js` (`AnswerTable.of`) settles columns and
+    classifies each value (`name`/`number`/`true`/`false`/`empty`/`text`); the panel
+    renders a real `<table>` with a sticky header, zebra rows and per-kind colour, and
+    `RowRenderer._column_names` drops the type prefix from headings (`ShapeUnderTest.name`
+    → `name`) unless that would merge two columns.
+19. **Query scopes.** `cramera/knowledge/queryable_knowledge.py`: `QueryScope`
+    (`CURRENT_STATE`/`EPISODIC_MEMORY`, `.label`, `of_name`), `UnknownQueryScope`,
+    `QueryEvaluation`/`InMemoryEvaluation`, `QueryableKnowledge(scope, domains,
+    evaluation, extra_names)`. `LiveQuerySource.domains()` → `knowledge()`;
+    `Preset.scope`; `Bridge.run_query(code, scope)` + `query_scopes()`;
+    `GET /presets` gains `scopes`, `POST /eql` takes `scope`.
+    `core/preset_groups.js` groups the buttons under headings (single group → no heading,
+    so every other scene is unchanged).
+20. **Episodic memory.** `cramera/knowledge/database_evaluation.py` translates via
+    `eql_to_sql` and materializes rows inside the session.
+    `results_database.ResultsDatabase` owns engine + schema creation (memoized per
+    instance — `create_all` over the generated schema takes ~50 s, unaffordable per
+    query); `_open_results_session` delegates to it. `MontessoriLiveQuerySource` gains
+    `results_database` and `EPISODIC_MEMORY_PRESETS`; `extra_names` supplies `sum` (EQL
+    leaves it out, it shadows the builtin) and `InsertionOutcome`.
+    `test_montessori_episodic_memory.py` seeds a real sqlite results database and asserts
+    the exact success-rate rows — no credentials, so it runs in CI.
+
+### Deviations from what was asked (round 3)
+
+- The user's snippet used `sum(comparator)` and `mode(...)`. krrood's `Sum` rejects a
+  `Comparator` (needs a `Selectable`) — rewritten as
+  `sum(case_when(outcome == FELL_THROUGH, 1, 0))`. `mode` has **no** SQL translation in
+  `eql_to_sql` and no portable SQL aggregate behind it, so the "most likely failure"
+  column was dropped and a *how did each shape's runs end?* preset added instead, whose
+  per-outcome counts answer the same question.
+- Column headings for aggregates read `Sum`/`Count`: `set_of` takes no aliases.
+
+### State (round 3)
+
+- cramera: 422/422 pass.
+- Postgres provisioning is blocked on the user: no passwordless sudo, and the
+  `semantic_digital_twin` role fails password auth on the local 5432 cluster (the 5433
+  cluster their snippet points at is down). Command handed to them in chat.
+- Killed two hung full-suite pytest runs left over from the previous session
+  (~1.9 GB RSS each, 6.5 h old).
