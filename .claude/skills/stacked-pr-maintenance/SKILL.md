@@ -188,7 +188,7 @@ leave the rest untouched, and report it: this is a preview API, so never improvi
 
 ## Step 2 - run the pass
 
-The rest of the pass is one command:
+Everything mechanical is one command:
 
 ```bash
 python <pinned>/maintenance.py run-report --json
@@ -203,15 +203,17 @@ it, and do not run the individual commands as well - that does the same work twi
 | status | what you do |
 |---|---|
 | `success` | render the summary |
+| `awaiting-promotion-summary` | nothing is wrong; go to step 3 and write what those branches are waiting for |
 | `not-fast-forward` | report it - the fork's base is behind the upstream, which every branch is measured against |
 | `move-refused` | stop and look; the reasons are in the document |
 | `branch-needs-attention` | carry every branch it names into the summary |
 
 A non-zero run also prints its status in words, so you never have to look a number up.
 
-**Then read what it left you.** `reparents` is the only entry that asks anything of you: a base
-change is the one write this credential is refused, so step 1 of the next pass is where it gets
-made. Everything else - `fast_forward`, `landed`, `restacked`, `promoted`,
+**Then read what it left you.** Two entries ask something of you. `reparents` is one: a base change
+is the one write this credential is refused, so step 1 of the next pass is where it gets made.
+`awaiting_summary` is the other, and step 3 is where it gets written. Everything else -
+`fast_forward`, `landed`, `restacked`, `promoted`,
 `promotion_labels_cleared` - is what happened, for the summary. A `restacked` entry other than
 `pushed` or `up-to-date` is a branch the pass could not publish; the executor has already labelled
 and commented on it, so name it in the summary and move on.
@@ -224,6 +226,44 @@ summary as yours rather than the branch owner's, and never label the branch for 
 
 If a landed pull request is somehow still open after the pass, report it rather than closing it
 yourself.
+
+## Step 3 - write what each promotable branch is waiting for
+
+Every branch the document lists under `awaiting_summary` is one the pass would have promoted and
+held back, for the single thing it cannot compute: the points the upstream reviewer reads. That
+list does not exist until the pass has run, which is why this is a second invocation rather than a
+flag on the first.
+
+Read each of those branches' fork pull requests, and write one JSON document keyed by fork pull
+request number:
+
+```json
+{
+  "<fork pull request number>": {
+    "points": [
+      "What the change does, in terms of the problem it solves.",
+      "Anything it deliberately does not do."
+    ]
+  }
+}
+```
+
+- **`points` is a list, not prose and not markdown.** The bullets are rendered from it, so writing
+  a paragraph produces one bullet containing a paragraph rather than a summary.
+- **`title` is optional**, and replaces the fork pull request's own title for that one branch. Omit
+  it and the fork title is copied through.
+- **The link back to the fork pull request is never yours to write.** It is appended to every
+  prefill, which is what lets the summary stay short.
+
+Write the document outside the checkout - it is one pass's working note, and no branch should ever
+carry it. Then promote:
+
+```bash
+python <pinned>/maintenance.py promote --summaries <the document you wrote>
+```
+
+A branch you deliberately do not want promoted yet is one you simply write no entry for; it is
+reported as awaiting a summary again on the next pass, which is a state, not a failure.
 
 ## What this pass never does
 
@@ -250,14 +290,24 @@ yourself.
 Record every branch reported on this run - the summary must list it, since a comment is not
 guaranteed to be seen.
 
-The **top** of the finish summary must list all pending upstream create-links: any built this run,
-and any fork pull request still carrying `cram2-link-sent` but not yet `in-review` (re-listed from
-prior runs, its link rebuilt with `<pinned>/stack.py promotion-link`). This section appears at the top even when
-nothing new was built, as long as any are pending - a scheduled run is configured to email its
-summary, so the summary *is* the delivery. List each pull request's number, title, branch and
-one-click link.
+The **top** of the finish summary is the table of every upstream create-link still waiting to be
+opened - built this run or on an earlier one, since nothing opens one but a person clicking Create:
 
-Right after the links, list every branch reported on this run: its number and branch, the
+```bash
+python <pinned>/maintenance.py pending-promotions
+```
+
+Paste that table as it stands. It is rendered rather than assembled by you, and each row's link is
+read back out of the fork pull request's own description, so the row carries the link a reader will
+actually open rather than a second one computed here. The table appears even when nothing new was
+built, as long as anything is pending.
+
+**Nothing else delivers those links.** No notification is sent - not by a scheduled run and not by
+a hand-invoked one - so this session is where they reach a person. That is survivable rather than
+fragile: the link also stays written into the fork pull request's own description under `## Promote`,
+where it is still there a week after the session that built it has gone.
+
+Right after the table, list every branch reported on this run: its number and branch, the
 conflicting files or failing check, the session link addressed (or that the body had none), and a
 link to the comment posted. Then list every pull request whose reparent could **not** be completed:
 its number, the base it is stuck on, the base it should have, and which step of the native-stack
@@ -275,7 +325,8 @@ else's run pins its own first, since the path the other run printed is not in fr
 python <pinned>/maintenance.py board --write   # export the fork's open pull requests
 python <pinned>/maintenance.py fast-forward    # move the fork's base onto the upstream
 python <pinned>/maintenance.py restack         # integrate every moved parent, publish, report
-python <pinned>/maintenance.py promote         # build and record every upstream link
+python <pinned>/maintenance.py promote --summaries <file>  # build and record every upstream link
+python <pinned>/maintenance.py pending-promotions          # the links waiting to be opened, as a table
 ```
 
 Each prints what it did and exits with the same statuses as the whole pass. Run `--help` for a
