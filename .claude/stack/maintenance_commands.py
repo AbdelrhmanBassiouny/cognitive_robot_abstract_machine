@@ -80,9 +80,9 @@ def declare_summaries_argument(parser: argparse.ArgumentParser) -> None:
         "--summaries",
         type=Path,
         help=(
-            "the summaries to prefill each upstream pull request with, keyed by fork "
-            "pull request number; a promotable branch with no entry is reported as "
-            "awaiting one rather than promoted"
+            "the points to prefill each upstream pull request with, keyed by fork pull "
+            "request number; a branch with no entry is promoted with the link back to "
+            "its fork pull request and nothing else"
         ),
     )
 
@@ -270,13 +270,11 @@ class PromoteCommand(MaintenanceCommand):
         :return: The process exit code."""
         stack = maintenance.stack()
         fork = maintenance.fork()
-        promotion = promote(
+        promoted = promote(
             stack, fork, PromotionSummaries.read_from(arguments.summaries)
         )
-        print_promotions(promotion, clear_spent_promotion_labels(stack, fork))
-        return exit_code_for(
-            MaintenanceReport(awaiting_summary=promotion.awaiting_summary)
-        )
+        print_promotions(promoted, clear_spent_promotion_labels(stack, fork))
+        return MaintenanceExitCode.SUCCESS
 
 
 @dataclass(frozen=True)
@@ -365,14 +363,14 @@ class RunReportCommand(MaintenanceCommand):
         fork = maintenance.fork()
         fast_forward_report = fast_forward(stack.configuration, maintenance.git)
         restacked = restack(stack, maintenance.git, fork)
-        promotion = promote(
+        promoted = promote(
             stack, fork, PromotionSummaries.read_from(arguments.summaries)
         )
         report = build_report(
             stack,
             fast_forward_report,
             restacked,
-            promotion,
+            promoted,
             clear_spent_promotion_labels(stack, fork),
         )
         BOARD_PATH.unlink(missing_ok=True)
@@ -381,7 +379,7 @@ class RunReportCommand(MaintenanceCommand):
         else:
             print_fast_forward(fast_forward_report)
             print_restack(report.restacked)
-            print_promotions(promotion, report.promotion_labels_cleared)
+            print_promotions(report.promoted, report.promotion_labels_cleared)
         return exit_code_for(report)
 
 
