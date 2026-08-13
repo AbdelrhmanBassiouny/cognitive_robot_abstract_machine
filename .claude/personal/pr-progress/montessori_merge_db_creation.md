@@ -219,3 +219,61 @@ No PR opened yet — all work is local on `montessori_merge_db_creation`.
   finished clean), but it was not ruled out by reading.
 - To capture a future crash, `/var/crash/_usr_bin_python3.12.1000.crash` must be removed
   first — apport will not overwrite it. Left in place for the user to decide.
+
+### Round 5 — the segfault again, and the racer round 4 missed
+
+25. **Round 4's fix was in the crashed run and did not save it.** The demo segfaulted
+    again at 19:51. Files edited 19:39–19:45; the crashed process was born 19:48:33
+    (`stat --time=birth` on its `/tmp/semantic_digital_twin_meshes_293115_*`). So
+    `NumericPose` removed a real racer but not the decisive one. No fresh core: apport
+    still held the 17:49 file and silently drops newer crashes.
+26. **Re-read the 17:49 core across all 137 threads** (round 4 only inspected the
+    faulting one). Exactly one thread in casadi (main, `SXElem::is_constant`), and
+    **thread 22 running Python bytecode** — `np.array(...)` via `PyArray_Pack` /
+    `PyArray_AssignFromCache_Recursive`. Legal only because casadi had released the GIL:
+    two live consumers, which is the use-after-free.
+27. **`Body.global_pose` builds a casadi object on every call.**
+    `ForwardKinematicsManager.compute` (forward_kinematics.py:160) computes numpy and
+    wraps it in a `HomogeneousTransformationMatrix`. So *any* thread reading a pose is a
+    casadi thread — not just one doing visibly symbolic work. This is what made round 4's
+    "only the HTTP thread touches casadi" reasoning wrong.
+28. **The dominant racer is the TF publisher, on the physics thread.** `MultiSim._sim_to_world`
+    (multi_sim.py:3324) says in its own docstring that it runs on the physics thread after
+    every `mj_step`, throttled to `sync_rate_hz`; the demo sets `SYNC_RATE_HZ = 100`. It
+    calls `world.notify_state_change()`, which fires `TFPublisher.on_state_change()` →
+    `compiled_tf.evaluate()` — casadi, at 100 Hz, off the plan thread. Created unless
+    `--no-rviz`. The one clean run on record (`headless_realtime_pacing_runner --world2
+    --no-rviz`) is exactly the one that had no TF publisher; both segfaults had one.
+29. **Fix taken (TDD):** `run_montessori_demo.sh` now defaults to `--world2 --viewer
+    --no-rviz`, and the demo's flag became `--rviz/--no-rviz` (`BooleanOptionalAction`,
+    default True) so the launcher's default is still overridable. The script's
+    drop-if-the-caller-decided loop learned to negate a negative default
+    (`--no-rviz` ↔ `--rviz`). Demo module defaults unchanged, so `batch_runner` /
+    `headless_realtime_pacing_runner` are unaffected; `batch_runner`'s own `--no-rviz`
+    is its own parser's flag and still forwards fine.
+30. Tests: `test_it_turns_off_rviz_publishing` (new, failed first), plus
+    `chosen_demo_defaults()` / `opposite_flag()` helpers. Two existing tests in
+    `TestItChoosesTheDemosDefaults` were generalized rather than weakened: one pinned the
+    defaults as an exact literal, the other assumed every default is a positive flag.
+
+### State (round 5)
+
+- `test_run_montessori_demo_script.py`: 16/16 pass.
+- `/var/crash/_usr_bin_python3.12.1000.crash` deleted (user's call), so the next crash
+  will actually be captured.
+
+### Not done, and why (round 5)
+
+- **The segmind monitor still reads the world off-thread.** `MontessoriEventMonitor`
+  (event_monitoring.py:200) runs a `segmind-event-monitor` daemon thread whose detectors
+  call `obj.global_pose` and do contact queries at 5 Hz. Real racer, 20× rarer than the TF
+  publisher. The user approved ticking it on the plan thread, but there is no clean seam:
+  `giskardpy.Executor` has no per-tick observer, so the options are monkey-patching
+  `Executor.tick` (as `cramera/live/hooks.py` does) or a decorating `Pacer` injected
+  through `GiskardExecutable._build_pacer` (coraplex/plans/executables.py:343) — whose
+  configuration today is class-level attributes, i.e. globals. Both change shared code and
+  need a design decision; ticking only at explicit demo points would miss the whole motion,
+  which is when pick-up and insertion happen.
+- **`TFPublisher` itself is unfixed**, only avoided. Evaluating a compiled casadi
+  expression from a state-change callback is unsafe for any threaded simulation, not just
+  this demo; it lives in `semantic_digital_twin` shared code.
