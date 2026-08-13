@@ -1,74 +1,63 @@
-
 # integration-branch (#154) — regenerated personal integration branch
 
 `workflow-unification` plan, `stack-tooling` track. Branch
-`claude/plan-item-kickoff-workflow-ixbvxl`, now containing `main` (which carries
-#139) and #151. Draft PR #154, head pushed 2026-08-12.
-Sessions: https://claude.ai/code/session_01Ue4PvfV5LDxHGRRS5BZB4g (built it, settled
-the review round), https://claude.ai/code/session_01AYLtTRh7uZu64oLpMhGjQR (this one —
-implemented parts A, B, C and E of that round's handover).
+`claude/plan-item-kickoff-workflow-ixbvxl`, containing `main` (which carries #139)
+and #151. Draft PR #154, head pushed 2026-08-13.
+Sessions: https://claude.ai/code/session_01Ue4PvfV5LDxHGRRS5BZB4g (built it),
+https://claude.ai/code/session_01AYLtTRh7uZu64oLpMhGjQR (parts A/B/C/E),
+https://claude.ai/code/session_01RhwNdD7ChskkomV1TCiRLU (this one — the 08-13
+review round; Part D split out).
 
-## Status: four of five parts done, part D not started
+## Status: the code is done; Part D is now a separate item
 
-595 tests pass across the three directories CI runs, from 479. All five entry points
-run standalone. Nothing is left uncommitted.
+599 tests pass across the three directories CI runs, from 595. All five entry points
+run standalone. Nothing uncommitted. `mergeable_state` clean against `main`.
 
-| handover part | state |
+**Part D is no longer this branch's work.** `integration-branch-ci-verdict` is a new
+plan item stacked on this one — the CI verdict, plus the two things review added to it
+(a stable/candidate branch pair, and a pytest marker with a job that runs only what it
+marks). `integration_test_command`, `--test`, `--no-test`,
+`TestCommandNotConfiguredError` and `_run_tests` all still exist here and all work;
+that item is what removes them.
+
+## The 08-13 round, seven threads
+
+| thread | outcome |
 |---|---|
-| A — rebase onto the parent chain | **done** (`abb7d994d`, `336b393e2`, `c3d0d1082`) |
-| B — the escalation pipeline | **done** (`4e63b6fb3`) |
-| C — mechanical threads | **done** (`375a9f013`) |
-| D — CI as the verdict | **not started** — see below |
-| new: only open-and-ready PRs | **done** (`fd008aa91`) |
+| labels as a `StrEnum` | done — `DefaultLabel`, one contract test pinning the wire spelling |
+| rename `semantic break` | done — `IntegrationTestFailure` (see below) |
+| rename `escalate` | done — `block-branch` |
+| join the failure methods into a class | done — `IntegrationTestFailure` + `FailureLocation` |
+| `unreviewed` as a status with a `carried` bool | done, **left open** — the inheritance edge is not literal |
+| `UnreviewedBranch` onto `Branch` | unified into the outcome type, **left open** — pushed back on `Branch` |
+| pytest marker + targeted CI job | **left open** — became the new item |
+| (carry-over) whole-CI | **left open** — became the new item |
 
-## Three handover instructions had expired — check before following
+Two carry-over `classproperty` threads stay open too: #151 reversed the ask by deleting
+`class_property.py`.
 
-#151 moved after the handover was written. Re-read the parent's tree before trusting
-any of it:
+## Three things worth carrying
 
-- `GitCommandRunner` is `.claude/shared/git_commands.py`, not `maintenance_git_commands.py`
-  (which now holds only `MaintenanceGitCommandRunner`).
-- `maintenance_errors.py` is gone; it is `.claude/shared/exceptions.py`.
-- `class_property.py` is deleted. The command base is `.claude/shared/command_line.py`'s
-  `Command`, with abstract **instance** properties — not #139's `classproperty`.
+**`TestFailure` is a name pytest penalises.** The user proposed it; a module-scope class
+named `Test*` in a test file is collected, and `test_integration.py` imports these names
+directly — `PytestCollectionWarning: cannot collect test class`. `TestCommandNotConfiguredError`
+escapes it only because the tests reach it through the module. Hence `IntegrationTestFailure`.
 
-## Part D — what it needs, and why it was not started
+**A review reply promised a test that was never written.** The earlier round's reply on the
+report-keys thread described `test_the_report_keys_are_the_ones_a_caller_parses` in detail;
+it did not exist. Found by renaming a wire key and noticing nothing failed. Grep for anything
+a reply claims to have added before resolving the thread.
 
-`build` pushes and exits printing the run URL; a separate subcommand reads the run's
-conclusion; localisation pushes every prefix at once. Not begun because:
-
-1. It needs a GitHub Actions client that does not exist in this tree. #146 measured
-   that `actions/runs`, `jobs` and job-logs answer 200 from a session, but #146 is
-   unlanded, so the client has to be written here.
-2. It rewrites the localisation path that `escalate` (part B) now depends on, so a
-   half-migration leaves the verdict path split across two mechanisms.
-3. Its verification is a real CI run on a pushed branch. Everything else on this branch
-   was verified against real git in the scratch fork; this cannot be.
-
-`integration_test_command`, `--test`, `--no-test`, `TestCommandNotConfiguredError` and
-`_run_tests` all still exist and all still work — part D is what removes them.
-
-## What changed beyond the handover
-
-- **Only reviewed work is carried.** `BranchStatus.is_out_of_draft` (covering `READY`
-  *and* `IN_REVIEW`), read down the whole chain by `select_for_build`, because a tip
-  contains its stack. Live board: 22 tips → 9. Everything left out is named in the
-  report as `unreviewed`, and does not reach the `tip-left-out` exit status.
-- **`integration-conflict`** is a second blocking label, read with `needs-resolution`
-  through `Configuration.blocking_labels`; only `needs-resolution` is auto-cleared.
-  `WithholdBranchStillConflicting` → `WithholdBlockedBranch`.
-- **`integration.py escalate`** localises a break, labels the branch causing it, and
-  comments naming what it breaks.
+**`ci.yml` triggers on `push` to `main` and `pull_request` only.** So a pushed integration
+branch gets no CI unless a pull request exists for it — which is why the stable/candidate
+design is the only shape that reaches a verdict, and is the first fact the new item needs.
 
 ## If this is picked up again
 
-- **Reply to and resolve the 28 threads.** All are addressed in code; none has an
-  inline reply and none is resolved. Two must stay open with a reply: `r3758277971`
-  (a GitHub issue per collision — answered *no* on 2026-08-12) and `r3758728157`
-  (the `classproperty` ask, which #151 reversed by deleting the file).
-- **#154's base ref is still #139's branch.** The base-field `PATCH` 403s through the
-  agent proxy, so the reparent onto #151's branch is a manual step in the UI.
-- Re-draft #154 after any push.
-- The `greenlet` claim recorded here earlier is retracted; judge any `test_each_lib`
-  red on its own evidence.
-
+- The base stays `main`. Reparenting onto #151's branch is *possible* (the MCP tool does it;
+  only raw `curl` 403s) and *wrong today* — #151 is 159 behind `main`, and basing on it took
+  the diff from 45 files to 261. Correct once #151 merges `main`.
+- `needs-resolution` is stale; the maintenance pass clears it itself.
+- Re-draft #154 after any push. It is a draft now.
+- A `main` merge (#543, the ORM-interface change) landed on this branch from outside the
+  session mid-round. Merged and the whole suite re-run rather than trusted.
