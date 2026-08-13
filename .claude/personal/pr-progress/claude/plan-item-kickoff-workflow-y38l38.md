@@ -41,9 +41,19 @@ TDD throughout: every part above gets its failing test in
   (`{}` opts out of every channel), `update_trigger` has no notification field, so an
   already-registered Routine has to be re-registered to change it.
 
+- Steps 1–4 implemented and pushed as `93edfb17`; PR #162 description rewritten to match.
+  487 tests pass across the three CI directories. Mutation-checked in both directions:
+  restoring the first-paragraph fallback fails the awaiting-summary test, dropping the new
+  status fails the exit-status one.
+
 ## Next
 
-- Steps 1–5 above, in order.
-- Republish `/plan-dashboard workflow-unification` after the manifest write.
+- **Step 5 (the #155 fold) is the one thing outstanding, and it is blocked on a decision.**
+  The roadmap says to push the "turn its completion email on" reversal onto #155's branch.
+  But #155 is out of draft and carries `cram2-link-sent`, which means the user marked it
+  ready themselves — and the notes' "When your PR's job ends" rule says a PR the user took
+  out of draft is finished: leave it ready, push no further commits. Asked rather than
+  guessed. If the answer is yes, the change is one paragraph in
+  `.claude/skills/stacked-pr-maintenance/routine-prompt.md`.
 - Note: `subscribe_pr_activity` on tracking issue #102 was refused by the permission
   classifier this session, so this session is not subscribed to it.
