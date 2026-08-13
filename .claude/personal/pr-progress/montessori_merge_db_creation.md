@@ -63,3 +63,49 @@ No PR opened yet — all work is local on `montessori_merge_db_creation`.
   the chosen scope.
 - Flagged, not fixed: `target_horizontal_offset` is persisted and documented but
   `_action_plan` never reads it, so every attempt aims at the hole centre.
+### Round 2 — object naming, run control, verbalization (all TDD)
+
+9.  `MontessoriShape.shape_key` / `.object_name` (semantics.py). The world names every
+    loose shape after its hole (`square_hole_shape`), so `ShapeUnderTest.name` read as
+    the hole. `name` is now `cube` / `cylinder_1`, with `shape_key` its own field on
+    `ShapeUnderTest`. `PlanStep.of_plan` / `SegmindEventRecord.of_event` take the
+    tracked `ShapeUnderTest` instead of loose primitives; a never-begun shape now
+    raises `UntrackedShapeError` rather than silently inventing a hole.
+10. `cramera/knowledge/query_verbalization.py`: `QueryVerbalization.of_expression`
+    builds one krrood fragment and renders it plain + HTML (`EscapedHtmlFormatter`
+    escapes literals). `RenderResult.verbalization` carries it; the EQL panel renders
+    it in `.qverb` above the rows. An `UnverbalizableExpressionError` costs the
+    sentence, never the answer.
+11. `cramera/live/run_control.py`: `RunCommand`, `RunActivity`, `RunControlState`,
+    `LiveRunControl`, `NoRunControlRegistered`, `UnknownRunCommand`. Bridge gains
+    `register_run_control` / `run_control_state` / `run_control_payload` /
+    `apply_run_command` behind `_run_control_lock`; `BridgeStatus.control` carries the
+    state so the existing 3 s `/info` poll drives the UI. `GET /run`, `POST /run`.
+12. `experiments/montessori/run_control.py`: `SortingRunControl` over one
+    `threading.Condition`. Pause freezes the `MujocoSim` physics thread *and* holds the
+    sorting thread at its next checkpoint; restart is honoured at the next attempt
+    boundary (and resumes a paused run so it can unwind); loop keeps rebuilding.
+    `PausableSimulation` Protocol keeps it testable without MuJoCo.
+13. Demo: `_insert_all_shapes` takes the control and checks it before each shape and
+    each attempt; an abandoned run returns early and is *not* persisted.
+    `_build_world_and_sort(node, arguments, iteration, control)` hands the new
+    `MujocoSim` to `begin_iteration`. `main`'s `for` loop became a `while` that honours
+    loop/restart; the old `while True: sleep` idle is now
+    `control.wait_for_another_iteration()` (blocks forever with nothing registered,
+    matching the previous behaviour).
+14. `web/core/run_control.js` (12 node tests) + Pause/Restart/Loop in the scene panel's
+    `.wf-btns`, rebuilt only when the button signature changes.
+15. `run_montessori_demo.sh` now supplies `--world2 --viewer` unless the caller chose
+    either way; `--viewer`/`--world2` became `BooleanOptionalAction` so `--no-viewer` /
+    `--no-world2` exist. The demo module's own defaults are unchanged, so
+    `batch_runner` / `headless_realtime_pacing_runner` are unaffected.
+
+### State (round 2)
+
+- cramera: 389/389 pass. montessori-related experiments files: 155/161.
+- The 6 failures are all pre-existing, verified on a pristine `HEAD` worktree:
+  `test_montessori_event_monitoring.py::test_shape_falling_through_...` and five in
+  `test_montessori_insert_shape_action.py` (`EmptyUnderspecified: Plan failed`).
+  `test_franka_panda_equipment.py` still fails to import (`PANDA_SCENE_BODIES_TO_DISCARD`).
+- Note: those five insert-shape-action tests passed earlier in this branch's history and
+  now fail at HEAD — worth a look, unrelated to this work.
