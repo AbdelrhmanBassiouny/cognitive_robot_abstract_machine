@@ -6660,3 +6660,75 @@ here has to be pinned in the same document. And #155 - untracked by any plan ite
 on" paragraph this item reverses; under the fold rule that paragraph belongs to #155 while
 #155 is unlanded, so kickoff checks whether its upstream pull request exists yet and folds
 the reversal there if it does not. The rest of the item stands alone in either case.
+
+## Update 2026-08-13 (kickoff): `promotion-summaries-and-table` opens as #162, with its two open questions answered
+
+Kicked off directly to implementation at the user's request - no plan-mode approval round.
+Based on `claude/stack-tooling-pinning-qf5r2m` (#158), which is open and out of draft, so
+ready to stack on by the dashboard's own rule; `stack-maintenance-executor` (#139) merged
+on 2026-08-12. Both dependencies checked with `check_dependency_readiness.py` rather than
+by eye.
+
+### The interface, settled
+
+The item's `notes` proposed a summaries file keyed by fork pull request number and left
+its shape to kickoff. Settled as JSON parsed into dataclasses, with two fields per entry:
+the points, and an optional title override. Points are a *list*, not a block of markdown,
+because "the skill must always supply a point-based summary" is then mechanical rather
+than a convention the session is trusted to have followed - `PromotionSummary.as_markdown`
+renders the bullets, so a session that writes prose still gets bullets and a session that
+writes one long point gets one bullet rather than a paragraph pretending to be a summary.
+The title override lives in the same entry rather than on the command line for the same
+reason the summary does: it is per-pull-request, and a flag would only be able to carry
+one.
+
+`promotion_summary` - the first-paragraph derivation - is **deleted**, not left as a
+fallback. Keeping it would make the new interface optional and today's defect reachable,
+which is the whole reason the item exists.
+
+### What "reported as awaiting a summary" is, concretely
+
+`promote` returns a `PromotionRound` carrying both what it promoted and every
+`BranchAwaitingSummary` - a branch it would have promoted and did not, because nobody had
+written its bullets. That reaches the report as its own field and the exit status as its
+own member, `AWAITING_PROMOTION_SUMMARY`. A distinct status rather than reusing
+`BRANCH_NEEDS_ATTENTION`: a branch waiting on words is not a branch left unpublished by a
+conflict, and a pass whose *only* outstanding work is the summaries is the expected result
+of the first of the two invocations, not a failure. It is ranked below every existing
+non-clean status, so a conflict is never masked by it.
+
+### The table reads the link back rather than rebuilding it
+
+`SKILL.md`'s Finish section asked the session to rebuild each pending link with
+`promotion-link`. The new `pending-promotions` command does not rebuild anything: the link
+is already written into the fork pull request's description under `## Promote`, so it is
+*read back* from there. That is what makes the table report the link a reader will actually
+open, rather than a freshly computed one that could differ from the recorded one - and it
+means the table needs no summaries at all, so it can be run in a session that did not run
+the pass. `promotion_link_in` is the exact inverse of `description_with_promotion_link`,
+and the two are tested as a round trip. A branch carrying `cram2-link-sent` whose
+description has no link under that heading is an illegal state and raises rather than
+printing an empty cell.
+
+### Notifications: the premise is withdrawn, and the open question is answered
+
+`SKILL.md`'s "a scheduled run is configured to email its summary, so the summary *is* the
+delivery" is gone, and with it the hand-assembly it justified. The Finish section now runs
+`pending-promotions` and pastes its table into the session that ran the pass.
+
+The item left one thing deliberately unanswered - whether an already-registered Routine's
+completion email can be turned off in place. Answered from the tool surface rather than
+guessed: `create_trigger` takes a `notifications` object and documents `{}` as opting out
+of every channel; `update_trigger` has no notification field at all. So a new Routine is
+registered with notifications off, and an existing one has to be re-registered to change
+it. `routine-prompt.md` says exactly that and no more.
+
+### The fold: the reversal belongs to #155
+
+The paragraph this item reverses - "turn its completion email on" - does not exist on
+`main`. It is introduced by #155 (`claude/routine-prompt-refresh-ps5l3z`), which is
+unlanded and carries `cram2-link-sent` without `in-review`, so its upstream pull request
+has not been created. Under the fold rule that paragraph is #155's own work, so the
+reversal is pushed onto #155's branch rather than carried here, and #162 carries none of
+it. Everything else in the item stands alone either way, which is what the item's `notes`
+predicted.
