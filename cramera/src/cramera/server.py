@@ -31,6 +31,8 @@ import socketserver
 import sys
 import threading
 import traceback
+import webbrowser
+from dataclasses import dataclass
 from pathlib import Path
 from typing_extensions import Any, Callable, ClassVar, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
@@ -194,9 +196,7 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             )
         if route == "/api/knowledge/view":
             name = (self._query_parameters().get("name") or ["knowledge"])[0]
-            return self._guarded(
-                lambda: GraphPanelViews.of_scene(scene).for_tab(name)
-            )
+            return self._guarded(lambda: GraphPanelViews.of_scene(scene).for_tab(name))
         if route == "/api/knowledge/expand":
             node = (self._query_parameters().get("node") or [""])[0]
             return self._guarded(lambda: self._expanded_node(node, scene))
@@ -262,17 +262,56 @@ def make_server(port: int = 0) -> socketserver.ThreadingTCPServer:
     return socketserver.ThreadingTCPServer(("127.0.0.1", port), Handler)
 
 
+NO_BROWSER_FLAG = "--no-browser"
+"""
+CLI flag that keeps the server from opening the viewer page on start.
+"""
+
+
+@dataclass(frozen=True)
+class ServerOptions:
+    """
+    What the ``cramera`` command line asks for.
+    """
+
+    port: int = DEFAULT_PORT
+    """
+    Port the server listens on.
+    """
+
+    open_browser: bool = True
+    """
+    Whether the viewer page is opened in the default browser on start.
+    """
+
+
+def parse_arguments(arguments: List[str]) -> ServerOptions:
+    """
+    Read the ``cramera`` command line: an optional port and ``--no-browser``.
+
+    :param arguments: The command-line arguments, without the program name.
+    """
+    open_browser = NO_BROWSER_FLAG not in arguments
+    ports = [argument for argument in arguments if argument != NO_BROWSER_FLAG]
+    port = int(ports[0]) if ports else DEFAULT_PORT
+    return ServerOptions(port=port, open_browser=open_browser)
+
+
 def main(arguments: Optional[List[str]] = None) -> None:
     """
     ``cramera`` — serve the viewer, the scenes and the JSON API.
+
+    Opens the viewer page in the default browser once the server is up; demos only
+    ever connect to it, so this is the one deliberate moment a page appears. Pass
+    ``--no-browser`` to skip it (a headless or remote server).
 
     :param arguments: Command-line arguments, or None to use ``sys.argv``.
     """
     # force: an imported CRAM package may already have configured the root logger,
     # which would otherwise make this call a no-op and swallow the startup output
     logging.basicConfig(level=logging.INFO, format="%(message)s", force=True)
-    arguments = sys.argv[1:] if arguments is None else arguments
-    port = int(arguments[0]) if arguments else DEFAULT_PORT
+    options = parse_arguments(sys.argv[1:] if arguments is None else arguments)
+    port = options.port
     if EQL_AVAILABLE:  # build the knowledge base once, before the first query
         EpisodeKnowledgeBase.of_active_scene()
     with make_server(port) as server:
@@ -284,6 +323,8 @@ def main(arguments: Optional[List[str]] = None) -> None:
             scenes,
             "" if Path(scenes).is_dir() else "  (missing — run cramera-onboard)",
         )
+        if options.open_browser:
+            webbrowser.open("http://localhost:%d/" % port)
         try:
             server.serve_forever()
         except KeyboardInterrupt:

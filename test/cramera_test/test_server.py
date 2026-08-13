@@ -123,3 +123,67 @@ class TestApi:
             status, body = err.code, err.read()
         assert status == 404
         assert json.loads(body)["ok"] is False
+
+
+# %% the command line
+
+
+class TestParseArguments:
+    def test_no_arguments_serve_the_default_port_and_open_the_page(self):
+        from cramera import server as server_module
+
+        options = server_module.parse_arguments([])
+
+        assert options.port == server_module.DEFAULT_PORT
+        assert options.open_browser is True
+
+    def test_a_port_argument_is_honored(self):
+        from cramera import server as server_module
+
+        assert server_module.parse_arguments(["8123"]).port == 8123
+
+    def test_no_browser_keeps_the_page_closed(self):
+        from cramera import server as server_module
+
+        options = server_module.parse_arguments(["--no-browser", "8123"])
+
+        assert options.port == 8123
+        assert options.open_browser is False
+
+
+class TestMainOpensTheViewerPage:
+    def run_main(self, monkeypatch, arguments):
+        """
+        Run ``main`` with the browser recorded and the serve loop cut short.
+
+        :param monkeypatch: The active monkeypatch fixture.
+        :param arguments: The command line to run with.
+        :return: The URLs the browser was asked to open.
+        """
+        from cramera import server as server_module
+
+        opened = []
+        monkeypatch.setattr(
+            server_module.webbrowser, "open", lambda url: opened.append(url)
+        )
+
+        real_make_server = server_module.make_server
+
+        def make_short_lived_server(port=0):
+            server = real_make_server(0)
+
+            def stop_immediately():
+                raise KeyboardInterrupt
+
+            monkeypatch.setattr(server, "serve_forever", stop_immediately)
+            return server
+
+        monkeypatch.setattr(server_module, "make_server", make_short_lived_server)
+        server_module.main(arguments)
+        return opened
+
+    def test_main_opens_the_viewer_page(self, monkeypatch):
+        assert self.run_main(monkeypatch, ["8123"]) == ["http://localhost:8123/"]
+
+    def test_no_browser_opts_out(self, monkeypatch):
+        assert self.run_main(monkeypatch, ["--no-browser", "8123"]) == []
