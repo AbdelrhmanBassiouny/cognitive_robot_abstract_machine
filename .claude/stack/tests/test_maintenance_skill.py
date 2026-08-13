@@ -15,6 +15,7 @@ import re
 import subprocess
 from pathlib import Path
 
+from maintenance_commands import PendingPromotionsCommand
 from stack import (
     CONFIGURATION_PATH,
     ENTRY_POINT_NAME,
@@ -102,6 +103,30 @@ def test_the_skill_restores_the_tooling_without_writing_the_index():
 
     assert "git restore --source=<ref> --worktree -- .claude/stack/" in skill
     assert "git checkout <ref> -- .claude/stack/" not in skill
+
+
+def test_the_skill_reports_the_pending_links_with_the_command_that_renders_them():
+    """
+    Rendering the table is mechanical, so it belongs to the executor - a document that
+    describes the columns instead of naming the command is one asking a session to
+    assemble them again, which is what the command replaced.
+    """
+    skill = MAINTENANCE_SKILL_DOCUMENT.read_text()
+
+    assert PendingPromotionsCommand.invoked_as in skill
+
+
+def test_the_skill_rests_on_no_notification_to_deliver_its_links():
+    """
+    The Finish section used to justify itself with "a scheduled run is configured to
+    email its summary, so the summary *is* the delivery".
+
+    No notification is sent by either kind of run now, so a document that assumes one is
+    telling a reader their links will arrive somewhere they will not.
+    """
+    skill = MAINTENANCE_SKILL_DOCUMENT.read_text().lower()
+
+    assert "email" not in skill
 
 
 def test_the_skill_runs_nothing_from_the_working_tree_once_the_tool_is_pinned():
