@@ -139,6 +139,9 @@ def test_cramera_backend_serves_the_world_and_publishes_plans(monkeypatch) -> No
         "serve",
         lambda bridge, port: served.append((bridge, port)) or _ShutdownRecorder(),
     )
+    monkeypatch.setattr(
+        cramera_visualization, "open_viewer_page", lambda viewer_port, bridge_port: None
+    )
     world = World()
     visualization = WorldVisualization(
         world=world, backend=VisualizationBackend.CRAMERA

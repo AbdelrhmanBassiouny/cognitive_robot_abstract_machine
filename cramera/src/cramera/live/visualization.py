@@ -10,6 +10,10 @@ shows.
 
 from __future__ import annotations
 
+import socket
+import socketserver
+import threading
+import webbrowser
 from dataclasses import dataclass, field
 
 from typing_extensions import Optional, TYPE_CHECKING
@@ -22,12 +26,67 @@ from semantic_digital_twin.callbacks.callback import (
 )
 from semantic_digital_twin.world import World
 
+from cramera import server as viewer_server_module
 from cramera.live.bridge import BRIDGE, Bridge
 from cramera.live.http import DEFAULT_PORT, serve
+from cramera.logging_setup import get_logger
 
 if TYPE_CHECKING:
     from coraplex.plans.plan import Plan
     from giskardpy.motion_statechart.motion_statechart import MotionStatechart
+
+logger = get_logger(__name__)
+
+# %% opening the viewer page
+
+
+def viewer_url(viewer_port: int, bridge_port: int) -> str:
+    """
+    The address of the viewer page attached to the given bridge.
+
+    :param viewer_port: Port the viewer page is served on.
+    :param bridge_port: Port of the bridge the page should attach to; a non-default one
+        travels as the page's ``live`` parameter.
+    """
+    address = "http://localhost:%d/" % viewer_port
+    if bridge_port != DEFAULT_PORT:
+        address += "?live=localhost:%d" % bridge_port
+    return address
+
+
+def port_is_serving(port: int) -> bool:
+    """
+    Whether something already listens on a local port.
+
+    :param port: The port to probe.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.3)
+        return probe.connect_ex(("127.0.0.1", port)) == 0
+
+
+def open_viewer_page(
+    viewer_port: int, bridge_port: int
+) -> Optional[socketserver.ThreadingTCPServer]:
+    """
+    Make the viewer page reachable and open it in the default browser.
+
+    Reuses an already running viewer server (a standalone ``cramera`` process);
+    otherwise serves the page from this process on a daemon thread.
+
+    :param viewer_port: Port the viewer page is served on.
+    :param bridge_port: Port of the bridge the page should attach to.
+    :return: The viewer server this call started, or None when one already ran.
+    """
+    started: Optional[socketserver.ThreadingTCPServer] = None
+    if not port_is_serving(viewer_port):
+        started = viewer_server_module.make_server(viewer_port)
+        threading.Thread(target=started.serve_forever, daemon=True).start()
+    address = viewer_url(viewer_port, bridge_port)
+    logger.info("viewer at %s", address)
+    webbrowser.open(address)
+    return started
+
 
 # %% world synchronization
 
@@ -117,6 +176,24 @@ class LiveVisualization:
     The bridge translating between the world and the viewer.
     """
 
+    open_viewer: bool = True
+    """
+    Whether starting also opens the viewer page in the default browser, serving the page
+    from this process unless a standalone ``cramera`` server already runs.
+    """
+
+    viewer_port: int = viewer_server_module.DEFAULT_PORT
+    """
+    Port the viewer page is served on (or expected to run on already).
+    """
+
+    viewer_server: Optional[socketserver.ThreadingTCPServer] = field(
+        init=False, default=None
+    )
+    """
+    The viewer page server this visualization started, when no standalone one ran.
+    """
+
     state_sync: Optional[WorldStateSync] = field(init=False, default=None)
     """
     The callback publishing state changes, while started.
@@ -143,6 +220,8 @@ class LiveVisualization:
         self.model_sync = WorldModelSync(_world=self.world, bridge=self.bridge)
         if self.bridge.live_server is None:
             self.bridge.live_server = serve(self.bridge, self.port)
+            if self.open_viewer:
+                self.viewer_server = open_viewer_page(self.viewer_port, self.port)
         return self
 
     def plan_callback(self, plan: Plan) -> BridgePlanCallback:
@@ -171,3 +250,6 @@ class LiveVisualization:
         if self.bridge.live_server is not None:
             self.bridge.live_server.shutdown()
             self.bridge.live_server = None
+        if self.viewer_server is not None:
+            self.viewer_server.shutdown()
+            self.viewer_server = None
