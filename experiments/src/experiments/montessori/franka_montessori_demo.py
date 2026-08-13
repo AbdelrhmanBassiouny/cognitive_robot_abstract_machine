@@ -50,7 +50,8 @@ from cramera.live.bridge import BRIDGE
 from cramera.live.runner import start as start_live_bridge
 
 from experiments.montessori.event_monitoring import (
-    MontessoriEventMonitor,
+    WatchesForEvents,
+    WatchesNothing,
     build_shape_monitor,
 )
 from experiments.montessori.franka_panda_equipment import (
@@ -282,6 +283,7 @@ def _insert_shape(
     action: InsertMontessoriShapeAction,
     montessori: MontessoriWorld,
     context,
+    monitor: WatchesForEvents,
 ) -> bool:
     """
     Run ``action``, then let the shape physically settle under gravity and contacts
@@ -297,6 +299,10 @@ def _insert_shape(
         equipped (see :func:`~experiments.montessori.franka_panda_equipment.equip_panda_for_physical_simulation`),
         inside a running simulation.
     :param context: The CRAM execution context to run the insertion action in.
+    :param monitor: Watches the shape for pick-up and insertion. Ticked here through the
+        settle window, which no motion executes in, so its own
+        :class:`~experiments.montessori.event_monitoring.ControlCycleTicking` gets no
+        control cycle to tick from.
     :raises BodyUnfetchable: If the shape moved less than :data:`MINIMUM_PICKUP_DISPLACEMENT`
         over the whole insertion, i.e. the grasp silently failed to pick it up at all.
 
@@ -383,6 +389,9 @@ def _insert_shape(
     for sample_index in range(sample_count):
         time.sleep(sample_interval)
         montessori.world.update_forward_kinematics()
+        # the shape lands, tips and comes to rest here, so this is where the insertion
+        # is detected; nothing else ticks the monitor while no motion is executing
+        monitor.tick()
         sample_position = shape.root.global_transform.to_position()
         logger.info(
             "%s settle sample %d/%d: (%.4f, %.4f, %.4f)",
@@ -402,6 +411,7 @@ def _insert_shape_or_none(
     montessori: MontessoriWorld,
     context,
     attempt: int,
+    monitor: WatchesForEvents,
 ) -> tuple[Optional[bool], InsertMontessoriShapeAction, Optional[BaseException]]:
     """
     Attempt one insertion via :func:`_insert_shape`, returning ``None`` instead of
@@ -412,6 +422,8 @@ def _insert_shape_or_none(
         equipped, inside a running simulation.
     :param context: The CRAM execution context to run the insertion action in.
     :param attempt: This attempt's 1-based index, used only for the log message.
+    :param monitor: Watches the shape for pick-up and insertion, ticked through the
+        settle window by :func:`_insert_shape`.
     :return: Whether the shape fell through its hole (``None`` if this attempt failed in
         a retryable way), the plan this attempt ran, for the caller to record regardless
         of outcome, and the failure itself, which is the only record of what went wrong
@@ -425,7 +437,7 @@ def _insert_shape_or_none(
 
     action = _build_insert_action(shape, montessori)
     try:
-        return _insert_shape(action, montessori, context), action, None
+        return _insert_shape(action, montessori, context, monitor), action, None
     except (
         PointOccupiedError,
         PlanFailure,
@@ -520,6 +532,7 @@ def _insert_all_shapes(
     control: SortingRunControl,
     max_shapes: Optional[int] = None,
     only_shape: Optional[str] = None,
+    watch_events: bool = True,
 ) -> list[ShapeInsertionResult]:
     """
     Have the Panda pick up and insert every loose shape that has a matching hole into
@@ -550,6 +563,10 @@ def _insert_all_shapes(
         never even reaches them), so the scene matches a full run; only the robot's
         insertion attempts are limited, for isolating one shape's own tuning without a
         full run's time cost.
+    :param watch_events: Whether to watch each shape for segmind events. Watching costs
+        the run a stutter, because a detector tick blocks the thread running the motion
+        for several control cycles; see
+        :class:`~experiments.montessori.event_monitoring.WatchesNothing`.
     :return: One :class:`~experiments.montessori.sorting_results.ShapeInsertionResult` per actually attempted shape, in
         attempt order; a skipped shape has no entry.
     """
@@ -583,7 +600,9 @@ def _insert_all_shapes(
             break
         attempted += 1
 
-        event_monitor = build_shape_monitor(montessori, shape)
+        event_monitor = (
+            build_shape_monitor(montessori, shape) if watch_events else WatchesNothing()
+        )
         event_monitor.start()
         progress.begin_shape(shape, montessori.board, montessori.world)
 
@@ -603,7 +622,7 @@ def _insert_all_shapes(
             )
             attempt_start_times.append(datetime.now())
             fell_through, action, failure = _insert_shape_or_none(
-                shape, montessori, context, attempt
+                shape, montessori, context, attempt, event_monitor
             )
             actions.append(action)
             failures.append(failure)
@@ -712,9 +731,28 @@ def _parse_arguments(argument_list: Optional[list[str]] = None) -> argparse.Name
         ),
     )
     parser.add_argument(
-        "--no-rviz",
-        action="store_true",
-        help="Don't publish TF/visualization markers to RViz; publishes by default.",
+        "--event-monitor",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Watch each shape for segmind pick-up and insertion events; watches by "
+            "default. A detector tick blocks the thread running the motion for about "
+            "99 ms and cannot be moved off it without racing CasADi, so turning this "
+            "off is what makes a watched run move smoothly. The sorting verdict is "
+            "read from the world's geometry either way; what is lost is the event "
+            "stream, the segmind verdict and the failure diagnosis."
+        ),
+    )
+    parser.add_argument(
+        "--rviz",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Publish TF/visualization markers to RViz; publishes by default. Turning "
+            "this off also takes the TF publisher's CasADi evaluation off the physics "
+            "thread, which is what makes a long run survive alongside a planning "
+            "thread doing CasADi of its own."
+        ),
     )
     parser.add_argument(
         "--cramera",
@@ -849,7 +887,7 @@ def _build_world_and_sort(
 
     tf_publisher = None
     viz_marker_publisher = None
-    if not arguments.no_rviz:
+    if arguments.rviz:
         tf_publisher = TFPublisher(node=node, _world=montessori.world)
         viz_marker_publisher = VizMarkerPublisher(_world=montessori.world, node=node)
         logger.info(
@@ -907,6 +945,7 @@ def _build_world_and_sort(
         control,
         max_shapes=arguments.max_shapes,
         only_shape=arguments.only_shape,
+        watch_events=arguments.event_monitor,
     )
     return results, multi_sim, tf_publisher, viz_marker_publisher
 

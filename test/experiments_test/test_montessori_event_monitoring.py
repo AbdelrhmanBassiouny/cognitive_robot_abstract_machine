@@ -1,7 +1,14 @@
+import threading
+
 import numpy as np
 from giskardpy.motion_statechart.context import MotionStatechartContext
 
-from experiments.montessori.event_monitoring import build_shape_monitor
+from cramera.monkey_patch import MethodPatch
+
+from experiments.montessori.event_monitoring import (
+    build_shape_monitor,
+    ControlCycleTicking,
+)
 from experiments.montessori.semantics import MontessoriShape, ShapeSortingHole
 from experiments.montessori.world import MontessoriWorld, TABLE_POSITION, TABLE_SCALE
 from segmind.datastructures.events import InsertionEvent, PickUpEvent
@@ -121,3 +128,211 @@ def test_the_monitor_tracks_the_shape_leaving_the_gripper():
         for detector in monitor.detectors
         if isinstance(detector, (ContactDetector, LossOfContactDetector))
     )
+
+
+# %% when the monitor gets to look at the world
+class RunsControlCycles:
+    """
+    Stands in for the class whose control cycle the monitor is ticked from.
+
+    Patching is what installs the ticking, so the test needs a class it can patch
+    without building a compiled motion statechart to tick.
+    """
+
+    def __init__(self):
+        self.cycles = 0
+
+    def tick(self) -> None:
+        self.cycles += 1
+
+
+class TicksItRecords:
+    """
+    Stands in for the monitor, recording which thread each tick happened on.
+    """
+
+    def __init__(self):
+        self.tick_threads = []
+
+    def tick(self) -> None:
+        self.tick_threads.append(threading.get_ident())
+
+
+def _ticking_of(monitor, tick_rate_hz=1000.0):
+    """
+    Ticking driven by :class:`RunsControlCycles` rather than by a real executor.
+
+    :param monitor: The monitor to tick.
+    :param tick_rate_hz: Rate to limit the monitor's ticks to.
+    """
+    ticking = ControlCycleTicking(
+        tick_rate_hz=tick_rate_hz,
+        patched_method=MethodPatch(owner=RunsControlCycles, name="tick"),
+    )
+    ticking.drive(monitor)
+    return ticking
+
+
+class TestTheMonitorIsTickedOnTheThreadThatPlans:
+    """
+    Every detector tick reads the world, and reading the world builds CasADi objects
+    (:meth:`Body.global_pose` wraps forward kinematics in a
+    ``HomogeneousTransformationMatrix``).
+
+    CasADi releases the GIL and counts its node references without atomics, so a monitor
+    ticking on a thread of its own frees nodes the planning thread is still
+    dereferencing, and the process dies inside CasADi.
+    """
+
+    def test_it_ticks_on_the_thread_that_ran_the_control_cycle(self):
+        monitor = TicksItRecords()
+        ticking = _ticking_of(monitor)
+        try:
+            RunsControlCycles().tick()
+        finally:
+            ticking.stop()
+
+        assert monitor.tick_threads == [threading.get_ident()]
+
+    def test_it_starts_no_thread_of_its_own(self):
+        monitor = TicksItRecords()
+        threads_before = threading.active_count()
+
+        ticking = _ticking_of(monitor)
+        try:
+            RunsControlCycles().tick()
+        finally:
+            ticking.stop()
+
+        assert threading.active_count() == threads_before
+
+    def test_it_still_runs_the_control_cycle_it_ticks_from(self):
+        runs_cycles = RunsControlCycles()
+        ticking = _ticking_of(TicksItRecords())
+        try:
+            runs_cycles.tick()
+        finally:
+            ticking.stop()
+
+        assert runs_cycles.cycles == 1
+
+    def test_it_stops_ticking_once_stopped(self):
+        monitor = TicksItRecords()
+        _ticking_of(monitor).stop()
+
+        RunsControlCycles().tick()
+
+        assert monitor.tick_threads == []
+
+    def test_a_tick_of_the_monitors_own_executor_does_not_tick_it_again(self):
+        """
+        The monitor drives a
+        :class:`~segmind.episode_segmenter.EpisodeSegmenterExecutor`, which is an
+        :class:`~giskardpy.executor.Executor` too, so its own control cycle goes through
+        the very method the ticking patches.
+        """
+        monitor = TicksItRecords()
+        ticks_a_nested_cycle = RunsControlCycles()
+        monitor.tick = lambda: (
+            TicksItRecords.tick(monitor),
+            ticks_a_nested_cycle.tick(),
+        )
+        ticking = _ticking_of(monitor)
+        try:
+            RunsControlCycles().tick()
+        finally:
+            ticking.stop()
+
+        assert len(monitor.tick_threads) == 1
+
+    def test_it_ticks_no_faster_than_its_rate(self):
+        """
+        A control cycle runs at 50 Hz and a detector tick costs far more than 20 ms, so
+        ticking on every cycle would spend the run detecting instead of sorting.
+        """
+        monitor = TicksItRecords()
+        ticking = _ticking_of(monitor, tick_rate_hz=0.001)
+        try:
+            runs_cycles = RunsControlCycles()
+            for _ in range(5):
+                runs_cycles.tick()
+        finally:
+            ticking.stop()
+
+        assert len(monitor.tick_threads) == 1
+
+
+class TicksOnAClockItControls:
+    """
+    Stands in for a monitor whose tick takes real time, without taking any.
+    """
+
+    def __init__(self, clock, tick_duration):
+        self.clock = clock
+        self.tick_duration = tick_duration
+        self.ticks = 0
+
+    def tick(self) -> None:
+        self.ticks += 1
+        self.clock.advance(self.tick_duration)
+
+
+class AdvancesOnlyWhenTold:
+    """
+    A monotonic clock that moves only when a tick says it did.
+    """
+
+    def __init__(self):
+        self.now = 0.0
+
+    def advance(self, seconds: float) -> None:
+        self.now += seconds
+
+    def __call__(self) -> float:
+        return self.now
+
+
+class TestTicksAreSpacedByTheGapBetweenThem:
+    """
+    A tick costs about 99 ms and a control cycle runs every 20 ms, so measuring the rate
+    from one tick's *start* lets a tick that overran its own interval be followed
+    immediately by the next one, and the monitor takes over the thread that is trying to
+    plan.
+    """
+
+    def test_a_tick_that_overran_its_interval_still_waits_before_the_next(self):
+        clock = AdvancesOnlyWhenTold()
+        monitor = TicksOnAClockItControls(clock, tick_duration=1.0)
+        ticking = ControlCycleTicking(
+            tick_rate_hz=10.0,
+            patched_method=MethodPatch(owner=RunsControlCycles, name="tick"),
+            clock=clock,
+        )
+        ticking.drive(monitor)
+        try:
+            runs_cycles = RunsControlCycles()
+            runs_cycles.tick()
+            runs_cycles.tick()
+        finally:
+            ticking.stop()
+
+        assert monitor.ticks == 1
+
+    def test_the_next_tick_comes_once_the_gap_has_passed(self):
+        clock = AdvancesOnlyWhenTold()
+        monitor = TicksOnAClockItControls(clock, tick_duration=1.0)
+        ticking = ControlCycleTicking(
+            tick_rate_hz=10.0,
+            patched_method=MethodPatch(owner=RunsControlCycles, name="tick"),
+            clock=clock,
+        )
+        ticking.drive(monitor)
+        try:
+            runs_cycles = RunsControlCycles()
+            runs_cycles.tick()
+            clock.advance(0.1)
+            runs_cycles.tick()
+        finally:
+            ticking.stop()
+
+        assert monitor.ticks == 2

@@ -22,7 +22,7 @@ demo_arguments=()
 # what a run you are watching wants, as opposed to what the headless batch runners that
 # invoke the demo module directly want. Each is dropped if the caller decides either way
 # about it themselves.
-default_demo_arguments=(--world2 --viewer)
+default_demo_arguments=(--world2 --viewer --no-rviz)
 
 usage() {
     cat <<USAGE
@@ -34,20 +34,25 @@ answering the viewer's EQL queries about the sort as it runs.
   --no-browser   Don't open the viewer; just print its URL.
   -h, --help     Show this message.
 
-Runs with --world2 --viewer unless you say otherwise, since this is the way to
-watch a run rather than to batch one.
+Runs with --world2 --viewer --no-rviz unless you say otherwise, since this is the
+way to watch a run rather than to batch one. RViz publishing is off because you are
+watching through the viewer instead, and because publishing it evaluates CasADi on
+the physics thread while the plan thread is planning, which segfaults the demo.
 
 Common demo arguments (see franka_montessori_demo.py --help for all of them):
 
   --no-viewer         Run headless instead of opening a MuJoCo window.
   --no-world2         Use the single-table layout instead of world2's.
-  --no-rviz           Skip TF/marker publishing when nothing is watching RViz.
+  --rviz              Publish TF/markers anyway, at the risk described above.
+  --no-event-monitor  Skip segmind event detection. A detector tick blocks the
+                      motion for ~99ms, so this is what makes a watched run
+                      move smoothly; the sorting verdict is unaffected.
   --only-shape KEY    Attempt one shape only, e.g. --only-shape square_hole.
   --database-uri URI  Record results somewhere other than the default database.
 
 Examples:
 
-  ./$(basename "$0") --no-rviz
+  ./$(basename "$0") --only-shape square_hole
   ./$(basename "$0") --no-browser --no-viewer --only-shape square_hole
 
 The demo records every iteration to Postgres and will not start without it; see
@@ -65,7 +70,11 @@ done
 
 # a default the caller already decided about, either way, is theirs to decide
 for default_argument in "${default_demo_arguments[@]}"; do
-    negated_argument="--no-${default_argument#--}"
+    if [[ "${default_argument}" == --no-* ]]; then
+        negated_argument="--${default_argument#--no-}"
+    else
+        negated_argument="--no-${default_argument#--}"
+    fi
     already_chosen=0
     for argument in ${demo_arguments[@]+"${demo_arguments[@]}"}; do
         if [[ "${argument}" == "${default_argument}" || "${argument}" == "${negated_argument}" ]]; then

@@ -118,12 +118,21 @@ takes any demo argument:
 
 ```
 ./run_montessori_demo.sh
-./run_montessori_demo.sh --no-rviz --only-shape square_hole
+./run_montessori_demo.sh --only-shape square_hole
 ```
 
-It runs with `--world2 --viewer` unless you say otherwise, since it exists to watch a
-run rather than to batch one; `--no-world2` and `--no-viewer` take those back. The demo
-module's own defaults are unchanged, so the headless batch runners are unaffected.
+It runs with `--world2 --viewer --no-rviz` unless you say otherwise, since it exists to
+watch a run rather than to batch one; `--no-world2`, `--no-viewer` and `--rviz` take
+those back. The demo module's own defaults are unchanged, so the headless batch runners
+are unaffected.
+
+RViz publishing is off by default here because you are watching through the viewer
+instead, and because it is not safe to leave on for a long run: `TFPublisher` evaluates
+a compiled CasADi expression from the physics thread every time the simulation syncs its
+state back (100 Hz), while the plan thread builds CasADi expressions of its own. CasADi
+releases the GIL and reference-counts its nodes without atomics, so the two corrupt each
+other and the process eventually dies of a segmentation fault inside CasADi. Pass
+`--rviz` if you need the markers and accept that risk.
 
 Or run the two halves yourself:
 

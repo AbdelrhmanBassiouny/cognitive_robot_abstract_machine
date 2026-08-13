@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from cramera.live.run_control import RunCommand
 
 from experiments.montessori import franka_montessori_demo
+from experiments.montessori.event_monitoring import WatchesNothing
 from experiments.montessori.franka_montessori_demo import (
     _parse_arguments,
     _partition_events_by_attempt,
@@ -154,7 +155,7 @@ def test_a_retryable_failure_is_returned_rather_than_only_logged(monkeypatch):
         shape = cube_at(world, Point3(0.0, 0.0, 0.08))
     failure = PointOccupiedError(point=None)
 
-    def fail(action, montessori, context):
+    def fail(action, montessori, context, monitor):
         raise failure
 
     monkeypatch.setattr(franka_montessori_demo, "_insert_shape", fail)
@@ -163,7 +164,7 @@ def test_a_retryable_failure_is_returned_rather_than_only_logged(monkeypatch):
     )
 
     fell_through, _, raised = franka_montessori_demo._insert_shape_or_none(
-        shape=shape, montessori=None, context=None, attempt=1
+        shape=shape, montessori=None, context=None, attempt=1, monitor=None
     )
 
     assert fell_through is None
@@ -228,3 +229,51 @@ def test_a_run_nobody_is_driving_is_never_held_up():
 
     assert control.restart_is_pending() is False
     assert control.wants_another_iteration() is False
+
+
+# %% trading event detection for a smooth run
+def test_watching_for_events_is_on_unless_turned_off():
+    assert _parse_arguments([]).event_monitor is True
+
+
+def test_watching_for_events_can_be_turned_off():
+    assert _parse_arguments(["--no-event-monitor"]).event_monitor is False
+
+
+def test_a_run_that_is_not_watching_builds_no_monitor(monkeypatch):
+    """
+    A detector tick blocks the thread running the motion for about 99 ms, five times a
+    control cycle's own budget, so a run that only wants to be watched must be able to
+    skip detection rather than pay for it and stutter.
+    """
+    world = World()
+    with world.modify_world():
+        world.add_body(Body(name=PrefixedName("root")))
+        board_with_one_hole(world, Point3(0.0, 0.0, 0.05))
+        shape = cube_at(world, Point3(0.0, 0.0, 0.08))
+
+    def refuse(montessori, shape):
+        raise AssertionError("a run that is not watching built a monitor anyway")
+
+    monkeypatch.setattr(franka_montessori_demo, "build_shape_monitor", refuse)
+    control = SortingRunControl()
+    control.apply(RunCommand.RESTART)
+
+    results = franka_montessori_demo._insert_all_shapes(
+        SceneThatRefusesToBeSorted([shape]),
+        context=None,
+        progress=SortingProgress(),
+        control=control,
+        watch_events=False,
+    )
+
+    assert results == []
+
+
+def test_a_monitor_that_watches_nothing_reports_nothing():
+    watches_nothing = WatchesNothing()
+    watches_nothing.start()
+    watches_nothing.tick()
+    watches_nothing.stop()
+
+    assert watches_nothing.events == []

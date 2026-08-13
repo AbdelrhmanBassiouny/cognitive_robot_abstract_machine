@@ -52,6 +52,24 @@ def documented_demo_flags() -> list:
     return documented
 
 
+def chosen_demo_defaults() -> list:
+    """
+    The demo flags the script supplies unless the caller decides about them itself.
+    """
+    return SCRIPT_TEXT.split("default_demo_arguments=(", 1)[1].split(")", 1)[0].split()
+
+
+def opposite_flag(flag: str) -> str:
+    """
+    The flag that says the opposite of ``flag``.
+
+    :param flag: A boolean demo flag, in either its positive or its negative form.
+    """
+    if flag.startswith("--no-"):
+        return "--" + flag[len("--no-") :]
+    return flag.replace("--", "--no-", 1)
+
+
 # %% the script itself
 class TestTheLauncherIsRunnable:
     def test_it_is_executable(self):
@@ -127,24 +145,34 @@ class TestItChoosesTheDemosDefaults:
     """
 
     def test_it_turns_on_the_window_and_the_second_layout(self):
-        assert "default_demo_arguments=(--world2 --viewer)" in SCRIPT_TEXT
+        assert {"--world2", "--viewer"} <= set(chosen_demo_defaults())
+
+    def test_it_turns_off_rviz_publishing(self):
+        """
+        The TF publisher evaluates a compiled CasADi expression on the physics thread
+        every time the simulation syncs its state back, while the plan thread is
+        building CasADi expressions of its own.
+
+        CasADi releases the GIL and counts its node references without atomics, so the
+        two corrupt each other and the demo dies of a segmentation fault. Nothing
+        watches RViz in a run being watched through the cramera viewer anyway.
+        """
+        assert "--no-rviz" in chosen_demo_defaults()
 
     def test_each_default_is_one_the_demo_accepts(self):
-        arguments = SCRIPT_TEXT.split("default_demo_arguments=(", 1)[1]
-        arguments = arguments.split(")", 1)[0].split()
+        arguments = chosen_demo_defaults()
 
         assert arguments
         assert _parse_arguments(arguments)
 
     def test_each_default_can_be_turned_back_off(self):
         """
-        A default is only a default if the caller can still say no to it.
+        A default is only a default if the caller can still say the opposite.
         """
-        arguments = SCRIPT_TEXT.split("default_demo_arguments=(", 1)[1]
-        for flag in arguments.split(")", 1)[0].split():
-            negation = flag.replace("--", "--no-", 1)
-            assert _parse_arguments([flag, negation]), negation
-            assert negation in SCRIPT_TEXT
+        for flag in chosen_demo_defaults():
+            opposite = opposite_flag(flag)
+            assert _parse_arguments([flag, opposite]), opposite
+            assert opposite in SCRIPT_TEXT
 
 
 # %% the ports it names
