@@ -42,6 +42,18 @@ No PR opened yet — all work is local on `montessori_merge_db_creation`.
 - `test_franka_panda_equipment.py` fails to import (`PANDA_SCENE_BODIES_TO_DISCARD`
   missing) — also pre-existing, untouched file.
 
+### Also done
+
+8. `run_montessori_demo.sh` at the repo root beside `run_cramera.sh`: starts the
+   cramera server, waits for its port, opens the viewer (no `?scene=`, so it
+   auto-attaches to the demo), then runs the demo with `--cramera` in the
+   foreground; a trap tears the server down. Covered by
+   `test_run_montessori_demo_script.py`, which pins the ports against
+   `cramera.server.DEFAULT_PORT` / `cramera.live.http.DEFAULT_PORT` and checks
+   every flag its help advertises against `_parse_arguments`.
+   Verified end to end: real MuJoCo run, bridge answered all 17 presets mid-sort,
+   shape fell through, exit 0, both ports released.
+
 ### Next
 
 - `cramera/scenes` is a submodule: `Franka_Montessori/presets.json` needs its own
