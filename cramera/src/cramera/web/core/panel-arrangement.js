@@ -1,14 +1,14 @@
 /* ============================================================================
  * core/panel-arrangement.js — where each Scene panel sits.
  *
- * Every panel is draggable by its header: drop it above or below another panel, or
- * into the other column, and the layout follows. The arrangement persists in the
- * browser's localStorage — install() replaces the configured layout with the stored
- * one before the panels mount, so every reload comes back to the same arrangement.
+ * The View menu assigns every panel a region (left or right column); place() moves
+ * the panel there and the arrangement persists in the browser's localStorage —
+ * install() replaces the configured layout with the stored one before the panels
+ * mount, so every reload comes back to the same arrangement.
  *
  * The layout rules (normalizing a stored arrangement against the configured
  * panels, moving a panel to a slot position) are pure and testable under node;
- * only init() touches the page.
+ * only install() and place() touch the page.
  * ==========================================================================*/
 (function (global) {
   'use strict';
@@ -81,84 +81,14 @@
     config.layout = read(global.localStorage, config.layout);
   }
 
-  /* Make every mounted panel draggable by its header and every slot a drop target. */
-  function init() {
-    document.querySelectorAll('[data-panel]').forEach(makeDraggable);
-    document.querySelectorAll('[data-slot]').forEach(makeDropTarget);
-  }
-
-  function makeDraggable(panel) {
-    const handle = panel.querySelector('.panel-head') || panel.firstElementChild || panel;
-    handle.setAttribute('draggable', 'true');
-    handle.style.cursor = 'grab';
-    handle.addEventListener('dragstart', function (event) {
-      event.dataTransfer.setData('text/panel-id', panel.dataset.panel);
-      event.dataTransfer.effectAllowed = 'move';
-      panel.classList.add('dragging');
-    });
-    handle.addEventListener('dragend', function () {
-      panel.classList.remove('dragging');
-      clearDropMarkers();
-    });
-  }
-
-  function makeDropTarget(slot) {
-    slot.addEventListener('dragover', function (event) {
-      if (!event.dataTransfer.types.includes('text/panel-id')) return;
-      event.preventDefault();
-      event.dataTransfer.dropEffect = 'move';
-      clearDropMarkers();
-      const before = insertionReference(slot, event.clientY);
-      if (before) before.classList.add('drop-before');
-      else slot.classList.add('drop-end');
-    });
-    slot.addEventListener('dragleave', function (event) {
-      if (!slot.contains(event.relatedTarget)) clearDropMarkers();
-    });
-    slot.addEventListener('drop', function (event) {
-      event.preventDefault();
-      clearDropMarkers();
-      const id = event.dataTransfer.getData('text/panel-id');
-      const panel = document.querySelector('[data-panel="' + id + '"]');
-      if (!panel) return;
-      const before = insertionReference(slot, event.clientY);
-      slot.insertBefore(panel, before);
-      persistFromPage();
-    });
-  }
-
-  /* The visible panel the drop would land in front of, or null for "at the end". */
-  function insertionReference(slot, pointerY) {
-    const panels = Array.from(slot.querySelectorAll('[data-panel]')).filter(function (panel) {
-      return !panel.classList.contains('dragging') && !panel.classList.contains('hidden');
-    });
-    return panels.find(function (panel) {
-      const box = panel.getBoundingClientRect();
-      return pointerY < box.top + box.height / 2;
-    }) || null;
-  }
-
-  function clearDropMarkers() {
-    document.querySelectorAll('.drop-before').forEach(function (element) {
-      element.classList.remove('drop-before');
-    });
-    document.querySelectorAll('.drop-end').forEach(function (element) {
-      element.classList.remove('drop-end');
-    });
-  }
-
-  /* Read the arrangement off the page, store it, and let the layout follow. */
-  function persistFromPage() {
-    const layout = {};
-    document.querySelectorAll('[data-slot]').forEach(function (slot) {
-      layout[slot.dataset.slot] = Array.from(slot.querySelectorAll('[data-panel]'))
-        .map(function (panel) { return panel.dataset.panel; });
-    });
-    (global.CRAMERA_CONFIG || {}).layout = layout;
-    write(global.localStorage, layout);
-    if (global.PanelVisibility && global.PanelVisibility.refresh) {
-      global.PanelVisibility.refresh();
-    }
+  /* Move a panel to the end of a slot, on the page and in the stored layout. */
+  function place(id, slotName) {
+    const config = global.CRAMERA_CONFIG || {};
+    config.layout = moved(config.layout || {}, id, slotName, Infinity);
+    const panel = document.querySelector('[data-panel="' + id + '"]');
+    const slot = document.querySelector('[data-slot="' + slotName + '"]');
+    if (panel && slot) slot.appendChild(panel);
+    write(global.localStorage, config.layout);
   }
 
   global.PanelArrangement = {
@@ -168,6 +98,6 @@
     normalize: normalize,
     moved: moved,
     install: install,
-    init: init,
+    place: place,
   };
 })(typeof window !== 'undefined' ? window : this);

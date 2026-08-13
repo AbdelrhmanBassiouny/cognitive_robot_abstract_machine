@@ -67,3 +67,9 @@ test('panels have readable menu labels', function () {
   assert.strictEqual(visibility.labelOf('robot-scene'), 'Semantic Digital Twin Scene');
   assert.strictEqual(visibility.labelOf('something-custom'), 'something-custom');
 });
+
+test('slot names get readable menu labels', function () {
+  const visibility = load();
+  assert.strictEqual(visibility.slotLabel('left'), 'Left');
+  assert.strictEqual(visibility.slotLabel('right'), 'Right');
+});

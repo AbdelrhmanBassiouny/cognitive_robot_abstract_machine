@@ -1,11 +1,12 @@
 /* ============================================================================
- * core/panel-visibility.js — which panels the Scene page shows.
+ * core/panel-visibility.js — which panels the Scene page shows, and where.
  *
- * The topbar's View menu lists every configured panel with a checkbox; unticking
- * hides the panel (it stays mounted, so re-ticking is instant), and a slot whose
- * panels are all hidden collapses so the remaining column takes the full width.
- * The selection persists in the browser's localStorage, so every reload comes back
- * to the same view.
+ * The topbar's View menu lists every configured panel with a region choice:
+ * a column to sit in, or Hidden. A hidden panel stays mounted (re-showing is
+ * instant), a slot whose panels are all hidden collapses so the remaining column
+ * takes the full width, and choosing a column moves the panel there (see
+ * core/panel-arrangement.js). Both choices persist in the browser's localStorage,
+ * so every reload comes back to the same view.
  *
  * The state rules (defaults, persistence format, slot collapsing) are pure and
  * testable under node; only init() touches the page.
@@ -56,6 +57,11 @@
 
   function labelOf(id) {
     return PANEL_LABELS[id] || id;
+  }
+
+  /* A slot name as the menu shows it: 'left' -> 'Left'. */
+  function slotLabel(slotName) {
+    return slotName.charAt(0).toUpperCase() + slotName.slice(1);
   }
 
   // %% wiring the page
@@ -115,21 +121,45 @@
     menu.appendChild(list);
     actions.appendChild(menu);
 
+    const HIDDEN_CHOICE = 'hidden';
     configuredIds(layout).forEach(function (id) {
       const row = document.createElement('label');
-      row.className = 'lp-row';
-      const checkbox = document.createElement('input');
-      checkbox.type = 'checkbox';
-      checkbox.checked = state[id] !== false;
-      checkbox.addEventListener('change', function () {
-        state[id] = checkbox.checked;
+      row.className = 'view-menu-row';
+      const name = document.createElement('span');
+      name.textContent = labelOf(id);
+      const region = document.createElement('select');
+      Object.keys(layout).forEach(function (slotName) {
+        const option = document.createElement('option');
+        option.value = slotName;
+        option.textContent = slotLabel(slotName);
+        region.appendChild(option);
+      });
+      const hiddenOption = document.createElement('option');
+      hiddenOption.value = HIDDEN_CHOICE;
+      hiddenOption.textContent = 'Hidden';
+      region.appendChild(hiddenOption);
+      region.value = state[id] === false ? HIDDEN_CHOICE : slotOf(id);
+      region.addEventListener('change', function () {
+        if (region.value === HIDDEN_CHOICE) {
+          state[id] = false;
+        } else {
+          state[id] = true;
+          if (global.PanelArrangement) global.PanelArrangement.place(id, region.value);
+        }
         write(global.localStorage, state);
         apply(state);
       });
-      row.appendChild(checkbox);
-      row.appendChild(document.createTextNode(labelOf(id)));
+      row.appendChild(name);
+      row.appendChild(region);
       list.appendChild(row);
     });
+
+    function slotOf(id) {
+      const current = (global.CRAMERA_CONFIG || {}).layout || {};
+      return Object.keys(current).find(function (slotName) {
+        return current[slotName].indexOf(id) !== -1;
+      }) || Object.keys(layout)[0];
+    }
 
     toggle.addEventListener('click', function (event) {
       event.stopPropagation();
@@ -149,6 +179,7 @@
     write: write,
     visibleSlots: visibleSlots,
     labelOf: labelOf,
+    slotLabel: slotLabel,
     init: init,
     refresh: refresh,
   };
