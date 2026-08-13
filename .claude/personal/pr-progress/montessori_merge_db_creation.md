@@ -277,3 +277,59 @@ No PR opened yet — all work is local on `montessori_merge_db_creation`.
 - **`TFPublisher` itself is unfixed**, only avoided. Evaluating a compiled casadi
   expression from a state-change callback is unsafe for any threaded simulation, not just
   this demo; it lives in `semantic_digital_twin` shared code.
+
+### Round 6 — the racer caught in the act, and the monitor moved onto the plan thread
+
+31. **Crashed again with `--no-rviz`** (confirmed in the fresh core's `ProcCmdline`), so
+    the TF publisher was not the whole story. This time apport had a free slot and
+    captured it: `/var/crash/_usr_bin_python3.12.1000.crash`, 20:14.
+32. **Two threads in casadi, caught mid-race.** Thread 1 (main/plan) in
+    `casadi::SXElem::is_constant()` with the GIL released; **thread 32 in
+    `_wrap_delete_SX` → `SwigPyObject_dealloc`**, blocked in `PyEval_RestoreThread` —
+    i.e. *destroying* an SX, dropping `SXNode` references, while the main thread
+    dereferenced them. `si_code=1` (SEGV_MAPERR) at `0x75f50f5c1486`, far from `$sp`.
+    Thread 67 was the cramera HTTP loop idle in `poll(timeout=500)`, so round 4's
+    `NumericPose` fix is holding. Thread 22 was mujoco in `mj_step`.
+33. **Round 5 under-rated the monitor badly.** `EpisodeSegmenterExecutor` subclasses
+    giskardpy's `Executor`, so the monitor thread was running `Executor.tick()` — full
+    motion-statechart tick plus `collision_manager.compute_collisions()` — not a light
+    5 Hz pose sampler. It was a peer of the planner.
+34. **And round 4's "snapshot() is only ever called on the plan thread" was wrong.**
+    `cramera/live/hooks.py:166` patches `Executor.tick`, and the segmind executor *is* an
+    `Executor`, so every monitor tick also ran `bridge.observe_tick()` →
+    `apply_moves()` + `snapshot()` → `rounded_pose()` over every body → forward
+    kinematics → casadi, **on the monitor thread**. This is why every segfault was a
+    `--cramera` run, and why this one landed immediately after a viewer drag: the queued
+    move was applied on the monitor thread.
+35. **Fix (TDD):** `ControlCycleTicking` in `event_monitoring.py` ticks the monitor from
+    `Executor.tick` (via `cramera.monkey_patch.MethodPatch`), so detectors read the world
+    on the thread running the motion. `MontessoriEventMonitor` lost `_thread` /
+    `_stop_requested` / `_run`; `start()`/`stop()` now drive/stop the ticking, and
+    `tick()` stays public. A reentrancy flag stops the monitor's own executor tick from
+    ticking it again — that also covers any future nesting, without importing segmind
+    types for the guard. Ticks are wall-clock rate-limited to `tick_rate_hz` (5 Hz),
+    because control cycles run at 50 Hz and a detector tick costs ~0.2 s.
+36. The settle window executes no motion, so `_insert_shape` ticks the monitor directly
+    per settle sample; `monitor` is threaded through `_insert_shape_or_none`.
+37. Tests: `TestTheMonitorIsTickedOnTheThreadThatPlans` (6, all failed first) with
+    `RunsControlCycles` / `TicksItRecords` mimics and an injected `MethodPatch`, so no
+    compiled statechart is needed. `test_franka_montessori_demo.py`'s `_insert_shape`
+    stub gained the new parameter — assertions untouched.
+
+### Ordering note (round 6)
+
+`MethodPatch` restores whatever it found at install time, so patches must unwind LIFO.
+cramera installs its tick hook once at startup and never removes it; the monitor installs
+and removes per shape on top of it. That holds today — but a second long-lived patcher of
+`Executor.tick` would break it.
+
+### Still open (round 6)
+
+- **Not yet verified against a real run.** The suite passes, but only a long
+  `./run_montessori_demo.sh` session proves the segfault is gone.
+- The demo will be somewhat slower in wall-clock: ~0.2 s of detector work every 0.2 s now
+  runs on the plan thread instead of alongside it. The total work is unchanged.
+- cramera's tick hook now fires twice per control cycle whenever a monitor tick happens
+  (once for the motion executor, once for the nested segmind one). Harmless, but it does
+  double the snapshot work at 5 Hz.
+- `TFPublisher` still unfixed (see round 5).
