@@ -62,9 +62,26 @@ TDD throughout: every part above gets its failing test in
   a section written by the promotion pass, so read the current body before replacing it.
 - Dashboard republished at the same URL; no drift, nothing auto-corrected.
 
+## Review round, 2026-08-13 (11 threads, `c5f174d2`)
+
+- **A summary no longer gates a promotion.** User's call, and the reason is `routine-cutover`:
+  the Action it ends on has no model, so requiring written points would leave it unable to
+  promote at all. Both halves optional; no entry → body is just the fork-PR link.
+  `EmptyPromotionSummaryError` and the `awaiting-promotion-summary` status deleted. Writing
+  the summaries moved to SKILL.md step 2, *before* the pass, off `stack.py next --porcelain`.
+- **Promotion reports per branch**, mirroring the restack half: `BranchPromotion` +
+  `PromotionOutcome` (promoted / already-linked / withheld / link-label-cleared). Not a
+  `BranchStatus` member — that model is derived from the board, and a written summary is not.
+- **`GitHubLinks`** is the one statement of every github.com URL; `stack.py` composes through
+  it. The read-back pattern is derived from the builder, so a link must now name the
+  configured upstream and base — any `https://` URL qualified before.
+- Upstream title convention recorded: `[TopicName] Catchy Minimal Relatable Title`.
+- 486 tests pass; three mutations checked. 7 threads resolved, 4 left open (the two on the
+  shared dataclass-exception base — deferred to whichever item lands `.claude/shared/`, since
+  #151 is 159 commits behind main — and the two on `or`, which were answered, not changed).
+
 ## Next
 
-- Nothing outstanding on #162 itself. It is a draft, mergeable against #158, with CI
-  running on `93edfb17`.
+- Nothing outstanding on #162 itself. It is a draft, mergeable against #158, CI on `c5f174d2`.
 - Note: `subscribe_pr_activity` on tracking issue #102 was refused by the permission
   classifier this session, so this session is not subscribed to it.
