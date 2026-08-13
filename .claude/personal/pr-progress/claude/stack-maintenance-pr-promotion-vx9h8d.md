@@ -35,9 +35,15 @@ end the session. No branch work, no PR.
   `not_started`, no branch, with the design and the open questions in `notes`; roadmap
   entry written; both saved to `claude/personal-notes`.
 
+- Republished the `workflow-unification` dashboard. The cached URL
+  (`6d11e0d3-...`) resolved to an artifact that no longer exists, so the publish was
+  refused; `Artifact` `list` gave the live page (`07123af6-...`), which was read,
+  republished to, and written back into `_generated/dashboard-urls.yaml`. That is the
+  drift `dashboard-url-cache-integrity` (#150) exists to stop.
+
 ### Next
 
-- Republish the `workflow-unification` dashboard, then end the session.
+- Nothing in this session. Kickoff is a separate session.
 - Anything further is a kickoff session's work: `/plan-item-kickoff workflow-unification
   promotion-summaries-and-table`.
 
