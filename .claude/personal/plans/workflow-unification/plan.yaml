@@ -3291,3 +3291,53 @@ items:
     track: stack-tooling
     depends_on: []
     status: not_started
+    notes: >
+      Split out of `integration-branch` (#154) on 2026-08-13, on the user's decision, rather than
+      folded into it. Part D of that item's own review round: the verdict moves from a local
+      `--test` run to GitHub CI. It was deferred there with three reasons and has since gained two
+      more requirements from review, which is what made it its own item.
+
+      The prefer-the-change test was run rather than judged by feel. Part D does modify what #154
+      introduces - it deletes `integration_test_command`, `--test`, `--no-test`,
+      `TestCommandNotConfiguredError` and `_run_tests`. But strip those deletions and what remains
+      is a GitHub Actions client, a CI job, a pytest marker, a second long-lived branch and a
+      subcommand reading a run's conclusion, which stands alone by a wide margin. Same answer the
+      rule gave #110 against #106.
+
+      The three reasons it was not started on #154 all still hold. It needs an Actions client this
+      tree does not have, since #146 measured that `actions/runs`, `jobs` and job-logs answer 200
+      from a session but is unlanded. It rewrites the localisation path that `block-branch` now
+      depends on, so a half-migration leaves the verdict split across two mechanisms. And its
+      verification is a real CI run on a pushed branch, which is the one thing nothing else on #154
+      needed - everything there was checkable against real git in the scratch fork.
+
+      One measured fact shapes the whole design and should be re-checked at kickoff rather than
+      inherited: `ci.yml` triggers on `push` to `main` and on `pull_request`, and nothing else. A
+      pushed integration branch therefore gets no CI at all unless a pull request exists for it.
+      That is why the user's "a PR into the existing stable integration branch" framing is the only
+      shape that reaches a verdict.
+
+      First added requirement: a stable branch and a candidate. `integration` becomes the last build
+      whose CI went green rather than a pointer moved to whatever was built last; each new build is
+      a candidate, opened as a pull request into it, and merged once green. A tension to settle
+      rather than paper over: a build is regenerated from scratch from the upstream base plus the
+      tips, so a candidate shares no history with the stable branch, its pull request's diff is
+      everything that changed between two independent builds, and merging it makes `integration`
+      accumulate history -the one property this design has held since the item was recorded. Whether
+      the stable branch is a real merge target or a second pointer force-updated on green is the
+      first decision.
+
+      Second added requirement: a pytest marker, and a CI job that runs only what it marks. The
+      failing test step 5 pushes to the breaking branch carries a marker named for the label; a job
+      runs only marked tests. That gives a verdict in a fraction of the matrix's time, and it gives
+      `integration-conflict` an automatic clearing condition it does not have today - the 08-11
+      round established that `WithholdBlockedBranch` cannot clear it, since a failure between two
+      cleanly merging branches never makes a pull request conflicted, and the label ships documented
+      as never cleared automatically for that reason. A marked test that passes is a different and
+      correct clearing condition. The user also offered a third option worth keeping: the script
+      that writes and clears the label could run the marked tests itself, or trigger only that job,
+      rather than depending on the whole run.
+
+      Two review threads on #154 stay open pointing here rather than being resolved: the
+      `DataclassException` one, whose subject `TestCommandNotConfiguredError` this item deletes
+      rather than converts, and the whole-CI thread this item is the answer to.
