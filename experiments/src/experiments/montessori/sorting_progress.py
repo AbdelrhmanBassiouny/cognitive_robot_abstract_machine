@@ -18,6 +18,7 @@ from datetime import datetime
 
 from coraplex.plans.plan import Plan
 from coraplex.plans.plan_node import DesignatorNode, PlanNode
+from cramera.body_geometry import NumericPose
 from krrood.exceptions import DataclassException
 from segmind.datastructures.events import (
     DetectionEvent,
@@ -25,7 +26,6 @@ from segmind.datastructures.events import (
     InsertionEvent,
     PickUpEvent,
 )
-from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Dict, List, Optional
@@ -91,7 +91,7 @@ class ShapeUnderTest:
     Name of the hole this shape is aimed at.
     """
 
-    target_pose: Optional[Pose] = None
+    target_pose: Optional[NumericPose] = None
     """
     The pose, in the world root frame, the shape is aimed to be released at.
     """
@@ -173,7 +173,7 @@ class InsertionAttemptRecord:
     When the attempt finished, successfully or not.
     """
 
-    target_pose: Optional[Pose] = None
+    target_pose: Optional[NumericPose] = None
     """
     The pose, in the world root frame, this attempt aimed to release the shape at.
     """
@@ -554,7 +554,7 @@ class SortingProgress:
             shape_key=shape.shape_key,
             shape_category=str(shape.shape_category),
             target_hole=board.hole_for(shape).name.name,
-            target_pose=board.insertion_target_for(shape, world),
+            target_pose=NumericPose.of_pose(board.insertion_target_for(shape, world)),
             is_inserted=board.has_fallen_through(shape, world),
         )
         with self._lock:

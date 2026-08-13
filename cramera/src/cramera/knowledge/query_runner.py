@@ -27,7 +27,7 @@ from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.scope import eql_factory_namespace
 from semantic_digital_twin.spatial_types import Point3, Pose
 
-from cramera.body_geometry import pose_label, position_label
+from cramera.body_geometry import NumericPose, pose_label, position_label
 from cramera.knowledge.entity import NamedEntity
 from cramera.knowledge.query_domain import QueryDomain
 from cramera.knowledge.query_verbalization import QueryVerbalization
@@ -168,7 +168,7 @@ class RowRenderer:
         rows: List[Dict[str, Any]] = []
         if result is None:
             return _RenderedRows(rows, self.highlight, False)
-        if isinstance(result, (str, int, float, bool, Point3, Pose)):
+        if isinstance(result, (str, int, float, bool, Point3, Pose, NumericPose)):
             rows.append({"value": self._jsonable(result)})
             return _RenderedRows(rows, self.highlight, False)
         if is_dataclass(result) and not isinstance(result, type):
@@ -191,7 +191,7 @@ class RowRenderer:
 
         :param item: The query result item to render as a row.
         """
-        if isinstance(item, (Point3, Pose)):
+        if isinstance(item, (Point3, Pose, NumericPose)):
             return {"value": self._jsonable(item)}
         if is_dataclass(item) and not isinstance(item, type):
             return self._entity_row(item)
@@ -243,6 +243,8 @@ class RowRenderer:
 
         :param value: The raw query result value to render.
         """
+        if isinstance(value, NumericPose):
+            return value.label
         if isinstance(value, Point3):
             return position_label(value)
         if isinstance(value, Pose):

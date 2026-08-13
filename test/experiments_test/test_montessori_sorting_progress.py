@@ -8,15 +8,18 @@ reads it partway through rather than only at the end.
 from __future__ import annotations
 
 import threading
+from dataclasses import fields
 from datetime import datetime, timedelta
 
 import pytest
 from giskardpy.qp.exceptions import SolverReturnedFailureError
 from segmind.datastructures.events import InsertionEvent, PickUpEvent
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.spatial_types.spatial_types import Point3
+from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
+
+from cramera.body_geometry import NumericPose
 
 from experiments.montessori.insertion_diagnosis import InsertionFailureReason
 from experiments.montessori.sorting_progress import (
@@ -121,8 +124,8 @@ class TestTrackingAShape:
         world, board, _, shape = scene
         [tracked] = progress.shapes
 
-        assert tracked.target_pose.to_position_quaternion_list() == (
-            board.insertion_target_for(shape, world).to_position_quaternion_list()
+        assert tracked.target_pose == NumericPose.of_pose(
+            board.insertion_target_for(shape, world)
         )
 
     def test_a_tracked_shape_starts_out_not_inserted(self, progress):
@@ -329,3 +332,50 @@ class TestConcurrentReads:
 
         assert progress.shapes[0].attempt_count == 50
         assert max(recorded_counts) <= 50
+
+
+# %% what may cross to the reading thread
+class TestNothingSymbolicIsHandedOut:
+    """
+    The viewer's HTTP thread renders these records while this thread keeps planning.
+
+    CasADi releases the GIL for the duration of a call and reference-counts its
+    expression nodes without atomics, so evaluating a symbolic value from both threads
+    frees a node that is still referenced and the process dies dereferencing it. Reading
+    every pose out into numbers here, on the thread that owns the world, is what keeps
+    the reader off CasADi altogether.
+    """
+
+    def test_a_tracked_shape_hands_out_no_symbolic_pose(self, progress):
+        [tracked] = progress.shapes
+
+        assert isinstance(tracked.target_pose, NumericPose)
+
+    def test_a_recorded_attempt_hands_out_no_symbolic_pose(self, progress, scene):
+        _, _, _, shape = scene
+        progress.record_attempt(attempt(shape, fell_through=False))
+
+        assert isinstance(progress.attempts[0].target_pose, NumericPose)
+
+    def test_no_recorded_value_is_a_symbolic_type(self, progress, scene):
+        """
+        Guards the fields the two tests above do not name: any symbolic value reaching
+        the reader is the same hazard, whichever field carries it.
+        """
+        _, _, _, shape = scene
+        progress.record_attempt(attempt(shape, fell_through=False))
+        records = [
+            *progress.shapes,
+            *progress.attempts,
+            *progress.plan_steps,
+            *progress.events,
+        ]
+
+        symbolic = [
+            (type(record).__name__, record_field.name)
+            for record in records
+            for record_field in fields(record)
+            if isinstance(vars(record)[record_field.name], (Point3, Pose))
+        ]
+
+        assert symbolic == []

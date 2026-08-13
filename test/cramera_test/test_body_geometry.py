@@ -28,6 +28,7 @@ from typing_extensions import Optional
 
 from cramera.body_geometry import (
     measure_body,
+    NumericPose,
     pose_label,
     position_label,
     rounded_pose,
@@ -152,6 +153,40 @@ def test_pose_label_positions_agree_with_position_label():
     pose = Pose.from_xyz_rpy(0.125, -1.5, 0.0)
 
     assert pose_label(pose).startswith(position_label(Point3(0.125, -1.5, 0.0)))
+
+
+# %% poses read out into plain numbers
+def test_a_numeric_pose_carries_the_poses_own_coordinates():
+    """
+    Reading a pose out is what makes it safe to hand to another thread, so the numbers
+    it keeps have to be the pose's own.
+    """
+    pose = Pose.from_xyz_rpy(1.5, -2.0, 0.25)
+
+    read_out = NumericPose.of_pose(pose)
+
+    assert read_out.position == (1.5, -2.0, 0.25)
+    assert read_out.quaternion == (0.0, 0.0, 0.0, 1.0)
+
+
+def test_a_numeric_pose_is_free_of_the_symbolic_pose_it_was_read_from():
+    """
+    A value still holding a CasADi expression would be evaluated again by whichever
+    thread renders it, which is the whole hazard being avoided.
+    """
+    read_out = NumericPose.of_pose(Pose.from_xyz_rpy(1.0, 2.0, 3.0))
+
+    assert all(type(value) is float for value in read_out.position)
+    assert all(type(value) is float for value in read_out.quaternion)
+
+
+def test_a_numeric_pose_reads_exactly_as_the_pose_it_was_read_from():
+    """
+    Recording a pose as numbers must not change how an answer showing it reads.
+    """
+    pose = Pose.from_xyz_rpy(0.125, -1.5, 0.0)
+
+    assert NumericPose.of_pose(pose).label == pose_label(pose)
 
 
 def test_rounded_pose_rounds_every_value():
