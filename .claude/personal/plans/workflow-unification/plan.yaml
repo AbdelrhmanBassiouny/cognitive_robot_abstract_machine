@@ -3216,12 +3216,14 @@ items:
 
   - id: promotion-summaries-and-table
     title: "Promote with a written summary, and report the links as a table rather than a notification"
-    branch: null
+    branch: claude/plan-item-kickoff-workflow-y38l38
     track: stack-tooling
     depends_on:
     - stack-maintenance-executor
     - pinned-stack-tooling
-    status: not_started
+    status: in_progress
+    pull_request_number: 162
+    session: https://claude.ai/code/session_01RTWnbUYSauqy9peX7JFJUz
     notes: >
       User's request, 2026-08-13, about the promotion phase of a maintenance pass: the
       compare-and-create link must be built by the script rather than assembled by the
