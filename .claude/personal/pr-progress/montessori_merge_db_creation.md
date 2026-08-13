@@ -177,3 +177,45 @@ No PR opened yet — all work is local on `montessori_merge_db_creation`.
   degradation — the answer is unaffected. The other two presets do word themselves.
 - Killed two hung full-suite pytest runs left over from the previous session
   (~1.9 GB RSS each, 6.5 h old).
+
+### Round 4 — the demo's segfault (root-caused from a core dump, fixed TDD)
+
+21. **SIGSEGV during a `--cramera` run.** Diagnosed from the apport core dump kept at
+    `/var/crash/_usr_bin_python3.12.1000.crash` (17:49 run; the 19:21 crash was dropped
+    because apport keeps only one file per executable). Faulting thread is the **main**
+    thread inside `casadi::SXElem::is_constant()`; `si_code=1` (SEGV_MAPERR) at
+    `0x76216ae158e5`, nowhere near `$sp` — a wild pointer, not stack overflow.
+    `_casadi.so` imports `PyEval_SaveThread`/`PyEval_RestoreThread`, so casadi **releases
+    the GIL**, and its `SXNode` reference counts are non-atomic: two Python threads
+    reading poses corrupt the graph and free a node still in use.
+22. **The racer my work added**: `SortingProgress` stored live `Pose` objects
+    (`ShapeUnderTest.target_pose`, `InsertionAttemptRecord.target_pose`), and
+    `RowRenderer._jsonable` called `pose_label(...)` → `to_position_quaternion_list()`
+    → casadi *on the HTTP thread*, while the main thread planned in casadi. This
+    violated the rule stated in `cramera/live/hooks.py` and in the plan ("the HTTP
+    thread only ever reads finished plain-Python records").
+23. **Fix**: `cramera.body_geometry.NumericPose` (frozen; `position`/`quaternion` tuples
+    of plain floats, `of_pose()`, `.label`). `pose_label` now delegates to it, so the
+    wording is unchanged. `SortingProgress` reads poses out at record time, on the
+    thread owning the world. `RowRenderer` renders a `NumericPose` as a value rather
+    than an entity row (added to the three isinstance checks).
+24. Tests: 3 in `test_body_geometry.py`, 3 in `test_montessori_sorting_progress.py`
+    (`TestNothingSymbolicIsHandedOut`, including an invariant test that no recorded
+    field is a `Point3`/`Pose`). All were failing first.
+
+### State (round 4)
+
+- cramera: 425/425 pass. montessori experiments: 201 passed, 7 failed — the same 7
+  pre-existing failures already verified on a pristine HEAD worktree in round 2/3.
+- `snapshot()` is only ever called on the plan thread, so the bridge itself was clean;
+  the leak was only `target_pose`.
+- Flagged, not fixed: `MujocoSimulator.add_entity` wraps a model recompile in
+  `self.pause()` / `self.unpause()` (mujoco_simulator.py:1731). A viewer Pause landing
+  inside that window is silently discarded when `add_entity` unpauses. Real bug in the
+  run-control feature, but it lives in shared `physics_simulators` code and is not what
+  crashed.
+- Not proven: that the physics/synchronizer thread never evaluates casadi. Evidence
+  points away from it (both segfaults were `--cramera` runs; the headless recording run
+  finished clean), but it was not ruled out by reading.
+- To capture a future crash, `/var/crash/_usr_bin_python3.12.1000.crash` must be removed
+  first — apport will not overwrite it. Left in place for the user to decide.
