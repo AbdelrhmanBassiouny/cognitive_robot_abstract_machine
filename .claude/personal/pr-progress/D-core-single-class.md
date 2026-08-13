@@ -39,19 +39,52 @@ re-verified below, with the five premises that had gone stale corrected.
    `test_underspecified_match` 9, `test_zoo_loader` 7.
    Note `-o addopts=` is required: the repo-root `pytest.ini` sets `-sv`, which
    suppresses the `::`-form ids `--collect-only` otherwise prints.
-2. **Tests first.** Port six files from mega-branch `e650d968`:
-   `test_single_class_rdr.py` (1079), `test_condition_resolver_integration.py`
-   (831), `test_ask_for_rule.py` (518), `test_backward_inference_integration.py`
-   (448), `test_fit_convergence.py` (426, rewritten around
-   `RDRDidNotConvergeError`), `test_corner_case_population.py` (217). Add
-   `expert_doubles.py` for the stubs/scripted experts currently duplicated
-   across three of them; hoist case builders onto the existing `animal.py`;
-   reuse `progress.py`'s `SpyProgressReporter`.
-3. **`single_class.py`** (554 lines) with its #68 threads applied — see below.
-4. **`rdr/exceptions.py`**: `RDRDidNotConvergeError` + the expert-required
-   exception, following the file's existing `DataclassException` shape.
-5. PR body answering every "discuss with me" thread this slice touches; record
-   the handoff on tracking issue #94.
+2. ~~**Tests first.**~~ **Done.** All six ported, plus `expert_doubles.py` and
+   `make_mammal`/`make_bird` hoisted onto `animal.py`. Two of the six shrank a lot
+   rather than being copied, because #98/#67 had already landed the unit coverage
+   they duplicated — recorded so a reviewer does not read the line count as a
+   dropped port:
+   - `test_condition_resolver_integration.py`: dropped `TestResolvedCondition`
+     (frozen/equality = what `@dataclass(frozen=True)` already guarantees),
+     `TestConditionResolverABC` (ABC's own semantics) and the live
+     `TestCornerCaseKnowledgeResolver`/`TestChainConditionResolver` blocks, all
+     covered by the 16 tests in `test_condition_resolver.py`. Kept what only the
+     live engine shows.
+   - `test_backward_inference_integration.py`: `test_backward_inference.py`'s 18
+     tests already cover traversal, `is_satisfiable`, guard flattening and index
+     caching. Kept the RDR-level wrapper and invalidation only.
+3. ~~**`single_class.py`**~~ **Done**, every listed thread applied. Two decisions
+   the plan left to the probe:
+   - The `SelfReferentialInsertionError` retry loop **is reachable** — probe in
+     `scratchpad/probe_self_ref.py` provokes it through `fit_case` with an expert
+     that answers with `context.trace.firing_anchor`. So it is **kept**, not
+     deleted, and pinned by two tests (HINT re-asks, AUTOMATIC surfaces).
+   - That probe found a **live defect**: `ExpertInterface._render_header` reads
+     `error.answer_name` on every entry of `initial_errors`, so passing the raw
+     `SelfReferentialInsertionError` (an EQL-core exception) crashed the re-prompt.
+     Fixed on this side rather than in `interface.py` — `initial_errors` is
+     documented as errors that each name their own request, so passing one that
+     does not was the bug. `_insert_rule` now raises `ConditionsNotInsertable`
+     (carrying `answer_name=AnswerName.CONDITIONS` and the anchor), chained from
+     the original.
+   - `sufficient_conditions_for` is the RDR method name, not the mega-branch's
+     `what_do_we_know_about`: `main` renamed the module-level function to
+     `get_conclusion_sufficient_conditions_from_a_rule_tree` (§21), and this method
+     is new here, so there is no rename — just not reintroducing the retired name.
+4. ~~**`rdr/exceptions.py`**~~ **Done**: a `# %% fitting` section with
+   `ExpertRequired`, `RDRDidNotConvergeError` (clashing cases + pass count) and
+   `ConditionsNotInsertable`.
+5. **Left to do**: finish the mutation checks, run `scripts/format_docstrings.py`
+   and revert its known deviations, check the `query_graph.pdf` /
+   `drawer_explanation.pdf` churn, commit, push, re-draft #159, write the PR body
+   answering the "discuss with me" threads, and record the handoff on #94.
+
+## Local result so far
+
+`test_eql_rdr` **230 passed / 0 failed**, against the 164-passing baseline — 66 new
+tests, no baseline test changed. One convergence-loop decision worth review: the
+pending recompute skips cases whose target is `...`, so `fit(cases, [...] * n)`
+stays single-pass rather than never converging.
 
 ## What this slice consumes from #98 (do not rebuild)
 
