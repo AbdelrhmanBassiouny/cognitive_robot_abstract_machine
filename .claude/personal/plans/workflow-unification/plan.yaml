@@ -3289,7 +3289,8 @@ items:
     title: "Move the integration branch's verdict to CI, with a stable branch and a targeted job"
     branch: null
     track: stack-tooling
-    depends_on: []
+    depends_on:
+    - integration-branch
     status: not_started
     notes: >
       Split out of `integration-branch` (#154) on 2026-08-13, on the user's decision, rather than

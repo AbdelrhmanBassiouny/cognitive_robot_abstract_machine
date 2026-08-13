@@ -6884,3 +6884,105 @@ whole run.
 `integration_test_command` in `stack.toml`, `--test`/`--no-test`, `TestCommandNotConfiguredError`
 and `_run_tests` all still exist on #154 and all still work. Part D is what removes them, so
 nothing is half-migrated in the meantime.
+
+## Update 2026-08-13 (resolved): #154's naming round, and a contract test a reply had promised but not written
+
+`/plan-item-resolve workflow-unification integration-branch`, session
+https://claude.ai/code/session_01RhwNdD7ChskkomV1TCiRLU. Seven new review threads, all applied in
+`f83d5133`; 599 tests across the three directories CI runs, was 595.
+
+### A name settled by measuring what the runner does with it
+
+Asked for something simpler than `semantic break`, the user proposed `TestFailure`. The direction
+was right - the thing is that the suite fails - and the literal name is one pytest penalises:
+**a module-scope class named `Test*` in a test file is collected**, and `test_integration.py`
+imports these names directly. Probed rather than argued: a frozen dataclass `TestFailure` imported
+into a test module emits `PytestCollectionWarning: cannot collect test class 'TestFailure' because
+it has a __init__ constructor`. `TestCommandNotConfiguredError` escapes it today only because the
+tests reach it as `integration.TestCommandNotConfiguredError` rather than importing it - so the
+existing file is not evidence that the name is safe.
+
+`IntegrationTestFailure` keeps the user's words and dodges the prefix, and was their call once the
+measurement was in front of them. `locate-break` became `locate-failure`, `escalate` became
+`block-branch` (the vocabulary `Configuration.blocking_labels` and `WithholdBlockedBranch` already
+use, and what the command's own docstring already claimed while the command was called something
+else), and the prose in `SKILL.md` and `README.md` followed. `breaks_against` and the comment
+prefix stay: the objection was to the noun, and those are verb phrases that read correctly.
+
+Worth carrying: a naming question is intent and belongs to the user, but a name can still have a
+*measurable* cost, and putting that measurement in front of them is different from arguing for a
+different name. Two rounds of this plan have now been settled that way rather than by preference.
+
+### The status answers whether it was carried, and one type absorbs the other
+
+`TipStatus` members carry a `TipStatusSpecification` with `spelling` and a `carried` bool, so
+`reached_the_build` is `self.status.carried` rather than membership of a set. The gain is not
+tidiness: a status added later is *answered* by having to give `carried` a value, where the set was
+answered by nothing and would have silently reported the new status as left out.
+
+That made the second half possible. `unreviewed` is a `TipStatus` member now, so the loose
+`UNREVIEWED_STATUS` constant and the whole `UnreviewedBranch` class are gone: every branch a build
+considered is one `PullRequestStackTipOutcome`, and `collided_with` generalises to `attributed_to`
+- *the other branch this outcome is about*, whether that is the sibling it conflicts with, the base
+it is stale against, or the draft beneath it. Those were the same question asked three ways.
+
+**One ask was answered differently, for a measured reason, and left open.** The user asked for the
+enum to *inherit* from the specification. `class TipStatus(TipStatusSpecification, Enum)` builds,
+but the member stops being a `str`, and `json.dumps` then refuses the report outright - taking every
+`document[key] == TipStatus.X` comparison with it. Each member carries a specification instead,
+unpacked by a `__new__` that keeps the `str` value. Same dataclass, same field; only the inheritance
+edge is missing, and only because `StrEnum` owns `__new__`.
+
+**Pushed back on one half of another**, also left open: `UnreviewedBranch` should not become a field
+of `stack.py`'s `Branch`. That is the shared board model the maintenance pass and the dashboard also
+read, and being unreviewed *for a build* is the result of one build's selection walk rather than a
+property of a branch - `attributed_to` names the draft *beneath* it, which is a fact about a chain.
+
+### A promised test that did not exist
+
+An earlier round's reply on the report-keys thread said the literals survive in
+`test_the_report_keys_are_the_ones_a_caller_parses`, "which asserts `{key.name: str(key) for key in
+ReportKey}` against a written-out mapping". **That test was never written.** Found by renaming a
+wire key in this round and noticing nothing failed.
+
+The gap was narrower than the reply implied, and measuring it is what made the fix honest. Most
+`ReportKey` members mirror a dataclass field that `asdict` produces, so renaming one *does* fail
+wherever it is read - mutation-checking `TIPS` confirms it. `STATUS` and `EXIT_CODE` do not:
+`as_json` injects them through the enum, so writer and reader change together and the rename is
+invisible. Those two are also the first thing `/integration-conflict-triage` matches on. The test
+exists now and its docstring says which half it is really guarding.
+
+Generalizable, and uncomfortable: **a reply describing a test is not a test.** This plan already
+records the rule that single-sourcing a contract deletes a guard, and this is the failure mode one
+step later - the guard was correctly identified, its replacement was described on the thread in
+detail, and nothing checked that the description was true. Anything a review reply claims to have
+added is worth grepping for before the thread is resolved.
+
+### The same shape found in the labels, from a different comment
+
+Asked why the labels are not a `StrEnum`, the answer had the same structure. `DefaultLabel` names
+all four; the wire spelling matters because a fork's owner creates these by hand and GitHub does not
+create a missing one; so one contract test pins member to value. Applying it also showed the guard
+had been *accidentally* spread: before, renaming `NEEDS_RESOLUTION` failed three tests, two of them
+about withholding and promotion rather than about a label's spelling. Both read the enum now, so
+each fails only for its own reason.
+
+### Part D became its own item
+
+`integration-branch-ci-verdict`, recorded in the section above. The user's two newest comments
+expanded it well past what was deferred - a stable/candidate branch pair, and a pytest marker with a
+job that runs only what it marks - and the prefer-the-change test comes out in favour of stacking:
+strip the deletions to #154's files and a whole Actions client, CI job, marker and second long-lived
+branch remain.
+
+One fact found while costing it is the load-bearing one for that item: `ci.yml` triggers on `push`
+to `main` and on `pull_request` only, so **a pushed integration branch gets no CI unless a pull
+request exists for it**. That is why the user's "a PR into the existing stable integration branch"
+framing is the only shape that reaches a verdict at all, rather than one option among several.
+
+### A base merge landed mid-session
+
+`main`'s ORM-interface change (#543) arrived on this branch from outside the session while the round
+was being written - 145,000 deletions, none of them reachable from a `.claude/` diff. Merged and the
+whole suite re-run rather than trusting the merge, per the standing rule that ancestry answers
+"did I lose anything" and only running the tests answers "does it still work".
