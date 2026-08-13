@@ -74,7 +74,7 @@ with world.modify_world():
 
 
 visualization = WorldVisualization.from_environment(
-    world, default_backend=VisualizationBackend.CRAMERA
+    world, default_backend=VisualizationBackend.RERUN
 ).start()
 
 pr2 = PR2.from_world(world)

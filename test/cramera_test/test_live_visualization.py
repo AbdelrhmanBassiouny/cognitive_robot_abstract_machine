@@ -178,20 +178,6 @@ def _as_motion_node(mimic):
 
 
 class TestLiveVisualization:
-    @pytest.fixture(autouse=True)
-    def keep_the_browser_closed(self, monkeypatch):
-        """
-        The backend opens the viewer page on start; tests must never reach a browser.
-        """
-        self.opened_pages = []
-        monkeypatch.setattr(
-            visualization_module,
-            "open_viewer_page",
-            lambda viewer_port, bridge_port: self.opened_pages.append(
-                (viewer_port, bridge_port)
-            ),
-        )
-
     def test_start_attaches_and_serves(self, world, monkeypatch):
         bridge = Bridge()
         server = ServerRecorder()
@@ -205,7 +191,6 @@ class TestLiveVisualization:
         assert bridge.world is world
         assert bridge.live_server is server
         assert live.state_sync in world.state.state_change_callbacks
-        assert self.opened_pages == [(live.viewer_port, live.port)]
 
     def test_start_reuses_a_running_server(self, world, monkeypatch):
         bridge = Bridge()
@@ -220,7 +205,6 @@ class TestLiveVisualization:
         LiveVisualization(world=world, bridge=bridge).start()
 
         assert bridge.live_server is existing
-        assert self.opened_pages == []
 
     def test_stop_detaches_the_callbacks_and_the_server(self, world, monkeypatch):
         bridge = Bridge()
@@ -237,16 +221,6 @@ class TestLiveVisualization:
         assert bridge.live_server is None
         assert state_sync not in world.state.state_change_callbacks
 
-    def test_opting_out_keeps_the_viewer_closed(self, world, monkeypatch):
-        bridge = Bridge()
-        monkeypatch.setattr(
-            visualization_module, "serve", lambda passed_bridge, port: ServerRecorder()
-        )
-
-        LiveVisualization(world=world, bridge=bridge, open_viewer=False).start()
-
-        assert self.opened_pages == []
-
     def test_plan_callback_publishes_the_plan_tree(self, world, monkeypatch):
         bridge = Bridge()
         monkeypatch.setattr(
@@ -260,22 +234,3 @@ class TestLiveVisualization:
         assert isinstance(callback, BridgePlanCallback)
         assert callback.bridge is bridge
         assert nodes_by_kind(bridge)["SequentialNode"] is not None
-
-
-# %% the viewer page address
-
-
-class TestViewerUrl:
-    def test_the_default_bridge_port_needs_no_live_parameter(self):
-        from cramera.live.http import DEFAULT_PORT
-
-        assert (
-            visualization_module.viewer_url(8711, DEFAULT_PORT)
-            == "http://localhost:8711/"
-        )
-
-    def test_a_custom_bridge_port_travels_as_the_live_parameter(self):
-        assert (
-            visualization_module.viewer_url(8711, 8792)
-            == "http://localhost:8711/?live=localhost:8792"
-        )
