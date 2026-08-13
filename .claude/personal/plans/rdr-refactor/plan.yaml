@@ -535,7 +535,31 @@ items:
     the bootstrap commit and changed no files - and merged rather than force-pushed so a session
     working locally is unaffected. mergeable_state clean. The port now starts from a base that
     carries main and has live CI, so the note above about the baseline having to be local no longer
-    applies.'
+    applies.
+    2026-08-13: the port is done and pushed as 04dc904c; PR #159 body rewritten and left in draft.
+    single_class.py, the three new exceptions (ExpertRequired, RDRDidNotConvergeError,
+    ConditionsNotInsertable) and six test files plus expert_doubles.py; make_mammal/make_bird hoisted
+    onto animal.py. Every listed #68 thread applied. Three findings the plan did not predict.
+    (1) The SelfReferentialInsertionError retry loop the plan said to delete if unprovokable IS
+    reachable - an expert answering with context.trace.firing_anchor reaches
+    conclusion_selector.py:121 through fit_case - so it is kept and pinned by two tests rather than
+    removed. (2) Probing that surfaced a live defect: ExpertInterface._render_header reads
+    error.answer_name on every entry of initial_errors, so passing the raw EQL-core exception
+    crashed the re-prompt with AttributeError. Fixed on this side, not in interface.py, because that
+    parameter is documented as errors each naming their own request - the new ConditionsNotInsertable
+    carries answer_name and the anchor, chained from the original. (3) The baseline expectation in
+    the saved plan was stale: D-core-expert 82eb69fb is 164 passed / 0 failed, not the 150 recorded
+    (150 was e52d74b4, pre-cascade; roadmap section 21 already had 164). This branch is 230 passed /
+    0 failed with zero baseline ids lost, and test_eql is 1180 passed / 3 skipped / 0 failed.
+    Mutation-checked per the standing lens, and it earned its keep: 6 of 7 mutants died at once but
+    the pre-raise-save mutant SURVIVED, because every insertion also saves, so the test asserting
+    `rdr in saver.saved` constrained nothing - the fourth instance on this plan of an assertion that
+    looked specific and was not. Rewritten to compare the save count against the rule count, which
+    kills it. Two API-shape questions deliberately left to the developer on the PR rather than
+    decided: whether the AUTOMATIC/HINT gate on the retry should instead key on "did we ask the
+    expert", and that building CaseContext once (as the plan required) makes
+    CaseContext.conclusion_domain always populated, contradicting its field docstring on #98''s
+    interface.py. Full account in roadmap.md section 22.'
 - id: d-core-backend
   title: 'RDR engine: underspecified-query RDR backend'
   branch: D-core-backend

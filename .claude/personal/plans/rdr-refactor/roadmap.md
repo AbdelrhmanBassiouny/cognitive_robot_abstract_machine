@@ -1782,3 +1782,116 @@ unlanded PR over a new one. Recorded on issue #102 rather than acted on here.
   themselves. This pass pushed the cascade merge to it anyway, because a steward cascade that stops
   below `D-core-expert` leaves #159 stranded — but it was **not** re-drafted, per the standing rule
   that a pull request the developer marked ready is theirs.
+
+## 22. Addendum (2026-08-13) — `d-core-single-class` (#159): the engine landed, and what the port found
+
+The port §20 bootstrapped ran. `single_class.py`, three new exceptions and six engine test files are
+pushed as `04dc904c`; #159's body is rewritten and it stays a draft. Every #68 thread §20 listed is
+applied. What follows is only the parts the plan did not already decide.
+
+### The baseline expectation in the saved plan was stale, and the note said so twice
+
+§20's *"Next"* step 1 said to expect `test_eql_rdr` **150 passed**. The measured baseline on
+`D-core-expert` `82eb69fb` is **164 passed / 0 failed**. 150 was `e52d74b4`, and §21's cascade then
+merged `D-core-support` into that branch, contributing its 14. §21 *already records 164* — the
+progress note was simply written before it and never reconciled.
+
+This is the same staleness class §5, §14, §18 and §19's own follow-up each caught, with a new
+wrinkle: here the two records disagreed and **the roadmap was the correct one**. A session following
+the progress note's number alone would have opened by "investigating" 14 phantom tests. Worth the
+standing habit: when a saved plan states a measured number, re-derive it rather than trusting it,
+and check the roadmap for a later measurement of the same thing.
+
+Recorded properly this time: 164 ids across 15 files, saved as a sorted list and diffed rather than
+counted. This branch is **230 passed / 0 failed** — 66 added, **zero baseline ids lost** — and
+`test_eql` is **1180 passed / 3 skipped / 0 failed**.
+
+One mechanical detail worth carrying, since it cost a wasted run: `--collect-only` prints nothing in
+`::` form unless `-o addopts=` clears the repo-root `pytest.ini`'s `-sv`.
+
+### The retry loop the plan said to consider deleting is reachable
+
+§20's engine list ended with *"probe whether the `SelfReferentialInsertionError` retry loop is
+reachable (HINT-mode test). If it cannot be provoked, delete it."* It **can** be provoked, and by
+something an ordinary expert could do rather than a contrived one: answering with
+`context.trace.firing_anchor`, which `conclusion_selector.py:121` rejects because splicing a node
+beneath itself would close a cycle in the DAG. The probe reaches it through `fit_case` in five lines.
+
+So the loop is **kept**, not deleted, and pinned by two tests: HINT re-asks, AUTOMATIC surfaces.
+Worth noting the shape of the near-miss — the plan's instinct was that this was dead code, and one
+run of the probe was the difference between keeping a live recovery path and removing it.
+
+### The probe found a live defect next door, fixed on this side rather than upstream
+
+Passing the raw `SelfReferentialInsertionError` into `ask_for_conditions(prior_errors=[…])` crashes:
+`ExpertInterface._render_header` does `error.answer_name` for every entry of `initial_errors`, and an
+EQL-core exception has no such field. So the re-prompt — the entire point of the retry loop — raised
+`AttributeError` instead of re-asking.
+
+Fixed **here**, not in `interface.py`, and the reason is a contract rather than a preference:
+`initial_errors` is documented as errors that each name their own request, and `_validate` builds
+exactly that shape. Passing one that does not was the caller's bug. `_insert_rule` now raises
+`ConditionsNotInsertable`, carrying `answer_name=AnswerName.CONDITIONS` and the offending anchor,
+chained from the original with `raise … from`.
+
+This is the third defect on this plan found by *exercising* a path rather than reading it (§16's
+`==`-on-symbolic-expressions, §12's `holds_for` reachability probe, now this). None was visible in
+the diff.
+
+### The mutation lens caught a vacuous assertion of this session's own
+
+Seven mutants; six died immediately at exactly the tests that name their behaviour. The
+**pre-raise-save mutant survived**: deleting `model_saver.save(self)` before
+`raise RDRDidNotConvergeError` changed nothing, because `_splice_rule` already saves on every
+insertion, so `assert rdr in saver.saved` was true no matter what the giving-up path did.
+
+That is the **fourth** instance on this plan of an assertion that looked specific and was not (§16's
+nine `==` comparisons, §18's `test_null_saver_writes_nothing_for_a_fitted_tree`, §19's tally of five
+review-driven removals, now this). The lesson is sharper than "write specific assertions": this one
+*was* specific — it named the exact object and the exact collection — and was still vacuous, because
+a **different** code path already established the fact it asserted. Membership tests are especially
+exposed to this. Rewritten to compare the save count against the number of rules inserted, which
+kills the mutant.
+
+Also worth recording as method: running the mutants was ~6 minutes of wall clock and found a defect
+in the test suite that reading it twice had not. It is cheap enough to be the default, not the
+exception.
+
+### Two API-shape questions deliberately left open on the PR
+
+Neither is a defect; both are places where the honest answer is the developer's:
+
+- **The retry's gate.** The mega-branch keyed it on `resolution_mode`, which conflates *"was this
+  auto-resolved"* with *"is anyone watching to answer differently"*. With **no resolver set at all**,
+  the expert authored the condition and still gets no second chance in AUTOMATIC mode. The gate
+  arguably belongs on "did we ask the expert for this condition". Kept the mega-branch's behaviour
+  rather than widening the port's scope.
+- **`CaseContext.conclusion_domain` is now always populated.** Building the context **once** — which
+  §20 required — means the domain is present on the conditions-only path too, contradicting the field
+  docstring on #98's `interface.py` that says it is `None` there. Harmless at runtime; the docstring
+  is now inaccurate, and correcting it means touching #98's file.
+
+### Two ported files shrank a lot, and that is the port working
+
+`test_condition_resolver_integration.py` and `test_backward_inference_integration.py` are much
+smaller than their mega-branch originals, because #98 and #67 had since landed the unit coverage they
+duplicated: `test_condition_resolver.py`'s 16 tests and `test_backward_inference.py`'s 18. What was
+dropped is precisely the shape §18/§19 removed five times under review — `frozen`/equality tests that
+restate a `@dataclass(frozen=True)` declaration, and ABC-instantiation tests that restate the
+language. What was kept is what only the live engine can show.
+
+Recorded on the PR too, so a reviewer does not read the line count as a dropped port. The general
+point for the remaining slices: a mega-branch file is a *starting* point, and the right first
+question is which of its assertions a sibling PR has since made redundant.
+
+### Small things
+
+- The RDR's backward-inference method is `sufficient_conditions_for`, not the mega-branch's
+  `what_do_we_know_about`. Not a rename — the method is new here — just not reintroducing the name
+  `main` retired in §21/#161.
+- `fit(cases, [...] * n)` stays single-pass: the convergence recompute skips cases whose target is
+  the sentinel, since a case with no ground truth has nothing to converge against.
+- `format_docstrings.py` again rewrapped unrelated field spacing, this time in `animal.py` — the
+  **sixth** recorded instance. Reverted there; kept in the files this PR writes whole, the same call
+  §14/§18/§19 made. No `...`-as-sentence-end regression this round.
+- CI queued on the push, as §21's finding predicts now that the base has moved.
