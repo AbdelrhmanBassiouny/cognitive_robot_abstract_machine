@@ -166,8 +166,14 @@ No PR opened yet — all work is local on `montessori_merge_db_creation`.
 ### State (round 3)
 
 - cramera: 422/422 pass.
-- Postgres provisioning is blocked on the user: no passwordless sudo, and the
-  `semantic_digital_twin` role fails password auth on the local 5432 cluster (the 5433
-  cluster their snippet points at is down). Command handed to them in chat.
+- Postgres: the user ran the provisioning command;
+  `franka_montessori_sorting_results` on the local 5432 cluster now holds iteration 1
+  (all five shapes `fell_through`), recorded with
+  `headless_realtime_pacing_runner --world2 --no-rviz --iterations 1
+  --exit-after-sorting`. All three episodic presets verified against it through a real
+  `Bridge`.
+- The success-rate preset gets no verbalization sentence: krrood has no grammar rule for
+  `Sum(CaseWhen(...))`, so `QueryVerbalization.of_expression` returns None. Documented
+  degradation — the answer is unaffected. The other two presets do word themselves.
 - Killed two hung full-suite pytest runs left over from the previous session
   (~1.9 GB RSS each, 6.5 h old).
