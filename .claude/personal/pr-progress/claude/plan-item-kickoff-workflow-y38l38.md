@@ -46,14 +46,25 @@ TDD throughout: every part above gets its failing test in
   restoring the first-paragraph fallback fails the awaiting-summary test, dropping the new
   status fails the exit-status one.
 
+- Step 5 done. Asked rather than guessed, because the roadmap said to fold the reversal
+  into #155 while the notes' "a PR I marked ready myself is finished" rule said not to push
+  to it. The user's answer settled it — "no emails and no notifications at all, a clear
+  session summary; if that is doable in 155 then do it". Pushed `21599cca` to
+  `claude/routine-prompt-refresh-ps5l3z`: notifications off, with the reason (the links
+  outlive the run in each fork PR's description, and `pending-promotions` rebuilds the
+  table), plus the tool fact that `update_trigger` has no notification field so an existing
+  Routine must be re-registered. Left ready rather than re-drafted, per that same rule.
+- One self-inflicted defect, found and fixed: rewriting #155's description dropped its
+  `## Promote` section, which is exactly the illegal state this PR's own
+  `RecordedPromotionLinkMissingError` refuses. Restored the original link verbatim, then
+  verified it end to end by reading it back through this PR's own `promotion_link_in`
+  against the live API. Worth carrying: a whole-body description write silently discards
+  a section written by the promotion pass, so read the current body before replacing it.
+- Dashboard republished at the same URL; no drift, nothing auto-corrected.
+
 ## Next
 
-- **Step 5 (the #155 fold) is the one thing outstanding, and it is blocked on a decision.**
-  The roadmap says to push the "turn its completion email on" reversal onto #155's branch.
-  But #155 is out of draft and carries `cram2-link-sent`, which means the user marked it
-  ready themselves — and the notes' "When your PR's job ends" rule says a PR the user took
-  out of draft is finished: leave it ready, push no further commits. Asked rather than
-  guessed. If the answer is yes, the change is one paragraph in
-  `.claude/skills/stacked-pr-maintenance/routine-prompt.md`.
+- Nothing outstanding on #162 itself. It is a draft, mergeable against #158, with CI
+  running on `93edfb17`.
 - Note: `subscribe_pr_activity` on tracking issue #102 was refused by the permission
   classifier this session, so this session is not subscribed to it.
