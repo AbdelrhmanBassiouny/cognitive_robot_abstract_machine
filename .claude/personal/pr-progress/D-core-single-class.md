@@ -74,17 +74,34 @@ re-verified below, with the five premises that had gone stale corrected.
 4. ~~**`rdr/exceptions.py`**~~ **Done**: a `# %% fitting` section with
    `ExpertRequired`, `RDRDidNotConvergeError` (clashing cases + pass count) and
    `ConditionsNotInsertable`.
-5. **Left to do**: finish the mutation checks, run `scripts/format_docstrings.py`
-   and revert its known deviations, check the `query_graph.pdf` /
-   `drawer_explanation.pdf` churn, commit, push, re-draft #159, write the PR body
-   answering the "discuss with me" threads, and record the handoff on #94.
+5. ~~PR body + handoff.~~ **Done.** Pushed as `04dc904c`, #159's body rewritten,
+   PR left in draft. Mutation checks run, formatter churn reverted, no PDF churn,
+   `plan.yaml` + roadmap §22 saved.
 
-## Local result so far
+## Result
 
-`test_eql_rdr` **230 passed / 0 failed**, against the 164-passing baseline — 66 new
-tests, no baseline test changed. One convergence-loop decision worth review: the
-pending recompute skips cases whose target is `...`, so `fit(cases, [...] * n)`
-stays single-pass rather than never converging.
+| | |
+|---|---|
+| baseline (`D-core-expert` `82eb69fb`) | `test_eql_rdr` **164 passed / 0 failed** |
+| this branch (`04dc904c`) | `test_eql_rdr` **230 passed / 0 failed** |
+| ids lost from baseline | **none** (compared as sorted lists) |
+| wider sweep | `test_eql` **1180 passed / 3 skipped / 0 failed** |
+| mutants | 7 run; 6 died at once, **1 survived and exposed a vacuous test of mine** |
+
+The surviving mutant is the interesting one: deleting the pre-raise
+`model_saver.save(self)` changed nothing, because `_splice_rule` already saves on
+every insertion, so `assert rdr in saver.saved` was true regardless. Fourth
+instance on this plan of an assertion that looked specific and was not — and this
+one *was* specific, just already made true by a different code path. Rewritten to
+compare the save count against the rule count; the mutant now dies.
+
+## Nothing is outstanding on this branch
+
+CI queued on the push (the base has moved, so §21's fix holds) — not watched, per
+the standing rule; check it by hand. Two API-shape questions are raised on the PR
+for the developer and deliberately not decided: the AUTOMATIC/HINT gate on the
+retry loop, and `CaseContext.conclusion_domain` now always being populated, which
+makes its field docstring on #98's `interface.py` inaccurate.
 
 ## What this slice consumes from #98 (do not rebuild)
 
