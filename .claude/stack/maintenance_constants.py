@@ -52,3 +52,11 @@ PROMOTION_LINK_LABEL = "cram2-link-sent"
 """
 Marks a branch whose link has been built, so a later pass does not rebuild it.
 """
+
+RECORDED_PROMOTION_LINK_PATTERN = re.compile(r"https://[^\s`]+")
+"""
+Matches the link read back out of the description it was recorded in.
+
+Backticks end a match as whitespace does, so a description that wraps the link in code
+formatting still reads back as the link rather than as the formatting around it.
+"""
