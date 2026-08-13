@@ -360,3 +360,32 @@ calls), `KinematicStructureEntity.has_collision` ~31 ms (158 calls),
 `World.bodies_with_collision` ~24 ms, and ~1,545 casadi `DM` constructions. No single
 knob — this is the broad-phase optimization the module docstring already records as not
 yet done. Making it cheap is what would let the monitor tick often *and* fast.
+
+### Round 8 — the stutter, the escape hatch, and a theory that turned out wrong
+
+42. **Ticking inline stutters visibly.** A 99 ms tick against a 50 Hz control loop freezes
+    the motion for five control periods, then the pacer runs cycles back-to-back to catch
+    up against simulated time. Lowering the rate changes how *often* it stops, never how
+    *long*, so tuning cannot fix it.
+43. **`--event-monitor` / `--no-event-monitor`** (`BooleanOptionalAction`, default True).
+    Implemented as a null object, `WatchesNothing`, plus a `WatchesForEvents` Protocol, so
+    no `None` checks leak into the sort. `_insert_all_shapes` gained `watch_events`.
+    Deliberately *not* made the launcher default: segmind events are persisted per
+    attempt, so flipping it silently would change what the database holds — the launcher
+    only advertises it in `--help`. 4 tests, failed first.
+44. **The "any two casadi threads corrupt each other" theory is wrong.** Three probes in
+    `scratchpad/`, none reproduced a crash: 4 threads on disjoint SX graphs (20 s);
+    4 threads reading `global_pose` from the *same* world (30 s, ~54k reads);
+    detector ticks against symbolic compilation (90 s, 421 ticks / 41,411 compiles).
+    Rounds 4–7 all reasoned from that wrong premise.
+45. **Better hypothesis, not yet reproduced:** every probe lacked a *writer*. The real
+    demo's physics thread calls `_sim_to_world` → `notify_state_change()` at 100 Hz,
+    invalidating the world's memoized forward-kinematics caches and *freeing* the casadi
+    objects they held. That matches the dump's thread 32 exactly —
+    `PyObject_SetAttr → SwigPyObject_dealloc → _wrap_delete_SX`, an attribute assignment
+    dropping the last reference to a casadi object. If it holds, this is a cache-
+    invalidation race, not a compute race: the monitor could go back on its own thread,
+    and *any* reader thread is exposed (including cramera's snapshot), which is consistent
+    with every crash having been a `--cramera` run.
+46. **Next probe:** add a thread hammering `notify_state_change()` while another reads
+    `global_pose`, and see whether it segfaults within seconds.
