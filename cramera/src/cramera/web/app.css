@@ -370,3 +370,16 @@ body.graph-full-open{overflow:hidden}
 .models-page .mode-assignment code{font-size:13.5px}
 .models-page .posterior-variables .lp-row{font-size:14px}
 .models-page .answer-empty,.models-page .qerr{font-size:13.5px}
+
+/* %% topbar view menu: which panels are shown */
+.view-menu{position:relative}
+.view-menu-toggle{
+  padding:7px 16px;border-radius:var(--radius);font-size:13px;font-weight:600;cursor:pointer;
+  color:var(--muted);background:transparent;border:1px solid var(--line2);
+}
+.view-menu-toggle:hover{color:var(--ink);background:rgba(255,255,255,.04)}
+.view-menu-list{
+  position:absolute;right:0;top:calc(100% + 8px);z-index:50;min-width:280px;
+  background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);
+  box-shadow:var(--shadow);padding:10px 14px;display:flex;flex-direction:column;gap:2px;
+}

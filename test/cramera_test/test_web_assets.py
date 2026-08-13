@@ -156,6 +156,9 @@ class TestJsUnits:
     def test_model_constraints(self):
         self.run_node("test_model_constraints.js")
 
+    def test_panel_visibility(self):
+        self.run_node("test_panel_visibility.js")
+
     def test_response_util(self):
         self.run_node("test_response_util.js")
 
