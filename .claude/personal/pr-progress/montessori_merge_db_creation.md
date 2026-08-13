@@ -333,3 +333,30 @@ and removes per shape on top of it. That holds today — but a second long-lived
   (once for the motion executor, once for the nested segmind one). Harmless, but it does
   double the snapshot work at 5 Hz.
 - `TFPublisher` still unfixed (see round 5).
+
+### Round 7 — the cost of serializing the monitor
+
+38. **Measured, not guessed:** one detector tick is **99 ms** (median over 10, warm) for a
+    single tracked shape. The module docstring's "around 0.2s" was pessimistic, but a
+    control cycle is 20 ms, so a tick is still five control periods.
+39. **Bug in round 6's rate limiter:** `_last_tick_time` was stamped *before* the tick, so
+    the rate was start-to-start. With a 99 ms tick and a 200 ms interval the monitor ran
+    99 ms of every 200 ms — half the plan thread, back-to-back. Now stamped after the
+    tick, so the rate is the *gap*. `_last_tick_time` became `Optional[float]` (None =
+    never ticked = due now), and a `clock` field was added so the tests drive time
+    instead of sleeping.
+40. **Rate lowered to 2 Hz** (`DEFAULT_TICK_RATE_HZ`), the user's choice from a costed
+    menu: ~17% of the plan thread and ~17 ticks per 10 s insertion, against 33% and ~33
+    at 5 Hz. Risk accepted: brief finger contact / loss-of-contact transitions are the
+    samples most likely to be missed, and those are what `insertion_diagnosis` reads to
+    tell `DROPPED_BEFORE_INSERTION` from `NOT_PICKED_UP`.
+41. Tests: `TestTicksAreSpacedByTheGapBetweenThem` (2, failed first) with
+    `AdvancesOnlyWhenTold` / `TicksOnAClockItControls` mimics.
+
+### Where the 99 ms goes (profiled, for whoever does the broad phase)
+
+Per tick, roughly: `ShapeCollection.as_bounding_box_collection_at_origin` ~50 ms (24
+calls), `KinematicStructureEntity.has_collision` ~31 ms (158 calls),
+`World.bodies_with_collision` ~24 ms, and ~1,545 casadi `DM` constructions. No single
+knob — this is the broad-phase optimization the module docstring already records as not
+yet done. Making it cheap is what would let the monitor tick often *and* fast.
