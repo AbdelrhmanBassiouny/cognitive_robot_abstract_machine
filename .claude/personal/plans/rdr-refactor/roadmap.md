@@ -1757,11 +1757,22 @@ unlanded PR over a new one. Recorded on issue #102 rather than acted on here.
 
 ### Carried forward
 
-- **`main` has two unfinished renames of its own**, found by the cascade and not fixed here since
-  they are `main`'s: `backward_inference.py:180,246` still say `:class:`ConclusionKnowledge`` in
-  docstrings, and `test_backward_inference.py:81-82` still name `what_do_we_know_about` in a test
-  name and its docstring. `AGENTS.md`'s own rule — a rename is finished only when every reader of
-  the old name reads the new one, docstrings included — is the one being broken.
+- **`main`'s two unfinished renames — fixed the next day as draft PR #161** (`bug`). Reported here
+  first as `main`'s and out of this pass's scope; the developer asked for them fixed. There were
+  **five** stale readers, not the four this section first counted — `test_condition_resolver.py:5`
+  on `main` was stale too. `AGENTS.md`'s own rule is the one that was being broken: a rename is
+  finished only when every reader of the old name reads the new one, docstrings included.
+  Two calls worth carrying: the test is renamed for its *behaviour*
+  (`test_backward_inference_resolves_conditions_root_from_any_tree_node`) rather than for the
+  function it calls, since naming it after the identifier is what let it go stale; and `knowledge`
+  is left alone throughout, because it is still live vocabulary (`target_knowledge`,
+  `current_knowledge`, "backward-inference knowledge") and only the class and the function moved.
+  Folding it into the stack's base PR #63 was considered and rejected on the mechanical test —
+  `git ls-tree main` on the three paths is non-empty, so it is not a change to unlanded work, and
+  #41, which introduced them, has merged. It is conflict-free against all four stack branches
+  (measured), because the one docstring this pass had already fixed on `D-core-expert` during the
+  cascade was re-wrapped on `main` to match the spelling the stack carries — otherwise the cascade
+  would have had to resolve the same fix twice, spelled two ways.
 - **`black` is not clean on this stack, and was not before this pass**: `backward_inference.py`,
   `test_backward_inference.py` (both already unformatted on `main`) and `serialization.py` (which
   this pass never touched). Left alone rather than swept in. Sixth entry in the running case for the
