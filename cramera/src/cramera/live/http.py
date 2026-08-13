@@ -17,6 +17,10 @@ HTTP endpoints of the live bridge (default port 8765).
     GET /chart   {signature, title,
                   nodes: [{id, parent, name, class_name, life_cycle, observation}],
                   edges: [{from, to, kind}]}
+    GET /presets {ok, title, presets: [{text, code}], variables: [name]}
+    GET /run     {ok, title, paused, looping, restart_pending, activity, iteration}
+    POST /eql    {code} -> the rendered answer rows
+    POST /run    {command} -> the run state that command produced
     POST /move   queue an object move (applied on the simulation thread)
 
 Every ``pose`` above is ``[x, y, z, qx, qy, qz, qw]``.
@@ -36,10 +40,18 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
+from dataclasses import asdict
+
 from typing_extensions import Any, Dict, Optional
 
 from cramera.logging_setup import get_logger
 from cramera.live.bridge import Bridge, MalformedMoveRequest, MoveRequest
+from cramera.live.query import NoQuerySourceRegistered
+from cramera.live.run_control import (
+    NoRunControlRegistered,
+    RunCommand,
+    UnknownRunCommand,
+)
 
 logger = get_logger(__name__)
 
@@ -53,9 +65,9 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
 
     MODEL_MESH_PATH_PATTERN = re.compile(r"^/model_mesh/(\d+)/(\d+)\.[A-Za-z0-9]+$")
     """
-    ``/model_mesh/<model index>/<reference index>.<extension>`` — the extension is
-    read only by the frontend to pick a mesh loader; the server resolves purely from
-    the two numeric indices.
+    ``/model_mesh/<model index>/<reference index>.<extension>`` — the extension is read
+    only by the frontend to pick a mesh loader; the server resolves purely from the two
+    numeric indices.
     """
 
     def __init__(self, *args: Any, bridge: Bridge, **kwargs: Any) -> None:
@@ -113,10 +125,39 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_model_urdf()
         if self.path.startswith("/model_mesh"):
             return self._send_model_mesh()
+        if self.path.startswith("/presets"):
+            return self._send_query_presets()
+        if self.path.startswith("/run"):
+            return self._send_run_control_state()
         if self.path.startswith("/info"):
             return self._send_json(self.bridge.status())
         self.send_response(404)
         self.end_headers()
+
+    def _send_query_presets(self) -> None:
+        """
+        Serve the running demo's ready-made queries, or say why there are none.
+        """
+        try:
+            payload = {
+                "ok": True,
+                "title": self.bridge.query_title(),
+                "presets": [asdict(preset) for preset in self.bridge.query_presets()],
+                "variables": self.bridge.query_variables(),
+            }
+        except NoQuerySourceRegistered as error:
+            payload = {"ok": False, "error": str(error), "presets": []}
+        self._send_json(payload)
+
+    def _send_run_control_state(self) -> None:
+        """
+        Serve where the running demo stands, or say why nothing can be driven.
+        """
+        try:
+            payload = {"ok": True, **self.bridge.run_control_payload()}
+        except NoRunControlRegistered as error:
+            payload = {"ok": False, "error": str(error)}
+        self._send_json(payload)
 
     def _query_value(self, name: str) -> Optional[str]:
         """
@@ -203,7 +244,67 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         Entry point :class:`~http.server.BaseHTTPRequestHandler` dispatches a ``POST``
         request to, found by name as ``"do_" + self.command``.
         """
+        if self.path.startswith("/eql"):
+            return self.answer_requested_query()
+        if self.path.startswith("/run"):
+            return self.apply_requested_run_command()
         self.queue_requested_move()
+
+    def _posted_payload(self) -> Optional[Dict[str, Any]]:
+        """
+        The request's JSON body as an object, or None when it is not one.
+        """
+        length = int(self.headers.get("Content-Length") or 0)
+        try:
+            payload = json.loads(self.rfile.read(length) or b"{}")
+        except json.JSONDecodeError:
+            return None
+        return payload if isinstance(payload, dict) else None
+
+    def answer_requested_query(self) -> None:
+        """
+        Answer one EQL query about the running demo.
+
+        A query is arbitrary user input, so every way it can go wrong is reported as an
+        answer the panel can render rather than as a dead request.
+        """
+        payload = self._posted_payload()
+        if payload is None:
+            return self._send_json(
+                {"ok": False, "error": "body must be a JSON object"}, code=400
+            )
+        code = (payload.get("code") or "").strip()
+        if not code:
+            return self._send_json({"ok": False, "error": "empty query"})
+        try:
+            return self._send_json(self.bridge.run_query(code).to_payload())
+        except NoQuerySourceRegistered as error:
+            return self._send_json({"ok": False, "error": str(error)})
+        except Exception as error:
+            # a SyntaxError from the query is named by its own type, like any other
+            return self._send_json(
+                {"ok": False, "error": "%s: %s" % (type(error).__name__, error)}
+            )
+
+    def apply_requested_run_command(self) -> None:
+        """
+        Pause, resume, restart or loop the running demo, and answer with its new state.
+        """
+        payload = self._posted_payload()
+        if payload is None:
+            return self._send_json(
+                {"ok": False, "error": "body must be a JSON object"}, code=400
+            )
+        try:
+            command = RunCommand.of_name(payload.get("command") or "")
+        except UnknownRunCommand as error:
+            return self._send_json({"ok": False, "error": str(error)}, code=400)
+        try:
+            return self._send_json(
+                {"ok": True, **self.bridge.apply_run_command(command)}
+            )
+        except NoRunControlRegistered as error:
+            return self._send_json({"ok": False, "error": str(error)})
 
     def queue_requested_move(self) -> None:
         """

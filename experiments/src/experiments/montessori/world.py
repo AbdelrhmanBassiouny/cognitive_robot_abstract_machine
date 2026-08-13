@@ -851,6 +851,23 @@ class MontessoriWorld:
             self.board = self._build_shape_sorting_board()
             self._build_shapes()
 
+    def gripper_bodies(self) -> List[Body]:
+        """
+        The bodies of :attr:`robot` that hold a shape while it is being carried.
+
+        What a shape losing contact with means it slipped out of the robot's hold, as
+        opposed to leaving any other body behind (see
+        :mod:`experiments.montessori.insertion_diagnosis`). Empty without a robot.
+        """
+        if self.robot is None:
+            return []
+        return [
+            body
+            for arm in self.robot.get_arms()
+            if arm.end_effector is not None
+            for body in arm.end_effector.bodies
+        ]
+
     def spawn_robot(
         self,
         robot_class: Type[AbstractRobot],

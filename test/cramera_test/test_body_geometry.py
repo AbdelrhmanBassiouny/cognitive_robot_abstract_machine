@@ -21,11 +21,18 @@ from semantic_digital_twin.world_description.geometry import (
     Scale,
     Sphere,
 )
+from semantic_digital_twin.spatial_types import Point3, Pose
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import Optional
 
-from cramera.body_geometry import measure_body, rounded_pose, rounded_scale
+from cramera.body_geometry import (
+    measure_body,
+    pose_label,
+    position_label,
+    rounded_pose,
+    rounded_scale,
+)
 
 
 # %% fixtures
@@ -124,6 +131,27 @@ def test_rounded_pose_reports_position_then_quaternion():
     assert rounded_pose(body, 5) == pytest.approx(
         body.global_pose.to_position_quaternion_list()
     )
+
+
+# %% display labels
+def test_pose_label_reports_the_position_before_the_orientation():
+    """
+    A pose reads as its position followed by its quaternion, so a query answer naming a
+    target is readable without the reader knowing the field order.
+    """
+    pose = Pose.from_xyz_rpy(1.0, 2.0, 3.0)
+
+    assert pose_label(pose) == "(1.00, 2.00, 3.00) q(0.00, 0.00, 0.00, 1.00)"
+
+
+def test_pose_label_positions_agree_with_position_label():
+    """
+    Both labels format coordinates the same way, so a position and the position part of
+    a pose never disagree in an answer that shows both.
+    """
+    pose = Pose.from_xyz_rpy(0.125, -1.5, 0.0)
+
+    assert pose_label(pose).startswith(position_label(Point3(0.125, -1.5, 0.0)))
 
 
 def test_rounded_pose_rounds_every_value():

@@ -47,6 +47,8 @@ Panels.define('robot-scene', function (root, bus) {
     '  <div class="workflow-head"><span class="wf-btns">' +
     '    <button id="live-btn" class="play-btn live" style="display:none" title="Attach to the running demo (cramera-live bridge) — renders the live world instead of the recording">◉ Live</button>' +
     '    <button id="play-btn" class="play-btn cram" title="Play the recorded coraplex + giskardpy motion trajectory">▶ Play robot motion</button>' +
+    '    <span id="run-controls" class="run-controls" style="display:none"></span>' +
+    '    <span id="run-status" class="run-status"></span>' +
     '  </span></div>' +
     '</div>';
   function $(id) { return root.querySelector('#' + id); }
@@ -1004,6 +1006,7 @@ Panels.define('robot-scene', function (root, bus) {
     fetch(liveUrl() + '/info').then(function (r) { return r.json(); })
       .then(function (info) {
         if (liveBtn && !liveOn) liveBtn.style.display = info ? '' : 'none';
+        showRunControls(info && info.control);
         // landing on the page with no explicit ?scene= attaches the moment a bridge
         // is reachable, instead of waiting for a manual click
         if (info && noExplicitScene && !liveOn && !autoAttachedLive) {
@@ -1011,7 +1014,46 @@ Panels.define('robot-scene', function (root, bus) {
           setLive(true);
         }
       })
-      .catch(function () { if (liveBtn && !liveOn) liveBtn.style.display = 'none'; });
+      .catch(function () {
+        if (liveBtn && !liveOn) liveBtn.style.display = 'none';
+        showRunControls(null);
+      });
+  }
+
+  // %% driving the running demo
+  const runControlsEl = $('run-controls');
+  const runStatusEl = $('run-status');
+
+  //: the run state rides along on the /info poll rather than getting a poll of its own
+  let shownRunButtons = '';
+  function showRunControls(control) {
+    const buttons = RunControl.buttonsFor(control);
+    runControlsEl.style.display = buttons.length ? '' : 'none';
+    runStatusEl.textContent = RunControl.statusOf(control);
+    // the poll comes round every 3 s; rebuilding unchanged buttons would drop whatever
+    // the mouse is on every time
+    const signature = JSON.stringify(buttons);
+    if (signature === shownRunButtons) return;
+    shownRunButtons = signature;
+    runControlsEl.innerHTML = '';
+    buttons.forEach(function (spec) {
+      const button = document.createElement('button');
+      button.className = 'play-btn run' + (spec.active ? ' on' : '') + (spec.pending ? ' pending' : '');
+      button.textContent = spec.label;
+      button.title = spec.title;
+      button.addEventListener('click', function () { sendRunCommand(spec.command); });
+      runControlsEl.appendChild(button);
+    });
+  }
+
+  function sendRunCommand(command) {
+    fetch(liveUrl() + '/run', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command: command }),
+    }).then(function (r) { return r.json(); })
+      .then(function (payload) { if (payload.ok) showRunControls(payload); })
+      .catch(function () {});
   }
   function applyLive(st) {
     if (!st || !st.frames) return;

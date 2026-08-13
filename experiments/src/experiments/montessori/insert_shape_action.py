@@ -25,7 +25,11 @@ from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from coraplex.robot_plans.motions.robot_body import MoveJointsMotion
 from coraplex.view_manager import ViewManager
-from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
+from experiments.montessori.semantics import (
+    DEFAULT_INSERTION_HOVER_HEIGHT,
+    MontessoriShape,
+    ShapeSortingBoard,
+)
 from experiments.montessori.world import DEFAULT_ROBOT_STANDOFF_DISTANCE
 from krrood.entity_query_language.factories import a
 from krrood.entity_query_language.query.match import Match
@@ -90,7 +94,7 @@ class InsertMontessoriShapeAction(ActionDescription):
     since the shape rests flat on a table rather than standing on an edge.
     """
 
-    insertion_hover_height: float = 0.03
+    insertion_hover_height: float = DEFAULT_INSERTION_HOVER_HEIGHT
     """
     Height above the target hole at which the shape is released, so the gripper clears
     the board's surface on approach.
@@ -405,18 +409,14 @@ class InsertMontessoriShapeAction(ActionDescription):
 
     @property
     def _action_plan(self) -> PlanNode:
-        hole = self.board.hole_for(self.montessori_shape)
-        offset = Point3(0.0, 0.0, 0.0)
-        insertion_pose = self.montessori_shape.insertion_pose_relative_to_hole(
-            hole, offset, self.insertion_hover_height
+        target_location = self.board.insertion_target_for(
+            self.montessori_shape, self.world, self.insertion_hover_height
         )
-        target_location = self.world.transform(insertion_pose, self.world.root)
         shape_position = self.montessori_shape.root.global_pose.to_position()
         self.grasp_description = self.grasp_description or GraspDescription(
             ApproachDirection.FRONT,
             VerticalAlignment.TOP,
             ViewManager.get_end_effector_view(self.arm, self.robot),
-
         )
 
         # A robot with a mobile base reaches whole-body from an underspecified standing
@@ -501,7 +501,10 @@ class InsertMontessoriShapeAction(ActionDescription):
         Whether :attr:`montessori_shape` currently rests below the board's top surface,
         directly beneath its matching hole, i.e. has actually fallen through that hole
         rather than still resting on top of the board or having never been moved there
-        at all.
+        at all, logging the measurements the verdict was reached from.
+
+        Delegates the verdict to
+        :meth:`~experiments.montessori.semantics.ShapeSortingBoard.has_fallen_through`.
 
         :attr:`_action_plan` only ever kinematically teleports the shape to its
         target pose via
@@ -544,7 +547,9 @@ class InsertMontessoriShapeAction(ActionDescription):
         )
         # Temporary diagnostic: which check (horizontal miss vs. resting too high)
         # is actually failing for a shape that doesn't fall through, and whether a
-        # box shape's yaw lines up with its hole's.
+        # box shape's yaw lines up with its hole's. The verdict itself is the board's
+        # (see ShapeSortingBoard.has_fallen_through); only this readout is the
+        # action's, since it reports on the placement the action just made.
         hole_roll, hole_pitch, hole_yaw = (
             hole.root.global_transform.to_rotation_matrix().to_rpy()
         )
@@ -575,4 +580,4 @@ class InsertMontessoriShapeAction(ActionDescription):
             math.degrees(float(shape_pitch)),
             math.degrees(float(shape_yaw)),
         )
-        return bool(is_below_the_hole and shape_top_z < board_top_z)
+        return self.board.has_fallen_through(self.montessori_shape, self.world)

@@ -85,6 +85,25 @@ class SceneBundle:
         ).read()
         return cls(scene, trajectory if isinstance(trajectory, dict) else {})
 
+    @classmethod
+    def declared_presets(cls, scene: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        The ready-made queries a bundle ships for itself, or none.
+
+        A bundle recorded from a demo knows which questions are worth asking about that
+        demo far better than anything generated from the scene's contents can.
+
+        :param scene: Name of the scene to read, or None for the active one.
+        """
+        directory = cls.directory_of(scene)
+        if not directory or not (directory / "presets.json").is_file():
+            return []
+        declared = GeneratedJson(directory / "presets.json").read()
+        if not isinstance(declared, dict):
+            return []
+        presets = declared.get("presets")
+        return presets if isinstance(presets, list) else []
+
 
 @dataclass
 class UrdfJoint:

@@ -113,7 +113,9 @@ def _collision_box_world_bounds(shapes, position) -> list:
 
 
 def _hole_world_bounds(hole: ShapeSortingHole) -> tuple:
-    """A hole's true (x, y) bounding box, in the world frame, with tolerance applied."""
+    """
+    A hole's true (x, y) bounding box, in the world frame, with tolerance applied.
+    """
     position = hole.global_transform.to_position()
     local_bounds = hole.root.area.combined_mesh.bounds
     return (
@@ -424,3 +426,27 @@ def test_add_robot_stand_spawns_a_table_at_the_mount_height():
     assert float(position.x) == pytest.approx(float(MOUNT_POSITION.x))
     assert float(position.y) == pytest.approx(float(MOUNT_POSITION.y))
     assert float(position.z) + highest_local_z == pytest.approx(float(MOUNT_POSITION.z))
+
+
+def test_gripper_bodies_are_the_end_effector_bodies_of_every_arm():
+    """
+    Recognizing that a shape slipped out of the robot's hold needs the bodies that hold
+    it, which is what the arms' end effectors are made of.
+    """
+    montessori = MontessoriWorld()
+    robot = montessori.mount_stationary_robot(
+        SyntheticFixedArmRobot, _parsed_synthetic_fixed_arm_robot(), MOUNT_POSITION
+    )
+
+    expected = [
+        body
+        for arm in robot.get_arms()
+        if arm.end_effector is not None
+        for body in arm.end_effector.bodies
+    ]
+    assert expected
+    assert montessori.gripper_bodies() == expected
+
+
+def test_gripper_bodies_are_empty_without_a_robot():
+    assert MontessoriWorld().gripper_bodies() == []

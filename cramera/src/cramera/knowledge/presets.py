@@ -10,6 +10,7 @@ from typing import Tuple
 from typing_extensions import List, Optional
 
 from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
+from cramera.knowledge.scene_bundle import SceneBundle
 
 
 @dataclass
@@ -28,13 +29,39 @@ class Preset:
     EQL source the panel runs when this preset is picked.
     """
 
+    requires_live: bool = False
+    """
+    Whether answering this needs a running demo attached to the viewer.
+
+    A bundle declares questions about the demo it was recorded from, which range over
+    variables only that demo's live query source offers.
+    """
+
     @classmethod
     def of_scene(cls, scene: Optional[str] = None) -> List[Preset]:
         """
         Ready-made queries for the EQL panel.
 
-        Scene presets are generated from the loaded scene, so they stay valid for any
-        onboarded robot/environment; the architecture presets are static.
+        A bundle that declares its own presets replaces the generated scene ones with
+        them; otherwise they are generated from the loaded scene, so they stay valid for
+        any onboarded robot/environment. The architecture presets are always offered:
+        they range over the repository scan rather than the scene.
+
+        :param scene: Name of the scene to build presets for, or None for the active
+            one.
+        """
+        declared = SceneBundle.declared_presets(scene)
+        if declared:
+            return [
+                cls(entry["text"], entry["code"], requires_live=True)
+                for entry in declared
+            ] + list(ARCHITECTURE_PRESETS)
+        return cls._generated_for_scene(scene) + list(ARCHITECTURE_PRESETS)
+
+    @classmethod
+    def _generated_for_scene(cls, scene: Optional[str]) -> List[Preset]:
+        """
+        Ready-made queries derived from what the scene bundle actually contains.
 
         :param scene: Name of the scene to build presets for, or None for the active
             one.
@@ -81,7 +108,7 @@ class Preset:
                         % repr(manipulation.name),
                     )
                 )
-        return presets + list(ARCHITECTURE_PRESETS)
+        return presets
 
 
 ARCHITECTURE_PRESETS: Tuple[Preset, ...] = (

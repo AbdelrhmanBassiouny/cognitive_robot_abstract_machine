@@ -16,7 +16,8 @@ Run with (the ``experiments`` package must be importable)::
 
 Every run's per-shape results are recorded, one :class:`~experiments.montessori.sorting_results.SortingIterationResult` (with
 its :class:`~experiments.montessori.sorting_results.ShapeInsertionResult` rows) per iteration, to a Postgres database via
-ORMatic; see ``--database-uri`` and :data:`DEFAULT_DATABASE_URI`.
+ORMatic; see ``--database-uri`` and
+:data:`~experiments.montessori.results_database.DEFAULT_DATABASE_URI`.
 
 .. note::
     :class:`~experiments.montessori.sorting_results.ShapeInsertionResult` and :class:`~experiments.montessori.sorting_results.SortingIterationResult` must be included
@@ -47,6 +48,9 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.sql.sqltypes import NullType
 from typing_extensions import Optional
 
+from cramera.live.bridge import BRIDGE
+from cramera.live.runner import start as start_live_bridge
+
 from experiments.montessori.event_monitoring import (
     MontessoriEventMonitor,
     build_shape_monitor,
@@ -58,11 +62,15 @@ from experiments.montessori.franka_panda_equipment import (
     equip_panda_for_physical_simulation,
     parse_panda,
 )
+from experiments.montessori.live_query_source import MontessoriLiveQuerySource
+from experiments.montessori.results_database import configured_database_uri
+from experiments.montessori.run_control import SortingRunControl
 from experiments.montessori.semantics import (
     MontessoriShape,
     MontessoriShapeCategory,
     NoMatchingHoleError,
 )
+from experiments.montessori.sorting_progress import CompletedAttempt, SortingProgress
 from experiments.montessori.sorting_results import (
     InsertionOutcome,
     ShapeInsertionAttempt,
@@ -87,25 +95,6 @@ if TYPE_CHECKING:
     from experiments.montessori.insert_shape_action import InsertMontessoriShapeAction
 
 logger = logging.getLogger(__name__)
-
-DEFAULT_DATABASE_URI = (
-    "postgresql+psycopg://semantic_digital_twin:montessori@localhost:5432/"
-    "franka_montessori_sorting_results"
-)
-"""
-Database URI used when neither ``--database-uri`` nor
-``FRANKA_MONTESSORI_SORTING_DATABASE_URI`` is given.
-
-Reuses the ``semantic_digital_twin`` role already provisioned on this host for the other
-demos/experiments in this workspace (see ``coraplex_panda_demo/demo3.py``'s own
-``DATABASE_URI``); only the database itself, ``franka_montessori_sorting_results``, is
-dedicated to this demo. Uses the ``psycopg`` (v3) driver explicitly since only that, not
-``psycopg2``, is installed in this environment.
-
-Provision the role and this database once, before the first run, with
-``semantic_digital_twin/scripts/create_postgres_database_and_user_if_not_exists.sql``
-(see that script's own header for its ``psql`` invocation).
-"""
 
 NODE_NAME = "franka_montessori_demo"
 """
@@ -154,7 +143,15 @@ overhead it saves, but produced an unreliable/wedged grasp and, once, a run that
 converged -- the controller needs joint state read back at least as often as it commands.
 """
 
-SKIPPED_SHAPE_CATEGORIES = frozenset({MontessoriShapeCategory.DISK})
+SKIPPED_SHAPE_CATEGORIES = frozenset(
+    {
+        MontessoriShapeCategory.DISK,
+        # MontessoriShapeCategory.CYLINDER,
+        # MontessoriShapeCategory.RECTANGULAR_PRISM,
+        # MontessoriShapeCategory.SPHERE,
+        # MontessoriShapeCategory.TRIANGULAR_PRISM,
+    }
+)
 """
 Shape categories the demo leaves where they are.
 
@@ -404,7 +401,7 @@ def _insert_shape_or_none(
     montessori: MontessoriWorld,
     context,
     attempt: int,
-) -> tuple[Optional[bool], InsertMontessoriShapeAction]:
+) -> tuple[Optional[bool], InsertMontessoriShapeAction, Optional[BaseException]]:
     """
     Attempt one insertion via :func:`_insert_shape`, returning ``None`` instead of
     letting a retryable failure propagate.
@@ -415,8 +412,10 @@ def _insert_shape_or_none(
     :param context: The CRAM execution context to run the insertion action in.
     :param attempt: This attempt's 1-based index, used only for the log message.
     :return: Whether the shape fell through its hole (``None`` if this attempt failed in
-        a retryable way), and the plan this attempt ran, for the caller to record
-        regardless of outcome.
+        a retryable way), the plan this attempt ran, for the caller to record regardless
+        of outcome, and the failure itself, which is the only record of what went wrong
+        for the exceptions that leave no reason on any plan node (see
+        :mod:`experiments.montessori.insertion_diagnosis`).
     """
     from coraplex.plans.failures import PlanFailure
     from giskardpy.motion_statechart.exceptions import CollisionViolatedError
@@ -425,7 +424,7 @@ def _insert_shape_or_none(
 
     action = _build_insert_action(shape, montessori)
     try:
-        return _insert_shape(action, montessori, context), action
+        return _insert_shape(action, montessori, context), action, None
     except (
         PointOccupiedError,
         PlanFailure,
@@ -439,7 +438,7 @@ def _insert_shape_or_none(
             MAX_INSERTION_ATTEMPTS,
             error,
         )
-        return None, action
+        return None, action, error
 
 
 def _log_segmind_verdict(
@@ -516,6 +515,8 @@ def _partition_events_by_attempt(
 def _insert_all_shapes(
     montessori: MontessoriWorld,
     context,
+    progress: SortingProgress,
+    control: SortingRunControl,
     max_shapes: Optional[int] = None,
     only_shape: Optional[str] = None,
 ) -> list[ShapeInsertionResult]:
@@ -534,6 +535,11 @@ def _insert_all_shapes(
     :param montessori: The Montessori scene, with the Panda already mounted and
         equipped, inside a running simulation.
     :param context: The CRAM execution context to run every insertion action in.
+    :param progress: The live record every shape, attempt and event is written into as
+        it happens, so the viewer can be asked about the sort while it is still running.
+    :param control: What the viewer drives this sort with. Read between attempts and
+        between shapes, which are the points a run can be held or abandoned without
+        leaving a half-executed plan behind.
     :param max_shapes: Stop after this many shapes have actually been attempted
         (skipped shapes don't count), for fast iteration while tuning parameters on a
         single shape. ``None`` attempts every shape.
@@ -549,6 +555,11 @@ def _insert_all_shapes(
     results: list[ShapeInsertionResult] = []
     attempted = 0
     for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape):
+        control.wait_while_paused()
+        if control.restart_is_pending():
+            logger.info("Restart requested; abandoning the rest of this run.")
+            return results
+
         if shape.shape_category in SKIPPED_SHAPE_CATEGORIES:
             logger.info(
                 "Skipping %s: %s is not sorted.", shape.name, shape.shape_category
@@ -561,7 +572,7 @@ def _insert_all_shapes(
             logger.info("Skipping %s: no matching hole.", shape.name)
             continue
 
-        shape_key = shape.name.name.removesuffix("_shape")
+        shape_key = shape.shape_key
         if only_shape is not None and shape_key != only_shape:
             logger.info("Skipping %s: not %s.", shape.name, only_shape)
             continue
@@ -573,11 +584,16 @@ def _insert_all_shapes(
 
         event_monitor = build_shape_monitor(montessori, shape)
         event_monitor.start()
+        progress.begin_shape(shape, montessori.board, montessori.world)
 
         fell_through = None
         attempt_start_times: list[datetime] = []
         actions: list[InsertMontessoriShapeAction] = []
+        failures: list[Optional[BaseException]] = []
         for attempt in range(1, MAX_INSERTION_ATTEMPTS + 1):
+            control.wait_while_paused()
+            if control.restart_is_pending():
+                break
             logger.info(
                 "Inserting %s into its matching hole (attempt %d/%d).",
                 shape.name,
@@ -585,14 +601,40 @@ def _insert_all_shapes(
                 MAX_INSERTION_ATTEMPTS,
             )
             attempt_start_times.append(datetime.now())
-            fell_through, action = _insert_shape_or_none(
+            fell_through, action, failure = _insert_shape_or_none(
                 shape, montessori, context, attempt
             )
             actions.append(action)
+            failures.append(failure)
+            # recorded as each attempt finishes rather than with the rest of the
+            # iteration, so the viewer can ask about the sort while it is still running
+            progress.record_attempt(
+                CompletedAttempt(
+                    shape_key=shape_key,
+                    attempt_number=attempt,
+                    started_at=attempt_start_times[-1],
+                    ended_at=datetime.now(),
+                    events=[
+                        event
+                        for event in event_monitor.events
+                        if event.timestamp >= attempt_start_times[-1]
+                    ],
+                    plan=action.plan if action.plan_node is not None else None,
+                    fell_through=fell_through,
+                    raised_exception=failure,
+                    gripper_bodies=montessori.gripper_bodies(),
+                )
+            )
+            progress.refresh_world_state(montessori.board, montessori.world)
             if fell_through is not None:
                 break
 
         event_monitor.stop()
+        if control.restart_is_pending():
+            # this shape was cut short rather than judged, so it gets no outcome: an
+            # abandoned attempt is not evidence that the shape could not be inserted
+            logger.info("Restart requested; abandoning the rest of this run.")
+            return results
         _log_segmind_verdict(shape, fell_through, event_monitor)
 
         if fell_through is None:
@@ -624,20 +666,29 @@ def _insert_all_shapes(
                 shape_key=shape_key, outcome=outcome, attempts=attempts
             )
         )
+        progress.finish_shape(shape_key, outcome)
+        progress.refresh_world_state(montessori.board, montessori.world)
 
     return results
 
 
-def _parse_arguments() -> argparse.Namespace:
+def _parse_arguments(argument_list: Optional[list[str]] = None) -> argparse.Namespace:
     """
     Parse command-line arguments selecting whether a MuJoCo viewer window is opened and
     how many shapes to attempt.
+
+    :param argument_list: Arguments to parse; the process's own when omitted.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--viewer",
-        action="store_true",
-        help="Open a MuJoCo viewer window; off by default so the demo runs headless.",
+        action=argparse.BooleanOptionalAction,
+        default=False,
+        help=(
+            "Open a MuJoCo viewer window; off by default so the demo runs headless. "
+            "run_montessori_demo.sh turns it on, so --no-viewer is how a launched run "
+            "goes headless."
+        ),
     )
     parser.add_argument(
         "--max-shapes",
@@ -665,12 +716,22 @@ def _parse_arguments() -> argparse.Namespace:
         help="Don't publish TF/visualization markers to RViz; publishes by default.",
     )
     parser.add_argument(
-        "--world2",
+        "--cramera",
         action="store_true",
+        help=(
+            "Serve this world and this sort to the cramera viewer from inside this "
+            "process, so its EQL panel can be asked about the sort while it runs."
+        ),
+    )
+    parser.add_argument(
+        "--world2",
+        action=argparse.BooleanOptionalAction,
+        default=False,
         help=(
             "Use experiments.montessori.world2's layout (board directly ahead of the "
             "robot, loose shapes on a separate stand to its side) instead of the "
-            "default single-table layout."
+            "default single-table layout. run_montessori_demo.sh turns it on, so "
+            "--no-world2 is how a launched run gets the single-table layout."
         ),
     )
     parser.add_argument(
@@ -709,17 +770,16 @@ def _parse_arguments() -> argparse.Namespace:
     )
     parser.add_argument(
         "--database-uri",
-        default=os.getenv(
-            "FRANKA_MONTESSORI_SORTING_DATABASE_URI", DEFAULT_DATABASE_URI
-        ),
+        default=configured_database_uri(),
         help=(
             "Database URI every iteration's SortingIterationResult (with its "
             "per-shape ShapeInsertionResult rows) is recorded to via ORMatic, one "
             "commit per iteration. Defaults to a local Postgres database (see "
-            "DEFAULT_DATABASE_URI), overridable via FRANKA_MONTESSORI_SORTING_DATABASE_URI."
+            "results_database.DEFAULT_DATABASE_URI), overridable via "
+            "FRANKA_MONTESSORI_SORTING_DATABASE_URI."
         ),
     )
-    return parser.parse_args()
+    return parser.parse_args(argument_list)
 
 
 def _open_results_session(database_uri: str) -> Session:
@@ -730,7 +790,8 @@ def _open_results_session(database_uri: str) -> Session:
     if they don't already exist.
 
     ``database_uri``'s database and role must already exist on the server; see
-    :data:`DEFAULT_DATABASE_URI` for how to provision them.
+    :data:`~experiments.montessori.results_database.DEFAULT_DATABASE_URI` for how to
+        provision them.
 
     Skips any table ORMatic could not assign a real column type to (surfaced as
     SQLAlchemy's ``NullType``, e.g. ``EpisodePlayerDAO.rdr_viewer`` for the
@@ -743,7 +804,7 @@ def _open_results_session(database_uri: str) -> Session:
     "undefined table" error the moment ``CREATE TABLE`` tried to reference it.
 
     :param database_uri: Database to write recorded results to; see
-        :data:`DEFAULT_DATABASE_URI`.
+        :data:`~experiments.montessori.results_database.DEFAULT_DATABASE_URI`.
     """
     import experiments.orm.ormatic_interface as ormatic_interface
 
@@ -767,15 +828,15 @@ def _open_results_session(database_uri: str) -> Session:
                 excluded_table_names.add(name)
                 newly_excluded = True
     creatable_tables = [
-        table
-        for name, table in all_tables.items()
-        if name not in excluded_table_names
+        table for name, table in all_tables.items() if name not in excluded_table_names
     ]
     ormatic_interface.Base.metadata.create_all(engine, tables=creatable_tables)
     return sessionmaker(engine)()
 
 
-def _build_world_and_sort(node, arguments: argparse.Namespace) -> tuple[
+def _build_world_and_sort(
+    node, arguments: argparse.Namespace, iteration: int, control: SortingRunControl
+) -> tuple[
     list[ShapeInsertionResult],
     MujocoSim,
     Optional[TFPublisher],
@@ -788,6 +849,9 @@ def _build_world_and_sort(node, arguments: argparse.Namespace) -> tuple[
     :param node: The ROS 2 node TF/marker publishing runs against.
     :param arguments: Parsed command-line arguments selecting the world layout, viewer,
         RViz publishing, and shape-attempt limits.
+    :param iteration: Which iteration this is, for the viewer to report.
+    :param control: What the viewer drives this sort with; it takes over the simulation
+        this iteration builds.
     :return: This run's per-shape results (see :func:`_insert_all_shapes`), and the live
         simulation and publishers, left running for the caller to stop once it is done
         with them.
@@ -862,13 +926,40 @@ def _build_world_and_sort(node, arguments: argparse.Namespace) -> tuple[
     context.simulation_clock = lambda: multi_sim.simulator.current_simulation_time
 
     multi_sim.start_simulation()
+    control.begin_iteration(iteration=iteration, simulation=multi_sim)
+    progress = SortingProgress()
+    if arguments.cramera:
+        _attach_cramera(montessori, progress, control)
     results = _insert_all_shapes(
         montessori,
         context,
+        progress,
+        control,
         max_shapes=arguments.max_shapes,
         only_shape=arguments.only_shape,
     )
     return results, multi_sim, tf_publisher, viz_marker_publisher
+
+
+def _attach_cramera(
+    montessori: MontessoriWorld,
+    progress: SortingProgress,
+    control: SortingRunControl,
+) -> None:
+    """
+    Serve this world and this sort to the cramera viewer, in this process.
+
+    All of it is safe to call again for a rebuilt world: the bridge reuses its port and
+    hooks, the newest sort replaces the one queries are answered from, and the control is
+    the same one across every iteration.
+
+    :param montessori: The Montessori scene the viewer visualizes.
+    :param progress: The record queries about this sort are answered from.
+    :param control: What the viewer pauses, restarts and loops this run with.
+    """
+    start_live_bridge(world=montessori.world)
+    BRIDGE.register_query_source(MontessoriLiveQuerySource(progress=progress))
+    BRIDGE.register_run_control(control)
 
 
 def _reclaim_native_heap_fragmentation() -> None:
@@ -977,32 +1068,48 @@ def main() -> None:
     multi_sim = None
     tf_publisher = None
     viz_marker_publisher = None
+    control = SortingRunControl()
+    last_planned_iteration = arguments.start_iteration + arguments.iterations - 1
+    iteration = arguments.start_iteration
     results_session = _open_results_session(arguments.database_uri)
     logger.info("Recording results to '%s'.", arguments.database_uri)
     try:
-        for iteration in range(
-            arguments.start_iteration,
-            arguments.start_iteration + arguments.iterations,
-        ):
+        while True:
             if arguments.iterations > 1:
                 logger.info(
                     "=== Starting iteration %d/%d ===",
                     iteration,
-                    arguments.start_iteration + arguments.iterations - 1,
+                    last_planned_iteration,
                 )
             shape_results, multi_sim, tf_publisher, viz_marker_publisher = (
-                _build_world_and_sort(node, arguments)
+                _build_world_and_sort(node, arguments, iteration, control)
             )
-            iteration_result = SortingIterationResult(
-                iteration=iteration, shape_results=shape_results
-            )
-            iteration_results.append(iteration_result)
-            results_session.add(to_dao(iteration_result))
-            results_session.commit()
+            control.finish_iteration()
 
-            if keep_simulation_running:
+            # an abandoned run sorted only part of its shapes, so recording it would
+            # enter a partial iteration alongside complete ones
+            if control.restart_is_pending():
+                logger.info("Iteration %d was restarted; not recording it.", iteration)
+            else:
+                iteration_result = SortingIterationResult(
+                    iteration=iteration, shape_results=shape_results
+                )
+                iteration_results.append(iteration_result)
+                results_session.add(to_dao(iteration_result))
+                results_session.commit()
+
+            planned_ahead = iteration < last_planned_iteration
+            if keep_simulation_running and not planned_ahead:
+                logger.info("Sorting done; the simulation keeps running.")
+                logger.info("Press Ctrl+C to stop, or restart the run from the viewer.")
+                # blocks until the viewer asks for another run, and forever when nothing
+                # is driving this one — which is the inspect-it-afterwards behaviour a
+                # single interactive run has always had
+                control.wait_for_another_iteration()
+            elif not (planned_ahead or control.wants_another_iteration()):
                 break
 
+            control.consume_restart()
             multi_sim.stop_simulation()
             if viz_marker_publisher is not None:
                 viz_marker_publisher.stop()
@@ -1010,14 +1117,9 @@ def main() -> None:
                 tf_publisher.stop()
             multi_sim = tf_publisher = viz_marker_publisher = None
             _reclaim_native_heap_fragmentation()
+            iteration += 1
 
-        if keep_simulation_running:
-            logger.info("Sorting done; the simulation keeps running.")
-            logger.info("Done. Press Ctrl+C to stop.")
-            while True:
-                time.sleep(0.1)
-        else:
-            _log_iteration_summary(iteration_results)
+        _log_iteration_summary(iteration_results)
     except KeyboardInterrupt:
         pass
     finally:

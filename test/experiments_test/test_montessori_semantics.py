@@ -8,6 +8,7 @@ from experiments.montessori.semantics import (
     DiskShape,
     MontessoriShape,
     MontessoriShapeCategory,
+    NoMatchingHoleError,
     RectangularPrismShape,
     ShapeSortingBoard,
     ShapeSortingHole,
@@ -16,12 +17,17 @@ from experiments.montessori.semantics import (
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Drawer
-from semantic_digital_twin.spatial_types.spatial_types import Point3
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Point3,
+)
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
+
+from .dataset.montessori_board import board_with_one_hole, cube_at
 
 
 @pytest.fixture
@@ -84,8 +90,8 @@ def test_montessori_shape_computes_its_insertion_pose_relative_to_the_hole(world
 
 def test_disk_shape_tips_onto_its_edge_to_pass_through_its_slot(world):
     """
-    A disk's matching hole is a narrow slot, not a coin-shaped opening, so unlike
-    every other shape it must be rotated onto its edge to fit through (see
+    A disk's matching hole is a narrow slot, not a coin-shaped opening, so unlike every
+    other shape it must be rotated onto its edge to fit through (see
     experiments.montessori.hole_geometry._classify_hole_shape).
     """
     body = Body(name=PrefixedName("piece"))
@@ -128,8 +134,8 @@ def _shape_with_cross_section(
 def test_fits_through_rejects_a_shape_too_large_for_an_otherwise_matching_hole(world):
     """
     The board has two circular holes of different sizes, both categorized
-    MontessoriShapeCategory.CYLINDER; matching category alone is not enough to tell
-    them apart, so fits_through must also check size.
+    MontessoriShapeCategory.CYLINDER; matching category alone is not enough to tell them
+    apart, so fits_through must also check size.
     """
     with world.modify_world():
         small_hole = ShapeSortingHole.create_with_new_region_in_world(
@@ -221,3 +227,108 @@ def test_shape_sorting_board_collects_drawers_and_shape_holes(world):
 
     assert board.drawers == [drawer]
     assert board.apertures == [hole]
+
+
+# %% how a shape names itself
+@pytest.mark.parametrize(
+    ["shape_class", "body_name", "expected_key", "expected_object_name"],
+    [
+        (CubeShape, "square_hole_shape", "square_hole", "cube"),
+        (CylinderShape, "circular_hole_1_shape", "circular_hole_1", "cylinder_1"),
+        (CylinderShape, "circular_hole_2_shape", "circular_hole_2", "cylinder_2"),
+        (DiskShape, "disk_hole_shape", "disk_hole", "disk"),
+        (SphereShape, "sphere_shape", "sphere", "sphere"),
+    ],
+)
+def test_a_shape_names_itself_after_its_own_geometry_not_after_its_hole(
+    world, shape_class, body_name, expected_key, expected_object_name
+):
+    """
+    Every loose shape's body is named after the hole it was built for
+    (``square_hole_shape``), so its own name says nothing about what it is.
+
+    Its
+    :attr:`~experiments.montessori.semantics.MontessoriShape.shape_key` keeps that
+    pairing while its ``object_name`` describes the piece itself.
+    """
+    body = Body(name=PrefixedName(body_name))
+    with world.modify_world():
+        world.add_body(body)
+        world.add_connection(FixedConnection(parent=world.root, child=body))
+        shape = shape_class(name=PrefixedName(body_name), root=body)
+
+    assert shape.shape_key == expected_key
+    assert shape.object_name == expected_object_name
+
+
+def test_two_shapes_of_one_category_keep_the_names_their_holes_tell_apart(world):
+    """
+    The board has two circular holes of different sizes, so the category alone does not
+    identify a cylinder; the hole key's trailing index is what separates them.
+    """
+    names = []
+    with world.modify_world():
+        for body_name in ("circular_hole_1_shape", "circular_hole_2_shape"):
+            body = Body(name=PrefixedName(body_name))
+            world.add_body(body)
+            world.add_connection(FixedConnection(parent=world.root, child=body))
+            names.append(CylinderShape(name=PrefixedName(body_name), root=body))
+
+    assert [shape.object_name for shape in names] == ["cylinder_1", "cylinder_2"]
+
+
+# %% fell-through ground truth
+def test_has_fallen_through_is_true_for_a_shape_under_its_hole(world):
+    """
+    Fallen through means both: horizontally inside the hole's footprint, and entirely
+    below the board's top surface.
+    """
+    with world.modify_world():
+        board, _ = board_with_one_hole(world, Point3(0.0, 0.0, 0.05))
+        cube = cube_at(world, Point3(0.0, 0.0, -0.1))
+
+    assert board.has_fallen_through(cube, world) is True
+
+
+def test_has_fallen_through_is_false_for_a_shape_resting_on_the_board(world):
+    with world.modify_world():
+        board, _ = board_with_one_hole(world, Point3(0.0, 0.0, 0.05))
+        cube = cube_at(world, Point3(0.0, 0.0, 0.08))
+
+    assert board.has_fallen_through(cube, world) is False
+
+
+def test_has_fallen_through_is_false_for_a_shape_beside_its_hole(world):
+    """
+    Being below the board is not enough; a shape that fell off the edge never went
+    through the hole.
+    """
+    with world.modify_world():
+        board, _ = board_with_one_hole(world, Point3(0.0, 0.0, 0.05))
+        cube = cube_at(world, Point3(0.2, 0.0, -0.1))
+
+    assert board.has_fallen_through(cube, world) is False
+
+
+def test_has_fallen_through_needs_no_action_to_be_asked(world):
+    """
+    The verdict is a property of the board and the world, so it can be read at any
+    moment rather than only from the action that placed the shape.
+    """
+    with world.modify_world():
+        board, _ = board_with_one_hole(world, Point3(0.0, 0.0, 0.05))
+        cube = cube_at(world, Point3(0.0, 0.0, -0.1))
+
+    assert board.has_fallen_through(cube, world) == board.has_fallen_through(
+        cube, world
+    )
+
+
+def test_has_fallen_through_rejects_a_shape_with_no_matching_hole(world):
+    with world.modify_world():
+        board, hole = board_with_one_hole(world, Point3(0.0, 0.0, 0.05))
+        hole.shape_category = MontessoriShapeCategory.TRIANGULAR_PRISM
+        cube = cube_at(world, Point3(0.0, 0.0, -0.1))
+
+    with pytest.raises(NoMatchingHoleError):
+        board.has_fallen_through(cube, world)

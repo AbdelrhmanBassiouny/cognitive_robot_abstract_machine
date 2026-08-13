@@ -140,11 +140,20 @@ body{
   padding:6px 11px;border-radius:4px;cursor:pointer;transition:.15s
 }
 .preset:hover{border-color:var(--accent);color:var(--ink)}
+/* a question about a demo that is not attached: shown, so the set of questions the
+   scene answers stays visible, but not clickable */
+.preset.unavailable{opacity:.45;cursor:not-allowed;border-style:dashed}
+.preset.unavailable:hover{border-color:var(--line2);color:var(--muted)}
 
 /* %% answer */
 .answer{padding:14px 16px;max-height:34%;overflow:auto;border-bottom:1px solid var(--line)}
 .answer-empty{color:var(--faint);font-size:13px;font-style:italic}
 .answer .goal{font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:8px;word-break:break-all}
+/* the query read back as English; the role colours are krrood's own inline spans */
+.answer .qverb{
+  font-size:13px;line-height:1.6;margin:0 0 10px;padding:8px 10px;border-radius:3px;
+  background:var(--bg2);border-left:2px solid var(--accent)
+}
 .answer .headline{font-size:13.5px;color:var(--ink);margin:0 0 10px;line-height:1.5}
 .answer .headline b{color:var(--accent)}
 .ansrow{
@@ -281,6 +290,13 @@ body.graph-full-open{overflow:hidden}
 .scene-select:hover,.scene-select:focus{border-color:var(--accent);outline:none}
 
 /* live mode button */
+/* driving the running demo: pause / restart / loop, beside the Live button */
+.run-controls{display:inline-flex;gap:6px}
+.play-btn.run{color:#ffd18a;border-color:#ffb648;background:rgba(255,182,72,.12)}
+.play-btn.run:hover{background:rgba(255,182,72,.24)}
+.play-btn.run.on{background:linear-gradient(135deg,#ffb648,#ff8f48);color:#1a1005;border-color:transparent}
+.play-btn.run.pending{opacity:.6;font-style:italic}
+.run-status{font-family:var(--mono);font-size:11px;color:var(--muted);align-self:center}
 .play-btn.live{color:#ff8091;border-color:#ff6b8b;background:rgba(255,107,139,.12)}
 .play-btn.live:hover{background:rgba(255,107,139,.22)}
 .play-btn.live.on{background:linear-gradient(135deg,#ff6b8b,#ff9d6b);color:#1a0509;border-color:transparent;animation:livePulse 1.6s ease-in-out infinite}

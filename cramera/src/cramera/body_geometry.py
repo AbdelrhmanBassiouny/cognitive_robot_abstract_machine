@@ -8,7 +8,7 @@ measurement, taken the same way, and both publish body poses rounded the same wa
 
 from __future__ import annotations
 
-from semantic_digital_twin.spatial_types import Point3
+from semantic_digital_twin.spatial_types import Point3, Pose
 from semantic_digital_twin.world_description.geometry import Scale
 from typing_extensions import List, Optional, TYPE_CHECKING
 
@@ -78,3 +78,17 @@ def position_label(position: Point3) -> str:
     :param position: The position to format.
     """
     return "(%.2f, %.2f, %.2f)" % tuple(position.to_np().tolist()[:3])
+
+
+def pose_label(pose: Pose) -> str:
+    """
+    A pose's position and orientation, formatted to two decimal places for display.
+
+    Formats the position exactly as :func:`position_label` does, so an answer showing
+    both a position and a pose reads consistently.
+
+    :param pose: The pose to format.
+    """
+    return "(%.2f, %.2f, %.2f) q(%.2f, %.2f, %.2f, %.2f)" % tuple(
+        pose.to_position_quaternion_list()
+    )

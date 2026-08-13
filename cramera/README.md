@@ -53,6 +53,84 @@ while it is reachable the viewer shows a *Live* button that renders the
 running world instead of the recording, and dragging an object writes its
 pose back into the demo's world.
 
+### Asking the running demo questions
+
+A demo can also answer EQL queries about itself. It registers what it wants
+asked about:
+
+```python
+from cramera.live.bridge import BRIDGE
+BRIDGE.register_query_source(MyDemoQuerySource(...))
+```
+
+A query source implements `cramera.live.query.LiveQuerySource`: a `title()`,
+the `presets()` to offer as buttons, and the `domains()` a query may range
+over — each a `QueryDomain(name, entity_type, objects)` naming one variable.
+The bridge then serves two more endpoints:
+
+```
+GET  /presets   {ok, title, presets: [{text, code}], variables: [name]}
+POST /eql       {code} -> the rendered answer rows
+```
+
+The EQL panel routes to them automatically while it is attached (see
+`web/core/query_source.js`), and falls back to `/api/*` against the recorded
+scene when it is not. Queries are serialized behind a lock, because krrood's
+`SymbolGraph` singleton is not threadsafe.
+
+Two rules a source has to keep:
+
+- **Never read the world from `domains()`.** It runs on an HTTP thread; only
+  the simulation thread may touch the world (see `cramera/live/hooks.py`).
+  Project what you want queried into plain dataclasses on the demo's own
+  thread, and let the domains range over those.
+- **Read the lists fresh on every call**, so an answer describes the demo as
+  it stands now rather than when the bridge was wired up.
+
+A scene bundle may also ship a `presets.json` (`{"presets": [{"text", "code"}]}`)
+declaring the questions worth asking about the demo it was recorded from.
+Those replace the generated scene presets for that scene, and the panel shows
+them greyed out until a demo is attached to answer them.
+`experiments/src/experiments/montessori/live_query_source.py` is a worked
+example of both halves.
+
+Answers arrive with the question read back as English, coloured by semantic
+role (`cramera/knowledge/query_verbalization.py`, built on krrood's own
+verbalization grammar), so a preset button says what it asked and not only
+what came back. A query krrood has no grammar rule for still answers; it just
+gets no sentence.
+
+### Driving the running demo
+
+A demo can also offer itself to be paused, restarted and looped:
+
+```python
+from cramera.live.bridge import BRIDGE
+BRIDGE.register_run_control(MyDemoRunControl(...))
+```
+
+A run control implements `cramera.live.run_control.LiveRunControl`: a
+`title()`, the `state()` it is in, and `apply(command)` for each
+`RunCommand` (`pause`, `resume`, `restart`, `enable_loop`, `disable_loop`).
+Two more endpoints follow:
+
+```
+GET  /run   {ok, title, paused, looping, restart_pending, activity, iteration}
+POST /run   {command} -> the run state that command produced
+```
+
+The same state rides along on `GET /info`, so the viewer's existing 3 s poll
+is what keeps the controls current; the scene panel turns it into buttons
+through `web/core/run_control.js`. Commands are serialized behind their own
+lock, so two viewers clicking at once cannot interleave inside the demo's
+flags.
+
+What a command *means* is the demo's to decide, and the two halves differ in
+when they take effect: pausing can be immediate (freeze the physics where it
+stands), while abandoning a run generally cannot — a plan is mid-motion, so a
+restart is best recorded and honoured at the next point the demo can stop
+without leaving something half-executed.
+
 ## Panels — how the UI is composed
 
 The frontend (`src/cramera/web/`) is a set of **panels** mounted into layout

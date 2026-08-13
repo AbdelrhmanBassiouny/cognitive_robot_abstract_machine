@@ -59,7 +59,16 @@ from semantic_digital_twin.world_description.connections import (
 )
 
 from cramera.knowledge.enums import PlanNodeGroup
+from cramera.knowledge.presets import Preset
+from cramera.knowledge.query_runner import EqlQueryRunner, RenderResult
 from cramera.live.model_source import LiveModelCatalog
+from cramera.live.query import LiveQuerySource, NoQuerySourceRegistered
+from cramera.live.run_control import (
+    LiveRunControl,
+    NoRunControlRegistered,
+    RunCommand,
+    RunControlState,
+)
 from cramera.mesh_format import MeshFormat
 from cramera.palette import ObjectPalette
 from cramera.robot_parts import RobotPartAnnotation
@@ -567,6 +576,12 @@ class BridgeStatus:
     movable: bool
     plan: bool
     chart: bool
+    query: bool
+    control: Optional[Dict[str, Any]]
+    """
+    The registered run control's published state, or None when nothing can be driven.
+    """
+
     sequence_number: int
     robot_parts: List[RobotPartAnnotation] = field(default_factory=list)
     """
@@ -751,6 +766,28 @@ class Bridge:
     The bridge's HTTP server once it is listening, so a second start reuses it.
     """
 
+    query_source: Optional[LiveQuerySource] = None
+    """
+    What the running demo offers to be queried about, once it registers itself.
+    """
+
+    run_control: Optional[LiveRunControl] = None
+    """
+    What the running demo offers to be driven by, once it registers itself.
+    """
+
+    _run_control_lock: threading.Lock = field(default_factory=threading.Lock)
+    """
+    Serializes commands: several viewers are answered from the bridge's own thread pool,
+    and two of them pausing at once must not interleave inside the demo's own flags.
+    """
+
+    _query_lock: threading.Lock = field(default_factory=threading.Lock)
+    """
+    Serializes queries: krrood's ``SymbolGraph`` singleton is not threadsafe, and the
+    bridge answers several viewers from its own thread pool.
+    """
+
     # %% one-time installation
     def claim_hook(self, hook: LiveHook) -> bool:
         """
@@ -924,6 +961,9 @@ class Bridge:
         """
         What the viewer polls to decide whether a live demo is reachable.
         """
+        # read before taking :attr:`_lock`: the demo's own control takes its own lock to
+        # answer, and the tick hook holds this one while it publishes every snapshot
+        control = self.run_control_payload() if self.run_control is not None else None
         with self._lock:
             return BridgeStatus(
                 running=self.world is not None,
@@ -932,6 +972,8 @@ class Bridge:
                 movable=True,
                 plan=bool(self.plan_state.nodes),
                 chart=bool(self.chart_state.nodes),
+                query=self.query_source is not None,
+                control=control,
                 sequence_number=self.sequence_number,
                 robot_parts=(
                     RobotPartAnnotation.of_robot(self.robot)
@@ -939,6 +981,117 @@ class Bridge:
                     else []
                 ),
             ).to_payload()
+
+    # %% viewer -> questions about the running demo
+    def register_query_source(self, source: LiveQuerySource) -> None:
+        """
+        Offer the running demo's state to the viewer's queries.
+
+        :param source: What the demo declares as queryable.
+        """
+        self.query_source = source
+        logger.info("live queries answered by '%s'", source.title())
+
+    def _registered_query_source(self) -> LiveQuerySource:
+        """
+        The registered query source.
+
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        """
+        if self.query_source is None:
+            raise NoQuerySourceRegistered()
+        return self.query_source
+
+    def query_title(self) -> str:
+        """
+        Short name of what queries are answered from.
+
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        """
+        return self._registered_query_source().title()
+
+    def query_presets(self) -> List[Preset]:
+        """
+        The ready-made queries the panel offers as buttons.
+
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        """
+        return self._registered_query_source().presets()
+
+    def query_variables(self) -> List[str]:
+        """
+        Names a query may range over, for the panel to advertise.
+
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        """
+        return [domain.name for domain in self._registered_query_source().domains()]
+
+    def run_query(self, code: str) -> RenderResult:
+        """
+        Answer one EQL query from the running demo's current state.
+
+        :param code: The EQL query source.
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        """
+        source = self._registered_query_source()
+        with self._query_lock:
+            return EqlQueryRunner(domains=source.domains()).run(code)
+
+    # %% viewer -> driving the run
+    def register_run_control(self, control: LiveRunControl) -> None:
+        """
+        Offer the running demo to the viewer's controls.
+
+        :param control: What the demo declares as drivable.
+        """
+        self.run_control = control
+        logger.info("run controlled by '%s'", control.title())
+
+    def _registered_run_control(self) -> LiveRunControl:
+        """
+        The registered run control.
+
+        :raises NoRunControlRegistered: When no demo offered one.
+        """
+        if self.run_control is None:
+            raise NoRunControlRegistered()
+        return self.run_control
+
+    def run_control_state(self) -> RunControlState:
+        """
+        Where the running demo stands.
+
+        :raises NoRunControlRegistered: When no demo offered one.
+        """
+        return self._registered_run_control().state()
+
+    def run_control_payload(self) -> Dict[str, Any]:
+        """
+        The run's state and the name of the demo it belongs to, as the viewer reads it.
+
+        :raises NoRunControlRegistered: When no demo offered one.
+        """
+        control = self._registered_run_control()
+        payload = control.state().to_payload()
+        payload["title"] = control.title()
+        return payload
+
+    def apply_run_command(self, command: RunCommand) -> Dict[str, Any]:
+        """
+        Ask the running demo to pause, resume, restart or keep looping.
+
+        :param command: What the viewer asked for.
+        :return: The state the command produced, in the same shape
+            :meth:`run_control_payload` publishes, so a viewer that acts on a command
+            and one that polls read the same thing.
+        :raises NoRunControlRegistered: When no demo offered one.
+        """
+        control = self._registered_run_control()
+        with self._run_control_lock:
+            control.apply(command)
+            payload = control.state().to_payload()
+        payload["title"] = control.title()
+        return payload
 
     # %% viewer -> world
     def queue_move(self, request: MoveRequest) -> None:

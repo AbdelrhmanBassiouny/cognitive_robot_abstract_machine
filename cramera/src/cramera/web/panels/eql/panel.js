@@ -1,9 +1,10 @@
 /* ============================================================================
  * panels/eql/panel.js — the EQL (Entity Query Language) console.
  *
- * Query box + presets + answer panel. Queries are executed server-side
- * (POST /api/eql) against the episode knowledge base; the knowledge-base overview
- * (GET /api/knowledge) provides presets and per-entity details.
+ * Query box + presets + answer panel. Queries go wherever core/query_source.js points:
+ * the server, answering from the recorded episode knowledge base, or an attached demo,
+ * answering from its own live state. The knowledge-base overview (GET /api/knowledge)
+ * always provides the per-entity details the describe panel shows.
  *
  * Bus events:
  *   emits    knowledge:ready {payload}          the /api/knowledge overview, once loaded
@@ -11,6 +12,7 @@
  *   listens  scene:part-clicked {id}     describe the clicked part
  *   listens  scene:step {step}           describe the running episode
  *   listens  entity:select {id, detail, relations}   node clicked in a graph
+ *   listens  live:changed {on, url}      answer from the demo instead of the recording
  * ==========================================================================*/
 Panels.define('eql', function (root, bus) {
   root.innerHTML =
@@ -34,6 +36,8 @@ Panels.define('eql', function (root, bus) {
   const presetsEl = root.querySelector('#presets');
 
   let knowledge = null;   // /api/knowledge overview (presets + entity details)
+  let source = QuerySource.of(null);   // where queries and presets are answered from
+  let recordedStatus = '';             // what the recorded scene calls itself
 
   // %% boot
   fetch(SceneContext.withScene('/api/knowledge')).then(ResponseUtil.parseJson).then(boot).catch(function (err) {
@@ -48,11 +52,28 @@ Panels.define('eql', function (root, bus) {
       return;
     }
     knowledge = payload;
-    knowledgeStatus.textContent = payload.status;
+    recordedStatus = payload.status;
     knowledgeStatus.classList.add('ready');
-    buildPresets(payload.presets || []);
+    if (!source.live) showSource(recordedStatus, payload.presets || []);
     welcome();
     bus.emit('knowledge:ready', { payload: payload });
+  }
+
+  // %% which source answers
+  bus.on('live:changed', function (live) {
+    source = QuerySource.of(live);
+    if (!source.live) return showSource(recordedStatus, (knowledge && knowledge.presets) || []);
+    fetch(source.presetsUrl).then(ResponseUtil.parseJson).then(function (payload) {
+      if (!payload.ok) throw new Error(payload.error || 'the demo offers no queries');
+      showSource('live · ' + payload.title, payload.presets || []);
+    }).catch(function (err) {
+      showSource('live · no queries (' + errorText(err) + ')', []);
+    });
+  });
+
+  function showSource(status, presets) {
+    knowledgeStatus.textContent = status;
+    buildPresets(presets);
   }
 
   function welcome() {
@@ -106,13 +127,19 @@ Panels.define('eql', function (root, bus) {
   function buildPresets(presets) {
     presetsEl.innerHTML = '';
     presets.forEach(function (p) {
+      // a bundle's own questions are about the demo it was recorded from, so they can
+      // only be answered while that demo is attached
+      const unanswerable = p.requires_live && !source.live;
       const b = document.createElement('div');
-      b.className = 'preset'; b.textContent = p.text;
-      b.title = p.code;
-      b.addEventListener('click', function () {
-        input.value = p.code;
-        runQuery(p.code);
-      });
+      b.className = unanswerable ? 'preset unavailable' : 'preset';
+      b.textContent = p.text;
+      b.title = unanswerable ? 'start the demo to answer this' : p.code;
+      if (!unanswerable) {
+        b.addEventListener('click', function () {
+          input.value = p.code;
+          runQuery(p.code);
+        });
+      }
       presetsEl.appendChild(b);
     });
   }
@@ -124,7 +151,7 @@ Panels.define('eql', function (root, bus) {
     running = true;
     runBtn.textContent = '…';
     try {
-      const r = await fetch(SceneContext.withScene('/api/eql'), {
+      const r = await fetch(source.runUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: code }),
@@ -138,7 +165,7 @@ Panels.define('eql', function (root, bus) {
   }
 
   function render(code, res) {
-    let html = '<div class="goal">&gt;&gt;&gt; ' + esc(code) + '</div>';
+    let html = '<div class="goal">&gt;&gt;&gt; ' + esc(code) + '</div>' + verbalization(res);
     if (!res.ok) {
       answerEl.innerHTML = html + '<div class="qerr">' + esc(res.error || 'query failed') + '</div>';
       bus.emit('entity:highlight', { ids: [] });
@@ -157,6 +184,14 @@ Panels.define('eql', function (root, bus) {
     });
     answerEl.innerHTML = html;
     bus.emit('entity:highlight', { ids: res.highlight || [] });
+  }
+
+  // the question in English, coloured by semantic role. The markup is krrood's own
+  // <span> colouring and its display text is escaped server-side, so it goes in as-is.
+  function verbalization(res) {
+    if (!res.verbalization || !res.verbalization.html) return '';
+    return '<div class="qverb" title="' + esc(res.verbalization.text) + '">' +
+      res.verbalization.html + '</div>';
   }
 
   function entityRow(row) {

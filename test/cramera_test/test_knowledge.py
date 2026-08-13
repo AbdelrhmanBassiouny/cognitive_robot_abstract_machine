@@ -17,10 +17,11 @@ from semantic_digital_twin.spatial_types import Point3  # noqa: E402
 from semantic_digital_twin.world_description.world_entity import Body  # noqa: E402
 
 from cramera.knowledge.entities import BenchObject  # noqa: E402
-from cramera.knowledge.eql_session import EqlSession, RowRenderer  # noqa: E402
+from cramera.knowledge.eql_session import EqlSession  # noqa: E402
+from cramera.knowledge.query_runner import RowRenderer  # noqa: E402
 from cramera.knowledge.graph_payload import KnowledgeGraphPayload  # noqa: E402
 from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase  # noqa: E402
-from cramera.knowledge.presets import Preset  # noqa: E402
+from cramera.knowledge.presets import ARCHITECTURE_PRESETS, Preset  # noqa: E402
 from cramera.knowledge.views.architecture import SubgraphViewPayload  # noqa: E402
 from cramera.knowledge.views.dispatcher import GraphPanelViews  # noqa: E402
 from cramera.knowledge.views.plan_tree import PlanViewPayload  # noqa: E402
@@ -188,7 +189,9 @@ class TestArmSideInference:
         )
         EpisodeKnowledgeBase.reset()
         center_arm = next(
-            arm for arm in EpisodeKnowledgeBase.of_active_scene().arms if arm.name == "center_arm"
+            arm
+            for arm in EpisodeKnowledgeBase.of_active_scene().arms
+            if arm.name == "center_arm"
         )
         assert center_arm.side is None
 
@@ -277,7 +280,9 @@ class TestRecordedMeasurements:
         )
         EpisodeKnowledgeBase.reset()
         milk = next(
-            entry for entry in EpisodeKnowledgeBase.of_active_scene().objects if entry.name == "milk"
+            entry
+            for entry in EpisodeKnowledgeBase.of_active_scene().objects
+            if entry.name == "milk"
         )
         assert milk.height_metres == 0.23
 
@@ -472,8 +477,8 @@ class TestPresetSafety:
         self, fixture_scene, monkeypatch
     ):
         """
-        ``Preset.of_scene()`` must escape object names, not splice them raw into
-        EQL source.
+        ``Preset.of_scene()`` must escape object names, not splice them raw into EQL
+        source.
         """
         bundle = SceneBundle.of_active_scene()
         scene, trajectory = bundle.scene, bundle.trajectory
@@ -485,9 +490,7 @@ class TestPresetSafety:
             lambda scene_name=None: SceneBundle(scene, trajectory),
         )
         EpisodeKnowledgeBase.reset()
-        preset = next(
-            p for p in Preset.of_scene() if "scene_object.name" in p.code
-        )
+        preset = next(p for p in Preset.of_scene() if "scene_object.name" in p.code)
         result = EqlSession.of_active_scene().run(preset.code)
         assert result.ok and result.rows[0]["__entity__"] == "o'brien"
 
@@ -857,9 +860,7 @@ class TestSceneSelection:
         scene = json.loads((source / "scene.json").read_text())
         scene["robot"]["name"] = "second_robot"
         (other / "scene.json").write_text(json.dumps(scene))
-        (other / "trajectory.json").write_text(
-            (source / "trajectory.json").read_text()
-        )
+        (other / "trajectory.json").write_text((source / "trajectory.json").read_text())
         EpisodeKnowledgeBase.reset()
         return "second"
 
@@ -887,11 +888,78 @@ class TestSceneSelection:
         assert any(node["id"] == "second_robot" for node in payload["nodes"])
 
 
+class TestBundleDeclaredPresets:
+    """
+    A bundle may ship the questions worth asking about the demo it was recorded from,
+    which replace the generated scene presets for that scene only.
+    """
+
+    def declare_presets(self, fixture_scene, presets):
+        """
+        Write a ``presets.json`` into the fixture bundle.
+
+        :param fixture_scene: The fixture scene's data directory.
+        :param presets: The preset entries to declare.
+        """
+        (fixture_scene / "scenes" / "fixture" / "presets.json").write_text(
+            json.dumps({"presets": presets})
+        )
+        EpisodeKnowledgeBase.reset()
+
+    def test_a_declared_preset_replaces_the_generated_scene_presets(
+        self, fixture_scene
+    ):
+        self.declare_presets(
+            fixture_scene,
+            [{"text": "which shapes are inserted?", "code": "an(entity(shape))"}],
+        )
+
+        presets = Preset.of_scene()
+
+        assert presets[0] == Preset(
+            "which shapes are inserted?", "an(entity(shape))", requires_live=True
+        )
+        assert not any(preset.text == "what is in the scene?" for preset in presets)
+
+    def test_the_architecture_presets_survive_a_declaration(self, fixture_scene):
+        """
+        They range over the repository scan rather than the scene, so they answer with
+        or without the demo the bundle's own questions need.
+        """
+        self.declare_presets(
+            fixture_scene, [{"text": "anything", "code": "an(entity(shape))"}]
+        )
+
+        assert ARCHITECTURE_PRESETS[0] in Preset.of_scene()
+
+    def test_a_declared_preset_is_marked_as_needing_a_running_demo(self, fixture_scene):
+        """
+        A bundle's questions range over variables only the live demo offers, so the
+        panel has to know it cannot answer them from the recording alone.
+        """
+        self.declare_presets(
+            fixture_scene, [{"text": "anything", "code": "an(entity(shape))"}]
+        )
+
+        assert Preset.of_scene()[0].requires_live is True
+
+    def test_a_generated_preset_does_not_need_a_running_demo(self, fixture_scene):
+        assert all(
+            preset.requires_live is False
+            for preset in Preset.of_scene()
+            if preset.text == "what is in the scene?"
+        )
+
+    def test_a_bundle_without_declared_presets_is_unchanged(self, fixture_scene):
+        assert any(
+            preset.text == "what is in the scene?" for preset in Preset.of_scene()
+        )
+
+
 class TestPresetSmoke:
     def test_every_preset_runs_and_returns_rows(self, fixture_scene):
         """
-        Every preset ``Preset.of_scene()`` hands to the EQL panel must actually
-        run.
+        Every preset ``Preset.of_scene()`` hands to the EQL panel must actually run.
 
         Replaces the module's former ``if __name__ == "__main__":`` smoke script, which
         logged OK/FAIL per preset instead of asserting anything.

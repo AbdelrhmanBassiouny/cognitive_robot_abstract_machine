@@ -19,10 +19,15 @@ sudo -u postgres psql -f semantic_digital_twin/scripts/create_postgres_database_
   -v user_password="montessori"
 ```
 
-This matches `franka_montessori_demo.py`'s own `DEFAULT_DATABASE_URI`
+This matches `results_database.py`'s own `DEFAULT_DATABASE_URI`
 (`postgresql+psycopg://semantic_digital_twin:montessori@localhost:5432/franka_montessori_sorting_results`);
 override it per run with `--database-uri`, or for every run with the
 `FRANKA_MONTESSORI_SORTING_DATABASE_URI` environment variable.
+
+If the role already exists with a different password, either set it to the one above
+or point the run somewhere else with `--database-uri`. `run_montessori_demo.sh` checks
+this before it starts anything, so a mismatch is reported in a fraction of a second
+rather than after a world has been built.
 
 ## Running a single iteration
 
@@ -104,6 +109,86 @@ run and print all of them against a real database without writing any code:
 python -m experiments.montessori.segmind_event_query_report
 python -m experiments.montessori.segmind_event_query_report --shape-key circular_hole_1
 ```
+
+## Asking the running demo questions
+
+`--cramera` serves the world and the running sort to the cramera viewer from inside the
+demo process. `run_montessori_demo.sh` at the repository root starts both together and
+takes any demo argument:
+
+```
+./run_montessori_demo.sh
+./run_montessori_demo.sh --no-rviz --only-shape square_hole
+```
+
+It runs with `--world2 --viewer` unless you say otherwise, since it exists to watch a
+run rather than to batch one; `--no-world2` and `--no-viewer` take those back. The demo
+module's own defaults are unchanged, so the headless batch runners are unaffected.
+
+Or run the two halves yourself:
+
+```
+python -m experiments.montessori.franka_montessori_demo --viewer --cramera
+./run_cramera.sh    # then open http://localhost:8711/
+```
+
+Leave `?scene=` off the viewer URL: it only attaches to a running demo by itself when
+the page names no recorded scene.
+
+The viewer's *Live* button appears within a few seconds, and the EQL panel's buttons
+become this demo's own questions, answered from the sort as it runs rather than from the
+database once it finishes. They cover three things:
+
+- **Was this shape inserted?** `shape.is_inserted` is the same geometric ground truth
+  `ShapeSortingBoard.has_fallen_through` gives, re-read after every attempt. A shape
+  names itself by what it *is* (`cube`, `cylinder_1`) rather than by the hole it is
+  aimed at; the world names every loose shape after its hole (`square_hole_shape`), so
+  `shape.name` would otherwise read as though the piece were the hole. `shape.shape_key`
+  keeps that pairing, and is the key results are recorded under.
+- **Where was it being inserted?** `shape.target_hole` and `shape.target_pose` name the
+  hole and the pose the attempt aims to release the shape at.
+- **Why could it not be?** `attempt.failure_reason` prefers the plan's own failure when
+  it names a cause, and otherwise reads the segmind events: never picked up, dropped out
+  of the gripper before the insertion phase, released off target, or wedged in the hole.
+  See `insertion_diagnosis.py` for the ranking.
+
+Four variables are in scope: `shape`, `attempt`, `plan_step` and `event`. The question
+set lives in `live_query_source.py` and is mirrored into the recorded
+`Franka_Montessori` bundle's `presets.json`, which a test keeps in step.
+
+Every answer is preceded by the query read back as coloured English, so a preset button
+says what it asked rather than only what came back.
+
+Nothing is persisted by this path — it reads the in-memory record in
+`sorting_progress.py`, which is why answers are available mid-run while the database
+only sees a completed iteration.
+
+## Driving the run from the viewer
+
+The scene panel's header carries **Pause**, **Restart** and **Loop** whenever a demo
+started with `--cramera` is attached (`run_control.py`), alongside a line saying what the
+run is doing and which iteration it is on.
+
+- **Pause** freezes the physics simulation where it stands, so the robot stops mid-motion
+  and the world can be queried exactly as it is. The sorting thread blocks at its next
+  checkpoint too, so nothing new is started while paused. **Resume** starts both again.
+- **Restart** abandons the current run and builds a fresh world. It is honoured at the
+  next attempt boundary rather than immediately: a plan mid-motion cannot be unwound
+  without leaving something half-executed, so a restart pressed during an insertion waits
+  for that insertion to finish. An abandoned run is not recorded to the database — it
+  sorted only some of its shapes, and a partial iteration alongside complete ones would
+  skew every rate computed from them. Pressing Restart while paused resumes first, since
+  a paused run never reaches a checkpoint.
+- **Loop** keeps building a new world each time a run finishes, until it is turned off.
+
+A single run that finishes with looping off now idles with its world up and its questions
+answerable, waiting for either of those buttons — which is what `--iterations 1` without
+`--exit-after-sorting` already did, except that the wait can now end in something other
+than Ctrl+C.
+
+> Looping runs many iterations in one long-lived process, which is exactly the shape the
+> `SIGSEGV` under **Known bugs** below shows up in. For an unattended run of many
+> iterations, prefer `batch_runner.py`.
 
 ## Known bugs
 

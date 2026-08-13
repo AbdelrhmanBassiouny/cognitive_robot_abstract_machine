@@ -15,6 +15,7 @@ import pytest
 from typing_extensions import List
 
 from cramera.knowledge.eql_session import EqlSession
+from cramera.knowledge.query_runner import RenderResult
 from cramera.paths import WEB_ROOT
 
 JS_DIR = Path(__file__).parent / "js"
@@ -142,6 +143,12 @@ class TestJsUnits:
     def test_scene_context(self):
         self.run_node("test_scene_context.js")
 
+    def test_query_source_routing(self):
+        self.run_node("test_query_source.js")
+
+    def test_run_control_buttons(self):
+        self.run_node("test_run_control.js")
+
     def test_scene_picker(self):
         self.run_node("test_scene_picker.js")
 
@@ -162,6 +169,29 @@ class TestJsUnits:
 
     def test_joint_routing(self):
         self.run_node("test_joint_routing.js")
+
+
+class TestQueryPanelReadsTheAnswer:
+    """
+    The answer payload is produced in Python and consumed in JavaScript, so a renamed
+    key drifts silently until someone opens the panel.
+    """
+
+    def test_the_panel_reads_the_verbalization_under_the_key_it_is_sent_as(self):
+        payload = RenderResult(
+            kind="rows", rows=[], count=0, more=False, highlight=[]
+        ).to_payload()
+
+        assert "verbalization" in payload
+        assert "res.verbalization" in read("panels/eql/panel.js")
+
+    def test_the_verbalization_is_styled_by_the_stylesheet(self):
+        """
+        The words are coloured by krrood; the block they sit in is cramera's own.
+        """
+        panel = read("panels/eql/panel.js")
+        assert 'class="qverb"' in panel
+        assert ".qverb{" in read("app.css")
 
 
 class TestQueryPanelHints:

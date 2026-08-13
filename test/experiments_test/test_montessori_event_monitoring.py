@@ -5,6 +5,10 @@ from experiments.montessori.event_monitoring import build_shape_monitor
 from experiments.montessori.semantics import MontessoriShape, ShapeSortingHole
 from experiments.montessori.world import MontessoriWorld, TABLE_POSITION, TABLE_SCALE
 from segmind.datastructures.events import InsertionEvent, PickUpEvent
+from segmind.detectors.atomic_event_detectors_nodes import (
+    ContactDetector,
+    LossOfContactDetector,
+)
 from segmind.detectors.base import SegmindContext
 from segmind.episode_segmenter import EpisodeSegmenterExecutor
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
@@ -39,9 +43,9 @@ def test_detect_holes_returns_every_shape_sorting_hole_not_the_loose_shapes():
 
 def test_shape_falling_through_its_hole_is_detected_as_pick_up_and_insertion():
     """
-    Moves the square hole's cube shape off the table, over its hole, and down through
-    it to rest, ticking a :class:`MontessoriEventMonitor` by hand throughout (rather
-    than starting its background thread) for a fully deterministic sequence of events.
+    Moves the square hole's cube shape off the table, over its hole, and down through it
+    to rest, ticking a :class:`MontessoriEventMonitor` by hand throughout (rather than
+    starting its background thread) for a fully deterministic sequence of events.
     """
     montessori = MontessoriWorld(shapes_are_movable=True)
     shape, hole = _shape_and_hole(montessori, "square_hole")
@@ -53,7 +57,9 @@ def test_shape_falling_through_its_hole_is_detected_as_pick_up_and_insertion():
     hole_position = hole.root.global_transform.to_position()
 
     def move_to(x: float, y: float, z: float) -> None:
-        shape.root.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(x, y, z)
+        shape.root.parent_connection.origin = (
+            HomogeneousTransformationMatrix.from_xyz_rpy(x, y, z)
+        )
         monitor.tick()
 
     # Settle on the table first, so there is a real SupportEvent(table) to be lost.
@@ -63,13 +69,18 @@ def test_shape_falling_through_its_hole_is_detected_as_pick_up_and_insertion():
     # Lift the shape off the table and carry it to hover above the hole.
     for t in np.linspace(0.0, 1.0, 6):
         move_to(
-            float(start_position.x) + t * (float(hole_position.x) - float(start_position.x)),
-            float(start_position.y) + t * (float(hole_position.y) - float(start_position.y)),
-            float(start_position.z) + t * (float(hole_position.z) + 0.05 - float(start_position.z)),
+            float(start_position.x)
+            + t * (float(hole_position.x) - float(start_position.x)),
+            float(start_position.y)
+            + t * (float(hole_position.y) - float(start_position.y)),
+            float(start_position.z)
+            + t * (float(hole_position.z) + 0.05 - float(start_position.z)),
         )
 
     # Lower it through the hole down to its resting position on the table.
-    for z in np.linspace(float(hole_position.z) + 0.05, table_top_z - resting_low_z, 10):
+    for z in np.linspace(
+        float(hole_position.z) + 0.05, table_top_z - resting_low_z, 10
+    ):
         move_to(float(hole_position.x), float(hole_position.y), float(z))
 
     # Let StopTranslationDetector's pose window (see MotionDetector.window_size)
@@ -78,14 +89,35 @@ def test_shape_falling_through_its_hole_is_detected_as_pick_up_and_insertion():
         monitor.tick()
 
     pick_up_events = [
-        event for event in monitor.events
+        event
+        for event in monitor.events
         if isinstance(event, PickUpEvent) and event.tracked_object is shape.root
     ]
     insertion_events = [
-        event for event in monitor.events
+        event
+        for event in monitor.events
         if isinstance(event, InsertionEvent) and event.tracked_object is shape.root
     ]
 
     assert len(pick_up_events) == 1
     assert len(insertion_events) == 1
     assert insertion_events[0].through_hole is hole
+
+
+def test_the_monitor_tracks_the_shape_leaving_the_gripper():
+    """
+    A shape that slips out of the fingers mid-transport is why an insertion failed, so
+    plain contact with the robot has to be watched, not only contact with the hole.
+    """
+    montessori = MontessoriWorld(shapes_are_movable=True)
+    shape, _ = _shape_and_hole(montessori, "square_hole")
+
+    monitor = build_shape_monitor(montessori, shape)
+
+    installed = {type(detector) for detector in monitor.detectors}
+    assert {ContactDetector, LossOfContactDetector} <= installed
+    assert all(
+        detector.tracked_object is shape.root
+        for detector in monitor.detectors
+        if isinstance(detector, (ContactDetector, LossOfContactDetector))
+    )

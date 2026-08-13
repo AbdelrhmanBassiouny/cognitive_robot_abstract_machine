@@ -1,13 +1,14 @@
 """
 Live segmind event monitoring for the Franka Montessori demo: while a simulation is
 running, tick a small segmind statechart in the background so pick-up and insertion
-events are detected as they happen, rather than only checked for after the fact via
-:meth:`~experiments.montessori.insert_shape_action.InsertMontessoriShapeAction.has_fallen_through_hole`.
+events are detected as they happen, rather than only checked for after the fact via :met
+h:`~experiments.montessori.insert_shape_action.InsertMontessoriShapeAction.has_fallen_th
+rough_hole`.
 
 A monitor tracks one shape at a time (see :func:`build_shape_monitor`), which keeps a
 tick around 0.2s on this scene, fast enough to run live in the background without
-slowing the demo down. Tracking every loose shape on the table at once needs the
-broader collision-broad-phase optimization tracked separately, not yet done.
+slowing the demo down. Tracking every loose shape on the table at once needs the broader
+collision-broad-phase optimization tracked separately, not yet done.
 """
 
 from __future__ import annotations
@@ -24,11 +25,16 @@ from experiments.montessori.world import MontessoriWorld
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from segmind.datastructures.events import DetectionEvent
 from segmind.detectors.atomic_event_detectors_nodes import (
+    ContactDetector,
+    LossOfContactDetector,
     StopTranslationDetector,
     TranslationDetector,
 )
 from segmind.detectors.base import AbstractDetector, SegmindContext
-from segmind.detectors.coarse_event_detector_nodes import PickUpDetector, PlacingDetector
+from segmind.detectors.coarse_event_detector_nodes import (
+    PickUpDetector,
+    PlacingDetector,
+)
 from segmind.detectors.spatial_relation_detector_nodes import (
     ContainmentDetector,
     HoleContactDetector,
@@ -74,18 +80,32 @@ def build_shape_monitor(
     landing_region = montessori.landing_regions.get(hole.name.name)
     additional_candidates = {hole: landing_region} if landing_region is not None else {}
     detectors = [
-        HoleContactDetector(tracked_object=shape.root, additional_candidates=additional_candidates),
-        LossOfHoleContactDetector(tracked_object=shape.root, additional_candidates=additional_candidates),
+        HoleContactDetector(
+            tracked_object=shape.root, additional_candidates=additional_candidates
+        ),
+        LossOfHoleContactDetector(
+            tracked_object=shape.root, additional_candidates=additional_candidates
+        ),
         SupportDetector(tracked_object=shape.root),
         LossOfSupportDetector(tracked_object=shape.root),
         ContainmentDetector(
             tracked_object=shape.root,
-            additional_candidates=[landing_region] if landing_region is not None else [],
+            additional_candidates=(
+                [landing_region] if landing_region is not None else []
+            ),
         ),
         LossOfContainmentDetector(
             tracked_object=shape.root,
-            additional_candidates=[landing_region] if landing_region is not None else [],
+            additional_candidates=(
+                [landing_region] if landing_region is not None else []
+            ),
         ),
+        # plain contact with whatever body is touching the shape, the gripper's fingers
+        # included: a shape that slips out of them mid-transport is why an insertion
+        # failed, and the hole-specific detectors above never see the robot at all (see
+        # experiments.montessori.insertion_diagnosis)
+        ContactDetector(tracked_object=shape.root),
+        LossOfContactDetector(tracked_object=shape.root),
         TranslationDetector(tracked_object=shape.root),
         StopTranslationDetector(tracked_object=shape.root),
         PickUpDetector(tracked_object=shape.root),
@@ -98,8 +118,8 @@ def build_shape_monitor(
 @dataclass
 class MontessoriEventMonitor:
     """
-    Ticks a segmind statechart against a live world on a background thread, so
-    pick-up/insertion events are detected as the simulation runs instead of only
+    Ticks a segmind statechart against a live world on a background thread, so pick-
+    up/insertion events are detected as the simulation runs instead of only
     reconstructed afterwards.
 
     Reads whatever pose data is currently in :attr:`world` on each tick, the same way
@@ -142,7 +162,9 @@ class MontessoriEventMonitor:
     The background thread ticking the statechart, once :meth:`start` has been called.
     """
 
-    _stop_requested: threading.Event = field(init=False, default_factory=threading.Event)
+    _stop_requested: threading.Event = field(
+        init=False, default_factory=threading.Event
+    )
     """
     Set by :meth:`stop` to end the background thread's tick loop.
     """

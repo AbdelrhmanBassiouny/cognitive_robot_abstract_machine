@@ -36,6 +36,26 @@ def server(bridge):
     httpd.shutdown()
 
 
+def post_json(url, payload):
+    """
+    POST ``payload`` as JSON and return the decoded answer, error responses included.
+
+    :param url: The endpoint to post to.
+    :param payload: The JSON-serializable request body.
+    """
+    request = urllib.request.Request(
+        url,
+        method="POST",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        return json.loads(error.read())
+
+
 def publish_mesh_object(
     bridge, tmp_path, key="milk.stl", content=b"solid milk endsolid"
 ):
@@ -81,6 +101,8 @@ class TestReadOnlyEndpoints:
             "movable": True,
             "plan": False,
             "chart": False,
+            "query": False,
+            "control": None,
             "sequenceNumber": 0,
             "partAnnotations": [],
         }
@@ -209,6 +231,129 @@ class TestMove:
         except urllib.error.HTTPError as error:
             status = error.code
         assert status == 404
+
+
+class TestQueryEndpoints:
+    """
+    The panel asks the running demo itself, over the same bridge it polls for state.
+    """
+
+    @pytest.fixture()
+    def query_bridge(self, bridge):
+        krrood = pytest.importorskip(
+            "krrood", reason="EQL requires krrood"
+        )  # noqa: F841
+        from .test_live_query import GrowingRecordSource, make_record
+
+        bridge.register_query_source(
+            GrowingRecordSource(records=[make_record("first")])
+        )
+        return bridge
+
+    def test_presets_are_the_registered_sources(self, server, query_bridge):
+        assert get_json(server + "/presets") == {
+            "ok": True,
+            "title": "record demo",
+            "presets": [
+                {
+                    "text": "all records",
+                    "code": "an(entity(record))",
+                    "requires_live": False,
+                }
+            ],
+            "variables": ["record"],
+        }
+
+    def test_presets_without_a_source_report_why(self, server):
+        payload = get_json(server + "/presets")
+        assert payload["ok"] is False
+        assert payload["presets"] == []
+
+    def test_a_query_is_answered_from_the_running_demo(self, server, query_bridge):
+        payload = post_json(server + "/eql", {"code": "an(entity(record))"})
+
+        assert payload["ok"] is True
+        assert [row["__entity__"] for row in payload["rows"]] == ["first"]
+
+    def test_info_announces_that_querying_is_available(self, server, query_bridge):
+        assert get_json(server + "/info")["query"] is True
+
+    def test_a_broken_query_is_reported_rather_than_crashing_the_handler(
+        self, server, query_bridge
+    ):
+        payload = post_json(server + "/eql", {"code": "definitely not python ((("})
+
+        assert payload["ok"] is False
+        assert "SyntaxError" in payload["error"]
+
+    def test_an_empty_query_is_rejected(self, server, query_bridge):
+        assert post_json(server + "/eql", {"code": "   "})["ok"] is False
+
+    def test_a_query_without_a_source_reports_why(self, server):
+        payload = post_json(server + "/eql", {"code": "an(entity(record))"})
+
+        assert payload["ok"] is False
+        assert "no query source" in payload["error"].lower()
+
+
+class TestRunControlEndpoints:
+    """
+    The viewer drives the demo over the same bridge it polls for state.
+    """
+
+    @pytest.fixture()
+    def controlled_bridge(self, bridge):
+        from .test_live_run_control import RecordingRunControl
+
+        control = RecordingRunControl()
+        bridge.register_run_control(control)
+        return bridge, control
+
+    def test_the_run_state_is_served(self, server, controlled_bridge):
+        payload = get_json(server + "/run")
+
+        assert payload["ok"] is True
+        assert payload["title"] == "record demo"
+        assert payload["paused"] is False
+
+    def test_the_run_state_without_a_demo_reports_why(self, server):
+        payload = get_json(server + "/run")
+
+        assert payload["ok"] is False
+        assert "no run control" in payload["error"].lower()
+
+    def test_a_command_reaches_the_demo(self, server, controlled_bridge):
+        _, control = controlled_bridge
+
+        payload = post_json(server + "/run", {"command": "pause"})
+
+        assert payload["ok"] is True
+        assert payload["paused"] is True
+        assert [command.value for command in control.applied] == ["pause"]
+
+    def test_an_unknown_command_is_refused_rather_than_ignored(
+        self, server, controlled_bridge
+    ):
+        _, control = controlled_bridge
+
+        payload = post_json(server + "/run", {"command": "self_destruct"})
+
+        assert payload["ok"] is False
+        assert "self_destruct" in payload["error"]
+        assert control.applied == []
+
+    def test_a_command_without_a_demo_reports_why(self, server):
+        payload = post_json(server + "/run", {"command": "pause"})
+
+        assert payload["ok"] is False
+        assert "no run control" in payload["error"].lower()
+
+    def test_info_carries_the_run_state_the_controls_render(
+        self, server, controlled_bridge
+    ):
+        post_json(server + "/run", {"command": "enable_loop"})
+
+        assert get_json(server + "/info")["control"]["looping"] is True
 
 
 class TestOptions:

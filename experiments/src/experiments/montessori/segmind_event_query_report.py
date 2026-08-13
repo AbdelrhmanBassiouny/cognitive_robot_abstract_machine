@@ -16,12 +16,12 @@ Run with (the ``experiments`` package must be importable)::
 from __future__ import annotations
 
 import argparse
-import os
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 import experiments.orm.ormatic_interface as ormatic_interface
+from experiments.montessori.results_database import configured_database_uri
 from experiments.montessori.segmind_event_query_examples import (
     attempts_with_pick_up_but_no_insertion,
     events_recorded_during_plan,
@@ -30,16 +30,6 @@ from experiments.montessori.segmind_event_query_examples import (
     shape_results_for_shape_key,
 )
 from krrood.ormatic.utils import create_engine
-
-DEFAULT_DATABASE_URI = (
-    "postgresql+psycopg://semantic_digital_twin:montessori@localhost:5432/"
-    "franka_montessori_sorting_results"
-)
-"""
-Database URI used when neither ``--database-uri`` nor
-``FRANKA_MONTESSORI_SORTING_DATABASE_URI`` is given, matching
-:data:`~experiments.montessori.franka_montessori_demo.DEFAULT_DATABASE_URI`.
-"""
 
 DEFAULT_SHAPE_KEY = "square_hole"
 """
@@ -57,10 +47,9 @@ def _parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--database-uri",
-        default=os.getenv(
-            "FRANKA_MONTESSORI_SORTING_DATABASE_URI", DEFAULT_DATABASE_URI
-        ),
-        help="Database URI to query. Defaults to DEFAULT_DATABASE_URI, overridable via "
+        default=configured_database_uri(),
+        help="Database URI to query. Defaults to "
+        "results_database.DEFAULT_DATABASE_URI, overridable via "
         "FRANKA_MONTESSORI_SORTING_DATABASE_URI.",
     )
     parser.add_argument(

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from cramera.knowledge.entity import NamedEntity
 
-from typing_extensions import Tuple
+from typing_extensions import List, Tuple
 
 
 @dataclass(unsafe_hash=True)
@@ -102,3 +102,12 @@ class PythonClass(NamedEntity):
         Unique across the scan, which is what the graph uses as the class's node id.
         """
         return self.module + "." + self.name
+
+    def related_highlight_ids(self) -> List[str]:
+        """
+        The subpackage and package to light up instead of the class itself.
+
+        A class is not a node of the graph, so an answer naming one has to point at the
+        groupings that are.
+        """
+        return [self.subpackage, self.package]
