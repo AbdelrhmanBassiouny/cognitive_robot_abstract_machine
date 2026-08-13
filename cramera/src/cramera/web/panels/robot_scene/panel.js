@@ -35,6 +35,7 @@ Panels.define('robot-scene', function (root, bus) {
     '  <div id="layers-panel" class="layers-panel">' +
     '    <div class="lp-title">Layers</div>' +
     '    <label class="lp-row"><input type="checkbox" id="lyr-objects" checked><span>Bench objects</span></label>' +
+    '    <label class="lp-row" title="debug markers the CRAM system publishes (collisions, costmaps, spatial types)"><input type="checkbox" id="lyr-markers" checked><span>ROS markers</span></label>' +
     '    <label class="lp-row"><input type="checkbox" id="lyr-labels"><span>Object labels</span></label>' +
     '    <label class="lp-row"><input type="checkbox" id="lyr-floor" checked><span>Floor shadow</span></label>' +
     '    <label class="lp-row" title="Attach to a running demo whenever one is reachable — including the next run after this one ends — instead of only once per page"><input type="checkbox" id="lyr-auto-live" checked><span>Auto-attach live</span></label>' +
@@ -173,6 +174,8 @@ Panels.define('robot-scene', function (root, bus) {
 
   // z-up (URDF/map) -> three y-up
   const worldRoot = new THREE.Group();
+  const markerRoot = new THREE.Group();   // the CRAM debug-marker overlay (/markers)
+  worldRoot.add(markerRoot);
   worldRoot.rotation.x = -Math.PI / 2;
   scene3.add(worldRoot);
 
@@ -1149,6 +1152,90 @@ Panels.define('robot-scene', function (root, bus) {
       else liveReloadRequested = false;        // bundling failed — try again next probe
     }).catch(function () { liveReloadRequested = false; });
   }
+  // %% the CRAM debug-marker overlay
+  let lastMarkersVersion = -1;
+  function refreshMarkers() {
+    fetch(liveUrl() + '/markers').then(function (r) { return r.json(); })
+      .then(function (payload) {
+        clearMarkers();
+        (payload.markers || []).forEach(function (marker) {
+          const built = buildMarker(marker);
+          if (built) markerRoot.add(built);
+        });
+        needsRender = true;
+      }).catch(function () {});
+  }
+  function clearMarkers() {
+    while (markerRoot.children.length) {
+      const child = markerRoot.children[0];
+      markerRoot.remove(child);
+      child.traverse(function (c) {
+        if (c.geometry) c.geometry.dispose();
+        if (c.material) { c.material.map && c.material.map.dispose(); c.material.dispose(); }
+      });
+    }
+  }
+  function markerMaterial(spec) {
+    return new THREE.MeshStandardMaterial({
+      color: new THREE.Color(spec.color),
+      transparent: spec.opacity < 1, opacity: spec.opacity,
+      roughness: 0.55, metalness: 0.05, envMapIntensity: 0.6,
+    });
+  }
+  function buildMarker(marker) {
+    const spec = MarkerSpecs.buildSpec(marker);
+    if (!spec) return null;
+    const holder = new THREE.Group();
+    holder.position.set(spec.pose[0], spec.pose[1], spec.pose[2]);
+    holder.quaternion.set(spec.pose[3], spec.pose[4], spec.pose[5], spec.pose[6]);
+    if (spec.type === 'box') {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), markerMaterial(spec));
+      mesh.scale.set(spec.size[0], spec.size[1], spec.size[2]);
+      holder.add(mesh);
+    } else if (spec.type === 'sphere') {
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 20, 14), markerMaterial(spec));
+      mesh.scale.set(spec.size[0], spec.size[1], spec.size[2]);
+      holder.add(mesh);
+    } else if (spec.type === 'cylinder') {
+      const geometry = new THREE.CylinderGeometry(0.5, 0.5, 1, 24);
+      geometry.rotateX(Math.PI / 2);                      // marker cylinders run along Z
+      const mesh = new THREE.Mesh(geometry, markerMaterial(spec));
+      mesh.scale.set(spec.size[0], spec.size[1], spec.size[2]);
+      holder.add(mesh);
+    } else if (spec.type === 'arrow') {
+      const material = markerMaterial(spec);
+      const headLength = Math.min(spec.length * 0.3, spec.headDiameter * 1.5);
+      const shaft = new THREE.Mesh(
+        new THREE.CylinderGeometry(spec.shaftDiameter / 2, spec.shaftDiameter / 2, spec.length - headLength, 12),
+        material);
+      shaft.rotation.z = -Math.PI / 2;                    // along +X
+      shaft.position.x = (spec.length - headLength) / 2;
+      const head = new THREE.Mesh(
+        new THREE.ConeGeometry(spec.headDiameter / 2, headLength, 12), material);
+      head.rotation.z = -Math.PI / 2;
+      head.position.x = spec.length - headLength / 2;
+      holder.add(shaft); holder.add(head);
+    } else if (spec.type === 'line' || spec.type === 'segments') {
+      const geometry = new THREE.BufferGeometry().setFromPoints(
+        spec.points.map(function (p) { return new THREE.Vector3(p[0], p[1], p[2]); }));
+      const material = new THREE.LineBasicMaterial({
+        color: new THREE.Color(spec.color), transparent: spec.opacity < 1, opacity: spec.opacity });
+      holder.add(spec.type === 'line' ? new THREE.Line(geometry, material)
+        : new THREE.LineSegments(geometry, material));
+    } else if (spec.type === 'points') {
+      const geometry = new THREE.BufferGeometry().setFromPoints(
+        spec.points.map(function (p) { return new THREE.Vector3(p[0], p[1], p[2]); }));
+      holder.add(new THREE.Points(geometry, new THREE.PointsMaterial({
+        color: new THREE.Color(spec.color), size: spec.size, sizeAttenuation: true,
+        transparent: spec.opacity < 1, opacity: spec.opacity })));
+    } else if (spec.type === 'text') {
+      const label = makeLabel(spec.text, spec.color);
+      label.visible = true;
+      holder.add(label);
+    }
+    return holder;
+  }
+
   function applyLive(st) {
     if (!st || !st.frames) return;
     for (const k in st.frames) {
@@ -1163,6 +1250,10 @@ Panels.define('robot-scene', function (root, bus) {
       models.forEach(function (m) {
         if (m.prefix === prefix) setPose(m.obj, modelBases[prefix], modelBases[prefix], 0);
       });
+    }
+    if (typeof st.markersVersion === 'number' && st.markersVersion !== lastMarkersVersion) {
+      lastMarkersVersion = st.markersVersion;
+      refreshMarkers();
     }
     let unknown = false;
     liveStateKeys = st.objects || {};
@@ -1279,6 +1370,7 @@ Panels.define('robot-scene', function (root, bus) {
     if (on) {
       playing = false;
       lastSeq = -1;
+      lastMarkersVersion = -1;
       liveStateKeys = {};
       livePolls = 0;
       verifyLiveBundle();
@@ -1288,6 +1380,7 @@ Panels.define('robot-scene', function (root, bus) {
       clearInterval(liveTimer);
       liveTimer = null;
       // remove objects that only existed for the live world, restore the rest
+      clearMarkers();
       for (const key in liveSpawned) removeObject(key);
       for (const key in objectMeshes) objectMeshes[key].visible = true;
       if (traj) applyFrame(playhead);                 // back to the recording
@@ -1428,6 +1521,11 @@ Panels.define('robot-scene', function (root, bus) {
     el.addEventListener('change', function () { RobotView[method](el.checked); });
   }
   bindLayer('lyr-objects', 'setPropsVisible');
+  const markersLayerEl = $('lyr-markers');
+  markersLayerEl.addEventListener('change', function () {
+    markerRoot.visible = markersLayerEl.checked;
+    needsRender = true;
+  });
   bindLayer('lyr-labels', 'setLabelsAlways');
   bindLayer('lyr-floor', 'setFloorVisible');
   const autoLiveEl = $('lyr-auto-live');

@@ -54,6 +54,7 @@ from semantic_digital_twin.world_description.connections import (
 )
 
 from cramera.knowledge.enums import PlanNodeGroup
+from cramera.live.markers import MarkerEntry, MarkerStore
 from cramera.live.shape_catalog import ShapeEntry, served_mesh_file, shape_entry
 from cramera.mesh_format import MeshFormat
 from cramera.palette import ObjectPalette
@@ -513,6 +514,11 @@ class WorldStateSnapshot:
     Loose-object pose by mesh key, in the same 7-element form as :attr:`base`.
     """
 
+    markers_version: int = 0
+    """
+    Version of the debug-marker overlay; the viewer refetches ``/markers`` on change.
+    """
+
     model_bases: Dict[str, List[float]] = field(default_factory=dict)
     """
     Every bundled model's root pose by world-instance prefix, in the same 7-element
@@ -526,6 +532,7 @@ class WorldStateSnapshot:
         payload = asdict(self)
         payload["sequenceNumber"] = payload.pop("sequence_number")
         payload["modelBases"] = payload.pop("model_bases")
+        payload["markersVersion"] = payload.pop("markers_version")
         return payload
 
 
@@ -720,6 +727,23 @@ class Bridge:
     Counts world attachments and model changes, reported as the status's model version.
     """
 
+    _marker_stores: Dict[str, MarkerStore] = field(default_factory=dict)
+    """
+    The ROS debug markers per subscribed topic (see :mod:`cramera.live.ros_markers`).
+    """
+
+    marker_state: Dict[str, Any] = field(
+        default_factory=lambda: {"version": 0, "markers": []}
+    )
+    """
+    The newest marker-overlay snapshot the HTTP layer serves.
+    """
+
+    _published_marker_revision: int = -1
+    """
+    The aggregate store revision :attr:`marker_state` was built from.
+    """
+
     _bundle_signature: str = ""
     """
     Cached digest of the bundled scene content, recomputed on attach and model change.
@@ -807,6 +831,119 @@ class Bridge:
         self._model_revision += 1
         self.bind()
         self._refresh_bundle_signature()
+
+    def observe_ros_markers(self, topic: str, markers: List[Any]) -> None:
+        """
+        Apply one received ``MarkerArray`` (called on the ROS subscriber thread).
+
+        Only the store is touched here; the publishable payload is rebuilt on the
+        simulation thread, which may read the world for frame resolution.
+
+        :param topic: The topic the array arrived on.
+        :param markers: The array's markers.
+        """
+        store = self._marker_stores.setdefault(topic, MarkerStore())
+        store.observe(markers)
+
+    def _marker_revision(self) -> int:
+        """
+        The aggregate revision over every topic's marker store.
+        """
+        return sum(store.revision for store in self._marker_stores.values())
+
+    def _refresh_marker_state(self) -> None:
+        """
+        Rebuild the marker overlay payload if any store changed since the last build.
+
+        Runs on the simulation thread: excluding the world-model markers and
+        resolving marker frames both read the world. Markers whose namespace names a
+        world entity are the robot/environment geometry the scene already renders,
+        and stay out of the overlay.
+        """
+        revision = self._marker_revision()
+        if revision == self._published_marker_revision:
+            return
+        world_entity_names = set()
+        if self.world is not None:
+            world_entity_names = {str(body.name) for body in self.world.bodies} | {
+                str(region.name) for region in self.world.regions
+            }
+        markers = []
+        for topic in sorted(self._marker_stores):
+            for entry in self._marker_stores[topic].entries.values():
+                if entry.ns in world_entity_names:
+                    continue
+                markers.append(self._marker_payload(topic, entry))
+        self._published_marker_revision = revision
+        with self._lock:
+            self.marker_state = {"version": revision, "markers": markers}
+
+    def _marker_payload(self, topic: str, entry: MarkerEntry) -> Dict[str, Any]:
+        """
+        One marker as the viewer renders it, with its pose resolved into the world.
+
+        :param topic: The topic the marker arrived on.
+        :param entry: The marker to publish.
+        """
+        return {
+            "topic": topic,
+            "ns": entry.ns,
+            "id": entry.id,
+            "kind": entry.kind,
+            "pose": self._marker_world_pose(entry),
+            "scale": entry.scale,
+            "color": entry.color,
+            "opacity": entry.opacity,
+            "points": entry.points,
+            "text": entry.text,
+        }
+
+    def _marker_world_pose(self, entry: MarkerEntry) -> List[float]:
+        """
+        A marker's pose in world coordinates, as ``[x, y, z, qx, qy, qz, qw]``.
+
+        A frame naming a world body anchors the marker to that body's current pose;
+        the world root (under any of its usual names) and unknown frames read as the
+        world itself.
+
+        :param entry: The marker whose pose is resolved.
+        """
+        local = entry.position + entry.quaternion
+        world = self.world
+        if world is None:
+            return local
+        frame_body = self._marker_frame_body(entry.frame)
+        if frame_body is None:
+            return local
+        frame_T_marker = HomogeneousTransformationMatrix.from_xyz_quaternion(*local)
+        world_T_marker = frame_body.global_pose.to_homogeneous_matrix() @ frame_T_marker
+        return [
+            round(value, POSE_PRECISION)
+            for value in world_T_marker.to_position_quaternion_list()
+        ]
+
+    def _marker_frame_body(self, frame: str) -> Optional[Body]:
+        """
+        The world body a marker frame names, or None for the world root and frames
+        the world does not know.
+
+        :param frame: The marker's ``frame_id``.
+        """
+        root_name = str(self.world.root.name)
+        if frame in ("", "map", "world", root_name, root_name.split("/")[-1]):
+            return None
+        for body in self.world.bodies:
+            name = str(body.name)
+            if frame == name or frame == name.split("/")[-1]:
+                return body
+        return None
+
+    def get_markers(self) -> Dict[str, Any]:
+        """
+        The debug-marker overlay the viewer renders.
+        """
+        with self._lock:
+            return self.marker_state
 
     def publish_bodies(self, bodies: Dict[str, Body]) -> None:
         """
@@ -1173,6 +1310,7 @@ class Bridge:
                 base_pose = rounded_pose(body)
             else:
                 object_poses[name] = rounded_pose(body)
+        self._refresh_marker_state()
         with self._lock:
             self.sequence_number += 1
             self.state = WorldStateSnapshot(
@@ -1180,6 +1318,7 @@ class Bridge:
                 frames=frames,
                 base=base_pose,
                 objects=object_poses,
+                markers_version=self.marker_state["version"],
             )
 
     def get_state(self) -> Dict[str, Any]:

@@ -68,6 +68,7 @@ class TestReadOnlyEndpoints:
             "base": None,
             "objects": {},
             "modelBases": {},
+            "markersVersion": 0,
         }
 
     def test_plan_reflects_a_fresh_bridge(self, server):
@@ -137,6 +138,11 @@ class TestMesh:
             get(server + "/mesh?key=board.obj%230&side=..%2Fsecret.txt")
 
         assert error.value.code == 403
+
+
+class TestMarkers:
+    def test_a_fresh_bridge_serves_an_empty_overlay(self, server):
+        assert get_json(server + "/markers") == {"version": 0, "markers": []}
 
 
 class TestLiveScene:

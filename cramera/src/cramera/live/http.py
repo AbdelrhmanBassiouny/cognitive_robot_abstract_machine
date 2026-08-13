@@ -8,6 +8,8 @@ HTTP endpoints of the live bridge (default port 8765).
     GET /state   {sequenceNumber, frames: {prefixed_joint: position},
                   base: pose, objects: {mesh_key: pose}}
     GET /objects geometry catalog (mesh served via /mesh?key=)
+    GET /markers {version, markers: [{topic, ns, id, kind, pose, scale, color,
+                  opacity, points, text}]}  the CRAM debug-marker overlay
     GET /live_scene  {scene}  bundles the running demo's *current* world into a
                       throwaway scene (see :mod:`cramera.live.live_bundle`) and names
                       it, or {scene: null} when nothing is tracked yet; the viewer
@@ -103,6 +105,8 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_mesh()
         if self.path.startswith("/live_scene"):
             return self._send_json({"scene": build_live_scene(self.bridge)})
+        if self.path.startswith("/markers"):
+            return self._send_json(self.bridge.get_markers())
         if self.path.startswith("/info"):
             return self._send_json(self.bridge.status())
         self.send_response(404)

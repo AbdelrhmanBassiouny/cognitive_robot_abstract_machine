@@ -24,6 +24,7 @@ from semantic_digital_twin.world import World
 
 from cramera.live.bridge import BRIDGE, Bridge
 from cramera.live.http import DEFAULT_PORT, serve
+from cramera.live.ros_markers import RosMarkerListener
 
 if TYPE_CHECKING:
     from coraplex.plans.plan import Plan
@@ -127,6 +128,11 @@ class LiveVisualization:
     The callback refreshing the catalogs on model changes, while started.
     """
 
+    marker_listener: Optional[RosMarkerListener] = field(init=False, default=None)
+    """
+    The ROS marker subscription feeding the debug overlay, when ROS is available.
+    """
+
     def start(self) -> LiveVisualization:
         """
         Attach the bridge to the world and start serving the viewer.
@@ -141,6 +147,7 @@ class LiveVisualization:
         self.bridge.snapshot()
         self.state_sync = WorldStateSync(_world=self.world, bridge=self.bridge)
         self.model_sync = WorldModelSync(_world=self.world, bridge=self.bridge)
+        self.marker_listener = RosMarkerListener.start_if_available(self.bridge)
         if self.bridge.live_server is None:
             self.bridge.live_server = serve(self.bridge, self.port)
         return self
@@ -168,6 +175,9 @@ class LiveVisualization:
         if self.model_sync is not None:
             self.model_sync.stop()
             self.model_sync = None
+        if self.marker_listener is not None:
+            self.marker_listener.stop()
+            self.marker_listener = None
         if self.bridge.live_server is not None:
             self.bridge.live_server.shutdown()
             self.bridge.live_server = None

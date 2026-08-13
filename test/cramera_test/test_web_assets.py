@@ -162,6 +162,9 @@ class TestJsUnits:
     def test_panel_arrangement(self):
         self.run_node("test_panel_arrangement.js")
 
+    def test_marker_specs(self):
+        self.run_node("test_marker_specs.js")
+
     def test_response_util(self):
         self.run_node("test_response_util.js")
 
