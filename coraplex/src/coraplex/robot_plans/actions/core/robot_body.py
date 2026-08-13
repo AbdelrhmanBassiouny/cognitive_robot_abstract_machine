@@ -48,7 +48,6 @@ class MoveTorsoAction(ActionDescription):
 
     @property
     def _action_plan(self) -> PlanNode:
-        print("mvoetorso")
         joint_state = self.robot.get_torso().get_joint_state_by_type(self.torso_state)
         return execute_single(
             MoveJointsMotion(
@@ -107,7 +106,6 @@ class ParkArmsAction(ActionDescription, HasMaxJointVelocity):
 
     @property
     def _action_plan(self) -> PlanNode:
-        print("parkarkms")
         joint_names, joint_poses = self.get_joint_poses()
 
         return execute_single(

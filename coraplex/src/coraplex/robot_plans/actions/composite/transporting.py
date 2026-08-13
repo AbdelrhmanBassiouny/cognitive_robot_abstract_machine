@@ -100,7 +100,6 @@ class TransportAction(ActionDescription):
 
     @property
     def _action_plan(self) -> PlanNode:
-        print("transport")
         self.grasp_description = self.grasp_description or GraspDescription(
             ApproachDirection.FRONT,
             VerticalAlignment.NoAlignment,
