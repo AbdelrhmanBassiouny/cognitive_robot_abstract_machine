@@ -13,6 +13,7 @@ still runs and the Models tab explains why it is empty.
 from __future__ import annotations
 
 import json
+import math
 import threading
 from dataclasses import dataclass, field
 
@@ -41,6 +42,16 @@ except ImportError:
 NO_MODELS_MESSAGE = "probabilistic_model not available in this environment"
 """
 What the API answers when the probabilistic-model stack is not importable.
+"""
+
+UNBOUNDED_SLIDER_LIMIT = 100.0
+"""
+Slider bound used where a variable's support is infinite, as in the desktop GUI.
+"""
+
+POINT_RELATIVE_WIDTH = 1e-6
+"""
+An interval narrower than this, relative to its magnitude, displays as one value.
 """
 
 
@@ -125,10 +136,10 @@ class ModelWorkbench:
                 ],
             }
 
-    @staticmethod
-    def _variable_payload(variable: Any) -> Dict[str, Any]:
+    def _variable_payload(self, variable: Any) -> Dict[str, Any]:
         """
-        One variable as the tab's constraint rows offer it.
+        One variable as the tab's constraint rows offer it: symbolic variables with
+        their elements, numeric ones with the slider bounds of their prior support.
 
         :param variable: The model variable to describe.
         """
@@ -139,7 +150,26 @@ class ModelWorkbench:
                 "values": [str(element) for element in variable.domain.all_elements],
             }
         kind = "integer" if isinstance(variable, Integer) else "continuous"
-        return {"name": variable.name, "kind": kind}
+        low, high = self._variable_bounds(variable)
+        return {"name": variable.name, "kind": kind, "low": low, "high": high}
+
+    def _variable_bounds(self, variable: Any) -> tuple:
+        """
+        The slider range of a numeric variable: its prior support, with infinite ends
+        clamped and a point support widened, as in the desktop GUI.
+
+        :param variable: The numeric variable to bound.
+        """
+        support = self.controller.priors[variable].support
+        low = support.simple_sets[0][variable].simple_sets[0].lower
+        high = support.simple_sets[-1][variable].simple_sets[-1].upper
+        if low == float("-inf"):
+            low = -UNBOUNDED_SLIDER_LIMIT
+        if high == float("inf"):
+            high = UNBOUNDED_SLIDER_LIMIT
+        if low == high:
+            low, high = low - 1.0, high + 1.0
+        return float(low), float(high)
 
     # %% events from constraint rows
 
@@ -267,12 +297,42 @@ class ModelWorkbench:
             mode_event, likelihood = result
             modes = [
                 {
-                    str(variable.name): str(assignment)
+                    str(variable.name): self._pretty_assignment(assignment)
                     for variable, assignment in simple_set.items()
                 }
                 for simple_set in mode_event.simple_sets
             ]
         return {"ok": True, "likelihood": likelihood, "modes": modes}
+
+    @classmethod
+    def _pretty_assignment(cls, assignment: Any) -> str:
+        """
+        One mode assignment as the tab displays it: rounded interval bounds, an interval
+        of negligible width as the single value it is, unions joined readably, and
+        symbolic selections as their elements.
+
+        :param assignment: The variable's assignment in a mode's simple event.
+        """
+        if isinstance(assignment, Interval):
+            return " ∪ ".join(
+                cls._pretty_interval(simple) for simple in assignment.simple_sets
+            )
+        if isinstance(assignment, Set):
+            return ", ".join(str(element) for element in assignment.simple_sets)
+        return str(assignment)
+
+    @classmethod
+    def _pretty_interval(cls, simple_interval: Any) -> str:
+        """
+        One simple interval, rounded, as a point when its width is negligible.
+
+        :param simple_interval: The interval to render.
+        """
+        low, high = float(simple_interval.lower), float(simple_interval.upper)
+        magnitude = max(abs(low), abs(high), 1.0)
+        if high - low <= magnitude * POINT_RELATIVE_WIDTH:
+            return "%.4g" % ((low + high) / 2)
+        return "[%.4g, %.4g]" % (low, high)
 
     def _require_model(self) -> None:
         """

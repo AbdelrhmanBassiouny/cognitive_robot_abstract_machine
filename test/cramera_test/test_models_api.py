@@ -82,7 +82,7 @@ class TestWorkbenchState:
         assert state["name"] == "test.json"
         assert state["variables"] == [
             {"name": "color", "kind": "symbolic", "values": ["red", "blue"]},
-            {"name": "x", "kind": "continuous"},
+            {"name": "x", "kind": "continuous", "low": 0.0, "high": 1.0},
         ]
 
 
@@ -149,8 +149,21 @@ class TestMode:
 
         assert result["ok"] is True
         assert result["likelihood"] == pytest.approx(0.7)
-        assert all("color" in mode for mode in result["modes"])
-        assert all("red" in mode["color"] for mode in result["modes"])
+        assert result["modes"] == [{"color": "red", "x": "[0, 1]"}]
+
+    def test_a_negligible_interval_displays_as_its_value(self):
+        pretty = ModelWorkbench._pretty_interval
+
+        class NarrowInterval:
+            lower = 0.024753697216510773
+            upper = 0.024753738194704056
+
+        class WideInterval:
+            lower = 0.0
+            upper = 0.5
+
+        assert pretty(NarrowInterval()) == "0.02475"
+        assert pretty(WideInterval()) == "[0, 0.5]"
 
 
 # %% the API endpoints
@@ -235,6 +248,9 @@ class TestModelsEndpoints:
         )
 
         assert loaded["loaded"] is True
+        assert loaded["variables"] == [
+            {"name": "x", "kind": "continuous", "low": -100.0, "high": 100.0}
+        ]
         posterior = post_json(
             server + "/api/models/posterior", {"variables": ["x"], "evidence": []}
         )

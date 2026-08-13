@@ -140,13 +140,14 @@
           };
         };
       } else {
-        const low = numberInput('low');
-        const high = numberInput('high');
-        constraintHolder.appendChild(low);
+        const step = variable.kind === 'integer' ? 1 : (variable.high - variable.low) / 200;
+        const low = boundControl(variable, variable.low, step);
+        const high = boundControl(variable, variable.high, step);
+        constraintHolder.appendChild(low.element);
         constraintHolder.appendChild(document.createTextNode(' ≤ ' + variable.name + ' ≤ '));
-        constraintHolder.appendChild(high);
+        constraintHolder.appendChild(high.element);
         readConstraint = function () {
-          return { variable: variable.name, kind: variable.kind, low: low.value, high: high.value };
+          return { variable: variable.name, kind: variable.kind, low: low.value(), high: high.value() };
         };
       }
     });
@@ -160,12 +161,34 @@
     container.appendChild(row);
   }
 
-  function numberInput(placeholder) {
-    const input = document.createElement('input');
-    input.type = 'number';
-    input.step = 'any';
-    input.placeholder = placeholder;
-    return input;
+  // one interval bound: a slider over the variable's prior support, synced with a
+  // number input for exact values
+  function boundControl(variable, initial, step) {
+    const holder = document.createElement('span');
+    holder.className = 'bound-control';
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = variable.low;
+    slider.max = variable.high;
+    slider.step = step;
+    slider.value = initial;
+    const number = document.createElement('input');
+    number.type = 'number';
+    number.step = 'any';
+    number.value = roundedForDisplay(initial, step);
+    slider.addEventListener('input', function () {
+      number.value = roundedForDisplay(parseFloat(slider.value), step);
+    });
+    number.addEventListener('input', function () { slider.value = number.value; });
+    holder.appendChild(slider);
+    holder.appendChild(number);
+    return { element: holder, value: function () { return number.value; } };
+  }
+
+  function roundedForDisplay(value, step) {
+    if (!isFinite(value)) return value;
+    const decimals = step >= 1 ? 0 : Math.min(6, Math.max(0, Math.ceil(-Math.log10(step))));
+    return parseFloat(value.toFixed(decimals));
   }
 
   function constraintsOf(containerId) {
@@ -251,11 +274,12 @@
       if (!payload.ok) return showError(resultEl, payload.error);
       const modes = payload.modes.map(function (mode, index) {
         const assignments = Object.keys(mode).map(function (name) {
-          return '<div class="mode-assignment"><b>' + escapeHtml(name) + '</b> ' +
-            escapeHtml(mode[name]) + '</div>';
+          return '<div class="mode-assignment"><span>' + escapeHtml(name) + '</span>' +
+            '<code>' + escapeHtml(mode[name]) + '</code></div>';
         }).join('');
-        return '<div class="mode-card"><div class="lp-title">mode ' + (index + 1) +
-          ' of ' + payload.modes.length + '</div>' + assignments + '</div>';
+        const title = payload.modes.length > 1
+          ? 'mode ' + (index + 1) + ' of ' + payload.modes.length : 'mode';
+        return '<div class="mode-card"><div class="lp-title">' + title + '</div>' + assignments + '</div>';
       }).join('');
       resultEl.innerHTML = '<div class="probability-result">likelihood <b>' +
         payload.likelihood.toExponential(4) + '</b></div>' + modes;
