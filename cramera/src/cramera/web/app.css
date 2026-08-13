@@ -25,6 +25,9 @@ body{
   padding:14px 22px;border-bottom:1px solid var(--line);
   background:linear-gradient(180deg,rgba(14,16,20,.9),rgba(6,7,9,.6));
   backdrop-filter:blur(6px);
+  /* the backdrop-filter flattens this into one stacking context, so the whole bar
+     (dropdowns included) must sit above every panel's positioned internals */
+  position:relative;z-index:100;
 }
 .brand{display:flex;align-items:center;gap:14px}
 /* AICOR logo — inverted (light) artwork, sits directly on the dark bar */
