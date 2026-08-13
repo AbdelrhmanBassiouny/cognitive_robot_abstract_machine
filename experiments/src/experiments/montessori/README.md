@@ -136,8 +136,12 @@ Leave `?scene=` off the viewer URL: it only attaches to a running demo by itself
 the page names no recorded scene.
 
 The viewer's *Live* button appears within a few seconds, and the EQL panel's buttons
-become this demo's own questions, answered from the sort as it runs rather than from the
-database once it finishes. They cover three things:
+become this demo's own questions, offered under two headings.
+
+### Current State Queries
+
+Answered from the sort as it runs rather than from the database once it finishes. They
+cover three things:
 
 - **Was this shape inserted?** `shape.is_inserted` is the same geometric ground truth
   `ShapeSortingBoard.has_fallen_through` gives, re-read after every attempt. A shape
@@ -152,16 +156,40 @@ database once it finishes. They cover three things:
   of the gripper before the insertion phase, released off target, or wedged in the hole.
   See `insertion_diagnosis.py` for the ranking.
 
-Four variables are in scope: `shape`, `attempt`, `plan_step` and `event`. The question
-set lives in `live_query_source.py` and is mirrored into the recorded
-`Franka_Montessori` bundle's `presets.json`, which a test keeps in step.
-
-Every answer is preceded by the query read back as coloured English, so a preset button
-says what it asked rather than only what came back.
+Four variables are in scope: `shape`, `attempt`, `plan_step` and `event`.
 
 Nothing is persisted by this path — it reads the in-memory record in
 `sorting_progress.py`, which is why answers are available mid-run while the database
 only sees a completed iteration.
+
+### Episodic Memory Queries
+
+Answered from `--database-uri`, so they describe every run already recorded there rather
+than the one on screen: how often each shape was sorted, how its attempts ended, and
+every recorded run. One variable is in scope, `shape_result`
+(`sorting_results.ShapeInsertionResult`), together with `InsertionOutcome` to compare
+against and `sum` (left out of EQL's own namespace, since it shadows the builtin).
+
+The query is translated to SQL by `krrood.ormatic.eql_interface.eql_to_sql` and run where
+the results live, so a database with thousands of iterations is grouped by the server
+rather than loaded into the demo process.
+
+> There is deliberately no "most likely failure" column. Expressing it needs `mode`,
+> which the EQL-to-SQL translation does not cover and which has no portable SQL aggregate
+> behind it. *how did each shape's runs end?* answers the same question by giving the
+> per-outcome counts to read off instead.
+
+### Both
+
+The question set lives in `live_query_source.py` and is mirrored into the recorded
+`Franka_Montessori` bundle's `presets.json`, which a test keeps in step.
+
+Every answer is preceded by the query read back as coloured English, so a preset button
+says what it asked rather than only what came back, and the rows are shown as a table
+whose columns are what the query asked for.
+
+Editing a question in the box keeps asking the heading its button came from; a query
+typed from scratch asks the current state.
 
 ## Driving the run from the viewer
 

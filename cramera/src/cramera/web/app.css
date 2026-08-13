@@ -134,7 +134,15 @@ body{
   font-weight:700;font-size:13px;padding:0 20px;border-radius:4px;cursor:pointer
 }
 #query-run:active{transform:translateY(1px)}
-.presets{display:flex;flex-wrap:wrap;gap:7px;margin-top:11px}
+.presets{margin-top:11px}
+/* the heading a body of knowledge's questions are offered under; a scene that only asks
+   about one thing gets no heading at all, so the row stands alone as it always did */
+.preset-group{
+  font-size:10.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;
+  color:var(--faint);margin:12px 0 6px
+}
+.preset-group:first-child{margin-top:0}
+.preset-row{display:flex;flex-wrap:wrap;gap:7px}
 .preset{
   font-size:12px;color:var(--muted);background:var(--bg2);border:1px solid var(--line2);
   padding:6px 11px;border-radius:4px;cursor:pointer;transition:.15s
@@ -168,6 +176,30 @@ body{
 .ansrow .body .name{font-weight:600;color:var(--ink)}
 .ansrow .body .sub{color:var(--muted);display:block;margin-top:2px}
 .ansrow .body code{font-family:var(--mono);font-size:11.5px;color:var(--accent2);background:rgba(91,140,255,.1);padding:1px 5px;border-radius:5px}
+
+/* %% answer table — a query's rows share their columns, so they are read as a table.
+   Each cell is coloured by what its value is; colouring them all alike turns an answer
+   into a wall of one colour that has to be read word by word. */
+.anstable-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg2)}
+.anstable{border-collapse:collapse;width:100%;font-size:12.5px}
+.anstable th{
+  position:sticky;top:0;z-index:1;background:var(--panel);
+  font-size:10.5px;font-weight:600;letter-spacing:.6px;text-transform:uppercase;
+  color:var(--faint);text-align:left;padding:7px 12px;white-space:nowrap;
+  border-bottom:1px solid var(--line2)
+}
+.anstable td{padding:7px 12px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.45}
+.anstable tbody tr:last-child td{border-bottom:0}
+.anstable tbody tr:nth-child(even){background:rgba(255,255,255,.018)}
+.anstable tbody tr:hover{background:rgba(57,213,200,.06)}
+.anstable .ans-type{width:1%;white-space:nowrap;padding-right:4px}
+.anstable .ans-type .tag{display:inline-block}
+.anstable .ans-name{color:var(--ink);font-weight:600}
+.anstable .ans-number{color:var(--warn);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.anstable .ans-true{color:var(--accent);font-weight:600}
+.anstable .ans-false{color:var(--danger);font-weight:600}
+.anstable .ans-empty{color:var(--faint)}
+.anstable .ans-text{color:var(--muted)}
 .nores{color:var(--warn);font-size:13px}
 .qerr{color:var(--danger);font-family:var(--mono);font-size:12px;white-space:pre-wrap}
 .ansub{font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:#93a4c4;margin:12px 0 6px}

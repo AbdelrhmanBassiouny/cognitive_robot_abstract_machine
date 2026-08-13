@@ -64,14 +64,29 @@ BRIDGE.register_query_source(MyDemoQuerySource(...))
 ```
 
 A query source implements `cramera.live.query.LiveQuerySource`: a `title()`,
-the `presets()` to offer as buttons, and the `domains()` a query may range
-over — each a `QueryDomain(name, entity_type, objects)` naming one variable.
+the `presets()` to offer as buttons, and the `knowledge()` it offers to be
+questioned about.
+
+A demo usually knows more than one thing, so `knowledge()` returns one
+`QueryableKnowledge` per `QueryScope` — `CURRENT_STATE` for what is true of
+the run right now, `EPISODIC_MEMORY` for what its finished runs recorded.
+Each carries the `domains` a query of that scope may range over (a
+`QueryDomain(name, entity_type, objects)` per variable), any `extra_names` its
+questions need in scope, and the `evaluation` that works the answer out:
+`InMemoryEvaluation` by default, or `DatabaseEvaluation` to translate the query
+into SQL (`krrood.ormatic.eql_interface.eql_to_sql`) and run it where the
+results live. A domain answered from a database names no `objects`.
+
 The bridge then serves two more endpoints:
 
 ```
-GET  /presets   {ok, title, presets: [{text, code}], variables: [name]}
-POST /eql       {code} -> the rendered answer rows
+GET  /presets   {ok, title, presets: [{text, code, scope}],
+                 scopes: [{name, label, variables}], variables: [name]}
+POST /eql       {code, scope} -> the rendered answer rows
 ```
+
+The panel groups the buttons under each scope's heading and posts the scope its
+button belongs to; a question typed from scratch asks `current_state`.
 
 The EQL panel routes to them automatically while it is attached (see
 `web/core/query_source.js`), and falls back to `/api/*` against the recorded
@@ -80,14 +95,15 @@ scene when it is not. Queries are serialized behind a lock, because krrood's
 
 Two rules a source has to keep:
 
-- **Never read the world from `domains()`.** It runs on an HTTP thread; only
+- **Never read the world from `knowledge()`.** It runs on an HTTP thread; only
   the simulation thread may touch the world (see `cramera/live/hooks.py`).
   Project what you want queried into plain dataclasses on the demo's own
   thread, and let the domains range over those.
 - **Read the lists fresh on every call**, so an answer describes the demo as
   it stands now rather than when the bridge was wired up.
 
-A scene bundle may also ship a `presets.json` (`{"presets": [{"text", "code"}]}`)
+A scene bundle may also ship a `presets.json`
+(`{"presets": [{"text", "code", "scope"}]}`)
 declaring the questions worth asking about the demo it was recorded from.
 Those replace the generated scene presets for that scene, and the panel shows
 them greyed out until a demo is attached to answer them.

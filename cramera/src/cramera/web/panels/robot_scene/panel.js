@@ -341,7 +341,7 @@ Panels.define('robot-scene', function (root, bus) {
   // one is reachable, instead of requiring a manual click; a URL that names a
   // specific recorded scene is a deliberate choice and is never overridden by this
   const noExplicitScene = !SceneContext.name();
-  let autoAttachedLive = false;
+  let userDetachedLive = false;   // only an explicit detach is remembered
 
   fetch(SCENES + 'index.json')
     .then(function (r) { return r.ok ? r.json() : { default: null, scenes: [] }; })
@@ -1007,12 +1007,13 @@ Panels.define('robot-scene', function (root, bus) {
       .then(function (info) {
         if (liveBtn && !liveOn) liveBtn.style.display = info ? '' : 'none';
         showRunControls(info && info.control);
-        // landing on the page with no explicit ?scene= attaches the moment a bridge
-        // is reachable, instead of waiting for a manual click
-        if (info && noExplicitScene && !liveOn && !autoAttachedLive) {
-          autoAttachedLive = true;
-          setLive(true);
-        }
+        // re-decided on every probe, so a demo that restarted is picked up again
+        if (LiveAttach.shouldAttach({
+          reachable: !!info,
+          attached: liveOn,
+          sceneNamed: !noExplicitScene,
+          userDetached: userDetachedLive,
+        })) setLive(true);
       })
       .catch(function () {
         if (liveBtn && !liveOn) liveBtn.style.display = 'none';
@@ -1221,7 +1222,10 @@ Panels.define('robot-scene', function (root, bus) {
     }
     needsRender = true;
   }
-  if (liveBtn) liveBtn.addEventListener('click', function () { setLive(!liveOn); });
+  if (liveBtn) liveBtn.addEventListener('click', function () {
+    userDetachedLive = liveOn;    // turning it off is the one detach that is meant to stick
+    setLive(!liveOn);
+  });
   const probeTimer = setInterval(probeLive, LIVE_PROBE_INTERVAL_MS);
   probeLive();
 

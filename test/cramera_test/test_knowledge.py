@@ -216,8 +216,8 @@ class TestQueries:
 
         assert result.ok
         assert result.rows == [
-            {"BenchObject.name": "milk", "BenchObject.kind": "object"},
-            {"BenchObject.name": "place_area", "BenchObject.kind": "location"},
+            {"name": "milk", "kind": "object"},
+            {"name": "place_area", "kind": "location"},
         ]
 
     def test_only_a_real_entity_is_treated_as_one(self):

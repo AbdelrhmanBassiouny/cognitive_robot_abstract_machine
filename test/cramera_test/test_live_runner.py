@@ -15,6 +15,8 @@ from semantic_digital_twin.world import World
 from cramera.live import runner
 from cramera.live.bridge import Bridge
 
+from .test_live_bridge import make_plan_node, PlanWithRoot
+
 
 def install_no_op_hooks(monkeypatch):
     """
@@ -24,6 +26,42 @@ def install_no_op_hooks(monkeypatch):
     monkeypatch.setattr(runner.hooks, "install_urdf_source_hook", lambda: None)
     monkeypatch.setattr(runner.hooks, "install_plan_hooks", lambda: None)
     monkeypatch.setattr(runner.hooks, "install_tick_hook", lambda: None)
+
+
+class TestStartingAgainForARebuiltWorld:
+    """
+    A demo restarted from the viewer builds a new world and offers it to the bridge
+    again; the bridge must follow it there rather than keep publishing the old one.
+    """
+
+    def test_the_running_bridge_is_rebound_to_the_world_it_is_given(self, monkeypatch):
+        bridge = Bridge()
+        monkeypatch.setattr(runner, "BRIDGE", bridge)
+        install_no_op_hooks(monkeypatch)
+        monkeypatch.setattr(runner, "serve", lambda passed_bridge, port: object())
+        abandoned = World()
+        runner.start(world=abandoned)
+        rebuilt = World()
+
+        runner.start(world=rebuilt)
+
+        assert bridge.world is rebuilt
+
+    def test_the_previous_worlds_plan_is_dropped(self, monkeypatch):
+        """
+        The plan tree of the run that was abandoned describes nodes of a world that no
+        longer exists, and would otherwise stay on screen as the new run's plan.
+        """
+        bridge = Bridge()
+        monkeypatch.setattr(runner, "BRIDGE", bridge)
+        install_no_op_hooks(monkeypatch)
+        monkeypatch.setattr(runner, "serve", lambda passed_bridge, port: object())
+        runner.start(world=World())
+        bridge.begin_plan(PlanWithRoot(root=make_plan_node("SequentialNode")))
+
+        runner.start(world=World())
+
+        assert bridge.get_plan()["nodes"] == []
 
 
 class TestStart:

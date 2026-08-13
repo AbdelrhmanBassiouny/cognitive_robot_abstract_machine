@@ -10,6 +10,7 @@ from typing import Tuple
 from typing_extensions import List, Optional
 
 from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
+from cramera.knowledge.queryable_knowledge import QueryScope
 from cramera.knowledge.scene_bundle import SceneBundle
 
 
@@ -37,6 +38,12 @@ class Preset:
     variables only that demo's live query source offers.
     """
 
+    scope: QueryScope = QueryScope.CURRENT_STATE
+    """
+    Which of the demo's bodies of knowledge this question is about, and so the heading
+    it is offered under.
+    """
+
     @classmethod
     def of_scene(cls, scene: Optional[str] = None) -> List[Preset]:
         """
@@ -53,7 +60,14 @@ class Preset:
         declared = SceneBundle.declared_presets(scene)
         if declared:
             return [
-                cls(entry["text"], entry["code"], requires_live=True)
+                cls(
+                    entry["text"],
+                    entry["code"],
+                    requires_live=True,
+                    scope=QueryScope.of_name(
+                        entry.get("scope", QueryScope.CURRENT_STATE)
+                    ),
+                )
                 for entry in declared
             ] + list(ARCHITECTURE_PRESETS)
         return cls._generated_for_scene(scene) + list(ARCHITECTURE_PRESETS)

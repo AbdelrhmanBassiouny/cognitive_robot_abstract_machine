@@ -31,6 +31,7 @@ from cramera.body_geometry import pose_label, position_label
 from cramera.knowledge.entity import NamedEntity
 from cramera.knowledge.query_domain import QueryDomain
 from cramera.knowledge.query_verbalization import QueryVerbalization
+from cramera.knowledge.queryable_knowledge import InMemoryEvaluation, QueryEvaluation
 from cramera.payload import CrameraPayload
 
 DEFAULT_ROW_LIMIT = 200
@@ -195,14 +196,29 @@ class RowRenderer:
         if is_dataclass(item) and not isinstance(item, type):
             return self._entity_row(item)
         if isinstance(item, Mapping):  # a unification row from set_of()
+            columns = self._column_names([str(key) for key in item])
             row = {}
-            for key, value in item.items():
+            for column, value in zip(columns, item.values()):
                 name = self._row_title(value)
                 if name:
                     self.highlight.append(name)
-                row[str(key)] = self._jsonable(value)
+                row[column] = self._jsonable(value)
             return row
         return {"value": self._jsonable(item)}
+
+    @staticmethod
+    def _column_names(keys: List[str]) -> List[str]:
+        """
+        The headings a set of asked-for values is shown under.
+
+        A selected attribute is named after its own type (``ShapeUnderTest.name``), which
+        is the answer's subject and reads as noise repeated in every heading. Dropping it
+        is only safe while the shortened headings stay distinct.
+
+        :param keys: The selected values' own names, in the order they were asked for.
+        """
+        shortened = [key.rsplit(".", 1)[-1] for key in keys]
+        return shortened if len(set(shortened)) == len(keys) else keys
 
     def _entity_row(self, item: Any) -> Dict[str, Any]:
         """
@@ -275,6 +291,11 @@ class EqlQueryRunner:
     Further names a query may use, such as constants or the raw domain lists.
     """
 
+    evaluation: QueryEvaluation = field(default_factory=InMemoryEvaluation)
+    """
+    Where a query of this runner is worked out.
+    """
+
     @property
     def entity_types(self) -> Tuple[Type[Any], ...]:
         """
@@ -290,8 +311,10 @@ class EqlQueryRunner:
         for domain in self.domains:
             namespace[domain.entity_type.__name__] = domain.entity_type
         for domain in self.domains:
-            namespace[domain.name] = eql_factories.variable(
-                domain.entity_type, domain=domain.objects
+            namespace[domain.name] = (
+                eql_factories.variable(domain.entity_type)
+                if domain.objects is None
+                else eql_factories.variable(domain.entity_type, domain=domain.objects)
             )
         namespace.update(self.extra_names)
         return namespace
@@ -327,7 +350,7 @@ class EqlQueryRunner:
             # worded before evaluating: building the sentence leaves the expression
             # evaluable, whereas the evaluated result is rows and no longer a question
             verbalization = QueryVerbalization.of_expression(result)
-            result = result.evaluate()
+            result = self.evaluation.evaluate(result)
         rendered = RowRenderer(limit=limit, entity_types=self.entity_types).rows_of(
             result
         )

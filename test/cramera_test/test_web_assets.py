@@ -149,6 +149,15 @@ class TestJsUnits:
     def test_run_control_buttons(self):
         self.run_node("test_run_control.js")
 
+    def test_live_attach_decision(self):
+        self.run_node("test_live_attach.js")
+
+    def test_answer_table(self):
+        self.run_node("test_answer_table.js")
+
+    def test_preset_groups(self):
+        self.run_node("test_preset_groups.js")
+
     def test_scene_picker(self):
         self.run_node("test_scene_picker.js")
 

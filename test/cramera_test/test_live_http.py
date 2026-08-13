@@ -246,7 +246,9 @@ class TestQueryEndpoints:
         from .test_live_query import GrowingRecordSource, make_record
 
         bridge.register_query_source(
-            GrowingRecordSource(records=[make_record("first")])
+            GrowingRecordSource(
+                records=[make_record("first")], stored=[make_record("last week")]
+            )
         )
         return bridge
 
@@ -259,10 +261,53 @@ class TestQueryEndpoints:
                     "text": "all records",
                     "code": "an(entity(record))",
                     "requires_live": False,
-                }
+                    "scope": "current_state",
+                },
+                {
+                    "text": "everything stored",
+                    "code": "an(entity(stored_record))",
+                    "requires_live": False,
+                    "scope": "episodic_memory",
+                },
+            ],
+            "scopes": [
+                {
+                    "name": "current_state",
+                    "label": "Current State Queries",
+                    "variables": ["record"],
+                },
+                {
+                    "name": "episodic_memory",
+                    "label": "Episodic Memory Queries",
+                    "variables": ["stored_record"],
+                },
             ],
             "variables": ["record"],
         }
+
+    def test_a_query_is_answered_from_the_scope_it_names(self, server, query_bridge):
+        payload = post_json(
+            server + "/eql",
+            {"code": "an(entity(stored_record))", "scope": "episodic_memory"},
+        )
+
+        assert payload["ok"] is True
+        assert [row["__entity__"] for row in payload["rows"]] == ["last week"]
+
+    def test_a_query_naming_no_scope_asks_the_current_state(self, server, query_bridge):
+        payload = post_json(server + "/eql", {"code": "an(entity(record))"})
+
+        assert [row["__entity__"] for row in payload["rows"]] == ["first"]
+
+    def test_a_query_of_a_scope_the_demo_does_not_offer_reports_why(
+        self, server, query_bridge
+    ):
+        payload = post_json(
+            server + "/eql", {"code": "an(entity(record))", "scope": "yesterday"}
+        )
+
+        assert payload["ok"] is False
+        assert "yesterday" in payload["error"]
 
     def test_presets_without_a_source_report_why(self, server):
         payload = get_json(server + "/presets")

@@ -25,6 +25,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 from cramera.body_geometry import pose_label
 from cramera.knowledge.query_runner import EqlQueryRunner
+from cramera.knowledge.queryable_knowledge import QueryScope
 from experiments.montessori.insertion_diagnosis import InsertionFailureReason
 from experiments.montessori.live_query_source import (
     MONTESSORI_PRESETS,
@@ -92,14 +93,28 @@ def source(scene):
     return MontessoriLiveQuerySource(progress=progress)
 
 
+def current_state_of(source):
+    """
+    What a source offers about the sort in progress.
+
+    :param source: The query source to read.
+    """
+    [knowledge] = [
+        entry
+        for entry in source.knowledge()
+        if entry.scope is QueryScope.CURRENT_STATE
+    ]
+    return knowledge
+
+
 def ask(source, code):
     """
-    Run one query against a source, the way the bridge does.
+    Run one query about the sort in progress, the way the bridge does.
 
     :param source: The query source to ask.
     :param code: The query to run.
     """
-    return EqlQueryRunner(domains=source.domains()).run(code)
+    return EqlQueryRunner(domains=current_state_of(source).domains).run(code)
 
 
 # %% the source's own shape
@@ -108,7 +123,7 @@ class TestTheSource:
         assert "montessori" in source.title().lower()
 
     def test_it_offers_the_shape_attempt_step_and_event_variables(self, source):
-        assert [domain.name for domain in source.domains()] == [
+        assert [domain.name for domain in current_state_of(source).domains] == [
             "shape",
             "attempt",
             "plan_step",
@@ -165,9 +180,9 @@ class TestWhereTheShapeWasAimed:
         result = ask(source, "set_of(shape.name, shape.target_hole, shape.target_pose)")
 
         [row] = result.rows
-        assert row["ShapeUnderTest.name"] == SHAPE_OBJECT_NAME
-        assert row["ShapeUnderTest.target_hole"] == SHAPE_KEY
-        assert row["ShapeUnderTest.target_pose"] == pose_label(
+        assert row["name"] == SHAPE_OBJECT_NAME
+        assert row["target_hole"] == SHAPE_KEY
+        assert row["target_pose"] == pose_label(
             board.insertion_target_for(shape, world)
         )
 
@@ -177,7 +192,7 @@ class TestWhereTheShapeWasAimed:
         )
 
         [row] = result.rows
-        assert row["InsertionAttemptRecord.target_hole"] == SHAPE_KEY
+        assert row["target_hole"] == SHAPE_KEY
 
 
 # %% "why couldn't you insert it?"
@@ -191,10 +206,10 @@ class TestWhyAnAttemptFailed:
 
         [row] = result.rows
         assert (
-            row["InsertionAttemptRecord.failure_reason"]
+            row["failure_reason"]
             == InsertionFailureReason.PLAN_FAILED
         )
-        assert "BodyUnfetchable" in row["InsertionAttemptRecord.failure_detail"]
+        assert "BodyUnfetchable" in row["failure_detail"]
 
     def test_a_shape_that_was_never_picked_up_is_named(self, scene):
         world, board, shape = scene
@@ -265,5 +280,6 @@ class TestDeclaredBundlePresets:
         declared = json.loads(DECLARED_PRESETS_PATH.read_text())["presets"]
 
         assert declared == [
-            {"text": preset.text, "code": preset.code} for preset in MONTESSORI_PRESETS
+            {"text": preset.text, "code": preset.code, "scope": preset.scope.value}
+            for preset in MONTESSORI_PRESETS
         ]

@@ -49,10 +49,12 @@ from semantic_digital_twin.spatial_types import (
 from cramera.logging_setup import get_logger
 from cramera.body_geometry import (
     measure_body,
+    mesh_file_of,
     POSE_PRECISION,
     rounded_pose,
     rounded_scale,
 )
+from cramera.loose_objects import LooseObjects
 from semantic_digital_twin.world_description.connections import (
     ActiveConnection1DOF,
     Connection6DoF,
@@ -61,6 +63,11 @@ from semantic_digital_twin.world_description.connections import (
 from cramera.knowledge.enums import PlanNodeGroup
 from cramera.knowledge.presets import Preset
 from cramera.knowledge.query_runner import EqlQueryRunner, RenderResult
+from cramera.knowledge.queryable_knowledge import (
+    QueryableKnowledge,
+    QueryScope,
+    UnknownQueryScope,
+)
 from cramera.live.model_source import LiveModelCatalog
 from cramera.live.query import LiveQuerySource, NoQuerySourceRegistered
 from cramera.live.run_control import (
@@ -809,8 +816,13 @@ class Bridge:
         """
         Bind to the world a demo is executing and publish its geometry catalog.
 
+        Safe to call for a world that replaces the one bound before it, which is what a
+        demo restarted from the viewer does.
+
         :param world: The world the demo is executing in.
         """
+        if self.world is not None and world is not self.world:
+            self._forget_previous_world()
         self.world = world
         self.bind()
         logger.info(
@@ -818,6 +830,23 @@ class Bridge:
             type(self.robot).__name__ if self.robot else "?",
             len(self._connections),
         )
+
+    def _forget_previous_world(self) -> None:
+        """
+        Drop everything published about the world being replaced.
+
+        Its plan tree and statechart describe nodes of a run that has been abandoned, and
+        would otherwise stay on screen as though they belonged to the new one.
+        """
+        self._plan = None
+        self._chart = None
+        self._chart_structure = None
+        self._chart_title = ""
+        self._last_node_states = None
+        self._motion_nodes.clear()
+        with self._lock:
+            self.plan_state = PlanSnapshot()
+            self.chart_state = ChartSnapshot()
 
     def observe_tick(self, chart: Optional[MotionStatechart]) -> None:
         """
@@ -1018,24 +1047,59 @@ class Bridge:
         """
         return self._registered_query_source().presets()
 
-    def query_variables(self) -> List[str]:
+    def query_scopes(self) -> List[QueryScope]:
         """
-        Names a query may range over, for the panel to advertise.
+        The bodies of knowledge the running demo offers, in the order it offers them.
 
         :raises NoQuerySourceRegistered: When no demo offered one.
         """
-        return [domain.name for domain in self._registered_query_source().domains()]
+        return [
+            knowledge.scope for knowledge in self._registered_query_source().knowledge()
+        ]
 
-    def run_query(self, code: str) -> RenderResult:
+    def query_variables(
+        self, scope: QueryScope = QueryScope.CURRENT_STATE
+    ) -> List[str]:
         """
-        Answer one EQL query from the running demo's current state.
+        Names a query of one scope may range over, for the panel to advertise.
+
+        :param scope: The body of knowledge the names belong to.
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        :raises UnknownQueryScope: When the demo offers no such body of knowledge.
+        """
+        return [domain.name for domain in self._queryable_knowledge(scope).domains]
+
+    def _queryable_knowledge(self, scope: QueryScope) -> QueryableKnowledge:
+        """
+        What answers questions of one scope.
+
+        :param scope: The body of knowledge being asked.
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        :raises UnknownQueryScope: When the demo offers no such body of knowledge.
+        """
+        for knowledge in self._registered_query_source().knowledge():
+            if knowledge.scope is scope:
+                return knowledge
+        raise UnknownQueryScope(name=scope.value)
+
+    def run_query(
+        self, code: str, scope: QueryScope = QueryScope.CURRENT_STATE
+    ) -> RenderResult:
+        """
+        Answer one EQL query about the running demo.
 
         :param code: The EQL query source.
+        :param scope: Which of the demo's bodies of knowledge to ask.
         :raises NoQuerySourceRegistered: When no demo offered one.
+        :raises UnknownQueryScope: When the demo offers no such body of knowledge.
         """
-        source = self._registered_query_source()
+        knowledge = self._queryable_knowledge(scope)
         with self._query_lock:
-            return EqlQueryRunner(domains=source.domains()).run(code)
+            return EqlQueryRunner(
+                domains=knowledge.domains,
+                extra_names=knowledge.extra_names,
+                evaluation=knowledge.evaluation,
+            ).run(code)
 
     # %% viewer -> driving the run
     def register_run_control(self, control: LiveRunControl) -> None:
@@ -1202,11 +1266,7 @@ class Bridge:
         if self.robot is not None:
             bodies[ROBOT_BASE_KEY] = self.robot.root
         try:
-            # loose objects by convention: bodies named like mesh files
-            for body in world.bodies:
-                basename = str(body.name).split("/")[-1]
-                if MeshFormat.of_path(basename) is not None:
-                    bodies[basename] = body
+            bodies.update(LooseObjects(world=world, robot=self.robot).keyed_bodies())
         except Exception as error:
             # boundary guard: the world is mid-modification (a body is being spawned
             # or removed) and iterating it is not safe. Keep the previous catalog
@@ -1247,8 +1307,8 @@ class Bridge:
         ):
             color = palette.color_for(index)
             object_id = Path(key).stem
-            mesh_path = self._mesh_files.get(key.lower())
-            if mesh_path and Path(mesh_path).is_file():
+            mesh_path = self._servable_mesh_path(key, body)
+            if mesh_path is not None:
                 serve[key] = mesh_path
                 catalog.append(
                     ObjectCatalogEntry(
@@ -1257,7 +1317,7 @@ class Bridge:
                         kind=ObjectKind.MESH,
                         color=color,
                         mesh="/mesh?key=" + urllib.parse.quote(key),
-                        format=Path(key).suffix.lstrip(".").lower(),
+                        format=Path(mesh_path).suffix.lstrip(".").lower(),
                     )
                 )
             else:
@@ -1273,6 +1333,24 @@ class Bridge:
         self._mesh_serve = serve
         with self._lock:
             self.object_metadata = catalog
+
+    def _servable_mesh_path(self, key: str, body: Body) -> Optional[str]:
+        """
+        The mesh file an object's geometry is served from, or None to place a box.
+
+        A demo that loads its objects from mesh files names each body after the file it
+        came from, which is what the mesh hook remembers; a demo that builds its objects
+        in code names them after themselves, and the geometry can only be found on the
+        body's own shapes.
+
+        :param key: Mesh key the object is published under.
+        :param body: The body whose geometry is served.
+        """
+        remembered = self._mesh_files.get(key.lower())
+        candidate = remembered if remembered else mesh_file_of(body)
+        if candidate is None or MeshFormat.of_path(candidate) is None:
+            return None
+        return candidate if Path(candidate).is_file() else None
 
     @classmethod
     def _box_size(cls, body: Body) -> Optional[List[float]]:

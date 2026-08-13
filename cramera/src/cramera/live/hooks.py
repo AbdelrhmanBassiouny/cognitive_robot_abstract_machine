@@ -64,7 +64,9 @@ class LiveHooks:
         :param kwargs: Keyword arguments forwarded to the wrapped call.
         """
         result = original(executor, *args, **kwargs)
-        if self.bridge.world is None:
+        # a demo that restarts executes in a world it has just built; staying bound to
+        # the abandoned one publishes its last poses forever
+        if self.bridge.world is not executor.context.world:
             self.bridge.attach(executor.context.world)
         try:
             self.bridge.observe_tick(executor.motion_statechart)

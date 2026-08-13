@@ -10,7 +10,13 @@ from __future__ import annotations
 
 from semantic_digital_twin.spatial_types import Point3, Pose
 from semantic_digital_twin.world_description.geometry import Scale
-from typing_extensions import List, Optional, TYPE_CHECKING
+from typing_extensions import (
+    List,
+    Optional,
+    Protocol,
+    runtime_checkable,
+    TYPE_CHECKING,
+)
 
 POSE_PRECISION = 5
 """
@@ -19,6 +25,31 @@ Decimal places a pose is rounded to before it is published or recorded.
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import Body
+
+
+@runtime_checkable
+class CarriesAMeshFile(Protocol):
+    """
+    A shape whose geometry lives in a file of its own.
+
+    Structural, because a world built in code writes its generated geometry out to a
+    file just as a loaded mesh names the file it came from.
+    """
+
+    filename: str
+
+
+def mesh_file_of(body: Body) -> Optional[str]:
+    """
+    The file a body's own geometry lives in, or None for one built from primitives.
+
+    :param body: The body whose geometry is inspected.
+    """
+    for shape_collection in (body.visual, body.collision):
+        for shape in shape_collection.shapes:
+            if isinstance(shape, CarriesAMeshFile) and shape.filename:
+                return shape.filename
+    return None
 
 
 def measure_body(body: Body) -> Optional[Scale]:

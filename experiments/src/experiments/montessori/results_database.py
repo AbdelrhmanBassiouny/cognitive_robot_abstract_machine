@@ -12,12 +12,15 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from krrood.exceptions import DataclassException
 from krrood.ormatic.utils import create_engine
+from sqlalchemy import MetaData, Table
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.sql.sqltypes import NullType
 from typing_extensions import List, Optional
 
 DEFAULT_DATABASE_URI = (
@@ -59,6 +62,91 @@ def database_label(database_uri: str) -> str:
     :param database_uri: The URI to render.
     """
     return make_url(database_uri).render_as_string(hide_password=True)
+
+
+@dataclass
+class ResultsDatabase:
+    """
+    The database a Montessori run records its results to, and reads them back from.
+    """
+
+    uri: str = field(default_factory=configured_database_uri)
+    """
+    Where the results live.
+    """
+
+    _sessions: Optional[sessionmaker] = field(default=None, init=False, repr=False)
+    """
+    Opens sessions on the engine this database has already prepared, once it has one.
+    """
+
+    def open_session(self) -> Session:
+        """
+        Open a session against the results, preparing the database on the first call.
+        """
+        if self._sessions is None:
+            self._sessions = self._prepared_sessions()
+        return self._sessions()
+
+    def _prepared_sessions(self) -> sessionmaker:
+        """
+        Connect, creating this module's tables if they are not there yet.
+
+        Done once per database rather than once per session: reading the whole generated
+        ``experiments`` schema and issuing its ``CREATE TABLE`` statements takes the best
+        part of a minute, which a query answered while a demo runs cannot pay.
+
+        Skips any table ORMatic could not assign a real column type to (surfaced as
+        SQLAlchemy's ``NullType``, e.g. ``EpisodePlayerDAO.rdr_viewer`` for the
+        ``RDRCaseViewer`` field it has no mapping for), together with every table that
+        depends on a skipped one through a foreign key -- transitively, since joined-
+        table inheritance chains more than one table deep. One unrelated, pre-existing
+        gap in the huge generated ``experiments`` schema must not stop every other
+        table, including this demo's own, from being created; a table left out purely
+        because it depends on a skipped one would otherwise fail with an "undefined
+        table" error the moment ``CREATE TABLE`` tried to reference it.
+        """
+        engine = create_engine(self.uri)
+        metadata = self._schema()
+        metadata.create_all(engine, tables=self._creatable_tables(metadata))
+        return sessionmaker(engine)
+
+    @staticmethod
+    def _schema() -> MetaData:
+        """
+        The generated ``experiments`` schema every result table belongs to.
+        """
+        import experiments.orm.ormatic_interface as ormatic_interface
+
+        return ormatic_interface.Base.metadata
+
+    @staticmethod
+    def _creatable_tables(metadata: MetaData) -> List[Table]:
+        """
+        Every table of a schema that can actually be created.
+
+        :param metadata: The schema to filter.
+        """
+        excluded = {
+            name
+            for name, table in metadata.tables.items()
+            if any(isinstance(column.type, NullType) for column in table.columns)
+        }
+        spreading = True
+        while spreading:
+            spreading = False
+            for name, table in metadata.tables.items():
+                if name in excluded:
+                    continue
+                if any(
+                    foreign_key.column.table.name in excluded
+                    for foreign_key in table.foreign_keys
+                ):
+                    excluded.add(name)
+                    spreading = True
+        return [
+            table for name, table in metadata.tables.items() if name not in excluded
+        ]
 
 
 @dataclass

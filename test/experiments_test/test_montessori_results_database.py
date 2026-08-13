@@ -5,10 +5,12 @@ Tests for resolving and reaching the database a Montessori run records to.
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import inspect
 
 from experiments.montessori.results_database import (
     DATABASE_URI_ENVIRONMENT_VARIABLE,
     DEFAULT_DATABASE_URI,
+    ResultsDatabase,
     UnreachableResultsDatabase,
     configured_database_uri,
     main,
@@ -34,6 +36,37 @@ class TestResolvingTheUri:
         monkeypatch.setenv(DATABASE_URI_ENVIRONMENT_VARIABLE, "sqlite://")
 
         assert configured_database_uri() == "sqlite://"
+
+
+# %% opening it
+class TestOpeningSessions:
+    """
+    A run writes its results and the viewer reads them back, so both open the same
+    database the same way.
+    """
+
+    def test_a_session_is_opened_against_the_configured_database(self, tmp_path):
+        database = ResultsDatabase(uri="sqlite:///%s" % (tmp_path / "results.db"))
+
+        with database.open_session() as session:
+            assert session.bind.url.database == str(tmp_path / "results.db")
+
+    def test_the_schema_is_created_before_the_first_write(self, tmp_path):
+        """
+        A fresh database has no tables of its own, and a run must not have to be told to
+        create them first.
+        """
+        database = ResultsDatabase(uri="sqlite:///%s" % (tmp_path / "results.db"))
+
+        with database.open_session() as session:
+            tables = inspect(session.bind).get_table_names()
+
+        assert "ShapeInsertionResultDAO" in tables
+
+    def test_the_default_database_is_the_configured_one(self, monkeypatch):
+        monkeypatch.setenv(DATABASE_URI_ENVIRONMENT_VARIABLE, "sqlite://")
+
+        assert ResultsDatabase().uri == "sqlite://"
 
 
 # %% is it actually reachable

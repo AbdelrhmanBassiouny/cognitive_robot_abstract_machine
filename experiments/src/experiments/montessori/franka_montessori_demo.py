@@ -43,9 +43,7 @@ from typing import TYPE_CHECKING
 import mujoco
 import numpy as np
 from krrood.ormatic.data_access_objects.helper import to_dao
-from krrood.ormatic.utils import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.sql.sqltypes import NullType
+from sqlalchemy.orm import Session
 from typing_extensions import Optional
 
 from cramera.live.bridge import BRIDGE
@@ -63,7 +61,10 @@ from experiments.montessori.franka_panda_equipment import (
     parse_panda,
 )
 from experiments.montessori.live_query_source import MontessoriLiveQuerySource
-from experiments.montessori.results_database import configured_database_uri
+from experiments.montessori.results_database import (
+    configured_database_uri,
+    ResultsDatabase,
+)
 from experiments.montessori.run_control import SortingRunControl
 from experiments.montessori.semantics import (
     MontessoriShape,
@@ -720,7 +721,8 @@ def _parse_arguments(argument_list: Optional[list[str]] = None) -> argparse.Name
         action="store_true",
         help=(
             "Serve this world and this sort to the cramera viewer from inside this "
-            "process, so its EQL panel can be asked about the sort while it runs."
+            "process, so its EQL panel can be asked about the sort while it runs and "
+            "about the runs already recorded to --database-uri."
         ),
     )
     parser.add_argument(
@@ -784,54 +786,17 @@ def _parse_arguments(argument_list: Optional[list[str]] = None) -> argparse.Name
 
 def _open_results_session(database_uri: str) -> Session:
     """
-    Open a SQLAlchemy session against ``database_uri``, creating
-    :class:`~experiments.montessori.sorting_results.SortingIterationResult` and
-    :class:`~experiments.montessori.sorting_results.ShapeInsertionResult`'s tables first
-    if they don't already exist.
+    Open a SQLAlchemy session against ``database_uri``, creating this demo's tables
+    first if they don't already exist.
 
     ``database_uri``'s database and role must already exist on the server; see
     :data:`~experiments.montessori.results_database.DEFAULT_DATABASE_URI` for how to
-        provision them.
-
-    Skips any table ORMatic could not assign a real column type to (surfaced as
-    SQLAlchemy's ``NullType``, e.g. ``EpisodePlayerDAO.rdr_viewer`` for the
-    ``RDRCaseViewer`` field it doesn't have a mapping for), together with every table
-    that depends on a skipped table through a foreign key (transitively, since joined-
-    table inheritance chains more than one table deep) -- rather than letting one
-    unrelated, pre-existing gap in the huge generated ``experiments`` schema stop every
-    other table -- including this module's own -- from being created. A table left out
-    here purely because it depends on a skipped one would otherwise fail with an
-    "undefined table" error the moment ``CREATE TABLE`` tried to reference it.
+    provision them.
 
     :param database_uri: Database to write recorded results to; see
         :data:`~experiments.montessori.results_database.DEFAULT_DATABASE_URI`.
     """
-    import experiments.orm.ormatic_interface as ormatic_interface
-
-    engine = create_engine(database_uri)
-    all_tables = ormatic_interface.Base.metadata.tables
-    excluded_table_names = {
-        name
-        for name, table in all_tables.items()
-        if any(isinstance(column.type, NullType) for column in table.columns)
-    }
-    newly_excluded = True
-    while newly_excluded:
-        newly_excluded = False
-        for name, table in all_tables.items():
-            if name in excluded_table_names:
-                continue
-            if any(
-                foreign_key.column.table.name in excluded_table_names
-                for foreign_key in table.foreign_keys
-            ):
-                excluded_table_names.add(name)
-                newly_excluded = True
-    creatable_tables = [
-        table for name, table in all_tables.items() if name not in excluded_table_names
-    ]
-    ormatic_interface.Base.metadata.create_all(engine, tables=creatable_tables)
-    return sessionmaker(engine)()
+    return ResultsDatabase(uri=database_uri).open_session()
 
 
 def _build_world_and_sort(
@@ -929,7 +894,12 @@ def _build_world_and_sort(
     control.begin_iteration(iteration=iteration, simulation=multi_sim)
     progress = SortingProgress()
     if arguments.cramera:
-        _attach_cramera(montessori, progress, control)
+        _attach_cramera(
+            montessori,
+            progress,
+            control,
+            ResultsDatabase(uri=arguments.database_uri),
+        )
     results = _insert_all_shapes(
         montessori,
         context,
@@ -945,20 +915,25 @@ def _attach_cramera(
     montessori: MontessoriWorld,
     progress: SortingProgress,
     control: SortingRunControl,
+    results_database: ResultsDatabase,
 ) -> None:
     """
     Serve this world and this sort to the cramera viewer, in this process.
 
-    All of it is safe to call again for a rebuilt world: the bridge reuses its port and
-    hooks, the newest sort replaces the one queries are answered from, and the control is
-    the same one across every iteration.
+    All of it is safe to call again for a rebuilt world: the bridge rebinds to the world
+    it is given while reusing its port and hooks, the newest sort replaces the one
+    questions about the present are answered from, and the control is the same one
+    across every iteration.
 
     :param montessori: The Montessori scene the viewer visualizes.
-    :param progress: The record queries about this sort are answered from.
+    :param progress: The record questions about this sort are answered from.
     :param control: What the viewer pauses, restarts and loops this run with.
+    :param results_database: Where questions about finished runs are answered from.
     """
     start_live_bridge(world=montessori.world)
-    BRIDGE.register_query_source(MontessoriLiveQuerySource(progress=progress))
+    BRIDGE.register_query_source(
+        MontessoriLiveQuerySource(progress=progress, results_database=results_database)
+    )
     BRIDGE.register_run_control(control)
 
 

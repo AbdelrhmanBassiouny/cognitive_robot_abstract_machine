@@ -49,10 +49,7 @@ from semantic_digital_twin.api import BodySpecification
 from semantic_digital_twin.adapters.package_resolver import PackageUriResolver
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
-from semantic_digital_twin.world_description.connections import (
-    ActiveConnection1DOF,
-    Connection6DoF,
-)
+from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
 from semantic_digital_twin.world_description.geometry import Box, Mesh
 from typing_extensions import (
     Any,
@@ -77,6 +74,7 @@ from cramera.body_geometry import (
     rounded_scale,
 )
 from cramera.live.bridge import ROBOT_BASE_KEY
+from cramera.loose_objects import LooseObjects
 from cramera.monkey_patch import MethodPatch
 from cramera.robot_parts import RobotPartAnnotation, model_identity
 from cramera.mesh_format import MeshFormat
@@ -477,32 +475,18 @@ class Recorder:
     @staticmethod
     def object_key(body: Body) -> str:
         """
-        The key a body's recorded poses are filed under: its local name, without the world
-        prefix a composed world gives it.
+        The key a body's recorded poses are filed under.
 
         :param body: The body to key.
         """
-        return str(body.name).split("/")[-1]
+        return LooseObjects.key_of(body)
 
     def free_floating_bodies(self) -> List[Body]:
         """
         Every body its world lets move freely, which is how a world states that a body is
         loose rather than part of the furniture.
-
-        The robot's own bodies are left out: a mobile base is free-floating too, and it is
-        recorded as the robot rather than as an object.
         """
-        robot_body_names = (
-            {str(body.name) for body in self.robot.bodies}
-            if self.robot is not None
-            else set()
-        )
-        return [
-            body
-            for body in self.world.bodies
-            if isinstance(body.parent_connection, Connection6DoF)
-            and str(body.name) not in robot_body_names
-        ]
+        return LooseObjects(world=self.world, robot=self.robot).free_floating_bodies()
 
     def bind_to_executor(self, executor: Executor) -> None:
         """

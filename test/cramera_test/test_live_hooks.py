@@ -103,8 +103,8 @@ class TestObserveTick:
         assert bridge.attached == ["the-world"]
         assert bridge.observed_charts == ["chart"]
 
-    def test_an_already_bound_world_is_not_reattached(self):
-        bridge = FakeBridge(world="already-bound")
+    def test_the_world_already_bound_is_not_reattached(self):
+        bridge = FakeBridge(world="the-world")
         hooks = LiveHooks(bridge=bridge)
         executor = FakeExecutor(
             context=FakeExecutorContext(world="the-world"), motion_statechart="chart"
@@ -113,6 +113,23 @@ class TestObserveTick:
         hooks._observe_tick(lambda executor: None, executor)
 
         assert bridge.attached == []
+
+    def test_a_rebuilt_world_replaces_the_one_bound_before_it(self):
+        """
+        A demo restarted from the viewer executes in a world it has just built. Staying
+        bound to the abandoned one publishes its last poses forever, which reads as a
+        viewer that attaches but never shows anything happening.
+        """
+        bridge = FakeBridge(world="the-abandoned-world")
+        hooks = LiveHooks(bridge=bridge)
+        executor = FakeExecutor(
+            context=FakeExecutorContext(world="the-rebuilt-world"),
+            motion_statechart="chart",
+        )
+
+        hooks._observe_tick(lambda executor: None, executor)
+
+        assert bridge.attached == ["the-rebuilt-world"]
 
     def test_a_bridge_failure_does_not_stop_the_tick(self):
         """

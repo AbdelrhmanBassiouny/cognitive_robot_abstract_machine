@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import Any, List, Type
+from typing_extensions import Any, List, Optional, Type
 
 
 @dataclass(frozen=True)
@@ -28,10 +28,12 @@ class QueryDomain:
     Type of the objects the variable ranges over; also in scope under its class name.
     """
 
-    objects: List[Any]
+    objects: Optional[List[Any]] = None
     """
-    The objects themselves.
+    The objects themselves, or None when the answer does not come from this process.
 
     Read whenever a query runs rather than copied, so a source that keeps appending to
-    this list is queried against its current contents.
+    this list is queried against its current contents. A domain answered from a database
+    names no objects here: what the variable ranges over is decided by the query's own
+    evaluation (see :class:`~cramera.knowledge.queryable_knowledge.QueryEvaluation`).
     """

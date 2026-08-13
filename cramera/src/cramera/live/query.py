@@ -12,7 +12,7 @@ from abc import ABC, abstractmethod
 from typing_extensions import List
 
 from cramera.knowledge.presets import Preset
-from cramera.knowledge.query_domain import QueryDomain
+from cramera.knowledge.queryable_knowledge import QueryableKnowledge
 
 
 class NoQuerySourceRegistered(Exception):
@@ -39,9 +39,10 @@ class LiveQuerySource(ABC):
         """
 
     @abstractmethod
-    def domains(self) -> List[QueryDomain]:
+    def knowledge(self) -> List[QueryableKnowledge]:
         """
-        The ready-made variables a query of this source may range over.
+        The bodies of knowledge this demo offers to be questioned about, in the order
+        their questions are shown.
 
         Read whenever a query runs, so an answer reflects the demo's current state.
         """

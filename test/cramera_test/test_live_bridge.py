@@ -115,6 +115,15 @@ class ShapeSet:
 
 
 @dataclass
+class MeshShapeFromFile:
+    """
+    A shape whose geometry was loaded from, or written to, a file of its own.
+    """
+
+    filename: str
+
+
+@dataclass
 class PublishedBody:
     """
     A world body as the bridge publishes it: a prefixed name and its shapes.
@@ -488,6 +497,62 @@ class TestApplyMove:
         pose = body.global_pose
         assert pose.to_position().to_np()[:3].tolist() == [1.0, 2.0, 3.0]
         assert np.allclose(pose.to_quaternion().to_np(), [0.0, 0.0, 1.0, 0.0])
+
+
+# %% what a world offers the viewer as objects
+class TestPublishedObjects:
+    """
+    Which of a world's bodies the bridge streams poses for.
+    """
+
+    def test_a_free_floating_body_is_published_however_it_is_named(self):
+        """
+        A world built in code names its objects after themselves rather than after a
+        mesh file, and its objects are the ones it lets move.
+        """
+        world, _, _ = make_free_floating_object()
+        bridge = Bridge()
+        bridge.attach(world)
+        assert bridge.object_keys() == ["milk"]
+
+    def test_a_published_object_gets_its_pose_streamed(self):
+        world, _, _ = make_free_floating_object()
+        bridge = Bridge()
+        bridge.attach(world)
+        bridge.snapshot()
+        assert bridge.get_state()["objects"]["milk"] == [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        ]
+
+    def test_an_objects_own_mesh_file_is_served_when_its_name_does_not_give_one(
+        self, tmp_path
+    ):
+        """
+        A procedurally built object carries the file its geometry was written to, which
+        is the only place the bridge can learn its geometry from: no mesh parser was
+        asked to load a file named after the body.
+        """
+        mesh_file = tmp_path / "extruded_outline.obj"
+        mesh_file.write_text("o cube\n")
+        bridge = Bridge()
+        bridge.publish_bodies(
+            {
+                "square_hole_shape": PublishedBody(
+                    name="montessori/square_hole_shape",
+                    visual=ShapeSet(shapes=[MeshShapeFromFile(filename=str(mesh_file))]),
+                )
+            }
+        )
+        entry = bridge.object_catalog()[0]
+        assert entry["kind"] == "mesh"
+        assert entry["format"] == "obj"
+        assert bridge.mesh_path("square_hole_shape") == str(mesh_file)
 
 
 # %% what the HTTP layer reads

@@ -17,9 +17,10 @@ HTTP endpoints of the live bridge (default port 8765).
     GET /chart   {signature, title,
                   nodes: [{id, parent, name, class_name, life_cycle, observation}],
                   edges: [{from, to, kind}]}
-    GET /presets {ok, title, presets: [{text, code}], variables: [name]}
+    GET /presets {ok, title, presets: [{text, code, scope}],
+                  scopes: [{name, label, variables}], variables: [name]}
     GET /run     {ok, title, paused, looping, restart_pending, activity, iteration}
-    POST /eql    {code} -> the rendered answer rows
+    POST /eql    {code, scope} -> the rendered answer rows
     POST /run    {command} -> the run state that command produced
     POST /move   queue an object move (applied on the simulation thread)
 
@@ -46,6 +47,7 @@ from typing_extensions import Any, Dict, Optional
 
 from cramera.logging_setup import get_logger
 from cramera.live.bridge import Bridge, MalformedMoveRequest, MoveRequest
+from cramera.knowledge.queryable_knowledge import QueryScope, UnknownQueryScope
 from cramera.live.query import NoQuerySourceRegistered
 from cramera.live.run_control import (
     NoRunControlRegistered,
@@ -143,6 +145,14 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
                 "ok": True,
                 "title": self.bridge.query_title(),
                 "presets": [asdict(preset) for preset in self.bridge.query_presets()],
+                "scopes": [
+                    {
+                        "name": scope.value,
+                        "label": scope.label,
+                        "variables": self.bridge.query_variables(scope),
+                    }
+                    for scope in self.bridge.query_scopes()
+                ],
                 "variables": self.bridge.query_variables(),
             }
         except NoQuerySourceRegistered as error:
@@ -277,8 +287,14 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         if not code:
             return self._send_json({"ok": False, "error": "empty query"})
         try:
-            return self._send_json(self.bridge.run_query(code).to_payload())
-        except NoQuerySourceRegistered as error:
+            scope = QueryScope.of_name(
+                payload.get("scope") or QueryScope.CURRENT_STATE.value
+            )
+        except UnknownQueryScope as error:
+            return self._send_json({"ok": False, "error": str(error)}, code=400)
+        try:
+            return self._send_json(self.bridge.run_query(code, scope).to_payload())
+        except (NoQuerySourceRegistered, UnknownQueryScope) as error:
             return self._send_json({"ok": False, "error": str(error)})
         except Exception as error:
             # a SyntaxError from the query is named by its own type, like any other

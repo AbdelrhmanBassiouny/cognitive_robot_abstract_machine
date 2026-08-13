@@ -32,7 +32,8 @@ def start(
 
     Safe to call more than once: ``cramera-live demo.py`` starts the bridge and the
     demo may call this again itself, which must not re-patch the hooks or bind the
-    port a second time.
+    port a second time. A demo that rebuilds its world calls this again with the new
+    one, and the already-running bridge follows it there.
 
     :param world: Bind to this world immediately; without it the bridge attaches to the
         executing world on the first executor tick.
@@ -40,16 +41,17 @@ def start(
     :return: The running HTTP server (a daemon thread).
     """
     bridge = BRIDGE
-    if bridge.live_server is not None:
+    already_running = bridge.live_server is not None
+    if not already_running:
+        hooks.install_mesh_hook()  # before the demo parses its objects
+        hooks.install_urdf_source_hook()  # before the demo parses its world
+        hooks.install_plan_hooks()
+    if world is not None:
+        bridge.attach(world)
+        bridge.snapshot()  # single-threaded here, before execution starts
+    if already_running:
         logger.info("live bridge is already running — reusing it")
         return bridge.live_server
-    hooks.install_mesh_hook()  # before the demo parses its objects
-    hooks.install_urdf_source_hook()  # before the demo parses its world
-    hooks.install_plan_hooks()
-    if world is not None:
-        bridge.world = world
-        bridge.bind()
-        bridge.snapshot()  # single-threaded here, before execution starts
     hooks.install_tick_hook()
     bridge.live_server = serve(bridge, port)
     logger.info(

@@ -38,6 +38,9 @@ Panels.define('eql', function (root, bus) {
   let knowledge = null;   // /api/knowledge overview (presets + entity details)
   let source = QuerySource.of(null);   // where queries and presets are answered from
   let recordedStatus = '';             // what the recorded scene calls itself
+  // which body of knowledge the box asks about: the last preset picked, since editing
+  // a question keeps it a question about the same thing
+  let askedScope = null;
 
   // %% boot
   fetch(SceneContext.withScene('/api/knowledge')).then(ResponseUtil.parseJson).then(boot).catch(function (err) {
@@ -65,15 +68,15 @@ Panels.define('eql', function (root, bus) {
     if (!source.live) return showSource(recordedStatus, (knowledge && knowledge.presets) || []);
     fetch(source.presetsUrl).then(ResponseUtil.parseJson).then(function (payload) {
       if (!payload.ok) throw new Error(payload.error || 'the demo offers no queries');
-      showSource('live · ' + payload.title, payload.presets || []);
+      showSource('live · ' + payload.title, payload.presets || [], payload.scopes);
     }).catch(function (err) {
       showSource('live · no queries (' + errorText(err) + ')', []);
     });
   });
 
-  function showSource(status, presets) {
+  function showSource(status, presets, scopes) {
     knowledgeStatus.textContent = status;
-    buildPresets(presets);
+    buildPresets(presets, scopes);
   }
 
   function welcome() {
@@ -124,24 +127,38 @@ Panels.define('eql', function (root, bus) {
   });
 
   // %% presets
-  function buildPresets(presets) {
+  function buildPresets(presets, scopes) {
     presetsEl.innerHTML = '';
-    presets.forEach(function (p) {
-      // a bundle's own questions are about the demo it was recorded from, so they can
-      // only be answered while that demo is attached
-      const unanswerable = p.requires_live && !source.live;
-      const b = document.createElement('div');
-      b.className = unanswerable ? 'preset unavailable' : 'preset';
-      b.textContent = p.text;
-      b.title = unanswerable ? 'start the demo to answer this' : p.code;
-      if (!unanswerable) {
-        b.addEventListener('click', function () {
-          input.value = p.code;
-          runQuery(p.code);
-        });
+    PresetGroups.of(presets, scopes).forEach(function (group) {
+      if (group.label) {
+        const heading = document.createElement('div');
+        heading.className = 'preset-group';
+        heading.textContent = group.label;
+        presetsEl.appendChild(heading);
       }
-      presetsEl.appendChild(b);
+      const row = document.createElement('div');
+      row.className = 'preset-row';
+      group.presets.forEach(function (p) { row.appendChild(presetButton(p, group.name)); });
+      presetsEl.appendChild(row);
     });
+  }
+
+  function presetButton(p, scope) {
+    // a bundle's own questions are about the demo it was recorded from, so they can
+    // only be answered while that demo is attached
+    const unanswerable = p.requires_live && !source.live;
+    const b = document.createElement('div');
+    b.className = unanswerable ? 'preset unavailable' : 'preset';
+    b.textContent = p.text;
+    b.title = unanswerable ? 'start the demo to answer this' : p.code;
+    if (!unanswerable) {
+      b.addEventListener('click', function () {
+        input.value = p.code;
+        askedScope = scope;
+        runQuery(p.code);
+      });
+    }
+    return b;
   }
 
   // %% run an EQL query
@@ -154,7 +171,7 @@ Panels.define('eql', function (root, bus) {
       const r = await fetch(source.runUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code: code }),
+        body: JSON.stringify({ code: code, scope: askedScope }),
       });
       render(code, await ResponseUtil.parseJson(r));
     } catch (err) {
@@ -177,11 +194,7 @@ Panels.define('eql', function (root, bus) {
       return;
     }
     html += '<p class="headline"><b>' + res.count + '</b> result' + (res.count === 1 ? '' : 's') +
-      (res.more ? ' (truncated)' : '') + '.</p>';
-    res.rows.forEach(function (row) {
-      if (row.__entity__ !== undefined) html += entityRow(row);
-      else html += valueRow(row);
-    });
+      (res.more ? ' (truncated)' : '') + '.</p>' + answerTable(res.rows);
     answerEl.innerHTML = html;
     bus.emit('entity:highlight', { ids: res.highlight || [] });
   }
@@ -194,22 +207,30 @@ Panels.define('eql', function (root, bus) {
       res.verbalization.html + '</div>';
   }
 
-  function entityRow(row) {
-    const g = groupOfType(row.__type__);
-    const sub = [];
-    for (const k in row) {
-      if (k.indexOf('__') === 0 || row[k] === null || row[k] === undefined) continue;
-      sub.push(k + ': ' + row[k]);
-    }
-    return '<div class="ansrow"><span class="tag" style="background:' + groupColor(g) + '">' +
-      esc(row.__type__) + '</span><div class="body"><span class="name">' + esc(row.__entity__) +
-      '</span><span class="sub">' + esc(sub.join('  ·  ')) + '</span></div></div>';
+  // the answer as one table: stable columns, and every value coloured by what it is
+  // rather than every value alike
+  function answerTable(rows) {
+    const table = AnswerTable.of(rows);
+    if (!table.columns.length) return '';
+    const typed = table.rows.some(function (row) { return row.type; });
+    let html = '<div class="anstable-wrap"><table class="anstable"><thead><tr>';
+    if (typed) html += '<th class="ans-type"></th>';
+    table.columns.forEach(function (column) { html += '<th>' + esc(column) + '</th>'; });
+    html += '</tr></thead><tbody>';
+    table.rows.forEach(function (row) {
+      html += '<tr>' + (typed ? '<td class="ans-type">' + typeTag(row.type) + '</td>' : '');
+      row.cells.forEach(function (cell) {
+        html += '<td class="ans-' + cell.kind + '">' + esc(cell.text) + '</td>';
+      });
+      html += '</tr>';
+    });
+    return html + '</tbody></table></div>';
   }
-  function valueRow(row) {
-    const parts = Object.keys(row).map(function (k) {
-      return '<code>' + esc(k) + ' = ' + esc(String(row[k])) + '</code>';
-    }).join(' ');
-    return '<div class="ansrow"><div class="body">' + parts + '</div></div>';
+
+  function typeTag(type) {
+    if (!type) return '';
+    return '<span class="tag" style="background:' + groupColor(groupOfType(type)) + '">' +
+      esc(type) + '</span>';
   }
 
   runBtn.addEventListener('click', function () { runQuery(input.value); });

@@ -2,21 +2,48 @@
 Tests for the domain-agnostic EQL query runner and its row rendering.
 """
 
+from dataclasses import dataclass, field
+
 import pytest
 
 krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
+from krrood.entity_query_language.evaluable import Evaluable  # noqa: E402
 from semantic_digital_twin.spatial_types import Point3, Pose  # noqa: E402
+from typing_extensions import Any, List  # noqa: E402
 
 from cramera.body_geometry import pose_label  # noqa: E402
 from cramera.knowledge.query_domain import QueryDomain  # noqa: E402
 from cramera.knowledge.query_runner import EqlQueryRunner, RowRenderer  # noqa: E402
+from cramera.knowledge.queryable_knowledge import QueryEvaluation  # noqa: E402
 
 from .dataset.queryable_records import (  # noqa: E402
     NamedRecord,
     PosedRecord,
     UnnamedRecord,
 )
+
+
+@dataclass
+class AnswersElsewhere(QueryEvaluation):
+    """
+    An evaluation that answers from somewhere other than the objects in this process,
+    recording what it was asked.
+    """
+
+    answer: Any
+    """
+    What it answers with, whatever it is asked.
+    """
+
+    asked: List[Any] = field(default_factory=list)
+    """
+    Every query expression handed to it, in order.
+    """
+
+    def evaluate(self, expression: Any) -> Any:
+        self.asked.append(expression)
+        return self.answer
 
 
 def make_records() -> list:
@@ -102,6 +129,51 @@ class TestDomainsBecomeVariables:
         assert runner.run("an(entity(record))").count == 1
 
 
+# %% where the answer is worked out
+class TestEvaluation:
+    """
+    A query is written the same way wherever its answer comes from, so the runner is
+    told where to work it out rather than assuming the objects are already here.
+    """
+
+    def test_a_query_is_answered_by_the_declared_evaluation(self):
+        runner = EqlQueryRunner(
+            domains=[QueryDomain("record", NamedRecord, make_records())],
+            evaluation=AnswersElsewhere(
+                answer=[NamedRecord("recorded", "alpha", 9.0, Point3(0.0, 0.0, 0.0))]
+            ),
+        )
+
+        result = runner.run("an(entity(record))")
+
+        assert [row["__entity__"] for row in result.rows] == ["recorded"]
+
+    def test_the_evaluation_is_handed_the_query_itself(self):
+        """
+        What it receives has to still be a query: an evaluation that translates one into
+        SQL has nothing to translate once it has been evaluated into rows.
+        """
+        evaluation = AnswersElsewhere(answer=[])
+        EqlQueryRunner(
+            domains=[QueryDomain("record", NamedRecord, make_records())],
+            evaluation=evaluation,
+        ).run("an(entity(record))")
+
+        assert [isinstance(seen, Evaluable) for seen in evaluation.asked] == [True]
+
+    def test_a_domain_of_no_particular_objects_still_gives_a_variable(self):
+        """
+        A domain answered from a database names no objects here; the variable it offers
+        is what the translated query ranges over.
+        """
+        evaluation = AnswersElsewhere(answer=[])
+        EqlQueryRunner(
+            domains=[QueryDomain("stored", NamedRecord)], evaluation=evaluation
+        ).run("an(entity(stored))")
+
+        assert len(evaluation.asked) == 1
+
+
 # %% rendering answer rows
 class TestRowRendering:
     """
@@ -123,13 +195,38 @@ class TestRowRendering:
         assert result.highlight == ["third"]
 
     def test_a_set_of_query_is_rendered_as_value_rows(self):
+        """
+        A column is named after the attribute that was asked for; the type it belongs to
+        is already the answer's subject and repeating it in every heading only crowds
+        the table.
+        """
         result = make_runner().run("set_of(record.name, record.category)")
 
         assert result.rows == [
-            {"NamedRecord.name": "first", "NamedRecord.category": "alpha"},
-            {"NamedRecord.name": "second", "NamedRecord.category": "alpha"},
-            {"NamedRecord.name": "third", "NamedRecord.category": "beta"},
+            {"name": "first", "category": "alpha"},
+            {"name": "second", "category": "alpha"},
+            {"name": "third", "category": "beta"},
         ]
+
+    def test_columns_keep_their_full_names_when_shortening_would_merge_them(self):
+        """
+        Two types can carry the same attribute name, and one column silently swallowing
+        the other loses an answer rather than tidying it.
+        """
+        runner = EqlQueryRunner(
+            domains=[
+                QueryDomain("record", NamedRecord, make_records()),
+                QueryDomain(
+                    "posed",
+                    PosedRecord,
+                    [PosedRecord("only", Pose.from_xyz_rpy(0.0, 0.0, 0.0))],
+                ),
+            ]
+        )
+
+        result = runner.run("set_of(record.name, posed.name)")
+
+        assert list(result.rows[0]) == ["NamedRecord.name", "PosedRecord.name"]
 
     def test_a_pose_is_rendered_readably(self):
         """
