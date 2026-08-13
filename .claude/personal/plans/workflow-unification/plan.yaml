@@ -3284,3 +3284,10 @@ items:
       is #155's own work while #155 is unlanded, so check at kickoff whether its upstream
       pull request has been created yet: if not, fold the reversal into #155 and leave
       everything else here, which stands alone either way.
+
+  - id: integration-branch-ci-verdict
+    title: "Move the integration branch's verdict to CI, with a stable branch and a targeted job"
+    branch: null
+    track: stack-tooling
+    depends_on: []
+    status: not_started

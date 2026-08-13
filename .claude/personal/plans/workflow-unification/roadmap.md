@@ -6816,3 +6816,71 @@ every exception derives from the base - which can only be written once the base 
 
 And the two asking whether `or` returns a bool. It does not - it evaluates to one of its operands -
 so both are answered with the measurement and no change.
+
+## Update 2026-08-13 (new item): the verdict moves to CI, and the integration branch gets a stable half
+
+`integration-branch`'s Part D — replacing the local `--test` run with GitHub CI — was deferred
+on #154 with three reasons and has since grown two more requirements from review. It is its own
+item now, `integration-branch-ci-verdict`, `stack-tooling`, `not_started`, stacked on #154.
+
+### Why a separate item rather than folded into #154
+
+Run against `scope-decision.md`'s prefer-the-change test rather than judged by feel. Part D does
+*modify* what #154 introduces — it deletes `integration_test_command`, `--test`, `--no-test`,
+`TestCommandNotConfiguredError` and `_run_tests`. But the test asks what remains when the edits to
+the parent are removed, and what remains here is a GitHub Actions client, a new CI job, a
+pytest marker, a second long-lived branch and a subcommand that reads a run's conclusion. That
+stands on its own by a wide margin, so it is ordinary stacking rather than a disguised
+modification — the same answer the rule gave #110 against #106.
+
+Three things settled it beyond the rule: #154 is 45 files and ~7,500 additions across 28 commits
+with a converging review round; Part D needs an Actions client that does not exist in this tree,
+because #146 measured the reachability but is unlanded; and its verification is a real CI run on a
+pushed branch, which is the one thing nothing else on #154 needed.
+
+Two review threads on #154 stay open pointing here rather than resolving — the
+`DataclassException` one, whose subject (`TestCommandNotConfiguredError`) this item deletes rather
+than converts, and the whole-CI one this item is the answer to.
+
+### The fact that shapes the whole design, measured rather than assumed
+
+`ci.yml` triggers on `push` to `main` and on `pull_request`, and nothing else. **A pushed
+integration branch therefore gets no CI at all unless a pull request exists for it.** That is not
+a detail of how to arrange things; it is why the user's "a PR into the existing stable integration
+branch" framing is the only shape that gets a verdict, and it should be checked again at kickoff
+rather than inherited from here.
+
+### The two requirements added in review
+
+**A stable branch and a candidate.** `integration` stops being a pointer moved to whatever was
+built last and becomes the last build whose CI went green; each new build is a candidate, opened
+as a pull request into it, and merged once green. What that buys is a branch a developer can work
+from that is known to work, instead of one that is fresh and unverified.
+
+There is a tension to resolve rather than paper over: a build is regenerated from scratch from the
+upstream base plus the tips, so a candidate shares no history with the stable branch it would
+merge into, and its pull request's diff is *everything that changed between two independent
+builds*. Merging it also makes `integration` accumulate merge history, which is the one property
+the design has held since the item was recorded — "it exists to be built from, not to be history".
+Whether the stable branch is a real merge target or simply a second pointer force-updated on green
+is the first thing to settle.
+
+**A pytest marker and a job that runs only what it marks.** The failing test that step 5 pushes to
+the breaking branch gets a marker — the user's suggestion is one named for the label,
+`integration-conflict` — and a CI job runs only marked tests. Two things follow: the verdict
+arrives in a fraction of the matrix's time, and `integration-conflict` gains an automatic clearing
+condition it does not have today. That closes the gap the label was created with: the 08-11 round
+established that `WithholdBlockedBranch` cannot clear it, since a failure between two cleanly
+merging branches never makes a pull request conflicted, and the label was documented as
+"never cleared automatically" for exactly that reason. A marked test that passes is a different,
+and correct, clearing condition — it says the thing that was broken works now.
+
+The user also offered a third option worth keeping: the script that writes and clears the label
+could run only the marked tests itself, or trigger just that job, rather than depending on the
+whole run.
+
+### What is left in place until it lands
+
+`integration_test_command` in `stack.toml`, `--test`/`--no-test`, `TestCommandNotConfiguredError`
+and `_run_tests` all still exist on #154 and all still work. Part D is what removes them, so
+nothing is half-migrated in the meantime.
