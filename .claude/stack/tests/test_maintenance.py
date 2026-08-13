@@ -75,10 +75,10 @@ from maintenance_git_commands import (
     ProposedPush,
 )
 from maintenance_github import ForkPullRequests
+from github_links import GitHubLinks
 from maintenance_promotion import (
-    BranchAwaitingSummary,
-    EmptyPromotionSummaryError,
-    PromotionRound,
+    BranchPromotion,
+    PromotionOutcome,
     PromotionSummaries,
     PromotionSummary,
     RecordedPromotionLinkMissingError,
@@ -1253,6 +1253,14 @@ Summaries written the way a caller writes them, read from a document of their ow
 rather than assembled as a literal in each test that needs one.
 """
 
+A_FORK_DESCRIPTION_WRITTEN_FOR_THE_FORK = (
+    "![a badge](https://example.invalid/badge.svg)\n\nWhat this branch does.\n"
+)
+"""
+A description whose first paragraph is no use to an upstream reviewer, which is what
+deriving the prefill from one used to produce.
+"""
+
 
 def the_summaries() -> PromotionSummaries:
     """
@@ -1261,22 +1269,44 @@ def the_summaries() -> PromotionSummaries:
     return PromotionSummaries.read_from(SUMMARY_FIXTURE)
 
 
+def an_upstream_link(branch: str, title: str = "A title") -> str:
+    """
+    Build the link a previous pass would have recorded for a branch.
+
+    Built rather than written out, so a test carries no second copy of the format the
+    tool composes - and a recorded link is recognised by the same builder that made it.
+
+    :param branch: The fork branch the link promotes.
+    :param title: The title it prefills.
+    :return: The compare-and-create link.
+    """
+    configuration = make_configuration()
+    return GitHubLinks(configuration.upstream_repository).create_pull_request_from(
+        base=configuration.upstream_base,
+        head=f"{configuration.fork_repository.owner}:{branch}",
+        title=title,
+        body="Whatever its author wrote.",
+    )
+
+
 def test_the_promotion_link_goes_into_the_description_and_the_branch_is_labelled(
     fork_checkout: ForkCheckout,
 ):
     a_parent_and_child(fork_checkout)
     fork = RecordingPullRequests(
-        descriptions={40: "What this branch does.\n\nMore detail.\n"},
+        descriptions={40: A_FORK_DESCRIPTION_WRITTEN_FOR_THE_FORK},
         titles={40: "A parent branch"},
     )
 
-    promotion = promote(a_stack(fork_checkout, the_board()), fork, the_summaries())
+    promoted = promote(a_stack(fork_checkout, the_board()), fork, the_summaries())
 
-    assert [entry.branch for entry in promotion.promoted] == ["a-parent"]
+    assert [(entry.branch, entry.outcome) for entry in promoted] == [
+        ("a-parent", PromotionOutcome.PROMOTED)
+    ]
     written = fork.description_writes[0]
     assert written.pull_request_number == 40
     assert PROMOTION_HEADING in written.body
-    assert promotion.promoted[0].url in written.body
+    assert promoted[0].url in written.body
     assert fork.label_writes == [RecordedLabelWrite(40, (PROMOTION_LINK_LABEL,))]
 
 
@@ -1290,15 +1320,15 @@ def test_the_upstream_opens_with_the_written_points_rather_than_the_fork_descrip
     """
     a_parent_and_child(fork_checkout)
     fork = RecordingPullRequests(
-        descriptions={40: "![a badge](https://example.invalid/badge.svg)\n\nProse.\n"}
+        descriptions={40: A_FORK_DESCRIPTION_WRITTEN_FOR_THE_FORK}
     )
     summary = the_summaries().for_pull_request(40)
 
-    promotion = promote(a_stack(fork_checkout, the_board()), fork, the_summaries())
+    promoted = promote(a_stack(fork_checkout, the_board()), fork, the_summaries())
 
-    prefilled = unquote(promotion.promoted[0].url)
+    prefilled = unquote(promoted[0].url)
     assert summary.as_markdown in prefilled
-    assert "badge" not in prefilled
+    assert A_FORK_DESCRIPTION_WRITTEN_FOR_THE_FORK.split("\n\n")[0] not in prefilled
 
 
 def test_the_upstream_body_always_links_back_to_the_fork_pull_request(
@@ -1310,13 +1340,36 @@ def test_the_upstream_body_always_links_back_to_the_fork_pull_request(
     """
     a_parent_and_child(fork_checkout)
 
-    promotion = promote(
+    promoted = promote(
         a_stack(fork_checkout, the_board()), RecordingPullRequests(), the_summaries()
     )
 
-    assert (
-        f"https://github.com/{make_configuration().fork_repository}/pull/40"
-        in unquote(promotion.promoted[0].url)
+    fork_pull_request = GitHubLinks(make_configuration().fork_repository).pull_request(
+        40
+    )
+    assert fork_pull_request in unquote(promoted[0].url)
+
+
+def test_a_branch_nobody_wrote_for_is_promoted_with_the_link_back_and_nothing_else(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A run with no model in it cannot read a diff, and holding every branch back until
+    one does would leave a scheduled pass unable to promote anything at all. So the
+    points are what a summary adds, never what a promotion depends on.
+    """
+    a_parent_and_child(fork_checkout)
+    fork = RecordingPullRequests(
+        descriptions={40: A_FORK_DESCRIPTION_WRITTEN_FOR_THE_FORK}
+    )
+
+    promoted = promote(a_stack(fork_checkout, the_board()), fork, PromotionSummaries())
+
+    assert promoted[0].outcome is PromotionOutcome.PROMOTED
+    body = unquote(promoted[0].url).partition("&body=")[2]
+    assert body == (
+        f"Full detail: "
+        f"{GitHubLinks(make_configuration().fork_repository).pull_request(40)}"
     )
 
 
@@ -1340,49 +1393,14 @@ def test_the_upstream_title_is_the_fork_one_unless_the_summary_overrides_it(
         }
     )
 
-    promotion = promote(a_stack(fork_checkout, board), fork, summaries)
+    promoted = promote(a_stack(fork_checkout, board), fork, summaries)
 
-    by_branch = {entry.branch: unquote(entry.url) for entry in promotion.promoted}
+    by_branch = {entry.branch: unquote(entry.url) for entry in promoted}
     assert "title=The fork's own title&body=" in by_branch["a-parent"]
     assert f"title={summaries.for_pull_request(42).title}&body=" in by_branch["a-third"]
 
 
-def test_a_promotable_branch_with_no_summary_is_reported_rather_than_promoted(
-    fork_checkout: ForkCheckout,
-):
-    """
-    Falling back to the fork description is exactly the behaviour this replaces, so a
-    fallback would make the interface optional and the defect reachable again.
-    """
-    a_parent_and_child(fork_checkout)
-    fork = RecordingPullRequests(titles={40: "A parent branch"})
-
-    promotion = promote(a_stack(fork_checkout, the_board()), fork, PromotionSummaries())
-
-    assert promotion.promoted == ()
-    assert promotion.awaiting_summary == (
-        BranchAwaitingSummary("a-parent", 40, "A parent branch"),
-    )
-    assert fork.description_writes == []
-    assert fork.label_writes == []
-
-
-def test_a_summary_that_says_nothing_is_refused_rather_than_read_as_none(
-    fork_checkout: ForkCheckout,
-):
-    """
-    An empty entry and a missing one have the same effect and different meanings: one
-    is a branch still waiting to be written for, the other one somebody called done.
-    """
-    with pytest.raises(EmptyPromotionSummaryError) as raised:
-        PromotionSummaries.from_json({"40": {"points": []}})
-
-    assert raised.value.pull_request_number == 40
-
-
-def test_a_summary_renders_its_points_as_points(
-    fork_checkout: ForkCheckout,
-):
+def test_a_summary_renders_its_points_as_points():
     """
     The caller supplies points rather than markdown, so prose cannot arrive dressed as
     a point-based summary - the rendering is the script's.
@@ -1392,16 +1410,28 @@ def test_a_summary_renders_its_points_as_points(
     assert summary.as_markdown == "- the first thing\n- the second thing"
 
 
+def test_a_summary_nobody_wrote_and_one_written_empty_are_the_same_summary():
+    """
+    Both mean nobody has read this diff for the upstream, and the promotion that follows
+    is identical - so they answer identically rather than one of them being an error.
+    """
+    summaries = PromotionSummaries.from_json({"40": {"points": []}})
+
+    assert summaries.for_pull_request(40) == summaries.for_pull_request(41)
+    assert summaries.for_pull_request(40).as_markdown == ""
+
+
 def test_a_branch_already_carrying_the_link_label_is_not_promoted_again(
     fork_checkout: ForkCheckout,
 ):
     a_parent_and_child(fork_checkout)
     fork = RecordingPullRequests(labels={40: [PROMOTION_LINK_LABEL]})
 
-    promotion = promote(a_stack(fork_checkout, the_board()), fork, the_summaries())
+    promoted = promote(a_stack(fork_checkout, the_board()), fork, the_summaries())
 
-    assert promotion == PromotionRound()
+    assert [entry.outcome for entry in promoted] == [PromotionOutcome.ALREADY_LINKED]
     assert fork.description_writes == []
+    assert fork.label_writes == []
 
 
 def test_a_branch_labelled_needs_resolution_during_this_pass_is_not_promoted(
@@ -1419,9 +1449,9 @@ def test_a_branch_labelled_needs_resolution_during_this_pass_is_not_promoted(
         labels={40: [make_configuration().needs_resolution_label]}
     )
 
-    promotion = promote(a_stack(fork_checkout, the_board()), fork, the_summaries())
+    promoted = promote(a_stack(fork_checkout, the_board()), fork, the_summaries())
 
-    assert promotion == PromotionRound()
+    assert [entry.outcome for entry in promoted] == [PromotionOutcome.WITHHELD]
     assert fork.description_writes == []
     assert fork.label_writes == []
 
@@ -1449,13 +1479,14 @@ def test_a_second_promotion_replaces_the_link_rather_than_appending_another():
     be replaced in place - two Promote headings would leave a reader guessing which link
     is current.
     """
-    first = description_with_promotion_link("Prose.\n", "https://example.invalid/first")
+    first_url, second_url = an_upstream_link("a-parent"), an_upstream_link("a-child")
+    first = description_with_promotion_link("Prose.\n", first_url)
 
-    second = description_with_promotion_link(first, "https://example.invalid/second")
+    second = description_with_promotion_link(first, second_url)
 
-    assert second.count("## Promote") == 1
-    assert "https://example.invalid/second" in second
-    assert "https://example.invalid/first" not in second
+    assert second.count(PROMOTION_HEADING) == 1
+    assert second_url in second
+    assert first_url not in second
     assert second.startswith("Prose.")
 
 
@@ -1464,13 +1495,27 @@ def test_a_recorded_link_reads_back_as_the_link_that_was_recorded():
     The table reports the link a reader will actually open, so it reads the recorded one
     back rather than computing a second one that could differ from it.
     """
-    url = "https://example.invalid/compare?expand=1&title=A%20title"
+    url = an_upstream_link("a-parent")
 
-    assert promotion_link_in(description_with_promotion_link("Prose.\n", url)) == url
+    read_back = promotion_link_in(
+        description_with_promotion_link("Prose.\n", url), make_configuration()
+    )
+
+    assert read_back == url
 
 
 def test_a_description_carrying_no_promotion_section_reads_back_as_no_link():
-    assert promotion_link_in("Prose, and nothing else.\n") is None
+    assert promotion_link_in("Prose, and nothing else.\n", make_configuration()) is None
+
+
+def test_a_link_to_somewhere_other_than_the_upstream_is_not_read_as_a_promotion_link():
+    """
+    What a promotion link looks like comes from the builder that composes one, so a
+    description mentioning some other URL under the heading cannot be mistaken for one.
+    """
+    described = description_with_promotion_link("Prose.\n", "https://example.invalid/x")
+
+    assert promotion_link_in(described, make_configuration()) is None
 
 
 def test_every_link_waiting_to_be_opened_is_reported_with_its_branch_and_title():
@@ -1483,8 +1528,8 @@ def test_every_link_waiting_to_be_opened_is_reported_with_its_branch_and_title()
     fork = RecordingPullRequests(
         titles={40: "A parent branch", 41: "A child branch", 42: "An unpromoted one"},
         descriptions={
-            40: description_with_promotion_link("", "https://example.invalid/parent"),
-            41: description_with_promotion_link("", "https://example.invalid/child"),
+            40: description_with_promotion_link("", an_upstream_link("a-parent")),
+            41: description_with_promotion_link("", an_upstream_link("a-child")),
         },
         labels={
             40: [PROMOTION_LINK_LABEL],
@@ -1497,7 +1542,7 @@ def test_every_link_waiting_to_be_opened_is_reported_with_its_branch_and_title()
 
     assert [entry.pull_request_number for entry in pending] == [40]
     assert pending[0].title == "A parent branch"
-    assert pending[0].url == "https://example.invalid/parent"
+    assert pending[0].url == an_upstream_link("a-parent")
 
 
 def test_a_branch_whose_link_was_built_but_is_gone_is_refused_rather_than_reported():
@@ -1521,13 +1566,13 @@ def test_the_pending_links_are_printed_as_one_markdown_row_each(
 ):
     """
     Rendering is mechanical, so the executor emits the table and the session pastes it -
-    which is what replaced the summary a scheduled run used to email.
+    which is what replaced the summary a scheduled run used to deliver.
     """
     configuration = make_configuration()
     fork = RecordingPullRequests(
         titles={40: "A parent branch"},
         descriptions={
-            40: description_with_promotion_link("", "https://example.invalid/parent")
+            40: description_with_promotion_link("", an_upstream_link("a-parent"))
         },
         labels={40: [PROMOTION_LINK_LABEL]},
         heads={40: "a-parent"},
@@ -1538,7 +1583,8 @@ def test_the_pending_links_are_printed_as_one_markdown_row_each(
     rows = capsys.readouterr().out.splitlines()
     assert rows[0] == "| " + " | ".join(PendingPromotionColumn) + " |"
     assert rows[-1] == (
-        "| #40 | A parent branch | `a-parent` | [open](https://example.invalid/parent) |"
+        f"| #40 | A parent branch | `a-parent` | "
+        f"[open]({an_upstream_link('a-parent')}) |"
     )
 
 
@@ -1556,7 +1602,9 @@ def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
 
     cleared = clear_spent_promotion_labels(a_stack(fork_checkout, board), fork)
 
-    assert cleared == ("a-parent",)
+    assert cleared == [
+        BranchPromotion("a-parent", 40, PromotionOutcome.LINK_LABEL_CLEARED)
+    ]
     assert fork.label_writes == [
         RecordedLabelWrite(40, (make_configuration().in_review_label,))
     ]
@@ -1630,12 +1678,12 @@ def test_a_whole_pass_leaves_no_board_behind(
     assert not board_path.exists()
 
 
-def test_a_whole_pass_with_no_summaries_reports_what_it_is_waiting_for(
+def test_a_whole_pass_with_no_summaries_still_promotes(
     fork_checkout: ForkCheckout, capsys: pytest.CaptureFixture[str]
 ):
     """
-    A summary cannot exist before a pass has decided a branch is promotable, so the run
-    that decides it is also the run that names the branches to write for.
+    The whole pass is what a run with no model in it performs, so a promotion that
+    needed a summary written for it would leave such a run unable to promote at all.
     """
     a_parent_and_child(fork_checkout)
 
@@ -1645,10 +1693,10 @@ def test_a_whole_pass_with_no_summaries_reports_what_it_is_waiting_for(
     )
     document = json.loads(capsys.readouterr().out)
 
-    assert status == MaintenanceExitCode.AWAITING_PROMOTION_SUMMARY
-    assert document["status"] == status.name_for_a_caller
-    assert [entry["branch"] for entry in document["awaiting_summary"]] == ["a-parent"]
-    assert document["promoted"] == []
+    assert status == MaintenanceExitCode.SUCCESS
+    assert [(entry["branch"], entry["outcome"]) for entry in document["promoted"]] == [
+        ("a-parent", PromotionOutcome.PROMOTED)
+    ]
 
 
 # %% the exit status every command derives from what it left behind
@@ -1765,31 +1813,6 @@ def test_a_clean_run_says_nothing_about_its_status(fork_checkout: ForkCheckout):
 
     assert result.returncode == MaintenanceExitCode.SUCCESS
     assert "success" not in result.stderr
-
-
-def test_a_branch_waiting_on_its_summary_is_never_reported_as_a_clean_pass():
-    """
-    The pass is clean and the promotion is not done, so a zero status would tell a
-    caller there is nothing left to write - which is the whole content of the run.
-    """
-    waiting = MaintenanceReport(
-        awaiting_summary=(BranchAwaitingSummary("a-branch", 40, "A branch"),)
-    )
-
-    assert exit_code_for(waiting) == MaintenanceExitCode.AWAITING_PROMOTION_SUMMARY
-
-
-def test_a_conflict_outranks_a_branch_waiting_on_its_summary():
-    """
-    A summary nobody wrote is expected of the first of the two runs; a branch nobody can
-    publish is not. Ranking them the other way would hide the conflict behind it.
-    """
-    conflicted = dataclasses.replace(
-        a_report(restack_outcome=RestackOutcome.CONFLICT),
-        awaiting_summary=(BranchAwaitingSummary("a-branch", 40, "A branch"),),
-    )
-
-    assert exit_code_for(conflicted) == MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
 
 
 def test_a_refused_move_keeps_its_own_status():

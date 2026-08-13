@@ -57,7 +57,8 @@ from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import ClassVar
-from urllib.parse import quote
+
+from github_links import GitHubLinks
 
 # %% configuration
 
@@ -929,12 +930,14 @@ class PromotionLink:
         :return: The link, flagged if the body was shortened.
         """
 
+        upstream = GitHubLinks(configuration.upstream_repository)
+
         def url_for(text: str) -> str:
-            return (
-                f"https://github.com/{configuration.upstream_repository}/compare/"
-                f"{configuration.upstream_base}..."
-                f"{configuration.fork_repository.owner}:{branch}"
-                f"?expand=1&title={quote(title)}&body={quote(text)}"
+            return upstream.create_pull_request_from(
+                base=configuration.upstream_base,
+                head=f"{configuration.fork_repository.owner}:{branch}",
+                title=title,
+                body=text,
             )
 
         if len(url_for(body)) <= cls.URL_CHARACTER_LIMIT:
