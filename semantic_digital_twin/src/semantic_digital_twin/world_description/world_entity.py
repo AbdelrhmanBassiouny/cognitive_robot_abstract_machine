@@ -576,10 +576,9 @@ class Body(KinematicStructureEntity):
         for shape in self.collision:
             if isinstance(shape, Mesh):
                 return True
-            shape_mesh = shape.mesh
             if (
-                shape_mesh.volume > volume_threshold
-                or shape_mesh.area > surface_threshold
+                shape.volume > volume_threshold
+                or shape.surface_area > surface_threshold
             ):
                 return True
         return False

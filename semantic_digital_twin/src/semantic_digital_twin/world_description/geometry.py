@@ -418,6 +418,16 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
 
     @property
     @abstractmethod
+    def surface_area(self) -> float:
+        """
+        :return: The area of this shape's surface.
+
+        ..note:: Stated the same way :attr:`volume` is: from the shape itself rather
+            than from the mesh standing in for it.
+        """
+
+    @property
+    @abstractmethod
     def local_frame_bounding_box(self) -> BoundingBox:
         """
         Returns the bounding box of the shape.
@@ -546,6 +556,10 @@ class Mesh(Shape):
             watertight mesh.
         """
         return self.mesh.volume
+
+    @property
+    def surface_area(self) -> float:
+        return self.mesh.area
 
     @property
     def local_frame_bounding_box(self) -> BoundingBox:
@@ -998,6 +1012,10 @@ class Sphere(Shape):
         return 4.0 / 3.0 * math.pi * self.radius**3
 
     @property
+    def surface_area(self) -> float:
+        return 4.0 * math.pi * self.radius**2
+
+    @property
     def mesh(self) -> trimesh.Trimesh:
         """
         Returns a trimesh object representing the sphere.
@@ -1054,6 +1072,10 @@ class Cylinder(Shape):
     @property
     def volume(self) -> float:
         return math.pi * self.radius**2 * self.height
+
+    @property
+    def surface_area(self) -> float:
+        return 2.0 * math.pi * self.radius * (self.radius + self.height)
 
     @property
     def mesh(self) -> trimesh.Trimesh:
@@ -1113,6 +1135,14 @@ class Box(Shape):
     @property
     def volume(self) -> float:
         return self.scale.x * self.scale.y * self.scale.z
+
+    @property
+    def surface_area(self) -> float:
+        return 2.0 * (
+            self.scale.x * self.scale.y
+            + self.scale.y * self.scale.z
+            + self.scale.z * self.scale.x
+        )
 
     @property
     def mesh(self) -> trimesh.Trimesh:
