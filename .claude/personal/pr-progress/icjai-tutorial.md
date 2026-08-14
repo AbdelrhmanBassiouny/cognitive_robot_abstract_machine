@@ -33,4 +33,17 @@ a `hide-cell`/`example-solution` cell - intentional, nothing to fix.
    New tests `test/cognitive_robot_abstract_machine_test` (8, wired into the
    CI matrix as `lib: cognitive_robot_abstract_machine`), README section.
 
+6. `DetachedInstanceError` from the notebook's last cell
+   (`queried_plan[0].from_dao()`): `SQLAlchemyBackend._evaluate` opened a
+   session per evaluation that only the generator frame held, so it was
+   garbage collected with the generator and detached every returned DAO. The
+   backend now owns one session (`session: Session = field(init=False)` set in
+   `__post_init__`), so results stay usable as long as the backend does. Test:
+   `test_backends.test_result_of_a_sqlalchemy_query_can_be_converted_back`.
+
+Both fixes are committed and pushed to `origin/icjai-tutorial` (d65ec42442,
+49b7744807). Pre-existing unrelated failure on this branch:
+`test_random_events_translator.test_comparison_between_two_variables_is_refused`
+(fails with all my changes stashed too).
+
 Next: nothing outstanding; user has not asked for a PR.
