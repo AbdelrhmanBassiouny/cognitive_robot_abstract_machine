@@ -123,6 +123,26 @@ class NumericTransform:
         )
 
     @classmethod
+    def from_translation(
+        cls,
+        x: float,
+        y: float,
+        z: float,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ) -> NumericTransform:
+        """
+        A transform that shifts by the given coordinates without rotating.
+
+        :param x: The shift along the x-axis.
+        :param y: The shift along the y-axis.
+        :param z: The shift along the z-axis.
+        :param reference_frame: The frame the transform is expressed in.
+        """
+        matrix = np.eye(4)
+        matrix[:3, 3] = (x, y, z)
+        return cls(matrix=matrix, reference_frame=reference_frame)
+
+    @classmethod
     def identity(
         cls, reference_frame: Optional[KinematicStructureEntity] = None
     ) -> NumericTransform:
@@ -299,6 +319,25 @@ class NumericPose:
         :return: This pose's position and orientation, as ``[x, y, z, qx, qy, qz, qw]``.
         """
         return [*self.position, *self.quaternion]
+
+    def euclidean_distance(self, other: NumericPose) -> float:
+        """
+        How far apart two poses are placed.
+
+        :param other: The pose to measure to.
+        """
+        return float(np.linalg.norm(np.subtract(self.position, other.position)))
+
+    def rotational_error(self, other: NumericPose) -> float:
+        """
+        The angle a pose would have to turn through to reach another's orientation.
+
+        Measured as the shorter of the two ways round, so the result is in ``[0, pi]``.
+
+        :param other: The pose to measure to.
+        """
+        alignment = abs(float(np.dot(self.quaternion, other.quaternion)))
+        return 2.0 * math.acos(min(1.0, alignment))
 
     @property
     def label(self) -> str:

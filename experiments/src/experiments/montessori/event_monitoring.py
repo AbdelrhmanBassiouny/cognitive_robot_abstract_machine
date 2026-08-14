@@ -379,7 +379,20 @@ class MontessoriEventMonitor:
         """
         Start watching, ticking whenever :attr:`ticking` says to.
         """
+        self._read_geometry_out()
         self.ticking.drive(self)
+
+    def _read_geometry_out(self) -> None:
+        """
+        Read every collidable shape's placement out into numbers before watching
+        starts.
+
+        A shape's own placement is model data, read out once and reused, so paying for
+        it here rather than inside the first tick keeps that one-time cost out of the
+        motion it would otherwise interrupt.
+        """
+        for entity in self.world.kinematic_structure_entities:
+            entity.combined_mesh
 
     def stop(self) -> None:
         """

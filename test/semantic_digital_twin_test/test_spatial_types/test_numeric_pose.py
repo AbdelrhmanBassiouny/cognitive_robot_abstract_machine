@@ -167,3 +167,43 @@ def test_a_bodys_numeric_global_pose_builds_no_transformation_matrix(
     monkeypatch.setattr(World, "compute_forward_kinematics", _refuse)
 
     assert body.numeric_global_pose == expected
+
+
+# %% comparing two numeric poses
+@pytest.mark.parametrize("roll, pitch, yaw", ROLL_PITCH_YAW_CASES)
+def test_the_angle_between_two_numeric_poses_matches_the_symbolic_one(
+    roll: float, pitch: float, yaw: float
+) -> None:
+    """
+    Motion detection compares consecutive poses, and the numeric comparison replaces the
+    symbolic rotational error, so it has to name the same rotation.
+
+    ..note:: :meth:`RotationMatrix.rotational_error` reports some rotations the long way
+       round, as ``2*pi`` minus the angle; the numeric measure always takes the shorter
+       way, so the two are compared modulo that wrap.
+    """
+    first = Pose.from_xyz_rpy(0.0, 0.0, 0.0, 0.2, -0.4, 1.1)
+    second = Pose.from_xyz_rpy(1.0, 2.0, 3.0, roll, pitch, yaw)
+    symbolic = float(
+        first.to_rotation_matrix().rotational_error(second.to_rotation_matrix())
+    )
+    expected = min(symbolic, 2.0 * np.pi - symbolic)
+
+    measured = NumericPose.of_pose(first).rotational_error(NumericPose.of_pose(second))
+
+    assert measured == pytest.approx(expected, abs=1e-6)
+
+
+def test_the_distance_between_two_numeric_poses_matches_the_symbolic_one() -> None:
+    """
+    The same comparison measures how far a tracked object moved.
+    """
+    first = Pose.from_xyz_rpy(1.0, 2.0, 3.0)
+    second = Pose.from_xyz_rpy(1.5, -2.0, 0.25)
+    expected = float(first.to_position().euclidean_distance(second.to_position()))
+
+    measured = NumericPose.of_pose(first).euclidean_distance(
+        NumericPose.of_pose(second)
+    )
+
+    assert measured == pytest.approx(expected)

@@ -32,7 +32,12 @@ from semantic_digital_twin.reasoning.robot_predicates import (
 )
 from semantic_digital_twin.robots.robot_parts import Camera, EndEffector
 from semantic_digital_twin.robots.pr2 import PR2
-from semantic_digital_twin.spatial_types.spatial_types import Pose, Quaternion
+from semantic_digital_twin.spatial_types.spatial_types import (
+    Point3,
+    Pose,
+    Quaternion,
+    Vector3,
+)
 from semantic_digital_twin.testing import *
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -651,3 +656,29 @@ def test_nothing_occludes_a_body_in_clear_line_of_sight():
         world.add_semantic_annotation(camera)
 
     assert occluding_bodies(camera, target) == []
+
+
+def _refuse_to_build(*args, **kwargs):
+    """
+    Stand in for symbolic machinery a numeric check must never reach.
+    """
+    raise AssertionError("a symbolic value was built")
+
+
+def test_supporting_builds_nothing_symbolic(two_block_world, monkeypatch):
+    """
+    Support is checked on every detector tick, from a thread that does not own the
+    world, so the check must reach its answer without touching CasADi.
+    """
+    center, top = two_block_world
+    with center._world.modify_world():
+        top.parent_connection.parent_T_connection_expression = (
+            HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=center, z=1.0)
+        )
+    expected = is_supported_by(top, center)
+    monkeypatch.setattr(HomogeneousTransformationMatrix, "__init__", _refuse_to_build)
+    monkeypatch.setattr(HomogeneousTransformationMatrix, "to_np", _refuse_to_build)
+    monkeypatch.setattr(Point3, "__init__", _refuse_to_build)
+    monkeypatch.setattr(Vector3, "__init__", _refuse_to_build)
+
+    assert is_supported_by(top, center) == expected

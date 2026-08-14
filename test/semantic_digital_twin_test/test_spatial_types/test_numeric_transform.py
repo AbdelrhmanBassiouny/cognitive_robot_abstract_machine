@@ -16,6 +16,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
 )
 from semantic_digital_twin.world import World
+from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
 
 ROOT_T_BODY = HomogeneousTransformationMatrix.from_xyz_rpy(
@@ -24,6 +25,13 @@ ROOT_T_BODY = HomogeneousTransformationMatrix.from_xyz_rpy(
 """
 A transform with a translation and a rotation on every axis.
 """
+
+
+def _refuse_to_build(*args: object, **kwargs: object) -> object:
+    """
+    Stand in for symbolic machinery a numeric read must never reach.
+    """
+    raise AssertionError("a symbolic value was built")
 
 
 def _frame() -> Body:
@@ -118,3 +126,51 @@ def test_a_numeric_point_keeps_its_own_coordinates() -> None:
 
     assert (point.x, point.y, point.z) == (1.0, 2.0, 3.0)
     assert point.to_np().tolist() == [1.0, 2.0, 3.0, 1.0]
+
+
+# %% reading a world entity out numerically
+def _stacked_bodies() -> tuple[Body, Body]:
+    """
+    A body held one metre above another by a fixed connection.
+    """
+    world = World()
+    lower = Body(name=PrefixedName("lower"))
+    upper = Body(name=PrefixedName("upper"))
+    with world.modify_world():
+        world.add_connection(
+            FixedConnection(
+                parent=lower,
+                child=upper,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    0.0, 0.0, 1.0
+                ),
+            )
+        )
+    return lower, upper
+
+
+def test_a_bodys_numeric_global_transform_matches_its_symbolic_one() -> None:
+    """
+    The numeric read replaces the symbolic one, so it must place the body where the
+    symbolic one does.
+    """
+    _, upper = _stacked_bodies()
+
+    assert upper.numeric_global_transform.to_np() == pytest.approx(
+        upper.global_transform.to_np()
+    )
+
+
+def test_a_bodys_numeric_global_transform_builds_nothing_symbolic(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Reading a body's placement is the commonest thing a detector tick does, and it must
+    not reach CasADi from a thread of its own.
+    """
+    _, upper = _stacked_bodies()
+    expected = upper.numeric_global_transform.to_np()
+    monkeypatch.setattr(World, "compute_forward_kinematics", _refuse_to_build)
+    monkeypatch.setattr(HomogeneousTransformationMatrix, "__init__", _refuse_to_build)
+
+    assert upper.numeric_global_transform.to_np() == pytest.approx(expected)

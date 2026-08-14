@@ -14,6 +14,7 @@ from typing_extensions import TYPE_CHECKING
 
 from krrood.adapters.json_serializer import SubclassJSONSerializer, to_json, from_json
 from semantic_digital_twin.exceptions import MismatchingWorld
+from semantic_digital_twin.spatial_types.numeric import NumericTransform
 from semantic_digital_twin.world_description.geometry import Shape, BoundingBox, Color
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Point3
@@ -138,14 +139,14 @@ class ShapeCollection(SubclassJSONSerializer):
         """
         transformed_meshes = []
         for shape in self.shapes:
-            transform = shape.origin.to_np()
+            transform = shape.numeric_origin.to_np()
             mesh = shape.mesh.copy()
             mesh.apply_transform(transform)
             transformed_meshes.append(mesh)
         return concatenate(transformed_meshes)
 
     def as_bounding_box_collection_at_origin(
-        self, origin: HomogeneousTransformationMatrix
+        self, origin: NumericTransform
     ) -> BoundingBoxCollection:
         """
         Provides the bounding box collection for this entity given a transformation
@@ -179,7 +180,7 @@ class ShapeCollection(SubclassJSONSerializer):
         :returns: A collection of bounding boxes in world-space coordinates.
         """
         return self.as_bounding_box_collection_at_origin(
-            HomogeneousTransformationMatrix(reference_frame=reference_frame)
+            NumericTransform.identity(reference_frame)
         )
 
     def to_json(self) -> Dict[str, Any]:
@@ -211,7 +212,7 @@ class ShapeCollection(SubclassJSONSerializer):
     def scale(self):
         return (
             self.as_bounding_box_collection_at_origin(
-                HomogeneousTransformationMatrix(reference_frame=self.reference_frame)
+                NumericTransform.identity(self.reference_frame)
             )
             .bounding_box()
             .scale
@@ -325,13 +326,8 @@ class BoundingBoxCollection(ShapeCollection):
                 x.upper - origin_x,
                 y.upper - origin_y,
                 z.upper - origin_z,
-                HomogeneousTransformationMatrix.from_point_rotation_matrix(
-                    point=Point3(
-                        origin_x,
-                        origin_y,
-                        origin_z,
-                    ),
-                    reference_frame=reference_frame,
+                NumericTransform.from_translation(
+                    origin_x, origin_y, origin_z, reference_frame=reference_frame
                 ),
             )
             if not keep_surface and (bb.depth == 0 or bb.height == 0 or bb.width == 0):
@@ -409,5 +405,5 @@ class BoundingBoxCollection(ShapeCollection):
             max(all_x),
             max(all_y),
             max(all_z),
-            HomogeneousTransformationMatrix(reference_frame=self.reference_frame),
+            NumericTransform.identity(self.reference_frame),
         )

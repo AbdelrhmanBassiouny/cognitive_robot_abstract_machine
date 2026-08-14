@@ -2085,6 +2085,24 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         """
         return NumericPose.of_pose(self).to_position_quaternion_list()
 
+    @classmethod
+    def from_numeric_pose(
+        cls,
+        numeric_pose: NumericPose,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ) -> Self:
+        """
+        Build a pose from one that was read out into numbers.
+
+        :param numeric_pose: The numbers to build the pose from.
+        :param reference_frame: The frame the pose is expressed in.
+        """
+        return cls.from_xyz_quaternion(
+            *numeric_pose.position,
+            *numeric_pose.quaternion,
+            reference_frame=reference_frame,
+        )
+
     def to_homogeneous_matrix(self) -> HomogeneousTransformationMatrix:
         return HomogeneousTransformationMatrix(
             data=self, reference_frame=self.reference_frame

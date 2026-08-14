@@ -373,6 +373,38 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
     trimesh visual instead.
     """
 
+    _numeric_origin: Optional[NumericTransform] = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    """
+    The numbers last read out of :attr:`origin`.
+    """
+
+    _read_origin: Optional[HomogeneousTransformationMatrix] = field(
+        default=None, init=False, repr=False, compare=False
+    )
+    """
+    The origin :attr:`_numeric_origin` was read out of, so that replacing the origin is
+    noticed.
+    """
+
+    @property
+    def numeric_origin(self) -> NumericTransform:
+        """
+        This shape's origin as plain numbers.
+
+        A shape's origin is model data, so the numbers are read out once and reused
+        until the origin is replaced; measuring geometry then touches no CasADi object.
+
+        ..warning:: An origin mutated in place rather than replaced is not noticed.
+        """
+        if self._read_origin is not self.origin:
+            self._numeric_origin = NumericTransform.from_transformation_matrix(
+                self.origin
+            )
+            self._read_origin = self.origin
+        return self._numeric_origin
+
     @property
     @abstractmethod
     def volume(self) -> float:
@@ -453,7 +485,7 @@ class Shape(ABC, SubclassJSONSerializer, HasSimulatorProperties):
         new_props = {
             f.name: deepcopy(getattr(self, f.name))
             for f in shape_props
-            if f.name not in ["origin"]
+            if f.init and f.name != "origin"
         }
         return self.__class__(origin=new_origin, **new_props)
 
@@ -522,7 +554,7 @@ class Mesh(Shape):
 
         The bounding box is axis-aligned and centered at the origin.
         """
-        return BoundingBox.from_mesh(self.mesh, self.origin)
+        return BoundingBox.from_mesh(self.mesh, self.numeric_origin)
 
     @staticmethod
     def _load_in_meters(filename: str, process: bool = True) -> trimesh.Trimesh:
@@ -986,7 +1018,7 @@ class Sphere(Shape):
             self.radius,
             self.radius,
             self.radius,
-            self.origin,
+            self.numeric_origin,
         )
 
     def to_json(self) -> Dict[str, Any]:
@@ -1050,7 +1082,7 @@ class Cylinder(Shape):
             half_width,
             half_width,
             half_height,
-            self.origin,
+            self.numeric_origin,
         )
 
     def to_json(self) -> Dict[str, Any]:
@@ -1110,7 +1142,7 @@ class Box(Shape):
             half_x,
             half_y,
             half_z,
-            self.origin,
+            self.numeric_origin,
         )
 
     def to_json(self) -> Dict[str, Any]:
