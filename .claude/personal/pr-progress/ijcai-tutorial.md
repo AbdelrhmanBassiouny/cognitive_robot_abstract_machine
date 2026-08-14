@@ -96,4 +96,20 @@ Both fixes are committed and pushed to `origin/icjai-tutorial` (d65ec42442,
    interfaces, so cell 0 always does it). Not verified by an image build.
    Restoring the RUN would work now and would save each session ~1 minute.
 
+10. Binder RViz showed nothing. Its startup config is the binder repo's root
+    `default.rviz` (copied to `/home/jovyan/.rviz2/default.rviz`; `demo_ui.py`
+    overwrites it with `notebooks/rviz/shared.rviz` for the pycram demo, so
+    editing it only affects the IJCAI notebook). Three faults, all in that
+    file: `Fixed Frame: map` while the demo's tf root is
+    `iai_oven_area/world` (frames are `str(PrefixedName)` of the
+    kitchen-small.urdf links, verified by parsing the world - a missing fixed
+    frame makes RViz drop every display); the orbit view's
+    `Target Frame: demo_camera_target`, which nothing publishes; and no
+    display at all for `/semworld/sampled_points` (the notebook's
+    `SpatialTypePublisher` topic - only `/semworld/viz_marker` had one).
+    Also set both semworld displays to transient local, matching the
+    publishers' QoS, since RViz starts before the notebook. Fixed in
+    e5e1461; the ORM generation RUN was restored in 4260670. Neither
+    verified by an image build.
+
 Next: nothing outstanding; user has not asked for a PR.
