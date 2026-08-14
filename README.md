@@ -87,7 +87,13 @@ Install the CRAM package along with its dependencies:
 
 ```bash
 poetry install
+pip install --no-deps -e .
 ```
+
+Poetry runs this repository in `package-mode = false`, so `poetry install` installs the
+packages of the workspace but not the meta-package `cognitive_robot_abstract_machine`
+itself. The second command adds it, which everything that imports it needs - including
+the ORM interface generation below.
 
 ### Generate the ORM interfaces
 

@@ -91,6 +91,9 @@ segmind               = { workspace = true }
 experiments           = { workspace = true }
 
 [tool.poetry]
+# Poetry installs the path dependencies below but never this project, so an environment
+# built with poetry has to add the meta-package itself with `pip install --no-deps -e .`
+# before `cognitive_robot_abstract_machine` can be imported.
 package-mode = false
 
 [tool.poetry.dependencies]
