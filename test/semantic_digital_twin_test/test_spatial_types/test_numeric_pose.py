@@ -14,7 +14,7 @@ import numpy as np
 import pytest
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types import spatial_types
-from semantic_digital_twin.spatial_types.numeric_pose import NumericPose
+from semantic_digital_twin.spatial_types.numeric import NumericPose
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Pose,

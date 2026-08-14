@@ -35,7 +35,7 @@ from semantic_digital_twin.exceptions import (
     SpatialTypesError,
     SpatialTypeNotJsonSerializable,
 )
-from semantic_digital_twin.spatial_types.numeric_pose import NumericPose
+from semantic_digital_twin.spatial_types.numeric import NumericPose
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import (

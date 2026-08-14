@@ -1,4 +1,4 @@
-from semantic_digital_twin.spatial_types.numeric_pose import NumericPose
+from semantic_digital_twin.spatial_types.numeric import NumericPose
 from semantic_digital_twin.spatial_types.spatial_types import (
     RotationMatrix,
     Vector3,

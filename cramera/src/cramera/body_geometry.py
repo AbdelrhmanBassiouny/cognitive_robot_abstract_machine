@@ -9,7 +9,7 @@ measurement, taken the same way, and both publish body poses rounded the same wa
 from __future__ import annotations
 
 from semantic_digital_twin.spatial_types import Point3, Pose
-from semantic_digital_twin.spatial_types.numeric_pose import NumericPose
+from semantic_digital_twin.spatial_types.numeric import NumericPose
 from semantic_digital_twin.world_description.geometry import Scale
 from typing_extensions import (
     List,

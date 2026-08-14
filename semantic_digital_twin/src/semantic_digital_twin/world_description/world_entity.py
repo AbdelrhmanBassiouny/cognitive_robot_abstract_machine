@@ -46,7 +46,7 @@ from semantic_digital_twin.exceptions import (
     ReferenceFrameMismatchError,
 )
 from semantic_digital_twin.mixin import HasSimulatorProperties
-from semantic_digital_twin.spatial_types.numeric_pose import NumericPose
+from semantic_digital_twin.spatial_types.numeric import NumericPose
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,

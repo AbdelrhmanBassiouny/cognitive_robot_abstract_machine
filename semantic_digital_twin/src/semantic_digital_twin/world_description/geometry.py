@@ -43,6 +43,7 @@ from semantic_digital_twin.spatial_types import (
     Vector3,
 )
 from semantic_digital_twin.spatial_types.math import inverse_frame
+from semantic_digital_twin.spatial_types.numeric import NumericTransform
 from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
 
 if TYPE_CHECKING:
@@ -1218,10 +1219,17 @@ class BoundingBox:
     The maximum z-coordinate of the bounding box, relative to the origin.
     """
 
-    origin: HomogeneousTransformationMatrix
+    origin: NumericTransform
     """
     The origin of the bounding box.
+
+    A :class:`HomogeneousTransformationMatrix` is accepted and read out into numbers, so
+    that a box carries nothing symbolic however it was built.
     """
+
+    def __post_init__(self):
+        if isinstance(self.origin, HomogeneousTransformationMatrix):
+            self.origin = NumericTransform.from_transformation_matrix(self.origin)
 
     def __hash__(self):
         # The hash should be this since comparing those via hash is checking if those are the same and not just equal
@@ -1544,19 +1552,20 @@ class BoundingBox:
         )
         return Box(origin=origin, scale=scale)
 
-    def transform_to_origin(
-        self, reference_T_new_origin: HomogeneousTransformationMatrix
-    ) -> Self:
+    def transform_to_origin(self, reference_T_new_origin: NumericTransform) -> Self:
         """
         Transform the bounding box to a different reference frame.
 
-        The corners are carried across in numpy, so no symbolic value is built per
-        corner and the transform is safe to run off the thread that owns the world.
+        The corners are carried across in numpy, so nothing symbolic is built or read
+        and the transform is safe to run off the thread that owns the world.
+
+        :param reference_T_new_origin: The origin to express the box from; a
+            :class:`HomogeneousTransformationMatrix` is read out into numbers first.
         """
-        reference_T_new_origin = HomogeneousTransformationMatrix(
-            data=reference_T_new_origin.to_np(),
-            reference_frame=reference_T_new_origin.reference_frame,
-        )
+        if isinstance(reference_T_new_origin, HomogeneousTransformationMatrix):
+            reference_T_new_origin = NumericTransform.from_transformation_matrix(
+                reference_T_new_origin
+            )
         new_origin_T_self = self._transform_from_own_origin(reference_T_new_origin)
         new_origin_P_corners = self.corner_coordinates() @ new_origin_T_self.T
         min_corner = new_origin_P_corners[:, :3].min(axis=0)
@@ -1564,7 +1573,7 @@ class BoundingBox:
         return BoundingBox(*min_corner, *max_corner, origin=reference_T_new_origin)
 
     def _transform_from_own_origin(
-        self, reference_T_new_origin: HomogeneousTransformationMatrix
+        self, reference_T_new_origin: NumericTransform
     ) -> NpMatrix4x4:
         """
         The transform taking a coordinate in this box's own origin frame to the given
