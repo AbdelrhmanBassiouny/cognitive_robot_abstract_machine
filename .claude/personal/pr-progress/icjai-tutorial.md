@@ -21,4 +21,16 @@ match, new hierarchical example).
 Notebook TODOs: all `# TODO` cells are `exercise`-tagged stubs each paired with
 a `hide-cell`/`example-solution` cell - intentional, nothing to fix.
 
+5. `NoDAOFoundError` when running the notebook on a fresh clone: the tracked
+   `ormatic_interface.py` files are empty, so no DAO exists until
+   `scripts/regenerate_all_orm.py` has run (~52s). Moved that logic out of the
+   script into the installed meta-package
+   (`cognitive_robot_abstract_machine/orm_interfaces.py`: `OrmInterface`,
+   `WorkspaceOrmInterfaces`, `WORKSPACE_ORM_INTERFACES`, plus
+   `exceptions.py`); both `scripts/regenerate_all_orm.py` and
+   `scripts/protect_generated_orm_interfaces.py` are thin CLIs over it. The
+   notebook's new first cell regenerates only when `are_generated` is False.
+   New tests `test/cognitive_robot_abstract_machine_test` (8, wired into the
+   CI matrix as `lib: cognitive_robot_abstract_machine`), README section.
+
 Next: nothing outstanding; user has not asked for a PR.
