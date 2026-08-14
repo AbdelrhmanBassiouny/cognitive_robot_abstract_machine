@@ -12,7 +12,10 @@ from __future__ import annotations
 import pytest
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import Connection6DoF
+from semantic_digital_twin.world_description.connections import (
+    Connection6DoF,
+    FixedConnection,
+)
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.geometry import (
     Box,
@@ -21,10 +24,14 @@ from semantic_digital_twin.world_description.geometry import (
     Scale,
     Sphere,
 )
-from semantic_digital_twin.spatial_types import Point3, Pose
+from semantic_digital_twin.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Point3,
+    Pose,
+)
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import Optional
+from typing_extensions import Any, Optional
 
 from cramera.body_geometry import (
     measure_body,
@@ -56,6 +63,13 @@ def _body_with_shapes(
     with world.modify_world():
         world.add_body(body)
     return body
+
+
+def _refuse_to_build(*args: Any, **kwargs: Any) -> Any:
+    """
+    Stand in for a symbolic call that a published read must never make.
+    """
+    raise AssertionError("the read path built a symbolic expression")
 
 
 # %% measure_body
@@ -207,3 +221,29 @@ def test_rounded_pose_rounds_every_value():
         world.state[degrees_of_freedom["x"].id].position = 0.123456789
 
     assert rounded_pose(body, 3)[0] == 0.123
+
+
+def test_rounded_pose_builds_no_transformation_matrix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """
+    Publishing runs while a demo plans, and wrapping forward kinematics in a
+    transformation matrix is what would make publishing a pose a CasADi call.
+    """
+    world = World()
+    root = Body(name=PrefixedName("world"))
+    body = Body(name=PrefixedName("object"))
+    with world.modify_world():
+        world.add_connection(
+            FixedConnection(
+                parent=root,
+                child=body,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    0.5, 1.5, -0.25, 0.3, -1.1, 2.4
+                ),
+            )
+        )
+    expected = rounded_pose(body)
+    monkeypatch.setattr(World, "compute_forward_kinematics", _refuse_to_build)
+
+    assert rounded_pose(body) == expected

@@ -8,16 +8,14 @@ measurement, taken the same way, and both publish body poses rounded the same wa
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-
 from semantic_digital_twin.spatial_types import Point3, Pose
+from semantic_digital_twin.spatial_types.numeric_pose import NumericPose
 from semantic_digital_twin.world_description.geometry import Scale
 from typing_extensions import (
     List,
     Optional,
     Protocol,
     runtime_checkable,
-    Tuple,
     TYPE_CHECKING,
 )
 
@@ -93,12 +91,14 @@ def rounded_pose(body: Body, precision: int = POSE_PRECISION) -> List[float]:
     """
     A body's world pose as ``[x, y, z, qx, qy, qz, qw]``, rounded for publication.
 
+    Reads the pose numerically, so publishing one builds no symbolic expression.
+
     :param body: The body whose world pose is read.
     :param precision: Number of decimal places to round each value to.
     """
     return [
         round(value, precision)
-        for value in body.global_pose.to_position_quaternion_list()
+        for value in body.numeric_global_pose.to_position_quaternion_list()
     ]
 
 
@@ -112,52 +112,6 @@ def position_label(position: Point3) -> str:
     :param position: The position to format.
     """
     return "(%.2f, %.2f, %.2f)" % tuple(position.to_np().tolist()[:3])
-
-
-@dataclass(frozen=True)
-class NumericPose:
-    """
-    A pose read out into plain numbers, holding nothing symbolic.
-
-    :class:`Pose` is CasADi-backed: reading one evaluates an expression graph whose nodes
-    are reference-counted without atomics, and CasADi releases the GIL while it does so.
-    Two threads reading poses therefore race that reference count and free a node another
-    thread still holds. A record that is written by one thread and read by another must
-    carry this instead, read out once by the thread that owns the world.
-
-    ..warning:: Build one only on the thread the pose belongs to.
-    """
-
-    position: Tuple[float, float, float]
-    """
-    The pose's x, y and z coordinates.
-    """
-
-    quaternion: Tuple[float, float, float, float]
-    """
-    The pose's orientation, as x, y, z and w.
-    """
-
-    @classmethod
-    def of_pose(cls, pose: Pose) -> NumericPose:
-        """
-        Read a pose out into plain numbers.
-
-        :param pose: The pose to read out.
-        """
-        values = [float(value) for value in pose.to_position_quaternion_list()]
-        return cls(position=tuple(values[:3]), quaternion=tuple(values[3:]))
-
-    @property
-    def label(self) -> str:
-        """
-        The pose formatted for display, exactly as :func:`pose_label` formats a live
-        one.
-        """
-        return "(%.2f, %.2f, %.2f) q(%.2f, %.2f, %.2f, %.2f)" % (
-            *self.position,
-            *self.quaternion,
-        )
 
 
 def pose_label(pose: Pose) -> str:
