@@ -64,6 +64,7 @@ from experiments.montessori.franka_panda_equipment import (
 from experiments.montessori.live_query_source import MontessoriLiveQuerySource
 from experiments.montessori.results_database import (
     configured_database_uri,
+    database_label,
     ResultsDatabase,
 )
 from experiments.montessori.run_control import SortingRunControl
@@ -822,6 +823,16 @@ def _parse_arguments(argument_list: Optional[list[str]] = None) -> argparse.Name
     return parser.parse_args(argument_list)
 
 
+def _log_where_results_go(database_uri: str) -> None:
+    """
+    Say where a run is recording its results.
+
+    :param database_uri: The database being recorded to; its password is withheld, since
+        a demo's log is pasted into issues and chats.
+    """
+    logger.info("Recording results to %s.", database_label(database_uri))
+
+
 def _open_results_session(database_uri: str) -> Session:
     """
     Open a SQLAlchemy session against ``database_uri``, creating this demo's tables
@@ -1086,7 +1097,7 @@ def main() -> None:
     last_planned_iteration = arguments.start_iteration + arguments.iterations - 1
     iteration = arguments.start_iteration
     results_session = _open_results_session(arguments.database_uri)
-    logger.info("Recording results to '%s'.", arguments.database_uri)
+    _log_where_results_go(arguments.database_uri)
     try:
         while True:
             if arguments.iterations > 1:

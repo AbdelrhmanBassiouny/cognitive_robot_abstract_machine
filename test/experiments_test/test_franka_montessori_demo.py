@@ -6,6 +6,7 @@ simulation.
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 
 from cramera.live.run_control import RunCommand
@@ -13,6 +14,7 @@ from cramera.live.run_control import RunCommand
 from experiments.montessori import franka_montessori_demo
 from experiments.montessori.event_monitoring import WatchesNothing
 from experiments.montessori.franka_montessori_demo import (
+    _log_where_results_go,
     _parse_arguments,
     _partition_events_by_attempt,
 )
@@ -277,3 +279,18 @@ def test_a_monitor_that_watches_nothing_reports_nothing():
     watches_nothing.stop()
 
     assert watches_nothing.events == []
+
+
+# %% saying where results go
+def test_the_recording_destination_is_logged_without_its_password(caplog):
+    """
+    A demo's log is pasted into issues and chats, and the database it records to is
+    normally chosen by an environment variable that carries a password with it.
+    """
+    with caplog.at_level(logging.INFO):
+        _log_where_results_go(
+            "postgresql+psycopg://recorder:hunter2@localhost:5432/sorting_results"
+        )
+
+    assert "sorting_results" in caplog.text
+    assert "hunter2" not in caplog.text

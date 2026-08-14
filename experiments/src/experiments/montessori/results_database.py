@@ -13,10 +13,11 @@ import argparse
 import os
 import sys
 from dataclasses import dataclass, field
+from enum import Enum
 
 from krrood.exceptions import DataclassException
 from krrood.ormatic.utils import create_engine
-from sqlalchemy import MetaData, Table
+from sqlalchemy import Column, Integer, MetaData, Table
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
@@ -47,12 +48,67 @@ DATABASE_URI_ENVIRONMENT_VARIABLE = "FRANKA_MONTESSORI_SORTING_DATABASE_URI"
 Environment variable overriding :data:`DEFAULT_DATABASE_URI` for every run.
 """
 
+WRITE_PROBE_TABLE_NAME = "montessori_write_probe"
+"""
+Table :func:`verify_writable` creates and drops again to prove a run can record.
+"""
+
 
 def configured_database_uri() -> str:
     """
     The database a run records to when it is not given one on the command line.
     """
     return os.getenv(DATABASE_URI_ENVIRONMENT_VARIABLE, DEFAULT_DATABASE_URI)
+
+
+class DatabaseUriOrigin(Enum):
+    """
+    What decided the database a run records to.
+    """
+
+    COMMAND_LINE = "--database-uri"
+    ENVIRONMENT = DATABASE_URI_ENVIRONMENT_VARIABLE
+    BUILT_IN_DEFAULT = "the built-in default"
+
+
+@dataclass(frozen=True)
+class ConfiguredDatabase:
+    """
+    The database a run records to, together with what decided it.
+    """
+
+    uri: str
+    """
+    Where the results go.
+    """
+
+    origin: DatabaseUriOrigin
+    """
+    What settled on :attr:`uri`.
+    """
+
+    @classmethod
+    def resolve(cls, requested_uri: Optional[str]) -> ConfiguredDatabase:
+        """
+        Settle on a database the way a run does.
+
+        :param requested_uri: The URI given on the command line, or None.
+        """
+        if requested_uri is not None:
+            return cls(uri=requested_uri, origin=DatabaseUriOrigin.COMMAND_LINE)
+        from_environment = os.getenv(DATABASE_URI_ENVIRONMENT_VARIABLE)
+        if from_environment is not None:
+            return cls(uri=from_environment, origin=DatabaseUriOrigin.ENVIRONMENT)
+        return cls(uri=DEFAULT_DATABASE_URI, origin=DatabaseUriOrigin.BUILT_IN_DEFAULT)
+
+    def describe(self) -> str:
+        """
+        This database as it can be shown to someone, saying where it came from.
+        """
+        return "Recording results to %s, from %s" % (
+            database_label(self.uri),
+            self.origin.value,
+        )
 
 
 def database_label(database_uri: str) -> str:
@@ -198,6 +254,74 @@ def verify_reachable(database_uri: str) -> None:
         ) from error
 
 
+@dataclass
+class ReadOnlyResultsDatabase(DataclassException):
+    """
+    Raised when the database a run would record its results to refuses to be written to.
+    """
+
+    database_uri: str
+    """
+    The database that would not take a write.
+    """
+
+    reason: str
+    """
+    What the driver said went wrong.
+    """
+
+    def error_message(self) -> str:
+        return "Cannot record results to %s: %s" % (
+            database_label(self.database_uri),
+            self.reason,
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "The database is reachable but will not take a write, which usually means "
+            "the role in that URI was provisioned for reading only. If no "
+            "--database-uri was given, the URI came from the %s environment variable "
+            "-- check whether a shell profile sets it -- or from DEFAULT_DATABASE_URI. "
+            "Grant the role write access as described in "
+            "experiments/src/experiments/montessori/README.md, or point the run at "
+            "another database with --database-uri (for a throwaway one, "
+            "--database-uri sqlite:///montessori.db)."
+        ) % DATABASE_URI_ENVIRONMENT_VARIABLE
+
+
+def verify_writable(database_uri: str) -> None:
+    """
+    Write a table of its own to the database a run would record to, and drop it again.
+
+    Reaching a database says nothing about recording to it: a read-only role connects,
+    finds every table it needs already there, and is refused only by the first insert --
+    a world build and a whole sort later.
+
+    Dropped rather than rolled back because SQLite's driver commits a ``CREATE TABLE``
+    whatever transaction it was issued in.
+
+    ..note:: Proves the role can create and write a table of its own. A role that can do
+        that but holds no insert privilege on a table someone else owns would still be
+        refused at record time.
+
+    :param database_uri: The database to write to.
+    :raises ReadOnlyResultsDatabase: When the write is refused.
+    """
+    engine = create_engine(database_uri)
+    probe = Table(
+        WRITE_PROBE_TABLE_NAME, MetaData(), Column("value", Integer, primary_key=True)
+    )
+    try:
+        with engine.begin() as connection:
+            probe.create(connection)
+            connection.execute(probe.insert().values(value=1))
+    except SQLAlchemyError as error:
+        raise ReadOnlyResultsDatabase(
+            database_uri=database_uri, reason=str(error.orig or error).strip()
+        ) from error
+    probe.drop(engine)
+
+
 def main(argument_list: Optional[List[str]] = None) -> int:
     """
     Check the database a run would record to, for a launcher to call before starting.
@@ -206,17 +330,19 @@ def main(argument_list: Optional[List[str]] = None) -> int:
     the run's whole argument list without knowing which parts are the demo's.
 
     :param argument_list: Arguments to read; the process's own when omitted.
-    :return: 0 when the database is reachable, 1 when it is not.
+    :return: 0 when the database can be recorded to, 1 when it cannot.
     """
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--database-uri", default=configured_database_uri())
+    parser.add_argument("--database-uri", default=None)
     arguments, _ = parser.parse_known_args(argument_list)
+    database = ConfiguredDatabase.resolve(arguments.database_uri)
     try:
-        verify_reachable(arguments.database_uri)
-    except UnreachableResultsDatabase as error:
+        verify_reachable(database.uri)
+        verify_writable(database.uri)
+    except (UnreachableResultsDatabase, ReadOnlyResultsDatabase) as error:
         print(error, file=sys.stderr)
         return 1
-    print("Recording results to %s" % database_label(arguments.database_uri))
+    print(database.describe())
     return 0
 
 
