@@ -69,6 +69,15 @@ class RecordedFrame:
     Loose-object pose by mesh key, in the same 7-element form as :attr:`base`.
     """
 
+    step: Optional[str] = None
+    """
+    Label of the action the plan was performing on this tick, or None between actions.
+
+    What a replay's timeline names this stretch of the run (see
+    :mod:`cramera.live.recording_segments`); an offline onboarded scene reads the same
+    labels off the recorded action list instead.
+    """
+
 
 @dataclass
 class Recording:
@@ -117,11 +126,12 @@ class Recording:
             self._frames = []
             self._tick_times = []
 
-    def append(self, snapshot: WorldStateSnapshot) -> None:
+    def append(self, snapshot: WorldStateSnapshot, step: Optional[str] = None) -> None:
         """
         Buffer one tick, or do nothing while not actively recording.
 
         :param snapshot: The tick's world state, as the bridge just published it.
+        :param step: Label of the action being performed on this tick, if any.
         """
         with self._lock:
             if self.state is not RecordingState.RECORDING:
@@ -133,6 +143,7 @@ class Recording:
                     objects={
                         key: list(value) for key, value in snapshot.objects.items()
                     },
+                    step=step,
                 )
             )
             self._tick_times.append(time.time())

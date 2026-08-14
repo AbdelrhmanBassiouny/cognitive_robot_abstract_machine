@@ -21,6 +21,7 @@ from cramera.live.recording_bundle import (
     finalize_recording,
     write_recording_bundle,
 )
+from cramera.live.recording_segments import derive_segments
 
 from .test_live_bundle import attached_bridge, laboratory_world, shaped
 
@@ -29,7 +30,9 @@ MILK_SPAWN = [0.1, 0.2, 0.3, 0, 0, 0, 1]
 
 def frame_with_milk(objects=None) -> RecordedFrame:
     return RecordedFrame(
-        frames={}, base=None, objects=objects if objects is not None else {"milk.stl": MILK_SPAWN}
+        frames={},
+        base=None,
+        objects=objects if objects is not None else {"milk.stl": MILK_SPAWN},
     )
 
 
@@ -158,7 +161,11 @@ class TestLooseObjects:
 
         scene = write_recording_bundle(
             bridge,
-            [frame_with_milk(objects={"milk.stl": MILK_SPAWN, "table.obj": [1, 2, 3, 0, 0, 0, 1]})],
+            [
+                frame_with_milk(
+                    objects={"milk.stl": MILK_SPAWN, "table.obj": [1, 2, 3, 0, 0, 0, 1]}
+                )
+            ],
             20.0,
             tmp_path / "rec",
             "__recording__",
@@ -176,7 +183,11 @@ class TestLooseObjects:
         bridge = attached_bridge()
 
         scene = write_recording_bundle(
-            bridge, [frame_with_milk(objects={})], 20.0, tmp_path / "rec", "__recording__"
+            bridge,
+            [frame_with_milk(objects={})],
+            20.0,
+            tmp_path / "rec",
+            "__recording__",
         )
 
         assert scene["objects"] == []
@@ -187,7 +198,9 @@ class TestTrajectory:
         bridge = attached_bridge()
         frames = [
             frame_with_milk(),
-            RecordedFrame(frames={"j": 1.0}, base=[0] * 7, objects={"milk.stl": MILK_SPAWN}),
+            RecordedFrame(
+                frames={"j": 1.0}, base=[0] * 7, objects={"milk.stl": MILK_SPAWN}
+            ),
         ]
 
         write_recording_bundle(bridge, frames, 20.0, tmp_path / "rec", "__recording__")
@@ -202,17 +215,71 @@ class TestTrajectory:
     def test_frames_per_second_is_carried_through(self, tmp_path):
         bridge = attached_bridge()
 
-        write_recording_bundle(bridge, [frame_with_milk()], 12.5, tmp_path / "rec", "__recording__")
+        write_recording_bundle(
+            bridge, [frame_with_milk()], 12.5, tmp_path / "rec", "__recording__"
+        )
 
         trajectory = json.loads((tmp_path / "rec" / "trajectory.json").read_text())
         assert trajectory["framesPerSecond"] == 12.5
 
 
+class TestSegments:
+    """
+    A recording's replay timeline is marked from the bundle's segments; a bundle that
+    wrote none would replay as one unmarked stretch (see
+    :mod:`cramera.live.recording_segments`).
+    """
+
+    def carried_milk(self):
+        """
+        Four ticks over which the milk is carried away from where it spawned.
+        """
+        return [
+            frame_with_milk({"milk.stl": MILK_SPAWN}),
+            frame_with_milk({"milk.stl": MILK_SPAWN}),
+            frame_with_milk({"milk.stl": [1.1, 0.2, 0.3, 0, 0, 0, 1]}),
+            frame_with_milk({"milk.stl": [2.1, 0.2, 0.3, 0, 0, 0, 1]}),
+        ]
+
+    def test_a_carried_object_is_written_as_a_segment_with_its_frames(self, tmp_path):
+        bridge = attached_bridge()
+
+        scene = write_recording_bundle(
+            bridge, self.carried_milk(), 20.0, tmp_path / "rec", "__recording__"
+        )
+
+        carried = [segment for segment in scene["segments"] if segment.get("picks")]
+        assert len(carried) == 1
+        assert carried[0]["picks"] == "milk.stl"
+        assert carried[0]["attach"] == 2
+
+    def test_the_written_segments_are_what_the_derivation_yields(self, tmp_path):
+        bridge = attached_bridge()
+        frames = self.carried_milk()
+
+        scene = write_recording_bundle(
+            bridge, frames, 20.0, tmp_path / "rec", "__recording__"
+        )
+
+        assert scene["segments"] == [
+            segment.to_payload() for segment in derive_segments(frames)
+        ]
+
+    def test_a_recording_in_which_nothing_moved_is_still_one_segment(self, tmp_path):
+        bridge = attached_bridge()
+
+        scene = write_recording_bundle(
+            bridge, [frame_with_milk()] * 3, 20.0, tmp_path / "rec", "__recording__"
+        )
+
+        assert [segment["start"] for segment in scene["segments"]] == [0]
+
+
 class TestFinalizeRecording:
     """
-    The safety net a demo process's exit relies on (see
-    cramera.live.visualization) — the recording must already be written to disk by the
-    time nothing is left to ask it to stop.
+    The safety net a demo process's exit relies on (see cramera.live.visualization) —
+    the recording must already be written to disk by the time nothing is left to ask it
+    to stop.
     """
 
     def test_an_idle_recording_has_nothing_to_finalize(self, tmp_path, monkeypatch):

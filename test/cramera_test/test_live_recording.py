@@ -1,6 +1,6 @@
 """
-Tests of the live recording buffer: the lifecycle and per-tick capture of one live
-run, independent of the bridge/world it is fed from.
+Tests of the live recording buffer: the lifecycle and per-tick capture of one live run,
+independent of the bridge/world it is fed from.
 """
 
 from __future__ import annotations
@@ -12,9 +12,7 @@ from cramera.live.recording import NoActiveRecording, Recording, RecordingState
 
 
 def snapshot(frames=None, base=None, objects=None) -> WorldStateSnapshot:
-    return WorldStateSnapshot(
-        frames=frames or {}, base=base, objects=objects or {}
-    )
+    return WorldStateSnapshot(frames=frames or {}, base=base, objects=objects or {})
 
 
 class TestLifecycle:
@@ -82,6 +80,26 @@ class TestAppend:
 
         assert recording.frame_count() == 1
 
+    def test_the_action_being_performed_is_buffered_with_the_tick(self):
+        """
+        What each tick was doing is what names its stretch of the replay timeline (see
+        cramera.live.recording_segments).
+        """
+        recording = Recording()
+        recording.start()
+
+        recording.append(snapshot(frames={"joint": 1.0}), "TransportAction")
+
+        assert recording.stop()[0].step == "TransportAction"
+
+    def test_a_tick_with_no_action_running_is_buffered_without_one(self):
+        recording = Recording()
+        recording.start()
+
+        recording.append(snapshot(frames={"joint": 1.0}))
+
+        assert recording.stop()[0].step is None
+
     def test_a_tick_while_idle_is_dropped(self):
         recording = Recording()
 
@@ -108,7 +126,9 @@ class TestAppend:
 
         assert [frame.frames["joint"] for frame in frames] == [1.0, 2.0]
 
-    def test_a_later_mutation_of_the_source_snapshot_does_not_affect_the_recording(self):
+    def test_a_later_mutation_of_the_source_snapshot_does_not_affect_the_recording(
+        self,
+    ):
         """
         Bridge.snapshot() reuses one WorldStateSnapshot's dicts are not mutated in
         place, but a recording must not assume that: it defensively copies each tick.

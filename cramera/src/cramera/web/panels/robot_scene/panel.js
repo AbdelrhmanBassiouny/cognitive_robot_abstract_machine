@@ -40,6 +40,8 @@ Panels.define('robot-scene', function (root, bus) {
     '    <label class="lp-row"><input type="checkbox" id="lyr-objects" checked><span>Bench objects</span></label>' +
     '    <label class="lp-row" title="debug markers the CRAM system publishes (collisions, costmaps, spatial types)"><input type="checkbox" id="lyr-markers" checked><span>ROS markers</span><button id="marker-gear" class="marker-gear" title="marker topics and namespaces">⚙</button></label>' +
     '    <div id="marker-settings" class="marker-settings hidden"></div>' +
+    '    <label class="lp-row" title="an axis triad on every frame of the world — URDF links and loose objects (red X, green Y, blue Z)"><input type="checkbox" id="lyr-frames"><span>TF frames</span><button id="frame-gear" class="layer-gear" title="frame axis size and names">⚙</button></label>' +
+    '    <div id="frame-settings" class="frame-settings hidden"></div>' +
     '    <label class="lp-row"><input type="checkbox" id="lyr-labels"><span>Object labels</span></label>' +
     '    <label class="lp-row"><input type="checkbox" id="lyr-floor" checked><span>Floor shadow</span></label>' +
     '    <label class="lp-row" title="Attach to a running demo whenever one is reachable — including the next run after this one ends — instead of only once per page"><input type="checkbox" id="lyr-auto-live" checked><span>Auto-attach live</span></label>' +
@@ -59,7 +61,11 @@ Panels.define('robot-scene', function (root, bus) {
     '    <select id="playback-speed" class="scene-select" style="display:none" title="Playback speed"></select>' +
     '  </span></div>' +
     '  <div id="playback-scrub-row" class="playback-scrub-row" style="display:none">' +
-    '    <input type="range" id="playback-scrubber" class="playback-scrubber" min="0" max="0" step="1" value="0">' +
+    '    <div class="playback-track">' +
+    '      <input type="range" id="playback-scrubber" class="playback-scrubber" min="0" max="0" step="1" value="0">' +
+    '      <div id="timeline-events" class="timeline-events"></div>' +
+    '      <div id="timeline-preview" class="timeline-preview hidden"></div>' +
+    '    </div>' +
     '    <span id="playback-time" class="playback-time">0:00 / 0:00</span>' +
     '  </div>' +
     '</div>';
@@ -243,6 +249,7 @@ Panels.define('robot-scene', function (root, bus) {
       objectMeshes[spec.key] = g;
       delete objectPending[spec.key];
       worldRoot.add(g);
+      refreshFrameAxes();            // the new object is a frame of its own
       needsRender = true;
     }
     // a recorded box is placed by its centre, like any other body; a fallback
@@ -362,6 +369,7 @@ Panels.define('robot-scene', function (root, bus) {
     });
     delete objectMeshes[key]; delete objectLabels[key];
     delete objectIdByKey[key]; delete liveSpawned[key]; delete objectPending[key];
+    refreshFrameAxes();              // its frame goes with it
   }
 
   // canvas-sprite name tag, colour-dotted to match the object
@@ -530,6 +538,7 @@ Panels.define('robot-scene', function (root, bus) {
         models.push(entry);
         if (m.robot) robotModel = entry;
         worldRoot.add(obj);
+        refreshFrameAxes();          // every link of the model is a frame
         needsRender = true;
       });
     });
@@ -698,6 +707,53 @@ Panels.define('robot-scene', function (root, bus) {
       const seg = SCENE.segments.find(function (s) { return i0 >= s.start && i0 < s.end; });
       if (seg && seg.step !== lastStep) { lastStep = seg.step; stepCb(seg.step); }
     }
+  }
+
+  // %% timeline previews
+  // What the scene looks like at one recorded frame, as a data URL. Rendered into an
+  // off-screen target rather than the canvas, so the live view neither flickers nor
+  // has to keep its drawing buffer around; the playhead is put back afterwards.
+  const THUMBNAIL_WIDTH = 172;
+  const THUMBNAIL_HEIGHT = 104;
+  const thumbnails = {};
+
+  function thumbnailAt(frame) {
+    if (!traj) return null;
+    if (thumbnails[frame]) return thumbnails[frame];
+    const target = new THREE.WebGLRenderTarget(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
+    const restore = playhead;
+    const aspect = camera.aspect;
+    applyFrame(frame);
+    camera.aspect = THUMBNAIL_WIDTH / THUMBNAIL_HEIGHT;
+    camera.updateProjectionMatrix();
+    renderer.setRenderTarget(target);
+    renderer.render(scene3, camera);
+    const pixels = new Uint8Array(THUMBNAIL_WIDTH * THUMBNAIL_HEIGHT * 4);
+    renderer.readRenderTargetPixels(target, 0, 0, THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT, pixels);
+    renderer.setRenderTarget(null);
+    target.dispose();
+    camera.aspect = aspect;
+    camera.updateProjectionMatrix();
+    applyFrame(restore);
+    needsRender = true;
+    thumbnails[frame] = pixelsToDataUrl(pixels);
+    return thumbnails[frame];
+  }
+
+  // GL reads bottom-up, a canvas draws top-down
+  function pixelsToDataUrl(pixels) {
+    const canvas = document.createElement('canvas');
+    canvas.width = THUMBNAIL_WIDTH;
+    canvas.height = THUMBNAIL_HEIGHT;
+    const context = canvas.getContext('2d');
+    const image = context.createImageData(THUMBNAIL_WIDTH, THUMBNAIL_HEIGHT);
+    const rowBytes = THUMBNAIL_WIDTH * 4;
+    for (let row = 0; row < THUMBNAIL_HEIGHT; row++) {
+      const source = (THUMBNAIL_HEIGHT - row - 1) * rowBytes;
+      image.data.set(pixels.subarray(source, source + rowBytes), row * rowBytes);
+    }
+    context.putImageData(image, 0, 0);
+    return canvas.toDataURL('image/png');
   }
 
   function playTrajectory() {
@@ -1285,6 +1341,68 @@ Panels.define('robot-scene', function (root, bus) {
     return holder;
   }
 
+  // %% frame axes (the in-scene TF display)
+  // A triad is a child of the frame's own object, so it moves with the world for
+  // free — playback drives the URDF joints, live mode drives the same objects.
+  // The arms ignore depth, since most link frames sit inside their own mesh and
+  // would otherwise never be visible.
+  const frameDisplay = {
+    visible: false, names: false, size: FrameAxes.DEFAULT_SIZE,
+    hidden: { sources: {}, frames: {} },
+  };
+  const frameTriads = [];
+
+  function applyFrameTriadSize(triad) {
+    triad.arms.scale.setScalar(frameDisplay.size);
+    triad.label.position.set(0, 0, frameDisplay.size * 1.25);
+  }
+
+  function buildFrameTriad(frame) {
+    const group = new THREE.Group();
+    const arms = new THREE.AxesHelper(1);
+    arms.material.depthTest = false;
+    arms.material.transparent = true;
+    arms.renderOrder = 3;
+    const label = makeLabel(frame.name, FrameAxes.AXES[0].color);
+    label.visible = frameDisplay.names;
+    group.add(arms);
+    group.add(label);
+    frame.object.add(group);
+    return { id: frame.id, group: group, arms: arms, label: label };
+  }
+
+  function disposeFrameTriad(triad) {
+    triad.group.parent && triad.group.parent.remove(triad.group);
+    triad.arms.geometry.dispose();
+    triad.arms.material.dispose();
+    triad.label.material.map && triad.label.material.map.dispose();
+    triad.label.material.dispose();
+  }
+
+  // Add a triad to every frame that has none and drop the ones whose frame is gone,
+  // so a live spawn or a scene switch is picked up without rebuilding the rest.
+  function refreshFrameAxes() {
+    const frames = frameDisplay.visible
+      ? FrameAxes.visibleFrames(FrameAxes.framesOf(models, objectMeshes), frameDisplay.hidden)
+      : [];
+    const wanted = {};
+    frames.forEach(function (frame) { wanted[frame.id] = frame; });
+    for (let i = frameTriads.length - 1; i >= 0; i--) {
+      if (wanted[frameTriads[i].id]) continue;
+      disposeFrameTriad(frameTriads[i]);
+      frameTriads.splice(i, 1);
+    }
+    const present = {};
+    frameTriads.forEach(function (triad) { present[triad.id] = true; });
+    frames.forEach(function (frame) {
+      if (present[frame.id]) return;
+      const triad = buildFrameTriad(frame);
+      applyFrameTriadSize(triad);
+      frameTriads.push(triad);
+    });
+    needsRender = true;
+  }
+
   function applyLive(st) {
     if (!st || !st.frames) return;
     for (const k in st.frames) {
@@ -1546,6 +1664,28 @@ Panels.define('robot-scene', function (root, bus) {
       for (const k in objectLabels) objectLabels[k].visible = labelsOn;
       needsRender = true;
     },
+    setFramesVisible: function (on) {
+      frameDisplay.visible = !!on;
+      refreshFrameAxes();
+    },
+    setFrameNamesVisible: function (on) {
+      frameDisplay.names = !!on;
+      frameTriads.forEach(function (triad) { triad.label.visible = frameDisplay.names; });
+      needsRender = true;
+    },
+    setFrameAxisSize: function (size) {
+      frameDisplay.size = FrameAxes.clampSize(size);
+      frameTriads.forEach(applyFrameTriadSize);
+      needsRender = true;
+    },
+    setHiddenFrames: function (hidden) {
+      frameDisplay.hidden = hidden || { sources: {}, frames: {} };
+      refreshFrameAxes();
+    },
+    frameSources: function () { return FrameAxes.sourcesOf(models, objectMeshes); },
+    frames: function () { return FrameAxes.framesOf(models, objectMeshes); },
+    frameCountOnScreen: function () { return frameTriads.length; },
+    thumbnailAt: thumbnailAt,
   };
 
   // %% panel wiring
@@ -1619,8 +1759,72 @@ Panels.define('robot-scene', function (root, bus) {
     if (visible) {
       scrubber.max = String(Math.max(0, RobotView.frameCount() - 1));
       updateScrubberUI(RobotView.getPlayhead());
+      renderTimelineEvents();
     }
   });
+
+  // %% key events on the timeline
+  // Each recorded step, pick and release gets a mark on the scrubber: hovering one
+  // previews what the scene looks like there, clicking one jumps to it.
+  const timelineEventsEl = $('timeline-events');
+  const timelinePreviewEl = $('timeline-preview');
+
+  function renderTimelineEvents() {
+    timelineEventsEl.innerHTML = '';
+    const frameCount = RobotView.frameCount();
+    TimelineEvents.of(RobotView.getScene()).forEach(function (event) {
+      const mark = document.createElement('button');
+      mark.className = 'timeline-mark';
+      mark.style.left = TimelineEvents.positionOf(event.frame, frameCount) + '%';
+      mark.style.background = TimelineEvents.colorOf(event);
+      mark.title = TimelineEvents.describe(event);
+      mark.addEventListener('mouseenter', function () { showTimelinePreview(event, mark); });
+      mark.addEventListener('mouseleave', hideTimelinePreview);
+      mark.addEventListener('click', function (clicked) {
+        clicked.preventDefault();
+        RobotView.seek(event.frame);
+        updateScrubberUI(event.frame);
+      });
+      timelineEventsEl.appendChild(mark);
+    });
+  }
+
+  // The thumbnail costs a render, so the card goes up with its caption first and the
+  // image lands on the next frame — a pointer sweeping along the timeline never
+  // stalls on a mark it is only passing over.
+  function showTimelinePreview(event, mark) {
+    timelinePreviewEl.classList.remove('hidden');
+    timelinePreviewEl.style.left = TimelineEvents.previewOffset(
+      parseFloat(mark.style.left),
+      timelineEventsEl.clientWidth,
+      timelinePreviewEl.offsetWidth) + 'px';
+    timelinePreviewEl.innerHTML = '';
+    const image = document.createElement('div');
+    image.className = 'tp-loading';
+    image.textContent = 'rendering…';
+    const label = document.createElement('div');
+    label.className = 'tp-label';
+    label.textContent = TimelineEvents.describe(event);
+    const time = document.createElement('div');
+    time.className = 'tp-time';
+    time.textContent = TimelineEvents.timeOf(event.frame, RobotView.framesPerSecond());
+    timelinePreviewEl.appendChild(image);
+    timelinePreviewEl.appendChild(label);
+    timelinePreviewEl.appendChild(time);
+    requestAnimationFrame(function () {
+      if (timelinePreviewEl.classList.contains('hidden')) return;
+      const source = RobotView.thumbnailAt(event.frame);
+      if (!source || !image.parentNode) return;
+      const rendered = document.createElement('img');
+      rendered.src = source;
+      rendered.alt = TimelineEvents.describe(event);
+      timelinePreviewEl.replaceChild(rendered, image);
+    });
+  }
+
+  function hideTimelinePreview() {
+    timelinePreviewEl.classList.add('hidden');
+  }
   RobotView.onPlayheadChange(updateScrubberUI);
   scrubber.addEventListener('pointerdown', function () {
     scrubbing = true;
@@ -1835,6 +2039,166 @@ Panels.define('robot-scene', function (root, bus) {
       }).catch(function () {});
     });
   }
+  // %% frame display (axis size and names, remembered like the marker settings)
+  const framesLayerEl = $('lyr-frames');
+  const frameSettingsEl = $('frame-settings');
+  const frameGearEl = $('frame-gear');
+
+  function applyFrameSettings(stored) {
+    framesLayerEl.checked = stored.visible;
+    RobotView.setFrameAxisSize(stored.size);
+    RobotView.setFrameNamesVisible(stored.names);
+    RobotView.setHiddenFrames(FrameAxes.hidden(window.localStorage));
+    RobotView.setFramesVisible(stored.visible);
+  }
+
+  function renderFrameSettings(stored) {
+    frameSettingsEl.innerHTML = '';
+    const sizeRow = document.createElement('label');
+    sizeRow.className = 'ms-slider';
+    sizeRow.appendChild(document.createTextNode('size'));
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = String(FrameAxes.MIN_SIZE);
+    slider.max = String(FrameAxes.MAX_SIZE);
+    slider.step = '0.01';
+    slider.value = String(stored.size);
+    const readout = document.createElement('span');
+    readout.textContent = stored.size.toFixed(2) + ' m';
+    slider.addEventListener('input', function () {
+      const updated = FrameAxes.setSize(window.localStorage, slider.value);
+      readout.textContent = updated.size.toFixed(2) + ' m';
+      RobotView.setFrameAxisSize(updated.size);
+    });
+    sizeRow.appendChild(slider);
+    sizeRow.appendChild(readout);
+    frameSettingsEl.appendChild(sizeRow);
+
+    const namesRow = document.createElement('label');
+    namesRow.className = 'lp-row ms-row';
+    const namesBox = document.createElement('input');
+    namesBox.type = 'checkbox';
+    namesBox.checked = stored.names;
+    namesBox.addEventListener('change', function () {
+      RobotView.setFrameNamesVisible(
+        FrameAxes.setNames(window.localStorage, namesBox.checked).names);
+    });
+    namesRow.appendChild(namesBox);
+    namesRow.appendChild(document.createTextNode('frame names'));
+    frameSettingsEl.appendChild(namesRow);
+    renderFrameSources();
+    refreshFrameTicks();
+  }
+
+  // A source (a loaded model, or the loose objects) opens into its own frames: a
+  // whole robot is a hundred of them, so the list starts collapsed and the source
+  // row ticks them all at once, while the level below ticks one frame at a time.
+  const expandedFrameSources = {};
+  const frameSourceDisclosures = {};
+  const frameSourceBoxes = {};
+  const frameBoxes = {};
+
+  function renderFrameSources() {
+    const sources = RobotView.frameSources();
+    if (!sources.length) return;
+    Object.keys(frameSourceBoxes).forEach(function (source) {
+      delete frameSourceBoxes[source]; delete frameSourceDisclosures[source];
+      delete frameBoxes[source];
+    });
+    const title = document.createElement('div');
+    title.className = 'ms-title';
+    title.textContent = 'frames of';
+    frameSettingsEl.appendChild(title);
+    sources.forEach(function (source) {
+      frameSettingsEl.appendChild(frameSourceRow(source));
+      const nested = document.createElement('div');
+      nested.className = 'ms-nested';
+      nested.style.display = expandedFrameSources[source] ? '' : 'none';
+      frameSourceRows(source).forEach(function (row) { nested.appendChild(row); });
+      frameSettingsEl.appendChild(nested);
+      frameSourceDisclosures[source].addEventListener('click', function (event) {
+        event.preventDefault();
+        expandedFrameSources[source] = !expandedFrameSources[source];
+        nested.style.display = expandedFrameSources[source] ? '' : 'none';
+        frameSourceDisclosures[source].textContent = expandedFrameSources[source] ? '▾' : '▸';
+      });
+    });
+  }
+
+  function frameSourceRow(source) {
+    const row = document.createElement('label');
+    row.className = 'lp-row ms-row';
+    const disclosure = document.createElement('button');
+    disclosure.className = 'ms-disclosure';
+    disclosure.title = 'the frames of ' + source;
+    disclosure.textContent = expandedFrameSources[source] ? '▾' : '▸';
+    frameSourceDisclosures[source] = disclosure;
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    frameSourceBoxes[source] = box;
+    box.addEventListener('change', function () {
+      const ids = FrameAxes.framesOfSource(RobotView.frames(), source)
+        .map(function (frame) { return frame.id; });
+      RobotView.setHiddenFrames(
+        FrameAxes.setSourceHidden(window.localStorage, source, !box.checked, ids));
+      refreshFrameTicks();
+    });
+    row.appendChild(disclosure);
+    row.appendChild(box);
+    row.appendChild(document.createTextNode(source));
+    return row;
+  }
+
+  function frameSourceRows(source) {
+    frameBoxes[source] = {};
+    return FrameAxes.framesOfSource(RobotView.frames(), source).map(function (frame) {
+      const row = document.createElement('label');
+      row.className = 'lp-row ms-row';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      frameBoxes[source][frame.id] = box;
+      box.addEventListener('change', function () {
+        RobotView.setHiddenFrames(FrameAxes.setFrameHidden(
+          window.localStorage, frame.id, !box.checked, source));
+        refreshFrameTicks();
+      });
+      row.appendChild(box);
+      row.appendChild(document.createTextNode(frame.name));
+      return row;
+    });
+  }
+
+  // Re-read every tick box from the stored state: one frame going off can turn its
+  // source's box from ticked to partial, and ticking a source clears the frames
+  // under it, so the whole tree is refreshed rather than the row that was clicked.
+  function refreshFrameTicks() {
+    const hidden = FrameAxes.hidden(window.localStorage);
+    const frames = RobotView.frames();
+    Object.keys(frameSourceBoxes).forEach(function (source) {
+      const state = FrameAxes.sourceState(frames, source, hidden);
+      const box = frameSourceBoxes[source];
+      box.checked = state !== FrameAxes.SourceState.NONE;
+      box.indeterminate = state === FrameAxes.SourceState.SOME;
+      const boxes = frameBoxes[source] || {};
+      Object.keys(boxes).forEach(function (id) {
+        boxes[id].checked = !hidden.sources[source] && !hidden.frames[id];
+      });
+    });
+  }
+
+  frameGearEl.addEventListener('click', function (event) {
+    event.preventDefault();
+    frameSettingsEl.classList.toggle('hidden');
+    if (!frameSettingsEl.classList.contains('hidden')) {
+      renderFrameSettings(FrameAxes.settings(window.localStorage));
+    }
+  });
+  framesLayerEl.addEventListener('change', function () {
+    RobotView.setFramesVisible(
+      FrameAxes.setVisible(window.localStorage, framesLayerEl.checked).visible);
+  });
+  applyFrameSettings(FrameAxes.settings(window.localStorage));
+
   bindLayer('lyr-labels', 'setLabelsAlways');
   bindLayer('lyr-floor', 'setFloorVisible');
   const autoLiveEl = $('lyr-auto-live');

@@ -217,6 +217,7 @@ class TestApi:
             ("kinematics", None),
             ("plan", "plan"),
             ("chart", "chart"),
+            ("transforms", "transforms"),
         ):
             payload = get_json(server + "/api/knowledge/view?name=" + name)
             assert payload["ok"], name

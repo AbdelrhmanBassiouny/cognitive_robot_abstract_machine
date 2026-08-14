@@ -97,6 +97,21 @@ class TestReadOnlyEndpoints:
         assert chart["nodes"] == []
         assert chart["edges"] == []
 
+    def test_transforms_reflects_a_fresh_bridge(self, server):
+        assert get_json(server + "/transforms")["connections"] == []
+
+    def test_transforms_serves_the_attached_worlds_connection_graph(
+        self, server, bridge
+    ):
+        bridge.world = world_with(shaped_body("kitchen", "shelf"))
+        bridge.bind()
+        bridge.snapshot()
+
+        payload = get_json(server + "/transforms")
+
+        assert [entry["child"] for entry in payload["connections"]] == ["kitchen/shelf"]
+        assert payload["signature"] == bridge.transform_state.signature
+
     def test_objects_reflects_the_injected_bridges_catalog(
         self, server, bridge, tmp_path
     ):
@@ -236,7 +251,9 @@ class TestRecordingEndpoints:
         assert status["sceneName"] == paths.RECORDING_SCENE_NAME
         assert status["frameCount"] == 2
 
-    def test_stopping_twice_does_not_rebundle(self, server, bridge, tmp_path, monkeypatch):
+    def test_stopping_twice_does_not_rebundle(
+        self, server, bridge, tmp_path, monkeypatch
+    ):
         monkeypatch.setenv("CRAMERA_DATA", str(tmp_path / "data"))
         monkeypatch.delenv("CRAMERA_SCENES", raising=False)
         self.start_recording(bridge)
@@ -250,7 +267,9 @@ class TestRecordingEndpoints:
         assert status == 200
         assert marker.exists()
 
-    def test_stopping_an_empty_recording_is_rejected(self, server, bridge, tmp_path, monkeypatch):
+    def test_stopping_an_empty_recording_is_rejected(
+        self, server, bridge, tmp_path, monkeypatch
+    ):
         monkeypatch.setenv("CRAMERA_DATA", str(tmp_path / "data"))
         monkeypatch.delenv("CRAMERA_SCENES", raising=False)
         bridge.attach(world_with(shaped_body("laboratory", "bench")))

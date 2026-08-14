@@ -27,6 +27,7 @@ from cramera.generated_json import write_json_atomically
 from cramera.live.bridge import Bridge, ObjectCatalogEntry, ObjectKind
 from cramera.live.live_bundle import bundle_world_models
 from cramera.live.recording import Recording, RecordedFrame, RecordingState
+from cramera.live.recording_segments import derive_segments
 from cramera.mesh_format import MeshFormat
 from cramera.onboard.bundle_urdf import BundledAssets
 
@@ -86,7 +87,7 @@ def write_recording_bundle(
             "models": geometry.models,
             "robot": geometry.robot,
             "objects": objects,
-            "segments": [],
+            "segments": [segment.to_payload() for segment in derive_segments(frames)],
             "missingAssets": geometry.missing_assets,
             "worldBound": True,
             "bundleSignature": bridge.bundle_signature(),

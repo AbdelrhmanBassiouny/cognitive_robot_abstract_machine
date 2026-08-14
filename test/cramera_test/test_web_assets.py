@@ -168,6 +168,12 @@ class TestJsUnits:
     def test_marker_settings(self):
         self.run_node("test_marker_settings.js")
 
+    def test_frame_axes(self):
+        self.run_node("test_frame_axes.js")
+
+    def test_timeline_events(self):
+        self.run_node("test_timeline_events.js")
+
     def test_response_util(self):
         self.run_node("test_response_util.js")
 

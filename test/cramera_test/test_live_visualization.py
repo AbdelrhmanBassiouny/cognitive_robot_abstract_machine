@@ -98,6 +98,28 @@ class TestWorldSync:
 
         assert bridge.recording.frame_count() == 1
 
+    def test_a_recorded_tick_carries_the_action_the_plan_is_performing(self, world):
+        """
+        The tick's action is what names its stretch of the replay timeline, so it has to
+        be captured as the tick is buffered — afterwards the plan has moved on.
+        """
+        bridge = Bridge()
+        bridge.attach(world)
+        bridge.recording = Recording()
+        bridge.recording.start()
+        performing = "TransportAction"
+        bridge.running_step = lambda: performing
+        sync = WorldStateSync(_world=world, bridge=bridge)
+
+        sync.on_state_change()
+        performing = "ParkArmsAction"
+        sync.on_state_change()
+
+        assert [frame.step for frame in bridge.recording.stop()] == [
+            "TransportAction",
+            "ParkArmsAction",
+        ]
+
     def test_a_state_change_without_a_recording_does_not_fail(self, world):
         bridge = Bridge()
         bridge.attach(world)
@@ -237,8 +259,10 @@ class TestLiveVisualization:
         """
         A demo run directly (not through ``cramera-live``) has no long-lived process
         left for the browser to send ``/recording/stop`` to — the interpreter exits the
-        moment the script's main body returns. The registered callback must finalize
-        whatever the bridge is currently recording at that point.
+        moment the script's main body returns.
+
+        The registered callback must finalize whatever the bridge is currently recording
+        at that point.
         """
         monkeypatch.setenv("CRAMERA_DATA", str(tmp_path))
         bridge = Bridge()
@@ -247,7 +271,8 @@ class TestLiveVisualization:
         )
         registered = []
         monkeypatch.setattr(
-            visualization_module.atexit, "register",
+            visualization_module.atexit,
+            "register",
             lambda fn, *args: registered.append((fn, args)),
         )
 
@@ -281,7 +306,8 @@ class TestLiveVisualization:
         bridge.recording.start()
         bridge.recording.append(bridge.state)
         monkeypatch.setattr(
-            visualization_module, "finalize_recording",
+            visualization_module,
+            "finalize_recording",
             lambda *a: (_ for _ in ()).throw(RuntimeError("boom")),
         )
 

@@ -53,7 +53,7 @@ class WorldStateSync(StateChangeCallback):
     def on_state_change(self, **kwargs) -> None:
         self.bridge.snapshot()
         if self.bridge.recording is not None:
-            self.bridge.recording.append(self.bridge.state)
+            self.bridge.recording.append(self.bridge.state, self.bridge.running_step())
 
 
 @dataclass(eq=False)

@@ -18,6 +18,10 @@ HTTP endpoints of the live bridge (default port 8765).
     GET /chart   {signature, title,
                   nodes: [{id, parent, name, class_name, life_cycle, observation}],
                   edges: [{from, to, kind}]}
+    GET /transforms  {signature, connections: [{name, parent, child, kind, writer,
+                      freshness, ageSeconds}]}  the world's connection graph and how
+                      recently each connection moved (see
+                      :mod:`cramera.live.transforms`)
     GET /recording  {state: idle|recording|finalized, frameCount, durationSeconds,
                       sceneName}  see :mod:`cramera.live.recording`
     POST /move   queue an object move (applied on the simulation thread)
@@ -115,6 +119,8 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_json(self.bridge.get_plan())
         if self.path.startswith("/chart"):
             return self._send_json(self.bridge.get_chart())
+        if self.path.startswith("/transforms"):
+            return self._send_json(self.bridge.get_transforms())
         if self.path.startswith("/objects"):
             return self._send_json({"objects": self.bridge.object_catalog()})
         if self.path.startswith("/mesh"):
