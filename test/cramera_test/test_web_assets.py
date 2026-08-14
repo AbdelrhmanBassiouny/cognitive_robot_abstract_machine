@@ -15,7 +15,7 @@ import pytest
 from typing_extensions import List
 
 from cramera.knowledge.eql_session import EqlSession
-from cramera.paths import LIVE_SCENE_NAME, WEB_ROOT
+from cramera.paths import LIVE_SCENE_NAME, RECORDING_SCENE_NAME, WEB_ROOT
 
 JS_DIR = Path(__file__).parent / "js"
 
@@ -198,6 +198,9 @@ class TestJsUnits:
     def test_live_mode(self):
         self.run_node("test_live_mode.js")
 
+    def test_recording_mode(self):
+        self.run_node("test_recording_mode.js")
+
     def test_shape_specs(self):
         self.run_node("test_shape_specs.js")
 
@@ -217,6 +220,21 @@ class TestLiveSceneName:
     def test_the_frontend_and_the_backend_name_the_same_scene(self):
         [declared] = self.LIVE_SCENE_NAME_PATTERN.findall(read("core/live-mode.js"))
         assert declared == LIVE_SCENE_NAME
+
+
+class TestRecordingSceneName:
+    """
+    Same wiring as :class:`TestLiveSceneName`, for the reserved scene a finalized live
+    recording is bundled under.
+    """
+
+    RECORDING_SCENE_NAME_PATTERN = re.compile(r"const SCENE_NAME = '([^']+)'")
+
+    def test_the_frontend_and_the_backend_name_the_same_scene(self):
+        [declared] = self.RECORDING_SCENE_NAME_PATTERN.findall(
+            read("core/recording-mode.js")
+        )
+        assert declared == RECORDING_SCENE_NAME
 
 
 class TestQueryPanelHints:

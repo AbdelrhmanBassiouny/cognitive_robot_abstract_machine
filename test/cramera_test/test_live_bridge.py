@@ -453,6 +453,16 @@ class TestViewerAccessors:
     def test_an_unserved_mesh_has_no_path(self):
         assert Bridge().mesh_path("milk.stl") is None
 
+    def test_object_body_returns_the_published_body(self):
+        bridge = Bridge()
+        milk = PublishedBody(name="world/milk.stl")
+        bridge.publish_bodies({"milk.stl": milk})
+
+        assert bridge.object_body("milk.stl") is milk
+
+    def test_object_body_is_none_for_an_unpublished_key(self):
+        assert Bridge().object_body("milk.stl") is None
+
     def test_status_reports_no_demo_before_attaching(self):
         status = Bridge().status()
         assert status["running"] is False

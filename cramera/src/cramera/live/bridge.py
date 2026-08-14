@@ -67,6 +67,8 @@ if TYPE_CHECKING:
     from semantic_digital_twin.world import World
     from semantic_digital_twin.world_description.world_entity import Body
 
+    from cramera.live.recording import Recording
+
 logger = get_logger(__name__)
 
 
@@ -766,6 +768,12 @@ class Bridge:
     The bridge's HTTP server once it is listening, so a second start reuses it.
     """
 
+    recording: Optional[Recording] = None
+    """
+    The current live run's capture buffer, started alongside :meth:`attach` (see
+    :mod:`cramera.live.visualization`); None before anything has ever attached.
+    """
+
     # %% what the visualization drives
     def attach(self, world: World) -> None:
         """
@@ -1034,6 +1042,15 @@ class Bridge:
         """
         with self._lock:
             return self._mesh_serve.get(key)
+
+    def object_body(self, key: str) -> Optional[Body]:
+        """
+        The published body behind an object-catalog key, or None if it is not published.
+
+        :param key: Mesh key of the object, as published in the geometry catalog.
+        """
+        with self._lock:
+            return self._bodies.get(key)
 
     def bundle_signature(self) -> str:
         """

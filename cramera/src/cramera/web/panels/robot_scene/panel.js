@@ -26,6 +26,9 @@ Panels.define('robot-scene', function (root, bus) {
     '    <label id="environment-picker" class="scene-picker" style="display:none">Environment:' +
     '      <select id="environment-select" class="scene-select"></select>' +
     '    </label>' +
+    '    <label id="scene-name-picker" class="scene-picker" style="display:none" title="Every saved scene by name — several can share the same robot and environment (e.g. multiple saved live recordings)">Scene:' +
+    '      <select id="scene-name-select" class="scene-select"></select>' +
+    '    </label>' +
     '  </div>' +
     '</div>' +
     '<div class="stage">' +
@@ -50,7 +53,15 @@ Panels.define('robot-scene', function (root, bus) {
     '  <div class="workflow-head"><span class="wf-btns">' +
     '    <button id="live-btn" class="play-btn live" style="display:none" title="Attach to the running demo (cramera-live bridge) — renders the live world instead of the recording">◉ Live</button>' +
     '    <button id="play-btn" class="play-btn cram" title="Play the recorded coraplex + giskardpy motion trajectory">▶ Play robot motion</button>' +
+    '    <button id="record-stop-btn" class="play-btn record" style="display:none" title="Stop capturing the live run into a temporary scene you can replay, discard or save">⏹ Stop recording</button>' +
+    '    <button id="record-discard-btn" class="play-btn record" style="display:none" title="Discard the captured recording">✕ Discard</button>' +
+    '    <button id="record-save-btn" class="play-btn record" style="display:none" title="Save the captured recording as a permanent scene">💾 Save…</button>' +
+    '    <select id="playback-speed" class="scene-select" style="display:none" title="Playback speed"></select>' +
     '  </span></div>' +
+    '  <div id="playback-scrub-row" class="playback-scrub-row" style="display:none">' +
+    '    <input type="range" id="playback-scrubber" class="playback-scrubber" min="0" max="0" step="1" value="0">' +
+    '    <span id="playback-time" class="playback-time">0:00 / 0:00</span>' +
+    '  </div>' +
     '</div>';
   function $(id) { return root.querySelector('#' + id); }
 
@@ -450,17 +461,14 @@ Panels.define('robot-scene', function (root, bus) {
   function wireScenePickers(scenes, activeName) {
     const robotSel = $('robot-select'), envSel = $('environment-select');
     const robotPicker = $('robot-picker'), envPicker = $('environment-picker');
+    const nameSel = $('scene-name-select'), namePicker = $('scene-name-picker');
     if (!robotSel || !envSel) return;
-    // picking either dropdown navigates away from the live scene, which the
-    // dropdowns should never do while watching a running demo
-    if (activeName === LIVE_SCENE_NAME) return;
-    const robots = ScenePicker.robots(scenes);
-    if (robots.length < 2 && ScenePicker.environments(scenes, robots[0]).length < 2) return;
-    const active = ScenePicker.describe(scenes, activeName) || {};
-    let robot = active.robot || robots[0];
+    // picking any dropdown navigates away from the live or recording scene, which
+    // the dropdowns should never do while watching or capturing a running demo
+    if (activeName === LIVE_SCENE_NAME || RecordingMode.isRecordingScene(activeName)) return;
 
     // a picker with nothing to choose (one option, or none) stays visible but
-    // disabled — it disappearing/reappearing as the other picker changes would
+    // disabled — it disappearing/reappearing as another picker changes would
     // shift the header layout around under the user's cursor
     function fillSelect(sel, values, selected) {
       sel.innerHTML = values.map(function (v) {
@@ -470,6 +478,24 @@ Panels.define('robot-scene', function (root, bus) {
       }).join('');
       sel.disabled = values.length <= 1;
     }
+
+    // Scene: every scene by name, independent of the robot/environment axes below.
+    // sceneFor() only ever resolves a (robot, environment) pair to its *first* match,
+    // so this is the exhaustive picker for choosing among several scenes that share
+    // one — e.g. multiple saved live recordings of the same demo.
+    const allNames = ScenePicker.names(scenes);
+    if (nameSel && namePicker && allNames.length > 1) {
+      namePicker.style.display = '';
+      fillSelect(nameSel, allNames, activeName);
+      nameSel.addEventListener('change', function () {
+        window.location.search = '?scene=' + encodeURIComponent(nameSel.value);
+      });
+    }
+
+    const robots = ScenePicker.robots(scenes);
+    if (robots.length < 2 && ScenePicker.environments(scenes, robots[0]).length < 2) return;
+    const active = ScenePicker.describe(scenes, activeName) || {};
+    let robot = active.robot || robots[0];
 
     function navigateTo(environment) {
       const target = ScenePicker.sceneFor(scenes, robot, environment || null);
@@ -491,6 +517,7 @@ Panels.define('robot-scene', function (root, bus) {
 
   function loadScene(sc) {
     SCENE = sc;
+    playbackSpeedMultiplier = 1;
     if (statusEl) statusEl.textContent = 'Loading ' + sc.name + '…';
     // robot part lookup (link -> part name)
     linkToPart = {};
@@ -625,8 +652,9 @@ Panels.define('robot-scene', function (root, bus) {
   }
 
   // %% playback
-  let playing = false, playhead = 0, stepCb = function () {};
+  let playing = false, playhead = 0, stepCb = function () {}, playbackSpeedMultiplier = 1;
   let lastStep = null;
+  const playheadCbs = [];        // notified whenever the playhead moves (autoplay or a seek)
   const _p0 = new THREE.Vector3(), _p1 = new THREE.Vector3();
   const _q0 = new THREE.Quaternion(), _q1 = new THREE.Quaternion();
 
@@ -674,10 +702,22 @@ Panels.define('robot-scene', function (root, bus) {
 
   function playTrajectory() {
     if (!traj) return false;
-    playing = true; playhead = 0; lastStep = null;
+    // resume from wherever the playhead sits (including a manual seek); only an
+    // already-finished playthrough restarts from the beginning
+    if (playhead >= traj.frames.length - 1) { playhead = 0; lastStep = null; }
+    playing = true;
     return true;
   }
   function stopTrajectory() { playing = false; }
+
+  function seekTo(frame) {
+    if (!traj) return;
+    playhead = Math.max(0, Math.min(frame, traj.frames.length - 1));
+    lastStep = null;   // re-evaluate the step caption even when seeking backward
+    applyFrame(playhead);
+    playheadCbs.forEach(function (cb) { cb(playhead); });
+    needsRender = true;
+  }
 
   // %% adjustable pick spawns + place target
   // The scene records for each manipulation segment which object moves and its
@@ -1376,6 +1416,12 @@ Panels.define('robot-scene', function (root, bus) {
       liveBtn.textContent = LiveMode.labelFor(sceneName, on);
       liveBtn.title = LiveMode.titleFor(sceneName);
     }
+    // the live pose stream and trajectory playback both drive the same joints/poses;
+    // playing a recording while live would just get overwritten every tick, so the
+    // playback controls are disabled for as long as the stream is attached
+    if (playBtn) playBtn.disabled = on;
+    if (scrubber) scrubber.disabled = on;
+    if (speedSelect) speedSelect.disabled = on;
     if (on) {
       playing = false;
       lastSeq = -1;
@@ -1438,9 +1484,10 @@ Panels.define('robot-scene', function (root, bus) {
     }
     const moved = controls.update();
     if (playing && traj && !liveOn) {
-      playhead += ((traj.framesPerSecond || 30) / 60) * 1.6;
+      playhead += ((traj.framesPerSecond || 30) / 60) * 1.6 * playbackSpeedMultiplier;
       if (playhead >= traj.frames.length - 1) { playhead = traj.frames.length - 1; playing = false; stepCb('__done__'); }
       applyFrame(playhead);
+      playheadCbs.forEach(function (cb) { cb(playhead); });
       if (follow && robotCenter(_target)) controls.target.lerp(_target, 0.06);
       needsRender = true;
     }
@@ -1470,6 +1517,14 @@ Panels.define('robot-scene', function (root, bus) {
     playTrajectory: playTrajectory,
     stopTrajectory: stopTrajectory,
     isPlayingTrajectory: function () { return playing; },
+    setPlaybackSpeed: function (multiplier) {
+      playbackSpeedMultiplier = RecordingMode.clampSpeed(multiplier);
+    },
+    seek: seekTo,
+    getPlayhead: function () { return playhead; },
+    frameCount: function () { return traj ? traj.frames.length : 0; },
+    framesPerSecond: function () { return (traj && traj.framesPerSecond) || 30; },
+    onPlayheadChange: function (cb) { playheadCbs.push(cb); },
     onStepStart: function (cb) { stepCb = cb; },
     setAutoRotate: function (on) { controls.autoRotate = on; controls.autoRotateSpeed = 0.5; needsRender = true; },
     setFloorVisible: function (on) { ground.visible = on; needsRender = true; },
@@ -1523,6 +1578,165 @@ Panels.define('robot-scene', function (root, bus) {
       highlightObjects([]);
     }
     bus.emit('scene:step', { step: step });
+  });
+
+  // %% playback speed
+  const speedSelect = $('playback-speed');
+  RecordingMode.SPEED_OPTIONS.forEach(function (speed) {
+    const option = document.createElement('option');
+    option.value = String(speed);
+    option.textContent = speed + '×';
+    if (speed === 1) option.selected = true;
+    speedSelect.appendChild(option);
+  });
+  speedSelect.addEventListener('change', function () {
+    RobotView.setPlaybackSpeed(parseFloat(speedSelect.value));
+  });
+  RobotView.onReady(function () {
+    speedSelect.style.display = RobotView.hasTrajectory() ? '' : 'none';
+  });
+
+  // %% playback scrubber
+  const scrubRow = $('playback-scrub-row');
+  const scrubber = $('playback-scrubber');
+  const timeLabel = $('playback-time');
+  let scrubbing = false, wasPlayingBeforeScrub = false;
+
+  function formatTime(frame, fps) {
+    const totalSeconds = Math.max(0, frame) / fps;
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = Math.floor(totalSeconds % 60);
+    return minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
+  }
+  function updateScrubberUI(frame) {
+    if (!scrubbing) scrubber.value = String(Math.round(frame));
+    const fps = RobotView.framesPerSecond();
+    timeLabel.textContent = formatTime(frame, fps) + ' / ' + formatTime(RobotView.frameCount() - 1, fps);
+  }
+  RobotView.onReady(function () {
+    const visible = RobotView.hasTrajectory();
+    scrubRow.style.display = visible ? '' : 'none';
+    if (visible) {
+      scrubber.max = String(Math.max(0, RobotView.frameCount() - 1));
+      updateScrubberUI(RobotView.getPlayhead());
+    }
+  });
+  RobotView.onPlayheadChange(updateScrubberUI);
+  scrubber.addEventListener('pointerdown', function () {
+    scrubbing = true;
+    wasPlayingBeforeScrub = RobotView.isPlayingTrajectory();
+    if (wasPlayingBeforeScrub) {
+      RobotView.stopTrajectory();
+      playBtn.classList.remove('playing'); playBtn.textContent = '▶ Play robot motion';
+    }
+  });
+  scrubber.addEventListener('input', function () {
+    const frame = parseInt(scrubber.value, 10);
+    RobotView.seek(frame);
+    updateScrubberUI(frame);
+  });
+  scrubber.addEventListener('pointerup', function () {
+    scrubbing = false;
+    if (wasPlayingBeforeScrub) {
+      RobotView.playTrajectory();
+      playBtn.classList.add('playing'); playBtn.textContent = '⏸ Stop';
+    }
+  });
+
+  // %% recording controls (capturing a live run into a temporary, replayable scene)
+  const recordStopBtn = $('record-stop-btn');
+  const recordDiscardBtn = $('record-discard-btn');
+  const recordSaveBtn = $('record-save-btn');
+  let recordingState = RecordingMode.STATE.IDLE;
+
+  function updateRecordingButtons() {
+    const visible = RecordingMode.controlsVisible({ state: recordingState });
+    recordStopBtn.style.display = visible ? '' : 'none';
+    recordDiscardBtn.style.display = visible ? '' : 'none';
+    recordSaveBtn.style.display = visible ? '' : 'none';
+    recordStopBtn.textContent = RecordingMode.stopButtonLabel(recordingState);
+    recordStopBtn.disabled = !RecordingMode.canStop(recordingState);
+    recordSaveBtn.disabled = !RecordingMode.canSave(recordingState);
+  }
+
+  // The bridge (the demo process, liveUrl()) is the source of truth while it is
+  // reachable -- only it knows whether capture is still running. Once a run is
+  // finalized (or the demo process has since exited entirely -- the recording was
+  // already written to disk either by an explicit stop or by its exit-time safety
+  // net, see cramera.live.visualization), discarding/saving it is a pure filesystem
+  // action the always-on server (this same origin) can do without the bridge at all.
+  // Every recording action below tries the bridge first and falls back to the
+  // general server's /api/recording/* the moment that fetch fails to connect.
+  function postRecordingAction(bridgePath, fallbackPath, body) {
+    const options = { method: 'POST' };
+    if (body) options.body = JSON.stringify(body);
+    return fetch(liveUrl() + bridgePath, options)
+      .then(function (r) { return r.json(); })
+      .catch(function () {
+        return fetch(fallbackPath, options).then(function (r) { return r.json(); });
+      });
+  }
+
+  function pollRecordingStatus() {
+    fetch(liveUrl() + '/recording').then(function (r) { return r.json(); })
+      .then(function (status) {
+        recordingState = (status && status.state) || RecordingMode.STATE.IDLE;
+        updateRecordingButtons();
+      })
+      .catch(function () {
+        fetch('/api/recording/status').then(function (r) { return r.json(); })
+          .then(function (status) {
+            recordingState = (status && status.state) || RecordingMode.STATE.IDLE;
+            updateRecordingButtons();
+          })
+          .catch(function () {});
+      });
+  }
+  updateRecordingButtons();
+  const recordingProbeTimer = setInterval(pollRecordingStatus, LIVE_PROBE_INTERVAL_MS);
+  pollRecordingStatus();
+
+  recordStopBtn.addEventListener('click', function () {
+    fetch(liveUrl() + '/recording/stop', { method: 'POST' }).then(function (r) { return r.json(); })
+      .then(function (d) {
+        pollRecordingStatus();
+        if (!d || !d.ok) return;
+        const params = new URLSearchParams(window.location.search);
+        params.set('scene', d.scene);
+        window.location.search = params.toString();
+      })
+      .catch(function () {});
+  });
+
+  recordDiscardBtn.addEventListener('click', function () {
+    postRecordingAction('/recording/discard', '/api/recording/discard').then(function () {
+      pollRecordingStatus();
+      if (RecordingMode.isRecordingScene(SceneContext.name())) {
+        const params = new URLSearchParams(window.location.search);
+        params.delete('scene');
+        window.location.search = params.toString();
+      }
+    });
+  });
+
+  recordSaveBtn.addEventListener('click', function () {
+    const name = window.prompt('Save this recording as:');
+    if (name === null) return;
+    if (!RecordingMode.isValidSaveName(name)) {
+      window.alert('Scene names must be 1-64 characters of letters, digits, "_" or "-".');
+      return;
+    }
+    postRecordingAction('/recording/save', '/api/recording/save', { name: name })
+      .then(function (d) {
+        if (!d || !d.ok) {
+          window.alert('Could not save the recording: ' + ((d && d.error) || 'unknown error'));
+          return;
+        }
+        pollRecordingStatus();
+        const params = new URLSearchParams(window.location.search);
+        params.set('scene', d.scene);
+        window.location.search = params.toString();
+      });
   });
 
   // %% layers panel
@@ -1643,6 +1857,7 @@ Panels.define('robot-scene', function (root, bus) {
     destroy: function () {
       running = false;                       // stops the requestAnimationFrame loop
       clearInterval(probeTimer);
+      clearInterval(recordingProbeTimer);
       if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
       containerObserver.disconnect();
       window.removeEventListener('resize', resize);
