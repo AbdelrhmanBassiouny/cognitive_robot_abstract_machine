@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Union
+
 from typing_extensions import Callable, List, Any, Optional, Type
 import operator
 
@@ -18,6 +20,8 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
+from krrood.entity_query_language.evaluable import Evaluable
+from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.query.query import (
     Query,
     Entity,
@@ -834,7 +838,7 @@ class EQLTranslator:
         bound_query = self.session.scalars(self.sql_query)
 
         if issubclass(self.quantifier_type, The):
-            return bound_query.one()
+            return [bound_query.one()]
 
         elif issubclass(self.quantifier_type, An):
             return bound_query.all()
@@ -1440,7 +1444,7 @@ class EQLTranslator:
 
 
 def eql_to_sql(
-    query: Query, session: Session, as_common_table_expression: Optional[str] = None
+    query: Evaluable, session: Session, as_common_table_expression: Optional[str] = None
 ) -> Union[EQLTranslator, Any]:
     """
     Translate an EQL query to SQL.
@@ -1465,6 +1469,8 @@ def eql_to_sql(
     (e.g. WITH large_bodies AS (SELECT ...))
     :return: EQLTranslator or SQLAlchemy common table expression
     """
+    if isinstance(query, Match):
+        query = query.expression
     query.build()
     result = EQLTranslator(query, session)
     result.translate()

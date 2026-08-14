@@ -68,3 +68,4 @@ class Evaluable(ABC):
         :raises StopIteration: If no results are found.
         """
         return next(self.evaluate(backend=backend))
+

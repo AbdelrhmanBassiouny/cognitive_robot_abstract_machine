@@ -88,9 +88,7 @@ class Sage10kOpenDoor(ActionDescription):
 
         where_condition = translate_free_space_to_where_condition(
             gcs.free_space_event,
-            reach_query.expression,
-            x_variable_name="MoveToReach.target_pose_offset_robot.x",
-            y_variable_name="MoveToReach.target_pose_offset_robot.y",
+            reach_query.expression.selected_variable.target_pose_offset_robot,
         )
 
         reach_action = reach_query.where(where_condition)

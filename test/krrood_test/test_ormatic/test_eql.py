@@ -315,7 +315,8 @@ def test_complicated_equal(session, database):
 
     # SQL result matches EQL result
     sql_result = translator.evaluate()
-    assert sql_result.name == eql_result[0].name
+    assert len(sql_result) == 1
+    assert sql_result[0].name == eql_result[0].name
 
 
 def test_contains(session, database):

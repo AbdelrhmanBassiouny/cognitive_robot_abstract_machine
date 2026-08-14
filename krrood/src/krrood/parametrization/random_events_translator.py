@@ -117,7 +117,7 @@ class WhereExpressionToRandomEventTranslator:
             )
 
         if not is_literal_comparator(expression):
-            raise WhereExpressionHasNoRandomEventRepresentation(expression)
+            return self.unconstrained_event()
 
         return self._translate_comparator(expression)
 

@@ -130,9 +130,7 @@ def test_translate_free_space_to_where_condition(wall_door_handle_world):
     # Translate free space to where condition
     where_condition = translate_free_space_to_where_condition(
         gcs.free_space_event,
-        query.expression,
-        x_variable_name="MoveToReach.target_pose_offset_robot.x",
-        y_variable_name="MoveToReach.target_pose_offset_robot.y",
+        query.expression.selected_variable.target_pose_offset_robot,
     )
 
     query = query.where(where_condition)

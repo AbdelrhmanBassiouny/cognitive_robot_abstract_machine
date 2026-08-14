@@ -174,14 +174,14 @@ class VerbalizationPipeline:
             return _HTML_CELL_WRAPPER.render(body=result)
         return result
 
-    def display(self, expression: SymbolicExpression) -> None:
+    def display(self, expression: SymbolicExpression, backend=None) -> None:
         """
         Render *expression* and display it in the current environment — inline in
         Jupyter / IPython, or in the default browser elsewhere.
 
         :param expression: Any EQL expression or query.
         """
-        self.display_fragment(self._verbalizer.build(expression))
+        self.display_fragment(self._verbalizer.build(expression, performative=directive_for_backend(backend)))
 
     def display_fragment(self, fragment: VerbalizationFragment) -> None:
         """

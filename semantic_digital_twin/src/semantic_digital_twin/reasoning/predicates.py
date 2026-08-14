@@ -19,7 +19,7 @@ from krrood.entity_query_language.verbalization.vocabulary.english import Prepos
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
     clause,
     Noun,
-    Verb,
+    Verb, Copula,
 )
 from krrood.inheritance_path_length import inheritance_path_length
 from random_events.interval import Interval
@@ -554,6 +554,13 @@ class InsideOf(KinematicStructureEntitySpatialRelation):
             return 0.0
         return sum(inside) / len(inside)
 
+    def _verbalization_fragment_(self, fields):
+        return clause(
+            Noun(fields["body"]),
+            Copula(),
+            Verb("inside"),
+            Noun(fields["other"]),
+        )
 
 @dataclass
 class ContainsType(Predicate):
