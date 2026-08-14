@@ -46,4 +46,17 @@ Both fixes are committed and pushed to `origin/icjai-tutorial` (d65ec42442,
 `test_random_events_translator.test_comparison_between_two_variables_is_refused`
 (fails with all my changes stashed too).
 
+7. `ModuleNotFoundError: cognitive_robot_abstract_machine` in the binder
+   (AbdelrhmanBassiouny/binder-template, branch `ijcai`, which clones this
+   branch and runs `poetry install`): `[tool.poetry] package-mode = false`
+   makes poetry install the workspace path dependencies but never the
+   meta-package. Fixed in the binder repo (67cdb93): `pip install --no-deps
+   -e .` after `poetry install`, ORM interfaces generated at image build
+   time, and the entrypoint regenerates them only when its `git pull
+   --ff-only` moved HEAD (otherwise a pulled notebook fix would run against
+   interfaces generated for older code). Repo side (eb5359c1ea): README
+   poetry section + a comment at `package-mode = false`. Not verified by an
+   image build - if the build-time generation RUN fails at that layer, drop
+   it; the pip line alone fixes the notebook.
+
 Next: nothing outstanding; user has not asked for a PR.
