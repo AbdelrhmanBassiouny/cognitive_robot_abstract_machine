@@ -188,6 +188,17 @@ class NumericTransform:
             self.matrix[:3, 3], reference_frame=self.reference_frame
         )
 
+    def transform_points(
+        self, points: npt.NDArray[np.float64]
+    ) -> npt.NDArray[np.float64]:
+        """
+        Carry a whole point cloud through this transform at once.
+
+        :param points: The points to carry, one per row of an ``(n, 3)`` array.
+        :return: The carried points, in the same layout.
+        """
+        return points @ self.matrix[:3, :3].T + self.matrix[:3, 3]
+
     def inverse(self) -> NumericTransform:
         """
         :return: The transform taking coordinates the other way.

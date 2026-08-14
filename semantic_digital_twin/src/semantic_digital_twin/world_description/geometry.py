@@ -1208,6 +1208,51 @@ class Bounds(Generic[T], SubClassSafeGeneric):
     The corner with the largest coordinate on every axis.
     """
 
+    @classmethod
+    def from_points(cls, points: npt.NDArray[np.float64]) -> Bounds[np.ndarray]:
+        """
+        The smallest axis-aligned region enclosing a point cloud.
+
+        :param points: The points to enclose, one per row of an ``(n, 3)`` array.
+        """
+        return cls(points.min(axis=0), points.max(axis=0))
+
+    @classmethod
+    def empty(cls) -> Bounds[np.ndarray]:
+        """
+        The region holding no point at all, which nothing overlaps and nothing lies in.
+
+        What geometry that is absent rather than merely elsewhere reads back as.
+        """
+        return cls(np.full(3, np.inf), np.full(3, -np.inf))
+
+    def overlaps(self, other: Bounds[np.ndarray]) -> bool:
+        """
+        Whether two regions share any point, touching included.
+
+        Assumes ``lower``/``upper`` are plain numeric arrays, as :meth:`clip_segment`
+        does.
+
+        :param other: The region to test against, in the same frame.
+        """
+        return bool(
+            np.all(self.lower <= other.upper) and np.all(other.lower <= self.upper)
+        )
+
+    def contains(self, points: npt.NDArray[np.float64]) -> npt.NDArray[np.bool_]:
+        """
+        Which of a point cloud's points lie inside this region.
+
+        A region flattened onto a plane encloses no volume and so contains nothing, not
+        even a point lying on it.
+
+        :param points: The points to test, one per row of an ``(n, 3)`` array.
+        :return: One flag per point, in the same order.
+        """
+        if np.any(self.upper <= self.lower):
+            return np.zeros(len(points), dtype=bool)
+        return np.all((points >= self.lower) & (points <= self.upper), axis=1)
+
     def clip_segment(
         self, start: npt.NDArray[np.float64], direction: npt.NDArray[np.float64]
     ) -> Optional[SimpleInterval]:

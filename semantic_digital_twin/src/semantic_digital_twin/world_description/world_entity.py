@@ -57,7 +57,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Pose,
 )
 from semantic_digital_twin.utils import camel_case_split
-from semantic_digital_twin.world_description.geometry import Mesh
+from semantic_digital_twin.world_description.geometry import Bounds, Mesh
 from semantic_digital_twin.world_description.inertial_properties import Inertial
 from semantic_digital_twin.world_description.shape_collection import (
     ShapeCollection,
@@ -381,6 +381,25 @@ class KinematicStructureEntity(ABC, WorldEntityWithSimulatorProperties):
         return NumericTransform(
             matrix=self._world.compute_forward_kinematics_np(self._world.root, self),
             reference_frame=self._world.root,
+        )
+
+    @property
+    def numeric_global_bounds(self) -> Bounds[np.ndarray]:
+        """
+        Computes the axis-aligned region enclosing this entity's geometry in the world
+        frame, as plain numbers.
+
+        Cheap enough to rule a pair of entities out before an exact spatial relation is
+        computed between them.
+
+        :return: The region's lower and upper corner, or an empty region if the entity
+            has no geometry.
+        """
+        mesh = self.combined_mesh
+        if mesh is None or mesh.is_empty:
+            return Bounds.empty()
+        return Bounds.from_points(
+            self.numeric_global_transform.transform_points(mesh.vertices)
         )
 
     @property
