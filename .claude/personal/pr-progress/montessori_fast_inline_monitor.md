@@ -87,9 +87,13 @@ that thread, and keeps the configuration that has never crashed.
     recording became best effort: `--no-record` asks for no database at all, and a run
     whose database refuses a write warns and sorts. `RecordsIterationsToADatabase` /
     `RecordsNothing` mirror `WatchesForEvents` / `WatchesNothing`.
-80. The pre-flight still exits 1 when the database was named with `--database-uri`
-    (`ConfiguredDatabase.was_asked_for`), which is what keeps the two pre-existing
-    launcher tests meaningful; an inherited URI warns and exits 0.
+80. First attempt gated this on origin -- exit 1 when the database was named with
+    `--database-uri`, exit 0 when inherited. **Wrong, and the developer hit it
+    immediately**: naming a database is not demanding to write to it. The live query
+    panel reads recorded runs from the same place, and a read-only role serves that
+    perfectly well, which is the whole reason to point a run at one. Only an
+    *unreachable* database stops a run now (nothing can be read from it either);
+    read-only always warns and carries on. `was_asked_for` is gone.
 81. The demo also logged the URI *with its password in it*; it logs the masked label now.
 82. **Verified against the real environment**: the pre-flight reports the read-only role
     in under a second and exits 0, and `--no-record` skips the check entirely.
