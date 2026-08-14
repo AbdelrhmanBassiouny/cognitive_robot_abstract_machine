@@ -25,6 +25,7 @@ dependencies = [
   "experiments",
   "segmind",
   "ipykernel>=7.2.0",
+  "nbformat",
   "lark-parser>=0.12.0"
 ]
 
