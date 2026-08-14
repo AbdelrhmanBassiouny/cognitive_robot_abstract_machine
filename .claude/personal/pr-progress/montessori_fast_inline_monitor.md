@@ -65,6 +65,47 @@ that thread, and keeps the configuration that has never crashed.
   permission denied for table ColorDAO` -- a database provisioning problem, not a code
   one -- and then segfaulted while unwinding from it. Not yet investigated.
 
+### Round 15 -- recording is optional now
+
+76. The developer's runs were dying at `results_session.commit()` with
+    `psycopg.errors.InsufficientPrivilege: permission denied for table ColorDAO`. Root
+    cause was **not** in the repository: `~/.bashrc` line 139 exports
+    `FRANKA_MONTESSORI_SORTING_DATABASE_URI` pointing at
+    `semantic_digital_twin_readonly` on port **5433**. The real database
+    (`semantic_digital_twin` on 5432) is healthy -- 1635 tables, all owned by that
+    role, insert allowed on every one. Told them; did not touch their `.bashrc`.
+77. The pre-flight (`results_database.main`, run by `run_montessori_demo.sh` before
+    anything else) only opened a connection, which a read-only role passes: the schema
+    is already there, so `create_all` issues nothing and the first insert is what fails,
+    a world build later. `verify_writable` now writes a table of its own and drops it.
+    Dropped rather than rolled back -- SQLite's driver commits a `CREATE TABLE` whatever
+    transaction it was issued in.
+78. `ConfiguredDatabase` carries the URI together with `DatabaseUriOrigin`, so output can
+    name the environment variable. A URI set in a shell profile appears nowhere in the
+    command that was run, which is why this was invisible.
+79. On the developer's instruction ("I do not want to record anyway so skip that part"),
+    recording became best effort: `--no-record` asks for no database at all, and a run
+    whose database refuses a write warns and sorts. `RecordsIterationsToADatabase` /
+    `RecordsNothing` mirror `WatchesForEvents` / `WatchesNothing`.
+80. The pre-flight still exits 1 when the database was named with `--database-uri`
+    (`ConfiguredDatabase.was_asked_for`), which is what keeps the two pre-existing
+    launcher tests meaningful; an inherited URI warns and exits 0.
+81. The demo also logged the URI *with its password in it*; it logs the masked label now.
+82. **Verified against the real environment**: the pre-flight reports the read-only role
+    in under a second and exits 0, and `--no-record` skips the check entirely.
+
+### Round 14b -- soak
+
+83. 900 s soak on this branch passed (6 passed, no signal). The developer separately ran
+    the demo in a loop and reports **no stuttering**.
+
+### Still open
+
+- The run segfaulted *during teardown* after the SQL error, with
+  `GLFWError: The GLFW library is not initialized` immediately before it. A viewer
+  shutdown crash on the exception path, not the CasADi race -- no second thread is
+  reading the world at that point. Needs the viewer to reproduce, so not chased.
+
 ### Next
 
 - Head-to-head soak against `stutter_montessori` at equal wall clock would put a number
