@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from types import NoneType
 from typing import Iterable, TypeVar
 
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import Session, sessionmaker
 from typing_extensions import ClassVar, Dict, Optional
 
 from krrood import logger
@@ -26,6 +26,7 @@ from krrood.entity_query_language.factories import entity, set_of, variable
 from krrood.entity_query_language.query.match import Match, AttributeMatch
 from krrood.entity_query_language.query.query import Query
 from krrood.ormatic.eql_interface import eql_to_sql
+
 try:
     from krrood.parametrization.model_registries import (
         ModelRegistry,
@@ -126,9 +127,20 @@ class SQLAlchemyBackend(SelectiveBackend):
     The session maker used for the database interactions.
     """
 
+    session: Session = field(init=False)
+    """
+    The session all queries of this backend run in.
+
+    Results stay bound to it, so relationships they have not loaded yet can still be
+    followed -- for example while converting a result back into a domain object -- for
+    as long as this backend exists.
+    """
+
+    def __post_init__(self):
+        self.session = self.session_maker()
+
     def _evaluate(self, expression: Query) -> Iterable:
-        session = self.session_maker()
-        translator = eql_to_sql(expression, session)
+        translator = eql_to_sql(expression, self.session)
         yield from translator.evaluate()
 
 

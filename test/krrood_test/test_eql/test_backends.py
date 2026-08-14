@@ -1,3 +1,4 @@
+import gc
 from copy import deepcopy
 from datetime import datetime
 from types import EllipsisType
@@ -119,6 +120,23 @@ def test_selective_query_multiple_backends(session, database):
 
     result = list(q.evaluate(backend=SQLAlchemyBackend(session_maker)))
     assert len(result) == 1
+
+
+def test_result_of_a_sqlalchemy_query_can_be_converted_back(session, database):
+    pose = KRROODPose(
+        position=KRROODPosition(1, 0, 0), orientation=KRROODOrientation(0, 0, 0, 1)
+    )
+    session.add(to_dao(pose))
+    session.commit()
+
+    backend = SQLAlchemyBackend(sessionmaker(session.bind))
+    pose_variable = variable(KRROODPose, [pose])
+    query = an(entity(pose_variable))
+
+    results = query.tolist(backend=backend)
+    gc.collect()
+
+    assert [result.from_dao() for result in results] == [pose]
 
 
 def test_probabilistic_backend_with_symbolic_expression():
