@@ -40,6 +40,26 @@ the branch was deleted. Its one commit is the first commit here.
     `MontessoriEventMonitor.start` reads the model's geometry out before spawning the
     thread, so even the one-time reads happen on the world's own thread.
 
+### Round 12 -- the soak test
+
+63. **`test/experiments_test/test_montessori_demo_soak.py`** runs the whole demo as its
+    own process (`--no-viewer --no-rviz --world2 --max-shapes 1 --iterations 1000`,
+    recording to a throwaway sqlite database), sorts until a deadline, then interrupts
+    it and reads the verdict off the exit status. A subprocess because the failure being
+    guarded against kills the process rather than raising.
+64. Asserts three things: it did not die of `SIGSEGV`/`SIGABRT`/`SIGBUS`/`SIGILL`/
+    `SIGFPE`; it kept going (still sorting at the deadline, or exited 0 -- this is what
+    catches an unhandled exception halfway); and at least one iteration was recorded, so
+    it cannot pass vacuously.
+65. Opt in with `MONTESSORI_DEMO_SOAK_SECONDS`; skipped otherwise and when rclpy is
+    missing. `SoakOutcome`'s reading of an exit status is checked by five separate tests
+    that do run in CI.
+66. **Result: 1500 s soak passed -- 46 iterations started, 45 finished and recorded, no
+    signal.** A 300 s soak passed first. About 33 s per iteration once warm.
+67. Known gap: a demo that *hangs* rather than crashes is still reported as "stopped at
+    the deadline" and passes. This is a crash guard, not a liveness guard; only the
+    recorded-iterations assertion pushes back, and weakly.
+
 ### What the evidence does and does not show
 
 - The reproducible racer (two threads in `rounded_pose`) is fixed and verified: 6/6
