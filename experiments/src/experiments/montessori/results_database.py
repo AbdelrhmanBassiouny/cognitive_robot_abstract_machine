@@ -101,6 +101,17 @@ class ConfiguredDatabase:
             return cls(uri=from_environment, origin=DatabaseUriOrigin.ENVIRONMENT)
         return cls(uri=DEFAULT_DATABASE_URI, origin=DatabaseUriOrigin.BUILT_IN_DEFAULT)
 
+    @property
+    def was_asked_for(self) -> bool:
+        """
+        Whether this run named this database itself, rather than inheriting it.
+
+        A database a run asked for by name and cannot use is worth refusing to start
+        over; one it merely inherited from a shell profile is not, since nothing about
+        the run says it wanted that database in particular.
+        """
+        return self.origin is DatabaseUriOrigin.COMMAND_LINE
+
     def describe(self) -> str:
         """
         This database as it can be shown to someone, saying where it came from.
@@ -330,18 +341,29 @@ def main(argument_list: Optional[List[str]] = None) -> int:
     the run's whole argument list without knowing which parts are the demo's.
 
     :param argument_list: Arguments to read; the process's own when omitted.
-    :return: 0 when the database can be recorded to, 1 when it cannot.
+    :return: 0 when the run may go ahead, 1 when it may not.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database-uri", default=None)
+    parser.add_argument("--record", action=argparse.BooleanOptionalAction, default=True)
     arguments, _ = parser.parse_known_args(argument_list)
+    if not arguments.record:
+        print("Not recording this run's results.")
+        return 0
     database = ConfiguredDatabase.resolve(arguments.database_uri)
     try:
         verify_reachable(database.uri)
         verify_writable(database.uri)
     except (UnreachableResultsDatabase, ReadOnlyResultsDatabase) as error:
         print(error, file=sys.stderr)
-        return 1
+        if database.was_asked_for:
+            return 1
+        print(
+            "Sorting anyway; this run's results will not be recorded. Pass --no-record "
+            "to ask for no database at all.",
+            file=sys.stderr,
+        )
+        return 0
     print(database.describe())
     return 0
 

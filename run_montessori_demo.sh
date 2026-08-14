@@ -48,6 +48,7 @@ Common demo arguments (see franka_montessori_demo.py --help for all of them):
                       motion for ~12ms, inside a control period; the sorting
                       verdict is unaffected either way.
   --only-shape KEY    Attempt one shape only, e.g. --only-shape square_hole.
+  --no-record         Keep no results, and ask for no database at all.
   --database-uri URI  Record results somewhere other than the default database.
 
 Examples:
@@ -97,9 +98,11 @@ else
 fi
 echo "Running with ${python_executable}."
 
-# before anything else: the demo records every iteration and refuses to start without
-# its database, and finding that out after the CRAM stack has imported and a world has
-# been built costs a minute and buries the reason under a hundred-line traceback
+# before anything else: the demo records every iteration, and finding out only after the
+# CRAM stack has imported and a world has been built that it cannot costs a minute and
+# buries the reason under a hundred-line traceback. Refuses to start only when the
+# database was named by this run; one inherited from a shell profile just warns and
+# sorts without recording
 if ! "${python_executable}" -m experiments.montessori.results_database \
     ${demo_arguments[@]+"${demo_arguments[@]}"}; then
     exit 1

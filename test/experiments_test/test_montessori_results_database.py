@@ -227,6 +227,26 @@ class TestPreflight:
 
         assert main([]) == 0
 
+    def test_a_database_nobody_asked_for_does_not_stop_the_run(
+        self, monkeypatch, capsys
+    ):
+        """
+        A URI inherited from a shell profile says nothing about wanting that database
+        in particular, so a run is worth more than the results it would have kept.
+        """
+        monkeypatch.setenv(DATABASE_URI_ENVIRONMENT_VARIABLE, UNREACHABLE_URI)
+
+        assert main([]) == 0
+
+        assert "will not be recorded" in capsys.readouterr().err
+
+    def test_a_run_that_records_nothing_needs_no_database(self, monkeypatch, capsys):
+        monkeypatch.setenv(DATABASE_URI_ENVIRONMENT_VARIABLE, UNREACHABLE_URI)
+
+        assert main(["--no-record"]) == 0
+
+        assert "Not recording" in capsys.readouterr().out
+
     def test_it_says_the_environment_chose_the_database(
         self, monkeypatch, capsys, tmp_path
     ):

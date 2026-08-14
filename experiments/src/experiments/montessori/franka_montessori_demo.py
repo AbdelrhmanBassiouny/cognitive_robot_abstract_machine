@@ -42,8 +42,6 @@ from typing import TYPE_CHECKING
 
 import mujoco
 import numpy as np
-from krrood.ormatic.data_access_objects.helper import to_dao
-from sqlalchemy.orm import Session
 from typing_extensions import Optional
 
 from cramera.live.bridge import BRIDGE
@@ -64,8 +62,12 @@ from experiments.montessori.franka_panda_equipment import (
 from experiments.montessori.live_query_source import MontessoriLiveQuerySource
 from experiments.montessori.results_database import (
     configured_database_uri,
-    database_label,
     ResultsDatabase,
+)
+from experiments.montessori.results_recording import (
+    RecordsIterations,
+    RecordsNothing,
+    open_recording,
 )
 from experiments.montessori.run_control import SortingRunControl
 from experiments.montessori.semantics import (
@@ -810,6 +812,18 @@ def _parse_arguments(argument_list: Optional[list[str]] = None) -> argparse.Name
         ),
     )
     parser.add_argument(
+        "--record",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=(
+            "Record every iteration's SortingIterationResult to --database-uri; "
+            "records by default. Turning it off asks for no database at all, which a "
+            "run that only wants to watch the sort has no use for. A run that is "
+            "recording but whose database will not take a write sorts anyway and says "
+            "so."
+        ),
+    )
+    parser.add_argument(
         "--database-uri",
         default=configured_database_uri(),
         help=(
@@ -823,29 +837,17 @@ def _parse_arguments(argument_list: Optional[list[str]] = None) -> argparse.Name
     return parser.parse_args(argument_list)
 
 
-def _log_where_results_go(database_uri: str) -> None:
+def _open_recording(arguments: argparse.Namespace) -> RecordsIterations:
     """
-    Say where a run is recording its results.
+    Decide where this run's finished iterations go.
 
-    :param database_uri: The database being recorded to; its password is withheld, since
-        a demo's log is pasted into issues and chats.
+    :param arguments: The run's own arguments, read for whether it records at all and
+        for the database it would record to.
     """
-    logger.info("Recording results to %s.", database_label(database_uri))
-
-
-def _open_results_session(database_uri: str) -> Session:
-    """
-    Open a SQLAlchemy session against ``database_uri``, creating this demo's tables
-    first if they don't already exist.
-
-    ``database_uri``'s database and role must already exist on the server; see
-    :data:`~experiments.montessori.results_database.DEFAULT_DATABASE_URI` for how to
-    provision them.
-
-    :param database_uri: Database to write recorded results to; see
-        :data:`~experiments.montessori.results_database.DEFAULT_DATABASE_URI`.
-    """
-    return ResultsDatabase(uri=database_uri).open_session()
+    if not arguments.record:
+        logger.info("Not recording this run's results.")
+        return RecordsNothing()
+    return open_recording(arguments.database_uri)
 
 
 def _build_world_and_sort(
@@ -1096,8 +1098,7 @@ def main() -> None:
     control = SortingRunControl()
     last_planned_iteration = arguments.start_iteration + arguments.iterations - 1
     iteration = arguments.start_iteration
-    results_session = _open_results_session(arguments.database_uri)
-    _log_where_results_go(arguments.database_uri)
+    recording = _open_recording(arguments)
     try:
         while True:
             if arguments.iterations > 1:
@@ -1120,8 +1121,7 @@ def main() -> None:
                     iteration=iteration, shape_results=shape_results
                 )
                 iteration_results.append(iteration_result)
-                results_session.add(to_dao(iteration_result))
-                results_session.commit()
+                recording.record(iteration_result)
 
             planned_ahead = iteration < last_planned_iteration
             if keep_simulation_running and not planned_ahead:
@@ -1148,7 +1148,7 @@ def main() -> None:
     except KeyboardInterrupt:
         pass
     finally:
-        results_session.close()
+        recording.close()
         if multi_sim is not None:
             multi_sim.stop_simulation()
         if viz_marker_publisher is not None:

@@ -8,6 +8,11 @@ per-shape result is persisted to a Postgres database via ORMatic (see
 
 ## One-time setup: the results database
 
+Only needed if you want the results kept. `--no-record` asks for no database at all,
+and a run whose database will not take a write sorts anyway and says so — it refuses to
+start only when that database was named with `--database-uri`, since inheriting one
+from `FRANKA_MONTESSORI_SORTING_DATABASE_URI` says nothing about wanting it.
+
 Persistence needs a Postgres role and database to already exist. Provision them once,
 as the `postgres` superuser, with the script `semantic_digital_twin` already ships for
 this:

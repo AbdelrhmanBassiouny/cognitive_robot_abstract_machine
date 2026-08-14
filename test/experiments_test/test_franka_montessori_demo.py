@@ -6,7 +6,6 @@ simulation.
 
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timedelta
 
 from cramera.live.run_control import RunCommand
@@ -14,9 +13,13 @@ from cramera.live.run_control import RunCommand
 from experiments.montessori import franka_montessori_demo
 from experiments.montessori.event_monitoring import WatchesNothing
 from experiments.montessori.franka_montessori_demo import (
-    _log_where_results_go,
+    _open_recording,
     _parse_arguments,
     _partition_events_by_attempt,
+)
+from experiments.montessori.results_recording import (
+    RecordsIterationsToADatabase,
+    RecordsNothing,
 )
 from experiments.montessori.run_control import SortingRunControl
 from experiments.montessori.sorting_progress import SortingProgress
@@ -281,16 +284,33 @@ def test_a_monitor_that_watches_nothing_reports_nothing():
     assert watches_nothing.events == []
 
 
-# %% saying where results go
-def test_the_recording_destination_is_logged_without_its_password(caplog):
-    """
-    A demo's log is pasted into issues and chats, and the database it records to is
-    normally chosen by an environment variable that carries a password with it.
-    """
-    with caplog.at_level(logging.INFO):
-        _log_where_results_go(
-            "postgresql+psycopg://recorder:hunter2@localhost:5432/sorting_results"
-        )
+# %% keeping the results
+def test_a_run_records_its_results_unless_told_not_to():
+    assert _parse_arguments([]).record is True
 
-    assert "sorting_results" in caplog.text
-    assert "hunter2" not in caplog.text
+
+def test_recording_can_be_turned_off():
+    """
+    A run that only wants to watch the sort has no use for a database, and asking for
+    none is better than pointing it at one that happens to refuse writes.
+    """
+    assert _parse_arguments(["--no-record"]).record is False
+
+
+def test_a_run_told_not_to_record_keeps_nothing(tmp_path):
+    arguments = _parse_arguments(
+        ["--no-record", "--database-uri", "sqlite:///%s" % (tmp_path / "results.db")]
+    )
+
+    assert isinstance(_open_recording(arguments), RecordsNothing)
+
+
+def test_a_run_that_records_opens_the_database_it_was_given(tmp_path):
+    arguments = _parse_arguments(
+        ["--database-uri", "sqlite:///%s" % (tmp_path / "results.db")]
+    )
+
+    recording = _open_recording(arguments)
+
+    assert isinstance(recording, RecordsIterationsToADatabase)
+    recording.close()
