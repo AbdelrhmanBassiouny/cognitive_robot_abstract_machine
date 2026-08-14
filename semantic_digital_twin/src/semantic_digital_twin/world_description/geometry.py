@@ -36,11 +36,13 @@ from random_events.interval import SimpleInterval, Bound, closed
 from random_events.product_algebra import SimpleEvent
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.mixin import HasSimulatorProperties
+from semantic_digital_twin.datastructures.types import NpMatrix4x4
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
     Vector3,
 )
+from semantic_digital_twin.spatial_types.math import inverse_frame
 from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
 
 if TYPE_CHECKING:
@@ -1228,40 +1230,57 @@ class BoundingBox:
         )
 
     @property
+    def origin_translation(self) -> npt.NDArray[np.float64]:
+        """
+        :return: The origin's x, y and z coordinates, as plain floats.
+        """
+        return self.origin.to_np()[:3, 3]
+
+    @property
+    def axis_intervals(self) -> List[SimpleInterval]:
+        """
+        The box's closed extent along x, y and z, offset by its origin.
+
+        Reads the origin once rather than once per bound, so offsetting the bounds does
+        no symbolic arithmetic.
+        """
+        origin = self.origin_translation
+        return [
+            SimpleInterval.from_data(
+                float(origin[axis] + minimum),
+                float(origin[axis] + maximum),
+                Bound.CLOSED,
+                Bound.CLOSED,
+            )
+            for axis, (minimum, maximum) in enumerate(
+                (
+                    (self.min_x, self.max_x),
+                    (self.min_y, self.max_y),
+                    (self.min_z, self.max_z),
+                )
+            )
+        ]
+
+    @property
     def x_interval(self) -> SimpleInterval:
         """
         :return: The x interval of the bounding box.
         """
-        return SimpleInterval.from_data(
-            float(self.origin.x + self.min_x),
-            float(self.origin.x + self.max_x),
-            Bound.CLOSED,
-            Bound.CLOSED,
-        )
+        return self.axis_intervals[0]
 
     @property
     def y_interval(self) -> SimpleInterval:
         """
         :return: The y interval of the bounding box.
         """
-        return SimpleInterval.from_data(
-            float(self.origin.y + self.min_y),
-            float(self.origin.y + self.max_y),
-            Bound.CLOSED,
-            Bound.CLOSED,
-        )
+        return self.axis_intervals[1]
 
     @property
     def z_interval(self) -> SimpleInterval:
         """
         :return: The z interval of the bounding box.
         """
-        return SimpleInterval.from_data(
-            float(self.origin.z + self.min_z),
-            float(self.origin.z + self.max_z),
-            Bound.CLOSED,
-            Bound.CLOSED,
-        )
+        return self.axis_intervals[2]
 
     def to_array_bounds(self) -> Bounds[np.ndarray]:
         """
@@ -1269,7 +1288,7 @@ class BoundingBox:
 
         :return: The corners, in the same frame as ``origin``.
         """
-        x, y, z = self.x_interval, self.y_interval, self.z_interval
+        x, y, z = self.axis_intervals
         lower = np.array([x.lower, y.lower, z.lower])
         upper = np.array([x.upper, y.upper, z.upper])
         return Bounds(lower, upper)
@@ -1280,7 +1299,7 @@ class BoundingBox:
 
         :return: The corners, in the same frame as ``origin``.
         """
-        x, y, z = self.x_interval, self.y_interval, self.z_interval
+        x, y, z = self.axis_intervals
         lower = Point3(
             x.lower,
             y.lower,
@@ -1319,11 +1338,12 @@ class BoundingBox:
         """
         :return: The bounding box as a random event.
         """
+        x, y, z = self.axis_intervals
         return SimpleEvent.from_data(
             {
-                SpatialVariables.x.value: self.x_interval,
-                SpatialVariables.y.value: self.y_interval,
-                SpatialVariables.z.value: self.z_interval,
+                SpatialVariables.x.value: x,
+                SpatialVariables.y.value: y,
+                SpatialVariables.z.value: z,
             }
         )
 
@@ -1529,50 +1549,50 @@ class BoundingBox:
     ) -> Self:
         """
         Transform the bounding box to a different reference frame.
+
+        The corners are carried across in numpy, so no symbolic value is built per
+        corner and the transform is safe to run off the thread that owns the world.
         """
         reference_T_new_origin = HomogeneousTransformationMatrix(
             data=reference_T_new_origin.to_np(),
             reference_frame=reference_T_new_origin.reference_frame,
         )
+        new_origin_T_self = self._transform_from_own_origin(reference_T_new_origin)
+        new_origin_P_corners = self.corner_coordinates() @ new_origin_T_self.T
+        min_corner = new_origin_P_corners[:, :3].min(axis=0)
+        max_corner = new_origin_P_corners[:, :3].max(axis=0)
+        return BoundingBox(*min_corner, *max_corner, origin=reference_T_new_origin)
 
-        new_origin_reference_T_self = self.origin.reference_frame._world.transform(
-            self.origin, reference_T_new_origin.reference_frame
+    def _transform_from_own_origin(
+        self, reference_T_new_origin: HomogeneousTransformationMatrix
+    ) -> NpMatrix4x4:
+        """
+        The transform taking a coordinate in this box's own origin frame to the given
+        one.
+
+        :param reference_T_new_origin: The origin the box is being transformed to.
+        """
+        world = self.origin.reference_frame._world
+        reference_T_self = (
+            world.compute_forward_kinematics_np(
+                reference_T_new_origin.reference_frame, self.origin.reference_frame
+            )
+            @ self.origin.to_np()
         )
+        return inverse_frame(reference_T_new_origin.to_np()) @ reference_T_self
 
-        self_T_new_pose = reference_T_new_origin.inverse() @ new_origin_reference_T_self
-
-        # Get all 8 corners of the BB in link-local space
-        list_self_T_corner = [
-            HomogeneousTransformationMatrix.from_point_rotation_matrix(
-                self_T_corner
-            ).to_np()
-            for self_T_corner in self.get_points()
-        ]  # shape (8, 3)
-
-        list_reference_T_corner = [
-            self_T_new_pose.to_np() @ self_T_corner
-            for self_T_corner in list_self_T_corner
-        ]
-
-        list_reference_P_corner = [
-            reference_T_corner[:3, 3:] for reference_T_corner in list_reference_T_corner
-        ]
-
-        # Compute new corner points
-        min_corner = np.min(list_reference_P_corner, axis=0)
-        max_corner = np.max(list_reference_P_corner, axis=0)
-
-        world_bb = BoundingBox.from_min_max(
-            Point3.from_iterable(
-                min_corner, reference_frame=reference_T_new_origin.reference_frame
-            ),
-            Point3.from_iterable(
-                max_corner, reference_frame=reference_T_new_origin.reference_frame
-            ),
-            reference_T_new_origin,
+    def corner_coordinates(self) -> npt.NDArray[np.float64]:
+        """
+        The box's 8 corners in its own origin frame, as homogeneous rows.
+        """
+        return np.array(
+            [
+                [x, y, z, 1.0]
+                for x in (self.min_x, self.max_x)
+                for y in (self.min_y, self.max_y)
+                for z in (self.min_z, self.max_z)
+            ]
         )
-
-        return world_bb
 
     def __eq__(self, other: BoundingBox) -> bool:
         return (
