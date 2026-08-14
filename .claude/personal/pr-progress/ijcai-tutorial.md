@@ -59,4 +59,20 @@ Both fixes are committed and pushed to `origin/icjai-tutorial` (d65ec42442,
    image build - if the build-time generation RUN fails at that layer, drop
    it; the pip line alone fixes the notebook.
 
+8. Tagged cells stayed visible in the binder: `hide-cell`/`hide-input` are
+   Jupyter Book tags, so a live JupyterLab session ignores them and showed
+   every example solution and the setup cells. What a live session collapses
+   is `metadata.jupyter.source_hidden`/`outputs_hidden`, so the tags now get
+   written into it by `cognitive_robot_abstract_machine/notebooks.py`
+   (`CellVisibilityTag`, `HiddenParts`, `Notebook.hide_tagged_cells`), with a
+   thin CLI at `scripts/hide_tagged_notebook_cells.py`. Applied to
+   `experiments/src/ijcai_demo.ipynb`: cells 0, 1, 4 (hide-input) and 7, 12,
+   17, 22, 35 (hide-cell solutions). Idempotent, and it expands cells again
+   when a tag is removed. Tests: `test/.../test_notebooks.py` (8) over
+   `dataset/tagged_cells.ipynb`; `nbformat` added to the meta-package
+   dependencies. Not verified in a running JupyterLab, only in the file.
+   Note left with the user: the committed outputs of cells 11 and 38 still
+   hold error tracebacks (`AttributeError` from the TODO stub, and the
+   `DetachedInstanceError` fixed in 49b7744807).
+
 Next: nothing outstanding; user has not asked for a PR.
