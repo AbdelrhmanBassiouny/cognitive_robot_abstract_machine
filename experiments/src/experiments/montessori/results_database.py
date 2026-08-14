@@ -101,17 +101,6 @@ class ConfiguredDatabase:
             return cls(uri=from_environment, origin=DatabaseUriOrigin.ENVIRONMENT)
         return cls(uri=DEFAULT_DATABASE_URI, origin=DatabaseUriOrigin.BUILT_IN_DEFAULT)
 
-    @property
-    def was_asked_for(self) -> bool:
-        """
-        Whether this run named this database itself, rather than inheriting it.
-
-        A database a run asked for by name and cannot use is worth refusing to start
-        over; one it merely inherited from a shell profile is not, since nothing about
-        the run says it wanted that database in particular.
-        """
-        return self.origin is DatabaseUriOrigin.COMMAND_LINE
-
     def describe(self) -> str:
         """
         This database as it can be shown to someone, saying where it came from.
@@ -340,6 +329,10 @@ def main(argument_list: Optional[List[str]] = None) -> int:
     Reads only ``--database-uri`` and ignores everything else, so a launcher can forward
     the run's whole argument list without knowing which parts are the demo's.
 
+    A database that cannot be reached at all stops the run: nothing can be read from it
+    either, and the live query panel reads recorded runs from the same place. One that
+    is merely read-only does not, since reading is all some runs want it for.
+
     :param argument_list: Arguments to read; the process's own when omitted.
     :return: 0 when the run may go ahead, 1 when it may not.
     """
@@ -353,11 +346,13 @@ def main(argument_list: Optional[List[str]] = None) -> int:
     database = ConfiguredDatabase.resolve(arguments.database_uri)
     try:
         verify_reachable(database.uri)
-        verify_writable(database.uri)
-    except (UnreachableResultsDatabase, ReadOnlyResultsDatabase) as error:
+    except UnreachableResultsDatabase as error:
         print(error, file=sys.stderr)
-        if database.was_asked_for:
-            return 1
+        return 1
+    try:
+        verify_writable(database.uri)
+    except ReadOnlyResultsDatabase as error:
+        print(error, file=sys.stderr)
         print(
             "Sorting anyway; this run's results will not be recorded. Pass --no-record "
             "to ask for no database at all.",

@@ -201,16 +201,28 @@ class TestPreflight:
         assert main(["--database-uri", UNREACHABLE_URI]) == 1
         assert "--database-uri" in capsys.readouterr().err
 
-    def test_it_fails_for_a_database_it_cannot_record_to(
+    def test_a_database_it_cannot_record_to_does_not_stop_the_run(
         self, capsys, read_only_database
     ):
         """
-        The whole point of the pre-flight is that a bad database is reported in a
-        fraction of a second rather than after a world has been built.
+        Naming a database is not the same as demanding to write to it: the live query
+        panel reads recorded runs from the same place, which a read-only role serves
+        perfectly well.
         """
-        assert main(["--database-uri", read_only_database]) == 1
+        assert main(["--database-uri", read_only_database]) == 0
 
-        assert DATABASE_URI_ENVIRONMENT_VARIABLE in capsys.readouterr().err
+        assert "will not be recorded" in capsys.readouterr().err
+
+    def test_it_says_a_database_it_cannot_record_to_is_read_only(
+        self, capsys, read_only_database
+    ):
+        """
+        The pre-flight is where a run learns this, in a fraction of a second rather
+        than after a world has been built.
+        """
+        main(["--database-uri", read_only_database])
+
+        assert "Cannot record results to" in capsys.readouterr().err
 
     def test_it_ignores_arguments_meant_for_the_demo(self, tmp_path):
         """
@@ -226,19 +238,6 @@ class TestPreflight:
         )
 
         assert main([]) == 0
-
-    def test_a_database_nobody_asked_for_does_not_stop_the_run(
-        self, monkeypatch, capsys
-    ):
-        """
-        A URI inherited from a shell profile says nothing about wanting that database
-        in particular, so a run is worth more than the results it would have kept.
-        """
-        monkeypatch.setenv(DATABASE_URI_ENVIRONMENT_VARIABLE, UNREACHABLE_URI)
-
-        assert main([]) == 0
-
-        assert "will not be recorded" in capsys.readouterr().err
 
     def test_a_run_that_records_nothing_needs_no_database(self, monkeypatch, capsys):
         monkeypatch.setenv(DATABASE_URI_ENVIRONMENT_VARIABLE, UNREACHABLE_URI)
