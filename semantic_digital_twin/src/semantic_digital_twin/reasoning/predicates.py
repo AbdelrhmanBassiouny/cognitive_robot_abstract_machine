@@ -40,7 +40,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Pose,
 )
 from semantic_digital_twin.world_description.connections import FixedConnection
-from semantic_digital_twin.world_description.geometry import BoundingBox
+from semantic_digital_twin.world_description.geometry import BoundingBox, Bounds
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     Region,
@@ -280,19 +280,25 @@ def is_supported_by(
     if is_below:
         return False
     supported_body_origin = NumericTransform.identity(supported_body)
-    bounding_box_supported_body = (
+    boxes_of_supported_body = (
         supported_body.collision.as_bounding_box_collection_at_origin(
             supported_body_origin
-        ).event
+        )
     )
-    bounding_box_supporting_body = (
+    boxes_of_supporting_body = (
         supporting_body.collision.as_bounding_box_collection_at_origin(
             supported_body_origin
-        ).event
+        )
     )
+    # bodies whose enclosing regions miss each other cannot intersect box by box
+    # either, and most candidate pairs a detector tick asks about are such a pair
+    if not boxes_of_supported_body.enclosing_bounds.overlaps(
+        boxes_of_supporting_body.enclosing_bounds
+    ):
+        return False
 
     intersection = (
-        bounding_box_supported_body & bounding_box_supporting_body
+        boxes_of_supported_body.event & boxes_of_supporting_body.event
     ).bounding_box()
 
     if intersection.is_empty():
@@ -343,6 +349,11 @@ def is_body_in_region(body: Body, region: Region) -> float:
     :param region: The region to check if the body is in.
     :return: The percentage (0.0..1.0) of the body's volume that lies in the region.
     """
+    # a body whose enclosing region misses the region's own shares no volume with it,
+    # and the exact boolean below is far too dear to reach for such a pair
+    if not body.numeric_global_bounds.overlaps(region.numeric_global_bounds):
+        return 0.0
+
     # Retrieve meshes in local frames
     body_mesh_local = body.collision.combined_mesh
     region_mesh_local = region.area.combined_mesh
@@ -588,40 +599,21 @@ class InsideOf(KinematicStructureEntitySpatialRelation):
     def compute_containment_ratio(self) -> float:
         """
         Compute the containment ratio of self.body inside self.other.
+
+        Both bodies' geometry is carried into the world frame as plain coordinates, so
+        neither the meshes themselves nor a box enclosing them is ever built.
         """
-        if self.other.combined_mesh is None:
+        body_mesh = self.body.combined_mesh
+        if body_mesh is None or body_mesh.is_empty:
             return 0.0
 
-        # Get meshes in their local (body) frames
-        mesh_a_local = self.body.combined_mesh
-        mesh_b_local = self.other.combined_mesh
-
-        # Check if either mesh is empty
-        if (
-            mesh_a_local is None
-            or mesh_a_local.is_empty
-            or mesh_b_local is None
-            or mesh_b_local.is_empty
-        ):
-            return 0.0
-
-        # Transform meshes from body frame to world frame
-        mesh_a = mesh_a_local.copy()
-        mesh_a.apply_transform(self.body.numeric_global_transform.to_np())
-
-        mesh_b = mesh_b_local.copy()
-        mesh_b.apply_transform(self.other.numeric_global_transform.to_np())
-
-        # Use bounding box of mesh_b to check if mesh_a is inside mesh_b
-        mesh_b_bbox = mesh_b.bounding_box
-
-        if not mesh_b_bbox.is_watertight:
-            return 0.0
-
-        inside = mesh_b_bbox.contains(mesh_a.vertices)
+        world_P_body = self.body.numeric_global_transform.transform_points(
+            body_mesh.vertices
+        )
+        inside = self.other.numeric_global_bounds.contains(world_P_body)
         if len(inside) == 0:
             return 0.0
-        return sum(inside) / len(inside)
+        return float(inside.sum()) / len(inside)
 
 
 @dataclass
