@@ -737,10 +737,10 @@ def _parse_arguments(argument_list: Optional[list[str]] = None) -> argparse.Name
         help=(
             "Watch each shape for segmind pick-up and insertion events; watches by "
             "default. A detector tick blocks the thread running the motion for about "
-            "99 ms and cannot be moved off it without racing CasADi, so turning this "
-            "off is what makes a watched run move smoothly. The sorting verdict is "
-            "read from the world's geometry either way; what is lost is the event "
-            "stream, the segmind verdict and the failure diagnosis."
+            "12 ms, inside a control period, and cannot be moved off that thread "
+            "without racing CasADi. The sorting verdict is read from the world's "
+            "geometry either way; what turning this off loses is the event stream, "
+            "the segmind verdict and the failure diagnosis."
         ),
     )
     parser.add_argument(

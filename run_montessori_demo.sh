@@ -45,8 +45,8 @@ Common demo arguments (see franka_montessori_demo.py --help for all of them):
   --no-world2         Use the single-table layout instead of world2's.
   --rviz              Publish TF/markers anyway, at the risk described above.
   --no-event-monitor  Skip segmind event detection. A detector tick blocks the
-                      motion for ~99ms, so this is what makes a watched run
-                      move smoothly; the sorting verdict is unaffected.
+                      motion for ~12ms, inside a control period; the sorting
+                      verdict is unaffected either way.
   --only-shape KEY    Attempt one shape only, e.g. --only-shape square_hole.
   --database-uri URI  Record results somewhere other than the default database.
 

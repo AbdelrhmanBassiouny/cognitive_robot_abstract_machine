@@ -5,10 +5,9 @@ they happen, rather than only checked for after the fact via :meth:`~experiments
 ori.insert_shape_action.InsertMontessoriShapeAction.has_fallen_through_hole`.
 
 A monitor tracks one shape at a time (see :func:`build_shape_monitor`), which measures a
-tick at about 99 ms on this scene. Tracking every loose shape on the table at once needs
-the broader collision-broad-phase optimization tracked separately, not yet done -- as
-does making a tick cheap enough to go unnoticed, most of it being spent recomputing
-collision geometry that does not change.
+tick at about 12 ms on this scene, inside a single control period. Tracking every loose
+shape on the table at once needs the broader collision-broad-phase optimization tracked
+separately, not yet done.
 
 Ticking happens on the thread running the motion being watched, never on one of its own
 -- see :class:`ControlCycleTicking` for what a second thread costs here, and
@@ -56,15 +55,14 @@ from semantic_digital_twin.world import World
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_TICK_RATE_HZ = 2.0
+DEFAULT_TICK_RATE_HZ = 5.0
 """
 Default rate the monitor's statechart is ticked at, as a gap between ticks.
 
-One tick measures about 99 ms for a single tracked shape on this scene, and it runs on
-the thread that is trying to plan (see :class:`ControlCycleTicking`), so the rate buys
-run speed with detection samples: this leaves the monitor about a sixth of that thread.
-Raise it when the events matter more than the wait -- a shorter gap resolves the brief
-finger contact and loss-of-contact transitions that
+One tick measures about 12 ms for a single tracked shape on this scene, and it runs on
+the thread that is trying to plan (see :class:`ControlCycleTicking`), so this leaves the
+monitor a twentieth of that thread. Raise it when the events matter more than the wait
+-- a shorter gap resolves the brief finger contact and loss-of-contact transitions that
 :mod:`experiments.montessori.insertion_diagnosis` reads to tell a dropped shape from one
 that was never picked up.
 """
@@ -170,11 +168,11 @@ class WatchesNothing:
     """
     A monitor that detects nothing, for a run that would rather move smoothly.
 
-    A detector tick blocks the thread running the motion for about 99 ms -- five times a
-    control cycle's own budget -- and it cannot be moved off that thread without racing
-    CasADi (see :class:`ControlCycleTicking`), so a run being watched can trade the
-    event stream for a motion that does not stutter. The sorting verdict itself is
-    unaffected: it is read from the world's own geometry, not from these events.
+    A detector tick blocks the thread running the motion for about 12 ms and cannot be
+    moved off that thread without racing CasADi (see :class:`ControlCycleTicking`), so a
+    run that wants none of that cost can trade the event stream away. The sorting
+    verdict itself is unaffected: it is read from the world's own geometry, not from
+    these events.
     """
 
     def start(self) -> None:
@@ -206,12 +204,16 @@ class ControlCycleTicking:
     Ticks a monitor from the control cycle of whatever motion is executing, so its
     detectors read the world on the thread that plans the motion.
 
-    A tick reads poses, and reading a pose builds a CasADi object:
-    :attr:`~semantic_digital_twin.world_description.world_entity.KinematicStructureEntity.global_pose`
-    wraps forward kinematics in a ``HomogeneousTransformationMatrix``. CasADi releases
-    the GIL for the duration of a call and counts its expression-node references without
+    A tick is a whole :class:`~giskardpy.executor.Executor` cycle, not only the detector
+    reads: the collision computation it drives builds CasADi objects, and under cramera
+    the patched cycle also snapshots every body's forward kinematics. CasADi releases the
+    GIL for the duration of a call and counts its expression-node references without
     atomics, so a monitor ticking on a thread of its own frees nodes the planning thread
     is still dereferencing and the process dies inside CasADi.
+
+    ..note:: The detectors themselves no longer build or read any symbolic value; they
+       read geometry out as plain numbers. It is the cycle around them that keeps this
+       on the planning thread.
 
     ..warning:: Drives ticking by replacing a method on a class, so at most one of these
        may run at a time.
@@ -384,8 +386,7 @@ class MontessoriEventMonitor:
 
     def _read_geometry_out(self) -> None:
         """
-        Read every collidable shape's placement out into numbers before watching
-        starts.
+        Read every collidable shape's placement out into numbers before watching starts.
 
         A shape's own placement is model data, read out once and reused, so paying for
         it here rather than inside the first tick keeps that one-time cost out of the
