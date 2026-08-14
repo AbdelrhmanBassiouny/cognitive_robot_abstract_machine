@@ -73,6 +73,12 @@ Both fixes are committed and pushed to `origin/icjai-tutorial` (d65ec42442,
    dependencies. Not verified in a running JupyterLab, only in the file.
    Note left with the user: the committed outputs of cells 11 and 38 still
    hold error tracebacks (`AttributeError` from the TODO stub, and the
-   `DetachedInstanceError` fixed in 49b7744807).
+   `DetachedInstanceError` fixed in 49b7744807). Committed and pushed as
+   80bb0436ed. The binder repo keeps its own copy of the notebook
+   (`notebooks/ijcai_demo.ipynb`, the one readers open - the CRAM clone there
+   only provides the library), so the same hiding was applied and pushed
+   there too (AbdelrhmanBassiouny/binder-template@843cef1, branch `ijcai`).
+   Its cell 0 carries `hide-cell` on top of `hide-input`, unlike this
+   repository's copy, so its setup output is collapsed as well.
 
 Next: nothing outstanding; user has not asked for a PR.
