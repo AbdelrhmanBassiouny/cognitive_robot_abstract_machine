@@ -81,4 +81,19 @@ Both fixes are committed and pushed to `origin/icjai-tutorial` (d65ec42442,
    Its cell 0 carries `hide-cell` on top of `hide-input`, unlike this
    repository's copy, so its setup output is collapsed as well.
 
+9. Binder image build failed in the ORM generation RUN with
+   `ModuleNotFoundError: No module named 'json_msgs'`, raised while generating
+   the `experiments` interface (its generator imports the control loop
+   modules, which import `giskardpy.middleware.ros2`, which imports
+   `json_msgs`). The RUN was not the cause: the notebook's first cell runs the
+   same `WORKSPACE_ORM_INTERFACES.regenerate()`, so it would have failed
+   identically at runtime. `json_msgs` lives in
+   https://github.com/cram2/cram_ros2_packages (public), which the binder's
+   ROS workspace never cloned. Fixed in the binder repo (a1afcaa): clone it,
+   `--packages-skip giskardpy_ros robokudo_ros`, drop the build-time
+   generation RUN as the user asked, and drop the entrypoint's
+   regenerate-after-pull branch (the image no longer ships generated
+   interfaces, so cell 0 always does it). Not verified by an image build.
+   Restoring the RUN would work now and would save each session ~1 minute.
+
 Next: nothing outstanding; user has not asked for a PR.
