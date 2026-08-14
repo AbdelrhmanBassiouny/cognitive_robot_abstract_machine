@@ -13,6 +13,7 @@ from krrood.entity_query_language.operators.core_logical_operators import (
 )
 from krrood.entity_query_language.operators.logical_quantifiers import Exists, ForAll
 from krrood.entity_query_language.verbalization.fragments.base import (
+    BlockFragment,
     flatten_fragment_to_plain_text,
     VerbalizationFragment,
     oxford_comma,
@@ -21,7 +22,6 @@ from krrood.entity_query_language.verbalization.fragments.base import (
 )
 from krrood.entity_query_language.verbalization.fragments.features import (
     GrammaticalNumber,
-    Separator,
 )
 from krrood.entity_query_language.verbalization.grammar.chain.assembler import (
     ChainAssembler,
@@ -381,14 +381,16 @@ class SharedSubjectConjunctionRule(PhraseRule):
 
 
 class OrRule(PhraseRule):
-    """Inclusive disjunction *"a, b, or c"*; flattens nested ORs. When every disjunct is a value
+    """Disjunction *"either a, b, or c"*; flattens nested ORs. When every disjunct is a value
     comparison on one shared subject chain it factors to *"the <subject> is … or …"* via the
-    :class:`SharedSubjectComparisons` fold. The disjunction is inclusive, so it is not fronted with
-    *"either"* (which reads as exclusive-or).
+    :class:`SharedSubjectComparisons` fold, which stays one clause and keeps no *"either"*.
+
+    The disjuncts are a block, so each is a point of its own in an outline while prose keeps the
+    Oxford *"a, b, or c"* coordination under the *"either"* header.
 
     >>> robot = variable(Robot, [])
     >>> verbalize_expression(or_(robot.battery > 50, robot.name == 'x'))
-    "the battery of a Robot is greater than 50, or the name of the Robot is 'x'"
+    "either the battery of a Robot is greater than 50, or the name of the Robot is 'x'"
     >>> verbalize_expression(or_(robot.battery > 50, robot.battery < 10))
     'the battery of a Robot is greater than 50 or less than 10'
     """
@@ -397,31 +399,26 @@ class OrRule(PhraseRule):
 
     def build(self, node: OR, context: RuleContext) -> VerbalizationFragment:
         """
-        Say the flattened disjuncts as *"a, b, or c"*, or the factored *"… is … or …"*
-        when they share a subject.
+        Say the flattened disjuncts as the *"either …"* block, or the factored *"… is …
+        or …"* when they share a subject.
 
-        It owns the *…, or …* framing around the disjuncts of the class example — the
-        comma-*or* before the last — while the disjunct clauses come from the recursion;
-        a shared-subject disjunction is delegated to the
+        It owns the *either …, or …* framing around the disjuncts of the class example —
+        the header and the comma-*or* before the last — while the disjunct clauses come
+        from the recursion; a shared-subject disjunction is delegated to the
         :class:`SharedSubjectComparisons` fold instead.
         """
         operands = flatten_operands(node, OR)
         shared_subject = fold_shared_subject_comparisons(operands)
         if shared_subject is not None:
             return context.child(shared_subject)
-        parts = [context.child(conjunct) for conjunct in operands]
+        parts = [context.child(disjunct) for disjunct in operands]
         if len(parts) == 1:
             return parts[0]
-        # "a, b, or c": the head items are comma-joined, then a trailing comma that the
-        # orthography pass hugs to the last head item — no separator="" bookkeeping here.
-        head = PhraseFragment(parts=parts[:-1], separator=Separator.COMMA)
-        return PhraseFragment(
-            parts=[
-                head,
-                Punctuation.COMMA.as_fragment(),
-                Conjunctions.OR.as_fragment(),
-                parts[-1],
-            ]
+        return BlockFragment(
+            header=Logicals.EITHER.as_fragment(),
+            items=parts,
+            conjunction=Conjunctions.OR.as_fragment(),
+            bulleted_header=True,
         )
 
 
@@ -430,7 +427,7 @@ class NotRule(PhraseRule):
 
     >>> robot = variable(Robot, [])
     >>> verbalize_expression(Not(or_(robot.battery > 50, robot.name == 'x')))
-    "not (the battery of a Robot is greater than 50, or the name of the Robot is 'x')"
+    "not (either the battery of a Robot is greater than 50, or the name of the Robot is 'x')"
     """
 
     construct = Not

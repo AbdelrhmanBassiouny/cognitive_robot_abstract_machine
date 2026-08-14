@@ -116,6 +116,39 @@ class VerbalizationPipeline:
     _verbalizer: EQLVerbalizer = field(default_factory=EQLVerbalizer, init=False)
     """The verbalizer that builds fragment trees from EQL expressions."""
 
+    def build(
+        self,
+        expression: SymbolicExpression,
+        services: Optional[MicroplanningServices] = None,
+        backend: Optional[QueryBackend] = None,
+    ) -> VerbalizationFragment:
+        """
+        Build the fragment tree for *expression* — the build half :meth:`verbalize` and
+        :meth:`display` share, so both say the same thing about the same expression.
+
+        A query is built first, so what is said is the resolved query rather than the
+        expression as it was written.
+
+        :param expression: Any EQL expression or query.
+        :param services: Shared verbalization state; created automatically when omitted.  Pass the
+            same services across calls so repeated mentions corefer (a Robot … the Robot).
+        :param backend: The backend the expression would be evaluated with. When given it decides
+            the opening verb (generative → *"Generate"*, selective → *"Find"*); when omitted the
+            verb is derived from the query type as before.
+        :return: Root of the fragment tree representing *expression*.
+
+        >>> tree = VerbalizationPipeline.plain().build(a(entity(variable(Robot, []))))
+        >>> VerbalizationPipeline.plain().verbalize_fragment(tree)
+        'Find a Robot'
+        """
+        if isinstance(expression, Match):
+            expression.expression.build()
+        elif isinstance(expression, Query):
+            expression.build()
+        return self._verbalizer.build(
+            expression, services, performative=directive_for_backend(backend)
+        )
+
     def verbalize(
         self,
         expression: SymbolicExpression,
@@ -139,14 +172,7 @@ class VerbalizationPipeline:
         >>> VerbalizationPipeline.plain().verbalize(a(entity(variable(Robot, []))))
         'Find a Robot'
         """
-        if isinstance(expression, Match):
-            expression.expression.build()
-        elif isinstance(expression, Query):
-            expression.build()
-        fragment = self._verbalizer.build(
-            expression, services, performative=directive_for_backend(backend)
-        )
-        return self.verbalize_fragment(fragment)
+        return self.verbalize_fragment(self.build(expression, services, backend))
 
     def _is_html_renderer(self) -> bool:
         """:return: ``True`` when this pipeline's renderer emits HTML."""
@@ -174,14 +200,24 @@ class VerbalizationPipeline:
             return _HTML_CELL_WRAPPER.render(body=result)
         return result
 
-    def display(self, expression: SymbolicExpression, backend=None) -> None:
+    def display(
+        self,
+        expression: SymbolicExpression,
+        services: Optional[MicroplanningServices] = None,
+        backend: Optional[QueryBackend] = None,
+    ) -> None:
         """
         Render *expression* and display it in the current environment — inline in
         Jupyter / IPython, or in the default browser elsewhere.
 
         :param expression: Any EQL expression or query.
+        :param services: Shared verbalization state; created automatically when omitted.  Pass the
+            same services across calls so repeated mentions corefer (a Robot … the Robot).
+        :param backend: The backend the expression would be evaluated with. When given it decides
+            the opening verb (generative → *"Generate"*, selective → *"Find"*); when omitted the
+            verb is derived from the query type as before.
         """
-        self.display_fragment(self._verbalizer.build(expression, performative=directive_for_backend(backend)))
+        self.display_fragment(self.build(expression, services, backend))
 
     def display_fragment(self, fragment: VerbalizationFragment) -> None:
         """

@@ -29,6 +29,9 @@ from krrood.entity_query_language.verbalization.grammar.match.planner import (
     MatchPlan,
     MatchPlanner,
 )
+from krrood.entity_query_language.verbalization.grammar.query.selection import (
+    SelectionAssembler,
+)
 from krrood.entity_query_language.verbalization.vocabulary.english import (
     Absence,
     Articles,
@@ -79,7 +82,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
             (
                 self.context.services.performative_override or Directive.GENERATE
             ).as_fragment(),
-            self.context.child(plan.selection),
+            self._selection(plan),
         ]
         if inline_predict is not None:
             header_parts.append(inline_predict)
@@ -99,6 +102,20 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
             items=items,
             source=node.expression,
         )
+
+    def _selection(self, plan: MatchPlan) -> VerbalizationFragment:
+        """:return: The selection noun phrase — *"the unique <type>"* for a uniqueness-quantified
+        match (``the(...)``, the same reading its lowered query gives), else the variable's own
+        referring form.
+
+        >>> verbalize_expression(the(Robot))
+        'Generate the unique Robot'
+        """
+        if plan.is_unique:
+            return SelectionAssembler(self.context).unique(
+                plan.selection, plan.selected_type
+            )
+        return self.context.child(plan.selection)
 
     # %% predict
 

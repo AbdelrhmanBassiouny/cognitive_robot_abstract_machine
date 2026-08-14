@@ -11,10 +11,12 @@ from krrood.entity_query_language.core.mapped_variable import Attribute
 from krrood.entity_query_language.core.variable import Literal
 from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.query.match import Match
+from krrood.entity_query_language.query.quantifiers import The
 from krrood.entity_query_language.verbalization.grammar.framework.planner import Planner
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
     group_by_owner,
 )
+from krrood.entity_query_language.verbalization.vocabulary.english import FallbackNouns
 
 
 @dataclass(frozen=True)
@@ -107,6 +109,17 @@ class MatchPlan:
     The variable the match constructs/selects.
     """
 
+    is_unique: bool
+    """
+    ``True`` when the match is uniqueness-quantified (``the(...)`` rather than
+    ``a(...)``), so its selection is said as *"the unique <type>"*.
+    """
+
+    selected_type: str
+    """
+    Display name of the selected type (*"Position"*).
+    """
+
     groups: List[AttributeGroup]
     """
     Single-hop construction equalities, grouped by their object.
@@ -149,6 +162,8 @@ class MatchPlanner(Planner[Match, MatchPlan]):
         >>> plan = MatchPlanner(a(Robot)(name="R2", battery=80)).plan()
         >>> (type(plan.selection).__name__, len(plan.groups))
         ('Variable', 1)
+        >>> MatchPlanner(the(Robot)).plan().is_unique
+        True
         """
         match = self.node
         match.resolve()
@@ -163,6 +178,8 @@ class MatchPlanner(Planner[Match, MatchPlan]):
         ]
         return MatchPlan(
             selection=match.variable,
+            is_unique=match._quantifier_type_ is The,
+            selected_type=FallbackNouns.ENTITY.name_of(match.variable),
             groups=groups,
             other_conditions=other,
             where_conditions=list(match._where_conditions_),

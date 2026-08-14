@@ -128,6 +128,25 @@ class SelectionAssembler:
             )
         return self.context.child(variable)
 
+    def unique(
+        self, selection: SymbolicExpression, type_name: str
+    ) -> VerbalizationFragment:
+        """:return: *"the unique <type>"* — the first-mention form of a uniqueness-quantified
+        selection (``eql.the``). It stays a referring noun phrase, so the coreference pass reduces a
+        repeat mention to *"the <type>"*.
+
+        :param selection: The selected variable.
+        :param type_name: The display name of the selected type.
+
+        >>> verbalize_expression(the(entity(variable(Robot, []))))
+        'Find the unique Robot'
+        """
+        return NounPhrase(
+            head=RoleFragment.for_variable(type_name, selection),
+            definiteness=Definiteness.UNIQUE,
+            referent_id=subject_referent_id(selection),
+        )
+
     def parenthesised(
         self, variables: List[SymbolicExpression]
     ) -> VerbalizationFragment:

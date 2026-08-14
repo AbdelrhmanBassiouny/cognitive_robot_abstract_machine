@@ -218,6 +218,26 @@ def test_value_phrase_enum_uses_member_name():
     assert value_phrase(_Choice.FIRST_OPTION) == "FIRST_OPTION"
 
 
+def test_value_phrase_rounds_a_float_to_the_displayed_decimals():
+    from krrood.entity_query_language.verbalization.value_lexicon import (
+        FLOAT_DISPLAY_DECIMALS,
+        value_phrase,
+    )
+
+    value = 1.123456789
+    assert value_phrase(value) == str(round(value, FLOAT_DISPLAY_DECIMALS))
+
+
+def test_value_phrase_keeps_a_short_float_unpadded():
+    from krrood.entity_query_language.verbalization.value_lexicon import value_phrase
+
+    assert value_phrase(10.5) == "10.5"
+
+
+def test_verbalize_rounds_a_float_literal():
+    assert verbalize_expression(Literal(_value_=0.1 + 0.2)) == "0.3"
+
+
 def test_verbalize_literal_type_object():
     literal_value = Literal(_value_=Apple)
     assert verbalize_expression(literal_value) == "Apple"
@@ -2253,7 +2273,7 @@ def test_query_planner_collects_subject_restriction_without_placing():
     plan = QueryPlanner(query).plan()
 
     assert plan.kind is SelectionKind.SUBJECT
-    assert plan.is_the is False
+    assert plan.is_unique is False
     assert plan.selected_type == "_Robot"
     assert plan.subject is not None
     assert plan.is_aggregation_subquery is False

@@ -16,6 +16,10 @@ _PRIMITIVE_TYPE_NOUNS = {
     bool: "Boolean",
 }
 
+#: Decimal places a floating-point value is rounded to before it is said — a measured value's full
+#: binary expansion (*"0.30000000000000004"*) is noise the reader has to skip past.
+FLOAT_DISPLAY_DECIMALS = 3
+
 
 def type_noun(type_: type) -> str:
     """
@@ -63,6 +67,7 @@ def value_phrase(value: Any) -> str:
     * A bare ``type`` → its ``__name__`` (``Apple`` → ``"Apple"``).
     * An ``enum`` member → its ``name`` (``OPTION_A`` rather than ``<TestEnum.OPTION_A: …>``).
     * A ``datetime`` with no time → ``"May 23, 2026"``; with a time → ``"May 23, 2026 at 14:30"``.
+    * A ``float`` → rounded to :data:`FLOAT_DISPLAY_DECIMALS` decimals, trailing zeros dropped.
     * Anything else → ``repr(value)``.
 
     :param value: Python value from a literal node.
@@ -76,6 +81,8 @@ def value_phrase(value: Any) -> str:
     'May 23, 2026'
     >>> value_phrase(42)
     '42'
+    >>> value_phrase(1.123456789)
+    '1.123'
     """
     if value is None:
         return "nothing"
@@ -83,6 +90,8 @@ def value_phrase(value: Any) -> str:
         return type_noun(value)
     if isinstance(value, enum.Enum):
         return value.name
+    if isinstance(value, float):
+        return f"{round(value, FLOAT_DISPLAY_DECIMALS)}"
     if isinstance(value, datetime.datetime):
         if value.time() == datetime.time.min:
             return value.strftime("%B %-d, %Y")

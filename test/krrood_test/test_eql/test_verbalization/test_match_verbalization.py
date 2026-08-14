@@ -16,9 +16,11 @@ from __future__ import annotations
 import enum
 from dataclasses import dataclass, field
 
+from krrood.entity_query_language.backends import EntityQueryLanguageBackend
 from krrood.entity_query_language.factories import (
     a,
     an,
+    the,
     variable,
 )
 from krrood.entity_query_language.verbalization.pipeline import (
@@ -85,6 +87,46 @@ def test_domain_carrying_match_also_opens_with_generate():
     """
     search = a(Position)(x=1, y=2).from_([Position(1, 2, 3)])
     assert verbalize_expression(search).startswith("Generate")
+
+
+# ── selection quantifier: "a" vs "the unique" ────────────────────────────────
+
+
+def test_uniqueness_quantified_match_selects_the_unique_type():
+    """
+    ``the(...)`` is a uniqueness claim, so the match's selection reads *"the unique
+    Position"* — the same reading its lowered query gives.
+    """
+    assert verbalize_expression(the(Position)) == "Generate the unique Position"
+
+
+def test_uniqueness_quantified_match_matches_its_lowered_query_selection():
+    """
+    A match and the query it lowers to describe the same selection, so only the backend-
+    driven opening verb may differ between them.
+    """
+    match = the(Position)
+    assert verbalize_expression(
+        match, backend=EntityQueryLanguageBackend()
+    ) == verbalize_expression(match.expression, backend=EntityQueryLanguageBackend())
+
+
+def test_plain_match_stays_indefinite():
+    """
+    ``a(...)`` claims no uniqueness, so its selection keeps the indefinite article.
+    """
+    assert verbalize_expression(a(Position)) == "Generate a Position"
+
+
+def test_uniqueness_quantified_match_keeps_its_pattern_conditions():
+    """
+    The uniqueness claim is about the selection only — the construction pattern is still
+    said as *"given that"*.
+    """
+    assert (
+        verbalize_expression(the(Position)(x=1))
+        == "Generate the unique Position given that its x is 1"
+    )
 
 
 # ── given that: grouped equality conditions ──────────────────────────────────

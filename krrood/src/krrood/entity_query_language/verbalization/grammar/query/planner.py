@@ -168,7 +168,7 @@ class QueryPlan:
     kind: SelectionKind
     """The structural shape of the selection."""
 
-    is_the: bool
+    is_unique: bool
     """``True`` when the query is uniqueness-quantified (*"the"* rather than *"a"*)."""
 
     selected_type: str
@@ -207,7 +207,7 @@ class QueryPlan:
 class QueryPlanner(Planner[Query, QueryPlan]):
     """
     Decompose an entity or set-of query into a ``QueryPlan`` (the *what to say* decisions): the
-    selection shape, the definiteness (``is_the``), the restriction subject and its WHERE
+    selection shape, the definiteness (``is_unique``), the restriction subject and its WHERE
     partition (grouped *"whose …"* predicates vs. residual *"such that …"*), and whether the
     entity is an aggregation value-subquery.
 
@@ -227,7 +227,7 @@ class QueryPlanner(Planner[Query, QueryPlan]):
         ranking = self._ranking()
         return QueryPlan(
             kind=self._kind(),
-            is_the=self._is_the(),
+            is_unique=self._is_unique(),
             selected_type=self._selected_type(),
             subject=self._subject(),
             subject_restriction=self._subject_restriction(),
@@ -330,12 +330,12 @@ class QueryPlanner(Planner[Query, QueryPlan]):
             return SelectionKind.EMPTY
         return SelectionKind.SUBJECT
 
-    def _is_the(self) -> bool:
+    def _is_unique(self) -> bool:
         """:return: ``True`` when the query is quantified by ``the`` (a uniqueness claim).
 
-        >>> QueryPlanner(the(entity(variable(Robot, [])))).plan().is_the
+        >>> QueryPlanner(the(entity(variable(Robot, [])))).plan().is_unique
         True
-        >>> QueryPlanner(entity(variable(Robot, []))).plan().is_the
+        >>> QueryPlanner(entity(variable(Robot, []))).plan().is_unique
         False
         """
         builder = getattr(self.node, "_quantifier_builder_", None)

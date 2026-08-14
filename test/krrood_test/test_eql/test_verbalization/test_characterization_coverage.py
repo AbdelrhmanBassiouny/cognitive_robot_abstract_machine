@@ -83,7 +83,7 @@ def test_and_nested_inside_or_keeps_both_connectives():
             )
         )
     ) == (
-        "Find a Robot such that its battery is greater than 50, "
+        "Find a Robot such that either its battery is greater than 50, "
         "and it is operational, or its battery is less than 5"
     )
 

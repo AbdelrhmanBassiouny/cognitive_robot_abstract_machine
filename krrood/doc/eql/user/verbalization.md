@@ -94,9 +94,13 @@ print(verbalize_expression(or_(x > 10, x < 0)))
 print(verbalize_expression(not_(x > 5)))
 ```
 
-Notice the `or_` form joins the options with a plain *"… or …"* — an *"or"* that allows either one or
-both (an *inclusive or*). It deliberately does **not** start with *"either"*, which would suggest only
-one of them can hold. Chained `and_` conditions are separated by commas with a final *"and"*.
+Notice the `or_` form opens with *"either"* and joins the options with *"… or …"*. The *"either"* names
+the choice as a whole, which is what lets each option become a point of its own in the hierarchical
+layout below; the *"or"* itself stays inclusive — one option, the other, or both. Chained `and_`
+conditions are separated by commas with a final *"and"*.
+
+When every option compares the *same* thing, the options are said under one shared subject instead —
+*"the battery of a Robot is greater than 50 or less than 10"* — one clause, so no *"either"*.
 
 ## Boolean and Indexed Attributes
 
@@ -282,7 +286,7 @@ An underspecified `an(...)` construction asks the system to *make* something rat
 becomes a *"has no"* line):
 
 ```{code-cell} ipython3
-from krrood.entity_query_language.factories import an
+from krrood.entity_query_language.factories import an, the
 
 @dataclass
 class Point:
@@ -291,7 +295,11 @@ class Point:
     z: float
 
 print(verbalize_expression(an(Point)(x=1, y=2, z=3)))
+print(verbalize_expression(the(Point)(x=1, y=2, z=3)))
 ```
+
+`the(...)` claims there is exactly one such thing, so its selection reads *"the unique Point"* where
+`an(...)` reads *"a Point"* — the same distinction a `the(entity(...))` query makes.
 
 ## Aggregations
 
@@ -636,6 +644,27 @@ HTML(VerbalizationPipeline(HierarchicalRenderer(HTMLFormatter())).verbalize(rule
 
 The hierarchical renderer shows the **If/then** structure with each condition and conclusion
 on its own line, indented under the relevant part.
+
+### A Choice Is Its Own Level
+
+A disjunction is a level of the outline, not a long line: the *"either"* heads the choice and each
+option is a point under it, so a query that allows several alternative regions stays readable however
+many there are.
+
+```{code-cell} ipython3
+from krrood.entity_query_language.factories import a, and_, or_
+from krrood.entity_query_language.verbalization._example_domain import Robot
+
+robot_match = a(Robot)(name=..., battery=...)
+robot_match.where(
+    or_(
+        and_(robot_match.variable.battery > 80, robot_match.variable.name != "BB8"),
+        and_(robot_match.variable.battery < 20, robot_match.variable.name != "Gonk"),
+    )
+)
+
+HTML(VerbalizationPipeline(HierarchicalRenderer(HTMLFormatter())).verbalize(robot_match))
+```
 
 ### Deep Nesting in Hierarchical Mode
 

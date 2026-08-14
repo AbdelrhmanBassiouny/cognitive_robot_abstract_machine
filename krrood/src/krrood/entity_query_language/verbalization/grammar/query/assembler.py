@@ -709,14 +709,8 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
             # An ordered listing presents all the matching results, so the subject is plural
             # ("Report Employees …"); a plural subject pronominalises to "their".
             return self._selections.one(variable, self._subject_number(plan))
-        if plan.is_the:
-            # "the unique <type>" first mention; the coreference pass reduces a repeat to
-            # "the <type>" (UNIQUE downgrades to DEFINITE) — so it is a referring noun phrase.
-            return NounPhrase(
-                head=RoleFragment.for_variable(plan.selected_type, variable),
-                definiteness=Definiteness.UNIQUE,
-                referent_id=subject_referent_id(variable),
-            )
+        if plan.is_unique:
+            return self._selections.unique(variable, plan.selected_type)
         # context.child(variable) → VariableRule referring noun phrase; the entity shares its referent.
         return self.context.child(variable)
 
@@ -725,7 +719,7 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
     ) -> VerbalizationFragment:
         """:return: The ranking selection — *"the first two Robots"* / *"the top three Employees by
         salary"* / *"the Employee with the highest salary"*. A ranking is inherently definite
-        (*"the"*), so it ignores ``is_the``; it stays a referring noun phrase so a repeat mention
+        (*"the"*), so it ignores ``is_unique``; it stays a referring noun phrase so a repeat mention
         reduces to *"the Robot"* and a WHERE pronominalises (*"its"* / *"their"*).
 
         >>> employee = variable(Employee, [])
@@ -795,7 +789,9 @@ class QueryAssembler(Assembler[Query, QueryPlan]):
         """
         plan = self.plan(entity)
         variable = entity.selected_variable
-        definiteness = Definiteness.UNIQUE if plan.is_the else Definiteness.INDEFINITE
+        definiteness = (
+            Definiteness.UNIQUE if plan.is_unique else Definiteness.INDEFINITE
+        )
         # A referring noun phrase is the subject of its own modifiers (the coreference pass infers
         # this from the modifiers slot), so no scope marker is emitted here. The "whose" block
         # flattens to "whose a, and b" inline (the renderer expands a block into points only at the

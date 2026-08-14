@@ -4,8 +4,9 @@ Tests for disjunction factoring: an OR whose disjuncts are all value comparisons
 predicate tails coordinated — *"the battery of a Robot is greater than 50 or less than
 10"* — rather than repeating *"the battery of … is …"* per disjunct.
 
-The disjunction is inclusive, so it is *not* fronted with *"either"* (which would read
-as exclusive-or).
+A factored disjunction is one clause, so it carries no *"either"* header — unlike a
+general disjunction, whose disjuncts are separate points (see
+:mod:`...test_disjunction_nesting`).
 """
 
 from __future__ import annotations
@@ -37,6 +38,6 @@ def test_disjuncts_on_different_subjects_are_not_factored():
     robot = variable(Robot, [])
     assert (
         verbalize_expression(or_(robot.battery > 50, robot.name == "x"))
-        == "the battery of a Robot is greater than 50, "
+        == "either the battery of a Robot is greater than 50, "
         "or the name of the Robot is 'x'"
     )

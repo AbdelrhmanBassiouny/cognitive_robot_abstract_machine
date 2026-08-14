@@ -15,10 +15,17 @@ from krrood.entity_query_language.backends import (
     EntityQueryLanguageBackend,
     ProbabilisticBackend,
 )
-from krrood.entity_query_language.factories import entity, a, an, variable
+from typing_extensions import Optional
+
+from krrood.entity_query_language.factories import entity, a, an, the, variable
+from krrood.entity_query_language.verbalization.context import MicroplanningServices
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
+)
 from krrood.entity_query_language.verbalization.pipeline import (
     directive_for_backend,
     verbalize_expression,
+    VerbalizationPipeline,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
 
@@ -82,6 +89,62 @@ def test_query_with_selective_backend_reads_find():
     robot = variable(Position, [])
     text = verbalize_expression(entity(robot), backend=EntityQueryLanguageBackend())
     assert text.startswith("Find")
+
+
+# ── every entry point takes the backend ──────────────────────────────────────
+
+
+@dataclass
+class DisplayRecordingPipeline(VerbalizationPipeline):
+    """
+    A pipeline that records what it would show instead of showing it, so the display
+    entry point can be exercised without a browser or a notebook.
+    """
+
+    displayed: Optional[str] = None
+    """
+    The text the last ``display`` call produced, or ``None`` before the first one.
+    """
+
+    def display_fragment(self, fragment: VerbalizationFragment) -> None:
+        self.displayed = self.verbalize_fragment(fragment)
+
+
+def test_display_honours_the_backend():
+    """
+    ``display`` resolves the opening verb from the backend, exactly as ``verbalize``
+    does.
+    """
+    pipeline = DisplayRecordingPipeline()
+    pipeline.display(a(Position)(x=1), backend=EntityQueryLanguageBackend())
+    assert pipeline.displayed.startswith("Find")
+
+
+def test_display_says_the_same_thing_as_verbalize():
+    """
+    The two entry points differ only in where the text goes, so a match reads the same
+    through either — including the query-building ``verbalize`` performs.
+    """
+    backend = EntityQueryLanguageBackend()
+    pipeline = DisplayRecordingPipeline()
+    pipeline.display(the(Position), backend=backend)
+    assert pipeline.displayed == VerbalizationPipeline.plain().verbalize(
+        the(Position), backend=backend
+    )
+
+
+def test_display_shares_services_across_calls():
+    """
+    Passing the same services to ``display`` makes a repeat mention corefer, as it does
+    for ``verbalize``.
+    """
+    services = MicroplanningServices()
+    pipeline = DisplayRecordingPipeline()
+    position = variable(Position, [])
+    pipeline.display(position, services)
+    first = pipeline.displayed
+    pipeline.display(position, services)
+    assert (first, pipeline.displayed) == ("a Position", "the Position")
 
 
 def test_directive_for_backend_maps_backend_kind_to_verb():
