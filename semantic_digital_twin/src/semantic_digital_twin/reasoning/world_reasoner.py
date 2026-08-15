@@ -79,8 +79,23 @@ class WorldReasoner:
             if attr_name != "semantic_annotations":
                 setattr(self.world, attr_name, attr_value)
             else:
-                for semantic_annotation in attr_value:
-                    self.world.add_semantic_annotation_recursively(semantic_annotation)
+                self._add_unknown_semantic_annotations(attr_value)
+
+    def _add_unknown_semantic_annotations(
+        self, semantic_annotations: List[SemanticAnnotation]
+    ) -> None:
+        """
+        Add the inferred semantic annotations that the world does not hold yet.
+
+        Reasoning on a world that has been reasoned on before infers annotations equal to
+        the ones already in it, and those must not be added a second time.
+
+        :param semantic_annotations: The inferred semantic annotations.
+        """
+        for semantic_annotation in semantic_annotations:
+            if semantic_annotation in self.world.semantic_annotations:
+                continue
+            self.world.add_semantic_annotation_recursively(semantic_annotation)
 
     def fit_semantic_annotations(
         self,

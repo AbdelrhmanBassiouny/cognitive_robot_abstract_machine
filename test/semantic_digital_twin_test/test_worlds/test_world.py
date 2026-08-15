@@ -8,6 +8,7 @@ from uuid import UUID, uuid4
 import numpy as np
 import pytest
 from numpy.testing import assert_raises
+from typing_extensions import Optional
 
 from semantic_digital_twin.adapters.urdf import URDFParser
 from semantic_digital_twin.datastructures.joint_state import JointState
@@ -22,6 +23,7 @@ from semantic_digital_twin.exceptions import (
     NonMonotonicTimeError,
     BrokenWorldModificationHistoryError,
     WorldEntityNotFoundError,
+    SemanticAnnotationCircularDependencyError,
 )
 from semantic_digital_twin.robots.minimal_robot import MinimalRobot
 from semantic_digital_twin.robots.pr2 import PR2, PR2Joint
@@ -544,6 +546,43 @@ def test_add_semantic_annotation(world_setup):
         world.add_semantic_annotation(v)
         world.add_semantic_annotation(v)
     assert world.get_semantic_annotation_by_name(v.name) == v
+
+
+def test_circular_dependency_error_names_the_annotations_in_the_cycle(world_setup):
+    """
+    The raised error must carry the annotations whose dependencies could not be
+    resolved, not the ones that were sorted successfully.
+    """
+
+    @dataclass(eq=False)
+    class AnnotationWithDependency(SemanticAnnotation):
+        """
+        Semantic annotation that depends on another annotation.
+        """
+
+        body: Optional[Body] = None
+        """
+        The body this annotation is about, which makes its hash unique.
+        """
+
+        depends_on: Optional[SemanticAnnotation] = None
+        """
+        The annotation this one depends on.
+        """
+
+    world, l1, l2, bf, r1, r2 = world_setup
+    independent = AnnotationWithDependency(body=bf)
+    first = AnnotationWithDependency(body=l1)
+    second = AnnotationWithDependency(body=l2, depends_on=first)
+    first.depends_on = second
+    with world.modify_world():
+        for annotation in [independent, first, second]:
+            world.add_semantic_annotation(annotation)
+
+    with pytest.raises(SemanticAnnotationCircularDependencyError) as error:
+        world.semantic_annotations_topologically_sorted
+
+    assert set(error.value.semantic_annotations) == {first, second}
 
 
 def test_duplicate_semantic_annotation(world_setup):

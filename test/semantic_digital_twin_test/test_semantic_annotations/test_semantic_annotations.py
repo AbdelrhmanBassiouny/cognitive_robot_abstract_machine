@@ -256,6 +256,19 @@ def test_apartment_semantic_annotations(apartment_world_copy):
     assert len(drawer_container_names) == 27
 
 
+def test_reasoning_again_does_not_duplicate_semantic_annotations(apartment_world_copy):
+    """
+    Reasoning on a world that has already been reasoned on infers equal annotations
+    again, and those must not be added to the world a second time.
+    """
+    WorldReasoner(apartment_world_copy).infer_semantic_annotations()
+    annotations_after_first_run = list(apartment_world_copy.semantic_annotations)
+
+    WorldReasoner(apartment_world_copy).infer_semantic_annotations()
+
+    assert apartment_world_copy.semantic_annotations == annotations_after_first_run
+
+
 @pytest.mark.order("second_to_last")
 def test_explain_inferred_semantic_annotations(apartment_world_copy):
     world_reasoner = WorldReasoner(apartment_world_copy)

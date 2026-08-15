@@ -878,8 +878,13 @@ class World(HasSimulatorProperties):
                 if len(dependency_map[annotation]) == 0:
                     no_dependency_queue.append(annotation)
 
-        if len(sorted_annotations) != len(annotations):
-            raise SemanticAnnotationCircularDependencyError(sorted_annotations)
+        unresolved_annotations = [
+            annotation
+            for annotation in annotations
+            if len(dependency_map[annotation]) > 0
+        ]
+        if unresolved_annotations:
+            raise SemanticAnnotationCircularDependencyError(unresolved_annotations)
 
         return sorted_annotations
 
