@@ -10,15 +10,20 @@ import json
 import pytest
 
 from cramera import paths
-from cramera.live.recording import Recording
+from cramera.live.bridge import WorldStateSnapshot
+from cramera.live.recording import FrameRange, InvalidFrameRange, Recording
 from cramera.live.recording_bundle import finalize_recording
 from cramera.live.recording_storage import (
     NoSavedRecording,
+    SceneDestination,
     SceneNameTaken,
+    SharedScenesUnavailable,
     discard_recording_bundle,
     has_saveable_recording,
     save_recording_bundle,
+    trim_recording_bundle,
 )
+from cramera.live.recording_segments import clip_segment_payloads
 from cramera.onboard.scene_index import InvalidSceneName
 
 from .test_live_bundle import attached_bridge
@@ -114,3 +119,168 @@ class TestSaveRecordingBundle:
 
         with pytest.raises(NoSavedRecording):
             save_recording_bundle("my_run")
+
+
+# %% cutting a finalized bundle down before it is saved
+
+
+class TestTrimRecordingBundle:
+    def finalized_run(self, tmp_path, monkeypatch, poses):
+        """
+        A finalized bundle on disk whose milk object visits each given pose in turn.
+        """
+        monkeypatch.setenv("CRAMERA_DATA", str(tmp_path))
+        bridge = attached_bridge()
+        recording = Recording()
+        recording.start()
+        for pose in poses:
+            recording.append(
+                WorldStateSnapshot(frames={}, base=None, objects={"milk.stl": pose})
+            )
+        finalize_recording(bridge, recording)
+
+    def carried_poses(self, count):
+        return [[0.1 * index, 0.2, 0.3, 0, 0, 0, 1] for index in range(count)]
+
+    def bundle_file(self, tmp_path, name):
+        return json.loads(
+            (tmp_path / "scenes" / paths.RECORDING_SCENE_NAME / name).read_text()
+        )
+
+    def test_only_the_kept_frames_remain(self, tmp_path, monkeypatch):
+        poses = self.carried_poses(6)
+        self.finalized_run(tmp_path, monkeypatch, poses)
+
+        trim_recording_bundle(FrameRange(first=1, last=3))
+
+        trajectory = self.bundle_file(tmp_path, "trajectory.json")
+        assert trajectory["objects"] == [{"milk.stl": pose} for pose in poses[1:4]]
+        assert len(trajectory["frames"]) == 3
+        assert len(trajectory["base"]) == 3
+
+    def test_objects_spawn_where_the_kept_stretch_starts(self, tmp_path, monkeypatch):
+        poses = self.carried_poses(6)
+        self.finalized_run(tmp_path, monkeypatch, poses)
+
+        trim_recording_bundle(FrameRange(first=4, last=5))
+
+        [entry] = self.bundle_file(tmp_path, "scene.json")["objects"]
+        assert entry["spawn"] == poses[4]
+
+    def test_the_timeline_is_rebased_on_the_kept_stretch(self, tmp_path, monkeypatch):
+        poses = self.carried_poses(6)
+        self.finalized_run(tmp_path, monkeypatch, poses)
+        before = self.bundle_file(tmp_path, "scene.json")["segments"]
+
+        trim_recording_bundle(FrameRange(first=2, last=5))
+
+        assert self.bundle_file(tmp_path, "scene.json")["segments"] == (
+            clip_segment_payloads(before, FrameRange(first=2, last=5))
+        )
+
+    def test_trimming_twice_cuts_the_already_trimmed_run(self, tmp_path, monkeypatch):
+        poses = self.carried_poses(6)
+        self.finalized_run(tmp_path, monkeypatch, poses)
+
+        trim_recording_bundle(FrameRange(first=1, last=4))
+        trim_recording_bundle(FrameRange(first=1, last=2))
+
+        trajectory = self.bundle_file(tmp_path, "trajectory.json")
+        assert trajectory["objects"] == [{"milk.stl": pose} for pose in poses[2:4]]
+
+    def test_a_range_past_the_recording_is_rejected(self, tmp_path, monkeypatch):
+        self.finalized_run(tmp_path, monkeypatch, self.carried_poses(3))
+
+        with pytest.raises(InvalidFrameRange):
+            trim_recording_bundle(FrameRange(first=0, last=9))
+
+    def test_trimming_without_a_bundle_is_rejected(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CRAMERA_DATA", str(tmp_path))
+
+        with pytest.raises(NoSavedRecording):
+            trim_recording_bundle(FrameRange(first=0, last=1))
+
+
+# %% promoting a saved episode into the shared scenes root
+
+
+class TestSceneDestination:
+    def separate_roots(self, tmp_path, monkeypatch):
+        """
+        A data directory and a distinct shared scenes root, as an initialized ``cram-
+        scenes`` submodule alongside the local recordings makes them.
+        """
+        monkeypatch.setenv("CRAMERA_DATA", str(tmp_path / "data"))
+        monkeypatch.setenv("CRAMERA_SCENES", str(tmp_path / "shared"))
+        (tmp_path / "shared").mkdir(parents=True)
+
+    def test_local_is_the_data_directorys_scenes(self, tmp_path, monkeypatch):
+        self.separate_roots(tmp_path, monkeypatch)
+
+        assert SceneDestination.LOCAL.directory() == paths.local_scenes_directory()
+
+    def test_shared_is_the_configured_scenes_root(self, tmp_path, monkeypatch):
+        self.separate_roots(tmp_path, monkeypatch)
+
+        assert SceneDestination.SHARED.directory() == paths.scenes_directory()
+
+
+class TestSharingARecording:
+    def separate_roots(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("CRAMERA_DATA", str(tmp_path / "data"))
+        monkeypatch.setenv("CRAMERA_SCENES", str(tmp_path / "shared"))
+        (tmp_path / "shared").mkdir(parents=True)
+        bridge = attached_bridge()
+        recording = Recording()
+        recording.start()
+        recording.append(bridge.state)
+        finalize_recording(bridge, recording)
+
+    def test_sharing_writes_into_the_shared_root(self, tmp_path, monkeypatch):
+        self.separate_roots(tmp_path, monkeypatch)
+
+        save_recording_bundle("my_run", SceneDestination.SHARED)
+
+        assert (tmp_path / "shared" / "my_run" / "scene.json").is_file()
+        assert not (tmp_path / "data" / "scenes" / "my_run").exists()
+
+    def test_sharing_indexes_it_in_the_shared_root(self, tmp_path, monkeypatch):
+        self.separate_roots(tmp_path, monkeypatch)
+
+        save_recording_bundle("my_run", SceneDestination.SHARED)
+
+        index = json.loads((tmp_path / "shared" / "index.json").read_text())
+        assert any(entry["name"] == "my_run" for entry in index["scenes"])
+
+    def test_saving_locally_still_stays_out_of_the_shared_root(
+        self, tmp_path, monkeypatch
+    ):
+        self.separate_roots(tmp_path, monkeypatch)
+
+        save_recording_bundle("my_run", SceneDestination.LOCAL)
+
+        assert (tmp_path / "data" / "scenes" / "my_run" / "scene.json").is_file()
+        assert not (tmp_path / "shared" / "my_run").exists()
+
+    def test_a_name_taken_in_either_root_is_refused(self, tmp_path, monkeypatch):
+        self.separate_roots(tmp_path, monkeypatch)
+        (tmp_path / "shared" / "my_run").mkdir()
+
+        with pytest.raises(SceneNameTaken):
+            save_recording_bundle("my_run", SceneDestination.SHARED)
+
+    def test_sharing_without_a_shared_root_is_refused(self, tmp_path, monkeypatch):
+        """
+        Without an initialized submodule or CRAMERA_SCENES the shared root *is* the
+        local one, so sharing would quietly be an ordinary save.
+        """
+        monkeypatch.setenv("CRAMERA_DATA", str(tmp_path / "data"))
+        monkeypatch.delenv("CRAMERA_SCENES", raising=False)
+        bridge = attached_bridge()
+        recording = Recording()
+        recording.start()
+        recording.append(bridge.state)
+        finalize_recording(bridge, recording)
+
+        with pytest.raises(SharedScenesUnavailable):
+            save_recording_bundle("my_run", SceneDestination.SHARED)

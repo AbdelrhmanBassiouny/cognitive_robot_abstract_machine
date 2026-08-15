@@ -185,12 +185,12 @@ class TestLiveScene:
     def test_live_scene_bundles_the_attached_world(
         self, server, bridge, tmp_path, monkeypatch
     ):
-        scenes = tmp_path / "scenes"
-        monkeypatch.setenv("CRAMERA_SCENES", str(scenes))
+        monkeypatch.setenv("CRAMERA_SCENES", str(tmp_path / "shared"))
+        monkeypatch.setenv("CRAMERA_DATA", str(tmp_path / "data"))
         bridge.attach(world_with(shaped_body("laboratory", "bench")))
 
         assert get_json(server + "/live_scene") == {"scene": paths.LIVE_SCENE_NAME}
-        scene_directory = scenes / paths.LIVE_SCENE_NAME
+        scene_directory = paths.local_scenes_directory() / paths.LIVE_SCENE_NAME
         assert (scene_directory / "scene.json").is_file()
         assert (scene_directory / "environment.urdf").is_file()
 
@@ -212,6 +212,7 @@ class TestRecordingEndpoints:
             "state": "idle",
             "frameCount": 0,
             "durationSeconds": 0.0,
+            "framesPerSecond": 30.0,
             "sceneName": None,
         }
 
@@ -297,8 +298,18 @@ class TestRecordingEndpoints:
         assert not local_bundle.exists()
         assert get_json(server + "/recording")["state"] == "idle"
 
-    def test_discard_without_a_recording_is_harmless(self, server):
+    def test_discard_without_a_recording_is_harmless(
+        self, server, tmp_path, monkeypatch
+    ):
+        """
+        Discarding deletes the ``__recording__`` bundle from whichever data directory is
+        configured, so this must run against a scratch one: pointed at the real one it
+        would throw away an unsaved recording the developer running the suite still has.
+        """
+        monkeypatch.setenv("CRAMERA_DATA", str(tmp_path))
+
         status, body = post(server + "/recording/discard")
+
         assert status == 200
         assert body["ok"] is True
 
@@ -330,6 +341,58 @@ class TestRecordingEndpoints:
         post(server + "/recording/save", {"name": "my_run"})
 
         assert get_json(server + "/recording")["state"] == "idle"
+
+    def test_save_trims_the_bundle_to_the_requested_frames(
+        self, server, bridge, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("CRAMERA_DATA", str(tmp_path / "data"))
+        monkeypatch.delenv("CRAMERA_SCENES", raising=False)
+        self.start_recording(bridge, ticks=5)
+        post(server + "/recording/stop")
+
+        status, body = post(
+            server + "/recording/save",
+            {"name": "my_run", "firstFrame": 1, "lastFrame": 3},
+        )
+
+        assert status == 200
+        assert body == {"ok": True, "scene": "my_run"}
+        trajectory = json.loads(
+            (tmp_path / "data" / "scenes" / "my_run" / "trajectory.json").read_text()
+        )
+        assert len(trajectory["frames"]) == 3
+
+    def test_save_without_a_trim_keeps_every_frame(
+        self, server, bridge, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("CRAMERA_DATA", str(tmp_path / "data"))
+        monkeypatch.delenv("CRAMERA_SCENES", raising=False)
+        self.start_recording(bridge, ticks=5)
+        post(server + "/recording/stop")
+
+        post(server + "/recording/save", {"name": "my_run"})
+
+        trajectory = json.loads(
+            (tmp_path / "data" / "scenes" / "my_run" / "trajectory.json").read_text()
+        )
+        assert len(trajectory["frames"]) == 5
+
+    def test_save_rejects_a_trim_past_the_recording(
+        self, server, bridge, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("CRAMERA_DATA", str(tmp_path / "data"))
+        monkeypatch.delenv("CRAMERA_SCENES", raising=False)
+        self.start_recording(bridge, ticks=2)
+        post(server + "/recording/stop")
+
+        status, body = post(
+            server + "/recording/save",
+            {"name": "my_run", "firstFrame": 0, "lastFrame": 9},
+        )
+
+        assert status == 400
+        assert body["ok"] is False
+        assert not (tmp_path / "data" / "scenes" / "my_run").exists()
 
     def test_save_without_a_finalized_recording_is_rejected(self, server):
         status, body = post(server + "/recording/save", {"name": "my_run"})

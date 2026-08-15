@@ -28,8 +28,9 @@ HTTP endpoints of the live bridge (default port 8765).
     POST /recording/stop     finalize the current recording into a scene bundle under
                               :func:`cramera.paths.local_scenes_directory`
     POST /recording/discard  drop the current recording and its bundle, if any
-    POST /recording/save     {name} -> promote the finalized bundle to a permanent,
-                              locally saved scene
+    POST /recording/save     {name, destination?, firstFrame?, lastFrame?} -> the finalized
+                              bundle to a permanent, locally saved scene, trimmed to
+                              the given inclusive frame range when one is sent
 
 Every ``pose`` above is ``[x, y, z, qx, qy, qz, qw]``.
 
@@ -52,14 +53,18 @@ from pathlib import Path
 from typing_extensions import Any, ClassVar, Dict, Optional, Tuple, Type
 
 from cramera.live.bridge import Bridge, MalformedMoveRequest, MoveRequest
+from cramera.live.frame_range import FrameRange, InvalidFrameRange
 from cramera.live.live_bundle import build_live_scene
 from cramera.live.recording import Recording, RecordingState
 from cramera.live.recording_bundle import finalize_recording
 from cramera.live.recording_storage import (
     NoSavedRecording,
+    SceneDestination,
     SceneNameTaken,
+    SharedScenesUnavailable,
     discard_recording_bundle,
     save_recording_bundle,
+    trim_recording_bundle,
 )
 from cramera.logging_setup import get_logger
 from cramera.onboard.scene_index import InvalidSceneName
@@ -238,6 +243,10 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
     def _save_recording(self) -> None:
         """
         Promote the finalized recording to a permanent, locally saved scene.
+
+        An optional ``firstFrame``/``lastFrame`` pair trims the run before it is saved,
+        re-bundling it from the kept stretch (see
+        :func:`cramera.live.recording_storage.trim_recording_bundle`).
         """
         length = int(self.headers.get("Content-Length") or 0)
         payload = json.loads(self.rfile.read(length) or b"{}")
@@ -246,11 +255,24 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_json(
                 {"ok": False, "error": "nothing finalized to save"}, 400
             )
+        if payload.get("firstFrame") is not None:
+            try:
+                trim_recording_bundle(
+                    FrameRange(
+                        first=int(payload["firstFrame"]),
+                        last=int(payload.get("lastFrame", -1)),
+                    )
+                )
+            except (InvalidFrameRange, NoSavedRecording) as error:
+                return self._send_json({"ok": False, "error": str(error)}, 400)
         try:
-            name = save_recording_bundle(str(payload.get("name") or ""))
+            name = save_recording_bundle(
+                str(payload.get("name") or ""),
+                SceneDestination(payload.get("destination", SceneDestination.LOCAL)),
+            )
         except InvalidSceneName as error:
             return self._send_json({"ok": False, "error": str(error)}, 400)
-        except NoSavedRecording as error:
+        except (NoSavedRecording, SharedScenesUnavailable) as error:
             return self._send_json({"ok": False, "error": str(error)}, 400)
         except SceneNameTaken as error:
             return self._send_json({"ok": False, "error": str(error)}, 409)

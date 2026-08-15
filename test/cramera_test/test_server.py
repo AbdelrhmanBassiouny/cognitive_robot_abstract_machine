@@ -10,6 +10,9 @@ import urllib.request
 
 import pytest
 
+from cramera import paths
+from cramera.live.recording_storage import SceneDestination
+
 
 @pytest.fixture()
 def server(fixture_scene):
@@ -95,7 +98,10 @@ class TestScenesTwoRoots:
     def two_root_server(self, tmp_path, monkeypatch):
         shared = tmp_path / "shared"
         local = tmp_path / "data" / "scenes"
-        for directory, name, robot in ((shared, "kitchen", "pr2"), (local, "my_run", "tracy")):
+        for directory, name, robot in (
+            (shared, "kitchen", "pr2"),
+            (local, "my_run", "tracy"),
+        ):
             bundle = directory / name
             bundle.mkdir(parents=True)
             (bundle / "scene.json").write_text(
@@ -142,9 +148,9 @@ class TestScenesTwoRoots:
 
 class TestRecordingApi:
     """
-    Saving/discarding a finalized recording must work through the always-on server
-    (this fixture never starts a live bridge at all), which is exactly the situation a
-    demo process that already exited leaves behind.
+    Saving/discarding a finalized recording must work through the always-on server (this
+    fixture never starts a live bridge at all), which is exactly the situation a demo
+    process that already exited leaves behind.
     """
 
     def finalize_on_disk(self, fixture_scene, name="__recording__"):
@@ -158,7 +164,9 @@ class TestRecordingApi:
     def test_status_is_idle_without_a_finalized_recording(self, server):
         assert get_json(server + "/api/recording/status") == {"state": "idle"}
 
-    def test_status_is_finalized_once_a_bundle_exists_on_disk(self, server, fixture_scene):
+    def test_status_is_finalized_once_a_bundle_exists_on_disk(
+        self, server, fixture_scene
+    ):
         self.finalize_on_disk(fixture_scene)
 
         assert get_json(server + "/api/recording/status") == {"state": "finalized"}
@@ -181,6 +189,115 @@ class TestRecordingApi:
         assert status == 200
         assert body == {"ok": True}
         assert not bundle.exists()
+
+    def replayable_on_disk(self, fixture_scene, frame_count=6):
+        """
+        A finalized bundle carrying a real trajectory, as a stopped live run leaves one.
+        """
+        bundle = fixture_scene / "scenes" / paths.RECORDING_SCENE_NAME
+        bundle.mkdir(parents=True)
+        poses = [[0.1 * index, 0, 0, 0, 0, 0, 1] for index in range(frame_count)]
+        (bundle / "scene.json").write_text(
+            json.dumps(
+                {
+                    "name": paths.RECORDING_SCENE_NAME,
+                    "robot": {"name": "pr2"},
+                    "models": [],
+                    "objects": [{"key": "milk.stl", "spawn": poses[0]}],
+                    "segments": [
+                        {
+                            "step": "run",
+                            "action": None,
+                            "arm": None,
+                            "start": 0,
+                            "end": frame_count - 1,
+                        }
+                    ],
+                }
+            )
+        )
+        (bundle / "trajectory.json").write_text(
+            json.dumps(
+                {
+                    "framesPerSecond": 20.0,
+                    "frames": [{} for _ in poses],
+                    "base": [None for _ in poses],
+                    "objects": [{"milk.stl": pose} for pose in poses],
+                }
+            )
+        )
+        return poses
+
+    def test_save_trims_the_bundle_with_no_bridge_involved_at_all(
+        self, server, fixture_scene
+    ):
+        """
+        Trimming has to work off the bundle alone: by the time a run is saved the demo
+        process that captured it has usually exited.
+        """
+        poses = self.replayable_on_disk(fixture_scene)
+
+        status, body = post(
+            server + "/api/recording/save",
+            {"name": "my_run", "firstFrame": 2, "lastFrame": 4},
+        )
+
+        assert status == 200
+        assert body == {"ok": True, "scene": "my_run"}
+        saved = fixture_scene / "scenes" / "my_run"
+        trajectory = json.loads((saved / "trajectory.json").read_text())
+        assert trajectory["objects"] == [{"milk.stl": pose} for pose in poses[2:5]]
+        [entry] = json.loads((saved / "scene.json").read_text())["objects"]
+        assert entry["spawn"] == poses[2]
+
+    def test_save_without_a_trim_keeps_every_frame(self, server, fixture_scene):
+        poses = self.replayable_on_disk(fixture_scene)
+
+        post(server + "/api/recording/save", {"name": "my_run"})
+
+        trajectory = json.loads(
+            (fixture_scene / "scenes" / "my_run" / "trajectory.json").read_text()
+        )
+        assert len(trajectory["objects"]) == len(poses)
+
+    def test_save_rejects_a_trim_past_the_recording(self, server, fixture_scene):
+        self.replayable_on_disk(fixture_scene, frame_count=3)
+
+        status, body = post(
+            server + "/api/recording/save",
+            {"name": "my_run", "firstFrame": 0, "lastFrame": 9},
+        )
+
+        assert status == 400
+        assert body["ok"] is False
+        assert not (fixture_scene / "scenes" / "my_run").exists()
+
+    def test_save_can_share_into_the_shared_scenes_root(
+        self, server, fixture_scene, tmp_path, monkeypatch
+    ):
+        monkeypatch.setenv("CRAMERA_SCENES", str(tmp_path / "shared"))
+        (tmp_path / "shared").mkdir()
+        self.finalize_on_disk(fixture_scene)
+
+        status, body = post(
+            server + "/api/recording/save",
+            {"name": "my_run", "destination": SceneDestination.SHARED.value},
+        )
+
+        assert status == 200
+        assert body == {"ok": True, "scene": "my_run"}
+        assert (tmp_path / "shared" / "my_run" / "scene.json").is_file()
+
+    def test_sharing_without_a_shared_root_is_reported(self, server, fixture_scene):
+        self.finalize_on_disk(fixture_scene)
+
+        status, body = post(
+            server + "/api/recording/save",
+            {"name": "my_run", "destination": SceneDestination.SHARED.value},
+        )
+
+        assert status == 400
+        assert body["ok"] is False
 
     def test_save_without_a_finalized_recording_is_rejected(self, server):
         status, body = post(server + "/api/recording/save", {"name": "my_run"})

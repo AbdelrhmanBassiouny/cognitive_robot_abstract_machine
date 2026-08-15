@@ -17,10 +17,11 @@ from cramera.live.recording_segments import (
     ObjectWindow,
     RecordedSegment,
     TRANSPORT_TOLERANCE,
+    clip_segment_payloads,
     derive_segments,
     object_windows,
 )
-from cramera.live.recording import RecordedFrame
+from cramera.live.recording import FrameRange, RecordedFrame
 
 RESTING = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
 """
@@ -277,3 +278,71 @@ class TestSegmentPayload:
 
         assert payload["picks"] == "milk.stl"
         assert (payload["attach"], payload["detach"]) == (2, 7)
+
+
+# %% narrowing a timeline to a trimmed run
+
+
+class TestClipping:
+    def segment(self, step, start, end, **window):
+        payload = {
+            "step": step,
+            "action": None,
+            "arm": None,
+            "start": start,
+            "end": end,
+        }
+        payload.update(window)
+        return payload
+
+    def test_indices_are_rebased_on_the_kept_stretch(self):
+        segments = [self.segment("Transport", 4, 9)]
+
+        [clipped] = clip_segment_payloads(segments, FrameRange(first=3, last=9))
+
+        assert clipped["start"] == 1
+        assert clipped["end"] == 6
+
+    def test_a_segment_reaching_past_the_cut_is_clamped_to_it(self):
+        segments = [self.segment("Transport", 0, 9)]
+
+        [clipped] = clip_segment_payloads(segments, FrameRange(first=2, last=5))
+
+        assert clipped["start"] == 0
+        assert clipped["end"] == 3
+
+    def test_a_segment_wholly_outside_the_cut_is_dropped(self):
+        segments = [self.segment("Early", 0, 2), self.segment("Late", 7, 9)]
+
+        clipped = clip_segment_payloads(segments, FrameRange(first=5, last=9))
+
+        assert [entry["step"] for entry in clipped] == ["Late"]
+
+    def test_a_carry_windows_frames_are_rebased_too(self):
+        segments = [
+            self.segment("Transport", 2, 8, picks="milk.stl", attach=3, detach=7)
+        ]
+
+        [clipped] = clip_segment_payloads(segments, FrameRange(first=2, last=8))
+
+        assert clipped["picks"] == "milk.stl"
+        assert clipped["attach"] == 1
+        assert clipped["detach"] == 5
+
+    def test_a_carry_window_reaching_past_the_cut_is_clamped(self):
+        segments = [
+            self.segment("Transport", 0, 9, picks="milk.stl", attach=1, detach=8)
+        ]
+
+        [clipped] = clip_segment_payloads(segments, FrameRange(first=3, last=6))
+
+        assert clipped["attach"] == 0
+        assert clipped["detach"] == 3
+
+    def test_keys_the_clip_does_not_own_are_carried_through(self):
+        segments = [self.segment("Transport", 0, 9, action="pick", arm="left")]
+
+        [clipped] = clip_segment_payloads(segments, FrameRange(first=0, last=9))
+
+        assert clipped["action"] == "pick"
+        assert clipped["arm"] == "left"

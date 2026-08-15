@@ -18,6 +18,7 @@ from enum import StrEnum
 from typing_extensions import Dict, List, Optional
 
 from cramera.live.bridge import WorldStateSnapshot
+from cramera.live.frame_range import FrameRange, InvalidFrameRange
 
 
 class RecordingState(StrEnum):
@@ -39,6 +40,12 @@ class RecordingState(StrEnum):
     """
     Capture has stopped; the buffered frames are ready to bundle or discard.
     """
+
+
+FALLBACK_FRAME_RATE = 30.0
+"""
+Frame rate reported for a recording with too few ticks to measure a span from.
+"""
 
 
 class NoActiveRecording(Exception):
@@ -174,6 +181,21 @@ class Recording:
             self._frames = []
             self._tick_times = []
 
+    def frames_in(self, frame_range: FrameRange) -> List[RecordedFrame]:
+        """
+        The buffered frames a range selects, in recording order.
+
+        :param frame_range: The stretch of the recording to keep.
+        :raises InvalidFrameRange: If the range reaches past the buffered frames.
+        """
+        with self._lock:
+            if frame_range.last >= len(self._frames):
+                raise InvalidFrameRange(
+                    "frame %d is past the recording's %d frames"
+                    % (frame_range.last, len(self._frames))
+                )
+            return self._frames[frame_range.first : frame_range.last + 1]
+
     def frame_count(self) -> int:
         """
         How many ticks have been captured so far.
@@ -181,7 +203,7 @@ class Recording:
         with self._lock:
             return len(self._frames)
 
-    def frames_per_second(self, fallback: float = 30.0) -> float:
+    def frames_per_second(self, fallback: float = FALLBACK_FRAME_RATE) -> float:
         """
         The recording's frame rate, estimated from wall-clock time between ticks.
 
@@ -189,12 +211,21 @@ class Recording:
             from.
         """
         with self._lock:
-            if len(self._tick_times) < 2:
-                return fallback
-            duration = self._tick_times[-1] - self._tick_times[0]
-            if duration <= 0:
-                return fallback
-            return max(1.0, round(len(self._tick_times) / duration, 2))
+            return self._measured_frame_rate(fallback)
+
+    def _measured_frame_rate(self, fallback: float) -> float:
+        """
+        The frame rate, with :attr:`_lock` already held by the caller.
+
+        :param fallback: Rate to report with fewer than two ticks to measure a span
+            from.
+        """
+        if len(self._tick_times) < 2:
+            return fallback
+        duration = self._tick_times[-1] - self._tick_times[0]
+        if duration <= 0:
+            return fallback
+        return max(1.0, round(len(self._tick_times) / duration, 2))
 
     def status_payload(self) -> Dict[str, object]:
         """
@@ -210,5 +241,6 @@ class Recording:
                 "state": self.state.value,
                 "frameCount": len(self._frames),
                 "durationSeconds": duration,
+                "framesPerSecond": self._measured_frame_rate(FALLBACK_FRAME_RATE),
                 "sceneName": self.scene_name,
             }

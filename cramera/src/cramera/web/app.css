@@ -120,6 +120,20 @@ body{
 .play-btn.record:hover{background:rgba(224,169,74,.24)}
 .play-btn.record:disabled{opacity:.45;cursor:default;background:rgba(224,169,74,.14)}
 
+/* %% naming and trimming a captured episode before it is saved */
+.record-save-panel{
+  display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin-top:10px;
+  padding:10px 12px;border:1px solid #e0a94a;border-radius:6px;
+  background:rgba(224,169,74,.08)
+}
+.record-save-field{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ink)}
+.record-name{
+  width:150px;padding:5px 7px;border:1px solid var(--line2);border-radius:4px;
+  background:var(--panel);color:var(--ink);font-size:12px
+}
+.record-trim{width:130px;accent-color:#e0a94a;cursor:pointer}
+.record-trim-summary{font-size:12px;color:var(--muted);min-width:120px}
+
 /* %% workflow */
 .workflow{border-top:1px solid var(--line);padding:12px 14px;background:var(--panel2)}
 .workflow-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:9px}

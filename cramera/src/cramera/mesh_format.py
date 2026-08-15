@@ -29,6 +29,11 @@ class MeshFormat(StrEnum):
     COLLADA, which references its textures from inside the document.
     """
 
+    GLB = ".glb"
+    """
+    Binary glTF, which carries its geometry, materials and textures in one file.
+    """
+
     @classmethod
     def suffixes(cls) -> Tuple[str, ...]:
         """

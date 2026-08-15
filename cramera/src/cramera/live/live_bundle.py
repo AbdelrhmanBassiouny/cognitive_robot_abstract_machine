@@ -143,7 +143,7 @@ def build_live_scene(bridge: Bridge) -> Optional[str]:
     """
     if bridge.world is None:
         return None
-    output_directory = paths.scenes_directory() / paths.LIVE_SCENE_NAME
+    output_directory = paths.local_scenes_directory() / paths.LIVE_SCENE_NAME
     with BUILD_LOCK:
         signature = bridge.bundle_signature()
         if _existing_signature(output_directory) == signature:

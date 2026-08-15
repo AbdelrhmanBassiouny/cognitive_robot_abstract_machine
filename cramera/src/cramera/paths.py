@@ -32,7 +32,9 @@ LIVE_SCENE_NAME = "__live__"
 """
 Reserved scene name a live-attach snapshot is bundled under (see
 :mod:`cramera.live.live_bundle`), rebuilt from the running demo's current world on every
-attach.
+attach. Written under :func:`local_scenes_directory`, like
+:data:`RECORDING_SCENE_NAME`: a shared copy would be shadowed by a stale local one and
+would litter a git-tracked checkout.
 
 Excluded from the real scene index — never a bundle a user onboarded.
 """

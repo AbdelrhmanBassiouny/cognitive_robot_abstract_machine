@@ -13,6 +13,8 @@ from pathlib import Path
 
 import pytest
 
+from cramera import paths
+
 DATASET_DIR = Path(__file__).parent / "dataset"
 """
 Real files instead of embedded strings/dicts, so they stay valid URDF/JSON and Python.
@@ -49,6 +51,19 @@ def reset_knowledge_base_cache() -> None:
     EpisodeKnowledgeBase.reset()
 
 
+@pytest.fixture(autouse=True)
+def unchecked_out_scenes_submodule(tmp_path, monkeypatch):
+    """
+    Point the scenes submodule at a directory that does not exist.
+
+    A developer machine with the submodule checked out would otherwise let every test
+    that leaves ``CRAMERA_SCENES`` unset fall back to the real ``cramera/scenes``
+    checkout, read the scenes in it and write its own bundles into it. Tests that want
+    a shared root override this with their own directory.
+    """
+    monkeypatch.setattr(paths, "SCENES_SUBMODULE", tmp_path / "no-submodule")
+
+
 @pytest.fixture()
 def fixture_scene(tmp_path, monkeypatch):
     """
@@ -64,9 +79,7 @@ def fixture_scene(tmp_path, monkeypatch):
         json.dumps(
             {
                 "default": "fixture",
-                "scenes": [
-                    {"name": "fixture", "robot": "pr2", "environment": None}
-                ],
+                "scenes": [{"name": "fixture", "robot": "pr2", "environment": None}],
             }
         )
     )

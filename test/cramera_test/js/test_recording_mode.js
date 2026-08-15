@@ -104,3 +104,72 @@ test('an unlisted speed falls back to 1x', function () {
   assert.strictEqual(recording.clampSpeed(3), 1);
   assert.strictEqual(recording.clampSpeed(undefined), 1);
 });
+
+// %% the single episode control
+test('the control offers to stop while capture runs, and to save once finalized', function () {
+  const recording = load();
+  assert.strictEqual(recording.controlLabel(recording.STATE.RECORDING), '⏹ Stop recording');
+  assert.strictEqual(recording.controlLabel(recording.STATE.FINALIZED), '💾 Save episode…');
+});
+
+test('the control does nothing while idle', function () {
+  const recording = load();
+  assert.strictEqual(recording.controlAction(recording.STATE.IDLE), null);
+});
+
+test('pressing the control stops capture, then opens the save panel', function () {
+  const recording = load();
+  assert.strictEqual(recording.controlAction(recording.STATE.RECORDING), recording.STOP);
+  assert.strictEqual(recording.controlAction(recording.STATE.FINALIZED), recording.SAVE);
+});
+
+// %% trimming before saving
+test('the default trim keeps the whole recording', function () {
+  const recording = load();
+  assert.deepStrictEqual(recording.wholeTrim(5), { first: 0, last: 4 });
+});
+
+test('a range inside the recording is valid', function () {
+  const recording = load();
+  assert.strictEqual(recording.isValidTrim({ first: 0, last: 4 }, 5), true);
+  assert.strictEqual(recording.isValidTrim({ first: 2, last: 2 }, 5), true);
+});
+
+test('a reversed or out-of-bounds range is rejected', function () {
+  const recording = load();
+  assert.strictEqual(recording.isValidTrim({ first: 3, last: 1 }, 5), false);
+  assert.strictEqual(recording.isValidTrim({ first: -1, last: 4 }, 5), false);
+  assert.strictEqual(recording.isValidTrim({ first: 0, last: 5 }, 5), false);
+  assert.strictEqual(recording.isValidTrim({ first: 0, last: 0 }, 0), false);
+});
+
+test('a trim covering everything is reported as no trim at all', function () {
+  const recording = load();
+  assert.strictEqual(recording.isWholeTrim({ first: 0, last: 4 }, 5), true);
+  assert.strictEqual(recording.isWholeTrim({ first: 1, last: 4 }, 5), false);
+});
+
+test('a trim is described by how much of the run it keeps', function () {
+  const recording = load();
+  assert.strictEqual(recording.trimSummary({ first: 0, last: 9 }, 10, 20), '10 frames · 0.50 s');
+  assert.strictEqual(recording.trimSummary({ first: 5, last: 9 }, 10, 20), '5 frames · 0.25 s');
+});
+
+test('only the captured episode itself can be trimmed', function () {
+  const recording = load();
+  // another scene's trajectory is a different run: its frame numbers would cut the
+  // episode at the wrong places
+  assert.strictEqual(recording.canTrim('pr2_scuess', 500), false);
+  assert.strictEqual(recording.canTrim(recording.SCENE_NAME, 500), true);
+});
+
+test('an episode the viewer has no trajectory for can only be saved whole', function () {
+  const recording = load();
+  assert.strictEqual(recording.canTrim(recording.SCENE_NAME, 0), false);
+});
+
+// %% where a saved episode lands
+test('the destinations mirror the scene roots the backend writes to', function () {
+  const recording = load();
+  assert.deepStrictEqual(recording.DESTINATION, { LOCAL: 'local', SHARED: 'shared' });
+});

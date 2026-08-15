@@ -15,6 +15,7 @@ class TestMeshFormatOfPath:
             ("meshes/table.obj", MeshFormat.OBJ),
             ("package://pr2_description/kitchen.dae", MeshFormat.DAE),
             ("MILK.STL", MeshFormat.STL),
+            ("meshes/cabinet01/oven.glb", MeshFormat.GLB),
         ],
     )
     def test_a_mesh_reference_names_its_format(self, path, expected):
@@ -27,4 +28,4 @@ class TestMeshFormatOfPath:
 
 class TestMeshFormatSuffixes:
     def test_every_member_contributes_its_suffix(self):
-        assert MeshFormat.suffixes() == (".stl", ".obj", ".dae")
+        assert MeshFormat.suffixes() == (".stl", ".obj", ".dae", ".glb")

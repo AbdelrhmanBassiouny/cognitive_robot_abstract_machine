@@ -13,6 +13,7 @@ from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import Box, Color, Scale
@@ -75,6 +76,26 @@ SPONGE_COLOR = Color(0.95, 0.85, 0.3)
 """
 Yellowish color for the sponge.
 """
+
+
+# %% robot placement
+
+
+def standing_pose_at(world: World, robot: AbstractRobot) -> Pose:
+    """
+    :param world: The apartment world the robot stands in.
+    :param robot: The robot to place.
+    :return: The pose in front of the kitchen counter, at the height the robot's root
+        already stands at, so a robot whose root is its pelvis keeps its feet on the
+        floor instead of sinking into it.
+    """
+    root_height = float(world.compute_forward_kinematics(world.root, robot.root).z)
+    return Pose.from_xyz_rpy(
+        *BASE_POSITION_XYZ[:2], root_height, reference_frame=world.root
+    )
+
+
+# %% demo objects
 
 
 def parse_object(stl_file_name: str, color: Optional[Color] = None) -> World:

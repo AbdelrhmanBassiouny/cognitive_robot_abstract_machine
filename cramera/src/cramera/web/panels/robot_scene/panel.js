@@ -55,11 +55,22 @@ Panels.define('robot-scene', function (root, bus) {
     '  <div class="workflow-head"><span class="wf-btns">' +
     '    <button id="live-btn" class="play-btn live" style="display:none" title="Attach to the running demo (cramera-live bridge) — renders the live world instead of the recording">◉ Live</button>' +
     '    <button id="play-btn" class="play-btn cram" title="Play the recorded coraplex + giskardpy motion trajectory">▶ Play robot motion</button>' +
-    '    <button id="record-stop-btn" class="play-btn record" style="display:none" title="Stop capturing the live run into a temporary scene you can replay, discard or save">⏹ Stop recording</button>' +
-    '    <button id="record-discard-btn" class="play-btn record" style="display:none" title="Discard the captured recording">✕ Discard</button>' +
-    '    <button id="record-save-btn" class="play-btn record" style="display:none" title="Save the captured recording as a permanent scene">💾 Save…</button>' +
+    '    <button id="record-btn" class="play-btn record" style="display:none" title="Stop capturing the live run, then name, trim and keep it as an episode">⏹ Stop recording</button>' +
     '    <select id="playback-speed" class="scene-select" style="display:none" title="Playback speed"></select>' +
     '  </span></div>' +
+    '  <div id="record-save-panel" class="record-save-panel" style="display:none">' +
+    '    <label class="record-save-field">Name<input type="text" id="record-name" class="record-name" placeholder="my_episode" maxlength="64"></label>' +
+    '    <label class="record-save-field">From<input type="range" id="record-trim-first" class="record-trim" min="0" max="0" step="1" value="0"></label>' +
+    '    <label class="record-save-field">To<input type="range" id="record-trim-last" class="record-trim" min="0" max="0" step="1" value="0"></label>' +
+    '    <span id="record-trim-summary" class="record-trim-summary"></span>' +
+    '    <button id="record-open-episode" class="play-btn record" style="display:none" title="Show the captured episode, so it can be cut before saving">⏵ Open episode to trim</button>' +
+    '    <span class="wf-btns">' +
+    '      <button id="record-save-confirm" class="play-btn record" title="Save the trimmed episode on this machine">💾 Save</button>' +
+    '      <button id="record-share-confirm" class="play-btn record" title="Save the trimmed episode into the shared scenes root, so others get it — the files land in the cram-scenes checkout, committing them stays up to you">🌐 Save &amp; share</button>' +
+    '      <button id="record-discard-btn" class="play-btn record" title="Throw the captured episode away">✕ Discard</button>' +
+    '      <button id="record-cancel-btn" class="play-btn" title="Keep the episode as it is, without saving yet">Cancel</button>' +
+    '    </span>' +
+    '  </div>' +
     '  <div id="playback-scrub-row" class="playback-scrub-row" style="display:none">' +
     '    <div class="playback-track">' +
     '      <input type="range" id="playback-scrubber" class="playback-scrubber" min="0" max="0" step="1" value="0">' +
@@ -310,6 +321,9 @@ Panels.define('robot-scene', function (root, bus) {
         } else {
           loadObj(null);
         }
+      } else if (shapeSpec.format === 'glb' && THREE.GLTFLoader) {
+        new THREE.GLTFLoader().load(shapeSpec.url, function (g) { finish(g.scene); },
+          undefined, fail);
       } else if (shapeSpec.format === 'dae' && THREE.ColladaLoader) {
         new THREE.ColladaLoader().load(shapeSpec.url, function (c) { finish(c.scene); },
           undefined, fail);
@@ -350,6 +364,10 @@ Panels.define('robot-scene', function (root, bus) {
         o.traverse(function (c) { if (c.isMesh) c.material = mat; });
         place(o);
       }, undefined, function () { box(); });
+    } else if (fmt === 'glb' && THREE.GLTFLoader) {
+      spec.tame = true;                         // glb carries its own materials, as dae did
+      new THREE.GLTFLoader().load(spec.meshUrl, function (g) { place(g.scene); },
+        undefined, function () { box(); });
     } else if (fmt === 'dae' && THREE.ColladaLoader) {
       spec.tame = true;                         // dae carries its own (possibly glowing) materials
       new THREE.ColladaLoader().load(spec.meshUrl, function (c) { place(c.scene); },
@@ -423,6 +441,9 @@ Panels.define('robot-scene', function (root, bus) {
         };
         new THREE.MTLLoader(mgr).load(path.replace(/\.obj$/i, '.mtl'), loadObj,
           undefined, function () { loadObj(null); });
+      } else if (/\.glb$/i.test(path)) {
+        new THREE.GLTFLoader(mgr).load(path, function (g) { done(g.scene); },
+          undefined, function () { done(new THREE.Object3D()); });
       } else if (/\.dae$/i.test(path)) {
         // ColladaLoader auto-rotates Z_UP assets for standalone use; a URDF mesh must
         // stay in its raw frame, since the world root already applies that correction
@@ -1848,19 +1869,77 @@ Panels.define('robot-scene', function (root, bus) {
   });
 
   // %% recording controls (capturing a live run into a temporary, replayable scene)
-  const recordStopBtn = $('record-stop-btn');
+  const recordBtn = $('record-btn');
+  const recordSavePanel = $('record-save-panel');
+  const recordName = $('record-name');
+  const recordTrimFirst = $('record-trim-first');
+  const recordTrimLast = $('record-trim-last');
+  const recordTrimSummary = $('record-trim-summary');
+  const recordSaveConfirm = $('record-save-confirm');
+  const recordShareConfirm = $('record-share-confirm');
   const recordDiscardBtn = $('record-discard-btn');
-  const recordSaveBtn = $('record-save-btn');
+  const recordCancelBtn = $('record-cancel-btn');
+  const recordOpenEpisode = $('record-open-episode');
   let recordingState = RecordingMode.STATE.IDLE;
+  let recordedFrameCount = 0;
+  let recordedFrameRate = 0;
 
   function updateRecordingButtons() {
-    const visible = RecordingMode.controlsVisible({ state: recordingState });
-    recordStopBtn.style.display = visible ? '' : 'none';
-    recordDiscardBtn.style.display = visible ? '' : 'none';
-    recordSaveBtn.style.display = visible ? '' : 'none';
-    recordStopBtn.textContent = RecordingMode.stopButtonLabel(recordingState);
-    recordStopBtn.disabled = !RecordingMode.canStop(recordingState);
-    recordSaveBtn.disabled = !RecordingMode.canSave(recordingState);
+    recordBtn.style.display =
+      RecordingMode.controlsVisible({ state: recordingState }) ? '' : 'none';
+    recordBtn.textContent = RecordingMode.controlLabel(recordingState);
+    recordBtn.disabled = RecordingMode.controlAction(recordingState) === null;
+    if (!RecordingMode.canSave(recordingState)) closeSavePanel();
+  }
+
+  function currentTrim() {
+    return { first: Number(recordTrimFirst.value), last: Number(recordTrimLast.value) };
+  }
+
+  function updateTrimSummary() {
+    if (!RecordingMode.canTrim(SceneContext.name(), recordedFrameCount)) {
+      recordSaveConfirm.disabled = false;
+      recordTrimSummary.textContent = '';
+      return;
+    }
+    const trim = currentTrim();
+    const valid = RecordingMode.isValidTrim(trim, recordedFrameCount);
+    recordSaveConfirm.disabled = !valid;
+    recordTrimSummary.textContent = valid
+      ? RecordingMode.trimSummary(trim, recordedFrameCount, recordedFrameRate)
+      : 'the end of the clip must come after its start';
+  }
+
+  // The trim's two ends share one run, so moving either past the other would select
+  // nothing: each end pushes the other along instead of being allowed to cross it.
+  function keepTrimEndsInOrder(moved) {
+    if (Number(recordTrimFirst.value) <= Number(recordTrimLast.value)) return;
+    if (moved === recordTrimFirst) recordTrimLast.value = recordTrimFirst.value;
+    else recordTrimFirst.value = recordTrimLast.value;
+  }
+
+  function openSavePanel() {
+    recordedFrameCount = RobotView.frameCount();
+    recordedFrameRate = RobotView.framesPerSecond();
+    const trimmable = RecordingMode.canTrim(SceneContext.name(), recordedFrameCount);
+    const whole = RecordingMode.wholeTrim(recordedFrameCount);
+    [recordTrimFirst, recordTrimLast].forEach(function (slider) {
+      slider.max = String(Math.max(0, recordedFrameCount - 1));
+      slider.parentNode.style.display = trimmable ? '' : 'none';
+    });
+    // Cutting means watching what gets cut, so the way to a trim from another scene is
+    // to go and look at the episode first.
+    recordOpenEpisode.style.display =
+      RecordingMode.isRecordingScene(SceneContext.name()) ? 'none' : '';
+    recordTrimFirst.value = String(whole.first);
+    recordTrimLast.value = String(whole.last);
+    recordSavePanel.style.display = '';
+    updateTrimSummary();
+    recordName.focus();
+  }
+
+  function closeSavePanel() {
+    recordSavePanel.style.display = 'none';
   }
 
   // The bridge (the demo process, liveUrl()) is the source of truth while it is
@@ -1881,18 +1960,22 @@ Panels.define('robot-scene', function (root, bus) {
       });
   }
 
+  // The run is trimmed on the bundle the viewer is replaying, not in the demo process,
+  // so the loaded trajectory is what the trim measures itself against — the bridge is
+  // usually gone by the time a run gets saved, and its status then carries no frames.
+  function applyRecordingStatus(status) {
+    recordingState = (status && status.state) || RecordingMode.STATE.IDLE;
+    recordedFrameCount = RobotView.frameCount();
+    recordedFrameRate = RobotView.framesPerSecond();
+    updateRecordingButtons();
+  }
+
   function pollRecordingStatus() {
     fetch(liveUrl() + '/recording').then(function (r) { return r.json(); })
-      .then(function (status) {
-        recordingState = (status && status.state) || RecordingMode.STATE.IDLE;
-        updateRecordingButtons();
-      })
+      .then(applyRecordingStatus)
       .catch(function () {
         fetch('/api/recording/status').then(function (r) { return r.json(); })
-          .then(function (status) {
-            recordingState = (status && status.state) || RecordingMode.STATE.IDLE;
-            updateRecordingButtons();
-          })
+          .then(applyRecordingStatus)
           .catch(function () {});
       });
   }
@@ -1900,7 +1983,11 @@ Panels.define('robot-scene', function (root, bus) {
   const recordingProbeTimer = setInterval(pollRecordingStatus, LIVE_PROBE_INTERVAL_MS);
   pollRecordingStatus();
 
-  recordStopBtn.addEventListener('click', function () {
+  recordBtn.addEventListener('click', function () {
+    if (RecordingMode.controlAction(recordingState) === RecordingMode.SAVE) {
+      openSavePanel();
+      return;
+    }
     fetch(liveUrl() + '/recording/stop', { method: 'POST' }).then(function (r) { return r.json(); })
       .then(function (d) {
         pollRecordingStatus();
@@ -1912,8 +1999,33 @@ Panels.define('robot-scene', function (root, bus) {
       .catch(function () {});
   });
 
+  // Moving an end of the trim shows the scene at that frame: a frame number alone says
+  // nothing about where in the run the cut lands.
+  function previewTrimEnd(slider) {
+    if (!RobotView.hasTrajectory()) return;
+    RobotView.stopTrajectory();
+    RobotView.seek(Number(slider.value));
+  }
+
+  [recordTrimFirst, recordTrimLast].forEach(function (slider) {
+    slider.addEventListener('input', function () {
+      keepTrimEndsInOrder(slider);
+      updateTrimSummary();
+      previewTrimEnd(slider);
+    });
+  });
+
+  recordCancelBtn.addEventListener('click', closeSavePanel);
+
+  recordOpenEpisode.addEventListener('click', function () {
+    const params = new URLSearchParams(window.location.search);
+    params.set('scene', RecordingMode.SCENE_NAME);
+    window.location.search = params.toString();
+  });
+
   recordDiscardBtn.addEventListener('click', function () {
     postRecordingAction('/recording/discard', '/api/recording/discard').then(function () {
+      closeSavePanel();
       pollRecordingStatus();
       if (RecordingMode.isRecordingScene(SceneContext.name())) {
         const params = new URLSearchParams(window.location.search);
@@ -1923,14 +2035,21 @@ Panels.define('robot-scene', function (root, bus) {
     });
   });
 
-  recordSaveBtn.addEventListener('click', function () {
-    const name = window.prompt('Save this recording as:');
-    if (name === null) return;
+  function saveEpisode(destination) {
+    const name = recordName.value;
     if (!RecordingMode.isValidSaveName(name)) {
       window.alert('Scene names must be 1-64 characters of letters, digits, "_" or "-".');
       return;
     }
-    postRecordingAction('/recording/save', '/api/recording/save', { name: name })
+    const trim = currentTrim();
+    const body = { name: name, destination: destination };
+    // Only ask for a trim that removes something: an untouched range would rewrite the
+    // bundle for nothing.
+    if (!RecordingMode.isWholeTrim(trim, recordedFrameCount)) {
+      body.firstFrame = trim.first;
+      body.lastFrame = trim.last;
+    }
+    postRecordingAction('/recording/save', '/api/recording/save', body)
       .then(function (d) {
         if (!d || !d.ok) {
           window.alert('Could not save the recording: ' + ((d && d.error) || 'unknown error'));
@@ -1941,6 +2060,13 @@ Panels.define('robot-scene', function (root, bus) {
         params.set('scene', d.scene);
         window.location.search = params.toString();
       });
+  }
+
+  recordSaveConfirm.addEventListener('click', function () {
+    saveEpisode(RecordingMode.DESTINATION.LOCAL);
+  });
+  recordShareConfirm.addEventListener('click', function () {
+    saveEpisode(RecordingMode.DESTINATION.SHARED);
   });
 
   // %% layers panel

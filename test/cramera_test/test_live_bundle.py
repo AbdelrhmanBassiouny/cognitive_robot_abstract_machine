@@ -111,14 +111,15 @@ def attached_bridge(with_robot: bool = False) -> Bridge:
 
 def use_scratch_scenes_directory(monkeypatch, tmp_path) -> Path:
     """
-    Point :func:`cramera.paths.scenes_directory` at a throwaway directory.
+    Point both scenes roots at throwaway directories.
 
     :param monkeypatch: The active monkeypatch fixture.
     :param tmp_path: The test's own scratch directory.
+    :return: The local root the live bundle is written into.
     """
-    scenes = tmp_path / "scenes"
-    monkeypatch.setenv("CRAMERA_SCENES", str(scenes))
-    return scenes
+    monkeypatch.setenv("CRAMERA_SCENES", str(tmp_path / "shared"))
+    monkeypatch.setenv("CRAMERA_DATA", str(tmp_path / "data"))
+    return paths.local_scenes_directory()
 
 
 def scene_payload(scenes: Path) -> dict:
@@ -299,3 +300,20 @@ class TestConcurrentBuilds:
         scene = scene_payload(scenes)
         assert [model["name"] for model in scene["models"]] == ["environment"]
         assert (scenes / paths.LIVE_SCENE_NAME / "environment.urdf").exists()
+
+
+# %% keeping the throwaway bundle out of the shared checkout
+
+
+class TestLiveBundleLocation:
+    def test_the_bundle_is_written_into_the_local_root(self, monkeypatch, tmp_path):
+        """
+        The shared root is a git checkout, and a scene there is shadowed by a local one
+        of the same name, so the throwaway bundle belongs in the local root only.
+        """
+        local = use_scratch_scenes_directory(monkeypatch, tmp_path)
+
+        build_live_scene(attached_bridge())
+
+        assert (local / paths.LIVE_SCENE_NAME / "scene.json").is_file()
+        assert not (paths.scenes_directory() / paths.LIVE_SCENE_NAME).exists()

@@ -9,13 +9,14 @@ import time
 import unittest
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List
+from typing import Callable, List, Type
 
 import numpy as np
 import pytest
 
 from semantic_digital_twin.adapters.mesh import STLParser
 from semantic_digital_twin.adapters.urdf import URDFParser
+from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Milk,
@@ -25,10 +26,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Pose,
 )
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import (
-    FixedConnection,
-    OmniDrive,
-)
+from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.world_entity import Body
 
 from coraplex.datastructures.enums import Arms, VisualizationBackend
@@ -36,6 +34,11 @@ from coraplex.view_manager import ViewManager
 from coraplex.visualization import WorldVisualization
 
 logger = logging.getLogger(__name__)
+
+ROBOT_SPAWN_POSITION_XY = (1.5, 2.5)
+"""
+Where the robot spawns in the apartment, in front of the kitchen counter.
+"""
 
 try:
     import rclpy
@@ -67,7 +70,7 @@ def start_visualization(world: World) -> WorldVisualization:
         else VisualizationBackend.NONE
     )
     return WorldVisualization.from_environment(
-        world, default_backend=default_backend
+        world, default_backend=VisualizationBackend.CRAMERA
     ).start()
 
 
@@ -97,13 +100,20 @@ def attach_tool(
     return connection.child
 
 
-def setup_world() -> World:
+def setup_world(robot_type: Type[AbstractRobot] = PR2) -> World:
+    """
+    Build the apartment world with a robot standing in front of the kitchen counter.
+
+    :param robot_type: Robot to place in the apartment.
+    """
     logger.setLevel(logging.DEBUG)
 
-    print("setup_world: parsing PR2 URDF (xacro expansion, this is the slow step)...")
-    pr2_sem_world = URDFParser.from_file(
-        "package://iai_pr2_description/robots/pr2_with_ft2_cableguide.xacro"
-    ).parse()
+    print(
+        "setup_world: parsing %s description (xacro expansion, this is the slow step)..."
+        % robot_type.__name__
+    )
+    robot_world = URDFParser.from_file(robot_type.get_ros_file_path()).parse()
+
     print("setup_world: parsing apartment URDF...")
     apartment_world = URDFParser.from_file(
         os.path.join(
@@ -116,49 +126,66 @@ def setup_world() -> World:
         )
     ).parse()
     print("setup_world: parsing object meshes...")
-    milk_world = STLParser(
-        os.path.join(
-            os.path.dirname(__file__), "..", "..", "resources", "objects", "milk.stl"
-        )
-    ).parse()
-    cereal_world = STLParser(
-        os.path.join(
-            os.path.dirname(__file__),
-            "..",
-            "..",
-            "resources",
-            "objects",
-            "breakfast_cereal.stl",
-        )
-    ).parse()
+    # milk_world = STLParser(
+    #     os.path.join(
+    #         os.path.dirname(__file__), "..", "..", "resources", "objects", "milk.stl"
+    #     )
+    # ).parse()
+    # cereal_world = STLParser(
+    #     os.path.join(
+    #         os.path.dirname(__file__),
+    #         "..",
+    #         "..",
+    #         "resources",
+    #         "objects",
+    #         "breakfast_cereal.stl",
+    #     )
+    # ).parse()
     print("setup_world: merging worlds...")
     # apartment_world.merge_world(pr2_sem_world)
-    apartment_world.merge_world(milk_world)
-    apartment_world.merge_world(cereal_world)
+    # apartment_world.merge_world(milk_world)
+    # apartment_world.merge_world(cereal_world)
 
     with apartment_world.modify_world():
-        pr2_root = pr2_sem_world.get_body_by_name("base_footprint")
+        robot_root = robot_world.get_body_by_name(robot_type._get_root_body_name())
         apartment_root = apartment_world.root
-        c_root_bf = OmniDrive.create_with_dofs(
-            parent=apartment_root, child=pr2_root, world=apartment_world
+        c_root_bf = robot_type.get_drive_connection_type().create_with_dofs(
+            parent=apartment_root, child=robot_root, world=apartment_world
         )
-        apartment_world.merge_world(pr2_sem_world, c_root_bf)
-        c_root_bf.origin = HomogeneousTransformationMatrix.from_xyz_rpy(1.5, 2.5, 0)
+        apartment_world.merge_world(robot_world, c_root_bf)
+        c_root_bf.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+            *ROBOT_SPAWN_POSITION_XY, 0
+        )
+    standing_height = max(
+        0.0,
+        -apartment_world.height_of_lowest_collision_point_of_branch(robot_root),
+    )
+    if standing_height > 0.0:
+        with apartment_world.modify_world():
+            # The drive keeps the robot on the z=0 plane of its parent frame, so a robot
+            # whose root is above its feet - a humanoid's pelvis - is stood on the floor
+            # by lifting that plane rather than the drive's own position.
+            c_root_bf.parent_T_connection_expression = (
+                c_root_bf.parent_T_connection_expression
+                @ HomogeneousTransformationMatrix.from_xyz_rpy(
+                    z=standing_height, reference_frame=apartment_root
+                )
+            )
     print("setup_world: done")
 
-    apartment_world.get_body_by_name("milk.stl").parent_connection.origin = (
-        HomogeneousTransformationMatrix.from_xyz_rpy(
-            2.37, 2, 1.05, reference_frame=apartment_world.root
-        )
-    )
-    apartment_world.get_body_by_name(
-        "breakfast_cereal.stl"
-    ).parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-        2.37, 1.8, 1.05, reference_frame=apartment_world.root
-    )
-    milk_view = Milk(root=apartment_world.get_body_by_name("milk.stl"))
-    with apartment_world.modify_world():
-        apartment_world.add_semantic_annotation(milk_view)
+    # apartment_world.get_body_by_name("milk.stl").parent_connection.origin = (
+    #     HomogeneousTransformationMatrix.from_xyz_rpy(
+    #         2.37, 2, 1.05, reference_frame=apartment_world.root
+    #     )
+    # )
+    # apartment_world.get_body_by_name(
+    #     "breakfast_cereal.stl"
+    # ).parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+    #     2.37, 1.8, 1.05, reference_frame=apartment_world.root
+    # )
+    # milk_view = Milk(root=apartment_world.get_body_by_name("milk.stl"))
+    # with apartment_world.modify_world():
+    #     apartment_world.add_semantic_annotation(milk_view)
 
     return apartment_world
 

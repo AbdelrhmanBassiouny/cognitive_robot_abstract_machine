@@ -15,6 +15,7 @@ import pytest
 from typing_extensions import List
 
 from cramera.knowledge.eql_session import EqlSession
+from cramera.mesh_format import MeshFormat
 from cramera.paths import LIVE_SCENE_NAME, RECORDING_SCENE_NAME, WEB_ROOT
 
 JS_DIR = Path(__file__).parent / "js"
@@ -128,6 +129,31 @@ class TestAssetConsistency:
         # the old repo served under /static/; the packaged app is rooted at /
         for panel_js in panel_scripts():
             assert "'static/" not in panel_js.read_text(), panel_js.name
+
+
+# %% mesh format loaders
+class TestBinaryGltfLoading:
+    """
+    The viewer must be able to load the compact mesh format scene bundles are
+    converted to, wherever it loads a mesh from.
+    """
+
+    SCENE_PANEL = "panels/robot_scene/panel.js"
+
+    def test_the_shell_ships_a_loader_for_it(self):
+        included = SCRIPT_PATTERN.findall(read("index.html"))
+        assert "vendor/GLTFLoader.js" in included
+
+    def test_a_urdf_mesh_reference_is_dispatched_to_that_loader(self):
+        panel = read(self.SCENE_PANEL)
+        suffix = MeshFormat.GLB.value.lstrip(".")
+        assert r"/\.%s$/i.test(path)" % suffix in panel
+
+    def test_a_published_shape_is_dispatched_to_that_loader(self):
+        panel = read(self.SCENE_PANEL)
+        suffix = MeshFormat.GLB.value.lstrip(".")
+        assert "shapeSpec.format === '%s'" % suffix in panel
+        assert "fmt === '%s'" % suffix in panel
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")

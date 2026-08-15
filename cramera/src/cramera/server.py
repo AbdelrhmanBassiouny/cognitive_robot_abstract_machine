@@ -16,8 +16,11 @@ Serves three things from one port (default 8711):
                                         cramera.live.recording_storage) — a pure
                                         filesystem check, so it answers correctly even
                                         once the demo process that made it has exited
-      POST /api/recording/save         {name} -> promote that bundle to a permanent,
-                                        locally saved scene
+      POST /api/recording/save         {name, destination?, firstFrame?, lastFrame?}
+                                        -> promote that
+                                        bundle to a permanent, locally saved scene,
+                                        trimmed to the given inclusive frame range
+                                        when one is sent
       POST /api/recording/discard      drop that bundle
 
 The API needs krrood (EQL). Without it the server still serves the viewer and
@@ -45,12 +48,16 @@ from typing_extensions import Any, Callable, ClassVar, Dict, List, Optional
 from urllib.parse import parse_qs, urlparse
 
 from cramera import paths
+from cramera.live.frame_range import FrameRange, InvalidFrameRange
 from cramera.live.recording_storage import (
     NoSavedRecording,
+    SceneDestination,
     SceneNameTaken,
+    SharedScenesUnavailable,
     discard_recording_bundle,
     has_saveable_recording,
     save_recording_bundle,
+    trim_recording_bundle,
 )
 from cramera.logging_setup import get_logger
 from cramera.models_workbench import (
@@ -281,13 +288,29 @@ class Handler(http.server.SimpleHTTPRequestHandler):
         Promote the on-disk ``__recording__`` bundle to a permanent, locally saved
         scene — independent of whether the demo process that made it is still running
         (see :mod:`cramera.live.recording_storage`).
+
+        An optional ``firstFrame``/``lastFrame`` pair cuts the run down to that
+        inclusive range before it is saved.
         """
         body = self._request_body()
+        if body.get("firstFrame") is not None:
+            try:
+                trim_recording_bundle(
+                    FrameRange(
+                        first=int(body["firstFrame"]),
+                        last=int(body.get("lastFrame", -1)),
+                    )
+                )
+            except (InvalidFrameRange, NoSavedRecording) as error:
+                return self._send_json({"ok": False, "error": str(error)}, 400)
         try:
-            name = save_recording_bundle(str(body.get("name") or ""))
+            name = save_recording_bundle(
+                str(body.get("name") or ""),
+                SceneDestination(body.get("destination", SceneDestination.LOCAL)),
+            )
         except InvalidSceneName as error:
             return self._send_json({"ok": False, "error": str(error)}, 400)
-        except NoSavedRecording as error:
+        except (NoSavedRecording, SharedScenesUnavailable) as error:
             return self._send_json({"ok": False, "error": str(error)}, 400)
         except SceneNameTaken as error:
             return self._send_json({"ok": False, "error": str(error)}, 409)

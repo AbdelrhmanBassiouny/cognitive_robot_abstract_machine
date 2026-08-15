@@ -24,6 +24,8 @@ from typing_extensions import (
     TYPE_CHECKING,
 )
 
+from cramera.live.frame_range import FrameRange
+
 if TYPE_CHECKING:
     from cramera.live.recording import RecordedFrame
 
@@ -291,3 +293,40 @@ def _last_frame_away_from(
         if current is not None and has_moved(current, pose, MOTION_TOLERANCE):
             return index
     return 0
+
+
+# %% narrowing a timeline to a trimmed run
+
+
+SEGMENT_FRAME_KEYS = ("start", "end", "attach", "detach")
+"""
+The keys of a segment payload that name a frame, and so have to be rebased when the run
+around them is cut down.
+"""
+
+
+def clip_segment_payloads(
+    payloads: List[Dict[str, Any]], frame_range: FrameRange
+) -> List[Dict[str, Any]]:
+    """
+    Narrow a bundle's segments to the stretch of the run a trim keeps.
+
+    Segments overlapping the kept stretch are clamped to it and rebased so frame zero is
+    the trim's first frame; segments lying entirely outside it are dropped. Keys that do
+    not name a frame are carried through untouched.
+
+    :param payloads: The segments in the ``scene.json`` shape a bundle carries.
+    :param frame_range: The stretch of the run that is kept.
+    """
+    clipped = []
+    for payload in payloads:
+        if payload["end"] < frame_range.first or payload["start"] > frame_range.last:
+            continue
+        entry = dict(payload)
+        for key in SEGMENT_FRAME_KEYS:
+            if entry.get(key) is None:
+                continue
+            inside = min(max(entry[key], frame_range.first), frame_range.last)
+            entry[key] = inside - frame_range.first
+        clipped.append(entry)
+    return clipped
