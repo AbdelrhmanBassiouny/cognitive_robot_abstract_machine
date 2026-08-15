@@ -87,8 +87,8 @@ class WorldReasoner:
         """
         Add the inferred semantic annotations that the world does not hold yet.
 
-        Reasoning on a world that has been reasoned on before infers annotations equal to
-        the ones already in it, and those must not be added a second time.
+        Reasoning on a world that has been reasoned on before infers annotations equal
+        to the ones already in it, and those must not be added a second time.
 
         :param semantic_annotations: The inferred semantic annotations.
         """
