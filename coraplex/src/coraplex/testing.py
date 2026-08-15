@@ -126,25 +126,25 @@ def setup_world(robot_type: Type[AbstractRobot] = PR2) -> World:
         )
     ).parse()
     print("setup_world: parsing object meshes...")
-    # milk_world = STLParser(
-    #     os.path.join(
-    #         os.path.dirname(__file__), "..", "..", "resources", "objects", "milk.stl"
-    #     )
-    # ).parse()
-    # cereal_world = STLParser(
-    #     os.path.join(
-    #         os.path.dirname(__file__),
-    #         "..",
-    #         "..",
-    #         "resources",
-    #         "objects",
-    #         "breakfast_cereal.stl",
-    #     )
-    # ).parse()
+    milk_world = STLParser(
+        os.path.join(
+            os.path.dirname(__file__), "..", "..", "resources", "objects", "milk.stl"
+        )
+    ).parse()
+    cereal_world = STLParser(
+        os.path.join(
+            os.path.dirname(__file__),
+            "..",
+            "..",
+            "resources",
+            "objects",
+            "breakfast_cereal.stl",
+        )
+    ).parse()
     print("setup_world: merging worlds...")
     # apartment_world.merge_world(pr2_sem_world)
-    # apartment_world.merge_world(milk_world)
-    # apartment_world.merge_world(cereal_world)
+    apartment_world.merge_world(milk_world)
+    apartment_world.merge_world(cereal_world)
 
     with apartment_world.modify_world():
         robot_root = robot_world.get_body_by_name(robot_type._get_root_body_name())
@@ -160,32 +160,30 @@ def setup_world(robot_type: Type[AbstractRobot] = PR2) -> World:
         0.0,
         -apartment_world.height_of_lowest_collision_point_of_branch(robot_root),
     )
-    if standing_height > 0.0:
-        with apartment_world.modify_world():
-            # The drive keeps the robot on the z=0 plane of its parent frame, so a robot
-            # whose root is above its feet - a humanoid's pelvis - is stood on the floor
-            # by lifting that plane rather than the drive's own position.
-            c_root_bf.parent_T_connection_expression = (
-                c_root_bf.parent_T_connection_expression
-                @ HomogeneousTransformationMatrix.from_xyz_rpy(
-                    z=standing_height, reference_frame=apartment_root
-                )
+    with apartment_world.modify_world():
+        # The drive keeps the robot on the z=0 plane of its parent frame, so a robot
+        # whose root is above its feet - a humanoid's pelvis - is stood on the floor by
+        # lifting that plane rather than the drive's own position.
+        c_root_bf.parent_T_connection_expression = (
+            HomogeneousTransformationMatrix.from_xyz_rpy(
+                z=standing_height, reference_frame=apartment_root
             )
+        )
     print("setup_world: done")
 
-    # apartment_world.get_body_by_name("milk.stl").parent_connection.origin = (
-    #     HomogeneousTransformationMatrix.from_xyz_rpy(
-    #         2.37, 2, 1.05, reference_frame=apartment_world.root
-    #     )
-    # )
-    # apartment_world.get_body_by_name(
-    #     "breakfast_cereal.stl"
-    # ).parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-    #     2.37, 1.8, 1.05, reference_frame=apartment_world.root
-    # )
-    # milk_view = Milk(root=apartment_world.get_body_by_name("milk.stl"))
-    # with apartment_world.modify_world():
-    #     apartment_world.add_semantic_annotation(milk_view)
+    apartment_world.get_body_by_name("milk.stl").parent_connection.origin = (
+        HomogeneousTransformationMatrix.from_xyz_rpy(
+            2.37, 2, 1.05, reference_frame=apartment_world.root
+        )
+    )
+    apartment_world.get_body_by_name(
+        "breakfast_cereal.stl"
+    ).parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
+        2.37, 1.8, 1.05, reference_frame=apartment_world.root
+    )
+    milk_view = Milk(root=apartment_world.get_body_by_name("milk.stl"))
+    with apartment_world.modify_world():
+        apartment_world.add_semantic_annotation(milk_view)
 
     return apartment_world
 

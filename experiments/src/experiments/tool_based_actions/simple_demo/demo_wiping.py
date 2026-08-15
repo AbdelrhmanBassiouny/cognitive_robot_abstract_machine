@@ -14,7 +14,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import Spon
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 from coraplex.datastructures.dataclasses import Context
-from coraplex.datastructures.enums import Arms
+from coraplex.datastructures.enums import Arms, VisualizationBackend
 from coraplex.execution_environment import simulated_robot
 from coraplex.plans.factories import sequential
 from coraplex.robot_plans.actions.composite.tool_based import WipingAction
@@ -24,7 +24,6 @@ from coraplex.robot_plans.actions.core.robot_body import (
     ParkArmsAction,
     SetGripperAction,
 )
-from coraplex.testing import setup_world, start_visualization
 
 
 def main() -> None:
