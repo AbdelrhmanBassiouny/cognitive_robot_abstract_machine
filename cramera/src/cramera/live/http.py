@@ -19,6 +19,8 @@ HTTP endpoints of the live bridge (default port 8765).
                   edges: [{from, to, kind}]}
     GET /presets {ok, title, presets: [{text, code, scope}],
                   scopes: [{name, label, variables}], variables: [name]}
+    GET /replay  {ok, start, end, frames: [{at, frames, base, objects}]}
+                  (start/end query parameters in seconds since the epoch)
     GET /run     {ok, title, paused, looping, restart_pending, activity, iteration}
     POST /eql    {code, scope} -> the rendered answer rows
     POST /run    {command} -> the run state that command produced
@@ -34,6 +36,7 @@ from __future__ import annotations
 
 import functools
 import json
+import math
 import os
 import re
 import threading
@@ -129,6 +132,8 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_model_mesh()
         if self.path.startswith("/presets"):
             return self._send_query_presets()
+        if self.path.startswith("/replay"):
+            return self._send_replay_clip()
         if self.path.startswith("/run"):
             return self._send_run_control_state()
         if self.path.startswith("/info"):
@@ -191,6 +196,36 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return int(value) if value is not None else None
         except ValueError:
             return None
+
+    def _query_float(self, name: str) -> Optional[float]:
+        """
+        One query-string parameter's value, parsed as a finite float, or None if it is
+        absent or not one.
+
+        :param name: The parameter's name.
+        """
+        value = self._query_value(name)
+        try:
+            parsed = float(value) if value is not None else None
+        except ValueError:
+            return None
+        return parsed if parsed is not None and math.isfinite(parsed) else None
+
+    def _send_replay_clip(self) -> None:
+        """
+        Serve the recorded frames of one replay window, or reject an unusable window.
+        """
+        start = self._query_float("start")
+        end = self._query_float("end")
+        if start is None or end is None or end <= start:
+            return self._send_json(
+                {
+                    "ok": False,
+                    "error": "'start' and 'end' must be numbers with start < end",
+                },
+                code=400,
+            )
+        self._send_json(self.bridge.replay_clip(start, end))
 
     def _send_mesh(self) -> None:
         """

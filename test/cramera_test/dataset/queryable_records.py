@@ -9,6 +9,7 @@ cramera owns.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 
 from semantic_digital_twin.spatial_types import Point3, Pose
 
@@ -54,6 +55,23 @@ class PosedRecord:
     target: Pose
     """
     The pose the row reports.
+    """
+
+
+@dataclass
+class MomentRecord:
+    """
+    A record of something that happened at one moment, as a detected event is.
+    """
+
+    name: str
+    """
+    What the rendered row is titled with.
+    """
+
+    timestamp: datetime
+    """
+    When the recorded thing happened.
     """
 
 

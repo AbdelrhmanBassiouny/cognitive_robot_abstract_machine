@@ -71,6 +71,7 @@ from cramera.knowledge.queryable_knowledge import (
 )
 from cramera.live.model_source import LiveModelCatalog
 from cramera.live.query import LiveQuerySource, NoQuerySourceRegistered
+from cramera.live.recording import DemoRecording
 from cramera.live.run_control import (
     LiveRunControl,
     NoRunControlRegistered,
@@ -657,6 +658,11 @@ class Bridge:
     The newest world snapshot in the trajectory-frame format.
     """
 
+    recording: DemoRecording = field(default_factory=DemoRecording)
+    """
+    The rolling record of every published snapshot, served as replay clips.
+    """
+
     object_metadata: List[ObjectCatalogEntry] = field(default_factory=list)
     """
     Geometry catalog for the viewer: one entry per loose object.
@@ -853,6 +859,7 @@ class Bridge:
         would otherwise stay on screen as though they belonged to the new one.
         """
         self.scene_entities = []
+        self.recording.clear()
         self._plan = None
         self._chart = None
         self._chart_structure = None
@@ -1431,12 +1438,28 @@ class Bridge:
                 object_poses[name] = rounded_pose(body)
         with self._lock:
             self.sequence_number += 1
-            self.state = WorldStateSnapshot(
+            state = WorldStateSnapshot(
                 sequence_number=self.sequence_number,
                 frames=frames,
                 base=base_pose,
                 objects=object_poses,
             )
+            self.state = state
+        self.recording.record(time.time(), state)
+
+    def replay_clip(self, start: float, end: float) -> Dict[str, Any]:
+        """
+        The recorded frames within one window, as the replay viewer plays them.
+
+        :param start: When the clip begins, in seconds since the epoch.
+        :param end: When the clip ends, in seconds since the epoch.
+        """
+        return {
+            "ok": True,
+            "start": start,
+            "end": end,
+            "frames": [frame.to_payload() for frame in self.recording.clip(start, end)],
+        }
 
     def get_state(self) -> Dict[str, Any]:
         """
