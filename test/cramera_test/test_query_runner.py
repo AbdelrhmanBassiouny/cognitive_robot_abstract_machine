@@ -273,6 +273,44 @@ class TestRowRendering:
         assert make_runner().run("an(entity(record))").more is False
 
 
+# %% highlightable answer values
+class TestHighlightableAnswerValues:
+    """
+    An answer value naming something the viewer shows is highlighted, whatever the query
+    asked for; every other value is left alone.
+    """
+
+    def make_highlighting_runner(self, *highlightable_ids: str) -> EqlQueryRunner:
+        """
+        A runner over :func:`make_records` that may light up the given ids.
+
+        :param highlightable_ids: Ids the viewer is said to show.
+        """
+        return EqlQueryRunner(
+            domains=[QueryDomain("record", NamedRecord, make_records())],
+            highlightable_ids=frozenset(highlightable_ids),
+        )
+
+    def test_a_string_answer_value_naming_a_highlightable_id_is_highlighted(self):
+        runner = self.make_highlighting_runner("alpha")
+
+        result = runner.run("set_of(record.name, record.category)")
+
+        assert result.highlight == ["alpha"]
+
+    def test_an_answer_value_naming_nothing_highlightable_is_left_alone(self):
+        result = make_runner().run("set_of(record.name, record.category)")
+
+        assert result.highlight == []
+
+    def test_an_entity_field_value_lights_up_the_id_it_names(self):
+        runner = self.make_highlighting_runner("beta")
+
+        result = runner.run("an(entity(record))")
+
+        assert result.highlight == ["beta", "first", "second", "third"]
+
+
 # %% failures reach the caller
 class TestQueryFailures:
     """
