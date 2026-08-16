@@ -359,6 +359,25 @@ class ShapeSortingBoard(HasCaseAsRootBody, HasDrawers, HasApertures):
     def hole_direction(self) -> Vector3:
         return Vector3.Z()
 
+    @property
+    def holes(self) -> List[ShapeSortingHole]:
+        """
+        The shape-holes cut into this board's lid, in the order they were added.
+        """
+        return [hole for hole in self.apertures if isinstance(hole, ShapeSortingHole)]
+
+    def fitting_holes(
+        self, montessori_shape: MontessoriShape
+    ) -> List[ShapeSortingHole]:
+        """
+        The holes ``montessori_shape`` actually passes through (see
+        :meth:`MontessoriShape.fits_through`); empty for a shape the board has no
+        opening for, such as the sphere.
+
+        :param montessori_shape: The shape to check against every hole.
+        """
+        return [hole for hole in self.holes if montessori_shape.fits_through(hole)]
+
     def hole_for(self, montessori_shape: MontessoriShape) -> ShapeSortingHole:
         """
         Find this board's :class:`ShapeSortingHole` that ``montessori_shape`` actually
@@ -379,12 +398,7 @@ class ShapeSortingBoard(HasCaseAsRootBody, HasDrawers, HasApertures):
         :raises NoMatchingHoleError: If this board has no hole ``montessori_shape``
             fits through.
         """
-        fitting_holes = [
-            hole
-            for hole in self.apertures
-            if isinstance(hole, ShapeSortingHole)
-            and montessori_shape.fits_through(hole)
-        ]
+        fitting_holes = self.fitting_holes(montessori_shape)
         if not fitting_holes:
             raise NoMatchingHoleError(montessori_shape, self)
         for hole in fitting_holes:

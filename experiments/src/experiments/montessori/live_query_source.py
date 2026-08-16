@@ -1,11 +1,12 @@
 """
 What a running Montessori sort offers the viewer's entity query language console.
 
-Two things are on offer. About the sort in progress, the questions the buttons exist to
-answer are: was this shape inserted, where was it being inserted, and why could it not
-be. About the runs that already finished, they are how often each shape was sorted and
-how its attempts ended -- read back out of the results database rather than out of this
-process.
+Three things are on offer. About the scene itself: where the holes, the box and each
+shape's insertion goal are, answered by highlighting them in the viewer. About the sort
+in progress, the questions the buttons exist to answer are: was this shape inserted,
+where was it being inserted, and why could it not be. About the runs that already
+finished, they are how often each shape was sorted and how its attempts ended -- read
+back out of the results database rather than out of this process.
 """
 
 from __future__ import annotations
@@ -21,6 +22,12 @@ from cramera.live.query import LiveQuerySource
 from typing_extensions import List, Optional
 
 from experiments.montessori.results_database import ResultsDatabase
+from experiments.montessori.scene_layout import (
+    BoardRecord,
+    HoleRecord,
+    InsertionGoalRecord,
+    SceneLayout,
+)
 from experiments.montessori.sorting_progress import (
     InsertionAttemptRecord,
     PlanStep,
@@ -162,11 +169,12 @@ behind it. The per-outcome breakdown answers the same thing by reading a column 
 
 MONTESSORI_PRESETS: List[Preset] = CURRENT_STATE_PRESETS + EPISODIC_MEMORY_PRESETS
 """
-Every ready-made question the viewer offers as a button for this demo.
+The ready-made questions the recorded Franka Montessori bundle declares in its
+``presets.json``; a test keeps the two in step.
 
-The recorded Franka Montessori bundle declares the same list in its ``presets.json``, so
-the same questions are shown whether or not a demo is attached; a test keeps the two in
-step.
+The live demo offers these plus the "where is" questions about its own scene (see
+:meth:`MontessoriLiveQuerySource.presets`), which only exist once a world has been
+built and so are not declared by the bundle.
 """
 
 
@@ -179,6 +187,12 @@ class MontessoriLiveQuerySource(LiveQuerySource):
     progress: SortingProgress = field(default_factory=SortingProgress)
     """
     The record the running sort keeps of itself.
+    """
+
+    layout: SceneLayout = field(default_factory=SceneLayout)
+    """
+    The scene's fixed layout — its board, holes and insertion goals — read once from
+    the world when the demo attaches.
     """
 
     results_database: Optional[ResultsDatabase] = None
@@ -203,9 +217,9 @@ class MontessoriLiveQuerySource(LiveQuerySource):
 
     def _current_state(self) -> QueryableKnowledge:
         """
-        The four things a question about the sort in progress is about.
-
-        Read fresh on every call, so an answer describes the sort as it stands now.
+        What a question about the sort in progress may range over: the sort's own
+        records, read fresh on every call so an answer describes the sort as it stands
+        now, plus the scene's fixed layout.
         """
         return QueryableKnowledge(
             scope=QueryScope.CURRENT_STATE,
@@ -214,6 +228,9 @@ class MontessoriLiveQuerySource(LiveQuerySource):
                 QueryDomain("attempt", InsertionAttemptRecord, self.progress.attempts),
                 QueryDomain("plan_step", PlanStep, self.progress.plan_steps),
                 QueryDomain("event", SegmindEventRecord, self.progress.events),
+                QueryDomain("hole", HoleRecord, self.layout.holes),
+                QueryDomain("board", BoardRecord, self.layout.boards),
+                QueryDomain("goal", InsertionGoalRecord, self.layout.goals),
             ],
         )
 
@@ -237,9 +254,42 @@ class MontessoriLiveQuerySource(LiveQuerySource):
     def presets(self) -> List[Preset]:
         """
         The ready-made questions the panel offers as buttons, in the groups they belong
-        to.
+        to: where things are in this scene, then the sort in progress, then the runs
+        that already finished.
         """
-        offered = list(CURRENT_STATE_PRESETS)
+        offered = self._scene_presets() + list(CURRENT_STATE_PRESETS)
         if self.results_database is not None:
             offered += EPISODIC_MEMORY_PRESETS
         return offered
+
+    def _scene_presets(self) -> List[Preset]:
+        """
+        The "where is" questions this scene's own layout gives rise to, each answered
+        by highlighting what it names in the viewer.
+        """
+        presets = [
+            Preset(
+                "where is the %s?" % hole.name.replace("_", " "),
+                "the(entity(hole).where(hole.name == %r))" % hole.name,
+            )
+            for hole in self.layout.holes
+        ]
+        if self.layout.holes:
+            presets.append(Preset("where are all the holes?", "an(entity(hole))"))
+        if self.layout.boards:
+            presets.append(Preset("where is the montessori box?", "the(entity(board))"))
+        presets += [
+            Preset(
+                "where is the goal for the %s?" % goal.shape.replace("_", " "),
+                "the(entity(goal).where(goal.shape == %r))" % goal.shape,
+            )
+            for goal in self.layout.goals
+        ]
+        if self.layout.goals:
+            presets.append(
+                Preset(
+                    "where is each shape's goal?",
+                    "set_of(goal.shape, goal.hole, goal.pose)",
+                )
+            )
+        return presets

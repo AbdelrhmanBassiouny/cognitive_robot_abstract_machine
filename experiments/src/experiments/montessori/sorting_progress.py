@@ -35,7 +35,11 @@ from experiments.montessori.insertion_diagnosis import (
     InsertionEvidence,
     InsertionFailureReason,
 )
-from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
+from experiments.montessori.semantics import (
+    MontessoriShape,
+    SHAPE_NAME_SUFFIX,
+    ShapeSortingBoard,
+)
 from experiments.montessori.sorting_results import InsertionOutcome
 
 INSERTION_PHASE_ACTION_NAME = "PlaceAction"
@@ -130,6 +134,15 @@ class ShapeUnderTest:
     """
     What that reason was read from.
     """
+
+    def related_highlight_ids(self) -> List[str]:
+        """
+        The piece's published body, so an answer row for this shape lights the piece
+        itself up: the record is named after what the piece is (``"cube"``) while the
+        viewer shows its body under the name it was built with
+        (``"square_hole_shape"``).
+        """
+        return [self.shape_key + SHAPE_NAME_SUFFIX]
 
 
 @dataclass
