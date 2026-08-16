@@ -67,3 +67,12 @@ opening-a-PR-ends-obligation rule.
 Outstanding: not verified in a live end-to-end demo run (needs ROS +
 Postgres); replay shifts fixed at 5 s lead/tail (easy to change in
 ReplayWindow).
+
+Follow-up on #165 (user request): scenes submodule pin fixed in ef46d536 —
+old pin 2438a523 was orphaned (never pushed to public cram2/cram-scenes; no
+commit there ever had a Franka_Montessori bundle), new pin = scenes main
+2230683. Bundle presets-sync test now skips while the checked-out submodule
+has no Franka_Montessori bundle (CI-safety rule), re-arms once one is
+published. PR #165 description updated; suites re-run green (cramera 459,
+live-query file 20 passed + 1 skipped). Open follow-up: publish the
+montessori bundle (incl. new presets) to cram-scenes.
