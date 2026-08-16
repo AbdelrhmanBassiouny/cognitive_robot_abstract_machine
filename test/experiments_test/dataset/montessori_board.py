@@ -14,6 +14,7 @@ from experiments.montessori.semantics import (
     MontessoriShapeCategory,
     ShapeSortingBoard,
     ShapeSortingHole,
+    SphereShape,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import (
@@ -21,9 +22,12 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Point3,
 )
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import Connection6DoF
+from semantic_digital_twin.world_description.connections import (
+    Connection6DoF,
+    FixedConnection,
+)
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
-from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.geometry import Box, Scale, Sphere
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -93,6 +97,30 @@ def cube_at(world: World, position: Point3) -> MontessoriShape:
     shape = CubeShape(name=PrefixedName(name), root=body)
     world.add_semantic_annotation(shape)
     _place(world, shape, position)
+    return shape
+
+
+def sphere_at(world: World, position: Point3) -> MontessoriShape:
+    """
+    A sphere, the one shape category the board has no hole for.
+
+    :param world: The world to build it in.
+    :param position: Where the sphere sits, in the world root frame.
+    """
+    body = Body.from_shape_collection(
+        PrefixedName("sphere_shape"), ShapeCollection([Sphere(radius=0.02)])
+    )
+    world.add_connection(
+        FixedConnection(
+            parent=world.root,
+            child=body,
+            parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                x=position.x, y=position.y, z=position.z
+            ),
+        )
+    )
+    shape = SphereShape(name=PrefixedName("sphere_shape"), root=body)
+    world.add_semantic_annotation(shape)
     return shape
 
 
