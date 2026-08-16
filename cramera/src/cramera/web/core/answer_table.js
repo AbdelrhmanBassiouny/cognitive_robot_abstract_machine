@@ -12,6 +12,7 @@
 
   const ENTITY_NAME = '__entity__';
   const ENTITY_TYPE = '__type__';
+  const REPLAY_WINDOW = '__replay__';
   const NAME_COLUMN = 'name';
   const EMPTY_CELL = '—';
 
@@ -24,7 +25,7 @@
         columns.push(NAME_COLUMN);
       }
       Object.keys(row).forEach(function (key) {
-        if (key === ENTITY_NAME || key === ENTITY_TYPE) return;
+        if (key === ENTITY_NAME || key === ENTITY_TYPE || key === REPLAY_WINDOW) return;
         if (columns.indexOf(key) < 0) columns.push(key);
       });
     });
@@ -56,6 +57,7 @@
       rows: all.map(function (row) {
         return {
           type: row[ENTITY_TYPE] === undefined ? null : String(row[ENTITY_TYPE]),
+          replay: row[REPLAY_WINDOW] === undefined ? null : row[REPLAY_WINDOW],
           cells: columns.map(function (column) { return cellOf(row, column); }),
         };
       }),

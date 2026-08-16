@@ -80,6 +80,18 @@ test('an answer of bare values is given a single value column', function () {
   assert.deepStrictEqual(cellTexts(table.rows[1]), ['cylinder_1']);
 });
 
+test('a replay window rides along on its row instead of becoming a column', function () {
+  const table = load().of([
+    { __entity__: 'cube PickUpEvent', __type__: 'SegmindEventRecord',
+      timestamp: '2026-08-13 12:00:30', __replay__: { start: 100, end: 110 } },
+    { __entity__: 'cube InsertionEvent', __type__: 'SegmindEventRecord',
+      timestamp: '2026-08-13 12:00:40' },
+  ]);
+  assert.deepStrictEqual(table.columns, ['name', 'timestamp']);
+  assert.deepStrictEqual(table.rows[0].replay, { start: 100, end: 110 });
+  assert.strictEqual(table.rows[1].replay, null);
+});
+
 test('no rows is an empty table rather than a broken one', function () {
   const table = load().of([]);
   assert.deepStrictEqual(table.columns, []);

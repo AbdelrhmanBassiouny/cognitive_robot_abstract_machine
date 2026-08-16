@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import math
 import threading
+import time
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -445,6 +446,53 @@ def make_free_floating_object() -> Tuple[World, Connection6DoF, Body]:
         world.add_connection(connection)
         world.state[qw.id].position = 1.0
     return world, connection, obj
+
+
+class TestDemoRecordingOnTheBridge:
+    """
+    Every published snapshot is kept for replay, and a replaced world's frames do not
+    survive it.
+    """
+
+    def test_a_published_snapshot_can_be_replayed(self):
+        world, _, _ = make_free_floating_object()
+        bridge = Bridge()
+        before = time.time()
+        bridge.attach(world)
+        bridge.snapshot()
+
+        clip = bridge.replay_clip(before, time.time())
+
+        assert [frame["objects"] for frame in clip["frames"]] == [
+            bridge.get_state()["objects"]
+        ]
+
+    def test_the_clip_names_the_window_it_was_asked_for(self):
+        assert Bridge().replay_clip(10.0, 20.0) == {
+            "ok": True,
+            "start": 10.0,
+            "end": 20.0,
+            "frames": [],
+        }
+
+    def test_back_to_back_snapshots_collapse_to_the_recordings_rate(self):
+        world, _, _ = make_free_floating_object()
+        bridge = Bridge()
+        bridge.attach(world)
+        bridge.snapshot()
+        bridge.snapshot()
+
+        assert len(bridge.replay_clip(0.0, time.time() + 1.0)["frames"]) == 1
+
+    def test_replacing_the_world_drops_the_previous_recording(self):
+        world_a, _, _ = make_free_floating_object()
+        world_b, _, _ = make_free_floating_object()
+        bridge = Bridge()
+        bridge.attach(world_a)
+        bridge.snapshot()
+        bridge.attach(world_b)
+
+        assert bridge.replay_clip(0.0, time.time() + 1.0)["frames"] == []
 
 
 class TestApplyMove:

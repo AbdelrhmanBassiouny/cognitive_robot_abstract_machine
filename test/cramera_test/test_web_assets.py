@@ -152,6 +152,9 @@ class TestJsUnits:
     def test_live_attach_decision(self):
         self.run_node("test_live_attach.js")
 
+    def test_replay(self):
+        self.run_node("test_replay.js")
+
     def test_answer_table(self):
         self.run_node("test_answer_table.js")
 
@@ -196,6 +199,15 @@ class TestQueryPanelReadsTheAnswer:
 
         assert "verbalization" in payload
         assert "res.verbalization" in read("panels/eql/panel.js")
+
+    def test_the_replay_window_is_read_under_the_key_it_is_sent_as(self):
+        """
+        A replayable row carries its window under ``__replay__`` (see
+        :class:`~cramera.knowledge.replay.ReplayWindow`); the table strips the key into
+        ``row.replay`` and the panel builds the replay button from it.
+        """
+        assert "'__replay__'" in read("core/answer_table.js")
+        assert "row.replay" in read("panels/eql/panel.js")
 
     def test_the_verbalization_is_styled_by_the_stylesheet(self):
         """

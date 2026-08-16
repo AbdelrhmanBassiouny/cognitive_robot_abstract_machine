@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 from collections.abc import Mapping
 from dataclasses import MISSING, dataclass, field, fields, is_dataclass
+from datetime import datetime
 
 from typing_extensions import (
     AbstractSet,
@@ -32,6 +33,7 @@ from semantic_digital_twin.spatial_types import Point3, Pose
 from cramera.body_geometry import NumericPose, pose_label, position_label
 from cramera.knowledge.entity import NamedEntity
 from cramera.knowledge.query_domain import QueryDomain
+from cramera.knowledge.replay import ReplayWindow
 from cramera.knowledge.query_verbalization import QueryVerbalization
 from cramera.knowledge.query_vocabulary import QueryVocabulary
 from cramera.knowledge.queryable_knowledge import InMemoryEvaluation, QueryEvaluation
@@ -45,6 +47,15 @@ DEFAULT_ROW_LIMIT = 200
 """
 Maximum number of answer rows a query returns unless the caller asks for fewer.
 """
+
+
+@runtime_checkable
+class CarriesATimestamp(Protocol):
+    """
+    An entity recording when it happened, such as a detected event.
+    """
+
+    timestamp: datetime
 
 
 @runtime_checkable
@@ -213,11 +224,16 @@ class RowRenderer:
         if isinstance(item, Mapping):  # a unification row from set_of()
             columns = self._column_names([str(key) for key in item])
             row = {}
+            window: Optional[ReplayWindow] = None
             for column, value in zip(columns, item.values()):
                 name = self._row_title(value)
                 if name:
                     self.highlight.append(name)
+                if window is None and isinstance(value, datetime):
+                    window = ReplayWindow.around(value)
                 row[column] = self._jsonable(value)
+            if window is not None:
+                row["__replay__"] = window.to_payload()
             return row
         return {"value": self._jsonable(item)}
 
@@ -262,6 +278,8 @@ class RowRenderer:
                 )
             elif entity_field.default is not MISSING:
                 row[entity_field.name] = self._jsonable(entity_field.default)
+        if isinstance(item, CarriesATimestamp) and isinstance(item.timestamp, datetime):
+            row["__replay__"] = ReplayWindow.around(item.timestamp).to_payload()
         return row
 
     def _jsonable(self, value: Any) -> Any:
@@ -276,6 +294,8 @@ class RowRenderer:
             return position_label(value)
         if isinstance(value, Pose):
             return pose_label(value)
+        if isinstance(value, datetime):
+            return value.isoformat(sep=" ", timespec="seconds")
         if is_dataclass(value) and not isinstance(value, type):
             return self._row_title(value) or repr(value)
         if isinstance(value, float):

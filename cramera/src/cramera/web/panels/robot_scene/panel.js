@@ -986,8 +986,18 @@ Panels.define('robot-scene', function (root, bus) {
   let liveDraggedKey = null;           // object being dragged (poll must not fight it)
   let lastMovePost = 0;
 
+  // a ?replay= page attaches to the bridge for its geometry like any live page, but
+  // plays a recorded clip on loop instead of the live stream — this is the popup a
+  // replay button in the EQL answer opens, leaving the opener's live view running
+  const replayWindow = Replay.fromSearch(window.location.search);
+  if (replayWindow && liveDot) {
+    liveDot.classList.add('replay');
+    liveDot.textContent = '▶ REPLAY · ' + Replay.label(replayWindow);
+  }
+
   // viewer -> world: throttled while dragging, final=true on release
   function postLiveMove(key, x, y, z, final) {
+    if (replayWindow) return;   // a replay shows the past; it must not move the live world
     const now = performance.now();
     if (!final && now - lastMovePost < 100) return;
     lastMovePost = now;
@@ -1005,8 +1015,8 @@ Panels.define('robot-scene', function (root, bus) {
   function probeLive() {
     fetch(liveUrl() + '/info').then(function (r) { return r.json(); })
       .then(function (info) {
-        if (liveBtn && !liveOn) liveBtn.style.display = info ? '' : 'none';
-        showRunControls(info && info.control);
+        if (liveBtn && !liveOn) liveBtn.style.display = info && !replayWindow ? '' : 'none';
+        showRunControls(replayWindow ? null : info && info.control);
         // re-decided on every probe, so a demo that restarted is picked up again
         if (LiveAttach.shouldAttach({
           reachable: !!info,
@@ -1079,6 +1089,33 @@ Panels.define('robot-scene', function (root, bus) {
     if (follow && robotCenter(_target)) controls.target.lerp(_target, 0.08);
     needsRender = true;
   }
+  // %% replay mode: loop a recorded clip of the demo instead of its live stream
+  let replayFrames = null;      // the fetched clip's frames, or null while loading
+  let replayStartedAt = 0;      // performance.now() when the looping playback began
+  function startReplayPlayback() {
+    fetch(liveUrl() + '/replay?start=' + replayWindow.start + '&end=' + replayWindow.end)
+      .then(function (r) { return r.json(); })
+      .then(function (payload) {
+        replayFrames = (payload.ok && payload.frames) || [];
+        if (!replayFrames.length) {
+          if (statusEl) {
+            statusEl.textContent =
+              'Nothing recorded for this window — the demo\'s rolling recording has moved on.';
+            statusEl.classList.remove('hidden');
+          }
+          return;
+        }
+        if (statusEl) statusEl.classList.add('hidden');
+        replayStartedAt = performance.now();
+        liveTimer = setInterval(stepReplay, 66);   // the live slot, so detach clears it
+      })
+      .catch(function () { if (liveOn) setTimeout(startReplayPlayback, 1000); });
+  }
+  function stepReplay() {
+    const frame = Replay.frameAt(replayFrames, (performance.now() - replayStartedAt) / 1000);
+    if (frame) applyLive(frame);
+  }
+
   let livePolls = 0;
   function livePoll() {
     if (++livePolls % 45 === 0) syncLiveObjects();   // ~3 s catalog reconcile
@@ -1210,7 +1247,8 @@ Panels.define('robot-scene', function (root, bus) {
       livePolls = 0;
       syncLiveObjects();
       attachLiveModels();
-      liveTimer = setInterval(livePoll, 66);          // ~15 Hz render updates
+      if (replayWindow) startReplayPlayback();
+      else liveTimer = setInterval(livePoll, 66);     // ~15 Hz render updates
     } else if (liveTimer) {
       clearInterval(liveTimer);
       liveTimer = null;

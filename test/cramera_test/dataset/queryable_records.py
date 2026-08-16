@@ -9,6 +9,7 @@ cramera owns.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from typing_extensions import Optional
 
@@ -82,6 +83,23 @@ class RecordWithClassLevelDefaults:
     revision: int = field(default=0, init=False)
     """
     A shown field left at its class-level default.
+    """
+
+
+@dataclass
+class MomentRecord:
+    """
+    A record of something that happened at one moment, as a detected event is.
+    """
+
+    name: str
+    """
+    What the rendered row is titled with.
+    """
+
+    timestamp: datetime
+    """
+    When the recorded thing happened.
     """
 
 
