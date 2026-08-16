@@ -26,5 +26,9 @@ passed; new + touched experiments tests 70 passed. Environment-only failures
 test (cram-scenes submodule pin 2438a52 unfetchable from public repo) and two
 ROS-dependent tests under the local rclpy mock shim (pass in CI with real
 ROS). Frontend needed no change: latest query already replaces highlights,
-unknown ids ignored. No PR opened (none requested).
-Next (if asked): open draft PR; optionally verify in a live run with ROS.
+unknown ids ignored.
+PR: draft #164 (montessori_eql_where_is_highlighting -> montessori_fast_inline_monitor),
+same commits as claude/montessori-eql-highlighting-bptp3r. This session's job
+on it is done per the opening-a-PR-ends-obligation rule.
+Outstanding: not verified in a live end-to-end demo run (needs ROS + Postgres);
+bundle presets.json untouched (submodule pin unfetchable), new presets live-only.
