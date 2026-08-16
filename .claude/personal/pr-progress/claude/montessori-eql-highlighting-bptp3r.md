@@ -32,3 +32,38 @@ same commits as claude/montessori-eql-highlighting-bptp3r. This session's job
 on it is done per the opening-a-PR-ends-obligation rule.
 Outstanding: not verified in a live end-to-end demo run (needs ROS + Postgres);
 bundle presets.json untouched (submodule pin unfetchable), new presets live-only.
+
+# Demo recording + event replay popup (stacked on montessori_eql_where_is_highlighting)
+
+Second PR, stacked on `montessori_eql_where_is_highlighting` per request.
+Branch: montessori_event_replay (same commits as claude/montessori-eql-highlighting-bptp3r HEAD).
+
+Plan:
+1. cramera knowledge: ReplayWindow (fixed LEAD/TAIL 5 s shifts around a moment);
+   RowRenderer marks entity rows carrying a datetime `timestamp`
+   (CarriesATimestamp protocol) and set_of rows containing datetime values with
+   `__replay__` {start, end}; datetimes render as readable times.
+2. cramera live: DemoRecording (rolling, 20 Hz cap, 600 s retention,
+   thread-safe) fed from Bridge.snapshot(); cleared on world replacement;
+   Bridge.replay_clip; GET /replay?start&end endpoint.
+3. frontend: core/replay.js (pure: ?replay= parsing, popup URL incl. live=,
+   frame stepping with 1 s loop hold, clip label); answer table strips
+   __replay__ into row.replay; EQL panel adds "▶ replay" buttons (live only)
+   opening a popup (named window 'cramera-replay'); config.js mounts only the
+   scene panel under ?replay=; robot_scene panel replay mode (geometry attach
+   as live, loops /replay clip, no live poll, no /move posts, no run controls,
+   blue REPLAY badge).
+4. montessori: event domain already queryable; tests pin event rows carrying
+   ReplayWindow.around(detection timestamp) incl. the "what was detected, and
+   when?" preset. No experiments src change needed.
+
+Status: DONE, pushed, PR opened (draft #165, montessori_event_replay ->
+montessori_eql_where_is_highlighting, commits ddfbefa7 cramera + 79081cf0
+montessori tests). Cramera suite 459
+passed; experiments failure set byte-identical to base (30 env-only
+failures: Postgres, py_trees/ROS shim gaps, submodule presets.json); node JS
+tests incl. new test_replay.js pass. Session's job on the PR is done per the
+opening-a-PR-ends-obligation rule.
+Outstanding: not verified in a live end-to-end demo run (needs ROS +
+Postgres); replay shifts fixed at 5 s lead/tail (easy to change in
+ReplayWindow).
