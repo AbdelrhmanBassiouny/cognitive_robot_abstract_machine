@@ -14,7 +14,7 @@ import urllib.request
 
 import pytest
 
-from cramera.live.bridge import Bridge
+from cramera.live.bridge import Bridge, WorldStateSnapshot
 from cramera.live.http import serve
 
 from .test_live_bridge import PublishedBody
@@ -399,6 +399,34 @@ class TestRunControlEndpoints:
         post_json(server + "/run", {"command": "enable_loop"})
 
         assert get_json(server + "/info")["control"]["looping"] is True
+
+
+class TestReplay:
+    def test_recorded_frames_within_the_window_are_served(self, server, bridge):
+        bridge.recording.record(100.0, WorldStateSnapshot(sequence_number=1))
+
+        assert get_json(server + "/replay?start=99&end=101") == {
+            "ok": True,
+            "start": 99.0,
+            "end": 101.0,
+            "frames": [{"at": 100.0, "frames": {}, "base": None, "objects": {}}],
+        }
+
+    def test_an_unrecorded_window_is_empty_rather_than_an_error(self, server):
+        payload = get_json(server + "/replay?start=0&end=1")
+
+        assert payload["ok"] is True
+        assert payload["frames"] == []
+
+    def test_a_window_missing_a_bound_is_rejected(self, server):
+        with pytest.raises(urllib.error.HTTPError) as error:
+            get(server + "/replay?start=5")
+        assert error.value.code == 400
+
+    def test_a_backwards_window_is_rejected(self, server):
+        with pytest.raises(urllib.error.HTTPError) as error:
+            get(server + "/replay?start=5&end=4")
+        assert error.value.code == 400
 
 
 class TestOptions:
