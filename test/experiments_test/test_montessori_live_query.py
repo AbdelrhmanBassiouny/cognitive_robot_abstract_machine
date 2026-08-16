@@ -26,6 +26,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 from cramera.body_geometry import pose_label
 from cramera.knowledge.query_runner import EqlQueryRunner
 from cramera.knowledge.queryable_knowledge import QueryScope
+from cramera.knowledge.replay import ReplayWindow
 from experiments.montessori.insertion_diagnosis import InsertionFailureReason
 from experiments.montessori.live_query_source import (
     MONTESSORI_PRESETS,
@@ -335,6 +336,32 @@ class TestWhereSomethingIs:
         )
 
         assert result.highlight == [SHAPE_KEY]
+
+
+# %% "show me what happened" — a detected event replays the demo around itself
+class TestReplayingADetectedEvent:
+    """
+    An answer row naming a segmind detection carries the recording window to replay
+    around it, leading and trailing the detection by the fixed shifts.
+    """
+
+    def test_an_event_row_carries_the_window_around_its_detection(self, source):
+        result = ask(source, "an(entity(event))")
+
+        [row] = result.rows
+        assert row["__replay__"] == ReplayWindow.around(STARTED_AT).to_payload()
+
+    def test_the_what_was_detected_preset_offers_a_replay_per_detection(self, source):
+        [preset] = [
+            offered
+            for offered in source.presets()
+            if offered.text == "what was detected, and when?"
+        ]
+
+        result = ask(source, preset.code)
+
+        [row] = result.rows
+        assert row["__replay__"] == ReplayWindow.around(STARTED_AT).to_payload()
 
 
 # %% the recorded bundle offers the same questions
