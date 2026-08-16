@@ -27,11 +27,14 @@ from semantic_digital_twin.spatial_types import (
     RotationMatrix,
 )
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import Connection6DoF
+from semantic_digital_twin.world_description.connections import (
+    Connection6DoF,
+    FixedConnection,
+)
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.geometry import Box, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import Body, Region
 from typing_extensions import Any, Dict, List, Optional, Tuple
 
 from cramera.knowledge.enums import PlanNodeGroup
@@ -545,7 +548,9 @@ class TestPublishedObjects:
             {
                 "square_hole_shape": PublishedBody(
                     name="montessori/square_hole_shape",
-                    visual=ShapeSet(shapes=[MeshShapeFromFile(filename=str(mesh_file))]),
+                    visual=ShapeSet(
+                        shapes=[MeshShapeFromFile(filename=str(mesh_file))]
+                    ),
                 )
             }
         )
@@ -553,6 +558,116 @@ class TestPublishedObjects:
         assert entry["kind"] == "mesh"
         assert entry["format"] == "obj"
         assert bridge.mesh_path("square_hole_shape") == str(mesh_file)
+
+
+# %% fixed scene entities a demo asks to publish
+def make_world_with_board_and_hole() -> Tuple[World, Body, Region]:
+    """
+    A world whose board body and hole region are fixed, the way scene fixtures are:
+    neither mesh-named nor free-floating, so the bridge does not discover them itself.
+    """
+    world = World()
+    root = Body(name=PrefixedName("world"))
+    board = Body(
+        name=PrefixedName("board", "montessori"),
+        visual=ShapeCollection(shapes=[Box(scale=Scale(0.4, 0.4, 0.1))]),
+    )
+    hole = Region(
+        name=PrefixedName("square_hole", "montessori"),
+        area=ShapeCollection(shapes=[Box(scale=Scale(0.05, 0.05, 0.001))]),
+    )
+    with world.modify_world():
+        world.add_body(root)
+        world.add_connection(
+            FixedConnection(
+                parent=root,
+                child=board,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    1.0, 0.0, 0.5
+                ),
+            )
+        )
+        world.add_connection(
+            FixedConnection(
+                parent=board,
+                child=hole,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    0.1, 0.0, 0.05
+                ),
+            )
+        )
+    return world, board, hole
+
+
+class TestRegisteredSceneEntities:
+    """
+    A demo can ask for fixed world entities — a board, the holes cut into it — to be
+    shown by the viewer, which discovery by looseness alone would leave out.
+    """
+
+    def test_registered_entities_are_published_alongside_the_loose_objects(self):
+        world, board, hole = make_world_with_board_and_hole()
+        bridge = Bridge()
+        bridge.attach(world)
+
+        bridge.register_scene_entities([board, hole])
+        bridge.bind()
+
+        assert sorted(bridge.object_keys()) == ["board", "square_hole"]
+
+    def test_a_registered_regions_pose_is_streamed(self):
+        world, board, hole = make_world_with_board_and_hole()
+        bridge = Bridge()
+        bridge.attach(world)
+        bridge.register_scene_entities([board, hole])
+        bridge.bind()
+
+        bridge.snapshot()
+
+        assert bridge.get_state()["objects"]["square_hole"] == [
+            1.1,
+            0.0,
+            0.55,
+            0.0,
+            0.0,
+            0.0,
+            1.0,
+        ]
+
+    def test_a_registered_region_is_catalogued_from_its_area(self):
+        world, board, hole = make_world_with_board_and_hole()
+        bridge = Bridge()
+        bridge.attach(world)
+        bridge.register_scene_entities([hole])
+        bridge.bind()
+
+        [entry] = bridge.object_catalog()
+
+        assert entry["kind"] == "box"
+        assert entry["size"] == [0.05, 0.05, 0.001]
+
+    def test_registered_entities_are_dropped_with_the_world_they_belong_to(self):
+        world, board, hole = make_world_with_board_and_hole()
+        bridge = Bridge()
+        bridge.attach(world)
+        bridge.register_scene_entities([board, hole])
+        bridge.bind()
+
+        replacement, _, _ = make_free_floating_object()
+        bridge.attach(replacement)
+
+        assert bridge.object_keys() == ["milk"]
+
+    def test_highlightable_ids_name_every_published_object_by_key_and_display_id(self):
+        bridge = Bridge()
+        bridge.publish_bodies(
+            {
+                "milk.stl": PublishedBody(name="world/milk.stl"),
+                "board": PublishedBody(name="montessori/board"),
+            }
+        )
+
+        assert bridge.highlightable_ids() == frozenset({"milk.stl", "milk", "board"})
 
 
 # %% what the HTTP layer reads

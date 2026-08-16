@@ -16,6 +16,7 @@ from typing_extensions import (
     Optional,
     Protocol,
     runtime_checkable,
+    Tuple,
     TYPE_CHECKING,
 )
 
@@ -25,7 +26,10 @@ Decimal places a pose is rounded to before it is published or recorded.
 """
 
 if TYPE_CHECKING:
-    from semantic_digital_twin.world_description.world_entity import Body
+    from semantic_digital_twin.world_description.shape_collection import ShapeCollection
+    from semantic_digital_twin.world_description.world_entity import (
+        KinematicStructureEntity,
+    )
 
 
 @runtime_checkable
@@ -40,32 +44,73 @@ class CarriesAMeshFile(Protocol):
     filename: str
 
 
-def mesh_file_of(body: Body) -> Optional[str]:
+@runtime_checkable
+class CarriesBodyGeometry(Protocol):
     """
-    The file a body's own geometry lives in, or None for one built from primitives.
+    An entity shaped like a body: geometry it is drawn with and geometry it collides
+    with.
 
-    :param body: The body whose geometry is inspected.
+    Structural, so a mimic body reads the same way a real one does.
     """
-    for shape_collection in (body.visual, body.collision):
+
+    visual: ShapeCollection
+    collision: ShapeCollection
+
+
+@runtime_checkable
+class CarriesAreaGeometry(Protocol):
+    """
+    An entity shaped like a region: the area it spans is its only geometry.
+    """
+
+    area: ShapeCollection
+
+
+def shape_collections_of(
+    entity: KinematicStructureEntity,
+) -> Tuple[ShapeCollection, ...]:
+    """
+    The shape collections an entity's geometry is read from, most descriptive first.
+
+    A body draws its visual geometry and collides with its collision geometry; a region
+    has only the area it spans. Publishing either to the viewer starts from the same
+    question — where is its geometry — so both are answered here.
+
+    :param entity: The body or region whose geometry is asked for.
+    """
+    if isinstance(entity, CarriesBodyGeometry):
+        return (entity.visual, entity.collision)
+    if isinstance(entity, CarriesAreaGeometry):
+        return (entity.area,)
+    return ()
+
+
+def mesh_file_of(entity: KinematicStructureEntity) -> Optional[str]:
+    """
+    The file an entity's own geometry lives in, or None for one built from primitives.
+
+    :param entity: The body or region whose geometry is inspected.
+    """
+    for shape_collection in shape_collections_of(entity):
         for shape in shape_collection.shapes:
             if isinstance(shape, CarriesAMeshFile) and shape.filename:
                 return shape.filename
     return None
 
 
-def measure_body(body: Body) -> Optional[Scale]:
+def measure_body(entity: KinematicStructureEntity) -> Optional[Scale]:
     """
-    Measure a body from the first of its shape collections that has any shapes.
+    Measure an entity from the first of its shape collections that has any shapes.
 
-    Checks :attr:`Body.visual` before :attr:`Body.collision`, using
-    :attr:`ShapeCollection.scale`, which measures any shape type from its bounding box
-    rather than relying on a shape-specific scale attribute.
+    Checks :attr:`Body.visual` before :attr:`Body.collision` (a region has only its
+    area), using :attr:`ShapeCollection.scale`, which measures any shape type from its
+    bounding box rather than relying on a shape-specific scale attribute.
 
-    :param body: The body to measure.
-    :return: The body's size along each world axis in metres, or None when both
-        collections are empty.
+    :param entity: The body or region to measure.
+    :return: The entity's size along each world axis in metres, or None when every
+        collection is empty.
     """
-    for shape_collection in (body.visual, body.collision):
+    for shape_collection in shape_collections_of(entity):
         if not shape_collection.shapes:
             continue
         scale = shape_collection.scale
@@ -87,18 +132,20 @@ def rounded_scale(scale: Scale, precision: int) -> List[float]:
     ]
 
 
-def rounded_pose(body: Body, precision: int = POSE_PRECISION) -> List[float]:
+def rounded_pose(
+    entity: KinematicStructureEntity, precision: int = POSE_PRECISION
+) -> List[float]:
     """
-    A body's world pose as ``[x, y, z, qx, qy, qz, qw]``, rounded for publication.
+    An entity's world pose as ``[x, y, z, qx, qy, qz, qw]``, rounded for publication.
 
     Reads the pose numerically, so publishing one builds no symbolic expression.
 
-    :param body: The body whose world pose is read.
+    :param entity: The body or region whose world pose is read.
     :param precision: Number of decimal places to round each value to.
     """
     return [
         round(value, precision)
-        for value in body.numeric_global_pose.to_position_quaternion_list()
+        for value in entity.numeric_global_pose.to_position_quaternion_list()
     ]
 
 

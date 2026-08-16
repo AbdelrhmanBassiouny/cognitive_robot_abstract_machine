@@ -30,6 +30,7 @@ from typing_extensions import (
     Any,
     ClassVar,
     Dict,
+    FrozenSet,
     List,
     Optional,
     Protocol,
@@ -87,7 +88,10 @@ if TYPE_CHECKING:
     from giskardpy.motion_statechart.graph_node import Task
     from giskardpy.motion_statechart.motion_statechart import MotionStatechart
     from semantic_digital_twin.world import World
-    from semantic_digital_twin.world_description.world_entity import Body
+    from semantic_digital_twin.world_description.world_entity import (
+        Body,
+        KinematicStructureEntity,
+    )
 
 logger = get_logger(__name__)
 
@@ -673,9 +677,19 @@ class Bridge:
     Actuated world connections whose positions are published as frames.
     """
 
-    _bodies: Dict[str, Body] = field(default_factory=dict)
+    _bodies: Dict[str, KinematicStructureEntity] = field(default_factory=dict)
     """
-    Published bodies by mesh key; :data:`ROBOT_BASE_KEY` is the robot root.
+    Published bodies and regions by mesh key; :data:`ROBOT_BASE_KEY` is the robot root.
+    """
+
+    scene_entities: List[KinematicStructureEntity] = field(default_factory=list)
+    """
+    World entities the demo asks to publish besides the loose objects the bridge
+    discovers by itself.
+
+    Fixtures such as a board and the holes cut into it are neither mesh-named nor
+    free-floating, so without being named here the viewer could neither show nor
+    highlight them.
     """
 
     _last_bind_time: float = 0.0
@@ -838,6 +852,7 @@ class Bridge:
         Its plan tree and statechart describe nodes of a run that has been abandoned, and
         would otherwise stay on screen as though they belonged to the new one.
         """
+        self.scene_entities = []
         self._plan = None
         self._chart = None
         self._chart_structure = None
@@ -901,14 +916,26 @@ class Bridge:
         """
         self._model_catalog.remember(file_path)
 
-    def publish_bodies(self, bodies: Dict[str, Body]) -> None:
+    def publish_bodies(self, bodies: Dict[str, KinematicStructureEntity]) -> None:
         """
         Replace the published bodies and rebuild the viewer's geometry catalog.
 
-        :param bodies: The current published bodies, keyed by mesh key.
+        :param bodies: The current published bodies and regions, keyed by mesh key.
         """
         self._bodies = bodies
         self._build_object_metadata(bodies)
+
+    def register_scene_entities(self, entities: List[KinematicStructureEntity]) -> None:
+        """
+        Ask for these world entities to be shown by the viewer besides the loose
+        objects, replacing any registered before.
+
+        Takes effect on the next world bind rather than immediately: rebuilding the
+        catalog reads the world, which only the simulation thread may do.
+
+        :param entities: Bodies and regions of the demo's world to publish.
+        """
+        self.scene_entities = list(entities)
 
     # %% what the HTTP layer reads
     def object_catalog(self) -> List[Dict[str, Any]]:
@@ -1082,6 +1109,16 @@ class Bridge:
                 return knowledge
         raise UnknownQueryScope(name=scope.value)
 
+    def highlightable_ids(self) -> FrozenSet[str]:
+        """
+        Ids the viewer can light up: every published object, by key and by display id.
+
+        An answer value naming one of these glows in the scene, whatever the query
+        asked for (see :attr:`~cramera.knowledge.query_runner.RowRenderer.highlightable_ids`).
+        """
+        keys = self.object_keys()
+        return frozenset(keys) | frozenset(Path(key).stem for key in keys)
+
     def run_query(
         self, code: str, scope: QueryScope = QueryScope.CURRENT_STATE
     ) -> RenderResult:
@@ -1099,6 +1136,7 @@ class Bridge:
                 domains=knowledge.domains,
                 extra_names=knowledge.extra_names,
                 evaluation=knowledge.evaluation,
+                highlightable_ids=self.highlightable_ids(),
             ).run(code)
 
     # %% viewer -> driving the run
@@ -1185,7 +1223,7 @@ class Bridge:
                 continue
             self._apply_move(move, body)
 
-    def _apply_move(self, move: MoveRequest, body: Body) -> None:
+    def _apply_move(self, move: MoveRequest, body: KinematicStructureEntity) -> None:
         """
         Write one viewer move into the world.
 
@@ -1201,7 +1239,7 @@ class Bridge:
            which is what the plan's navigate/pick reachability reads.
 
         :param move: The queued move to apply.
-        :param body: The body the move targets.
+        :param body: The body or region the move targets.
         """
         connection = body.parent_connection
         if not isinstance(connection, Connection6DoF):
@@ -1262,7 +1300,7 @@ class Bridge:
         robots = world.get_semantic_annotations_by_type(AbstractRobot)
         self.robot = robots[0] if robots else None
         self._connections = self._actuated_connections(world)
-        bodies: Dict[str, Body] = {}
+        bodies: Dict[str, KinematicStructureEntity] = {}
         if self.robot is not None:
             bodies[ROBOT_BASE_KEY] = self.robot.root
         try:
@@ -1275,6 +1313,8 @@ class Bridge:
             logger.debug("body scan skipped this bind: %s", error)
             for key, body in self._bodies.items():
                 bodies.setdefault(key, body)
+        for entity in self.scene_entities:
+            bodies.setdefault(LooseObjects.key_of(entity), entity)
         self.publish_bodies(bodies)
 
     @staticmethod
@@ -1290,14 +1330,16 @@ class Bridge:
             if isinstance(connection, ActiveConnection1DOF)
         ]
 
-    def _build_object_metadata(self, bodies: Dict[str, Body]) -> None:
+    def _build_object_metadata(
+        self, bodies: Dict[str, KinematicStructureEntity]
+    ) -> None:
         """
         Rebuild the geometry catalog the viewer spawns live objects from.
 
         Each object gets either a mesh URL (served by the bridge) or a box size, so
         objects the viewer does not know yet can appear mid-run.
 
-        :param bodies: The current published bodies, keyed by mesh key.
+        :param bodies: The current published bodies and regions, keyed by mesh key.
         """
         catalog: List[ObjectCatalogEntry] = []
         serve: Dict[str, str] = {}
@@ -1334,32 +1376,34 @@ class Bridge:
         with self._lock:
             self.object_metadata = catalog
 
-    def _servable_mesh_path(self, key: str, body: Body) -> Optional[str]:
+    def _servable_mesh_path(
+        self, key: str, entity: KinematicStructureEntity
+    ) -> Optional[str]:
         """
         The mesh file an object's geometry is served from, or None to place a box.
 
         A demo that loads its objects from mesh files names each body after the file it
         came from, which is what the mesh hook remembers; a demo that builds its objects
         in code names them after themselves, and the geometry can only be found on the
-        body's own shapes.
+        entity's own shapes.
 
         :param key: Mesh key the object is published under.
-        :param body: The body whose geometry is served.
+        :param entity: The body or region whose geometry is served.
         """
         remembered = self._mesh_files.get(key.lower())
-        candidate = remembered if remembered else mesh_file_of(body)
+        candidate = remembered if remembered else mesh_file_of(entity)
         if candidate is None or MeshFormat.of_path(candidate) is None:
             return None
         return candidate if Path(candidate).is_file() else None
 
     @classmethod
-    def _box_size(cls, body: Body) -> Optional[List[float]]:
+    def _box_size(cls, entity: KinematicStructureEntity) -> Optional[List[float]]:
         """
-        Size of a body's geometry in metres, or None when no shape reports one.
+        Size of an entity's geometry in metres, or None when no shape reports one.
 
-        :param body: The body whose geometry is measured.
+        :param entity: The body or region whose geometry is measured.
         """
-        extent = measure_body(body)
+        extent = measure_body(entity)
         return rounded_scale(extent, cls.SIZE_PRECISION) if extent else None
 
     # %% world snapshot

@@ -30,11 +30,12 @@ from semantic_digital_twin.spatial_types import (
     Pose,
 )
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import Body
+from semantic_digital_twin.world_description.world_entity import Body, Region
 from typing_extensions import Any, Optional
 
 from cramera.body_geometry import (
     measure_body,
+    mesh_file_of,
     NumericPose,
     pose_label,
     position_label,
@@ -129,6 +130,53 @@ def test_of_prefers_visual_over_collision():
     )
     extent = measure_body(body)
     assert [extent.x, extent.y, extent.z] == pytest.approx([0.1, 0.1, 0.1])
+
+
+# %% regions
+def _region_with_area(shapes: ShapeCollection) -> Region:
+    """
+    A real ``Region``, fixed to the root of its own world.
+
+    A region's shapes are measured through their reference frame just as a body's are,
+    so the region has to live in an actual world too.
+    """
+    region = Region(name=PrefixedName("landmark"), area=shapes)
+    world = World()
+    root = Body(name=PrefixedName("world"))
+    with world.modify_world():
+        world.add_body(root)
+        world.add_connection(
+            FixedConnection(
+                parent=root,
+                child=region,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    0.5, 0.0, 0.0
+                ),
+            )
+        )
+    return region
+
+
+def test_of_measures_a_regions_area():
+    region = _region_with_area(
+        ShapeCollection(shapes=[Box(scale=Scale(0.2, 0.3, 0.4))])
+    )
+    extent = measure_body(region)
+    assert [extent.x, extent.y, extent.z] == pytest.approx([0.2, 0.3, 0.4])
+
+
+def test_mesh_file_of_reads_a_regions_area_mesh(tmp_path):
+    mesh_file = tmp_path / "hole_marker.obj"
+    mesh_file.write_text("o marker\n")
+    region = _region_with_area(ShapeCollection(shapes=[Mesh(filename=str(mesh_file))]))
+    assert mesh_file_of(region) == str(mesh_file)
+
+
+def test_rounded_pose_reads_a_regions_world_pose():
+    region = _region_with_area(
+        ShapeCollection(shapes=[Box(scale=Scale(0.1, 0.1, 0.1))])
+    )
+    assert rounded_pose(region) == [0.5, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
 
 
 # %% rounded_scale
