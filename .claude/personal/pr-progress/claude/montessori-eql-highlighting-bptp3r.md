@@ -19,6 +19,12 @@ Plan:
    pin is unfetchable, sync test must keep passing).
 4. Tests in test/cramera_test + test/experiments_test; format; push.
 
-Status: environment synced with uv; design settled; implementing (1).
-Frontend needs no change: latest query already replaces highlights, unknown
-ids are ignored.
+Status: DONE and pushed (commits 354b8760 cramera, 72cf8f75 montessori).
+All four plan points implemented with tests. Test results: cramera suite 437
+passed; new + touched experiments tests 70 passed. Environment-only failures
+(also fail on base, not caused by this change): the presets.json bundle-sync
+test (cram-scenes submodule pin 2438a52 unfetchable from public repo) and two
+ROS-dependent tests under the local rclpy mock shim (pass in CI with real
+ROS). Frontend needed no change: latest query already replaces highlights,
+unknown ids ignored. No PR opened (none requested).
+Next (if asked): open draft PR; optionally verify in a live run with ROS.
