@@ -130,13 +130,47 @@ that thread, and keeps the configuration that has never crashed.
     environment); the `presets.json` failures in the live-query/episodic-memory suites
     are a missing `cramera/scenes/Franka_Montessori/` in this checkout.
 
+### Round 17 -- the cramera/scenes submodule
+
+89. The dead pin was **two** problems, not one. `2438a52` is unreachable because
+    `cram2/cram-scenes` rewrote its history (old `014c879 garmi` -> new
+    `2230683 garmi` + two more), so `submodule update --init` fails "not our ref".
+    And `2438a52` was only a **5-line `index.json` insertion** -- the 34 MB
+    `Franka_Montessori/` bundle it names was never committed anywhere, surviving only
+    as *untracked files* in `~/Projects/copied/cognitive_robot_abstract_machine`.
+    So re-pinning to latest could never have restored the scene.
+90. `ef46d536b5` on `montessori_event_replay` had already done the minimal re-pin
+    (`2230683` + a `skipif`). `cram2/main` has no `cramera` at all, so nothing central
+    was ever broken by this.
+91. On the developer's instruction ("can we make it a new PR onto cram2/cram-scenes?"),
+    the bundle is now published: branch `franka-montessori-scene` on
+    `cram2/cram-scenes`, commit `64b98ed`, parented on `2230683`. 69 files, the
+    `index.json` entry re-applied byte-identically to `2438a52`'s. Dropped
+    `stacking_scene.urdf` -- a leftover from the panda_stacking scene, referenced by
+    nothing. Checked before publishing: no absolute paths, no secrets, all 59 mesh
+    references in `panda.urdf`/`environment.urdf` resolve, and the repo commits meshes
+    directly (921 already, no LFS) so 34 MB is in keeping.
+92. **The developer has push access to `cram2/cram-scenes`** (verified with a dry-run
+    push). No `gh` CLI and no token in this environment, so the PR itself has to be
+    opened by hand at
+    `https://github.com/cram2/cram-scenes/pull/new/franka-montessori-scene`.
+93. Superproject pinned to `64b98ed` in `3153fa6d1a`. Safe to pin a PR-branch commit
+    here in a way `2438a52` was not: it is actually pushed, and GitHub keeps
+    `refs/pull/*/head` -- verified by fetching the SHA into a throwaway clone.
+    **Re-pin to `main` once the PR merges.** Note this will conflict trivially with
+    `ef46d536b5` when the branches meet; ours is the one to keep.
+94. `presets.json` is unique to this bundle -- no other scene declares one -- and is
+    still in sync with `MONTESSORI_PRESETS` (20 presets, scopes match). Both
+    `TestDeclaredBundlePresets` suites now pass: 23 passed across live-query and
+    episodic-memory, where two were failing.
+
 ### Environment quirks found while doing this
 
 - `cramera` is not installed in the `cram` virtualenv (this repo's), only in `cram2`,
   which points at a *different* checkout (`~/Projects/copied/...`). Every test touching
   `experiments.orm.ormatic_interface` needs
   `PYTHONPATH=cramera/src:$PYTHONPATH` to collect. **Worth the developer's attention.**
-- `cramera/scenes/` is empty here, so the bundle-preset tests cannot pass.
+- `cramera/scenes/` was empty here; fixed in round 17.
 
 ### Still open
 
