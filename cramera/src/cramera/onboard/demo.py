@@ -1191,7 +1191,7 @@ class SceneBuilder:
             "id": key,
             "key": key,
             "spawn": self.recorder.object_frames[0][key],
-            "color": palette.color_for(index),
+            "color": palette.color_of(body, index),
         }
         extent = measure_body(body)
         if extent is not None:
@@ -1300,16 +1300,16 @@ class SceneBuilder:
             destination = os.path.join(self.output_directory, "meshes", "objects", mesh)
             os.makedirs(os.path.dirname(destination), exist_ok=True)
             shutil.copy2(source, destination)
+            body = (self.recorder._bodies or {}).get(mesh)
             entry = {
                 "id": os.path.splitext(mesh)[0],
                 "key": mesh,
                 "mesh": "meshes/objects/" + mesh,
                 "spawn": self.recorder.object_frames[0][mesh],
-                "color": palette.color_for(index),
+                "color": palette.color_of(body, index),
             }
             # recorded from the world, so the knowledge base does not have to guess it;
             # omitted when the object's shapes report no measurable size
-            body = (self.recorder._bodies or {}).get(mesh)
             extent = measure_body(body) if body is not None else None
             if extent is not None:
                 entry["height"] = round(extent.z, POSE_PRECISION)
