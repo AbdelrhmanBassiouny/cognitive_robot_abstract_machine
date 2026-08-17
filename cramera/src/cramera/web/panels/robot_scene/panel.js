@@ -325,7 +325,7 @@ Panels.define('robot-scene', function (root, bus) {
         new THREE.GLTFLoader().load(shapeSpec.url, function (g) { finish(g.scene); },
           undefined, fail);
       } else if (shapeSpec.format === 'dae' && THREE.ColladaLoader) {
-        new THREE.ColladaLoader().load(shapeSpec.url, function (c) { finish(c.scene); },
+        new THREE.ColladaLoader().load(shapeSpec.url, function (c) { finish(ColladaMeshUtil.neutralizeUpAxisRotation(c.scene)); },
           undefined, fail);
       } else {
         _objLoader.load(shapeSpec.url, function (geom) {
@@ -370,7 +370,7 @@ Panels.define('robot-scene', function (root, bus) {
         undefined, function () { box(); });
     } else if (fmt === 'dae' && THREE.ColladaLoader) {
       spec.tame = true;                         // dae carries its own (possibly glowing) materials
-      new THREE.ColladaLoader().load(spec.meshUrl, function (c) { place(c.scene); },
+      new THREE.ColladaLoader().load(spec.meshUrl, function (c) {   place(ColladaMeshUtil.neutralizeUpAxisRotation(c.scene)); },
         undefined, function () { box(); });
     } else {
       _objLoader.load(spec.meshUrl, function (geom) { place(new THREE.Mesh(geom, mat)); },
