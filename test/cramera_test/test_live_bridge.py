@@ -34,12 +34,13 @@ from semantic_digital_twin.world_description.connections import (
     FixedConnection,
 )
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
-from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.geometry import Box, Color, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
 from typing_extensions import Any, Dict, List, Optional, Tuple
 
 from cramera.knowledge.enums import PlanNodeGroup
+from cramera.palette import ObjectPalette
 from cramera.live.bridge import (
     Bridge,
     ChartEdgeEntry,
@@ -126,6 +127,11 @@ class MeshShapeFromFile:
     """
 
     filename: str
+
+    color: Color = field(default_factory=Color)
+    """
+    The shape's colour, default white like every real shape's.
+    """
 
 
 @dataclass
@@ -757,6 +763,34 @@ class TestViewerAccessors:
         bridge = Bridge()
         bridge.publish_bodies({"blob.stl": PublishedBody(name="world/blob.stl")})
         assert bridge.object_catalog()[0]["size"] == list(Bridge.DEFAULT_OBJECT_SIZE)
+
+
+class TestPublishedObjectColours:
+    """
+    The catalog shows a body in the colour its world authored for it; only colourless
+    bodies are told apart by the shared cycle.
+    """
+
+    def test_an_authored_colour_is_published(self):
+        bridge = Bridge()
+        cube = Body(
+            name=PrefixedName("cube"),
+            visual=ShapeCollection(
+                shapes=[Box(scale=Scale(0.05, 0.05, 0.05), color=Color.RED())]
+            ),
+        )
+        world = World()
+        with world.modify_world():
+            world.add_body(cube)
+        bridge.publish_bodies({"cube": cube})
+
+        assert bridge.object_catalog()[0]["color"] == "#ff0000"
+
+    def test_a_colourless_body_takes_its_cycle_colour(self):
+        bridge = Bridge()
+        bridge.publish_bodies({"blob.stl": PublishedBody(name="world/blob.stl")})
+
+        assert bridge.object_catalog()[0]["color"] == ObjectPalette().color_for(0)
 
     def test_an_unserved_mesh_has_no_path(self):
         assert Bridge().mesh_path("milk.stl") is None

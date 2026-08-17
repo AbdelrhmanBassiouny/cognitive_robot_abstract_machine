@@ -1422,7 +1422,7 @@ class Bridge:
         for index, (key, body) in enumerate(
             item for item in bodies.items() if item[0] != ROBOT_BASE_KEY
         ):
-            color = palette.color_for(index)
+            color = palette.color_of(body, index)
             object_id = Path(key).stem
             mesh_path = self._servable_mesh_path(key, body)
             if mesh_path is not None:
