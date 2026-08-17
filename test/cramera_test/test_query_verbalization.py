@@ -9,8 +9,14 @@ import pytest
 
 krrood = pytest.importorskip("krrood", reason="EQL requires krrood")
 
+from krrood.entity_query_language.verbalization._example_domain import (  # noqa: E402
+    Robot as ExampleRobot,
+)
 from krrood.entity_query_language.verbalization.exceptions import (  # noqa: E402
     UnverbalizableExpressionError,
+)
+from krrood.entity_query_language.verbalization.fragments.source_reference import (  # noqa: E402
+    SourceReference,
 )
 from krrood.entity_query_language.verbalization.pipeline import (  # noqa: E402
     VerbalizationPipeline,
@@ -21,7 +27,12 @@ from krrood.entity_query_language.verbalization.verbalizer import (  # noqa: E40
 
 from cramera.knowledge.query_domain import QueryDomain  # noqa: E402
 from cramera.knowledge.query_runner import EqlQueryRunner  # noqa: E402
-from cramera.knowledge.query_verbalization import QueryVerbalization  # noqa: E402
+from cramera.knowledge.query_verbalization import (  # noqa: E402
+    DEFAULT_DOCUMENTATION_SITE,
+    DOCUMENTATION_SITE_VARIABLE,
+    PublishedDocumentationResolver,
+    QueryVerbalization,
+)
 
 from .dataset.queryable_records import NamedRecord  # noqa: E402
 from .test_query_runner import make_records, make_runner  # noqa: E402
@@ -79,6 +90,111 @@ class TestReadingAQueryBack:
 
         assert "&lt;b&gt;hi&lt;/b&gt;" in verbalization.html
         assert "<b>" not in verbalization.html
+
+
+# %% words linking to their documentation
+class TestDocumentationLinks:
+    """
+    A verbalized word naming a class or attribute of a package with published docs is a
+    hyperlink to its AutoAPI page; anything else stays plain text — a link known to lead
+    nowhere is worse than no link.
+    """
+
+    EXAMPLE_ROBOT_PAGE = (
+        DEFAULT_DOCUMENTATION_SITE
+        + "/krrood/autoapi/krrood/entity_query_language/verbalization/_example_domain"
+        + "/index.html#krrood.entity_query_language.verbalization._example_domain.Robot"
+    )
+
+    def documented_runner(self) -> EqlQueryRunner:
+        """
+        A runner over a class from a package whose documentation is published.
+        """
+        return EqlQueryRunner(domains=[QueryDomain("bot", ExampleRobot, [])])
+
+    def test_a_documented_class_resolves_to_its_autoapi_page(self):
+        url = PublishedDocumentationResolver().resolve(
+            SourceReference(owner_type=ExampleRobot)
+        )
+
+        assert url == self.EXAMPLE_ROBOT_PAGE
+
+    def test_a_documented_attribute_resolves_to_its_own_anchor(self):
+        url = PublishedDocumentationResolver().resolve(
+            SourceReference(owner_type=ExampleRobot, attribute="battery")
+        )
+
+        assert url == self.EXAMPLE_ROBOT_PAGE + ".battery"
+
+    def test_a_class_of_an_undocumented_package_resolves_to_nothing(self):
+        assert (
+            PublishedDocumentationResolver().resolve(
+                SourceReference(owner_type=NamedRecord)
+            )
+            is None
+        )
+
+    def test_the_environment_overrides_the_documentation_site(self, monkeypatch):
+        monkeypatch.setenv(DOCUMENTATION_SITE_VARIABLE, "http://localhost:8000/docs/")
+
+        url = PublishedDocumentationResolver.of_environment().resolve(
+            SourceReference(owner_type=ExampleRobot)
+        )
+
+        assert url.startswith("http://localhost:8000/docs/krrood/autoapi/")
+
+    def test_the_html_links_documented_words_to_their_pages(self):
+        verbalization = self.documented_runner().verbalize(
+            "an(entity(bot).where(bot.battery > 50))"
+        )
+
+        assert 'href="' + self.EXAMPLE_ROBOT_PAGE + '"' in verbalization.html
+        assert 'href="' + self.EXAMPLE_ROBOT_PAGE + '.battery"' in verbalization.html
+
+    def test_the_plain_text_stays_free_of_link_markup(self):
+        verbalization = self.documented_runner().verbalize(
+            "an(entity(bot).where(bot.battery > 50))"
+        )
+
+        assert "href" not in verbalization.text
+        assert "<a" not in verbalization.text
+
+    def test_undocumented_words_stay_plain_text(self):
+        verbalization = make_runner().verbalize(
+            "an(entity(record).where(record.score > 1.0))"
+        )
+
+        assert "<a" not in verbalization.html
+
+
+# %% wording a query from its source code
+class TestWordingFromCode:
+    """
+    Presets are worded before they are run, so the runner reads a query's source back as
+    English without evaluating it.
+    """
+
+    def test_code_is_worded_the_same_as_the_expression_it_builds(self):
+        runner = make_runner()
+        code = "an(entity(record).where(record.score > 1.0))"
+        expected = QueryVerbalization.of_expression(eval(code, runner.namespace()))
+
+        assert runner.verbalize(code) == expected
+
+    def test_code_that_does_not_build_is_not_worded(self):
+        assert make_runner().verbalize("definitely not python (((") is None
+
+    def test_a_name_the_runner_does_not_know_is_not_worded(self):
+        assert make_runner().verbalize("an(entity(shape))") is None
+
+    def test_code_that_builds_something_other_than_a_query_is_not_worded(self):
+        assert make_runner().verbalize("1 + 1") is None
+
+    def test_wording_leaves_the_code_runnable(self):
+        runner = make_runner()
+        runner.verbalize("an(entity(record))")
+
+        assert runner.run("an(entity(record))").ok
 
 
 # %% verbalizing what cannot be verbalized

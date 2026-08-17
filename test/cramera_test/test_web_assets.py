@@ -9,12 +9,14 @@ panels must not reach outside their own DOM subtree.
 import re
 import shutil
 import subprocess
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
 from typing_extensions import List
 
 from cramera.knowledge.eql_session import EqlSession
+from cramera.knowledge.presets import Preset
 from cramera.knowledge.query_runner import RenderResult
 from cramera.paths import WEB_ROOT
 
@@ -164,6 +166,12 @@ class TestJsUnits:
     def test_preset_groups(self):
         self.run_node("test_preset_groups.js")
 
+    def test_question_display(self):
+        self.run_node("test_question_display.js")
+
+    def test_eql_panel(self):
+        self.run_node("test_eql_panel.js")
+
     def test_scene_picker(self):
         self.run_node("test_scene_picker.js")
 
@@ -235,13 +243,29 @@ class TestQueryPanelReadsTheAnswer:
         assert "'__replay__'" in read("core/answer_table.js")
         assert "row.replay" in read("panels/eql/panel.js")
 
-    def test_the_verbalization_is_styled_by_the_stylesheet(self):
+    def test_the_preset_verbalization_is_read_under_the_key_it_is_sent_as(self):
         """
-        The words are coloured by krrood; the block they sit in is cramera's own.
+        A preset travels as its ``asdict`` shape, so the question display must read the
+        wording under the same key the dataclass carries it as.
+        """
+        payload = asdict(Preset("which robot is this?", "the(entity(robot))"))
+
+        assert "verbalization" in payload
+        assert "question.verbalization" in read("core/question_display.js")
+
+    def test_the_question_display_sits_under_the_query_bar(self):
+        """
+        The query bar keeps its input box; underneath it the asked question is shown big
+        as English, and the stylesheet styles both the display and the documentation
+        links inside it.
         """
         panel = read("panels/eql/panel.js")
-        assert 'class="qverb"' in panel
-        assert ".qverb{" in read("app.css")
+        assert 'class="query-bar"' in panel
+        assert "<textarea" in panel
+        assert 'class="question"' in panel
+        stylesheet = read("app.css")
+        assert ".question{" in stylesheet
+        assert ".question a{" in stylesheet
 
 
 class TestQueryPanelHints:

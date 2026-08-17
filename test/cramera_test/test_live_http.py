@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
+from dataclasses import asdict
 
 import pytest
 
@@ -253,6 +254,10 @@ class TestQueryEndpoints:
         return bridge
 
     def test_presets_are_the_registered_sources(self, server, query_bridge):
+        # the wording is the bridge's own (see TestWordedLivePresets); the payload has
+        # to carry it under the key the panel reads, next to the preset's own fields
+        worded = [asdict(preset) for preset in query_bridge.query_presets()]
+        assert all(entry["verbalization"] is not None for entry in worded)
         assert get_json(server + "/presets") == {
             "ok": True,
             "title": "record demo",
@@ -262,12 +267,14 @@ class TestQueryEndpoints:
                     "code": "an(entity(record))",
                     "requires_live": False,
                     "scope": "current_state",
+                    "verbalization": worded[0]["verbalization"],
                 },
                 {
                     "text": "everything stored",
                     "code": "an(entity(stored_record))",
                     "requires_live": False,
                     "scope": "episodic_memory",
+                    "verbalization": worded[1]["verbalization"],
                 },
             ],
             "scopes": [

@@ -4,14 +4,19 @@ Ready-made EQL queries for the EQL panel.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Tuple
 
-from typing_extensions import List, Optional
+from typing_extensions import TYPE_CHECKING, List, Optional
 
+from cramera.knowledge.eql_session import EqlSession
 from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
+from cramera.knowledge.query_verbalization import QueryVerbalization
 from cramera.knowledge.queryable_knowledge import QueryScope
 from cramera.knowledge.scene_bundle import SceneBundle
+
+if TYPE_CHECKING:
+    from cramera.knowledge.query_runner import EqlQueryRunner
 
 
 @dataclass
@@ -44,6 +49,23 @@ class Preset:
     it is offered under.
     """
 
+    verbalization: Optional[QueryVerbalization] = None
+    """
+    The question read back as English, or None while nothing that knows the query's
+    variables has worded it (see :meth:`worded`).
+    """
+
+    def worded(self, runner: EqlQueryRunner) -> Preset:
+        """
+        This preset with its question read back as English by ``runner``.
+
+        A preset whose code the runner cannot build keeps no verbalization: its button
+        still shows its label, and running it reports its own error.
+
+        :param runner: The runner whose variables the preset's code ranges over.
+        """
+        return replace(self, verbalization=runner.verbalize(self.code))
+
     @classmethod
     def of_scene(cls, scene: Optional[str] = None) -> List[Preset]:
         """
@@ -59,7 +81,7 @@ class Preset:
         """
         declared = SceneBundle.declared_presets(scene)
         if declared:
-            return [
+            presets = [
                 cls(
                     entry["text"],
                     entry["code"],
@@ -70,7 +92,27 @@ class Preset:
                 )
                 for entry in declared
             ] + list(ARCHITECTURE_PRESETS)
-        return cls._generated_for_scene(scene) + list(ARCHITECTURE_PRESETS)
+        else:
+            presets = cls._generated_for_scene(scene) + list(ARCHITECTURE_PRESETS)
+        return cls._worded_by_scene(presets, scene)
+
+    @classmethod
+    def _worded_by_scene(
+        cls, presets: List[Preset], scene: Optional[str]
+    ) -> List[Preset]:
+        """
+        The presets with their questions read back as English by the scene's runner.
+
+        A bundle-declared question ranges over a demo's own variables, which the
+        recorded scene does not know; it is worded by the live bridge instead and stays
+        unworded here.
+
+        :param presets: The presets to word.
+        :param scene: Name of the scene whose runner words them, or None for the active
+            one.
+        """
+        runner = EqlSession.of_scene(scene).runner()
+        return [preset.worded(runner) for preset in presets]
 
     @classmethod
     def _generated_for_scene(cls, scene: Optional[str]) -> List[Preset]:
