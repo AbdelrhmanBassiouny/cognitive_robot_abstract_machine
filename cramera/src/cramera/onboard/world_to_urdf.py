@@ -5,12 +5,17 @@ Any adapter that resolves a robot description into a :class:`World` (Gazebo/SDF,
 ...) can bundle it by parsing it and handing the result to
 :meth:`UrdfDocument.of_world`; this module walks the kinematic tree and serializes it,
 it has no notion of the source format.
+
+Where the meshes a document references end up is :class:`MeshFileReferences`' decision:
+a scene bundle copies them in so it stands on its own, while a document served out of
+the running process points at the files that process already loaded.
 """
 
 from __future__ import annotations
 
 import os
 import xml.etree.ElementTree as ElementTree
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
 from coraplex.datastructures.enums import JointType
@@ -37,6 +42,123 @@ from semantic_digital_twin.world_description.world_entity import Body
 from typing_extensions import ClassVar, Dict, Iterable, List, Type
 
 from cramera.onboard.bundle_urdf import BundledAssets, BundleReport
+
+
+class DisconnectedBranch(Exception):
+    """
+    Raised when a branch to serialize does not hang off a single root body.
+    """
+
+    def __init__(self, name: str, root_names: List[str]) -> None:
+        """
+        Report which bodies of the branch turned out to be roots.
+
+        :param name: Name of the model being serialized.
+        :param root_names: Names of the bodies found without a parent in the branch.
+        """
+        super().__init__(
+            "%s is not one branch: %d bodies have no parent in it (%s)"
+            % (name, len(root_names), ", ".join(root_names) or "none")
+        )
+
+
+# %% where a serialized mesh reference points
+@dataclass
+class MeshFileReferences(ABC):
+    """
+    How a document names the mesh files its geometry references.
+    """
+
+    assets: BundledAssets
+    """
+    Records what was written, and which references resolved to no file.
+    """
+
+    @abstractmethod
+    def reference_for(self, mesh_file_path: str) -> str:
+        """
+        The ``filename`` a mesh's geometry element is written with.
+
+        :param mesh_file_path: Path the world's mesh shape was loaded from.
+        """
+
+
+@dataclass
+class BundledMeshFiles(MeshFileReferences):
+    """
+    Copies every referenced mesh into the bundle and names the copy, so the bundle
+    stands on its own once the world that produced it is gone.
+    """
+
+    output_directory: str
+    """
+    Directory the bundle's ``meshes/`` tree goes into.
+    """
+
+    mesh_subdirectory: str
+    """
+    Directory bundled meshes nest under, so meshes from different source formats or
+    models cannot collide.
+    """
+
+    @classmethod
+    def into(cls, output_directory: str, mesh_subdirectory: str) -> BundledMeshFiles:
+        """
+        Copy into a bundle, writing nothing outside it.
+
+        :param output_directory: Directory the bundle's ``meshes/`` tree goes into.
+        :param mesh_subdirectory: Directory bundled meshes nest under.
+        """
+        return cls(
+            assets=BundledAssets(bundle_root=output_directory),
+            output_directory=output_directory,
+            mesh_subdirectory=mesh_subdirectory,
+        )
+
+    def reference_for(self, mesh_file_path: str) -> str:
+        """
+        Copy the mesh, with the side assets it references, and name the copy relative
+        to the URDF.
+
+        :param mesh_file_path: Path the world's mesh shape was loaded from.
+        """
+        relative_path = os.path.join(
+            self.mesh_subdirectory,
+            os.path.basename(os.path.dirname(mesh_file_path)),
+            os.path.basename(mesh_file_path),
+        )
+        bundled = os.path.join(self.output_directory, "meshes", relative_path)
+        if self.assets.copy(mesh_file_path, bundled):
+            self.assets.copy_side_assets(mesh_file_path, bundled)
+        return "meshes/" + relative_path.replace(os.sep, "/")
+
+
+@dataclass
+class OriginalMeshFiles(MeshFileReferences):
+    """
+    Names every mesh where it already lies, copying nothing.
+
+    For a document served straight out of the process that built the world: the files
+    it points at are the ones that process loaded, so copying tens of megabytes of them
+    would buy nothing.
+    """
+
+    @classmethod
+    def in_place(cls) -> OriginalMeshFiles:
+        """
+        Reference the world's own mesh files.
+        """
+        return cls(assets=BundledAssets())
+
+    def reference_for(self, mesh_file_path: str) -> str:
+        """
+        The mesh's own absolute path.
+
+        :param mesh_file_path: Path the world's mesh shape was loaded from.
+        """
+        if not os.path.isfile(mesh_file_path):
+            self.assets.missing.append(mesh_file_path)
+        return mesh_file_path
 
 
 @dataclass
@@ -85,23 +207,17 @@ class UrdfDocument:
 
     output_directory: str
     """
-    Directory the URDF and its ``meshes/`` tree are written to.
+    Directory the URDF is written to.
     """
 
-    mesh_subdirectory: str
+    mesh_files: MeshFileReferences
     """
-    Directory bundled meshes nest under, so meshes from different source formats or
-    models cannot collide.
+    Where the ``filename`` of a serialized mesh points.
     """
 
     root_element: ElementTree.Element
     """
     The document's ``robot`` element, which every link and joint is added to.
-    """
-
-    assets: BundledAssets
-    """
-    Collects the files copied into the bundle.
     """
 
     joint_names: List[str] = field(default_factory=list)
@@ -116,7 +232,11 @@ class UrdfDocument:
 
     @classmethod
     def of_world(
-        cls, world: World, name: str, output_directory: str, mesh_subdirectory: str
+        cls,
+        world: World,
+        name: str,
+        output_directory: str,
+        mesh_files: MeshFileReferences,
     ) -> BundleReport:
         """
         Serialize a parsed world, with every mesh it references, as a URDF.
@@ -124,21 +244,40 @@ class UrdfDocument:
         :param world: The world to serialize, already resolved to concrete shapes and
             poses by whichever adapter parsed it.
         :param name: Output model name, used for ``<output_directory>/<name>.urdf``.
-        :param output_directory: Directory the URDF and its ``meshes/`` tree go into.
-        :param mesh_subdirectory: Directory bundled meshes nest under.
+        :param output_directory: Directory the URDF goes into.
+        :param mesh_files: Where the ``filename`` of a serialized mesh points.
         """
-        os.makedirs(output_directory, exist_ok=True)
-        document = cls(
-            output_directory=output_directory,
-            mesh_subdirectory=mesh_subdirectory,
-            root_element=ElementTree.Element("robot", {"name": name}),
-            assets=BundledAssets(bundle_root=output_directory),
-        )
+        document = cls._empty(name, output_directory, mesh_files)
         bodies = world.bodies_topologically_sorted
-        for body in bodies:
-            document.add_link(body)
-            if body.parent_connection is not None:
-                document.add_joint(body.parent_connection)
+        document.add_bodies(bodies)
+        return document.write(name, bodies)
+
+    @classmethod
+    def of_branch(
+        cls,
+        bodies: List[Body],
+        name: str,
+        output_directory: str,
+        mesh_files: MeshFileReferences,
+    ) -> BundleReport:
+        """
+        Serialize one kinematic branch of a world as a URDF in the branch root's own
+        frame.
+
+        The branch root becomes the document's root link at identity, so whatever
+        drives the model from outside -- a live bridge publishing the robot's base
+        pose, say -- places the whole branch by placing that link.
+
+        :param bodies: The branch's bodies, in the order they should appear.
+        :param name: Output model name, used for ``<output_directory>/<name>.urdf``.
+        :param output_directory: Directory the URDF goes into.
+        :param mesh_files: Where the ``filename`` of a serialized mesh points.
+        :raises DisconnectedBranch: If the bodies do not hang off exactly one root.
+        """
+        document = cls._empty(name, output_directory, mesh_files)
+        roots = document.add_bodies(bodies)
+        if len(roots) != 1:
+            raise DisconnectedBranch(name, [str(body.name) for body in roots])
         return document.write(name, bodies)
 
     @classmethod
@@ -147,7 +286,7 @@ class UrdfDocument:
         bodies: List[Body],
         name: str,
         output_directory: str,
-        mesh_subdirectory: str,
+        mesh_files: MeshFileReferences,
     ) -> BundleReport:
         """
         Serialize part of a world -- the bodies no parsed source describes -- as a URDF.
@@ -160,28 +299,53 @@ class UrdfDocument:
 
         :param bodies: The bodies to serialize, in the order they should appear.
         :param name: Output model name, used for ``<output_directory>/<name>.urdf``.
-        :param output_directory: Directory the URDF and its ``meshes/`` tree go into.
-        :param mesh_subdirectory: Directory bundled meshes nest under.
+        :param output_directory: Directory the URDF goes into.
+        :param mesh_files: Where the ``filename`` of a serialized mesh points.
         """
-        os.makedirs(output_directory, exist_ok=True)
-        document = cls(
-            output_directory=output_directory,
-            mesh_subdirectory=mesh_subdirectory,
-            root_element=ElementTree.Element("robot", {"name": name}),
-            assets=BundledAssets(bundle_root=output_directory),
-        )
+        document = cls._empty(name, output_directory, mesh_files)
         ElementTree.SubElement(
             document.root_element, "link", {"name": cls.SYNTHESIZED_ROOT_LINK}
         )
+        for body in document.add_bodies(bodies):
+            document.graft_onto_root(body)
+        return document.write(name, bodies)
+
+    @classmethod
+    def _empty(
+        cls, name: str, output_directory: str, mesh_files: MeshFileReferences
+    ) -> UrdfDocument:
+        """
+        An empty document ready to be filled, with its output directory in place.
+
+        :param name: The model name the ``robot`` element carries.
+        :param output_directory: Directory the URDF goes into.
+        :param mesh_files: Where the ``filename`` of a serialized mesh points.
+        """
+        os.makedirs(output_directory, exist_ok=True)
+        return cls(
+            output_directory=output_directory,
+            mesh_files=mesh_files,
+            root_element=ElementTree.Element("robot", {"name": name}),
+        )
+
+    def add_bodies(self, bodies: List[Body]) -> List[Body]:
+        """
+        Add a link per body, and a joint per connection whose parent is also present.
+
+        :param bodies: The bodies to serialize, in the order they should appear.
+        :return: The bodies whose parent lies outside the given ones, which the caller
+            decides how to root.
+        """
         serialized = {str(body.name) for body in bodies}
+        roots: List[Body] = []
         for body in bodies:
-            document.add_link(body)
+            self.add_link(body)
             connection = body.parent_connection
             if connection is not None and str(connection.parent.name) in serialized:
-                document.add_joint(connection)
+                self.add_joint(connection)
             else:
-                document.graft_onto_root(body)
-        return document.write(name, bodies)
+                roots.append(body)
+        return roots
 
     def graft_onto_root(self, body: Body) -> None:
         """
@@ -224,10 +388,10 @@ class UrdfDocument:
             links=[str(body.name) for body in bodies],
             joints=self.joint_names,
             movable_joints=self.movable_joint_names,
-            meshes_copied=len(self.assets.copied),
-            mesh_suffixes=self.assets.mesh_suffixes,
-            references_rewritten=len(self.assets.copied),
-            missing=self.assets.missing,
+            meshes_copied=len(self.mesh_files.assets.copied),
+            mesh_suffixes=self.mesh_files.assets.mesh_suffixes,
+            references_rewritten=len(self.mesh_files.assets.copied),
+            missing=self.mesh_files.assets.missing,
         )
 
     # %% links
@@ -248,8 +412,8 @@ class UrdfDocument:
 
     def _add_geometry(self, visual_element: ElementTree.Element, shape: Shape) -> None:
         """
-        Add the ``geometry`` a shape describes, copying a mesh's file into the bundle
-        first if the shape is one.
+        Add the ``geometry`` a shape describes, naming a mesh's file through
+        :attr:`mesh_files` if the shape is one.
 
         :param visual_element: The ``visual`` element the geometry belongs to.
         :param shape: The shape to describe.
@@ -278,19 +442,11 @@ class UrdfDocument:
         if not isinstance(shape, Mesh):
             raise TypeError("Unsupported shape type for bundling: %s" % type(shape))
 
-        relative_path = os.path.join(
-            self.mesh_subdirectory,
-            os.path.basename(os.path.dirname(shape.filename)),
-            os.path.basename(shape.filename),
-        )
-        bundled = os.path.join(self.output_directory, "meshes", relative_path)
-        if self.assets.copy(shape.filename, bundled):
-            self.assets.copy_side_assets(shape.filename, bundled)
         ElementTree.SubElement(
             geometry_element,
             "mesh",
             {
-                "filename": "meshes/" + relative_path.replace(os.sep, "/"),
+                "filename": self.mesh_files.reference_for(shape.filename),
                 "scale": self._format_numbers(shape.scale.to_np()),
             },
         )

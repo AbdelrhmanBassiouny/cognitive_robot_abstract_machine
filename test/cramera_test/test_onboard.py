@@ -42,7 +42,11 @@ from typing_extensions import Any, Dict, List, Optional
 
 from cramera.onboard import bundle_urdf as bundler
 from cramera.onboard.bundle_world import BundledWorld
-from cramera.onboard.world_to_urdf import UrdfDocument
+from cramera.onboard.world_to_urdf import (
+    BundledMeshFiles,
+    DisconnectedBranch,
+    UrdfDocument,
+)
 from cramera.onboard.demo import (
     BundledModel,
     SceneBuilder,
@@ -603,7 +607,7 @@ class TestSerializeUnclaimedBodies:
             ],
             name="environment",
             output_directory=str(tmp_path / "bundle"),
-            mesh_subdirectory="environment",
+            mesh_files=BundledMeshFiles.into(str(tmp_path / "bundle"), "environment"),
         )
 
     def test_the_subset_becomes_a_urdf_rooted_in_one_link(
@@ -715,6 +719,24 @@ class TestSerializeUnclaimedBodies:
         report = self.serialize(hand_built_world, tmp_path)
 
         assert report.links == ["table", "drawer"]
+
+    def test_bodies_that_are_not_one_branch_cannot_be_serialized_as_one(
+        self, hand_built_world, tmp_path
+    ):
+        """
+        A branch is written in its root's own frame, which only means something when
+        there is exactly one root to write it in.
+        """
+        with pytest.raises(DisconnectedBranch, match="2 bodies have no parent"):
+            UrdfDocument.of_branch(
+                bodies=[
+                    hand_built_world.get_body_by_name("floor"),
+                    hand_built_world.get_body_by_name("drawer"),
+                ],
+                name="two_roots",
+                output_directory=str(tmp_path / "bundle"),
+                mesh_files=BundledMeshFiles.into(str(tmp_path / "bundle"), "two_roots"),
+            )
 
 
 # %% loose objects of a world built in code

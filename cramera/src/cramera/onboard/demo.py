@@ -80,7 +80,7 @@ from cramera.robot_parts import RobotPartAnnotation, model_identity
 from cramera.mesh_format import MeshFormat
 from cramera.onboard.bundle_urdf import BundledAssets, BundleReport
 from cramera.onboard.bundle_world import BundledWorld
-from cramera.onboard.world_to_urdf import UrdfDocument
+from cramera.onboard.world_to_urdf import BundledMeshFiles, UrdfDocument
 from cramera.palette import ObjectPalette
 
 if TYPE_CHECKING:
@@ -1149,7 +1149,9 @@ class SceneBuilder:
             bodies=unclaimed,
             name=self.ENVIRONMENT_MODEL_NAME,
             output_directory=self.output_directory,
-            mesh_subdirectory=self.ENVIRONMENT_MODEL_NAME,
+            mesh_files=BundledMeshFiles.into(
+                self.output_directory, self.ENVIRONMENT_MODEL_NAME
+            ),
         )
         log(
             "bundled %-28s prefix=%-12s robot=%s meshes=%d missing=%d (%d bodies no source described)"
