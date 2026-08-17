@@ -104,3 +104,49 @@ Local-environment landmines (pre-existing, NOT from this round; tell the develop
   changes stashed, so pre-existing on this branch, likely a semantic_digital_twin
   spatial-types drift.
 
+### Round 3 (2026-08-18, uncommitted): the landmines above are FIXED
+
+The developer asked to fix all of the Round-2 landmines. All four are resolved:
+
+1. **lark / plugin autoload**: the venv's `lark-parser` 0.12.0 install was half-deleted
+   (an orphan namespace dir shadowed `lark`), and the modern package is `lark` anyway
+   (renamed 2021; ROS jazzy `launch` needs `from lark import Lark`). Uninstalled
+   `lark-parser`, removed the orphan `site-packages/lark`+`lark-stubs` dirs, installed
+   `lark` 1.3.1. pytest now runs *without* `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`.
+   Repo-side: `pyproject.toml` now depends on `lark>=1.1.1` instead of
+   `lark-parser>=0.12.0` (nothing in the workspace imports lark; the pin only serves
+   ROS launch, which needs the modern one). The old pin came from commit `125dfe5a5a`
+   "sage 10k grasp book" -- flagged to the developer in chat.
+2. **mypy**: installed mypy 2.3.1 in cram2; `test/krrood_test/test_eql/test_typing`
+   now runs and passes (1 test).
+3. **`_MockedConvexSetDAO` conftest crash**: the real cause was semantic_digital_twin's
+   *committed* `ormatic_interface.py` defining the identical `_MockedConvexSetDAO`
+   block *twice* (lines 12360 and 12464) -- the file collided with itself on import;
+   the earlier "coraplex vs sdt" diagnosis was wrong (each generated interface has its
+   own Base/MetaData and is self-contained). Fixed by regenerating *only* sdt's
+   interface via `scripts/regenerate_all_orm.py` (diff: duplicate mocked-DAO block
+   removed, stray coraplex DAOs dropped from sdt's file, new branch classes added --
+   MeshDownloadFailed/TransientFailureRetries/Numeric* spatial types). coraplex's and
+   experiments' regenerated files were reverted: their churn (dropping
+   Giskard/BehaviorTree DAOs) is environment damage -- `json_msgs` (a custom ROS
+   message package) is not built anywhere on this machine, so
+   `giskardpy.middleware.ros2` cannot import here. Note: any `test/coraplex_test` run
+   regenerates coraplex's interface at collection time and will re-dirty it on this
+   machine for the same reason -- revert that churn, do not commit it.
+4. **12 detector-test failures**: stale test arrangement code, not a production bug.
+   `Connection6DoF.origin`'s setter deliberately requires the assigned
+   `HomogeneousTransformationMatrix` to carry a `reference_frame` (documented contract,
+   custom `MissingReferenceFrameError`); the tests assigned frameless
+   `from_xyz_rpy(...)` matrices. Added `_move_milk(milk, ...)` helper in
+   `test_segmind_detectors.py` that builds the origin with
+   `reference_frame=milk.parent_connection.parent` and converted all ~30 call sites.
+   No assertion was changed. File was black-formatted by `format_docstrings.py`.
+
+Verified after fixes (all without `PYTEST_DISABLE_PLUGIN_AUTOLOAD`): segmind 46
+passed + 1 skipped (was 34+12 failing); krrood typing 1 passed; coraplex
+`test_designator_symbol_graph.py` 4 passed *with* conftest. Full coraplex-suite run
+result: see chat.
+
+Still known-broken in this env (not asked, not fixed): `open3d` wants `ipywidgets`
+(pip check); drake/sapien/robocasa optional deps absent (mocked classes stay).
+
