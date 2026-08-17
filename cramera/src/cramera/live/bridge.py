@@ -825,8 +825,12 @@ class Bridge:
 
     _query_lock: threading.Lock = field(default_factory=threading.Lock)
     """
-    Serializes queries: krrood's ``SymbolGraph`` singleton is not threadsafe, and the
+    Serializes queries: EQL evaluation is not written to run twice at once, and the
     bridge answers several viewers from its own thread pool.
+
+    ..note:: This does not keep a query apart from the demo thread, which evaluates EQL
+        of its own; what they share is the ``SymbolGraph`` singleton, which serializes
+        itself.
     """
 
     # %% one-time installation
