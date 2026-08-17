@@ -19,7 +19,7 @@ from cramera.live.bridge import Bridge, WorldStateSnapshot
 from cramera.live.http import serve
 
 from .test_live_bridge import PublishedBody
-from .test_server import get, get_json
+from .test_server import get, get_json, post_json
 
 
 @pytest.fixture()
@@ -37,24 +37,20 @@ def server(bridge):
     httpd.shutdown()
 
 
-def post_json(url, payload):
+@pytest.fixture()
+def query_bridge(bridge):
     """
-    POST ``payload`` as JSON and return the decoded answer, error responses included.
+    The bridge with a demo's queryable state registered on it.
+    """
+    krrood = pytest.importorskip("krrood", reason="EQL requires krrood")  # noqa: F841
+    from .test_live_query import GrowingRecordSource, make_record
 
-    :param url: The endpoint to post to.
-    :param payload: The JSON-serializable request body.
-    """
-    request = urllib.request.Request(
-        url,
-        method="POST",
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
+    bridge.register_query_source(
+        GrowingRecordSource(
+            records=[make_record("first")], stored=[make_record("last week")]
+        )
     )
-    try:
-        with urllib.request.urlopen(request, timeout=10) as response:
-            return json.loads(response.read())
-    except urllib.error.HTTPError as error:
-        return json.loads(error.read())
+    return bridge
 
 
 def publish_mesh_object(
@@ -239,20 +235,6 @@ class TestQueryEndpoints:
     The panel asks the running demo itself, over the same bridge it polls for state.
     """
 
-    @pytest.fixture()
-    def query_bridge(self, bridge):
-        krrood = pytest.importorskip(
-            "krrood", reason="EQL requires krrood"
-        )  # noqa: F841
-        from .test_live_query import GrowingRecordSource, make_record
-
-        bridge.register_query_source(
-            GrowingRecordSource(
-                records=[make_record("first")], stored=[make_record("last week")]
-            )
-        )
-        return bridge
-
     def test_presets_are_the_registered_sources(self, server, query_bridge):
         # the wording is the bridge's own (see TestWordedLivePresets); the payload has
         # to carry it under the key the panel reads, next to the preset's own fields
@@ -343,6 +325,62 @@ class TestQueryEndpoints:
 
     def test_a_query_without_a_source_reports_why(self, server):
         payload = post_json(server + "/eql", {"code": "an(entity(record))"})
+
+        assert payload["ok"] is False
+        assert "no query source" in payload["error"].lower()
+
+
+class TestAskedQuestionsOverTheBridge:
+    """
+    A spoken question about the running demo is matched against the demo's own presets
+    and either runs as if clicked or is declined with the sorry reply.
+    """
+
+    def test_the_full_voice_flow_runs_the_matched_preset(self, server, query_bridge):
+        """
+        The whole journey minus the microphone: transcript in, matched preset out, the
+        preset's code and scope posted back — exactly what clicking its button runs —
+        and answered from the demo.
+        """
+        match = post_json(server + "/question", {"text": "show me all records"})
+
+        assert match["ok"] is True
+        assert match["matched"] is True
+        assert match["preset"]["code"] == "an(entity(record))"
+
+        answer = post_json(
+            server + "/eql",
+            {"code": match["preset"]["code"], "scope": match["preset"]["scope"]},
+        )
+        assert answer["ok"] is True
+        assert [row["__entity__"] for row in answer["rows"]] == ["first"]
+
+    def test_a_question_about_stored_runs_matches_its_own_scope(
+        self, server, query_bridge
+    ):
+        match = post_json(server + "/question", {"text": "everything stored"})
+
+        assert match["matched"] is True
+        assert match["preset"]["code"] == "an(entity(stored_record))"
+        assert match["preset"]["scope"] == "episodic_memory"
+
+    def test_an_unanswerable_question_gets_the_sorry_reply(self, server, query_bridge):
+        from cramera.knowledge.question_matching import UNMATCHED_QUESTION_REPLY
+
+        match = post_json(server + "/question", {"text": "open the pod bay doors"})
+
+        assert match["ok"] is True
+        assert match["matched"] is False
+        assert match["reply"] == UNMATCHED_QUESTION_REPLY
+
+    def test_an_empty_question_is_rejected(self, server, query_bridge):
+        assert post_json(server + "/question", {"text": "   "})["ok"] is False
+
+    def test_a_body_that_is_not_an_object_is_a_400(self, server, query_bridge):
+        assert post_json(server + "/question", ["not", "an", "object"])["ok"] is False
+
+    def test_a_question_without_a_source_reports_why(self, server):
+        payload = post_json(server + "/question", {"text": "which robot is this"})
 
         assert payload["ok"] is False
         assert "no query source" in payload["error"].lower()

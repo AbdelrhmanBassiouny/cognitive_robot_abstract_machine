@@ -2,7 +2,8 @@
  * panels/eql/panel.js — the EQL (Entity Query Language) console.
  *
  * Query bar + question display + presets + answer panel. Queries are typed into the
- * bar or picked as presets; underneath, the question asked is shown big, in English
+ * bar, picked as presets, or spoken through the bar's record button
+ * (core/voice.js); underneath, the question asked is shown big, in English
  * (core/question_display.js) — the query's verbalization, with class and attribute
  * words linking to their documentation pages. Queries go wherever
  * core/query_source.js points: the server, answering from the recorded episode
@@ -13,6 +14,8 @@
  * Bus events:
  *   emits    knowledge:ready {payload}          the /api/knowledge overview, once loaded
  *   emits    entity:highlight {ids, focus?}   results / described entity
+ *   emits    voice:transcript {text}     a spoken question, as recognized text
+ *   listens  voice:transcript {text}     match the question to a preset and run it
  *   listens  scene:part-clicked {id}     describe the clicked part
  *   listens  scene:step {step}           describe the running episode
  *   listens  entity:select {id, detail, relations}   node clicked in a graph
@@ -28,6 +31,7 @@ Panels.define('eql', function (root, bus) {
     '  <div class="query-bar">' +
     '    <textarea id="query-input" rows="2" spellcheck="false" placeholder="the(entity(scene_object).where(scene_object.name == \'milk\'))   —  vars: scene_object, episode, arm, joint, robot"></textarea>' +
     '    <button id="query-run">Run</button>' +
+    '    <button id="voice-ask" class="voice-ask" title="ask a question by voice">🎤</button>' +
     '  </div>' +
     '  <div id="question" class="question"></div>' +
     '  <div id="presets" class="presets"></div>' +
@@ -39,6 +43,7 @@ Panels.define('eql', function (root, bus) {
   const input = root.querySelector('#query-input');
   const runBtn = root.querySelector('#query-run');
   const questionEl = root.querySelector('#question');
+  const voiceButton = root.querySelector('#voice-ask');
   const presetsEl = root.querySelector('#presets');
 
   const ASK_HINT = 'The question you ask appears here in English — run a query, or pick one below.';
@@ -214,6 +219,57 @@ Panels.define('eql', function (root, bus) {
   function showQuestion(question) {
     questionEl.innerHTML = QuestionDisplay.markup(question);
     questionEl.title = question.code || '';
+  }
+
+  // %% asking by voice
+  // The capture only produces text; the transcript goes over the bus, so any panel
+  // can consume a spoken question.
+  const voice = VoiceCapture.create({
+    onTranscript: function (text) { bus.emit('voice:transcript', { text: text }); },
+    onState: function (listening) {
+      voiceButton.classList.toggle('listening', listening);
+      if (listening) questionEl.innerHTML = QuestionDisplay.hint('Listening…');
+    },
+    onError: function (message) {
+      questionEl.innerHTML = QuestionDisplay.hint(ASK_HINT);
+      answerEl.innerHTML = '<div class="qerr">voice input failed: ' + esc(message) + '</div>';
+    },
+  });
+  if (!voice.supported) {
+    voiceButton.disabled = true;
+    voiceButton.title = 'speech recognition is not available in this browser';
+  }
+  voiceButton.addEventListener('click', function () {
+    if (voice.listening) voice.stop(); else voice.start();
+  });
+
+  // the default consumer: recognize the spoken question as one of the presets on
+  // offer and run it as if its button had been clicked — or say it can't be answered
+  bus.on('voice:transcript', function (p) { askSpokenQuestion(p.text); });
+
+  async function askSpokenQuestion(text) {
+    text = (text || '').trim(); if (!text) return;
+    questionEl.innerHTML = QuestionDisplay.hint('You asked: “' + text + '”');
+    try {
+      const r = await fetch(source.questionUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: text }),
+      });
+      const res = await ResponseUtil.parseJson(r);
+      if (!res.ok) throw new Error(res.error || 'question matching failed');
+      if (!res.matched) {
+        answerEl.innerHTML = '<div class="nores">' + esc(res.reply) + '</div>';
+        bus.emit('entity:highlight', { ids: [] });
+        return;
+      }
+      input.value = res.preset.code;
+      askedScope = res.preset.scope;
+      showQuestion(res.preset);
+      runQuery(res.preset.code);
+    } catch (err) {
+      answerEl.innerHTML = '<div class="qerr">' + esc(errorText(err)) + '</div>';
+    }
   }
 
   // %% run an EQL query

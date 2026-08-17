@@ -13,6 +13,7 @@ Serves three things from one port (default 8711):
       GET  /api/eql/vocabulary         every name a query may use
       GET  /api/eql/members?name=      the members that follow one name's dot
       POST /api/eql             run an EQL query string
+      POST /api/question        match a natural-language question to a preset
 
 The API needs krrood (EQL). Without it the server still serves the viewer and
 answers API calls with ``{"ok": false, "error": ...}`` so the frontend can say
@@ -50,6 +51,8 @@ try:
 
     from cramera.knowledge.eql_session import EqlSession
     from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase
+    from cramera.knowledge.presets import Preset
+    from cramera.knowledge.question_matching import QuestionMatcher
     from cramera.knowledge.views.dispatcher import GraphPanelViews
 
     EQL_AVAILABLE = True
@@ -227,16 +230,31 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self) -> None:
         """
-        Execute an EQL query (the only write-ish endpoint).
+        Route the write-ish API: running an EQL query, and matching a question to one.
         """
-        if self.path.split("?")[0] != "/api/eql":
-            return self._send_error("unknown endpoint", 404)
+        route = self.path.split("?")[0]
+        if route == "/api/eql":
+            return self._answer_eql_query()
+        if route == "/api/question":
+            return self._answer_asked_question()
+        return self._send_error("unknown endpoint", 404)
+
+    def _posted_body(self) -> Dict[str, Any]:
+        """
+        The request's JSON body as a dict (malformed bodies raise, and the POST routes
+        report exceptions as error payloads).
+        """
+        length = int(self.headers.get("Content-Length") or 0)
+        return json.loads(self.rfile.read(length) or b"{}")
+
+    def _answer_eql_query(self) -> None:
+        """
+        Execute an EQL query.
+        """
         if not EQL_AVAILABLE:
             return self._send_error(self.NO_EQL_MESSAGE)
         try:
-            length = int(self.headers.get("Content-Length") or 0)
-            request_body = json.loads(self.rfile.read(length) or b"{}")
-            code = (request_body.get("code") or "").strip()
+            code = (self._posted_body().get("code") or "").strip()
             if not code:
                 return self._send_error("empty query")
             with _EQL_LOCK:
@@ -244,6 +262,29 @@ class Handler(http.server.SimpleHTTPRequestHandler):
                 return self._send_json(session.run(code))
         except Exception as error:
             # a SyntaxError from the query is named by its own type, like any other
+            return self._send_exception(error)
+
+    def _answer_asked_question(self) -> None:
+        """
+        Match a natural-language question to the presets this scene can answer.
+
+        Bundle-declared presets need a running demo, which the recorded scene does not
+        have, so only the presets answerable here are on offer to match.
+        """
+        if not EQL_AVAILABLE:
+            return self._send_error(self.NO_EQL_MESSAGE)
+        try:
+            text = (self._posted_body().get("text") or "").strip()
+            if not text:
+                return self._send_error("empty question")
+            with _EQL_LOCK:
+                answerable = [
+                    preset
+                    for preset in Preset.of_scene(self._requested_scene())
+                    if not preset.requires_live
+                ]
+                return self._send_json(QuestionMatcher(answerable).match(text))
+        except Exception as error:
             return self._send_exception(error)
 
     def _send_error(self, message: str, code: int = 200) -> None:

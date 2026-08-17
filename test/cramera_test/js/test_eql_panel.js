@@ -20,15 +20,33 @@ function loadCore(name, scope) {
   new Function('window', fs.readFileSync(path.join(WEB, name), 'utf8'))(scope);
 }
 
-function coreModules() {
+function coreModules(recognizer) {
   const scope = { location: { search: '' } };
+  if (recognizer) scope.SpeechRecognition = recognizer;
   loadCore('core/scene.js', scope);
   loadCore('core/query_source.js', scope);
   loadCore('core/question_display.js', scope);
   loadCore('core/preset_groups.js', scope);
   loadCore('core/answer_table.js', scope);
   loadCore('core/response.js', scope);
+  loadCore('core/voice.js', scope);
   return scope;
+}
+
+// a scripted recognizer standing in for the browser's SpeechRecognition
+function recognizerClass() {
+  const instances = [];
+  function ScriptedRecognizer() { instances.push(this); }
+  ScriptedRecognizer.prototype.start = function () {};
+  ScriptedRecognizer.prototype.stop = function () { this.onend(); };
+  ScriptedRecognizer.instances = instances;
+  return ScriptedRecognizer;
+}
+
+function speak(Recognizer, text) {
+  const recognition = Recognizer.instances[Recognizer.instances.length - 1];
+  recognition.onresult({ results: [[{ transcript: text }]] });
+  recognition.onend();
 }
 
 function flush() {
@@ -50,6 +68,8 @@ function makeElement(tag) {
       classes: new Set(),
       add(c) { this.classes.add(c); },
       remove(c) { this.classes.delete(c); },
+      toggle(c, on) { if (on) this.classes.add(c); else this.classes.delete(c); },
+      contains(c) { return this.classes.has(c); },
     },
     appendChild(child) { this.children.push(child); return child; },
     addEventListener(event, cb) { (listeners[event] = listeners[event] || []).push(cb); },
@@ -65,6 +85,7 @@ function makeRoot() {
     '#query-input': makeElement('textarea'),
     '#query-run': makeElement('button'),
     '#question': makeElement(),
+    '#voice-ask': makeElement('button'),
     '#presets': makeElement(),
   };
   return {
@@ -143,8 +164,8 @@ const ANSWER = {
   },
 };
 
-function mountPanel(overrides) {
-  const core = coreModules();
+function mountPanel(overrides, recognizer) {
+  const core = coreModules(recognizer);
   const root = makeRoot();
   const bus = makeBus();
   const requests = [];
@@ -164,12 +185,12 @@ function mountPanel(overrides) {
   const define = function (name, factory) { panelFactory = factory; };
   new Function(
     'Panels', 'SceneContext', 'QuerySource', 'QuestionDisplay', 'PresetGroups',
-    'AnswerTable', 'ResponseUtil', 'EqlSuggestions', 'Replay', 'fetch', 'window',
-    'document',
+    'AnswerTable', 'ResponseUtil', 'VoiceCapture', 'EqlSuggestions', 'Replay',
+    'fetch', 'window', 'document',
     SOURCE
   )(
     { define: define }, core.SceneContext, core.QuerySource, core.QuestionDisplay,
-    core.PresetGroups, core.AnswerTable, core.ResponseUtil,
+    core.PresetGroups, core.AnswerTable, core.ResponseUtil, core.VoiceCapture,
     { of() { return { forget() {}, handledKey() { return false; } }; } },
     { popupUrl() { return ''; } },
     makeFetch(routes, requests),
@@ -265,4 +286,78 @@ test('a failed query is reported in the answer area, not swallowed', async funct
 
   const answer = panel.root.part('#answer').innerHTML;
   assert.ok(answer.indexOf('NameError: shape') >= 0, answer);
+});
+
+// %% asking by voice — the full demo flow, with a scripted microphone
+const MATCHED = { ok: true, matched: true, similarity: 95.0, preset: WORDED_PRESET };
+const UNMATCHED = {
+  ok: true, matched: false, similarity: 40.0,
+  reply: 'Sorry, I cannot answer that question.',
+};
+
+test('a spoken question that matches runs as if its button had been clicked', async function () {
+  const Recognizer = recognizerClass();
+  const panel = mountPanel({ '/api/question': MATCHED }, Recognizer);
+  await flush(); await flush();
+
+  panel.root.part('#voice-ask').click();
+  assert.ok(panel.root.part('#question').innerHTML.indexOf('Listening…') >= 0);
+  speak(Recognizer, 'which robot is this');
+  await flush(); await flush(); await flush();
+
+  // the transcript went over the bus, for any consumer
+  const transcript = panel.bus.emitted.find(function (e) { return e.event === 'voice:transcript'; });
+  assert.deepStrictEqual(transcript.payload, { text: 'which robot is this' });
+
+  // the default consumer asked the matcher, then ran the recognized preset
+  const asked = panel.requests.find(function (r) { return r.url === '/api/question'; });
+  assert.deepStrictEqual(JSON.parse(asked.options.body), { text: 'which robot is this' });
+  const run = panel.requests.find(function (r) { return r.url === '/api/eql'; });
+  assert.deepStrictEqual(JSON.parse(run.options.body), {
+    code: WORDED_PRESET.code,
+    scope: WORDED_PRESET.scope,
+  });
+
+  // as if clicked: the bar carries the recognized preset's code,
+  // the question is on display, and its answer rendered
+  assert.strictEqual(panel.root.part('#query-input').value, WORDED_PRESET.code);
+  assert.strictEqual(panel.root.part('#question').innerHTML, ANSWER.verbalization.html);
+  assert.ok(panel.root.part('#answer').innerHTML.indexOf('tracy') >= 0);
+});
+
+test('a spoken question nothing answers gets the sorry reply', async function () {
+  const Recognizer = recognizerClass();
+  const panel = mountPanel({ '/api/question': UNMATCHED }, Recognizer);
+  await flush(); await flush();
+
+  panel.root.part('#voice-ask').click();
+  speak(Recognizer, 'what is the weather like today');
+  await flush(); await flush();
+
+  // the reply is the server's own words, and no query ran
+  const answer = panel.root.part('#answer').innerHTML;
+  assert.ok(answer.indexOf(UNMATCHED.reply) >= 0, answer);
+  assert.ok(!panel.requests.some(function (r) { return r.url === '/api/eql'; }));
+  // the question display still says what was asked
+  const question = panel.root.part('#question').innerHTML;
+  assert.ok(question.indexOf('what is the weather like today') >= 0, question);
+});
+
+test('a browser without speech recognition disables the button', async function () {
+  const panel = mountPanel();
+  await flush();
+
+  assert.strictEqual(panel.root.part('#voice-ask').disabled, true);
+});
+
+test('any consumer can feed a transcript over the bus', async function () {
+  // the mic button is one producer; the contract is the bus event
+  const panel = mountPanel({ '/api/question': MATCHED });
+  await flush(); await flush();
+
+  panel.bus.emit('voice:transcript', { text: 'which robot is this' });
+  await flush(); await flush(); await flush();
+
+  const run = panel.requests.find(function (r) { return r.url === '/api/eql'; });
+  assert.ok(run, 'the matched preset ran');
 });

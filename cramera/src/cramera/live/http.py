@@ -25,6 +25,9 @@ HTTP endpoints of the live bridge (default port 8765).
                   (start/end query parameters in seconds since the epoch)
     GET /run     {ok, title, paused, looping, restart_pending, activity, iteration}
     POST /eql    {code, scope} -> the rendered answer rows
+    POST /question {text} -> the preset matching a natural-language question
+                  ({ok, matched, similarity, preset} or {ok, matched, similarity,
+                  reply} when nothing on offer answers it)
     POST /run    {command} -> the run state that command produced
     POST /move   queue an object move (applied on the simulation thread)
 
@@ -338,6 +341,8 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         """
         if self.path.startswith("/eql"):
             return self.answer_requested_query()
+        if self.path.startswith("/question"):
+            return self.answer_asked_question()
         if self.path.startswith("/run"):
             return self.apply_requested_run_command()
         self.queue_requested_move()
@@ -383,6 +388,23 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_json(
                 {"ok": False, "error": "%s: %s" % (type(error).__name__, error)}
             )
+
+    def answer_asked_question(self) -> None:
+        """
+        Match a natural-language question to the running demo's ready-made queries.
+        """
+        payload = self._posted_payload()
+        if payload is None:
+            return self._send_json(
+                {"ok": False, "error": "body must be a JSON object"}, code=400
+            )
+        text = (payload.get("text") or "").strip()
+        if not text:
+            return self._send_json({"ok": False, "error": "empty question"})
+        try:
+            return self._send_json(self.bridge.match_question(text).to_payload())
+        except NoQuerySourceRegistered as error:
+            return self._send_json({"ok": False, "error": str(error)})
 
     def apply_requested_run_command(self) -> None:
         """

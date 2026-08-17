@@ -1,4 +1,11 @@
-# The server and the live bridge are stdlib-only on purpose: the viewer must be
-# servable on machines without the full CRAM stack. krrood (EQL), coraplex and
-# giskardpy are imported lazily and only needed for the knowledge panel, the
-# onboarder and the live bridge hooks — inside this workspace they are present.
+# The server and the live bridge stay servable on machines without the full
+# CRAM stack. krrood (EQL), coraplex and giskardpy are imported lazily and only
+# needed for the knowledge panel, the onboarder and the live bridge hooks —
+# inside this workspace they are present.
+#
+# rapidfuzz is the one small third-party dependency: it scores how similar a
+# spoken question is to the ready-made queries' wordings (see
+# cramera.knowledge.question_matching), and is a self-contained wheel with no
+# dependencies of its own.
+rapidfuzz>=3.0
+
