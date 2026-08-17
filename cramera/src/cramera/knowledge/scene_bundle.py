@@ -48,7 +48,40 @@ class SceneBundle:
         if not index_path.is_file():
             return None
         index = GeneratedJson(index_path).read()
-        return index.get("default") if isinstance(index, dict) else None
+        if not isinstance(index, dict):
+            return None
+        return cls.default_of_index(index)
+
+    @classmethod
+    def default_of_index(cls, index: Dict[str, Any]) -> Optional[str]:
+        """
+        The scene a scenes index opens on: the default it declares, or its first
+        scene when that default is not one of the scenes it declares.
+
+        A bundle can outlive the default recorded beside it -- a scene renamed or
+        dropped upstream leaves a name that resolves to nothing -- and a scene the
+        bundle does have is a better answer than none.
+
+        :param index: Parsed ``index.json``.
+        """
+        declared = [
+            scene["name"]
+            for scene in index.get("scenes", [])
+            if isinstance(scene, dict) and scene.get("name")
+        ]
+        default = index.get("default")
+        if default in declared:
+            return default
+        if not declared:
+            return None
+        if default:
+            logger.warning(
+                "the scenes index names '%s' as its default but does not declare it; "
+                "opening '%s' instead",
+                default,
+                declared[0],
+            )
+        return declared[0]
 
     @classmethod
     def directory_of(cls, scene: Optional[str] = None) -> Optional[Path]:

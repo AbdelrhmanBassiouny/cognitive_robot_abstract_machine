@@ -347,7 +347,7 @@ Panels.define('robot-scene', function (root, bus) {
     .then(function (r) { return r.ok ? r.json() : { default: null, scenes: [] }; })
     .catch(function () { return { default: null, scenes: [] }; })
     .then(function (index) {
-      const name = SceneContext.name() || index.default;
+      const name = SceneContext.name() || ScenePicker.defaultScene(index);
       wireScenePickers(index.scenes || [], name);
       if (!name) {
         if (statusEl) statusEl.textContent = 'No scene found — run cramera-onboard first.';
