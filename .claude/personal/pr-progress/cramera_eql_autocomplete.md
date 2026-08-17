@@ -83,7 +83,8 @@ The developer asked for two more things on this branch:
    `krrood/doc/eql/user/verbalization.md`.
 
 Verified: krrood 1383+777 pass (typing suite skipped locally, no mypy in cram2 env);
-segmind and cramera suites pass. Ran `scripts/format_docstrings.py` on touched files.
+cramera 477 pass; segmind 34 pass + 12 pre-existing failures (see landmines). Ran
+`scripts/format_docstrings.py` on touched files.
 
 Local-environment landmines (pre-existing, NOT from this round; tell the developer):
 
@@ -98,4 +99,8 @@ Local-environment landmines (pre-existing, NOT from this round; tell the develop
   zero changes traceable to the Symbol edit -- regeneration was reverted; segmind's
   conftest-generated ORM is byte-identical, confirming Symbol's fields are ignored by
   ormatic.
+- All 12 `test/segmind_test/test_detectors/test_segmind_detectors.py` tests fail with
+  `MissingReferenceFrameError` in `World.transform` -- identically with the Symbol
+  changes stashed, so pre-existing on this branch, likely a semantic_digital_twin
+  spatial-types drift.
 
