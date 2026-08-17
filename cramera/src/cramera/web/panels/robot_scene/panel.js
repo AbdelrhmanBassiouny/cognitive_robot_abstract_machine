@@ -54,7 +54,7 @@ Panels.define('robot-scene', function (root, bus) {
     '<div class="workflow">' +
     '  <div class="workflow-head"><span class="wf-btns">' +
     '    <button id="live-btn" class="play-btn live" style="display:none" title="Attach to the running demo (cramera-live bridge) — renders the live world instead of the recording">◉ Live</button>' +
-    '    <button id="play-btn" class="play-btn cram" title="Play the recorded coraplex + giskardpy motion trajectory">▶ Play robot motion</button>' +
+    '    <button id="play-btn" class="play-btn cram" title="Play the recorded coraplex + giskardpy motion trajectory">▶ Play NEEM</button>' +
     '    <button id="record-btn" class="play-btn record" style="display:none" title="Stop capturing the live run, then name, trim and keep it as an episode">⏹ Stop recording</button>' +
     '    <select id="playback-speed" class="scene-select" style="display:none" title="Playback speed"></select>' +
     '  </span></div>' +
@@ -1727,7 +1727,7 @@ Panels.define('robot-scene', function (root, bus) {
     if (!RobotView.hasTrajectory()) return;
     if (RobotView.isPlayingTrajectory()) {
       RobotView.stopTrajectory();
-      playBtn.classList.remove('playing'); playBtn.textContent = '▶ Play robot motion';
+      playBtn.classList.remove('playing'); playBtn.textContent = '▶ Play NEEM';
     } else {
       RobotView.playTrajectory();
       playBtn.classList.add('playing'); playBtn.textContent = '⏸ Stop';
@@ -1735,7 +1735,7 @@ Panels.define('robot-scene', function (root, bus) {
   });
   RobotView.onStepStart(function (step) {
     if (step === '__done__') {
-      playBtn.classList.remove('playing'); playBtn.textContent = '▶ Play robot motion';
+      playBtn.classList.remove('playing'); playBtn.textContent = '▶ Play NEEM';
       highlightObjects([]);
     }
     bus.emit('scene:step', { step: step });
@@ -1852,7 +1852,7 @@ Panels.define('robot-scene', function (root, bus) {
     wasPlayingBeforeScrub = RobotView.isPlayingTrajectory();
     if (wasPlayingBeforeScrub) {
       RobotView.stopTrajectory();
-      playBtn.classList.remove('playing'); playBtn.textContent = '▶ Play robot motion';
+      playBtn.classList.remove('playing'); playBtn.textContent = '▶ Play NEEM';
     }
   });
   scrubber.addEventListener('input', function () {
