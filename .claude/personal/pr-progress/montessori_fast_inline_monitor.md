@@ -196,6 +196,29 @@ that thread, and keeps the configuration that has never crashed.
     whole `experiments_test` package fails to collect. Also present on
     `montessori_event_replay`. **Worth the developer's attention.**
 
+### Round 19 -- the viewer opened on a scene the bundle does not have
+
+101. The developer reported "robot scene could not be loaded". Cause: `cramera/scenes`'
+    `index.json` ships `"default": "pr2_kitchen"`, a scene the bundle no longer carries
+    (it is not even in the index's own `scenes` array). The viewer fetched
+    `scenes/pr2_kitchen/scene.json`, got a 404 and stopped at "Scene failed to load";
+    `SceneBundle.active_name` resolved the same dead name server-side.
+102. Fix: a declared default is honoured only when the index also declares that scene,
+    else the first declared scene is opened -- `Franka_Montessori` for this bundle.
+    `ScenePicker.defaultScene` for the viewer, `SceneBundle.default_of_index` for the
+    knowledge base, one per side that has to resolve it; the server logs which default
+    it could not use. Committed `30bd734f53`, pushed.
+103. Verified in Chrome against a server from this checkout (port 8712, `?live=127.0.0.1:9`
+    so it could not touch the developer's running demo): the Franka Montessori scene
+    renders, `ScenePicker.defaultScene` answers `Franka_Montessori`, 431 -> 431 cramera
+    tests still pass plus 9 new ones.
+104. **Their running viewer is not from this checkout**: pid 29803 is
+    `~/Projects/copied/cognitive_robot_abstract_machine/.venv/bin/python -m cramera.server`.
+    That clone needs the same fix (or to run cramera from here) before the symptom goes
+    away for them.
+105. The `GET /core/replay.js 404` in their log comes from a cached `index.html` of
+    `montessori_event_replay`; nothing on this branch references that file.
+
 ### Environment quirks found while doing this
 
 - `cramera` is not installed in the `cram` virtualenv (this repo's), only in `cram2`,
