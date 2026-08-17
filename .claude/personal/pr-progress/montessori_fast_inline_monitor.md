@@ -103,6 +103,41 @@ that thread, and keeps the configuration that has never crashed.
 83. 900 s soak on this branch passed (6 passed, no signal). The developer separately ran
     the demo in a loop and reports **no stuttering**.
 
+### Round 16 -- a missing database no longer stops a run
+
+84. The developer asked why `FRANKA_MONTESSORI_SORTING_DATABASE_URI` "is not used
+    automatically". It always was -- `ConfiguredDatabase.resolve` reads it. What they
+    were seeing was the pre-flight *exiting 1* on it: `~/.bashrc:139` points the
+    variable at port **5433**, whose cluster (`pg 17 main`) is down; only `pg 18 main`
+    on 5432 is online. Round 15 made a read-only database survivable but left an
+    unreachable one fatal.
+85. `ConfiguredDatabase.resolve_reachable` now stands `IN_MEMORY_DATABASE_URI`
+    (`sqlite://`) in for a configured database that cannot be reached, carrying the
+    `UnreachableResultsDatabase` it replaced in `fell_back_from` so both the pre-flight
+    (stderr) and the demo (log) can say why in their own channel. `main` never returns
+    1 for a database reason now; the launcher's usage text and README said the demo
+    "will not start without it" and no longer do.
+86. **An in-memory database is per-connection**, so two things had to change or the
+    fallback would have silently recorded into a database nobody could read:
+    `create_results_engine` gives it `StaticPool` + `check_same_thread=False`, and the
+    demo resolves *one* `ResultsDatabase` and hands the same object to both
+    `_open_recording` and `_attach_cramera`. `open_recording` takes a `ResultsDatabase`
+    rather than a URI for that reason.
+87. `--database-uri` defaults to `None` instead of `configured_database_uri()`, so the
+    run resolves its own and can name the origin.
+88. 79 passed across the four affected suites. Two `caplog`-based recording tests fail,
+    **confirmed failing on the unmodified code too** (caplog captures nothing in this
+    environment); the `presets.json` failures in the live-query/episodic-memory suites
+    are a missing `cramera/scenes/Franka_Montessori/` in this checkout.
+
+### Environment quirks found while doing this
+
+- `cramera` is not installed in the `cram` virtualenv (this repo's), only in `cram2`,
+  which points at a *different* checkout (`~/Projects/copied/...`). Every test touching
+  `experiments.orm.ormatic_interface` needs
+  `PYTHONPATH=cramera/src:$PYTHONPATH` to collect. **Worth the developer's attention.**
+- `cramera/scenes/` is empty here, so the bundle-preset tests cannot pass.
+
 ### Still open
 
 - The run segfaulted *during teardown* after the SQL error, with
