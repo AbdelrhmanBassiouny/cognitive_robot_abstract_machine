@@ -104,9 +104,13 @@ scenes bundle published + submodule repinned 64b98ed, GeneratedWorldModels
 commit 26f40d36); commit was rebased onto montessori_event_replay tip
 5266cbc1 and re-tested there: cramera suite + montessori live-query 510
 passed (bundle presets sync now runs and passes). Pushed to
-claude/montessori-eql-highlighting-bptp3r (d7d0314d). Pushing to
-montessori_event_replay was denied by the session's permission layer —
-user must fast-forward it themselves (git push origin
-d7d0314d:montessori_event_replay) or ask a session with that permission.
+claude/montessori-eql-highlighting-bptp3r (d7d0314d). Push to
+montessori_event_replay was first denied by the permission layer, then
+succeeded on user request ("try to push again"): #165 head = d7d0314d,
+still draft, description updated to cover d7d0314d + the user's own
+26f40d36/11311d09. #165 mergeable_state is "dirty": its branch still
+carries the pre-rebase #164 commits (354b8760/72cf8f75) while the base
+was force-pushed to the rebased 680ea932 — restacking #165 needs a
+history rewrite the user has to decide on (left alone).
 Note: the published Franka_Montessori bundle still has baked palette
 colours; re-onboarding after this commit would bake authored colours.
