@@ -1,14 +1,15 @@
-## PR A — verbalization display (draft #167, branch `claude/cramera-verbalization-voice-ttwcza`)
+## PR A — verbalization under the bar + doc links (draft #167, branch `claude/cramera-verbalization-voice-ttwcza`)
 
-Stacked on PR #165 (`montessori_event_replay`). Status: **implemented, tested,
-pushed, draft PR open**. The EQL panel's textarea + Run button are replaced by
-a big verbalized-question display; presets travel worded (recorded scene per
-its runner, live bridge per declared scope); `EqlQueryRunner.build()`/
-`verbalize()` added. Full cramera suite: 472 passed.
+Stacked on PR #165 (`montessori_event_replay`). Status: **reworked per
+feedback, amended commit force-pushed**. The query text bar stays (textarea +
+Run inside one bar); the asked query's verbalization shows big *under* the
+bar, and its class/attribute words hyperlink to Sphinx AutoAPI pages via
+`PublishedDocumentationResolver` (site default cram2.github.io aggregate,
+`CRAMERA_DOCUMENTATION_SITE` overrides; only packages with published docs get
+links). Presets travel worded as before. 481 passed.
 
-Follow-up work continues in PR B (#168, branch
-`claude/cramera-voice-questions-ttwcza`, stacked on this one): voice capture +
-question matching. Both PRs are drafts; see that branch's progress note.
+PR B (#168, `claude/cramera-voice-questions-ttwcza`) is stacked on this and
+adds the 🎤 inside the bar beside Run.
 
 ### Outstanding
-- CI not checked on #167 (session ended before CI ran).
+- CI not checked on #167 after the force-push.
