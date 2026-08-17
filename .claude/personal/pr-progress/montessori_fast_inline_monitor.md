@@ -172,6 +172,30 @@ that thread, and keeps the configuration that has never crashed.
     `TestDeclaredBundlePresets` suites now pass: 23 passed across live-query and
     episodic-memory, where two were failing.
 
+### Round 18 -- a flaky mesh download no longer kills the run
+
+96. The demo died at `PandaMeshAssets.download_if_missing` with `503 Server Error` for
+    `link6_4.obj` from `raw.githubusercontent.com`, 52 of 67 meshes in. The same URL
+    answered 200 a minute later, so it was a momentary GitHub failure, not a bad
+    reference -- and `raise_for_status()` turned it straight into a traceback.
+97. `TransientFailureRetries` (5 attempts, 1 s doubling) now repeats a request while the
+    host answers 429/500/502/503/504; anything else (404) is not retried. The give-up
+    path raises `MeshDownloadFailed` naming the URL and status, and points out that
+    meshes fetched so far are kept, so a rerun only fetches the remainder.
+98. No try/except: the retry reads `response.status_code` rather than letting
+    `raise_for_status` throw, and closes a transient answer unread so the connection
+    returns to the pool.
+99. Five new tests in `test/semantic_digital_twin_test/test_robots/test_panda_assets.py`
+    against a queued-status HTTP stand-in and a two-mesh MJCF in the new
+    `test/semantic_digital_twin_test/dataset/`. Ran the real download afterwards: all 67
+    meshes present, 34.3 MB, and `parse_panda()` builds its 14-body world.
+100. **Found while testing, not mine**: `98ac709d4a` ("moved the panda xml", sorinar329)
+    deleted `PANDA_SCENE_BODIES_TO_DISCARD` from `franka_panda_equipment.py` but left
+    its orphaned docstring at lines 50-53, and
+    `test/experiments_test/test_franka_panda_equipment.py:7` still imports it -- so the
+    whole `experiments_test` package fails to collect. Also present on
+    `montessori_event_replay`. **Worth the developer's attention.**
+
 ### Environment quirks found while doing this
 
 - `cramera` is not installed in the `cram` virtualenv (this repo's), only in `cram2`,
