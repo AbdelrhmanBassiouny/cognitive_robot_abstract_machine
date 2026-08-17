@@ -31,7 +31,12 @@ from cramera.body_geometry import NumericPose, pose_label, position_label
 from cramera.knowledge.entity import NamedEntity
 from cramera.knowledge.query_domain import QueryDomain
 from cramera.knowledge.query_verbalization import QueryVerbalization
+from cramera.knowledge.query_vocabulary import QueryVocabulary
 from cramera.knowledge.queryable_knowledge import InMemoryEvaluation, QueryEvaluation
+from cramera.knowledge.workspace_classes import (
+    WorkspaceClassIndex,
+    WorkspaceClassNamespace,
+)
 from cramera.payload import CrameraPayload
 
 DEFAULT_ROW_LIMIT = 200
@@ -298,6 +303,13 @@ class EqlQueryRunner:
     Where a query of this runner is worked out.
     """
 
+    class_index: WorkspaceClassIndex = field(
+        default_factory=WorkspaceClassIndex.of_repository
+    )
+    """
+    The workspace classes a query of this runner may name besides its own domains.
+    """
+
     @property
     def entity_types(self) -> Tuple[Type[Any], ...]:
         """
@@ -305,11 +317,22 @@ class EqlQueryRunner:
         """
         return tuple(domain.entity_type for domain in self.domains)
 
+    def vocabulary(self) -> QueryVocabulary:
+        """
+        Everything a query of this runner may name, for a query box to offer.
+        """
+        return QueryVocabulary(
+            domains=self.domains,
+            extra_names=self.extra_names,
+            class_index=self.class_index,
+        )
+
     def namespace(self) -> Dict[str, Any]:
         """
         A namespace for evaluating one EQL query (fresh variables each time).
         """
-        namespace: Dict[str, Any] = eql_factory_namespace()
+        namespace = WorkspaceClassNamespace(index=self.class_index)
+        namespace.update(eql_factory_namespace())
         for domain in self.domains:
             namespace[domain.entity_type.__name__] = domain.entity_type
         for domain in self.domains:

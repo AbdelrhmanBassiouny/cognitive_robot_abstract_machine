@@ -161,6 +161,9 @@ class TestJsUnits:
     def test_scene_picker(self):
         self.run_node("test_scene_picker.js")
 
+    def test_completion(self):
+        self.run_node("test_completion.js")
+
     def test_collada_mesh(self):
         self.run_node("test_collada_mesh.js")
 

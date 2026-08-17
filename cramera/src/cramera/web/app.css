@@ -121,7 +121,11 @@ body{
 /* %% query box */
 .knowledge-status{font-size:12px;color:var(--faint)}
 .knowledge-status.ready{color:var(--accent)}
-.query-box{padding:14px 16px;border-bottom:1px solid var(--line);background:var(--panel2)}
+/* position:relative so the suggestion menu hangs below the box it belongs to */
+.query-box{
+  padding:14px 16px;border-bottom:1px solid var(--line);background:var(--panel2);
+  position:relative
+}
 .query-row{display:flex;gap:8px}
 #query-input{
   flex:1;background:var(--bg);border:1px solid var(--line2);border-radius:4px;
@@ -134,6 +138,31 @@ body{
   font-weight:700;font-size:13px;padding:0 20px;border-radius:4px;cursor:pointer
 }
 #query-run:active{transform:translateY(1px)}
+/* %% suggestion menu */
+/* hangs under the query box like an editor's completion popup: one row per name, the
+   kind it is, what it is, and the module a class comes from. Fixed rather than absolute,
+   and placed from the box's own rectangle, because every panel clips its overflow and a
+   menu longer than the panel would be cut off inside it. */
+.completion-menu{
+  position:fixed;z-index:60;
+  background:var(--panel);border:1px solid var(--line2);border-radius:var(--radius);
+  box-shadow:var(--shadow);overflow:auto
+}
+.completion-item{
+  display:grid;grid-template-columns:74px minmax(120px,auto) 1fr auto;gap:10px;
+  align-items:baseline;padding:5px 10px;cursor:pointer;font-size:12px
+}
+.completion-item.active{background:var(--bg2)}
+.completion-kind{
+  font-size:9.5px;letter-spacing:.5px;text-transform:uppercase;color:var(--faint)
+}
+.completion-name{font-family:var(--mono);color:var(--ink)}
+.completion-item.active .completion-name{color:var(--accent)}
+.completion-detail{
+  color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis
+}
+.completion-origin{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
+
 .presets{margin-top:11px}
 /* the heading a body of knowledge's questions are offered under; a scene that only asks
    about one thing gets no heading at all, so the row stands alone as it always did */

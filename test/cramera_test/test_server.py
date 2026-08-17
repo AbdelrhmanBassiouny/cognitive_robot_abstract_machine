@@ -123,3 +123,38 @@ class TestApi:
             status, body = err.code, err.read()
         assert status == 404
         assert json.loads(body)["ok"] is False
+
+
+class TestVocabularyApi:
+    """
+    What the query box is told it may name, served from the recorded scene.
+    """
+
+    def test_the_vocabulary_offers_the_scene_variables_and_workspace_classes(
+        self, server
+    ):
+        pytest.importorskip("krrood")
+        payload = get_json(server + "/api/eql/vocabulary")
+
+        assert payload["ok"]
+        offered = {entry["name"]: entry for entry in payload["entries"]}
+        assert offered["scene_object"]["kind"] == "variable"
+        assert offered["scene_object"]["type"] == "BenchObject"
+        assert offered["entity"]["kind"] == "factory"
+        # a class of the scanned architecture, which the fixture keeps miniature
+        assert offered["Plan"]["kind"] == "class"
+        assert offered["Plan"]["module"] == "coraplex.plans.plan"
+
+    def test_the_members_of_a_variable_are_served_for_its_type(self, server):
+        pytest.importorskip("krrood")
+        payload = get_json(server + "/api/eql/members?name=scene_object")
+
+        assert payload["ok"] and payload["name"] == "scene_object"
+        assert "name" in [member["name"] for member in payload["members"]]
+
+    def test_the_members_of_an_unknown_name_are_refused(self, server):
+        pytest.importorskip("krrood")
+        payload = get_json(server + "/api/eql/members?name=NoSuchType")
+
+        assert payload["ok"] is False
+        assert "NoSuchType" in payload["error"]
