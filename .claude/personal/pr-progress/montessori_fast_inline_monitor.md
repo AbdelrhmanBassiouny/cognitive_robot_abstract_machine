@@ -125,7 +125,9 @@ that thread, and keeps the configuration that has never crashed.
     rather than a URI for that reason.
 87. `--database-uri` defaults to `None` instead of `configured_database_uri()`, so the
     run resolves its own and can name the origin.
-88. 79 passed across the four affected suites. Two `caplog`-based recording tests fail,
+88. Committed as `a5b24bb3d2` and pushed to `origin/montessori_fast_inline_monitor`,
+    one commit over the round-17 pin. 79 passed across the four affected suites. Two
+    `caplog`-based recording tests fail,
     **confirmed failing on the unmodified code too** (caplog captures nothing in this
     environment); the `presets.json` failures in the live-query/episodic-memory suites
     are a missing `cramera/scenes/Franka_Montessori/` in this checkout.
