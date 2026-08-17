@@ -62,3 +62,40 @@ information without flooding the list. Say so; revisit if they want all rows.
 - The 682 KB payload could be trimmed (drop `detail` for classes, or serve names only and
   fetch details per row) if it ever feels slow.
 
+### Round 2 (2026-08-17, uncommitted): Symbols + Match verb default
+
+The developer asked for two more things on this branch:
+
+1. **Coraplex actions and segmind events/detectors as Symbols**, so they land in the
+   SymbolGraph and are EQL-queryable in cramera. Added `Symbol` to the highest
+   ancestors: `Designator` (coraplex -- covers actions *and* motions; the actions'
+   highest ancestor), `DetectionEvent` (segmind events root), and `AbstractDetector`
+   (segmind detectors root; its parent `MotionStatechartNode` is giskardpy's, which was
+   deliberately left untouched). New tests:
+   `test/coraplex_test/test_designator/test_designator_symbol_graph.py` (4),
+   `test/segmind_test/test_symbol_graph.py` (6). Also found WIP already in the tree from
+   an earlier session: `NamedEntity(Symbol)` in cramera plus `RowRenderer` handling of
+   `init=False`/`repr=False` fields and `test_entity_symbol_graph.py` -- kept as is.
+2. **Match verbalization default**: a match now opens with *"Find"* unless
+   `has_ellipsis_attributes` (then *"Generate"*); a backend override still wins. Decided
+   declaratively in `MatchPlanner` -> `MatchPlan.default_directive`, consumed by
+   `MatchAssembler.realize`. Updated tests, docstrings/doctests, and
+   `krrood/doc/eql/user/verbalization.md`.
+
+Verified: krrood 1383+777 pass (typing suite skipped locally, no mypy in cram2 env);
+segmind and cramera suites pass. Ran `scripts/format_docstrings.py` on touched files.
+
+Local-environment landmines (pre-existing, NOT from this round; tell the developer):
+
+- pytest only runs with `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` -- ROS jazzy's
+  launch-testing plugins die on a broken `lark` install.
+- Any `test/coraplex_test` run dies in conftest: `Table '_MockedConvexSetDAO' is
+  already defined` (coraplex's and semantic_digital_twin's committed
+  ormatic_interface.py both define it). Reproduces on a clean tree. The new coraplex
+  test was therefore verified with `--noconftest`.
+- `scripts/regenerate_all_orm.py` in this env produces huge unrelated churn (drops
+  ROS-dependent DAOs, moves coraplex DAOs out of semantic_digital_twin's interface) and
+  zero changes traceable to the Symbol edit -- regeneration was reverted; segmind's
+  conftest-generated ORM is byte-identical, confirming Symbol's fields are ignored by
+  ormatic.
+
