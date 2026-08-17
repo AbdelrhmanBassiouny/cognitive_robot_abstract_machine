@@ -219,6 +219,29 @@ that thread, and keeps the configuration that has never crashed.
 105. The `GET /core/replay.js 404` in their log comes from a cached `index.html` of
     `montessori_event_replay`; nothing on this branch references that file.
 
+### Round 20 -- the demo could not import its own ORM schema
+
+106. The developer's `run_montessori_demo` died at `_open_recording` importing
+    `experiments.orm.ormatic_interface`, whose line 102 pulls in
+    `giskardpy.middleware.ros2.behavior_tree_config` -> `py_trees_ros` -> `ros2topic`
+    -> `argcomplete`. Two modules were missing, for different reasons:
+    - `argcomplete`: the `cram2` venv is built without system site-packages, so the
+      system copy in `/usr/lib/python3/dist-packages` (the one ROS Jazzy's
+      `ros2topic` counts on) is invisible to it. Installed `argcomplete` 3.7.2 into
+      the venv; that half is fixed.
+    - `json_msgs` (the next import in the same giskardpy chain, via
+      `publish_feedback.py`): built only in `~/ros2_ws` (`cram_ros2_packages`,
+      alongside `giskardpy_ros`), and `~/.bashrc` sources `/opt/ros/jazzy` and
+      `~/Projects/ros2_ws` but never `~/ros2_ws`. Not touched (round 76 precedent:
+      their shell profile is theirs); the developer needs
+      `source ~/ros2_ws/install/setup.bash` before running.
+107. Verified: with that overlay on the path the full `ormatic_interface` import
+    succeeds in `cram2` from this checkout.
+108. Design smell worth raising: the ORM interface importing a ROS2 behavior-tree
+    config means a `--no-rviz` demo cannot record results without a sourced ROS
+    workspace. Per AGENTS.md that file is regenerated, so the fix would go through
+    `scripts/regenerate_all_orm.py` / what feeds it, not the file.
+
 ### Environment quirks found while doing this
 
 - `cramera` is not installed in the `cram` virtualenv (this repo's), only in `cram2`,
