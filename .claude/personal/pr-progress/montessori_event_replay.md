@@ -43,7 +43,40 @@ existed:
 `http://localhost:8711/` in Chrome: LIVE, panda + both stands + board + floor +
 shapes, no console errors. Writing the world takes 14 ms.
 
-**Next.** No PR opened yet. Untouched, worth telling the developer: the
-`cramera/scenes` submodule has `Franka_Montessori/` untracked while `index.json`
-lists it, and that `index.json`'s `default` still names the missing
-`pr2_kitchen`.
+## Merging the stack (developer's instruction)
+
+The stack turned out to be linear and this branch was already its tip -
+`montessori_event_replay` contained `montessori_fast_inline_monitor` already.
+What was missing was two commits pushed to `origin/montessori_fast_inline_monitor`
+after the local copy: `11311d09e` (scenes pin that carries the bundle) and
+`a5b24bb3d` (in-memory results-database fallback).
+
+Committed the live-geometry work as `26f40d36e`, then merged
+`origin/montessori_fast_inline_monitor` as `df413937f`. One conflict,
+`cramera/scenes`, since both sides repinned it off the dead `2438a523`;
+resolved to the incoming `64b98ed`, which is on `cram2/cram-scenes` *and*
+carries the bundle, where this branch's `2230683` was that repository's
+bundle-less main. Pushed to `origin/montessori_event_replay`.
+
+Deliberately left out, both below the "starting from" point:
+`origin/montessori_merge_db_creation`'s one extra commit is only an older
+submodule repoint (`014c8796`), superseded; `montessori_thread_safe_reads`
+(local only) has 4 of 5 commits in by content, the fifth (`f0e94fb48`) differing
+because round 13 ported it with a different resolution - `_read_geometry_out`
+is on HEAD as a warm-up, as the round-13 notes say.
+
+**Still open.**
+
+- No PR.
+- `index.json` at the new pin *still* names `pr2_kitchen` as its default and no
+  such scene exists there (`Franka_Montessori`, `G1_warehouse`,
+  `garmi_pick_place`, `pr2_breakfast`, `pr2_pouring`). Harmless for the demo now
+  that the landing page draws the live world, but a viewer opened with no demo
+  running still says "Scene failed to load". Fixing it means a commit in
+  `cram2/cram-scenes`, so left alone.
+- The local `cramera/scenes` checkout is still at `2438a52` with
+  `Franka_Montessori/` untracked, while the superproject records `64b98ed`. All
+  68 bundle files are byte-identical to what `64b98ed` carries, plus one extra
+  on disk (`stacking_scene.urdf`). `git submodule update` will refuse until the
+  identical untracked copies are removed - the developer's delete to make, not
+  mine.
