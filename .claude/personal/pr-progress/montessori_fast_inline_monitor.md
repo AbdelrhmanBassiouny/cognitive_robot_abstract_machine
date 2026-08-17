@@ -159,7 +159,13 @@ that thread, and keeps the configuration that has never crashed.
     `refs/pull/*/head` -- verified by fetching the SHA into a throwaway clone.
     **Re-pin to `main` once the PR merges.** Note this will conflict trivially with
     `ef46d536b5` when the branches meet; ours is the one to keep.
-94. `presets.json` is unique to this bundle -- no other scene declares one -- and is
+94. The developer opened the PR: **`cram2/cram-scenes#1`**, still open (`main` is
+    `2230683`). The pin commit is `11311d09e2`, **pushed to
+    `origin/montessori_fast_inline_monitor`**. Verified the way it will actually be
+    used: a fresh `git clone --branch montessori_fast_inline_monitor` followed by
+    `git submodule update --init cramera/scenes` checks out `64b98ed` and yields the
+    34 MB bundle. The one outstanding step is re-pinning to `main` after #1 merges.
+95. `presets.json` is unique to this bundle -- no other scene declares one -- and is
     still in sync with `MONTESSORI_PRESETS` (20 presets, scopes match). Both
     `TestDeclaredBundlePresets` suites now pass: 23 passed across live-query and
     episodic-memory, where two were failing.
