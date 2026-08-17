@@ -35,6 +35,15 @@ include = ["semantic_digital_twin*"]
 version = {attr = "semantic_digital_twin._version.__version__"}
 dependencies = {file = "requirements.txt"}
 
+[dependency-groups]
+workspace = [
+    "giskardpy",
+    "krrood",
+    "physics_simulators",
+    "probabilistic_model",
+    "random_events",
+]
+
 [project.optional-dependencies]
 gui = [
     "ripple_down_rules[gui]",

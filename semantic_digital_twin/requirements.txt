@@ -20,6 +20,9 @@ rtree
 daqp
 pathlib
 probabilistic_model
+giskardpy
+krrood
+physics_simulators
 python-fcl
 manifold3d
 polytope

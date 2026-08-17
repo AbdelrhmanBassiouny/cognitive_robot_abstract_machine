@@ -35,3 +35,8 @@ include = ["probabilistic_model*"]
 [tool.setuptools.dynamic]
 version = {attr = "probabilistic_model._version.__version__"}
 dependencies = {file = "requirements.txt"}
+
+[dependency-groups]
+workspace = [
+    "krrood",
+]

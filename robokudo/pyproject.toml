@@ -34,6 +34,12 @@ include = ["robokudo*"]
 version = {attr = "robokudo._version.__version__"}
 dependencies = {file = "requirements.txt"}
 
+[dependency-groups]
+workspace = [
+    "krrood",
+    "semantic_digital_twin",
+]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0,<8.0.0",

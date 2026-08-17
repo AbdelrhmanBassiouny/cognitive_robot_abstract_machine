@@ -35,6 +35,15 @@ include = ["coraplex*"]
 version = {attr = "coraplex._version.__version__"}
 dependencies = {file = "requirements.txt"}
 
+[dependency-groups]
+workspace = [
+    "giskardpy",
+    "krrood",
+    "probabilistic_model",
+    "random_events",
+    "semantic_digital_twin",
+]
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0,<8.0.0",

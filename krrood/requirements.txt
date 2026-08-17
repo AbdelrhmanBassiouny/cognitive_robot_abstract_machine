@@ -11,6 +11,8 @@ ruff
 sortedcontainers
 ruff
 inflection
+probabilistic_model
+random_events
 
 # rdr requirements
 anytree>=2.8.0
