@@ -9,7 +9,10 @@ import logging
 import pytest
 from sqlalchemy import func, select
 
-from experiments.montessori.results_database import ResultsDatabase
+from experiments.montessori.results_database import (
+    IN_MEMORY_DATABASE_URI,
+    ResultsDatabase,
+)
 from experiments.montessori.results_recording import (
     RecordsIterationsToADatabase,
     RecordsNothing,
@@ -23,15 +26,15 @@ A Postgres URI on a port nothing listens on, carrying a password a log must not 
 """
 
 
-def recorded_iteration_count(database_uri: str) -> int:
+def recorded_iteration_count(results_database: ResultsDatabase) -> int:
     """
     How many iterations a database holds.
 
-    :param database_uri: The database to count in.
+    :param results_database: The database to count in.
     """
     import experiments.orm.ormatic_interface as ormatic_interface
 
-    with ResultsDatabase(uri=database_uri).open_session() as session:
+    with results_database.open_session() as session:
         return session.scalar(
             select(func.count()).select_from(
                 ormatic_interface.SortingIterationResultDAO
@@ -41,19 +44,35 @@ def recorded_iteration_count(database_uri: str) -> int:
 
 # %% recording to a database that takes writes
 def test_a_finished_iteration_is_kept(tmp_path):
-    uri = "sqlite:///%s" % (tmp_path / "results.db")
+    database = ResultsDatabase(uri="sqlite:///%s" % (tmp_path / "results.db"))
 
-    recording = open_recording(uri)
+    recording = open_recording(database)
     recording.record(SortingIterationResult(iteration=1))
     recording.close()
 
-    assert recorded_iteration_count(uri) == 1
+    assert recorded_iteration_count(database) == 1
 
 
 def test_a_writable_database_is_recorded_to(tmp_path):
-    recording = open_recording("sqlite:///%s" % (tmp_path / "results.db"))
+    recording = open_recording(
+        ResultsDatabase(uri="sqlite:///%s" % (tmp_path / "results.db"))
+    )
 
     assert isinstance(recording, RecordsIterationsToADatabase)
+    recording.close()
+
+
+def test_an_in_memory_database_is_read_back_through_the_same_object():
+    """
+    An in-memory database is what a run falls back to, and the viewer's episodic-memory
+    questions are answered from the very object the run recorded through.
+    """
+    database = ResultsDatabase(uri=IN_MEMORY_DATABASE_URI)
+
+    recording = open_recording(database)
+    recording.record(SortingIterationResult(iteration=1))
+
+    assert recorded_iteration_count(database) == 1
     recording.close()
 
 
@@ -63,7 +82,7 @@ def test_a_run_that_cannot_reach_a_database_records_nothing(caplog):
     A database problem must cost a run its results, never the sort itself.
     """
     with caplog.at_level(logging.WARNING):
-        recording = open_recording(UNREACHABLE_URI)
+        recording = open_recording(ResultsDatabase(uri=UNREACHABLE_URI))
 
     assert isinstance(recording, RecordsNothing)
 
@@ -74,7 +93,7 @@ def test_a_run_that_cannot_record_says_so_without_the_password(caplog):
     demo's log is pasted into issues and chats.
     """
     with caplog.at_level(logging.WARNING):
-        open_recording(UNREACHABLE_URI)
+        open_recording(ResultsDatabase(uri=UNREACHABLE_URI))
 
     assert "franka_montessori_sorting_results" in caplog.text
     assert "hunter2" not in caplog.text
@@ -85,7 +104,7 @@ def test_a_run_that_cannot_record_is_told_it_is_not_recording(caplog):
     Nothing else in the run's output would reveal that its results are being dropped.
     """
     with caplog.at_level(logging.WARNING):
-        open_recording(UNREACHABLE_URI)
+        open_recording(ResultsDatabase(uri=UNREACHABLE_URI))
 
     assert "not being recorded" in caplog.text
 
@@ -94,7 +113,9 @@ def test_a_read_only_database_records_nothing(tmp_path):
     path = tmp_path / "results.db"
     ResultsDatabase(uri="sqlite:///%s" % path).open_session().close()
 
-    recording = open_recording("sqlite:///file:%s?mode=ro&uri=true" % path)
+    recording = open_recording(
+        ResultsDatabase(uri="sqlite:///file:%s?mode=ro&uri=true" % path)
+    )
 
     assert isinstance(recording, RecordsNothing)
 

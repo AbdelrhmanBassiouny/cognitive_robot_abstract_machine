@@ -8,10 +8,11 @@ per-shape result is persisted to a Postgres database via ORMatic (see
 
 ## One-time setup: the results database
 
-Only needed if you want the results kept. `--no-record` asks for no database at all,
-and a run whose database will not take a write sorts anyway and says so — it refuses to
-start only when that database was named with `--database-uri`, since inheriting one
-from `FRANKA_MONTESSORI_SORTING_DATABASE_URI` says nothing about wanting it.
+Only needed if you want the results kept past the run. No database problem stops a run:
+one that will not take a write is sorted alongside and simply not recorded to, and one
+that cannot be reached at all is replaced by a SQLite database inside the demo's own
+process, which the viewer's episodic-memory questions are answered from until the run
+exits. `--no-record` asks for no database at all.
 
 Persistence needs a Postgres role and database to already exist. Provision them once,
 as the `postgres` superuser, with the script `semantic_digital_twin` already ships for
@@ -32,7 +33,9 @@ override it per run with `--database-uri`, or for every run with the
 If the role already exists with a different password, either set it to the one above
 or point the run somewhere else with `--database-uri`. `run_montessori_demo.sh` checks
 this before it starts anything, so a mismatch is reported in a fraction of a second
-rather than after a world has been built.
+rather than after a world has been built — and says which of the three settled on the
+database, since a URI inherited from a shell profile appears nowhere in the command
+that was run.
 
 ## Running a single iteration
 

@@ -49,15 +49,19 @@ Common demo arguments (see franka_montessori_demo.py --help for all of them):
                       verdict is unaffected either way.
   --only-shape KEY    Attempt one shape only, e.g. --only-shape square_hole.
   --no-record         Keep no results, and ask for no database at all.
-  --database-uri URI  Record results somewhere other than the default database.
+  --database-uri URI  Record results somewhere other than the configured database.
 
 Examples:
 
   ./$(basename "$0") --only-shape square_hole
   ./$(basename "$0") --no-browser --no-viewer --only-shape square_hole
 
-The demo records every iteration to Postgres and will not start without it; see
-experiments/src/experiments/montessori/README.md for the one-time provisioning.
+The demo records every iteration to the database named by
+FRANKA_MONTESSORI_SORTING_DATABASE_URI, or to a local Postgres one when that is not
+set; see experiments/src/experiments/montessori/README.md for the one-time
+provisioning. A database that is not running is replaced by one in the demo's own
+memory, so the run still sorts and the viewer's queries are still answered -- only its
+recorded history is gone when it exits.
 USAGE
 }
 
@@ -98,11 +102,11 @@ else
 fi
 echo "Running with ${python_executable}."
 
-# before anything else: the demo records every iteration, and finding out only after the
-# CRAM stack has imported and a world has been built that it cannot costs a minute and
-# buries the reason under a hundred-line traceback. Refuses to start only when the
-# database was named by this run; one inherited from a shell profile just warns and
-# sorts without recording
+# before anything else: say where this run's results go, and warn now rather than after
+# the CRAM stack has imported and a world has been built, which costs a minute and
+# buries the reason under a hundred-line traceback. No database problem stops the run --
+# an unreachable one is replaced by an in-memory database and a read-only one is simply
+# not recorded to -- so only a broken pre-flight itself does
 if ! "${python_executable}" -m experiments.montessori.results_database \
     ${demo_arguments[@]+"${demo_arguments[@]}"}; then
     exit 1
@@ -163,8 +167,5 @@ demo_status=0
 if [[ "${demo_status}" -ne 0 ]]; then
     echo >&2
     echo "The demo exited with status ${demo_status}." >&2
-    echo "If it failed to reach its results database, provision it once as described" >&2
-    echo "in experiments/src/experiments/montessori/README.md, or point the run at" >&2
-    echo "another one with --database-uri." >&2
 fi
 exit "${demo_status}"

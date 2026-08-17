@@ -4,8 +4,9 @@ Tests for resolving and reaching the database a Montessori run records to.
 
 from __future__ import annotations
 
+import threading
+
 import pytest
-from krrood.ormatic.utils import create_engine
 from sqlalchemy import inspect
 
 from experiments.montessori.results_database import (
@@ -13,10 +14,12 @@ from experiments.montessori.results_database import (
     DATABASE_URI_ENVIRONMENT_VARIABLE,
     DEFAULT_DATABASE_URI,
     DatabaseUriOrigin,
+    IN_MEMORY_DATABASE_URI,
     ReadOnlyResultsDatabase,
     ResultsDatabase,
     UnreachableResultsDatabase,
     configured_database_uri,
+    create_results_engine,
     main,
     verify_reachable,
     verify_writable,
@@ -157,11 +160,11 @@ class TestWritingToTheDatabase:
         database it is checking.
         """
         uri = "sqlite:///%s" % (tmp_path / "results.db")
-        tables_before = inspect(create_engine(uri)).get_table_names()
+        tables_before = inspect(create_results_engine(uri)).get_table_names()
 
         verify_writable(uri)
 
-        assert inspect(create_engine(uri)).get_table_names() == tables_before
+        assert inspect(create_results_engine(uri)).get_table_names() == tables_before
 
 
 # %% where the database came from
@@ -191,15 +194,95 @@ class TestResolvingWithItsOrigin:
         assert resolved.origin is DatabaseUriOrigin.BUILT_IN_DEFAULT
 
 
+# %% falling back to memory when the configured database is not there
+class TestFallingBackToMemory:
+    """
+    A database that is simply not running must cost a run its recorded history, never
+    the sort it was started for.
+    """
+
+    def test_a_reachable_database_is_kept(self, tmp_path):
+        uri = "sqlite:///%s" % (tmp_path / "results.db")
+
+        resolved = ConfiguredDatabase.resolve_reachable(uri)
+
+        assert resolved.uri == uri
+        assert resolved.fell_back_from is None
+
+    def test_an_unreachable_database_is_replaced_by_one_in_memory(self):
+        resolved = ConfiguredDatabase.resolve_reachable(UNREACHABLE_URI)
+
+        assert resolved.uri == IN_MEMORY_DATABASE_URI
+        assert resolved.origin is DatabaseUriOrigin.IN_MEMORY_FALLBACK
+
+    def test_the_fallback_remembers_which_database_it_stands_in_for(self):
+        """
+        The run still has to be able to say which database was missing, and why.
+        """
+        resolved = ConfiguredDatabase.resolve_reachable(UNREACHABLE_URI)
+
+        assert resolved.fell_back_from.database_uri == UNREACHABLE_URI
+
+    def test_the_fallback_says_it_keeps_nothing_past_the_run(self):
+        described = ConfiguredDatabase.resolve_reachable(UNREACHABLE_URI).describe()
+
+        assert "only until this run exits" in described
+
+    def test_an_unreachable_database_from_the_environment_is_replaced_too(
+        self, monkeypatch
+    ):
+        """
+        The variable is usually set in a shell profile, so its database being down must
+        not be a reason for every run on that host to refuse to start.
+        """
+        monkeypatch.setenv(DATABASE_URI_ENVIRONMENT_VARIABLE, UNREACHABLE_URI)
+
+        assert ConfiguredDatabase.resolve_reachable(None).uri == IN_MEMORY_DATABASE_URI
+
+
+# %% a database that lives only in this process
+class TestTheInMemoryDatabase:
+    def test_the_schema_is_created_in_it_too(self):
+        database = ResultsDatabase(uri=IN_MEMORY_DATABASE_URI)
+
+        with database.open_session() as session:
+            assert "ShapeInsertionResultDAO" in inspect(session.bind).get_table_names()
+
+    def test_another_thread_opens_the_same_database(self):
+        """
+        An in-memory SQLite database lives inside the connection that created it, so the
+        run recording on the planning thread and the viewer reading on another are
+        looking at the same rows only when one connection is shared between them.
+        """
+        database = ResultsDatabase(uri=IN_MEMORY_DATABASE_URI)
+        database.open_session().close()
+        tables_seen_elsewhere = []
+
+        def read_the_schema() -> None:
+            with database.open_session() as session:
+                tables_seen_elsewhere.extend(inspect(session.bind).get_table_names())
+
+        reader = threading.Thread(target=read_the_schema)
+        reader.start()
+        reader.join()
+
+        assert "ShapeInsertionResultDAO" in tables_seen_elsewhere
+
+
 # %% the pre-flight a launcher runs
 class TestPreflight:
     def test_it_reports_success_for_a_reachable_database(self, capsys, tmp_path):
         assert main(["--database-uri", "sqlite:///%s" % (tmp_path / "r.db")]) == 0
         assert "sqlite" in capsys.readouterr().out
 
-    def test_it_fails_for_an_unreachable_database(self, capsys):
-        assert main(["--database-uri", UNREACHABLE_URI]) == 1
-        assert "--database-uri" in capsys.readouterr().err
+    def test_an_unreachable_database_does_not_stop_the_run(self, capsys):
+        assert main(["--database-uri", UNREACHABLE_URI]) == 0
+        assert "Cannot reach the results database" in capsys.readouterr().err
+
+    def test_it_records_in_memory_when_the_database_is_unreachable(self, capsys):
+        main(["--database-uri", UNREACHABLE_URI])
+
+        assert IN_MEMORY_DATABASE_URI in capsys.readouterr().out
 
     def test_a_database_it_cannot_record_to_does_not_stop_the_run(
         self, capsys, read_only_database

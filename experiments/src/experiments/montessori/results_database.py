@@ -17,12 +17,15 @@ from enum import Enum
 
 from krrood.exceptions import DataclassException
 from krrood.ormatic.utils import create_engine
-from sqlalchemy import Column, Integer, MetaData, Table
+from sqlalchemy import Column, Engine, Integer, MetaData, Table
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 from sqlalchemy.sql.sqltypes import NullType
 from typing_extensions import List, Optional
+
+# %% which database a run records to
 
 DEFAULT_DATABASE_URI = (
     "postgresql+psycopg://semantic_digital_twin:montessori@localhost:5432/"
@@ -48,6 +51,14 @@ DATABASE_URI_ENVIRONMENT_VARIABLE = "FRANKA_MONTESSORI_SORTING_DATABASE_URI"
 Environment variable overriding :data:`DEFAULT_DATABASE_URI` for every run.
 """
 
+IN_MEMORY_DATABASE_URI = "sqlite://"
+"""
+Database a run records to when the configured one cannot be reached.
+
+Lives inside the running process, so a run keeps its results only until it exits; the
+viewer's episodic-memory questions are answered from it in the meantime.
+"""
+
 WRITE_PROBE_TABLE_NAME = "montessori_write_probe"
 """
 Table :func:`verify_writable` creates and drops again to prove a run can record.
@@ -69,6 +80,7 @@ class DatabaseUriOrigin(Enum):
     COMMAND_LINE = "--database-uri"
     ENVIRONMENT = DATABASE_URI_ENVIRONMENT_VARIABLE
     BUILT_IN_DEFAULT = "the built-in default"
+    IN_MEMORY_FALLBACK = "an in-memory fallback"
 
 
 @dataclass(frozen=True)
@@ -87,6 +99,12 @@ class ConfiguredDatabase:
     What settled on :attr:`uri`.
     """
 
+    fell_back_from: Optional[UnreachableResultsDatabase] = None
+    """
+    The unreachable database this one stands in for, or None when it is the configured
+    one.
+    """
+
     @classmethod
     def resolve(cls, requested_uri: Optional[str]) -> ConfiguredDatabase:
         """
@@ -101,11 +119,38 @@ class ConfiguredDatabase:
             return cls(uri=from_environment, origin=DatabaseUriOrigin.ENVIRONMENT)
         return cls(uri=DEFAULT_DATABASE_URI, origin=DatabaseUriOrigin.BUILT_IN_DEFAULT)
 
+    @classmethod
+    def resolve_reachable(cls, requested_uri: Optional[str]) -> ConfiguredDatabase:
+        """
+        Settle on a database a run can actually open.
+
+        Stands :data:`IN_MEMORY_DATABASE_URI` in for a configured database that cannot
+        be reached, so a database nobody started costs a run its recorded history rather
+        than the sort it was started for.
+
+        :param requested_uri: The URI given on the command line, or None.
+        """
+        configured = cls.resolve(requested_uri)
+        try:
+            verify_reachable(configured.uri)
+        except UnreachableResultsDatabase as unreachable:
+            return cls(
+                uri=IN_MEMORY_DATABASE_URI,
+                origin=DatabaseUriOrigin.IN_MEMORY_FALLBACK,
+                fell_back_from=unreachable,
+            )
+        return configured
+
     def describe(self) -> str:
         """
         This database as it can be shown to someone, saying where it came from.
         """
-        return "Recording results to %s, from %s" % (
+        if self.fell_back_from is None:
+            return "Recording results to %s, from %s" % (
+                database_label(self.uri),
+                self.origin.value,
+            )
+        return "Recording results to %s, from %s, kept only until this run exits" % (
             database_label(self.uri),
             self.origin.value,
         )
@@ -118,6 +163,38 @@ def database_label(database_uri: str) -> str:
     :param database_uri: The URI to render.
     """
     return make_url(database_uri).render_as_string(hide_password=True)
+
+
+# %% opening it
+
+
+def is_in_memory(database_uri: str) -> bool:
+    """
+    Whether a URI names a SQLite database that exists only inside this process.
+
+    :param database_uri: The URI to read.
+    """
+    url = make_url(database_uri)
+    return url.get_backend_name() == "sqlite" and url.database in (None, "", ":memory:")
+
+
+def create_results_engine(database_uri: str) -> Engine:
+    """
+    An engine on a results database.
+
+    An in-memory database lives inside the connection that created it, so one connection
+    is shared across every thread for it: a run records on the planning thread while the
+    viewer reads on another, and they must see the same rows.
+
+    :param database_uri: The database to open.
+    """
+    if not is_in_memory(database_uri):
+        return create_engine(database_uri)
+    return create_engine(
+        database_uri,
+        poolclass=StaticPool,
+        connect_args={"check_same_thread": False},
+    )
 
 
 @dataclass
@@ -162,7 +239,7 @@ class ResultsDatabase:
         because it depends on a skipped one would otherwise fail with an "undefined
         table" error the moment ``CREATE TABLE`` tried to reference it.
         """
-        engine = create_engine(self.uri)
+        engine = create_results_engine(self.uri)
         metadata = self._schema()
         metadata.create_all(engine, tables=self._creatable_tables(metadata))
         return sessionmaker(engine)
@@ -203,6 +280,9 @@ class ResultsDatabase:
         return [
             table for name, table in metadata.tables.items() if name not in excluded
         ]
+
+
+# %% is it actually reachable
 
 
 @dataclass
@@ -246,12 +326,15 @@ def verify_reachable(database_uri: str) -> None:
     :raises UnreachableResultsDatabase: When no connection can be opened.
     """
     try:
-        with create_engine(database_uri).connect():
+        with create_results_engine(database_uri).connect():
             pass
     except SQLAlchemyError as error:
         raise UnreachableResultsDatabase(
             database_uri=database_uri, reason=str(error.orig or error).strip()
         ) from error
+
+
+# %% can it actually be recorded to
 
 
 @dataclass
@@ -307,7 +390,7 @@ def verify_writable(database_uri: str) -> None:
     :param database_uri: The database to write to.
     :raises ReadOnlyResultsDatabase: When the write is refused.
     """
-    engine = create_engine(database_uri)
+    engine = create_results_engine(database_uri)
     probe = Table(
         WRITE_PROBE_TABLE_NAME, MetaData(), Column("value", Integer, primary_key=True)
     )
@@ -322,6 +405,9 @@ def verify_writable(database_uri: str) -> None:
     probe.drop(engine)
 
 
+# %% the pre-flight a launcher runs
+
+
 def main(argument_list: Optional[List[str]] = None) -> int:
     """
     Check the database a run would record to, for a launcher to call before starting.
@@ -329,12 +415,12 @@ def main(argument_list: Optional[List[str]] = None) -> int:
     Reads only ``--database-uri`` and ignores everything else, so a launcher can forward
     the run's whole argument list without knowing which parts are the demo's.
 
-    A database that cannot be reached at all stops the run: nothing can be read from it
-    either, and the live query panel reads recorded runs from the same place. One that
-    is merely read-only does not, since reading is all some runs want it for.
+    Reports rather than refuses: an unreachable database is replaced by one in memory
+    and a read-only one is recorded nothing to, so the only thing a database problem
+    costs is the run's recorded history.
 
     :param argument_list: Arguments to read; the process's own when omitted.
-    :return: 0 when the run may go ahead, 1 when it may not.
+    :return: 0, the run may go ahead.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--database-uri", default=None)
@@ -343,12 +429,9 @@ def main(argument_list: Optional[List[str]] = None) -> int:
     if not arguments.record:
         print("Not recording this run's results.")
         return 0
-    database = ConfiguredDatabase.resolve(arguments.database_uri)
-    try:
-        verify_reachable(database.uri)
-    except UnreachableResultsDatabase as error:
-        print(error, file=sys.stderr)
-        return 1
+    database = ConfiguredDatabase.resolve_reachable(arguments.database_uri)
+    if database.fell_back_from is not None:
+        print(database.fell_back_from, file=sys.stderr)
     try:
         verify_writable(database.uri)
     except ReadOnlyResultsDatabase as error:
