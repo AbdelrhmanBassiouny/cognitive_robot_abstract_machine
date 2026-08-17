@@ -13,7 +13,6 @@ from coraplex.datastructures.enums import (
 from coraplex.plans.failures import PlanFailure
 from coraplex.fluent import Fluent
 from coraplex.language import (
-    MonitorNode,
     SequentialNode,
     TryAllNode,
     ParallelNode,
@@ -102,19 +101,6 @@ def test_combination_construction():
     assert len(root.children) == 2
     assert isinstance(root.children[0], SequentialNode)
     assert len(root.children[0].children) == 2
-
-
-def test_monitor_construction():
-    act = ParkArmsAction(Arms.BOTH)
-    act2 = MoveTorsoAction(TorsoState.HIGH)
-
-    def monitor_func():
-        return True
-
-    root = monitor(children=[sequential([act, act2])], condition=monitor_func)
-    assert len(root.children) == 1
-    assert isinstance(root, MonitorNode)
-    root.plan.validate()
 
 
 def test_repeat_construction():
@@ -264,28 +250,4 @@ def test_exception_try_all(immutable_model_world):
         _ = plan.perform()
 
     assert type(plan.root) is TryAllNode
-    assert plan.root.status == TaskStatus.SUCCEEDED
-
-
-def test_monitor_resume(immutable_model_world):
-    world, robot_view, context = immutable_model_world
-    act = ParkArmsAction(Arms.BOTH)
-    act2 = MoveTorsoAction(TorsoState.HIGH)
-
-    def monitor_func():
-        time.sleep(2)
-        return True
-
-    plan = monitor(
-        [
-            sequential([act, act2]),
-        ],
-        condition=monitor_func,
-        behavior=MonitorBehavior.RESUME,
-        context=context,
-    ).plan
-    with simulated_robot:
-        plan.perform()
-    assert len(plan.root.children) == 1
-    assert isinstance(plan.root, MonitorNode)
     assert plan.root.status == TaskStatus.SUCCEEDED

@@ -172,69 +172,6 @@ class RepeatNode(ExecutesSequentially):
             super().notify()
 
 
-@dataclass(eq=False)
-class MonitorNode(ExecutesSequentially):
-    """
-    Monitors a Language Expression and interrupts it when the given condition is
-    evaluated to True.
-
-    Behaviour:
-        Monitors start a new Thread which checks the condition while performing the nodes below it. Monitors can have
-        different behaviors, they can Interrupt, Pause or Resume the execution of the children.
-        If the behavior is set to Resume the plan will be paused until the condition is met.
-    """
-
-    condition: Union[Callable, Fluent] = field(kw_only=True)
-    """
-    The condition to monitor.
-    """
-
-    behavior: MonitorBehavior = field(kw_only=True, default=MonitorBehavior.INTERRUPT)
-    """
-    What to do on the condition.
-    """
-
-    _monitor_thread: Optional[threading.Thread] = field(init=False, default=None)
-    """
-    Thread for the subplan that is monitored.
-    """
-
-    kill_event: threading.Event = field(init=False, default_factory=threading.Event)
-    """
-    Event used to stop the monitoring thread once the children have finished.
-    """
-
-    def __post_init__(self):
-        if self.behavior == MonitorBehavior.RESUME:
-            self.pause()
-        if callable(self.condition):
-            self.condition = Fluent(self.condition)
-
-        self._monitor_thread = threading.Thread(
-            target=self.monitor, name=f"MonitorThread-{id(self)}"
-        )
-        self._monitor_thread.start()
-
-    def notify(self):
-        super().notify()
-        self.kill_event.set()
-        self._monitor_thread.join()
-
-    def monitor(self):
-        atexit.register(self.kill_event.set)
-        while not self.kill_event.is_set():
-            if self.condition.get_value():
-                if self.behavior == MonitorBehavior.INTERRUPT:
-                    self.interrupt()
-                    self.kill_event.set()
-                elif self.behavior == MonitorBehavior.PAUSE:
-                    self.pause()
-                    self.kill_event.set()
-                elif self.behavior == MonitorBehavior.RESUME:
-                    self.resume()
-                    self.kill_event.set()
-            time.sleep(0.1)
-
 
 @dataclass(eq=False)
 class TryInOrderNode(ExecutesSequentially):
