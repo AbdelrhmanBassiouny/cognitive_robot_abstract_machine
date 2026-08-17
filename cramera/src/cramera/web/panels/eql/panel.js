@@ -20,7 +20,7 @@ Panels.define('eql', function (root, bus) {
     '  <h2>EQL · entity query language</h2>' +
     '  <span id="knowledge-status" class="knowledge-status">loading knowledge base…</span>' +
     '</div>' +
-    '<div class="query-box">' +
+    '<div class="query-box" id="query-box">' +
     '  <div class="query-row">' +
     '    <textarea id="query-input" rows="2" spellcheck="false" placeholder="the(entity(scene_object).where(scene_object.name == \'milk\'))   —  vars: scene_object, episode, arm, joint, robot"></textarea>' +
     '    <button id="query-run">Run</button>' +
@@ -37,6 +37,7 @@ Panels.define('eql', function (root, bus) {
 
   let knowledge = null;   // /api/knowledge overview (presets + entity details)
   let source = QuerySource.of(null);   // where queries and presets are answered from
+  let vocabulary = [];                 // every name the answering source offers
   let recordedStatus = '';             // what the recorded scene calls itself
   // which body of knowledge the box asks about: the last preset picked, since editing
   // a question keeps it a question about the same thing
@@ -77,7 +78,36 @@ Panels.define('eql', function (root, bus) {
   function showSource(status, presets, scopes) {
     knowledgeStatus.textContent = status;
     buildPresets(presets, scopes);
+    loadVocabulary();
   }
+
+  // %% what the box may name
+  // Re-asked whenever the answering source changes: a demo's own variables are not the
+  // recorded scene's, and only the source that answers a query knows what it accepts.
+  function loadVocabulary() {
+    vocabulary = [];
+    suggestions.forget();
+    fetch(source.vocabularyUrl(askedScope)).then(ResponseUtil.parseJson)
+      .then(function (payload) {
+        vocabulary = (payload && payload.ok && payload.entries) || [];
+      })
+      .catch(function () { vocabulary = []; });
+  }
+
+  function fetchMembers(owner) {
+    return fetch(source.membersUrl(owner, askedScope)).then(ResponseUtil.parseJson)
+      .then(function (payload) {
+        return (payload && payload.ok && payload.members) || [];
+      })
+      .catch(function () { return []; });
+  }
+
+  const suggestions = EqlSuggestions.of({
+    input: input,
+    anchor: root.querySelector('#query-box'),
+    entries: function () { return vocabulary; },
+    fetchMembers: fetchMembers,
+  });
 
   function welcome() {
     answerEl.innerHTML =
@@ -91,7 +121,11 @@ Panels.define('eql', function (root, bus) {
       '<code>robot</code>, <code>package</code> / <code>subpackage</code> / <code>python_class</code> ' +
       '(CRAM packages, subpackages, classes). ' +
       'Build queries like <code>the(entity(scene_object).where(scene_object.name == \'milk\'))</code> — ' +
-      'or click a preset below, or a node in the graph.</p>';
+      'or click a preset below, or a node in the graph.</p>' +
+      '<p class="hint-txt">Start typing in the box to see everything this scene lets you ' +
+      'name — its variables, EQL’s own keywords and every class of the CRAM workspace — ' +
+      'and type a dot after a name for what it holds. ArrowUp / ArrowDown pick, ' +
+      'Tab or Enter accepts, Escape closes.</p>';
   }
 
   // %% describe an entity in the answer panel
@@ -154,7 +188,12 @@ Panels.define('eql', function (root, bus) {
     if (!unanswerable) {
       b.addEventListener('click', function () {
         input.value = p.code;
-        askedScope = scope;
+        // the box now asks about this preset's own body of knowledge, whose variables
+        // are not the ones the previous scope offered
+        if (askedScope !== scope) {
+          askedScope = scope;
+          loadVocabulary();
+        }
         runQuery(p.code);
       });
     }
@@ -235,6 +274,8 @@ Panels.define('eql', function (root, bus) {
 
   runBtn.addEventListener('click', function () { runQuery(input.value); });
   input.addEventListener('keydown', function (e) {
+    // the suggestion menu owns the arrows, Tab, Escape and Enter while it is open
+    if (suggestions.handledKey(e)) { e.preventDefault(); return; }
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); runQuery(input.value); }
   });
 

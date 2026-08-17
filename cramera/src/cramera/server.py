@@ -10,6 +10,8 @@ Serves three things from one port (default 8711):
       GET  /api/knowledge              the knowledge-graph overview payload
       GET  /api/knowledge/view?name=   one graph tab (knowledge/kinematics/plan/chart)
       GET  /api/knowledge/expand?node= drill-down subgraph for one node
+      GET  /api/eql/vocabulary         every name a query may use
+      GET  /api/eql/members?name=      the members that follow one name's dot
       POST /api/eql             run an EQL query string
 
 The API needs krrood (EQL). Without it the server still serves the viewer and
@@ -194,12 +196,22 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             )
         if route == "/api/knowledge/view":
             name = (self._query_parameters().get("name") or ["knowledge"])[0]
-            return self._guarded(
-                lambda: GraphPanelViews.of_scene(scene).for_tab(name)
-            )
+            return self._guarded(lambda: GraphPanelViews.of_scene(scene).for_tab(name))
         if route == "/api/knowledge/expand":
             node = (self._query_parameters().get("node") or [""])[0]
             return self._guarded(lambda: self._expanded_node(node, scene))
+        if route == "/api/eql/vocabulary":
+            return self._guarded(
+                lambda: EqlSession.of_scene(scene).runner().vocabulary().to_payload()
+            )
+        if route == "/api/eql/members":
+            name = (self._query_parameters().get("name") or [""])[0]
+            return self._guarded(
+                lambda: EqlSession.of_scene(scene)
+                .runner()
+                .vocabulary()
+                .members_payload(name)
+            )
         return super().do_GET()
 
     @staticmethod
