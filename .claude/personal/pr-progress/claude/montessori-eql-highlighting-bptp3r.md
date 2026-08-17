@@ -112,5 +112,17 @@ still draft, description updated to cover d7d0314d + the user's own
 carries the pre-rebase #164 commits (354b8760/72cf8f75) while the base
 was force-pushed to the rebased 680ea932 — restacking #165 needs a
 history rewrite the user has to decide on (left alone).
+
+Restack done on user request ("yes restack"): #165 rebuilt onto 680ea932
+as exactly five commits — be96570e (recording), 5433d2ed (montessori
+replay tests), d1675bb2 (world geometry, was 26f40d36), 23ef4d4a
+(symbolgraph, was 5266cbc1), d05ea28f (visibility, was d7d0314d).
+Dropped: old #164 pair (superseded by rebased base) and ef46d536 (pin
+superseded by base's 11311d09; its skipif guard also gone — the user's
+rebased #164 removed it, bundle now always present). Tree delta vs old
+tip = exactly that guard removal; suites 510 passed on the restacked
+tip. Force-pushed (lease) to montessori_event_replay + claude branch;
+PR #165 mergeable again ("unstable" = CI pending), still draft,
+description updated with new hashes.
 Note: the published Franka_Montessori bundle still has baked palette
 colours; re-onboarding after this commit would bake authored colours.
