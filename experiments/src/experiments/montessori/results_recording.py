@@ -3,8 +3,8 @@ Whether and where a Montessori run keeps the iterations it finishes.
 
 Recording is best effort: a run whose database will not take a write sorts anyway and
 says so, rather than losing a finished sort to a database problem. ``run_montessori_dem
-o.sh``'s pre-flight is what still refuses to start a run whose database was named on the
-command line and is broken, before a world has been built.
+o.sh``'s pre-flight reports the same thing before a world has been built, where it is
+worth a fraction of a second rather than a minute.
 """
 
 from __future__ import annotations
@@ -94,22 +94,24 @@ class RecordsNothing:
         """
 
 
-def open_recording(database_uri: str) -> RecordsIterations:
+def open_recording(results_database: ResultsDatabase) -> RecordsIterations:
     """
     Start keeping finished iterations, or keep none if the database refuses them.
 
-    :param database_uri: The database to record to.
+    Records through the database object it is given rather than one of its own, so the
+    viewer reading a run's episodic memory reads the very rows the run is writing --
+    which for an in-memory database is only true of a shared connection.
+
+    :param results_database: The database to record to.
     :return: A recorder writing to that database, or one keeping nothing when it cannot
         be reached or will not take a write.
     """
     try:
-        verify_reachable(database_uri)
-        verify_writable(database_uri)
+        verify_reachable(results_database.uri)
+        verify_writable(results_database.uri)
     except (UnreachableResultsDatabase, ReadOnlyResultsDatabase) as error:
         logger.warning("%s", error)
         logger.warning("Sorting anyway; this run's results are not being recorded.")
         return RecordsNothing()
-    logger.info("Recording results to %s.", database_label(database_uri))
-    return RecordsIterationsToADatabase(
-        session=ResultsDatabase(uri=database_uri).open_session()
-    )
+    logger.info("Recording results to %s.", database_label(results_database.uri))
+    return RecordsIterationsToADatabase(session=results_database.open_session())

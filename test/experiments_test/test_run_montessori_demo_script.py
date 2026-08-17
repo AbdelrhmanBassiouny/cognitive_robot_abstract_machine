@@ -112,8 +112,8 @@ class TestItLaunchesTheQueryablePair:
 
     def test_it_checks_the_results_database_before_starting_anything(self):
         """
-        The demo will not start without its database, and finding that out only after
-        the CRAM stack has imported costs a minute for an answer worth a fraction of a
+        Where a run's results go is worth knowing before the CRAM stack has imported and
+        a world has been built, which costs a minute for an answer worth a fraction of a
         second.
         """
         preflight = SCRIPT_TEXT.index("-m experiments.montessori.results_database")
@@ -121,19 +121,6 @@ class TestItLaunchesTheQueryablePair:
         assert preflight < SCRIPT_TEXT.index(
             "-m experiments.montessori.franka_montessori_demo"
         )
-
-    def test_an_unreachable_database_stops_it_before_it_opens_a_port(self, tmp_path):
-        unreachable = "postgresql+psycopg://nobody:wrong@127.0.0.1:1/montessori"
-        finished = subprocess.run(
-            [str(SCRIPT_PATH), "--no-browser", "--database-uri", unreachable],
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-
-        assert finished.returncode == 1
-        assert "Cannot reach the results database" in finished.stderr
-        assert "Starting the cramera server" not in finished.stdout
 
 
 # %% what it runs the demo with by default

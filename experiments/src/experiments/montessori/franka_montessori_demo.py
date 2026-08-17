@@ -16,8 +16,12 @@ Run with (the ``experiments`` package must be importable)::
 
 Every run's per-shape results are recorded, one :class:`~experiments.montessori.sorting_results.SortingIterationResult` (with
 its :class:`~experiments.montessori.sorting_results.ShapeInsertionResult` rows) per iteration, to a Postgres database via
-ORMatic; see ``--database-uri`` and
-:data:`~experiments.montessori.results_database.DEFAULT_DATABASE_URI`.
+ORMatic; see ``--database-uri``,
+:data:`~experiments.montessori.results_database.DEFAULT_DATABASE_URI` and the
+``FRANKA_MONTESSORI_SORTING_DATABASE_URI`` environment variable. A database that is not
+reachable is replaced by
+:data:`~experiments.montessori.results_database.IN_MEMORY_DATABASE_URI`, so no run is
+stopped by one.
 
 .. note::
     :class:`~experiments.montessori.sorting_results.ShapeInsertionResult` and :class:`~experiments.montessori.sorting_results.SortingIterationResult` must be included
@@ -61,7 +65,7 @@ from experiments.montessori.franka_panda_equipment import (
 )
 from experiments.montessori.live_query_source import MontessoriLiveQuerySource
 from experiments.montessori.results_database import (
-    configured_database_uri,
+    ConfiguredDatabase,
     ResultsDatabase,
 )
 from experiments.montessori.results_recording import (
@@ -825,33 +829,54 @@ def _parse_arguments(argument_list: Optional[list[str]] = None) -> argparse.Name
     )
     parser.add_argument(
         "--database-uri",
-        default=configured_database_uri(),
+        default=None,
         help=(
             "Database URI every iteration's SortingIterationResult (with its "
             "per-shape ShapeInsertionResult rows) is recorded to via ORMatic, one "
-            "commit per iteration. Defaults to a local Postgres database (see "
-            "results_database.DEFAULT_DATABASE_URI), overridable via "
-            "FRANKA_MONTESSORI_SORTING_DATABASE_URI."
+            "commit per iteration. Taken from FRANKA_MONTESSORI_SORTING_DATABASE_URI "
+            "when it is set, and otherwise from a local Postgres database (see "
+            "results_database.DEFAULT_DATABASE_URI). A database that cannot be reached "
+            "is replaced by one in this process's memory, which keeps the run's "
+            "results only until it exits."
         ),
     )
     return parser.parse_args(argument_list)
 
 
-def _open_recording(arguments: argparse.Namespace) -> RecordsIterations:
+def _open_results_database(arguments: argparse.Namespace) -> ResultsDatabase:
+    """
+    Settle on the one database this run records to and answers questions from.
+
+    :param arguments: The run's own arguments, read for the database it asks for.
+    """
+    database = ConfiguredDatabase.resolve_reachable(arguments.database_uri)
+    if database.fell_back_from is not None:
+        logger.warning("%s", database.fell_back_from)
+    logger.info("%s.", database.describe())
+    return ResultsDatabase(uri=database.uri)
+
+
+def _open_recording(
+    arguments: argparse.Namespace, results_database: ResultsDatabase
+) -> RecordsIterations:
     """
     Decide where this run's finished iterations go.
 
-    :param arguments: The run's own arguments, read for whether it records at all and
-        for the database it would record to.
+    :param arguments: The run's own arguments, read for whether it records at all.
+    :param results_database: The database this run settled on.
     """
     if not arguments.record:
         logger.info("Not recording this run's results.")
         return RecordsNothing()
-    return open_recording(arguments.database_uri)
+    return open_recording(results_database)
 
 
 def _build_world_and_sort(
-    node, arguments: argparse.Namespace, iteration: int, control: SortingRunControl
+    node,
+    arguments: argparse.Namespace,
+    iteration: int,
+    control: SortingRunControl,
+    results_database: ResultsDatabase,
 ) -> tuple[
     list[ShapeInsertionResult],
     MujocoSim,
@@ -868,6 +893,8 @@ def _build_world_and_sort(
     :param iteration: Which iteration this is, for the viewer to report.
     :param control: What the viewer drives this sort with; it takes over the simulation
         this iteration builds.
+    :param results_database: Where the viewer's questions about finished runs are
+        answered from.
     :return: This run's per-shape results (see :func:`_insert_all_shapes`), and the live
         simulation and publishers, left running for the caller to stop once it is done
         with them.
@@ -945,12 +972,7 @@ def _build_world_and_sort(
     control.begin_iteration(iteration=iteration, simulation=multi_sim)
     progress = SortingProgress()
     if arguments.cramera:
-        _attach_cramera(
-            montessori,
-            progress,
-            control,
-            ResultsDatabase(uri=arguments.database_uri),
-        )
+        _attach_cramera(montessori, progress, control, results_database)
     results = _insert_all_shapes(
         montessori,
         context,
@@ -1059,9 +1081,9 @@ def main() -> None:
     sorting finishes (rebuilding the whole world and rerunning the sort between
     iterations, then logging a per-shape success-rate summary, if there is more than
     one). Every iteration's :class:`~experiments.montessori.sorting_results.SortingIterationResult` is recorded to
-    :attr:`~argparse.Namespace.database_uri` as it finishes (see
-    :func:`_open_results_session`), one commit per iteration, so a run interrupted
-    partway through still leaves every completed iteration persisted.
+    the database this run settled on as it finishes (see :func:`_open_results_database`
+    and :func:`_open_recording`), one commit per iteration, so a run interrupted partway
+    through still leaves every completed iteration persisted.
     """
     # force: the CRAM/Giskard stack configures the root logger on import, which would
     # otherwise swallow this script's own reporting.
@@ -1098,7 +1120,8 @@ def main() -> None:
     control = SortingRunControl()
     last_planned_iteration = arguments.start_iteration + arguments.iterations - 1
     iteration = arguments.start_iteration
-    recording = _open_recording(arguments)
+    results_database = _open_results_database(arguments)
+    recording = _open_recording(arguments, results_database)
     try:
         while True:
             if arguments.iterations > 1:
@@ -1108,7 +1131,9 @@ def main() -> None:
                     last_planned_iteration,
                 )
             shape_results, multi_sim, tf_publisher, viz_marker_publisher = (
-                _build_world_and_sort(node, arguments, iteration, control)
+                _build_world_and_sort(
+                    node, arguments, iteration, control, results_database
+                )
             )
             control.finish_iteration()
 
