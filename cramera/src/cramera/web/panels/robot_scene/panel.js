@@ -299,6 +299,13 @@ Panels.define('robot-scene', function (root, bus) {
     return spr;
   }
   let linkToPart = {};           // link name -> part name (from robot.parts)
+  // a bundle names its links exactly as its URDF does; the bridge's part annotations
+  // name them stripped of their model prefix, so a live world's '/hand' is announced
+  // as 'hand'. Both spellings have to reach the same part.
+  function partOfLink(link) {
+    const name = String(link || '');
+    return linkToPart[name] || linkToPart[name.split('/').pop()] || null;
+  }
   const readyCbs = [];
   let finalized = false;
 
@@ -526,10 +533,10 @@ Panels.define('robot-scene', function (root, bus) {
       c.userData._tamed = true;
     });
   }
-  function upgradeMaterials() { models.forEach(tameModel); }
+  function upgradeMaterials() { models.concat(liveModels).forEach(tameModel); }
 
   function dropGroundToScene() {
-    const envs = models.filter(function (m) { return !m.robot; });
+    const envs = activeModelSet.filter(function (m) { return !m.robot; });
     if (!envs.length) return;
     const box = new THREE.Box3();
     envs.forEach(function (m) { box.expandByObject(m.obj); });
@@ -755,7 +762,7 @@ Panels.define('robot-scene', function (root, bus) {
   function envMeshes() {
     if (_envMeshes) return _envMeshes;
     _envMeshes = [];
-    models.forEach(function (m) {
+    activeModelSet.forEach(function (m) {
       if (m.robot) return;
       m.obj.traverse(function (c) { if (c.isMesh) _envMeshes.push(c); });
     });
@@ -902,7 +909,7 @@ Panels.define('robot-scene', function (root, bus) {
         let o = hits[i].object;
         while (o && o !== scene3) {
           if (o.isURDFLink && o.name) {
-            return linkToPart[String(o.name)] || (SCENE.robot && SCENE.robot.name) || null;
+            return partOfLink(o.name) || (SCENE && SCENE.robot && SCENE.robot.name) || null;
           }
           o = o.parent;
         }
@@ -952,7 +959,7 @@ Panels.define('robot-scene', function (root, bus) {
       robotModel.obj.traverse(function (c) {
         if (!c.isMesh) return;
         const link = linkNameOf(c);
-        const part = linkToPart[link];
+        const part = partOfLink(link);
         const on = wholeRobot || !!(part && set[part]) || !!linkSet[link];
         const mats = Array.isArray(c.material) ? c.material : [c.material];
         mats.forEach(function (m) {
@@ -1012,9 +1019,19 @@ Panels.define('robot-scene', function (root, bus) {
     const m = /[?&]live=([\w.:-]+)/.exec(window.location.search);
     return 'http://' + (m ? m[1] : (window.location.hostname + ':8765'));
   }
+  // the bridge announces the running robot's parts; a page with no recorded bundle has
+  // no scene.json to read them from, so a part an answer names would light up nothing
+  function adoptLivePartAnnotations(annotations) {
+    if (recordedRobotModel || !liveModelsLoaded) return;
+    (annotations || []).forEach(function (part) {
+      (part.links || []).forEach(function (link) { linkToPart[link] = part.name; });
+    });
+  }
+
   function probeLive() {
     fetch(liveUrl() + '/info').then(function (r) { return r.json(); })
       .then(function (info) {
+        if (info) adoptLivePartAnnotations(info.partAnnotations);
         if (liveBtn && !liveOn) liveBtn.style.display = info && !replayWindow ? '' : 'none';
         showRunControls(replayWindow ? null : info && info.control);
         // re-decided on every probe, so a demo that restarted is picked up again
@@ -1203,6 +1220,7 @@ Panels.define('robot-scene', function (root, bus) {
                 // the recorded scene's own models would otherwise sit frozen in
                 // place, doubled up with the live ones now animating on top
                 models.forEach(function (m) { m.obj.visible = false; });
+                showLiveWorld();
               }
             }
           );
@@ -1210,6 +1228,21 @@ Panels.define('robot-scene', function (root, bus) {
       }).catch(function () {
         if (liveOn) setTimeout(attachLiveModels, LIVE_MODELS_RETRY_MS);
       });
+  }
+
+  // the live world's models have just replaced whatever was on screen: give them the
+  // finishing pass a recorded bundle gets in finalize(). A page opened without
+  // ?scene= has no bundle at all, so without this it would show an unlit world, an
+  // unframed camera and the failed-to-load notice of the scene it never had.
+  function showLiveWorld() {
+    _envMeshes = null;
+    upgradeMaterials();
+    dropGroundToScene();
+    // a bundle already framed the camera, and moving it under someone who has since
+    // orbited it would be its own surprise
+    if (!SCENE) frameCamera();
+    if (statusEl) statusEl.classList.add('hidden');
+    needsRender = true;
   }
 
   function disposeLiveModels() {
@@ -1230,6 +1263,7 @@ Panels.define('robot-scene', function (root, bus) {
     activeModelSet = models;
     robotModel = recordedRobotModel;
     models.forEach(function (m) { m.obj.visible = true; });
+    _envMeshes = null;
   }
 
   function setLive(on) {

@@ -21,7 +21,7 @@ from semantic_digital_twin.world import World
 from typing_extensions import Callable, ClassVar, Dict, Optional
 
 from cramera.onboard.bundle_urdf import BundleReport, MeshReference
-from cramera.onboard.world_to_urdf import UrdfDocument
+from cramera.onboard.world_to_urdf import BundledMeshFiles, UrdfDocument
 
 
 @dataclass
@@ -123,6 +123,9 @@ class BundledWorld:
                 % (format_name, source_path, source)
             )
         report = UrdfDocument.of_world(
-            parse(source_path), name, output_directory, mesh_subdirectory
+            parse(source_path),
+            name,
+            output_directory,
+            BundledMeshFiles.into(output_directory, mesh_subdirectory),
         )
         return dataclasses.replace(report, source=source_path)
