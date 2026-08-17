@@ -76,3 +76,37 @@ has no Franka_Montessori bundle (CI-safety rule), re-arms once one is
 published. PR #165 description updated; suites re-run green (cramera 459,
 live-query file 20 passed + 1 skipped). Open follow-up: publish the
 montessori bundle (incl. new presets) to cram-scenes.
+
+# Viewer visibility fixes (user request after watching the demo)
+
+User reported: pale/similar colours, barely visible highlighting, board
+"always highlighted", poor resolution. Diagnosis (all confirmed):
+- Bridge/onboarder coloured objects from the shared cycle by index,
+  discarding world-authored colours; in world2 the board landed on the
+  cycle's one saturated blue (#5b8cff) → looked permanently selected. The
+  Python highlight path was clean (only the board query highlights it).
+- Highlight = 0.55 emissive tint on pale materials → barely visible.
+- resize() called ssaoPass.setSize(w,h) in CSS pixels AFTER
+  composer.setSize had sized every pass at device pixels → whole scene
+  rendered blurry (SSAOPass renders the scene into its own beauty target).
+
+Fix commit d7d0314d ("[Cramera] Show worlds in their own colours and make
+highlights unmissable"): ObjectPalette.color_of(entity, index) prefers a
+declared shape colour (default-white = undeclared) — bridge catalog +
+onboarder both use it; new core/highlight_arrow.js (pure, node-tested) +
+bouncing teal cone over each highlighted object in robot_scene panel,
+emissive raised 0.55→0.85 (objects) / 0.45→0.7 (robot); removed the
+redundant ssaoPass.setSize (contract test pins it). world2 now publishes
+red/blue/green/orange/yellow shapes + matching holes + beige board.
+
+Remote had moved (user pushed: #164 rebased to 680ea932, base advanced,
+scenes bundle published + submodule repinned 64b98ed, GeneratedWorldModels
+commit 26f40d36); commit was rebased onto montessori_event_replay tip
+5266cbc1 and re-tested there: cramera suite + montessori live-query 510
+passed (bundle presets sync now runs and passes). Pushed to
+claude/montessori-eql-highlighting-bptp3r (d7d0314d). Pushing to
+montessori_event_replay was denied by the session's permission layer —
+user must fast-forward it themselves (git push origin
+d7d0314d:montessori_event_replay) or ask a session with that permission.
+Note: the published Franka_Montessori bundle still has baked palette
+colours; re-onboarding after this commit would bake authored colours.
