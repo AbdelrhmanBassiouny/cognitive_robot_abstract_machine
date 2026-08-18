@@ -79,10 +79,40 @@ run-control/live-event-source/franka-demo 66 passed with `--noconftest`.
 `test_shape_falling_through_its_hole_…` still fails here, as it does on the
 base branch.
 
+## Folded into #169 — this branch's PR is closed
+
+The developer asked for `montessori_live_event_timeline_tab` to be merged into
+`montessori_fast_inline_monitor`, local and remote. Round 2 was committed as
+`d01cf215d3`, origin merged in, and the branch pushed; then the merge into the
+base branch **fast-forwarded** — the timeline branch already contained the whole
+of its base — so both branches are now the single commit `f980badc80` and GitHub
+closed **#175 as merged**. The tab container and the timeline ship inside #169.
+
+The concern was raised before the merge (that folding it down puts the feature
+under the whole stack, and that #175's diff becomes empty); the developer went
+ahead.
+
+### The skip-worktree deadlock, worth knowing
+
+The push failed as non-fast-forward and the pull that would fix it aborted on the
+six `ormatic_interface.py` files. `232b8ba199` untracks and gitignores them, but
+git refuses to merge across a **skip-worktree** path it has to change — a
+chicken-and-egg, since the commit that makes the bit unnecessary cannot be merged
+in while the bit is set. Emptying the files to match their committed placeholders
+does not help; git refuses on the bit, not the content. The developer ran
+`git update-index --no-skip-worktree` on all six, the merge went through, and the
+regenerated interfaces were restored from a scratchpad backup afterwards (they are
+ignored now, so the bit is never needed again). Anyone whose branch predates
+`232b8ba199` hits exactly this.
+
 ## Next
 
-- Not yet pushed. Round 2 is committed nowhere yet — commit and push, then
-  re-draft #175 and update its description.
+- Nothing for this session. #175 is merged and #169 carries the work.
+- Left for whoever picks it up: **#178 (`montessori_plan_graph_tab`) is based on
+  #175**, which is no longer an open PR — its branch still exists and points at the
+  same commit as #169, so nothing is broken, but it needs reparenting onto
+  `montessori_fast_inline_monitor`. #170/#164/#165/#167/#168 inherit the timeline
+  work at their next restack.
 
 ## Decisions worth remembering
 
