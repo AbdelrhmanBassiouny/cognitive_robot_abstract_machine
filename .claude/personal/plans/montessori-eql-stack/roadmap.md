@@ -1165,3 +1165,47 @@ added beyond the question's own, and prefers the more specific wording on a tie
 behaviour behaves once the whole workspace is imported, and class-tree-walking
 features (here `instantiable_subclasses`) are exactly where import order bites.
 
+
+## 2026-08-18: the chain restacked from #169 up to #168
+
+The developer asked for the stack to be restacked from `montessori_fast_inline_monitor`
+through #168. Only one link had actually broken: #165 was 20 commits behind #164, which
+by then carried both the plan-graph fold `da2e062e3d` merged into #169 and the ORM
+generation fix `fb0ef552e9` on #170. #169, #170 and #164 were already current with each
+other, and `cram2/main` is contained in #169, so nothing upstream had to be merged.
+
+`#165 f9fee84ac` → `#167 f69c5f255` → `#168 d94990922`, merged rather than rebased as
+every round before it, and pushed as fast-forwards. Only the first merge conflicted, all
+three keep-both:
+
+- `live/bridge.py`: each side had added an import (`DemoRecording`, `LiveEventSource`).
+- `config.js`: #165's `?replay=` popup layout against the tab container's
+  Graph/Events/Plan tabs. The popup keeps the scene alone; every other page gets the
+  tabbed right column.
+- `test_split_resize.js`: the incoming side returned `eql` and `graph` from `install()`,
+  which #165's rewrite had deleted — it builds its panels from `rightPanelIds` now, so
+  taking that side verbatim would have been a `ReferenceError`. Kept #165's shape plus
+  the `emitted` field the tab work's one `panel:resized` test reads.
+
+The silent-conflict check the stack has needed four times found nothing: no reference to
+the removed `window.Graph`/`attach()` survived anywhere, and every answer write on the
+voice path still goes through #167's `showAnswer`.
+
+Verified per tip: cramera 587 / 622 / 663, node tests 281 / 295 / 309, all green. All six
+pull requests report `MERGEABLE`, all still drafts, bases intact.
+
+### Left stale by this round
+
+`#176` and `#177` both hang off `montessori_event_replay` and were not restacked — the
+request stopped at #168. `#178` is still based on `montessori_live_event_timeline_tab`,
+the stale pointer the plan-graph fold left behind.
+
+### Environment
+
+The `.venv` in the checkout is not the project interpreter and has rotted well past the
+lark landmine this file keeps recording — `objgraph` is gone from it too, so
+`test/conftest.py` cannot even be imported there. `~/.virtualenvs/cram`, which `.idea`
+names as the project SDK, runs everything cleanly with no `PYTEST_DISABLE_PLUGIN_AUTOLOAD`.
+Note that `~/.virtualenvs/cram2` has `cramera` installed from a *different* checkout
+(`Projects/copied/...`), so a suite run there tests the wrong tree.
+

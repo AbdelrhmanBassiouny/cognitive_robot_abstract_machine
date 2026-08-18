@@ -149,6 +149,12 @@ items:
       and again for the ORM-untracking fix: b8f970a93. Its history
       carries stale duplicates of #164's commits and internal pre/post-merge
       duplicates, which is why the rounds merged rather than rebased.
+      Restacked again on 2026-08-18 onto #164's 2a2e76a7c, which brought down
+      the plan-graph fold and the ORM-generation fix: f9fee84ac, the only
+      branch of the chain that had fallen behind. Three conflicts, all
+      keep-both (the bridge's import block, config.js's replay-popup layout
+      against the tab container, and the split-resize harness). cramera suite
+      587, 281 node tests green.
 
   - id: cramera-question-readback
     title: "Read the asked query back big under the bar, linked to its docs"
@@ -170,6 +176,8 @@ items:
       cramera suite 579. The links had never appeared because the docs site
       publishes six packages and a scene is queried through none of them, so
       words now fall back to the class's source at the checkout's commit.
+      Restacked onto #165's f9fee84ac on 2026-08-18: f69c5f255, no conflicts,
+      cramera suite 622 and 295 node tests green.
 
   - id: cramera-voice-questions
     title: "Answer a spoken question by running the preset it asks for"
@@ -190,7 +198,9 @@ items:
       to it - had not reached this branch's three voice-path answer writes, so a
       spoken question's reply would have landed below the fold. All three now go
       through it, pinned by a test verified to fail without the change. cramera
-      suite 611, 221 node tests green. On 2026-08-18 the developer asked for
+      suite 611, 221 node tests green. Restacked onto #167's f69c5f255 on
+      2026-08-18: d94990922, no conflicts, cramera suite 663 and 309 node tests
+      green. On 2026-08-18 the developer asked for
       more questions to be recognized and answered: what is your current goal
       (the shape being sorted, via ShapeUnderTest.is_current), what is your
       current action (the running plan's innermost running node, read live via
