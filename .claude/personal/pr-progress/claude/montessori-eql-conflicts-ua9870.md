@@ -30,14 +30,28 @@ single merge commit (`608bc7fe`) that was pushed on as a fast-forward to
   `main` deleted, so importing the module raised `NameError` and
   `test/conftest.py` failed collection in every library's CI job. Now
   `float | None`.
+- Fixed the CI failures that first run then surfaced (`6d944c52`). Merge
+  fallout: `_build_pacer` passed `SimulationPacer(real_time_factor=None)` for
+  "do not pace", which main's validating `real_time_factor: float = 1.0`
+  rejects; now `RealTimePacer` / `NoPacing`. That one line was coraplex's 175
+  failures and all four demo jobs. Also fixed two pre-existing branch breaks
+  the first-ever CI run exposed: the `PANDA_SCENE_BODIES_TO_DISCARD` constant
+  98ac709d dropped while leaving its importer, and frameless matrices assigned
+  to `Connection.origin` in the segmind detector tests.
 - Manifest and roadmap updated and saved; dashboard republished.
 
 ## Next
 
 - Nothing on this branch. The remaining work belongs to the other items: the
   five downstream stack branches and #175 are all still based on the pre-merge
-  `30bd734f` and need restacking onto `a5080fd0`.
-- CI on `a5080fd0` had not reported yet when this session ended.
+  `30bd734f` and need restacking onto `6d944c52`.
+- Two CI failures are deliberately left for the developer, both pre-existing
+  and unrelated to the merge: `PickUpAction`'s commented-out `AttachNode`
+  (8cc3cf69) makes main's `test_node_expansion` see three children where it
+  asserts four, and `test_warehouse_storage_layout` /
+  `test_wind_farm_service_layout` (08257863) test two demo directories that
+  were never committed.
+- CI on `6d944c52` had not reported yet when this session ended.
 
 ## Verification limits
 
