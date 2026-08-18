@@ -142,11 +142,33 @@ The developer asked to fix all of the Round-2 landmines. All four are resolved:
    `reference_frame=milk.parent_connection.parent` and converted all ~30 call sites.
    No assertion was changed. File was black-formatted by `format_docstrings.py`.
 
+5. **Bonus, found while verifying #3**: full coraplex-suite runs were OOM-killing the
+   machine inside `test_costmaps.py`. Root cause in production code:
+   `OccupancyCostmap.inflate_obstacles` (`coraplex/src/coraplex/locations/costmaps.py`)
+   reshaped an `as_strided` sliding-window view, materializing a ~1 GiB copy of the
+   expanded matrix. Fixed by summing over the window axes of the view directly
+   (`np.sum(sub_matrices, axis=(-2, -1))`) -- no copy, identical semantics. Added
+   `test_inflate_obstacles_marks_only_fully_free_windows` (loop-computed expectation).
+   All 22 costmaps tests now pass even under `ulimit -v 8000000`; before the fix, 2
+   failed with `_ArrayMemoryError` under that cap and unconstrained runs got
+   OOM-killed.
+
 Verified after fixes (all without `PYTEST_DISABLE_PLUGIN_AUTOLOAD`): segmind 46
 passed + 1 skipped (was 34+12 failing); krrood typing 1 passed; coraplex
-`test_designator_symbol_graph.py` 4 passed *with* conftest. Full coraplex-suite run
-result: see chat.
+costmaps 22 passed; coraplex `test_designator_symbol_graph.py` 4 passed *with*
+conftest.
+
+First-ever full coraplex baseline on this machine (file-by-file; the conftest crash
+had always hidden it): most files green; pre-existing failures NOT touched (out of
+scope this round): `test_multi_robot_action_designator.py` 68 errors,
+`test_multi_robot_location_designator.py` 28 errors, `test_warehouse_storage_layout.py`
+16 failed + 4 errors, `test_wind_farm_service_layout.py` 17 failed + 4 errors,
+`test_graph_parsing.py` 4 failed, `test_action_conditions.py` 3 failed,
+`test_demonstrations.py` 1 failed, `test_memory_leak.py` 1 failed,
+`test_plan.py` 1 failed, `test_motion_designator.py` 3 errors.
 
 Still known-broken in this env (not asked, not fixed): `open3d` wants `ipywidgets`
-(pip check); drake/sapien/robocasa optional deps absent (mocked classes stay).
+(pip check); drake/sapien/robocasa optional deps absent (mocked classes stay);
+`json_msgs` ROS package not built anywhere, so coraplex conftest ORM regeneration
+always drops Giskard ROS2 DAOs locally -- revert that churn after coraplex test runs.
 
