@@ -1773,10 +1773,12 @@ class World(HasSimulatorProperties):
         and the branch keeps its world pose. No-op if ``branch_root`` is already a child
         of ``new_parent``.
 
-        A :class:`Connection6DoF` carries its pose in its degrees of freedom, so it is recreated with
-        fresh DOFs whose origin is set to the world-preserving pose. Every other connection keeps its
-        degree of freedom and only its parent offset is recomputed
-        (see :meth:`~...world_entity.Connection.copy_with_new_parent`).
+        Every connection keeps its degrees of freedom
+        (see :meth:`~...world_entity.Connection.copy_with_new_parent`), so the world state
+        layout is unchanged and memory views bound to it stay valid. A
+        :class:`Connection6DoF` carries its pose in those degrees of freedom, so instead of
+        recomputing a parent offset its origin is set to the world-preserving pose and its
+        derivatives are cleared.
 
         :param branch_root: The root of the branch to be moved.
         :param new_parent: The new parent of the branch.
@@ -1802,8 +1804,10 @@ class World(HasSimulatorProperties):
             new_parent_T_branch_root = self.compute_forward_kinematics(
                 new_parent, branch_root, enable_unsafe_inside_world_block
             )
-            new_connection = Connection6DoF.create_with_dofs(
-                parent=new_parent, child=branch_root, world=self
+            # The pose lives entirely in the degrees of freedom, so the connection sits
+            # right on the new parent and the offset below is set from it afterwards.
+            new_connection = old_connection.copy_with_new_parent(
+                new_parent, HomogeneousTransformationMatrix()
             )
         else:
             # Relocate the connection frame so the branch keeps its world pose, then let the connection
@@ -1827,6 +1831,13 @@ class World(HasSimulatorProperties):
 
         if isinstance(old_connection, Connection6DoF):
             new_connection.origin = new_parent_T_branch_root
+            # The re-used degrees of freedom describe the pose relative to the old parent,
+            # so any motion they still carry is meaningless under the new one.
+            for degree_of_freedom in new_connection.passive_dofs:
+                self.state[degree_of_freedom.id].velocity = 0
+                self.state[degree_of_freedom.id].acceleration = 0
+                self.state[degree_of_freedom.id].jerk = 0
+            self.notify_state_change()
 
     def move_branch_to_new_world(self, new_root: KinematicStructureEntity) -> World:
         """
