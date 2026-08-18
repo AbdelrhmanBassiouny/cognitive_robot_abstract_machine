@@ -1,12 +1,14 @@
 """
 What a running Montessori sort offers the viewer's entity query language console.
 
-Three things are on offer. About the scene itself: where the holes, the box and each
+Four things are on offer. About the scene itself: where the holes, the box and each
 shape's insertion goal are, answered by highlighting them in the viewer. About the sort
 in progress, the questions the buttons exist to answer are: was this shape inserted,
-where was it being inserted, and why could it not be. About the runs that already
-finished, they are how often each shape was sorted and how its attempts ended -- read
-back out of the results database rather than out of this process.
+where was it being inserted, and why could it not be. About what the robot can still be
+asked to do: which shapes this board makes insertable, answered with rows the viewer can
+press perform on. About the runs that already finished, they are how often each shape
+was sorted and how its attempts ended -- read back out of the results database rather
+than out of this process.
 """
 
 from __future__ import annotations
@@ -21,6 +23,7 @@ from cramera.knowledge.queryable_knowledge import QueryableKnowledge, QueryScope
 from cramera.live.query import LiveQuerySource
 from typing_extensions import List, Optional
 
+from experiments.montessori.performable_insertions import PerformableInsertion
 from experiments.montessori.results_database import ResultsDatabase
 from experiments.montessori.scene_layout import (
     BoardRecord,
@@ -208,6 +211,12 @@ class MontessoriLiveQuerySource(LiveQuerySource):
     the world when the demo attaches.
     """
 
+    insertions: List[PerformableInsertion] = field(default_factory=list)
+    """
+    The insertions this scene makes possible, read once from the world when the demo
+    attaches, so an answer naming one can be performed from the viewer.
+    """
+
     results_database: Optional[ResultsDatabase] = None
     """
     Where finished runs were recorded, or None when nothing is asking about them.
@@ -244,6 +253,7 @@ class MontessoriLiveQuerySource(LiveQuerySource):
                 QueryDomain("hole", HoleRecord, self.layout.holes),
                 QueryDomain("board", BoardRecord, self.layout.boards),
                 QueryDomain("goal", InsertionGoalRecord, self.layout.goals),
+                QueryDomain("insertion", PerformableInsertion, self.insertions),
             ],
         )
 
@@ -283,12 +293,25 @@ class MontessoriLiveQuerySource(LiveQuerySource):
         """
         offered = (
             self._scene_presets()
+            + self._insertion_presets()
             + list(CURRENT_STATE_PRESETS)
             + list(DETECTED_EVENTS_PRESETS)
         )
         if self.results_database is not None:
             offered += EPISODIC_MEMORY_PRESETS
         return offered
+
+    def _insertion_presets(self) -> List[Preset]:
+        """
+        The questions this scene's performable insertions give rise to, each answered
+        with rows the viewer can press perform on.
+
+        Only the live demo offers them: the recorded bundle answers about a run that is
+        over, so nothing it names can be carried out.
+        """
+        if not self.insertions:
+            return []
+        return [Preset("what can the robot insert?", "an(entity(insertion))")]
 
     def _scene_presets(self) -> List[Preset]:
         """

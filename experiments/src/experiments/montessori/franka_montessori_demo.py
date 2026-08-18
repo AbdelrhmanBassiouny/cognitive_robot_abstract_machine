@@ -46,11 +46,12 @@ from typing import TYPE_CHECKING
 
 import mujoco
 import numpy as np
-from typing_extensions import Optional
+from typing_extensions import List, Optional
 
 from cramera.live.bridge import BRIDGE
 from cramera.live.runner import start as start_live_bridge
 
+from experiments.montessori.action_execution import SortingActionExecution
 from experiments.montessori.event_monitoring import (
     WatchesForEvents,
     WatchesNothing,
@@ -64,6 +65,7 @@ from experiments.montessori.franka_panda_equipment import (
     parse_panda,
 )
 from experiments.montessori.live_query_source import MontessoriLiveQuerySource
+from experiments.montessori.performable_insertions import PerformableInsertion
 from experiments.montessori.results_database import (
     ConfiguredDatabase,
     ResultsDatabase,
@@ -533,11 +535,51 @@ def _partition_events_by_attempt(
     return buckets
 
 
+def _perform_requested_insertions(
+    montessori: MontessoriWorld,
+    context,
+    progress: SortingProgress,
+    execution: SortingActionExecution,
+) -> None:
+    """
+    Carry out every insertion the viewer asked for, one at a time.
+
+    Deliberately outside the sort's own attempt records: an insertion asked for from the
+    console is not one of the sort's attempts, and entering it as one would count it in
+    every question about how the sort is going. The world-derived part of those records
+    is re-read afterwards, so the console still answers about the board as it now
+    stands.
+
+    :param montessori: The Montessori scene, with the Panda already mounted and
+        equipped, inside a running simulation.
+    :param context: The CRAM execution context to run each insertion action in.
+    :param progress: The record questions about this sort are answered from.
+    :param execution: The insertions the viewer asked for.
+    """
+    requested = execution.take_requested()
+    while requested is not None:
+        shape = requested.shape_in(montessori.world)
+        logger.info("Inserting %s, asked for from the viewer.", shape.name)
+        fell_through, _, failure = _insert_shape_or_none(
+            shape, montessori, context, attempt=1, monitor=WatchesNothing()
+        )
+        logger.info(
+            "%s, asked for from the viewer, fell through: %s (%s).",
+            shape.name,
+            fell_through,
+            failure,
+        )
+        progress.refresh_world_state(montessori.board, montessori.world)
+        execution.finish_requested()
+        requested = execution.take_requested()
+
+
 def _insert_all_shapes(
     montessori: MontessoriWorld,
     context,
     progress: SortingProgress,
     control: SortingRunControl,
+    execution: SortingActionExecution,
     max_shapes: Optional[int] = None,
     only_shape: Optional[str] = None,
     watch_events: bool = True,
@@ -562,6 +604,8 @@ def _insert_all_shapes(
     :param control: What the viewer drives this sort with. Read between attempts and
         between shapes, which are the points a run can be held or abandoned without
         leaving a half-executed plan behind.
+    :param execution: The insertions the viewer asked for, taken between shapes for the
+        same reason.
     :param max_shapes: Stop after this many shapes have actually been attempted
         (skipped shapes don't count), for fast iteration while tuning parameters on a
         single shape. ``None`` attempts every shape.
@@ -582,6 +626,7 @@ def _insert_all_shapes(
     attempted = 0
     for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape):
         control.wait_while_paused()
+        _perform_requested_insertions(montessori, context, progress, execution)
         if control.restart_is_pending():
             logger.info("Restart requested; abandoning the rest of this run.")
             return results
@@ -877,6 +922,7 @@ def _build_world_and_sort(
     arguments: argparse.Namespace,
     iteration: int,
     control: SortingRunControl,
+    execution: SortingActionExecution,
     results_database: ResultsDatabase,
 ) -> tuple[
     list[ShapeInsertionResult],
@@ -894,6 +940,8 @@ def _build_world_and_sort(
     :param iteration: Which iteration this is, for the viewer to report.
     :param control: What the viewer drives this sort with; it takes over the simulation
         this iteration builds.
+    :param execution: What the viewer asks this sort to insert; it is offered whatever
+        the world this iteration builds makes possible.
     :param results_database: Where the viewer's questions about finished runs are
         answered from.
     :return: This run's per-shape results (see :func:`_insert_all_shapes`), and the live
@@ -972,13 +1020,18 @@ def _build_world_and_sort(
     multi_sim.start_simulation()
     control.begin_iteration(iteration=iteration, simulation=multi_sim)
     progress = SortingProgress()
+    insertions = PerformableInsertion.of_world(montessori.world)
+    execution.offer(insertions)
     if arguments.cramera:
-        _attach_cramera(montessori, progress, control, results_database)
+        _attach_cramera(
+            montessori, progress, control, execution, insertions, results_database
+        )
     results = _insert_all_shapes(
         montessori,
         context,
         progress,
         control,
+        execution,
         max_shapes=arguments.max_shapes,
         only_shape=arguments.only_shape,
         watch_events=arguments.event_monitor,
@@ -990,6 +1043,8 @@ def _attach_cramera(
     montessori: MontessoriWorld,
     progress: SortingProgress,
     control: SortingRunControl,
+    execution: SortingActionExecution,
+    insertions: List[PerformableInsertion],
     results_database: ResultsDatabase,
 ) -> None:
     """
@@ -1003,6 +1058,9 @@ def _attach_cramera(
     :param montessori: The Montessori scene the viewer visualizes.
     :param progress: The record questions about this sort are answered from.
     :param control: What the viewer pauses, restarts and loops this run with.
+    :param execution: What the viewer asks this run to insert.
+    :param insertions: The insertions this world makes possible, answered with and
+        performed from the viewer.
     :param results_database: Where questions about finished runs are answered from.
     """
     start_live_bridge(world=montessori.world)
@@ -1011,10 +1069,12 @@ def _attach_cramera(
         MontessoriLiveQuerySource(
             progress=progress,
             layout=SceneLayout.of_world(montessori.world),
+            insertions=insertions,
             results_database=results_database,
         )
     )
     BRIDGE.register_run_control(control)
+    BRIDGE.register_action_execution(execution)
 
 
 def _reclaim_native_heap_fragmentation() -> None:
@@ -1124,6 +1184,7 @@ def main() -> None:
     tf_publisher = None
     viz_marker_publisher = None
     control = SortingRunControl()
+    execution = SortingActionExecution()
     last_planned_iteration = arguments.start_iteration + arguments.iterations - 1
     iteration = arguments.start_iteration
     results_database = _open_results_database(arguments)
@@ -1138,7 +1199,7 @@ def main() -> None:
                 )
             shape_results, multi_sim, tf_publisher, viz_marker_publisher = (
                 _build_world_and_sort(
-                    node, arguments, iteration, control, results_database
+                    node, arguments, iteration, control, execution, results_database
                 )
             )
             control.finish_iteration()

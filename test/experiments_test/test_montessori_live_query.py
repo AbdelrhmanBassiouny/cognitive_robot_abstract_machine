@@ -176,6 +176,7 @@ class TestTheSource:
             "hole",
             "board",
             "goal",
+            "insertion",
         ]
 
     def test_every_preset_runs(self, source):

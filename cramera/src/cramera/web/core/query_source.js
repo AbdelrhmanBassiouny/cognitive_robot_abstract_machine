@@ -25,6 +25,9 @@
       live: false,
       presetsUrl: window.SceneContext.withScene(RECORDED_PRESETS),
       runUrl: window.SceneContext.withScene(RECORDED_RUN),
+      // only a running demo has a robot to act; a recording answers about a run that
+      // is over, so nothing it names can be performed
+      performUrl: null,
       // a recorded scene has one body of knowledge, so it is asked about no scope
       vocabularyUrl: function () {
         return window.SceneContext.withScene(RECORDED_VOCABULARY);
@@ -45,6 +48,7 @@
       live: true,
       presetsUrl: base + '/presets',
       runUrl: base + '/eql',
+      performUrl: base + '/perform',
       // a demo offers several bodies of knowledge, each with its own variables
       vocabularyUrl: function (scope) {
         const url = base + '/vocabulary';

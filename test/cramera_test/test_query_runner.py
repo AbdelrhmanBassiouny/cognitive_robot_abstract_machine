@@ -20,6 +20,7 @@ from cramera.knowledge.queryable_knowledge import QueryEvaluation  # noqa: E402
 from cramera.knowledge.replay import ReplayWindow  # noqa: E402
 
 from .dataset.queryable_records import (  # noqa: E402
+    ActionRecord,
     MomentRecord,
     NamedRecord,
     PosedRecord,
@@ -414,6 +415,72 @@ class TestReplayableAnswerRows:
         result = self.make_moment_runner().run("an(entity(moment))")
 
         assert result.rows[0]["timestamp"] == "2026-08-13 12:00:30"
+
+
+# %% performable answer rows
+class TestPerformableAnswerRows:
+    """
+    An answer row naming an action the robot can be asked to carry out carries that
+    action, so the viewer can offer to perform it; rows naming no action carry none.
+    """
+
+    def make_action_runner(self) -> EqlQueryRunner:
+        """
+        A runner over one ``action`` domain of a single performable record.
+        """
+        return EqlQueryRunner(
+            domains=[
+                QueryDomain(
+                    name="action",
+                    entity_type=ActionRecord,
+                    objects=[
+                        ActionRecord("insert_cube", "the cube in the square hole")
+                    ],
+                )
+            ]
+        )
+
+    def test_an_entity_row_carries_the_action_the_entity_offers(self):
+        result = self.make_action_runner().run("an(entity(action))")
+
+        assert result.perform == [
+            ActionRecord(
+                "insert_cube", "the cube in the square hole"
+            ).performable_action()
+        ]
+
+    def test_an_asked_for_entity_value_makes_its_row_performable(self):
+        result = self.make_action_runner().run("set_of(action, action.goal)")
+
+        assert result.perform == [
+            ActionRecord(
+                "insert_cube", "the cube in the square hole"
+            ).performable_action()
+        ]
+
+    def test_a_row_naming_no_action_offers_nothing_to_perform(self):
+        result = make_runner().run("an(entity(record))")
+
+        assert result.perform == [None, None, None]
+
+    def test_a_row_holds_only_what_the_query_asked_for(self):
+        """
+        An action travels beside its row rather than inside it, so a viewer that knows
+        nothing of performing shows the answer as it always did instead of rendering the
+        action as a column of its own.
+        """
+        result = self.make_action_runner().run("an(entity(action))")
+
+        assert list(result.rows[0]) == ["__entity__", "__type__", "goal"]
+
+    def test_the_payload_offers_the_actions_beside_the_rows(self):
+        payload = self.make_action_runner().run("an(entity(action))").to_payload()
+
+        assert payload["perform"] == [
+            ActionRecord("insert_cube", "the cube in the square hole")
+            .performable_action()
+            .to_payload()
+        ]
 
 
 # %% failures reach the caller

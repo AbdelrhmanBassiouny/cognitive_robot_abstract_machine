@@ -155,6 +155,9 @@ class TestJsUnits:
     def test_replay(self):
         self.run_node("test_replay.js")
 
+    def test_perform_buttons(self):
+        self.run_node("test_perform.js")
+
     def test_highlight_arrow(self):
         self.run_node("test_highlight_arrow.js")
 

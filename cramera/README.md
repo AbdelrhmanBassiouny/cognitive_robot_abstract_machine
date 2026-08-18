@@ -180,6 +180,40 @@ stands), while abandoning a run generally cannot — a plan is mid-motion, so a
 restart is best recorded and honoured at the next point the demo can stop
 without leaving something half-executed.
 
+### Performing a queried action
+
+An answer row can name an action rather than a state, and such a row is offered
+with a **perform** button that has the running demo carry it out. An entity the
+demo answers with declares itself performable by returning a
+`cramera.knowledge.performable_action.PerformableAction` from a
+`performable_action()` method; the query runner then carries one beside every
+row, the way it carries a replay window beside a row naming a moment.
+
+What actually performs them is registered like a run control:
+
+```python
+from cramera.live.bridge import BRIDGE
+BRIDGE.register_action_execution(MyDemoActionExecution(...))
+```
+
+An action execution implements `cramera.live.action_execution.LiveActionExecution`:
+a `title()`, the `state()` it is in (which action is being carried out, which are
+still waiting), and `perform(name)` for the name a pressed button sends. Two more
+endpoints follow:
+
+```
+GET  /perform  {ok, title, performing, requested}
+POST /perform  {action} -> the state asking for that action produced
+```
+
+That state rides along on `GET /info` too, so the same 3 s poll keeps every
+button current; `web/core/perform.js` turns it into what each button says.
+
+A robot is generally mid-motion when a button is pressed, so `perform(name)` is
+expected to queue the action and let the demo start it at the next point it can,
+exactly as a restart is — the waiting count in the published state is what tells
+the viewer it was taken.
+
 ## Panels — how the UI is composed
 
 The frontend (`src/cramera/web/`) is a set of **panels** mounted into layout

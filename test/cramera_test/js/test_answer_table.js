@@ -97,6 +97,21 @@ test('an answer sent without windows is a table of rows that replay nothing', fu
   assert.strictEqual(table.rows[0].replay, null);
 });
 
+test('a performable action travels beside its row and lands on it', function () {
+  const action = { name: 'insert_cube', description: 'insert the cube into the square hole' };
+  const table = load().of([
+    { __entity__: 'insert_cube', __type__: 'PerformableInsertion' },
+    { __entity__: 'insert_star', __type__: 'PerformableInsertion' },
+  ], null, [action, null]);
+  assert.deepStrictEqual(table.rows[0].perform, action);
+  assert.strictEqual(table.rows[1].perform, null);
+});
+
+test('an answer sent without actions is a table of rows that perform nothing', function () {
+  const table = load().of([{ __entity__: 'cube', __type__: 'ShapeUnderTest' }]);
+  assert.strictEqual(table.rows[0].perform, null);
+});
+
 test('a key the table does not know is left out rather than shown as a column',
   function () {
     // an older viewer meeting a newer answer: whatever __key__ it carries is the

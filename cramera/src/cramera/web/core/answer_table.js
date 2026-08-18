@@ -54,11 +54,13 @@
     return { text: String(value), kind: 'text' };
   }
 
-  // `replay` is the answer's parallel list of replay windows, one entry per row and
-  // null for a row naming no moment; an answer that carries none replays nothing.
-  function of(rows, replay) {
+  // `replay` and `perform` are the answer's parallel lists of replay windows and
+  // performable actions, one entry per row and null for a row naming neither; an answer
+  // that carries neither replays and performs nothing.
+  function of(rows, replay, perform) {
     const all = rows || [];
     const windows = replay || [];
+    const actions = perform || [];
     const columns = columnsOf(all);
     return {
       columns: columns,
@@ -66,6 +68,7 @@
         return {
           type: row[ENTITY_TYPE] === undefined ? null : String(row[ENTITY_TYPE]),
           replay: windows[index] === undefined ? null : windows[index],
+          perform: actions[index] === undefined ? null : actions[index],
           cells: columns.map(function (column) { return cellOf(row, column); }),
         };
       }),

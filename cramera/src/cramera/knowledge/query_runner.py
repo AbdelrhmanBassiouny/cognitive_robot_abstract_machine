@@ -32,6 +32,7 @@ from semantic_digital_twin.spatial_types import Point3, Pose
 
 from cramera.body_geometry import NumericPose, pose_label, position_label
 from cramera.knowledge.entity import NamedEntity
+from cramera.knowledge.performable_action import PerformableAction
 from cramera.knowledge.query_domain import QueryDomain
 from cramera.knowledge.replay import ReplayWindow
 from cramera.knowledge.query_verbalization import QueryVerbalization
@@ -56,6 +57,18 @@ class CarriesATimestamp(Protocol):
     """
 
     timestamp: datetime
+
+
+@runtime_checkable
+class CarriesAPerformableAction(Protocol):
+    """
+    An entity naming an action the robot can be asked to carry out.
+    """
+
+    def performable_action(self) -> PerformableAction:
+        """
+        The action a row for this entity offers to perform.
+        """
 
 
 @runtime_checkable
@@ -114,6 +127,14 @@ class RenderResult(CrameraPayload):
     the window as a column.
     """
 
+    perform: List[Optional[PerformableAction]] = field(default_factory=list)
+    """
+    The action each row offers to have the robot carry out, one entry per row and None
+    for a row naming no action.
+
+    Beside the rows for the same reason :attr:`replay` is.
+    """
+
     verbalization: Optional[QueryVerbalization] = None
     """
     The query read back as English, or None when there was no expression to word.
@@ -133,6 +154,10 @@ class RenderResult(CrameraPayload):
             "replay": [
                 window.to_payload() if window is not None else None
                 for window in self.replay
+            ],
+            "perform": [
+                action.to_payload() if action is not None else None
+                for action in self.perform
             ],
             "verbalization": (
                 self.verbalization.to_payload()
@@ -157,6 +182,12 @@ class AnswerRow:
     """
     The window of the demo recording worth replaying around this row's moment, or None
     when the row names no moment.
+    """
+
+    perform: Optional[PerformableAction] = None
+    """
+    The action this row offers to have the robot carry out, or None when the row names
+    no action.
     """
 
 
@@ -257,14 +288,17 @@ class RowRenderer:
             columns = self._column_names([str(key) for key in item])
             values = {}
             window: Optional[ReplayWindow] = None
+            action: Optional[PerformableAction] = None
             for column, value in zip(columns, item.values()):
                 name = self._row_title(value)
                 if name:
                     self.highlight.append(name)
                 if window is None and isinstance(value, datetime):
                     window = ReplayWindow.around(value)
+                if action is None:
+                    action = self._performable_action_of(value)
                 values[column] = self._jsonable(value)
-            return AnswerRow(values, window)
+            return AnswerRow(values, window, action)
         return AnswerRow({"value": self._jsonable(item)})
 
     @staticmethod
@@ -314,7 +348,19 @@ class RowRenderer:
             and isinstance(item.timestamp, datetime)
             else None
         )
-        return AnswerRow(values, window)
+        return AnswerRow(values, window, self._performable_action_of(item))
+
+    @staticmethod
+    def _performable_action_of(value: Any) -> Optional[PerformableAction]:
+        """
+        The action a row for this value offers to perform, or None for a value naming
+        no action.
+
+        :param value: The query result value to read an action off.
+        """
+        if not isinstance(value, CarriesAPerformableAction):
+            return None
+        return value.performable_action()
 
     def _jsonable(self, value: Any) -> Any:
         """
@@ -478,5 +524,6 @@ class EqlQueryRunner:
             more=rendered.more,
             highlight=sorted(set(rendered.highlight)),
             replay=[row.replay for row in rendered.rows],
+            perform=[row.perform for row in rendered.rows],
             verbalization=verbalization,
         )
