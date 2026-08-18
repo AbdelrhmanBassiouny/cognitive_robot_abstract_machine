@@ -123,9 +123,10 @@
 
   // %% the panels a slot stacks
   /* A three-track grid holds one divider, so a slot is only made resizable when
-     it stacks exactly two panels. */
+     it stacks exactly two entries. An entry is a panel or a group of tabbed ones
+     (core/panel_tabs.js) — the divider resizes either the same way. */
   const stacked = Array.prototype.filter.call(right.children, function (child) {
-    return child.dataset.panel;
+    return child.dataset.panel || child.dataset.tabs;
   });
   if (stacked.length === 2) installDivider(right, stacked[1], ROWS, 'splitBottom:' + page);
 

@@ -6,11 +6,14 @@
  * mounted into which layout slot. Swapping a visualization = editing
  * config.js, no other file changes.
  *
- *   Panels.define('my-panel', function (root, bus) {
+ *   Panels.define('my-panel', function (root, bus, id) {
  *     root.innerHTML = '…';               // the panel owns its DOM subtree
  *     bus.on('entity:highlight', …);      // talk to others via the bus only
  *     return { destroy: function () {…} } // optional cleanup
  *   });
+ *
+ * A panel is handed the id it was registered under, so one that has to recognize
+ * itself in a broadcast bus event does not carry a second copy of its own name.
  *
  * Slots are elements with a data-slot attribute in index.html. Panels.boot()
  * reads window.CRAMERA_CONFIG.layout = {slotName: [entry, …]} and mounts every
@@ -39,7 +42,7 @@
     root.dataset.panel = id;
     parentEl.appendChild(root);
     try {
-      mounted.push({ id: id, instance: factory(root, window.Bus) || {} });
+      mounted.push({ id: id, instance: factory(root, window.Bus, id) || {} });
     } catch (err) {
       console.error('[panels] mounting "' + id + '" failed:', err);
       root.innerHTML = '<div class="panel-error">panel "' + id + '" failed to mount — see console</div>';

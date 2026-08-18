@@ -113,11 +113,13 @@ function loadPanel(responses, search) {
   const requested = [];
   const Panels = { define(id, f) { factory = f; } };
   const zooms = [];
+  const resizes = [];
   const Graph = {
     attach() {}, build(payload) { lastBuild = payload; },
     onSelect() {}, onDoubleSelect() {}, highlight() {}, reset() {},
     setStatuses() { return false; },
     zoomBy(factor) { zooms.push(factor); }, fit() { zooms.push('fit'); },
+    resize() { resizes.push('resize'); },
   };
   new Function('Panels', 'Graph', 'fetch', 'ResponseUtil', 'SceneContext', SOURCE)(
     Panels, Graph, makeFetch(responses, requested), loadResponseUtil(), loadSceneContext(search)
@@ -127,6 +129,7 @@ function loadPanel(responses, search) {
     lastBuild: function () { return lastBuild; },
     requested: requested,
     zooms: zooms,
+    resizes: resizes,
   };
 }
 
@@ -276,6 +279,40 @@ test('the zoom controls step the graph in, out and back to a full fit', async fu
     // stepping out undoes stepping in
     assert.ok(Math.abs(panel.zooms[0] * panel.zooms[1] - 1) < 1e-12);
     assert.strictEqual(panel.zooms[2], 'fit');
+  } finally {
+    instance.destroy();
+  }
+});
+
+
+// %% coming back into view inside a tab group
+// vis-network measures its container as it draws, and a hidden tab body has no size, so
+// a graph that was drawn while its tab was closed stays the wrong size until it redraws.
+test('the graph re-fits when its own tab becomes the visible one', async function () {
+  const panel = loadPanel({ '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} } });
+  const bus = makeBus();
+  const instance = panel.factory(makeRoot(), bus, 'graph');
+  try {
+    await flush();
+
+    bus.emit('panel:shown', { id: 'graph' });
+
+    assert.deepStrictEqual(panel.resizes, ['resize']);
+  } finally {
+    instance.destroy();
+  }
+});
+
+test('another tab becoming visible leaves the graph alone', async function () {
+  const panel = loadPanel({ '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} } });
+  const bus = makeBus();
+  const instance = panel.factory(makeRoot(), bus, 'graph');
+  try {
+    await flush();
+
+    bus.emit('panel:shown', { id: 'event-timeline' });
+
+    assert.deepStrictEqual(panel.resizes, []);
   } finally {
     instance.destroy();
   }

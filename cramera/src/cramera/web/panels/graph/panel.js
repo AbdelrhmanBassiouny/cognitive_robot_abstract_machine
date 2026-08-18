@@ -18,7 +18,7 @@
  *
  * Rendering is delegated to graph.js (window.Graph, vis-network wrapper).
  * ==========================================================================*/
-Panels.define('graph', function (root, bus) {
+Panels.define('graph', function (root, bus, panelId) {
   root.innerHTML =
     '<div class="graph-wrap">' +
     '  <div class="graph-tabs" id="graph-tabs">' +
@@ -179,6 +179,10 @@ Panels.define('graph', function (root, bus) {
     if (hi.length) Graph.highlight(hi); else Graph.reset();
   }
   bus.on('entity:highlight', spotlight);
+  // vis-network measures its container as it draws, and a tab body that is not the
+  // visible one has no size, so a graph drawn behind a closed tab stays wrong until it
+  // is told the tab opened
+  bus.on('panel:shown', function (p) { if (p.id === panelId) Graph.resize(); });
   bus.on('scene:step', function (p) {
     if (p.step === '__done__') { Graph.reset(); return; }
     if (tab === 'knowledge' && !stacks[tab].length && inGraphSet[p.step]) select(p.step);
