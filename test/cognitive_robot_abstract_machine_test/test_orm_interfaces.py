@@ -11,12 +11,11 @@ from pathlib import Path
 import pytest
 from typing_extensions import Set, Tuple
 
-from cognitive_robot_abstract_machine.exceptions import (
-    MissingOrmGeneratorError,
-    MissingOrmInterfaceError,
-)
+from cognitive_robot_abstract_machine.exceptions import MissingOrmGeneratorError
 from cognitive_robot_abstract_machine.orm_interfaces import (
+    INTERFACE_FILE_NAME,
     OrmInterface,
+    REPOSITORY_ROOT,
     WORKSPACE_ORM_INTERFACES,
     WorkspaceOrmInterfaces,
 )
@@ -32,7 +31,7 @@ Packages of the checkout under test, in dependency order.
 
 STALE_INTERFACE_CONTENT = "# interface of a previous run\n"
 """
-Content the interfaces hold before the checkout is regenerated.
+Content the interfaces of the checkout hold before it is regenerated.
 """
 
 
@@ -69,36 +68,49 @@ def workspace(checkout: Path) -> WorkspaceOrmInterfaces:
     )
 
 
-def interfaces_git_ignores_changes_of(repository_root: Path) -> Set[str]:
+def tracked_interfaces(repository_root: Path) -> Set[str]:
     """
-    Read which of a checkout's files git was told to ignore the local changes of.
+    Read which ORM interfaces of a checkout git tracks.
 
     :param repository_root: Root of the checkout.
-    :return: The repository-relative paths carrying git's skip-worktree bit.
+    :return: The repository-relative paths of the tracked interfaces.
     """
     listing = subprocess.run(
-        ["git", "ls-files", "-v"],
+        ["git", "ls-files", "--", f"*/{INTERFACE_FILE_NAME}"],
         cwd=repository_root,
         check=True,
         capture_output=True,
         text=True,
     )
-    return {
-        line.split(" ", 1)[1]
-        for line in listing.stdout.splitlines()
-        if line.startswith("S ")
-    }
+    return set(listing.stdout.splitlines())
+
+
+def git_ignores(repository_root: Path, path: Path) -> bool:
+    """
+    Ask git whether a checkout's ignore rules cover a path.
+
+    :param repository_root: Root of the checkout.
+    :param path: Path to ask about.
+    :return: Whether git ignores it.
+    """
+    return (
+        subprocess.run(
+            ["git", "check-ignore", "--quiet", str(path)],
+            cwd=repository_root,
+        ).returncode
+        == 0
+    )
 
 
 # %% telling a generated checkout from a fresh one
 
 
-def test_workspace_is_not_generated_while_one_interface_is_empty(
+def test_workspace_is_not_generated_while_one_interface_is_missing(
     workspace: WorkspaceOrmInterfaces,
 ):
     assert workspace.are_generated
 
-    workspace.interfaces[-1].clear()
+    workspace.interfaces[-1].remove()
 
     assert workspace.interfaces[0].is_generated
     assert not workspace.interfaces[-1].is_generated
@@ -137,16 +149,6 @@ def test_regeneration_fills_every_interface(workspace: WorkspaceOrmInterfaces):
         ) == generate_orm.interface_content(interface.package_name)
 
 
-def test_regeneration_lets_git_ignore_the_generated_content(
-    workspace: WorkspaceOrmInterfaces, checkout: Path
-):
-    workspace.regenerate()
-
-    assert interfaces_git_ignores_changes_of(checkout) == {
-        str(interface.path.relative_to(checkout)) for interface in workspace.interfaces
-    }
-
-
 # %% building only a checkout that needs it
 
 
@@ -161,7 +163,7 @@ def test_a_checkout_that_already_has_its_interfaces_is_left_alone(
 def test_a_checkout_missing_one_interface_has_every_one_built(
     workspace: WorkspaceOrmInterfaces, checkout: Path
 ):
-    workspace.interfaces[-1].clear()
+    workspace.interfaces[-1].remove()
 
     assert workspace.ensure_generated()
 
@@ -183,24 +185,34 @@ def test_missing_generator_names_its_package(workspace: WorkspaceOrmInterfaces):
     assert error.value.path == incomplete.generator
 
 
-def test_missing_interface_names_its_package(workspace: WorkspaceOrmInterfaces):
-    incomplete = workspace.interfaces[-1]
-    incomplete.path.unlink()
-
-    with pytest.raises(MissingOrmInterfaceError) as error:
-        workspace.regenerate()
-
-    assert error.value.package_name == incomplete.package_name
-    assert error.value.path == incomplete.path
-
-
 # %% this repository
 
 
-def test_every_workspace_package_has_a_generator_and_an_interface():
-    incomplete = [
+def test_every_workspace_package_has_a_generator():
+    without_generator = [
         interface.package_name
         for interface in WORKSPACE_ORM_INTERFACES.interfaces
-        if not (interface.generator.exists() and interface.path.exists())
+        if not interface.generator.exists()
     ]
-    assert incomplete == []
+    assert without_generator == []
+
+
+def test_this_repository_tracks_no_generated_interface():
+    assert tracked_interfaces(REPOSITORY_ROOT) == set()
+
+
+def test_this_repository_ignores_every_generated_interface():
+    not_ignored = [
+        interface.package_name
+        for interface in WORKSPACE_ORM_INTERFACES.interfaces
+        if not git_ignores(REPOSITORY_ROOT, interface.path)
+    ]
+    assert not_ignored == []
+
+
+def test_this_repository_ignores_a_generated_interface_outside_a_workspace_package():
+    krrood_test_dataset_interface = (
+        REPOSITORY_ROOT / "test" / "krrood_test" / "dataset" / INTERFACE_FILE_NAME
+    )
+
+    assert git_ignores(REPOSITORY_ROOT, krrood_test_dataset_interface)
