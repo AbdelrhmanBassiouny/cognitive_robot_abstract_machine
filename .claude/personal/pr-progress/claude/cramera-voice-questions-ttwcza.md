@@ -90,6 +90,27 @@ tests verified red without the fix. Committed and pushed as 22845f77b; the PR
 description gained a "Reading a read-only results database" section. Still a
 draft.
 
+### The read-only fix left the schema unread (2026-08-18)
+
+`22845f77b` moved `self._schema()` inside `if create_missing_tables:`, and that
+import is the only thing that registers the generated `experiments` DAOs. So a
+session opened without table creation - which is exactly what the episodic-memory
+evaluation now asks for - had no mapping for `ShapeInsertionResult`, and every
+recorded-runs question died in the EQL-to-SQL translation with
+`NoDAOFoundForSelectionError` (whose suggestion blames a stale ormatic interface;
+the interface was fine). Fixed by reading the schema either way and keeping only
+`create_all` behind the flag.
+
+Neither test from `22845f77b` caught it: both run in an interpreter where an
+earlier writable session had already imported the interface. The new test
+therefore resolves the mapping in a **fresh interpreter**
+(`test/experiments_test/dataset/resolve_recorded_results_dao.py`, run through
+`subprocess`), and was verified red before the fix.
+
+Tests: `test_montessori_results_database.py` 35 passed;
+`test_montessori_episodic_memory.py` 10 passed with the known `presets.json`
+submodule drift still failing. Not committed yet.
+
 ### Outstanding
 - CI not checked on #167/#168.
 - Pre-existing red in this checkout: `presets.json` in the scenes submodule
