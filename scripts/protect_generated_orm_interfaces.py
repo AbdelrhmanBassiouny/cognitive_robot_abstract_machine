@@ -15,10 +15,13 @@ import sys
 from pathlib import Path
 from typing_extensions import Sequence
 
-REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
+from cognitive_robot_abstract_machine.orm_interfaces import (
+    REPOSITORY_ROOT,
+    let_git_ignore_changes,
+)
 
 
-def tracked_ormatic_interfaces() -> Sequence[str]:
+def tracked_ormatic_interfaces() -> Sequence[Path]:
     """
     List every ormatic_interface.py path tracked by git, relative to the repository
     root.
@@ -32,20 +35,7 @@ def tracked_ormatic_interfaces() -> Sequence[str]:
         check=True,
         text=True,
     )
-    return result.stdout.splitlines()
-
-
-def mark_skip_worktree(path: str) -> None:
-    """
-    Set the skip-worktree bit on ``path`` so git ignores local changes to it.
-
-    :param path: Repository-relative path of a tracked ORM interface file.
-    """
-    subprocess.run(
-        ["git", "update-index", "--skip-worktree", path],
-        cwd=REPOSITORY_ROOT,
-        check=True,
-    )
+    return [Path(line) for line in result.stdout.splitlines()]
 
 
 def main() -> None:
@@ -53,7 +43,7 @@ def main() -> None:
     Set the skip-worktree bit on every tracked ORM interface file.
     """
     for path in tracked_ormatic_interfaces():
-        mark_skip_worktree(path)
+        let_git_ignore_changes(REPOSITORY_ROOT, path)
 
 
 if __name__ == "__main__":
