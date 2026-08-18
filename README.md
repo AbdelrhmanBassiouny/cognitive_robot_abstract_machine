@@ -92,8 +92,8 @@ poetry install
 ### Generate the ORM interfaces
 
 The database mappings of the packages (their `ormatic_interface.py`) are generated code
-that is never reviewed, so the repository tracks them as empty placeholders. Build them
-once after cloning, and again whenever a mapped datastructure changes:
+that is never reviewed, so the repository ignores them rather than tracking them. Build
+them once after cloning, and again whenever a mapped datastructure changes:
 
 ```bash
 python scripts/regenerate_all_orm.py
@@ -101,8 +101,9 @@ python scripts/regenerate_all_orm.py
 
 Until then, anything that reads objects from or writes objects to a database - including
 the probabilistic query backend - raises `NoDAOFoundError`. Generating takes about a
-minute and leaves the interfaces marked with git's skip-worktree bit, so the generated
-content is never proposed for staging (see [contributing](doc/contributing.rst)).
+minute; git ignores what it writes, so the generated content is never proposed for
+staging and never stands in the way of a branch switch (see
+[contributing](doc/contributing.rst)).
 
 ## To run tests
 
