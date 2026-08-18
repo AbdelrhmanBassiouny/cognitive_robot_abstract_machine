@@ -393,3 +393,42 @@ reinstalled; it is correctly declared in `cramera/requirements.txt` on #168.
 The repo-side pin was already right both times, so this is purely local rot —
 if it comes back a third time, something in this environment is reinstalling
 the dead package and that is the thing to find.
+
+## 2026-08-18: the ORMatic bug behind #169's red experiments job
+
+`montessori_fast_inline_monitor`'s `experiments` CI job had been failing at
+collection, and the cause was in krrood rather than in the demo. ORMatic decided
+a dataclass field gets a plain column by asking `krrood.utils.is_builtin_type`,
+which answers "does this type live in the `builtins` module" -- true of every
+exception class too. This branch's `InsertionEvidence.raised_exception` and
+`CompletedAttempt.raised_exception` are `Optional[BaseException]`, so the
+generated `experiments` interface declared an untyped `mapped_column` for them
+and SQLAlchemy raised `MappedAnnotationError` on import. Five
+`test/experiments_test` modules import that interface at module level, so the
+whole suite failed to collect; #170 inherited the same red job.
+
+Fixed in `7a9af9cd0` by naming the types a generated `Mapped[...]` annotation
+resolves to a column type for and requiring the field's endpoint to be one of
+them. The exception field then falls through to the skip ORMatic already applies
+to types it cannot map, which is the right outcome: the persisted record,
+`InsertionAttemptRecord.raised_exception`, is a `str` filled from
+`named_exception()`, and the two `BaseException` fields are in-flight state.
+
+The shared `is_builtin_type` was deliberately left alone -- `code_generation`
+uses it to decide which names need an import, where "lives in builtins" is the
+right question. The narrowing belongs to the ORM layer only.
+
+### Why it landed here rather than on #170
+
+The fix was written while debugging `run_montessori_demo` on
+`cramera_eql_autocomplete`, but the two `Optional[BaseException]` fields arrive
+in this branch's `b47af991b`, and #170 does not touch those files at all. Left
+on #170, this branch would have landed with its experiments suite uncollectable.
+
+### Not done here
+
+#170 and everything above it do not have the fix yet; a merge of this branch's
+new tip carries it up the stack. Nothing was pushed to `cram2` -- the same
+latent krrood bug is on `cram2/main`, reachable by any dataclass field typed
+with a builtin SQLAlchemy has no column type for.
+
