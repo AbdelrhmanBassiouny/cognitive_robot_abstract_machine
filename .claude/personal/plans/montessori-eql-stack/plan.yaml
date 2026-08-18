@@ -55,9 +55,13 @@ items:
     notes: >-
       Base of the stack. Marked ready for review. main was merged in on
       2026-08-18 to clear the conflicts that had left it mergeable_state
-      dirty, plus a semantic conflict in giskardpy/executor.py that git
-      merged cleanly and that broke every CI job at collection. The
-      downstream stack still sits on the pre-merge tip and needs restacking.
+      dirty, plus the two integration breaks the merge only made visible:
+      a semantic conflict in giskardpy/executor.py and a pacer built the way
+      main no longer allows. What is left red is pre-existing branch work
+      needing the developer - PickUpAction's commented-out AttachNode, and
+      two demo directories its tests expect but that were never committed.
+      The downstream stack still sits on the pre-merge tip and needs
+      restacking.
 
   - id: cramera_eql_autocomplete
     title: "Name any class of the workspace in a query, and complete as you type"

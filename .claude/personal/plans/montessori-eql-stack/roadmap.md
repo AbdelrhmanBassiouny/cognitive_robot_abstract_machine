@@ -210,6 +210,41 @@ non-generated files were touched by both sides, and the other four
 `semantic_digital_twin/exceptions.py`, `test/conftest.py`) merged additively,
 with every symbol they reference resolving in the merged tree.
 
+### What CI then found
+
+The merge is also what first gave this branch any CI at all: an unmergeable PR
+has no merge ref, so no run had ever happened on it. The first green-ish run
+split into three causes, only one of them the merge's own.
+
+- **The merge's own** (`6d944c52`): `_build_pacer` in
+  `coraplex/plans/executables.py` built `SimulationPacer(real_time_factor=None)`
+  to mean "do not pace". main reworked the `Pacer` hierarchy and gave
+  `SimulationPacer` a validating `real_time_factor: float = 1.0`, so the call
+  raised `TypeError: '<=' not supported between instances of 'NoneType' and
+  'int'`. main states the two cases as pacers of their own, so `_build_pacer`
+  now returns `RealTimePacer` or `NoPacing`. This single line was the coraplex
+  suite's 175 failures and all four demo jobs. `SimulationTimePacer` also lost
+  its own `target_frequency` field, which main's `Pacer` declares `init=False`
+  and `Ros2Executor.compile` overwrote anyway.
+- **Pre-existing, fixed** (`6d944c52`): `PANDA_SCENE_BODIES_TO_DISCARD` had been
+  dropped from `franka_panda_equipment` by 98ac709d while its docstring and its
+  importer in `test_franka_panda_equipment` stayed, failing the experiments
+  suite at collection; and the segmind detector tests assigned frameless
+  matrices to `Connection.origin`, whose setter has required a reference frame
+  since before the merge base. Both are the branch's own, exposed only because
+  CI finally ran.
+- **Pre-existing, left for the developer**: `PickUpAction` has its `AttachNode`
+  commented out (8cc3cf69, "demo works now, worth a try"), so main's
+  `test_node_expansion` sees three children where it asserts four — restoring it
+  would presumably undo whatever that commit was working around, so it is a
+  question rather than a fix. And `test_warehouse_storage_layout` /
+  `test_wind_farm_service_layout` (added by 08257863) test
+  `coraplex_warehouse_storage_demo` and `coraplex_wind_farm_service_demo`, two
+  demo directories that were never committed — eight collection errors.
+
+`main` at `e198ea36`, this merge's base, is green, so none of the above is
+inherited from the base branch.
+
 ### Not done here
 
 The other five stack branches are still based on the pre-merge `30bd734f`, so
