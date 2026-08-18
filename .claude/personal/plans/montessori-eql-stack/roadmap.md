@@ -1025,3 +1025,36 @@ node tests across 23 files green. The new test
 (`a spoken question nothing answers is scrolled to like any other`) was run against
 the unfixed panel first and fails there, so it pins the behaviour rather than
 describing it.
+
+## 2026-08-18: the plan-graph tab folded into #169 as well
+
+The developer asked for `claude/plan-graph-executing-node-hqkt32` to be merged into
+`montessori_fast_inline_monitor`, local and remote - the same fold #175 had already
+been given. It **fast-forwarded**, `f980badc80..da2e062e3d`, since the branch already
+contained the whole of #169; 23 files, 1399 insertions.
+
+No verification was re-run: a fast-forward leaves the tree byte-identical to the tip
+already tested at `da2e062e3d` (474 cramera tests, 234 node tests).
+
+### #178 did not close itself, and #175 did
+
+Worth recording, because the two folds look identical and behave differently. #175's
+head branch *was* `montessori_live_event_timeline_tab` and its base was
+`montessori_fast_inline_monitor`, so merging head into base made GitHub close it as
+merged. #178's base is `montessori_live_event_timeline_tab`, which still points at
+`f980badc80` - the work went into a branch that is not #178's base, so GitHub still
+sees a diff and #178 stays open as a draft.
+
+`montessori_live_event_timeline_tab` is now a stale pointer: it names the pre-fold
+commit of a PR that has already been closed as merged, and it is the only thing keeping
+#178 open. Advancing it to `da2e062e3d` would close #178 the way #175 closed; that was
+left as the developer's call rather than done as a side effect of the merge they asked
+for.
+
+### What #169 now is
+
+It began as "a monitor tick cheap enough to stay on the planning thread" and now also
+carries the panel tab container, the live event timeline, the run clock those marks are
+plotted against, and the plan-graph tab with its executing-node highlighting - plus the
+bridge fix that made the plan tab show anything at all. The five branches stacked above
+it inherit all of it at their next restack; none of them has been restacked since.

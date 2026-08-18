@@ -85,7 +85,10 @@ items:
       the generated ormatic_interface.py files altogether, which is what had
       made every branch switch abort while a checkout held its own generated
       copy; the whole stack, #175, #176 and #177 were restacked onto it so the
-      fix reaches all of them. Now 232b8ba19, mergeable.
+      fix reaches all of them. Now da2e062e3d, mergeable: after the timeline
+      tab (#175) was folded in, the plan-graph tab (#178) was folded in too, so
+      this PR now carries the whole live-panels tab container, the event
+      timeline and the plan graph on top of the monitor it is named for.
 
   - id: cramera_eql_autocomplete
     title: "Name any class of the workspace in a query, and complete as you type"
@@ -272,7 +275,7 @@ items:
     pull_request_number: 178
     track: live-panels
     depends_on: [montessori_live_event_timeline_tab]
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_011zuYnHUJtJLYs48VikWaYn
     notes: >-
       Implemented on 2026-08-18 as 8de5cf76, based on #175 and restacked onto
@@ -308,7 +311,15 @@ items:
       re-entering the plan already being followed. That round also fixed
       `test_knowledge_views`, red since this branch dropped the plan view's
       `live: "plan"` flag. 474 cramera tests and 234 node tests green - the
-      suite does run in this session's container.
+      suite does run in this session's container. Folded into #169 the same
+      day at the developer's request, exactly as
+      montessori_live_event_timeline_tab was:
+      `claude/plan-graph-executing-node-hqkt32` was merged into
+      `montessori_fast_inline_monitor` local and remote, and the merge
+      fast-forwarded (f980badc80..da2e062e3d), so the whole plan-graph tab now
+      ships inside #169. #178 stays *open* rather than closing itself, because
+      its base is `montessori_live_event_timeline_tab` - a branch still sitting
+      at f980badc80 - and not the branch the work was merged into.
 
   - id: montessori_detachable_panels
     title: "Detach, reattach, resize, and maximize any of the panel tabs"
