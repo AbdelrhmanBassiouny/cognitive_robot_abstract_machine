@@ -799,3 +799,72 @@ the JS-suite registration) are left to CI. All 205 node tests are green locally.
 Opened as draft **#178**, based on #175. Its description carries the three defects
 above and the replacement rationale, so a reviewer reading only the PR sees why the
 graph panel lost a tab.
+
+
+## 2026-08-18: the timeline follows the run's clock, then #175 folded into #169
+
+Two rounds in one session, the second at the developer's explicit request.
+
+### The now-bar kept moving while the run was paused
+
+The timeline measured along the wall clock, which knows nothing about pausing. Once a
+run had been paused, the bar and the marks behind it no longer meant the same thing: a
+mark said where the wall clock had been, the bar said where it is now, and the gap
+between them was however long the run had stood still.
+
+`cramera/live/run_clock.py` gives it an axis of its own — `RunClock`, a stopwatch over
+one run that stops, resumes and restarts, answering a `RunClockReading` of how far it
+has got and whether it is still getting anywhere. `DetectedEvent` carries
+`seconds_into_run` and `GET /events` carries `clock: {elapsed, running}`; the panel
+carries the reading forward between its one-second polls **only while it says it is
+running**, which is the whole of the fix.
+
+`SortingRunControl` drives it, since pausing and restarting is what that class is. One
+`_match_clock_to_run()` reads the clock's state off the run's — going exactly when the
+run is not paused and is sorting — rather than tracking it alongside, so no transition
+can leave the two disagreeing: an iteration rebuilt while paused starts stopped, and a
+finished run holds its final reading instead of sweeping on while it idles.
+
+Pointing at a mark now shows what was detected, to what, and when. Wording lives in
+`core/event_summary.js`, anchoring in `TimelineLayout.summaryPlacement`. That needed
+the plot to stop emptying and refilling itself every 200 ms, which destroys whatever
+the pointer is resting on — the `title` tooltip it used to set never had a chance
+either. Lanes, marks and the bar are grown into and moved rather than recreated, and a
+mark reads `events[index]` when pointed at, so a restart re-purposes what is already
+there.
+
+`pytest test/cramera_test` 467 passed (was 448); the experiments run-control,
+live-event-source and franka-demo modules 66 passed with `--noconftest`.
+
+### The skip-worktree deadlock, and how it was cleared
+
+The push failed as non-fast-forward, and the pull that would have fixed it aborted on
+the six `ormatic_interface.py` files. `232b8ba199` ("Stop tracking the generated ORM
+interfaces so branches can be switched") untracks and gitignores them — but git refuses
+to merge across a **skip-worktree** path it has to change, and all six still carried the
+bit. Worth recording because it is a chicken-and-egg: the very commit that makes the bit
+unnecessary cannot be merged in while the bit is set, and emptying the files to match
+their committed placeholders does not help — git refuses on the bit, not the content.
+The only route is `git update-index --no-skip-worktree` on all six first. Anyone whose
+branch predates `232b8ba199` will hit exactly this.
+
+### #175 folded into #169
+
+The developer asked for `montessori_live_event_timeline_tab` to be merged into
+`montessori_fast_inline_monitor`, local and remote. The merge **fast-forwarded** — the
+timeline branch already contained the whole of its base — so both branches are now the
+single commit `f980badc80`, and GitHub closed **#175 as merged** because its head became
+its base.
+
+The whole tab-container + timeline feature therefore ships inside #169 rather than as a
+PR of its own, and #169's diff against `main` grew by 3081 insertions. The concern was
+raised before the merge and the developer went ahead.
+
+**Consequences for the stack**, none of them addressed here:
+
+- #170, #164, #165, #167 and #168 are all based on #169 and inherit the timeline work
+  at their next restack.
+- **#178 (`montessori_plan_graph_tab`) is based on #175**, which no longer exists as an
+  open PR. Its branch `montessori_live_event_timeline_tab` still exists and points at
+  the same commit as #169, so nothing is broken yet — but #178 needs reparenting onto
+  `montessori_fast_inline_monitor`.

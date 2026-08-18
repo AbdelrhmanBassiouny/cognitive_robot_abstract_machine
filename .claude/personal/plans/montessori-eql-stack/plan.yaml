@@ -231,7 +231,7 @@ items:
     pull_request_number: 175
     track: live-panels
     depends_on: [montessori_fast_inline_monitor]
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01X3d7gwqJqim7D39XJPpJij
     notes: >-
       Replaces the fixed knowledge-graph frame at the bottom of the right column
@@ -244,6 +244,14 @@ items:
       and onto the ORM-untracking fix as 2d7f7b183 - c97594bc4 was the first time this branch
       carries main, and clean, because #169 had already resolved the
       Body.has_collision conflict it would otherwise have hit.
+      Folded into #169 on 2026-08-18 at the developer's request: a last round
+      made the now-bar follow the run's own clock rather than the wall clock
+      (cramera/live/run_clock.py, driven by SortingRunControl) and gave a
+      pointed-at mark a summary, then montessori_live_event_timeline_tab was
+      merged into montessori_fast_inline_monitor. The merge fast-forwarded, so
+      both branches are the one commit f980badc80 and GitHub closed #175 as
+      merged. The whole timeline feature now ships inside #169, and everything
+      stacked on #169 inherits it at its next restack.
 
   - id: montessori_plan_graph_tab
     title: "A plan-graph tab highlighting the executing plan node in real time"
