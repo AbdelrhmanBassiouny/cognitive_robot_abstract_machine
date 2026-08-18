@@ -75,6 +75,21 @@ Committed and pushed as 564c1f0fa; the PR description gained a "More
 questions, asked aloud" section (gh's GraphQL edit path is broken by the
 classic-Projects deprecation, so it went through the REST API). Still a draft.
 
+### Reading a read-only results database (2026-08-18)
+
+The developer hit `permission denied for schema public` while querying the
+episodic database: `FRANKA_MONTESSORI_SORTING_DATABASE_URI` (set in `~/.bashrc`)
+points at the shared results DB on localhost:5433 — an ssh tunnel to a remote
+PostgreSQL 17 whose `semantic_digital_twin_readonly` role has USAGE only — and
+`open_session` prepared the database before reading, issuing CREATE TABLE for
+every table the generated schema knows of but the remote lacks. The record
+path already degraded (`verify_writable` → `RecordsNothing`), only the query
+path crashed. Fixed by giving `open_session` a `create_missing_tables` flag and
+having the episodic-memory evaluation ask for sessions without it; both new
+tests verified red without the fix. Committed and pushed as 22845f77b; the PR
+description gained a "Reading a read-only results database" section. Still a
+draft.
+
 ### Outstanding
 - CI not checked on #167/#168.
 - Pre-existing red in this checkout: `presets.json` in the scenes submodule
