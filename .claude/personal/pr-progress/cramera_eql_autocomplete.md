@@ -241,3 +241,64 @@ stacked-pr-maintenance skill mandates. Note the stored header holds the gh
 OAuth token verbatim; if gh re-authenticates, re-run the `claude mcp add` with
 the fresh token.
 
+
+### Round 5 (2026-08-18): merged cram2/main and force-pushed to origin
+
+The developer asked to push this branch with the merge conflicts resolved "according to
+the most up to date one and the one that is proved stable".
+
+Starting point: the local branch was 7 rebased copies of origin's 7 commits, replanted on
+`608bc7fe6` (montessori_fast_inline_monitor after *its* main merge) -- so 7 behind / 228
+ahead of `origin/cramera_eql_autocomplete`. `cram2/main` had 23 new commits.
+
+**One textual conflict**, in `semantic_digital_twin/world_description/world_entity.py`,
+`Body.has_collision`:
+
+- ours (`bb75a7157`): `shape.volume > vt or shape.surface_area > st` -- never meshes.
+- cram2/main (`208cf0e44`, Simon Stelter): `shape.volume > vt`, then
+  `shape.mesh.area > st` -- meshes only for a shape too flat to pass on volume.
+
+**Resolved to cram2/main's version.** Both sides carry the *same* `.. note::` in the
+docstring (it merged without conflict), and that note describes main's short-circuit
+exactly -- so keeping ours would have left the note describing code that is not there.
+Main's is also the version upstream merged with tests written against it. Checked first
+that this breaks nothing: `bb75a7157` added no `has_collision` test, only
+`test_shape.py`'s four `surface_area` property tests, which still pass.
+
+**Consequence to raise with the developer:** `Shape.surface_area` (5 implementations in
+`geometry.py`, added by `bb75a7157`) is now used by nothing but its own tests. Per
+AGENTS.md that is a consult-before-removing situation -- either drop it, or reinstate it
+in `has_collision` in main's short-circuit shape.
+
+**Second fix, `03b3130a5`:** `giskardpy/executor.py` used `Optional[float]` with no
+import -- main dropped the module's `typing_extensions.Optional` along with its last use
+while this branch added `_next_target_time`. This is the same invisible conflict
+`a5080fd08` fixed on `montessori_fast_inline_monitor`; our branch forked from
+`608bc7fe6`, one commit before it, so it arrived here unfixed. `test/conftest.py` reaches
+this module transitively, so collection failed everywhere. Spelled `float | None`, as the
+rest of the module does.
+
+Method for finding it: `pyflakes` over the merged tree, restricted to the 17 Python files
+the upstream side touched -- pyflakes is per-file, so nothing else could be newly broken.
+`Optional` was the only finding. All six `ormatic_interface.py` files are empty in the
+merged tree, as the hook requires.
+
+Verified (all with `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`): cramera 477 passed; segmind 46
+passed + 1 skipped; sdt `test_world.py` + `test_spatial_types.py` 357 passed + 1 skipped;
+`test_shape.py` + `test_collision_matrix.py` 59 passed; giskardpy `test_cartesian_tasks.py`
+collects (47) -- which is what the `Optional` bug used to break.
+
+Pushed `d3321a4e9...03b3130a5` to `origin/cramera_eql_autocomplete` with
+`--force-with-lease`. Nothing pushed to `cram2`; the developer chose origin only.
+
+**Landmine regressed:** the lark fix from Round 3 is gone from this venv -- pytest again
+dies in ROS jazzy's `launch_testing` with `ImportError: cannot import name 'Lark'`, so
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` is required again. The repo-side `pyproject.toml` pin
+(`lark>=1.1.1`) is still correct; it is the local `.venv` that is wrong.
+
+**Outstanding:** PR #170's draft state was not touched -- `gh` is unauthenticated in this
+session's environment, so its state could not be read. If the developer did not mark it
+ready themselves, it needs re-drafting after this push. The five branches stacked above
+(#164, #165, #167, #168 and #175) are all still based on the pre-merge tip and need
+restacking.
+
