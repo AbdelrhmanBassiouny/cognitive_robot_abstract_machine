@@ -126,11 +126,6 @@ class SimulationTimePacer(Pacer):
     fast the simulation happens to run.
     """
 
-    target_frequency: float
-    """
-    Control cycles per simulated second.
-    """
-
     simulation_clock: Callable[[], float]
     """
     Returns the simulation's current time in seconds.
