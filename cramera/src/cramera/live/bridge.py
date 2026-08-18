@@ -1157,11 +1157,16 @@ class Bridge:
 
     def query_presets(self) -> List[Preset]:
         """
-        The ready-made queries the panel offers as buttons.
+        The ready-made queries the panel offers as buttons, each with its question read
+        back as English by the scope it declares.
 
         :raises NoQuerySourceRegistered: When no demo offered one.
         """
-        return self._registered_query_source().presets()
+        presets = self._registered_query_source().presets()
+        with self._query_lock:
+            return [
+                preset.worded(self._scope_runner(preset.scope)) for preset in presets
+            ]
 
     def query_scopes(self) -> List[QueryScope]:
         """
@@ -1236,14 +1241,27 @@ class Bridge:
         :raises NoQuerySourceRegistered: When no demo offered one.
         :raises UnknownQueryScope: When the demo offers no such body of knowledge.
         """
-        knowledge = self._queryable_knowledge(scope)
         with self._query_lock:
-            return EqlQueryRunner(
-                domains=knowledge.domains,
-                extra_names=knowledge.extra_names,
-                evaluation=knowledge.evaluation,
-                highlightable_ids=self.highlightable_ids(),
-            ).run(code)
+            return self._scope_runner(scope).run(code)
+
+    def _scope_runner(self, scope: QueryScope) -> EqlQueryRunner:
+        """
+        The runner answering questions of one scope, over the demo's current state.
+
+        Krrood's SymbolGraph singleton is not threadsafe, so callers hold
+        :attr:`_query_lock` around whatever they do with the runner.
+
+        :param scope: The body of knowledge being asked.
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        :raises UnknownQueryScope: When the demo offers no such body of knowledge.
+        """
+        knowledge = self._queryable_knowledge(scope)
+        return EqlQueryRunner(
+            domains=knowledge.domains,
+            extra_names=knowledge.extra_names,
+            evaluation=knowledge.evaluation,
+            highlightable_ids=self.highlightable_ids(),
+        )
 
     # %% viewer -> driving the run
     def register_run_control(self, control: LiveRunControl) -> None:

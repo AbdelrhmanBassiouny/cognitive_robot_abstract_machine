@@ -930,7 +930,8 @@ class TestBundleDeclaredPresets:
             fixture_scene, [{"text": "anything", "code": "an(entity(shape))"}]
         )
 
-        assert ARCHITECTURE_PRESETS[0] in Preset.of_scene()
+        runner = EqlSession.of_active_scene().runner()
+        assert ARCHITECTURE_PRESETS[0].worded(runner) in Preset.of_scene()
 
     def test_a_declared_preset_is_marked_as_needing_a_running_demo(self, fixture_scene):
         """
@@ -954,6 +955,56 @@ class TestBundleDeclaredPresets:
         assert any(
             preset.text == "what is in the scene?" for preset in Preset.of_scene()
         )
+
+
+class TestPresetWording:
+    """
+    Every preset carries its question read back as English, so the panel can show what
+    is asked instead of EQL source.
+    """
+
+    def test_every_scene_preset_is_worded_by_the_scenes_own_runner(self, fixture_scene):
+        runner = EqlSession.of_active_scene().runner()
+        for preset in Preset.of_scene():
+            assert preset.verbalization == runner.verbalize(preset.code), preset.text
+
+    def test_a_generated_preset_carries_both_renderings(self, fixture_scene):
+        preset = next(
+            entry for entry in Preset.of_scene() if entry.text == "which robot is this?"
+        )
+
+        assert preset.verbalization is not None
+        assert preset.verbalization.text
+        assert "<span" in preset.verbalization.html
+
+    def test_wording_returns_a_copy_and_leaves_the_original_untouched(
+        self, fixture_scene
+    ):
+        preset = Preset("which robot is this?", "the(entity(robot))")
+        worded = preset.worded(EqlSession.of_active_scene().runner())
+
+        assert preset.verbalization is None
+        assert worded.verbalization is not None
+        assert (worded.text, worded.code, worded.requires_live, worded.scope) == (
+            preset.text,
+            preset.code,
+            preset.requires_live,
+            preset.scope,
+        )
+
+    def test_a_declared_preset_stays_unworded_in_the_recorded_scene(
+        self, fixture_scene
+    ):
+        """
+        A bundle's questions range over a demo's own variables, which only the live
+        bridge knows; the recorded scene offers their labels unworded.
+        """
+        (fixture_scene / "scenes" / "fixture" / "presets.json").write_text(
+            json.dumps({"presets": [{"text": "anything", "code": "an(entity(shape))"}]})
+        )
+        EpisodeKnowledgeBase.reset()
+
+        assert Preset.of_scene()[0].verbalization is None
 
 
 class TestPresetSmoke:

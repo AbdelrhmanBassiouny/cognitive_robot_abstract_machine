@@ -9,12 +9,14 @@ panels must not reach outside their own DOM subtree.
 import re
 import shutil
 import subprocess
+from dataclasses import asdict
 from pathlib import Path
 
 import pytest
 from typing_extensions import List
 
 from cramera.knowledge.eql_session import EqlSession
+from cramera.knowledge.presets import Preset
 from cramera.knowledge.query_runner import RenderResult
 from cramera.paths import WEB_ROOT
 
@@ -218,6 +220,12 @@ class TestJsUnits:
     def test_preset_groups(self):
         self.run_node("test_preset_groups.js")
 
+    def test_question_display(self):
+        self.run_node("test_question_display.js")
+
+    def test_eql_panel(self):
+        self.run_node("test_eql_panel.js")
+
     def test_scene_picker(self):
         self.run_node("test_scene_picker.js")
 
@@ -289,13 +297,29 @@ class TestQueryPanelReadsTheAnswer:
         assert "res.replay" in read("panels/eql/panel.js")
         assert "row.replay" in read("panels/eql/panel.js")
 
-    def test_the_verbalization_is_styled_by_the_stylesheet(self):
+    def test_the_preset_verbalization_is_read_under_the_key_it_is_sent_as(self):
         """
-        The words are coloured by krrood; the block they sit in is cramera's own.
+        A preset travels as its ``asdict`` shape, so the question display must read the
+        wording under the same key the dataclass carries it as.
+        """
+        payload = asdict(Preset("which robot is this?", "the(entity(robot))"))
+
+        assert "verbalization" in payload
+        assert "question.verbalization" in read("core/question_display.js")
+
+    def test_the_question_display_sits_under_the_query_bar(self):
+        """
+        The query bar keeps its input box; underneath it the asked question is shown big
+        as English, and the stylesheet styles both the display and the documentation
+        links inside it.
         """
         panel = read("panels/eql/panel.js")
-        assert 'class="qverb"' in panel
-        assert ".qverb{" in read("app.css")
+        assert 'class="query-bar"' in panel
+        assert "<textarea" in panel
+        assert 'class="question"' in panel
+        stylesheet = read("app.css")
+        assert ".question{" in stylesheet
+        assert ".question a{" in stylesheet
 
 
 class TestQueryPanelHints:
@@ -330,3 +354,48 @@ class TestQueryPanelHints:
             placeholder.group(1).replace("\\'", "'")
         )
         assert result.ok
+
+
+class TestQueryConsoleScrolls:
+    """
+    The query bar stays put and everything under it scrolls: the question read back, the
+    questions on offer and the answer share one scrolling region, so a long
+    verbalization cannot push the answer out of a panel that clips whatever does not
+    fit.
+    """
+
+    def declarations(self, selector: str) -> str:
+        """
+        The declarations one stylesheet rule sets.
+
+        :param selector: The selector whose rule to read.
+        """
+        rule = re.search(re.escape(selector) + r"\s*\{([^}]*)\}", read("app.css"))
+        assert rule is not None, selector
+        return rule.group(1)
+
+    def test_the_question_the_presets_and_the_answer_share_one_region(self):
+        panel = read("panels/eql/panel.js")
+        body = panel.split('class="console-body"', 1)[1]
+
+        for element in ('id="question"', 'id="presets"', 'id="answer"'):
+            assert element in body, element
+
+    def test_the_query_bar_stays_above_what_scrolls(self):
+        """
+        The suggestion menu is placed from the input's own rectangle and never moved
+        again, so a bar that scrolled would leave its menu behind.
+        """
+        panel = read("panels/eql/panel.js")
+
+        assert panel.index('class="query-bar"') < panel.index('class="console-body"')
+
+    def test_the_region_is_the_one_that_scrolls(self):
+        """
+        A flex child scrolls only when it may shrink below its content.
+        """
+        body = self.declarations(".console-body")
+
+        assert "overflow-y:auto" in body
+        assert "min-height:0" in body
+        assert "max-height" not in self.declarations(".answer")

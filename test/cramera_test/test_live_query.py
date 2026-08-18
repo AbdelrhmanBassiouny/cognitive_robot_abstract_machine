@@ -16,6 +16,7 @@ from typing_extensions import Any, List  # noqa: E402
 
 from cramera.knowledge.presets import Preset  # noqa: E402
 from cramera.knowledge.query_domain import QueryDomain  # noqa: E402
+from cramera.knowledge.query_runner import EqlQueryRunner  # noqa: E402
 from cramera.knowledge.queryable_knowledge import (  # noqa: E402
     QueryableKnowledge,
     QueryEvaluation,
@@ -166,6 +167,29 @@ class TestQueryingARegisteredSource:
     def test_every_preset_of_a_source_runs_in_the_scope_it_declares(self, bridge):
         for preset in bridge.query_presets():
             assert bridge.run_query(preset.code, preset.scope).ok, preset.text
+
+
+# %% presets worded per scope
+class TestWordedLivePresets:
+    """
+    The bridge hands out each preset with its question read back as English, worded by
+    the body of knowledge the preset declares — the source itself stays wording-free.
+    """
+
+    def test_each_preset_is_worded_by_the_scope_it_declares(self, bridge):
+        current, stored = bridge.query_presets()
+
+        assert current.verbalization == EqlQueryRunner(
+            domains=[QueryDomain("record", NamedRecord, [])]
+        ).verbalize(current.code)
+        assert stored.verbalization == EqlQueryRunner(
+            domains=[QueryDomain("stored_record", NamedRecord)]
+        ).verbalize(stored.code)
+        assert current.verbalization is not None
+        assert stored.verbalization is not None
+
+    def test_the_sources_own_presets_stay_unworded(self, source):
+        assert all(preset.verbalization is None for preset in source.presets())
 
 
 # %% two bodies of knowledge, asked apart

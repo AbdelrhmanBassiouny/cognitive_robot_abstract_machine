@@ -429,15 +429,14 @@ class EqlQueryRunner:
         namespace.update(self.extra_names)
         return namespace
 
-    def run(self, code: str, limit: int = DEFAULT_ROW_LIMIT) -> RenderResult:
+    def build(self, code: str) -> Any:
         """
-        Execute an EQL query string and return its rendered result.
+        Build an EQL query string into the expression it stands for, unevaluated.
 
         The last expression of ``code`` is the query; preceding statements are executed
         as setup.
 
         :param code: The EQL query source.
-        :param limit: Maximum number of result rows to return.
         """
         namespace = self.namespace()
         tree = ast.parse(code, mode="exec")
@@ -448,13 +447,41 @@ class EqlQueryRunner:
             if len(tree.body) > 1:
                 preamble = ast.Module(body=tree.body[:-1], type_ignores=[])
                 exec(compile(preamble, "<eql>", "exec"), namespace)
-            result = eval(
-                compile(ast.Expression(last.value), "<eql>", "eval"), namespace
-            )
-        else:
-            exec(compile(tree, "<eql>", "exec"), namespace)
-            result = namespace.get("result")
+            return eval(compile(ast.Expression(last.value), "<eql>", "eval"), namespace)
+        exec(compile(tree, "<eql>", "exec"), namespace)
+        return namespace.get("result")
 
+    def verbalize(self, code: str) -> Optional[QueryVerbalization]:
+        """
+        Read an EQL query string back as English without evaluating it.
+
+        A sentence is a nicety: a query whose code cannot even be built still gets
+        offered (running it reports its own error), so nothing here is allowed to
+        raise.
+
+        :param code: The EQL query source.
+        :return: Both renderings, or None when the code does not build or does not
+            build into a query.
+        """
+        try:
+            expression = self.build(code)
+        except Exception:
+            return None
+        if not isinstance(expression, Evaluable):
+            return None
+        return QueryVerbalization.of_expression(expression)
+
+    def run(self, code: str, limit: int = DEFAULT_ROW_LIMIT) -> RenderResult:
+        """
+        Execute an EQL query string and return its rendered result.
+
+        The last expression of ``code`` is the query; preceding statements are executed
+        as setup.
+
+        :param code: The EQL query source.
+        :param limit: Maximum number of result rows to return.
+        """
+        result = self.build(code)
         verbalization = None
         if isinstance(result, Evaluable):
             # worded before evaluating: building the sentence leaves the expression

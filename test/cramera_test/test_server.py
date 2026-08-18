@@ -91,6 +91,21 @@ class TestApi:
         assert payload["ok"]
         assert any(n["id"] == "milk" for n in payload["nodes"])
 
+    def test_knowledge_overview_presets_are_worded(self, server):
+        """
+        The overview's presets carry their questions read back as English, so the
+        panel's question display has words to show before a query has run.
+        """
+        pytest.importorskip("krrood")
+        payload = get_json(server + "/api/knowledge")
+        preset = next(
+            entry
+            for entry in payload["presets"]
+            if entry["text"] == "which robot is this?"
+        )
+        assert preset["verbalization"]["text"]
+        assert "<span" in preset["verbalization"]["html"]
+
     def test_knowledge_views(self, server):
         pytest.importorskip("krrood")
         for name, expect_live in (
