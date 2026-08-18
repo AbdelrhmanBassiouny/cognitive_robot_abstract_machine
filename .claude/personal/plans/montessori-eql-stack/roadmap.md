@@ -57,3 +57,34 @@ instead of the branch names.
   draft-until-told-otherwise convention in the personal notes.
 - Landing order is the stack order; nothing here is parallelizable, which is
   why the plan is one wave / one track with a chained `depends_on`.
+
+## 2026-08-18: the interactive-UI wave
+
+The developer asked for six new items extending the demo once the stack lands
+(session: https://claude.ai/code/session_01FqxK37C2yafUeRmJfNGwBZ). They form
+a second wave, `interactive-ui`, in three tracks that — unlike the stack — can
+run in parallel:
+
+- **Acting from the console** (`action-execution`): first a perform button on
+  queried actions, mirroring the replay button #165 gives queried segmind
+  events; then running a freshly written, under-specified action with a run
+  button. The second item is chained on the first because it reuses the
+  execute-from-the-console machinery the first introduces.
+- **Annotated event replay** (`replay-annotation`): during replay, the event's
+  name rendered in the video with arrows from the label to the involved
+  objects, arrow tips following the objects as they move. Depends directly
+  on #165's replay.
+- **Live tabbed panels** (`live-panels`): the fixed knowledge-graph frame at
+  the bottom left becomes a selectable tab widget (the knowledge graph stays
+  as one tab). New tabs: a live segmind-event timeline with a moving vertical
+  now-bar (depends on #169's monitor for the live detections), then a
+  robot-plan-graph tab highlighting the executing node in real time (chained
+  on the timeline item because that one introduces the tab container). A
+  final item makes every tab detachable/reattachable, freely resizable, and
+  maximizable to the full page.
+
+Dependencies are structural (what each item actually needs from the stack),
+not a continuation of the strict chain: `montessori_live_event_timeline_tab`
+only needs #169, the action and replay items need #165. Branch names are
+planned, not yet created; ids equal the planned branch names, following the
+stack items' convention.

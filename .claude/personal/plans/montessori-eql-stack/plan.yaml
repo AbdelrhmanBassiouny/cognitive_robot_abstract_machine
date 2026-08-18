@@ -8,6 +8,8 @@ description: >
   demo recording with replay around queried events, the asked question read
   back in English, and spoken questions answered by matching presets. One
   strict stack: each PR is based on the previous one (GitHub stack #173).
+  A second wave extends the landed stack with acting from the console,
+  annotated replay, and live tabbed panels.
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 174
 
@@ -15,11 +17,31 @@ waves:
   - id: stack
     name: "The stacked chain"
     description: "A single sequential stack; each item lands on top of the previous."
+  - id: interactive-ui
+    name: "Interactive UI extensions"
+    description: >-
+      Features on top of the stack: performing actions from the console,
+      annotating event replay, and live tabbed panels. Unlike the stack,
+      these tracks can run in parallel.
 
 tracks:
   - id: montessori-eql
     name: "Montessori demo EQL features"
     wave: stack
+  - id: action-execution
+    name: "Acting from the console"
+    wave: interactive-ui
+    description: "Executing robot actions from the query console."
+  - id: replay-annotation
+    name: "Annotated event replay"
+    wave: interactive-ui
+    description: "Overlays that explain a replayed segmind event inside the video."
+  - id: live-panels
+    name: "Live tabbed panels"
+    wave: interactive-ui
+    description: >-
+      A tabbed panel area in the viewer with live views of the running demo,
+      and the window management to arrange those tabs freely.
 
 items:
   - id: montessori_fast_inline_monitor
@@ -85,3 +107,74 @@ items:
     depends_on: [cramera-question-readback]
     status: in_progress
     notes: "Top of the stack. rapidfuzz dependency is declared in cramera/requirements.txt."
+
+  - id: montessori_perform_queried_action
+    title: "Perform a queried action from a perform button on its result"
+    branch: montessori_perform_queried_action
+    pull_request_number: null
+    track: action-execution
+    depends_on: [montessori_event_replay]
+    status: not_started
+    notes: >-
+      Mirrors the replay button queried segmind events get in #165: an action
+      returned by a query carries a perform button that executes it on the
+      robot when pressed.
+
+  - id: montessori_run_written_action
+    title: "Write a new under-specified action and run it with a run button"
+    branch: montessori_run_written_action
+    pull_request_number: null
+    track: action-execution
+    depends_on: [montessori_perform_queried_action]
+    status: not_started
+    notes: >-
+      The user types an under-specified action into the console; pressing the
+      run button resolves the missing parameters and executes it. Builds on
+      the execute-from-the-console machinery the perform button introduces.
+
+  - id: montessori_replay_event_annotations
+    title: "Label a replayed event in the video, with arrows tracking its objects"
+    branch: montessori_replay_event_annotations
+    pull_request_number: null
+    track: replay-annotation
+    depends_on: [montessori_event_replay]
+    status: not_started
+    notes: >-
+      During replay of a segmind event, show the event's name in the video
+      with an arrow from the label to each involved object; the arrow tips
+      follow the objects as they move.
+
+  - id: montessori_live_event_timeline_tab
+    title: "A tabbed panel with a live timeline of detected segmind events"
+    branch: montessori_live_event_timeline_tab
+    pull_request_number: null
+    track: live-panels
+    depends_on: [montessori_fast_inline_monitor]
+    status: not_started
+    notes: >-
+      Replaces the fixed knowledge-graph frame at the bottom left with a
+      selectable tab widget; its first new tab plots segmind events live as
+      they are detected, on a timeline with a moving vertical now-bar. The
+      knowledge graph stays available as one of the tabs.
+
+  - id: montessori_plan_graph_tab
+    title: "A plan-graph tab highlighting the executing plan node in real time"
+    branch: montessori_plan_graph_tab
+    pull_request_number: null
+    track: live-panels
+    depends_on: [montessori_live_event_timeline_tab]
+    status: not_started
+    notes: >-
+      Adds a tab to the panel widget showing the robot's current plan graph,
+      with the node currently being executed highlighted live.
+
+  - id: montessori_detachable_panels
+    title: "Detach, reattach, resize, and maximize any of the panel tabs"
+    branch: montessori_detachable_panels
+    pull_request_number: null
+    track: live-panels
+    depends_on: [montessori_live_event_timeline_tab, montessori_plan_graph_tab]
+    status: not_started
+    notes: >-
+      Every tab in the panel widget can be detached into its own window,
+      reattached, resized freely, or expanded to take the full page.
