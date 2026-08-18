@@ -77,12 +77,14 @@ questions need in scope, and the `evaluation` that works the answer out:
 into SQL (`krrood.ormatic.eql_interface.eql_to_sql`) and run it where the
 results live. A domain answered from a database names no `objects`.
 
-The bridge then serves two more endpoints:
+The bridge then serves four more endpoints:
 
 ```
-GET  /presets   {ok, title, presets: [{text, code, scope}],
-                 scopes: [{name, label, variables}], variables: [name]}
-POST /eql       {code, scope} -> the rendered answer rows
+GET  /presets     {ok, title, presets: [{text, code, scope}],
+                   scopes: [{name, label, variables}], variables: [name]}
+GET  /vocabulary?scope=      {ok, entries: [{name, kind, detail, module, type}]}
+GET  /members?name=&scope=   {ok, name, members: [{name, kind, detail}]}
+POST /eql         {code, scope} -> the rendered answer rows
 ```
 
 The panel groups the buttons under each scope's heading and posts the scope its
@@ -115,6 +117,37 @@ role (`cramera/knowledge/query_verbalization.py`, built on krrood's own
 verbalization grammar), so a preset button says what it asked and not only
 what came back. A query krrood has no grammar rule for still answers; it just
 gets no sentence.
+
+### What a query may name, and completing it as you type
+
+A query is not limited to the ready-made variables: **every class of the
+workspace can be named in one**, so `Body`, `World` or a coraplex designator
+work as they do in Python. The names come from the architecture scan
+(`cramera/knowledge/workspace_classes.py`): a class is nameable when it belongs
+to a workspace package, lives in that package's `src/` tree, and is not one of
+the ORM classes generated from another class. About 3,000 names qualify.
+
+Nothing is imported until a query actually uses a name:
+`WorkspaceClassNamespace` looks it up in the index on first use and imports only
+the module that defines it. A name several modules define — `Descriptor` lives
+in 36 — resolves to the candidate from the package declared first in
+`WorkspacePackage`, and the suggestion menu labels it with the module it
+resolved to and how many others were passed over. A name no class has still
+fails as the `NameError` it always was.
+
+The query box completes what it can name, like an editor:
+
+- typing filters the menu by what you have typed — a prefix, or a name's
+  capitals (`BCC` finds `BodyCollisionCheck`),
+- a dot after a variable or a class offers that type's fields, properties and
+  methods,
+- ArrowUp / ArrowDown pick, Tab or Enter accepts, Escape closes, and with the
+  menu closed Enter runs the query as before.
+
+`web/core/completion.js` decides what to offer for the word under the caret and
+`web/panels/eql/suggestions.js` shows it. Both halves are fed by whichever
+source answers the queries, so an attached demo completes its own variables
+while the recorded scene completes the scene's.
 
 ### Driving the running demo
 

@@ -34,7 +34,6 @@ from krrood.entity_query_language.verbalization.vocabulary.english import (
     Articles,
     Conjunctions,
     Copulas,
-    Directive,
     Keywords,
     Prepositions,
 )
@@ -48,7 +47,8 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
     """
     Realise a match into *"Find/Generate <selection> [, and predict its … values]"* with
     a *"given that"* block (the construction pattern, attributes aggregated per object)
-    and a *"where"* block (the free conditions), each condition its own point.
+    and a *"where"* block (the free conditions), each condition its own point. The verb
+    is the plan's default directive unless a backend override is set.
 
     The selection and every condition/value are recursed through ``context.child``, so the existing
     chain / comparator / coreference machinery renders them; this assembler only decides the
@@ -57,7 +57,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
     Reference: :cite:t:`gatt2009simplenlg` — surface realisation.
 
     >>> verbalize_expression(a(Robot)(name="R2", battery=80))
-    "Generate a Robot given that the name and battery of the Robot are 'R2' and 80 respectively"
+    "Find a Robot given that the name and battery of the Robot are 'R2' and 80 respectively"
     """
 
     planner = MatchPlanner
@@ -70,14 +70,14 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
             selection as the discourse subject (*"its …"*).
 
         >>> verbalize_expression(a(Mission)(assigned_to=a(Robot)(name="R2")))
-        "Generate a Mission given that the name of the Robot to which it is assigned is 'R2'"
+        "Find a Mission given that the name of the Robot to which it is assigned is 'R2'"
         """
         predict_groups = [group for group in plan.groups if group.predicted]
         inline_predict = self._inline_predict(predict_groups, plan)
 
         header_parts: List[VerbalizationFragment] = [
             (
-                self.context.services.performative_override or Directive.GENERATE
+                self.context.services.performative_override or plan.default_directive
             ).as_fragment(),
             self.context.child(plan.selection),
         ]
@@ -171,7 +171,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         of the Robot are 'R2' and 80 respectively"* point) and any free-condition statements.
 
         >>> verbalize_expression(a(Robot)(name="R2", battery=80))
-        "Generate a Robot given that the name and battery of the Robot are 'R2' and 80 respectively"
+        "Find a Robot given that the name and battery of the Robot are 'R2' and 80 respectively"
         """
         points: List[VerbalizationFragment] = []
         for group in plan.groups:
@@ -196,7 +196,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         subject/object and cannot fold into the coordination).
 
         >>> verbalize_expression(a(Robot)(name="R2", battery=None))
-        "Generate a Robot given that its name is 'R2', and the Robot has no battery"
+        "Find a Robot given that its name is 'R2', and the Robot has no battery"
         """
         present = [a for a in group.concrete if not is_none_literal(a.value)]
         absent = [a for a in group.concrete if is_none_literal(a.value)]
@@ -219,7 +219,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         alone (a lone value needs no *"respectively"*, and too many would be unreadable to zip).
 
         >>> verbalize_expression(a(Robot)(name="R2", battery=80, operational=True))
-        "Generate a Robot given that the name, battery, and operational of the Robot are 'R2', 80, and True respectively"
+        "Find a Robot given that the name, battery, and operational of the Robot are 'R2', 80, and True respectively"
         """
         atomic = [a for a in present if is_atomic_value(a.value)]
         if 2 <= len(atomic) <= _MAX_RESPECTIVELY:
@@ -232,7 +232,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         """:return: *"the <object> has no <attrs>"* for attributes assigned ``None``.
 
         >>> verbalize_expression(a(Mission)(priority=None))
-        'Generate a Mission given that the Mission has no priority'
+        'Find a Mission given that the Mission has no priority'
         """
         return PhraseFragment(
             parts=[
@@ -254,7 +254,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         :meth:`_concrete_points`), so a lone assignment reads *"its name is 'R2'"*.
 
         >>> verbalize_expression(a(Robot)(name="R2", battery=80))
-        "Generate a Robot given that the name and battery of the Robot are 'R2' and 80 respectively"
+        "Find a Robot given that the name and battery of the Robot are 'R2' and 80 respectively"
         """
         value_list = oxford_comma(
             [self.context.child(a.value, as_value=True) for a in concrete],
@@ -278,7 +278,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         point's attributes take (*"the name and battery of the Robot"*).
 
         >>> verbalize_expression(a(Robot)(name="R2", battery=80))
-        "Generate a Robot given that the name and battery of the Robot are 'R2' and 80 respectively"
+        "Find a Robot given that the name and battery of the Robot are 'R2' and 80 respectively"
         """
         return PhraseFragment(
             parts=[
@@ -338,7 +338,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         it by :meth:`_group_point`.
 
         >>> verbalize_expression(a(Robot)(name="R2", battery=80))
-        "Generate a Robot given that the name and battery of the Robot are 'R2' and 80 respectively"
+        "Find a Robot given that the name and battery of the Robot are 'R2' and 80 respectively"
         """
         fragments = [
             RoleFragment.for_attribute(

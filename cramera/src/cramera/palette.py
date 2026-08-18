@@ -11,7 +11,14 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from semantic_digital_twin.world_description.geometry import Color
-from typing_extensions import List
+from typing_extensions import List, Optional, TYPE_CHECKING
+
+from cramera.body_geometry import shape_collections_of
+
+if TYPE_CHECKING:
+    from semantic_digital_twin.world_description.world_entity import (
+        KinematicStructureEntity,
+    )
 
 OBJECT_COLORS = (
     "#f3f0ea",
@@ -52,6 +59,35 @@ class ObjectPalette:
         The colour of the object at the given position in the scene, as ``#rrggbb``.
         """
         return self.css_color(self.colors[index % len(self.colors)])
+
+    def color_of(self, entity: Optional[KinematicStructureEntity], index: int) -> str:
+        """
+        The colour an entity is shown in, as ``#rrggbb``: the one its world authored
+        onto a shape of it, or its position's cycle colour when no shape declares one.
+
+        :param entity: The body or region to colour, or None for one only known by key.
+        :param index: The entity's position in the scene, picking its fallback colour.
+        """
+        authored = self._authored_color(entity) if entity is not None else None
+        return self.css_color(authored) if authored else self.color_for(index)
+
+    @staticmethod
+    def _authored_color(entity: KinematicStructureEntity) -> Optional[Color]:
+        """
+        The first colour an entity's shapes declare, or None when every shape keeps the
+        default white.
+
+        ..note:: A shape deliberately authored in the default white is indistinguishable
+           from one that was never coloured, and falls back to the cycle.
+
+        :param entity: The body or region whose shapes are read.
+        """
+        white = Color()
+        for shape_collection in shape_collections_of(entity):
+            for shape in shape_collection.shapes:
+                if shape.color != white:
+                    return shape.color
+        return None
 
     @staticmethod
     def _color_from_hex(hex_value: str) -> Color:

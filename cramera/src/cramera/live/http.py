@@ -19,6 +19,8 @@ HTTP endpoints of the live bridge (default port 8765).
                   edges: [{from, to, kind}]}
     GET /presets {ok, title, presets: [{text, code, scope}],
                   scopes: [{name, label, variables}], variables: [name]}
+    GET /vocabulary?scope=   {ok, entries: [{name, kind, detail, module, type}]}
+    GET /members?name=&scope= {ok, name, members: [{name, kind, detail}]}
     GET /replay  {ok, start, end, frames: [{at, frames, base, objects}]}
                   (start/end query parameters in seconds since the epoch)
     GET /run     {ok, title, paused, looping, restart_pending, activity, iteration}
@@ -50,6 +52,7 @@ from typing_extensions import Any, Dict, Optional
 
 from cramera.logging_setup import get_logger
 from cramera.live.bridge import Bridge, MalformedMoveRequest, MoveRequest
+from cramera.knowledge.query_vocabulary import UnknownVocabularyName
 from cramera.knowledge.queryable_knowledge import QueryScope, UnknownQueryScope
 from cramera.live.query import NoQuerySourceRegistered
 from cramera.live.run_control import (
@@ -132,6 +135,10 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_model_mesh()
         if self.path.startswith("/presets"):
             return self._send_query_presets()
+        if self.path.startswith("/vocabulary"):
+            return self._send_query_vocabulary()
+        if self.path.startswith("/members"):
+            return self._send_query_members()
         if self.path.startswith("/replay"):
             return self._send_replay_clip()
         if self.path.startswith("/run"):
@@ -163,6 +170,46 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         except NoQuerySourceRegistered as error:
             payload = {"ok": False, "error": str(error), "presets": []}
         self._send_json(payload)
+
+    def _send_query_vocabulary(self) -> None:
+        """
+        Serve every name a query of the asked-for scope may use.
+        """
+        try:
+            payload = self.bridge.query_vocabulary(self._requested_scope()).to_payload()
+        except (
+            NoQuerySourceRegistered,
+            UnknownQueryScope,
+        ) as error:
+            payload = {"ok": False, "error": str(error), "entries": []}
+        self._send_json(payload)
+
+    def _send_query_members(self) -> None:
+        """
+        Serve the members that follow one name's dot.
+        """
+        name = self._query_value("name") or ""
+        try:
+            payload = self.bridge.query_vocabulary(
+                self._requested_scope()
+            ).members_payload(name)
+        except (
+            NoQuerySourceRegistered,
+            UnknownQueryScope,
+            UnknownVocabularyName,
+        ) as error:
+            payload = {"ok": False, "error": str(error), "members": []}
+        self._send_json(payload)
+
+    def _requested_scope(self) -> QueryScope:
+        """
+        The body of knowledge the request asks about, the current state by default.
+
+        :raises UnknownQueryScope: When the request names no such body of knowledge.
+        """
+        return QueryScope.of_name(
+            self._query_value("scope") or QueryScope.CURRENT_STATE.value
+        )
 
     def _send_run_control_state(self) -> None:
         """

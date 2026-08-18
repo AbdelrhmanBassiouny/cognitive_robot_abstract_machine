@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Dict
 from typing_extensions import Optional, List, Any, get_type_hints
 
 from coraplex.exceptions import ContextIsUnavailable
+from krrood.symbol_graph.symbol_graph import Symbol
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
 
@@ -17,11 +18,12 @@ if TYPE_CHECKING:
 
 
 @dataclass
-class Designator:
+class Designator(Symbol):
     """
     Abstract base class for designators.
 
-    Designators are objects that can be executed and are managed by a plan node.
+    Designators are objects that can be executed and are managed by a plan node. As a
+    :class:`Symbol`, every instance is tracked in the SymbolGraph.
     """
 
     plan_node: Optional[PlanNode] = field(

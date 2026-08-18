@@ -530,10 +530,13 @@ class OccupancyCostmap(Costmap):
         strides = map.strides + map.strides
 
         sub_matrices = np.lib.stride_tricks.as_strided(map, view_shape, strides)
-        sub_matrices = sub_matrices.reshape(sub_matrices.shape[:-2] + (-1,))
 
-        sum = np.sum(sub_matrices, axis=2)
-        map = (sum == (self._distance_to_obstacle_index * 2) ** 2).astype("int16")
+        # Summing over the window axes of the strided view directly keeps it a view;
+        # reshaping it first would materialize a copy of the full expanded matrix.
+        window_sums = np.sum(sub_matrices, axis=(-2, -1))
+        map = (window_sums == (self._distance_to_obstacle_index * 2) ** 2).astype(
+            "int16"
+        )
         return map
 
     def _create_from_world(self) -> np.ndarray:

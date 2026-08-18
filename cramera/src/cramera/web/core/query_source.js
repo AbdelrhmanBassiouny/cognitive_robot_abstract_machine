@@ -13,12 +13,26 @@
 
   const RECORDED_PRESETS = '/api/knowledge';
   const RECORDED_RUN = '/api/eql';
+  const RECORDED_VOCABULARY = '/api/eql/vocabulary';
+  const RECORDED_MEMBERS = '/api/eql/members';
+
+  function withParameter(url, name, value) {
+    return url + (url.indexOf('?') >= 0 ? '&' : '?') + name + '=' + encodeURIComponent(value);
+  }
 
   function recorded() {
     return {
       live: false,
       presetsUrl: window.SceneContext.withScene(RECORDED_PRESETS),
       runUrl: window.SceneContext.withScene(RECORDED_RUN),
+      // a recorded scene has one body of knowledge, so it is asked about no scope
+      vocabularyUrl: function () {
+        return window.SceneContext.withScene(RECORDED_VOCABULARY);
+      },
+      membersUrl: function (name) {
+        return withParameter(
+          window.SceneContext.withScene(RECORDED_MEMBERS), 'name', name);
+      },
     };
   }
 
@@ -27,7 +41,20 @@
   function of(live) {
     if (!live || !live.on || !live.url) return recorded();
     const base = String(live.url).replace(/\/+$/, '');
-    return { live: true, presetsUrl: base + '/presets', runUrl: base + '/eql' };
+    return {
+      live: true,
+      presetsUrl: base + '/presets',
+      runUrl: base + '/eql',
+      // a demo offers several bodies of knowledge, each with its own variables
+      vocabularyUrl: function (scope) {
+        const url = base + '/vocabulary';
+        return scope ? withParameter(url, 'scope', scope) : url;
+      },
+      membersUrl: function (name, scope) {
+        const url = withParameter(base + '/members', 'name', name);
+        return scope ? withParameter(url, 'scope', scope) : url;
+      },
+    };
   }
 
   window.QuerySource = { of: of };

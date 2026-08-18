@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
+from http import HTTPStatus
 from pathlib import Path
+from time import sleep
 from xml.etree import ElementTree
 
 import requests
+
+from semantic_digital_twin.exceptions import MeshDownloadFailed
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +20,48 @@ MENAGERIE_ASSET_URL = (
 """
 Template for one Panda mesh in the ``mujoco_menagerie`` repository.
 """
+
+TRANSIENT_STATUS_CODES = frozenset(
+    {
+        HTTPStatus.TOO_MANY_REQUESTS,
+        HTTPStatus.INTERNAL_SERVER_ERROR,
+        HTTPStatus.BAD_GATEWAY,
+        HTTPStatus.SERVICE_UNAVAILABLE,
+        HTTPStatus.GATEWAY_TIMEOUT,
+    }
+)
+"""
+Statuses that say the host is momentarily unwilling to serve a mesh it does have,
+so the same request stands a chance of succeeding later.
+"""
+
+
+@dataclass
+class TransientFailureRetries:
+    """
+    How persistently a mesh download is repeated while the host reports a
+    transient failure.
+    """
+
+    attempts: int = 5
+    """
+    How many times one mesh is requested before the download is given up on.
+    """
+
+    first_delay_seconds: float = 1.0
+    """
+    Seconds to wait after the first failure, doubling with each further one.
+    """
+
+    def delay_after_attempt(self, attempt: int) -> float:
+        """
+        Seconds to wait before repeating a request, backing off the longer the
+        host has been failing.
+
+        :param attempt: Zero-based index of the attempt that just failed.
+        :return: The delay to observe.
+        """
+        return self.first_delay_seconds * 2**attempt
 
 
 @dataclass
@@ -48,6 +94,11 @@ class PandaMeshAssets:
     session: requests.Session = field(default_factory=requests.Session)
     """
     Connection pool reused across the individual mesh downloads.
+    """
+
+    retries: TransientFailureRetries = field(default_factory=TransientFailureRetries)
+    """
+    How a host that is momentarily refusing to serve a mesh is waited out.
     """
 
     @property
@@ -92,17 +143,58 @@ class PandaMeshAssets:
             directory,
         )
         for filename in missing:
-            url = MENAGERIE_ASSET_URL.format(
-                revision=self.revision, filename=filename
-            )
-            response = self.session.get(url, stream=True, timeout=self.timeout)
-            response.raise_for_status()
-            # Written to a temporary name first so an interrupted download
-            # cannot leave a truncated mesh that later runs take for complete.
-            partial = directory / f"{filename}.partial"
-            with partial.open("wb") as mesh_file:
-                for chunk in response.iter_content(chunk_size=8192):
-                    mesh_file.write(chunk)
-            partial.rename(directory / filename)
+            self.download(filename, directory)
 
         return directory
+
+    def download(self, filename: str, directory: Path) -> None:
+        """
+        Download one mesh into ``directory``.
+
+        :param filename: Name of the mesh as the scene refers to it.
+        :param directory: Where the mesh is written.
+        :raises MeshDownloadFailed: If the host does not serve the mesh.
+        """
+        url = MENAGERIE_ASSET_URL.format(revision=self.revision, filename=filename)
+        response = self.request_while_failing_transiently(url)
+        if response.status_code != HTTPStatus.OK:
+            raise MeshDownloadFailed(url=url, status_code=response.status_code)
+
+        # Written to a temporary name first so an interrupted download
+        # cannot leave a truncated mesh that later runs take for complete.
+        partial = directory / f"{filename}.partial"
+        with partial.open("wb") as mesh_file:
+            for chunk in response.iter_content(chunk_size=8192):
+                mesh_file.write(chunk)
+        partial.rename(directory / filename)
+
+    def request_while_failing_transiently(self, url: str) -> requests.Response:
+        """
+        Request ``url`` until the host answers with something other than a
+        transient failure, or until the attempts are used up.
+
+        :param url: Address of the mesh to request.
+        :return: The last answer received, whether or not it carries the mesh.
+        """
+        attempts_made = 0
+        while True:
+            response = self.session.get(url, stream=True, timeout=self.timeout)
+            if response.status_code not in TRANSIENT_STATUS_CODES:
+                return response
+            # The answer carries no mesh, so the connection goes back to the pool
+            # unread; the status stays readable on the closed answer.
+            response.close()
+            attempts_made += 1
+            if attempts_made == self.retries.attempts:
+                return response
+            delay = self.retries.delay_after_attempt(attempts_made - 1)
+            logger.warning(
+                "mujoco_menagerie answered HTTP %d for %s, retrying in %.1f s "
+                "(attempt %d of %d)",
+                response.status_code,
+                url,
+                delay,
+                attempts_made + 1,
+                self.retries.attempts,
+            )
+            sleep(delay)

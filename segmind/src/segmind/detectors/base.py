@@ -4,10 +4,14 @@ from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
 from typing import Optional, Dict, Set, List, Any
 
-from giskardpy.motion_statechart.context import MotionStatechartContext, ContextExtension
+from giskardpy.motion_statechart.context import (
+    MotionStatechartContext,
+    ContextExtension,
+)
 from giskardpy.motion_statechart.data_types import ObservationStateValues
 from giskardpy.motion_statechart.graph_node import MotionStatechartNode, NodeArtifacts
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
+from krrood.symbol_graph.symbol_graph import Symbol
 from segmind.datastructures.events import MotionEvent, DetectionEvent, RotationEvent
 from segmind.datastructures.object_tracker import ObjectTrackerFactory
 from segmind.event_logger import EventLogger
@@ -105,10 +109,13 @@ class SegmindContext(ContextExtension):
     The object tracker registry.    
     """
 
+
 @dataclass(repr=False, eq=False)
-class AbstractDetector(MotionStatechartNode, ABC):
+class AbstractDetector(MotionStatechartNode, Symbol, ABC):
     """
     Abstract base class for all detectors.
+
+    As a :class:`Symbol`, every instance is tracked in the SymbolGraph.
     """
 
     tracked_object: Optional[Body] = field(kw_only=True, default=None)
@@ -117,7 +124,9 @@ class AbstractDetector(MotionStatechartNode, ABC):
     If None, all trackable objects in the world are checked.
     """
 
-    def on_tick(self, context: MotionStatechartContext) -> Optional[ObservationStateValues]:
+    def on_tick(
+        self, context: MotionStatechartContext
+    ) -> Optional[ObservationStateValues]:
         """
         Executes one update cycle of the detector.
 
@@ -140,13 +149,18 @@ class AbstractDetector(MotionStatechartNode, ABC):
                 if type(body.parent_connection) is Connection6DoF
             ]
         )
-        events = self.update_context_and_events(context, segmind_context_extension, objects_to_check)
+        events = self.update_context_and_events(
+            context, segmind_context_extension, objects_to_check
+        )
         for e in events:
-            segmind_context_extension.logger.log_event(e, segmind_context_extension.tracker_registry)
+            segmind_context_extension.logger.log_event(
+                e, segmind_context_extension.tracker_registry
+            )
         return ObservationStateValues.TRUE if events else ObservationStateValues.FALSE
 
-
-    def get_relation(self, context: MotionStatechartContext, tracked_objects: List[Body], predicate) -> Dict[Body, Set[Body]]:
+    def get_relation(
+        self, context: MotionStatechartContext, tracked_objects: List[Body], predicate
+    ) -> Dict[Body, Set[Body]]:
         """
         Get the relation between tracked objects.
 
@@ -206,7 +220,12 @@ class AbstractDetector(MotionStatechartNode, ABC):
         return related_regions
 
     @abstractmethod
-    def update_context_and_events(self, context:MotionStatechartContext, segmind_context:SegmindContext, tracked_objects: List[Body]) -> List[DetectionEvent]:
+    def update_context_and_events(
+        self,
+        context: MotionStatechartContext,
+        segmind_context: SegmindContext,
+        tracked_objects: List[Body],
+    ) -> List[DetectionEvent]:
         """
         Core detection logic that updates the internal state and identifies new events.
 

@@ -224,6 +224,7 @@ Panels.define('robot-scene', function (root, bus) {
       g.add(content);
       const box = new THREE.Box3().setFromObject(content);
       const top = isFinite(box.max.z) ? box.max.z : 0.15;
+      g.userData.topZ = top;                 // where an arrow or label clears the object
       const label = makeLabel(spec.id.replace(/_/g, ' '), spec.color);
       label.position.z = top + 0.09;
       label.visible = labelsOn;
@@ -261,6 +262,7 @@ Panels.define('robot-scene', function (root, bus) {
   function removeObject(key) {
     const g = objectMeshes[key];
     if (!g) return;
+    arrowOver(key, false);
     worldRoot.remove(g);
     g.traverse(function (c) {
       if (c.geometry) c.geometry.dispose();
@@ -354,7 +356,7 @@ Panels.define('robot-scene', function (root, bus) {
     .then(function (r) { return r.ok ? r.json() : { default: null, scenes: [] }; })
     .catch(function () { return { default: null, scenes: [] }; })
     .then(function (index) {
-      const name = SceneContext.name() || index.default;
+      const name = SceneContext.name() || ScenePicker.defaultScene(index);
       wireScenePickers(index.scenes || [], name);
       if (!name) {
         if (statusEl) statusEl.textContent = 'No scene found — run cramera-onboard first.';
@@ -918,6 +920,42 @@ Panels.define('robot-scene', function (root, bus) {
     return null;
   }
 
+  // %% the arrow bouncing over a highlighted object
+  // The emissive glow alone is easy to miss among similar colours, so every
+  // highlighted object also gets an arrow pointing down at it, bobbing so the eye
+  // finds it (core/highlight_arrow.js holds the math). Arrows live in worldRoot
+  // rather than on the object so a tumbling object cannot tip them over; the
+  // render loop keeps each one over its object.
+  const highlightArrows = {};    // mesh key -> the arrow over that object
+  function arrowOver(key, on) {
+    const existing = highlightArrows[key];
+    if (!on || !objectMeshes[key]) {
+      if (existing) {
+        worldRoot.remove(existing);
+        existing.geometry.dispose(); existing.material.dispose();
+        delete highlightArrows[key];
+        needsRender = true;
+      }
+      return;
+    }
+    if (existing || !window.HighlightArrow) return;
+    const geometry = new THREE.ConeGeometry(HighlightArrow.RADIUS, HighlightArrow.HEIGHT, 20);
+    geometry.rotateX(-Math.PI / 2);          // tip down along worldRoot's up axis
+    const arrow = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: HighlightArrow.COLOR }));
+    placeArrowOver(arrow, key, 0);
+    worldRoot.add(arrow);
+    highlightArrows[key] = arrow;
+    needsRender = true;
+  }
+  function placeArrowOver(arrow, key, bob) {
+    const over = objectMeshes[key];
+    arrow.position.set(
+      over.position.x,
+      over.position.y,
+      over.position.z + HighlightArrow.restAltitude(over.userData.topZ || 0.15) + bob
+    );
+  }
+
   // glow entities in 3D — accepts object ids, mesh keys or segment step names
   function highlightObjects(ids) {
     const set = {};
@@ -934,9 +972,10 @@ Panels.define('robot-scene', function (root, bus) {
       objectMeshes[key].traverse(function (c) {
         if (c.isMesh && c.material && c.material.emissive) {
           c.material.emissive.setHex(on ? 0x39d5c8 : 0x000000);
-          c.material.emissiveIntensity = on ? 0.55 : 0;
+          c.material.emissiveIntensity = on ? 0.85 : 0;
         }
       });
+      arrowOver(key, on);
     }
     // direct link references: knowledge-base joint entities (l_shoulder_pan_joint → its
     // child link) and URDF-tree nodes ('urdf:<link>') resolve to link names
@@ -965,7 +1004,7 @@ Panels.define('robot-scene', function (root, bus) {
         mats.forEach(function (m) {
           if (m && m.emissive) {
             m.emissive.setHex(on ? 0x39d5c8 : 0x000000);
-            m.emissiveIntensity = on ? 0.45 : 0;
+            m.emissiveIntensity = on ? 0.7 : 0;
           }
         });
       });
@@ -1336,6 +1375,15 @@ Panels.define('robot-scene', function (root, bus) {
       upgradeMaterials();
       needsRender = true;
     }
+    const arrowKeys = Object.keys(highlightArrows);
+    if (arrowKeys.length) {
+      const bob = HighlightArrow.bobOffset(clock.getElapsedTime());
+      arrowKeys.forEach(function (key) {
+        if (!objectMeshes[key]) { arrowOver(key, false); return; }
+        placeArrowOver(highlightArrows[key], key, bob);
+      });
+      needsRender = true;
+    }
     const moved = controls.update();
     if (playing && traj && !liveOn) {
       playhead += ((traj.framesPerSecond || 30) / 60) * 1.6;
@@ -1354,8 +1402,9 @@ Panels.define('robot-scene', function (root, bus) {
     const w = container.clientWidth, h = container.clientHeight;
     if (!w || !h) return;
     renderer.setSize(w, h, false);
+    // the composer resizes every pass itself, at device resolution; sizing the SSAO
+    // pass again here would shrink its render targets back to CSS pixels
     if (composer) composer.setSize(w, h);
-    if (ssaoPass) ssaoPass.setSize(w, h);
     camera.aspect = w / h; camera.updateProjectionMatrix();
     needsRender = true;
   }
