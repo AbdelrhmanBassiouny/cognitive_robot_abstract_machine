@@ -248,16 +248,15 @@ items:
   - id: montessori_plan_graph_tab
     title: "A plan-graph tab highlighting the executing plan node in real time"
     branch: claude/plan-graph-executing-node-hqkt32
-    pull_request_number: null
+    pull_request_number: 178
     track: live-panels
     depends_on: [montessori_live_event_timeline_tab]
     status: in_progress
     session: https://claude.ai/code/session_011zuYnHUJtJLYs48VikWaYn
     notes: >-
       Implemented on 2026-08-18 as 8de5cf76, based on #175 and restacked onto
-      its ORM-untracking tip 2d7f7b183 in the same session (6a496668). No pull
-      request opened yet - the developer asked for the implementation only. The
-      branch keeps the session's own designated name rather than the manifest's,
+      its ORM-untracking tip 2d7f7b183 in the same session (6a496668). Draft
+      #178 opened the same day, based on #175. The branch keeps the session's own designated name rather than the manifest's,
       as `montessori_perform_queried_action` and
       `montessori_replay_event_annotations` already did. The item was *not*
       redundant, but it is a replacement rather than an addition: the plan tree

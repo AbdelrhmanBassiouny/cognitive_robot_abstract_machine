@@ -795,3 +795,7 @@ The cramera pytest suite could not run in this session's container — `random_e
 needs its `random_events_lib` C++ extension built from the workspace — so the Python
 tests (the three new `executing` cases in `test_live_bridge.py`, the asset checks and
 the JS-suite registration) are left to CI. All 205 node tests are green locally.
+
+Opened as draft **#178**, based on #175. Its description carries the three defects
+above and the replacement rationale, so a reviewer reading only the PR sees why the
+graph panel lost a tab.
