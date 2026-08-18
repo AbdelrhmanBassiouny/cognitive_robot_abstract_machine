@@ -127,10 +127,11 @@ class GiskardExecutable(Executable):
     :py:class:`pycram.motion_executor.ExecutionEnvironment`.
     """
 
-    max_ticks_per_motion_mapping: ClassVar[int] = 2000
+    max_ticks_per_motion_mapping: ClassVar[Optional[int]] = None
     """
     Per-motion tick budget for :meth:`_execute_simulation`'s tick loop,
     managed by :py:class:`pycram.motion_executor.ExecutionEnvironment`.
+    ``None`` lets the loop tick until the motion ends.
 
     The overall loop bound is this value multiplied by the number of motion
     mappings, so a stuck motion is bounded to roughly
@@ -138,9 +139,9 @@ class GiskardExecutable(Executable):
     is raised, instead of hanging (or taking minutes) indefinitely.
 
     Matters most together with ``real_time_pacing``: a paced tick sleeps for a
-    full control period, so the default budget of 2000 ticks per mapping is
-    ~40 s of wall clock *per mapping* before a stuck motion gives up, during
-    which the robot simply appears frozen. Lower it when pacing is on.
+    full control period, so a budget of 2000 ticks per mapping is ~40 s of wall
+    clock *per mapping* before a stuck motion gives up, during which the robot
+    simply appears frozen. Keep it low when pacing is on.
     """
 
     _current_motion_state_chart: MotionStatechart = field(init=False, default=None)
@@ -363,11 +364,11 @@ class GiskardExecutable(Executable):
         motion_state_chart = self.motion_state_chart
         executor.compile(motion_state_chart)
 
+        budget = GiskardExecutable.max_ticks_per_motion_mapping
+        tick_limit = None if budget is None else len(self.motion_mappings) * budget
+
         counter = 0
-        while (
-            counter
-            < len(self.motion_mappings) * GiskardExecutable.max_ticks_per_motion_mapping
-        ):
+        while tick_limit is None or counter < tick_limit:
             # Interrupting and pausing are handled inside the motion state chart by
             # per-task monitors (see motion_state_chart): an interrupt ends the
             # motion via EndMotion, a pause holds the active task via its
