@@ -153,7 +153,13 @@ items:
       (a semantic conflict with the autocomplete feature git could not see).
       Restacked again later that day by merging the base in: 408f4511b,
       cramera suite 566, then onto the post-main-merge base, once more for
-      06582ca32, and again for the ORM-untracking fix: 3964d20eb.
+      06582ca32, and again for the ORM-untracking fix: 3964d20eb. On
+      2026-08-18 the developer reported that the answer was unreachable behind
+      the big verbalization, and that no hyperlink ever appeared; both were
+      fixed on the branch and pushed as c045c9f5b (06a5297b3, c045c9f5b),
+      cramera suite 579. The links had never appeared because the docs site
+      publishes six packages and a scene is queried through none of them, so
+      words now fall back to the class's source at the checkout's commit.
 
   - id: cramera-voice-questions
     title: "Answer a spoken question by running the preset it asks for"
