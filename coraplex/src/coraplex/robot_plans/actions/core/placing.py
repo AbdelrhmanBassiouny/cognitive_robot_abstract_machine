@@ -70,19 +70,23 @@ class PlaceAction(ActionDescription, PlaceTuningParameters, HasGraspDetectionThr
 
     def _retract_plan(self, retract_pose: Pose) -> PlanNode:
         """
-        :return: The plan that re-parents the placed object back to the world and
-            retracts the end effector away from it.
+        :return: The plan that retracts the end effector away from the placed object,
+            re-parenting the object back to the world first unless the context leaves
+            attachment to a physics simulator.
         """
-        return sequential(
-            [
-                DetachNode(body=self.object_designator, new_parent=self.world.root),
-                MoveToolCenterPointMotion(
-                    retract_pose,
-                    self.arm,
-                    max_linear_velocity=self.retract_linear_velocity,
-                ),
-            ],
+        children = []
+        if self.context.update_world_model_attachment:
+            children.append(
+                DetachNode(body=self.object_designator, new_parent=self.world.root)
+            )
+        children.append(
+            MoveToolCenterPointMotion(
+                retract_pose,
+                self.arm,
+                max_linear_velocity=self.retract_linear_velocity,
+            )
         )
+        return sequential(children)
 
     @property
     def _action_plan(self) -> PlanNode:

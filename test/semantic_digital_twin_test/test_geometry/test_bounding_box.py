@@ -2,10 +2,12 @@ import numpy as np
 import pytest
 from random_events.interval import closed
 
+from krrood.symbolic_math.symbolic_math import Scalar
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.datastructures.variables import SpatialVariables
 from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Point3
+from semantic_digital_twin.spatial_types.numeric import NumericTransform
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import BoundingBox
@@ -154,3 +156,116 @@ def test_contains(pr2_apartment_state_reset):
     point = Point3(0, 0, 0, reference_frame=pr2_apartment_state_reset.root)
 
     assert bb.contains(point)
+
+
+def _refuse_to_build(*args, **kwargs):
+    """
+    Stand in for symbolic machinery a numeric read must never reach.
+    """
+    raise AssertionError("a symbolic value was built")
+
+
+def test_transform_to_origin_builds_no_symbolic_value_per_corner(monkeypatch):
+    """
+    A detector tick transforms hundreds of bounding boxes, and a Point3 per corner is a
+    CasADi object per corner: the bulk of what a tick costs, and unsafe to build from a
+    thread of its own.
+    """
+    world = World()
+    with world.modify_world():
+        body1 = Body(name=PrefixedName("body1"))
+        body2 = Body(name=PrefixedName("body2"))
+        world.add_connection(
+            FixedConnection(
+                body1,
+                body2,
+                HomogeneousTransformationMatrix.from_xyz_rpy(1, 0, 0, yaw=np.pi / 2),
+            )
+        )
+    bb = BoundingBox(-0.5, -1, 0, 0.5, 1, 1, body2.global_pose)
+    new_origin = HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=body1)
+    expected = bb.transform_to_origin(new_origin)
+    monkeypatch.setattr(Point3, "__init__", _refuse_to_build)
+    monkeypatch.setattr(Point3, "from_iterable", _refuse_to_build)
+
+    transformed = bb.transform_to_origin(new_origin)
+
+    assert transformed.dimensions == expected.dimensions
+    assert (transformed.min_x, transformed.min_y, transformed.min_z) == (
+        expected.min_x,
+        expected.min_y,
+        expected.min_z,
+    )
+
+
+def test_intervals_do_no_symbolic_arithmetic(monkeypatch):
+    """
+    Every containment and support check turns bounding boxes into events, and offsetting
+    each bound by the origin symbolically is both the slowest and the least thread-safe
+    way to reach a number.
+    """
+    bb = BoundingBox(
+        -0.5,
+        -1,
+        0,
+        0.5,
+        1,
+        1,
+        HomogeneousTransformationMatrix.from_xyz_rpy(1.0, 2.0, 3.0),
+    )
+    expected = (bb.x_interval, bb.y_interval, bb.z_interval)
+    monkeypatch.setattr(Scalar, "_binary", _refuse_to_build)
+
+    assert (bb.x_interval, bb.y_interval, bb.z_interval) == expected
+    assert bb.simple_event == SimpleEvent.from_data(
+        {
+            SpatialVariables.x.value: expected[0],
+            SpatialVariables.y.value: expected[1],
+            SpatialVariables.z.value: expected[2],
+        }
+    )
+
+
+def test_a_bounding_box_holds_its_origin_as_numbers():
+    """
+    The origin is read on every interval and every frame change, so a symbolic one makes
+    even reading a box a CasADi call.
+    """
+    symbolic_origin = HomogeneousTransformationMatrix.from_xyz_rpy(1.0, 2.0, 3.0)
+
+    bb = BoundingBox(-0.5, -1, 0, 0.5, 1, 1, symbolic_origin)
+
+    assert isinstance(bb.origin, NumericTransform)
+    assert np.array_equal(bb.origin.to_np(), symbolic_origin.to_np())
+
+
+def test_transforming_a_box_between_frames_touches_no_symbolic_value(monkeypatch):
+    """
+    Carrying a box into another frame is what a detector tick does hundreds of times,
+    from a thread that must not touch CasADi at all -- not even to read a matrix out.
+    """
+    world = World()
+    with world.modify_world():
+        body1 = Body(name=PrefixedName("body1"))
+        body2 = Body(name=PrefixedName("body2"))
+        world.add_connection(
+            FixedConnection(
+                body1,
+                body2,
+                HomogeneousTransformationMatrix.from_xyz_rpy(1, 0, 0, yaw=np.pi / 2),
+            )
+        )
+    bb = BoundingBox(-0.5, -1, 0, 0.5, 1, 1, body2.global_pose)
+    new_origin = NumericTransform.identity(body1)
+    expected = bb.transform_to_origin(new_origin)
+    monkeypatch.setattr(HomogeneousTransformationMatrix, "__init__", _refuse_to_build)
+    monkeypatch.setattr(HomogeneousTransformationMatrix, "to_np", _refuse_to_build)
+
+    transformed = bb.transform_to_origin(new_origin)
+
+    assert (transformed.min_x, transformed.min_y, transformed.min_z) == (
+        expected.min_x,
+        expected.min_y,
+        expected.min_z,
+    )
+    assert transformed.simple_event == expected.simple_event

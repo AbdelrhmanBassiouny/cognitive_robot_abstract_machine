@@ -63,7 +63,7 @@ jobs:
             ${{ runner.os }}-cache-
 
       - name: Build ORM
-        # ormatic_interface.py files are committed empty (see AGENTS.md), and each package's
+        # ormatic_interface.py files are untracked (see AGENTS.md), and each package's
         # generate_orm.py imports its upstream dependency's *already generated* interface
         # module. Regenerating only this job's own lib would import an empty upstream module,
         # so the whole chain (semantic_digital_twin -> giskardpy -> coraplex -> segmind ->
@@ -89,6 +89,12 @@ jobs:
           
           bazel build //test:test_all
           bazel test //test:test_all
+
+      - name: Install node
+        # cramera's frontend unit tests run under `node --test`; without node on PATH
+        # test_web_assets.py skips them instead of executing them.
+        if: ${{inputs.lib == 'cramera'}}
+        run: sudo apt-get install -y nodejs
 
       - name: Run tests
         run: |

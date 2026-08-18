@@ -100,6 +100,30 @@ def test_pick_up_motion(immutable_model_world):
     assert JointPositionList in motion_charts
 
 
+def test_close_gripper_on_object_uses_a_tight_convergence_threshold(
+    immutable_simple_pr2_world,
+):
+    """
+    The commanded finger target for a grasped object stops only
+    ``squeeze_margin`` short of the object's surface, so the motion must not be
+    considered converged before the fingers are within that same margin -- the
+    default :class:`JointPositionList` threshold (1cm) is 10x looser than the
+    squeeze margin (1mm), which lets the plan advance to lifting before the
+    fingers have actually made contact.
+    """
+    world, robot_view, context = immutable_simple_pr2_world
+    milk = world.get_body_by_name("milk.stl")
+
+    motion = MoveGripperMotion(
+        motion=GripperState.CLOSE,
+        gripper=Arms.LEFT,
+        grasped_object=milk,
+    )
+    execute_single(motion, context=context)
+
+    assert motion.motion_chart.threshold <= motion.squeeze_margin * 2
+
+
 def test_move_motion_chart(immutable_model_world):
     world, view, context = immutable_model_world
     motion = MoveMotion(

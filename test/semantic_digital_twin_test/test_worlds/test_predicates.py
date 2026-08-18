@@ -20,6 +20,7 @@ from semantic_digital_twin.reasoning.predicates import (
     is_supported_by,
     reachable,
     is_place_occupied,
+    InsideOf,
 )
 from semantic_digital_twin.reasoning.robot_predicates import (
     robot_in_collision,
@@ -32,7 +33,12 @@ from semantic_digital_twin.reasoning.robot_predicates import (
 )
 from semantic_digital_twin.robots.robot_parts import Camera, EndEffector
 from semantic_digital_twin.robots.pr2 import PR2
-from semantic_digital_twin.spatial_types.spatial_types import Pose, Quaternion
+from semantic_digital_twin.spatial_types.spatial_types import (
+    Point3,
+    Pose,
+    Quaternion,
+    Vector3,
+)
 from semantic_digital_twin.testing import *
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -651,3 +657,139 @@ def test_nothing_occludes_a_body_in_clear_line_of_sight():
         world.add_semantic_annotation(camera)
 
     assert occluding_bodies(camera, target) == []
+
+
+def _refuse_to_build(*args, **kwargs):
+    """
+    Stand in for symbolic machinery a numeric check must never reach.
+    """
+    raise AssertionError("a symbolic value was built")
+
+
+def test_supporting_builds_nothing_symbolic(two_block_world, monkeypatch):
+    """
+    Support is checked on every detector tick, from a thread that does not own the
+    world, so the check must reach its answer without touching CasADi.
+    """
+    center, top = two_block_world
+    with center._world.modify_world():
+        top.parent_connection.parent_T_connection_expression = (
+            HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=center, z=1.0)
+        )
+    expected = is_supported_by(top, center)
+    monkeypatch.setattr(HomogeneousTransformationMatrix, "__init__", _refuse_to_build)
+    monkeypatch.setattr(HomogeneousTransformationMatrix, "to_np", _refuse_to_build)
+    monkeypatch.setattr(Point3, "__init__", _refuse_to_build)
+    monkeypatch.setattr(Vector3, "__init__", _refuse_to_build)
+
+    assert is_supported_by(top, center) == expected
+
+
+def test_bodies_nowhere_near_each_other_support_nothing(two_block_world):
+    """
+    Most candidate pairs a detector tick asks about are far apart, and are ruled out
+    without an exact intersection ever being computed.
+    """
+    center, top = two_block_world
+
+    assert not is_supported_by(top, center)
+    assert not is_supported_by(center, top)
+
+
+# %% containment
+@pytest.fixture(scope="function")
+def container_and_content():
+    """
+    A hollow-free box twice the size of the one placed inside it, movable relative to
+    it.
+
+    The inner box's corners sit well inside the outer box's faces, so a test moves it
+    without landing any corner exactly on a boundary.
+    """
+    container = Body(name=PrefixedName("container"))
+    container.collision = ShapeCollection(
+        [
+            Box(
+                scale=Scale(2.0, 2.0, 2.0),
+                origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    reference_frame=container
+                ),
+            )
+        ],
+        reference_frame=container,
+    )
+
+    content = Body(name=PrefixedName("content"))
+    content.collision = ShapeCollection(
+        [
+            Box(
+                scale=Scale(1.0, 1.0, 1.0),
+                origin=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    reference_frame=content
+                ),
+            )
+        ],
+        reference_frame=content,
+    )
+
+    world = World()
+    with world.modify_world():
+        world.add_connection(
+            FixedConnection(
+                parent=container,
+                child=content,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    reference_frame=container
+                ),
+            )
+        )
+    return container, content
+
+
+def _place_content(container: Body, content: Body, z: float) -> None:
+    """
+    Move the inner box to a height above the outer box's own frame.
+    """
+    with container._world.modify_world():
+        content.parent_connection.parent_T_connection_expression = (
+            HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=container, z=z)
+        )
+
+
+def test_a_body_within_another_is_entirely_contained(container_and_content):
+    container, content = container_and_content
+
+    assert InsideOf(content, container)() == 1.0
+
+
+def test_a_body_beyond_another_is_not_contained_at_all(container_and_content):
+    container, content = container_and_content
+    _place_content(container, content, z=5.0)
+
+    assert InsideOf(content, container)() == 0.0
+
+
+def test_a_body_crossing_another_is_contained_in_proportion(container_and_content):
+    """
+    Half the inner box's corners are still inside the outer box once it is lifted far
+    enough that its top face clears the outer box's own.
+    """
+    container, content = container_and_content
+    _place_content(container, content, z=1.0)
+
+    assert InsideOf(content, container)() == 0.5
+
+
+def test_containment_builds_nothing_symbolic(container_and_content, monkeypatch):
+    """
+    Containment is checked against every collidable body on every detector tick, so it
+    must reach its answer without touching CasADi.
+    """
+    container, content = container_and_content
+    _place_content(container, content, z=1.0)
+    expected = InsideOf(content, container)()
+    monkeypatch.setattr(HomogeneousTransformationMatrix, "__init__", _refuse_to_build)
+    monkeypatch.setattr(HomogeneousTransformationMatrix, "to_np", _refuse_to_build)
+    monkeypatch.setattr(Point3, "__init__", _refuse_to_build)
+
+    assert InsideOf(content, container)() == expected

@@ -3,8 +3,10 @@ from __future__ import annotations
 import hashlib
 import logging
 from dataclasses import dataclass, field
+from datetime import datetime
 from functools import cached_property, lru_cache
 from inspect import isclass
+from types import NoneType
 
 import sqlalchemy
 from typing_extensions import (
@@ -33,6 +35,14 @@ if TYPE_CHECKING:
 
 
 logger = logging.getLogger(__name__)
+
+COLUMN_VALUE_TYPES = frozenset({bool, int, float, str, bytes, datetime, NoneType})
+"""
+The types a generated ``Mapped[...]`` annotation resolves to a column type for.
+
+Many other classes live in ``builtins`` -- every exception among them -- and a column
+declared for one of those cannot be built, so a field holding one is left unmapped.
+"""
 
 
 @dataclass
@@ -606,7 +616,11 @@ class WrappedTable:
             logger.info(f"Parsing as type.")
             self.create_type_type_column(wrapped_field)
 
-        elif wrapped_field.is_builtin_type and not wrapped_field.is_container:
+        elif (
+            wrapped_field.is_builtin_type
+            and not wrapped_field.is_container
+            and type_endpoint in COLUMN_VALUE_TYPES
+        ):
             logger.info(f"Parsing as builtin type.")
             self.create_builtin_column(wrapped_field)
 
@@ -791,8 +805,21 @@ class WrappedTable:
         # create a relationship
         rel_name = f"{wrapped_field.field.name}"
 
-        # Use the actual container type from the domain model (e.g., list)
-        container_name = module_and_class_name(wrapped_field.container_type)
+        # SQLAlchemy's relationship() only accepts a mutable collection_class it can
+        # instrument (append/remove/...) -- list, set, dict, or a custom
+        # @collection-decorated class. A domain field typed as a tuple (or any other
+        # immutable container) can't be used directly here; the ORM-managed collection
+        # falls back to list, while the generated Mapped[...] type hint below keeps
+        # showing the field's real domain type. Reconstructing the domain object
+        # (from_dao) still produces the original container type, since that's derived
+        # from the domain dataclass's own field type, not from this collection_class.
+        sqlalchemy_collection_type = (
+            list
+            if isclass(wrapped_field.container_type)
+            and issubclass(wrapped_field.container_type, tuple)
+            else wrapped_field.container_type
+        )
+        container_name = module_and_class_name(sqlalchemy_collection_type)
 
         # Association Object pattern
         rel_type = f"Mapped[{module_and_class_name(wrapped_field.container_type)}[{association_table.name}]]"

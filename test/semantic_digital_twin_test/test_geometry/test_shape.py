@@ -349,6 +349,38 @@ def test_mesh_volume(tmp_path):
     assert mesh.volume == pytest.approx(8.0)
 
 
+# %% the surface a shape spans
+
+
+def test_box_surface_area():
+    assert Box(scale=Scale(0.5, 2.0, 3.0)).surface_area == pytest.approx(
+        2.0 * (0.5 * 2.0 + 2.0 * 3.0 + 3.0 * 0.5)
+    )
+
+
+def test_sphere_surface_area():
+    assert Sphere(radius=2.0).surface_area == pytest.approx(4.0 * math.pi * 4.0)
+
+
+def test_cylinder_surface_area():
+    """
+    A cylinder's surface follows from the circle its width spans, not from the polygon
+    its mesh approximates that circle with.
+    """
+    cylinder = Cylinder(width=2.0, height=3.0)
+
+    assert cylinder.surface_area == pytest.approx(2.0 * math.pi * (1.0 + 3.0))
+    assert cylinder.surface_area > cylinder.mesh.area
+
+
+def test_mesh_surface_area(tmp_path):
+    source = trimesh.creation.box(extents=(1.0, 2.0, 4.0))
+
+    mesh = Mesh.from_trimesh(mesh=source, directory=tmp_path, file_type="stl")
+
+    assert mesh.surface_area == pytest.approx(2.0 * (2.0 + 8.0 + 4.0))
+
+
 # %% the units a mesh file declares
 
 

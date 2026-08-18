@@ -457,7 +457,7 @@ The resolver is passed to the renderer at construction (via the `VerbalizationPi
 | VerbalizationFragment IR | `fragments/base.py` (the `VerbalizationFragment` hierarchy + `fold_fragment` / `map_structural_children` / `map_fragment` / `oxford_comma` / `flatten_fragment_to_plain_text`), `fragments/features.py`, `fragments/roles.py`, `fragments/source_reference.py` |
 | Lexicon | `vocabulary/english.py`, `vocabulary/words.py` — **all** English words/phrases/punctuation |
 | Grammar framework | `grammar/framework/` — `phrase_rule` (`PhraseRule`, `RuleContext`, `select`), `registry` (`RULES`, auto-discovered by walking the grammar package), `specificity` (`SpecificityRule`, `most_applicable`, and the shared `concrete_subclasses` / `most_specific` / `mro_depth` selection primitives), `assembler` (`Assembler` base), `planner` (`Planner` base) |
-| Grammar (per construct) | `grammar/<construct>/` — `terms`, `chain`, `conditions`, `query`, `inference`, `aggregation`, `clauses`, `instantiated`, `match`; each has `rules.py`, and the involved ones a `planner.py` + `assembler.py` |
+| Grammar (per construct) | `grammar/<construct>/` — `terms`, `chain`, `conditions`, `conditionals`, `query`, `inference`, `aggregation`, `clauses`, `instantiated`, `match`; each has `rules.py`, and the involved ones a `planner.py` + `assembler.py` |
 | Conditions | `grammar/conditions/` — `rules` (entry `PhraseRule`s), `assembler` (`ConditionAssembler` surface-form toolkit), `predication` (`PredicateTransform` registry + operator-word selection `comparator_operator` / `coindexed_operator` + `render_absence`), `placement` (`ConditionForm` registry, `Slot`, `place` / `as_subject_restrictions`), `subject` (`RestrictionSubjectRule`, `restriction_subject`), `recognition` (structural recognizers) |
 | Microplanning | `microplanning/` — `referring`, `binding_scope`, `config` (`RenderConfiguration`), `microplan` (`Microplan`), `coordination`, `possessive` |
 | Rendering | `rendering/` — `realization` (the passes), `coreference_processor`, `determiner_processor`, `morphology_processor`, `orthography_processor`, `discourse` (`DiscourseModel`), `renderer`, `formatter`, `source_link_resolver` |
@@ -551,7 +551,7 @@ text = VerbalizationPipeline(ParagraphRenderer(MarkdownFormatter())).verbalize(q
 
 ### Vocabulary (lexicon)
 
-- {py:class}`~krrood.entity_query_language.verbalization.vocabulary.english.Keywords` / `Logicals` / `Aggregations` / `Copulas` / `Operators` / `Articles` / `Prepositions` / `Conjunctions` / `Punctuation` / `Pronouns` / `RangePhrases` / `CoindexedOperators` / `CoindexedPhrases` / `Absence` / `NonExistence` / `SetMembership` / `Specificity` / `ExistentialPhrase` / `FallbackNouns`
+- {py:class}`~krrood.entity_query_language.verbalization.vocabulary.english.Keywords` / `Logicals` / `Aggregations` / `Copulas` / `Operators` / `Articles` / `Prepositions` / `Conjunctions` / `Punctuation` / `Pronouns` / `RangePhrases` / `ConditionalPhrases` / `CoindexedOperators` / `CoindexedPhrases` / `Absence` / `NonExistence` / `SetMembership` / `Specificity` / `ExistentialPhrase` / `FallbackNouns`
 - {py:class}`~krrood.entity_query_language.verbalization.vocabulary.words.PlainWord` / `RoleWord` / `VocabEnum`
 
 ## References
