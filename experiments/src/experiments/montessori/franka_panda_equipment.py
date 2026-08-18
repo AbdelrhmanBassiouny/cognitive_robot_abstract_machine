@@ -46,10 +46,12 @@ The one MJCF this repo has for the Panda: its body tree, gripper, and mesh refer
 shared with ``coraplex_panda_demo``'s own cube-stacking demo.
 """
 
-
+PANDA_SCENE_BODIES_TO_DISCARD = frozenset(
+    {"target", "cube0", "cube1", "cube2", "cube3", "floor", "stack_pad"}
+)
 """
-Bodies of :data:`PANDA_SCENE_PATH` that belong to its own cube-stacking task rather than
-to the robot, dropped so only the Panda itself is merged into another scene.
+Bodies of the cube-stacking task the Panda's MJCF used to be shared with. They were
+stripped out of :data:`PANDA_SCENE_PATH` when it moved, so a parse holds only the robot.
 """
 
 PANDA_MOUNT_ROOT_NAME = PrefixedName("panda_mount", "montessori")

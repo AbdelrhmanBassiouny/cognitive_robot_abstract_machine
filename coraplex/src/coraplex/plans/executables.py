@@ -19,7 +19,7 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
 from giskardpy.motion_statechart.goals.templates import Sequence
 from giskardpy.motion_statechart.graph_node import EndMotion, Task
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
-from giskardpy.executor import Pacer, SimulationPacer, SimulationTimePacer
+from giskardpy.executor import NoPacing, Pacer, RealTimePacer, SimulationTimePacer
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from giskardpy.ros_executor import Ros2Executor
 from krrood.entity_query_language.factories import evaluate_condition
@@ -331,7 +331,8 @@ class GiskardExecutable(Executable):
     def _build_pacer(self) -> Pacer:
         """
         The pacer for the control loop: simulated time when the context knows
-        how to read a simulation clock, wall-clock time otherwise.
+        how to read a simulation clock, otherwise wall-clock time if
+        ``real_time_pacing`` is on and no pacing at all if it is not.
 
         Pacing against a simulation that cannot hold real time keeps one
         control cycle of simulation between commands, rather than letting the
@@ -339,13 +340,10 @@ class GiskardExecutable(Executable):
         be lagging.
         """
         if self.context.simulation_clock is not None:
-            return SimulationTimePacer(
-                target_frequency=50,
-                simulation_clock=self.context.simulation_clock,
-            )
-        return SimulationPacer(
-            real_time_factor=1.0 if GiskardExecutable.real_time_pacing else None
-        )
+            return SimulationTimePacer(simulation_clock=self.context.simulation_clock)
+        if GiskardExecutable.real_time_pacing:
+            return RealTimePacer()
+        return NoPacing()
 
     def _execute_simulation(self) -> None:
         """
