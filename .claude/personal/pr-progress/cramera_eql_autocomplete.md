@@ -220,10 +220,13 @@ Both outstanding items resolved later the same day:
   GitHub-stack member (stack #166), so a plain base change would 422; followed
   the stacked-pr-maintenance dissolve procedure: recorded the stack list
   (scratchpad `stacks-before-unstack.json`), `POST /stacks/166/unstack`,
-  `gh pr edit 164 --base cramera_eql_autocomplete`, re-created as **stack #172**
-  (`cramera_eql_autocomplete` -> #164 -> #165 -> #167 -> #168, confirmed on every
-  member). #164's diff is clean: 2 commits, 15 files. Stack #171
-  (`main` -> #169 -> #170) untouched.
+  `gh pr edit 164 --base cramera_eql_autocomplete`, re-created as stack #172
+  (`cramera_eql_autocomplete` -> #164 -> #165 -> #167 -> #168). #164's diff is
+  clean: 2 commits, 15 files. The developer then asked for one unified stack, so
+  #171 (`main` -> #169 -> #170) and #172 were both dissolved and re-created as
+  **stack #173**: `main` -> #169 -> #170 -> #164 -> #165 -> #167 -> #168, size 6,
+  confirmed on every member (records in scratchpad `stacks-before-unstack.json`
+  and `stacks-before-merge.json`).
 - **`rapidfuzz` was a false alarm**: it *is* declared, in
   `cramera/requirements.txt`, which is where `cramera/pyproject.toml` sources
   its dynamic dependencies. Only the local cram2 venv predated the branch;
