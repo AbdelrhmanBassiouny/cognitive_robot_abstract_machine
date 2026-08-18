@@ -1128,3 +1128,40 @@ neither of, so it is left to CI. Running anything at all there took a Python 3.1
 virtualenv built by hand (the repo uses 3.12 syntax, the container ships 3.11) plus
 stand-ins for the ROS packages on the import path -- worth knowing for any session
 that lands in the same container.
+
+## 2026-08-18: more questions, and a matcher tie-break they exposed
+
+The developer asked for the voice matcher to recognize and answer more questions:
+"what is your current goal?", "what is your current action?", "what actions did
+you perform?", and "give me all pick up events" for any event type, and likewise
+for actions (session: this one, on
+`claude/cramera-voice-questions-ttwcza`). The first three are live-only buttons
+(the recorded bundle answers about a run that is over); the per-type questions
+are written out per ask and matched but never shown as buttons, via the new
+`LiveQuerySource.unlisted_presets()` beside `presets()`.
+
+### What the current-action answer needed
+
+An attempt's actions are only recorded once the attempt finishes, so a question
+about what the robot is doing now has to read the plan while it performs.
+`SortingProgress.follow_plan(plan, shape_key, attempt_number)` holds the
+performing attempt, and `actions()` returns the finished attempts' frozen
+`PerformedAction`s plus the performing plan's own, with the innermost RUNNING
+node marked `is_current` (an expanding action leaves every node down the chain
+running). The demo hands the plan over in `_perform_attempt_plan`, right after
+`execute_single` and before `node.perform()`.
+
+### The matcher tie-break, and how it was caught
+
+`token_set_ratio` scores any wording that *contains* the asked words at 100, so
+"give me all pick up actions" ties with "give me all move and pick up actions"
+and lost the tie by list order once the transporting actions were imported. The
+matcher's inputs change with what a run has imported, which is why the unit
+tests never saw it - only the full experiments suite did, where
+`test_montessori_insert_shape_action.py`'s imports sit ahead of the matcher
+tests. `QuestionMatcher` now pairs the score with how many words the wording
+added beyond the question's own, and prefers the more specific wording on a tie
+- the general shape being: a test of one module cannot promise how its
+behaviour behaves once the whole workspace is imported, and class-tree-walking
+features (here `instantiable_subclasses`) are exactly where import order bites.
+
