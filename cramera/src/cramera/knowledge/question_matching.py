@@ -12,7 +12,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 
 from rapidfuzz import fuzz, utils
-from typing_extensions import Any, Dict, List, Optional
+from typing_extensions import Any, Dict, List, Optional, Tuple
 
 from cramera.knowledge.presets import Preset
 from cramera.payload import CrameraPayload
@@ -99,34 +99,47 @@ class QuestionMatcher:
         :param text: The question as asked, in natural language.
         """
         best: Optional[Preset] = None
-        best_similarity = 0.0
+        best_pair = (0.0, -1.0)
         for preset in self.presets:
-            similarity = self._similarity(text, preset)
-            if similarity > best_similarity:
-                best, best_similarity = preset, similarity
+            pair = self._comparison(text, preset)
+            if pair > best_pair:
+                best, best_pair = preset, pair
+        best_similarity = best_pair[0]
         if best is None or best_similarity < self.minimum_similarity:
             return QuestionMatchResult(preset=None, similarity=best_similarity)
         return QuestionMatchResult(preset=best, similarity=best_similarity)
 
     @staticmethod
-    def _similarity(text: str, preset: Preset) -> float:
+    def _comparison(text: str, preset: Preset) -> Tuple[float, float]:
         """
-        Similarity (0–100) between the asked question and one preset's wording.
+        How well the asked question names one preset: its best word-overlap score, and
+        how many of the words scoring it were its own.
 
         A preset is worded twice — its query's verbalization and the label on its
         button — and being recognized by either is being recognized.
 
         Scored by word overlap (:func:`rapidfuzz.fuzz.token_set_ratio`), so word
         order and polite framing around the words that matter do not count against a
-        question.
+        question. Word overlap alone ties a question with every wording that contains
+        its words, e.g. "give me all pick up actions" inside "give me all move and pick
+        up actions", so the score is paired with the count of the wording's own words
+        and a match prefers the wording that added the fewest: the more specific one.
 
         :param text: The question as asked, in natural language.
         :param preset: The preset whose wordings the question is compared against.
+        :return: The score, and the negated count of words the best wording added
+            beyond the question's own, so a higher pair means a better, more specific
+            match.
         """
         wordings = [preset.text]
         if preset.verbalization is not None:
             wordings.append(preset.verbalization.text)
-        return max(
-            fuzz.token_set_ratio(text, wording, processor=utils.default_process)
-            for wording in wordings
-        )
+        asked_words = len(utils.default_process(text).split())
+        best = (0.0, 0.0)
+        for wording in wordings:
+            score = fuzz.token_set_ratio(text, wording, processor=utils.default_process)
+            own_words = len(utils.default_process(wording).split())
+            pair = (score, -float(own_words - asked_words))
+            if pair > best:
+                best = pair
+        return best

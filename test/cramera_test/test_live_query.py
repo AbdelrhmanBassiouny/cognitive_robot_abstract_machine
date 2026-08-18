@@ -94,6 +94,14 @@ class GrowingRecordSource(LiveQuerySource):
             ),
         ]
 
+    def unlisted_presets(self) -> List[Preset]:
+        """
+        The one-per-kind question this source recognizes without showing it.
+        """
+        return [
+            Preset("give me all beta samples", "an(entity(record))"),
+        ]
+
 
 @dataclass
 class CurrentStateOnlySource(LiveQuerySource):
@@ -213,6 +221,36 @@ class TestAskedQuestions:
 
         assert answer.ok
         assert [row["__entity__"] for row in answer.rows] == ["first"]
+
+    def test_a_question_the_panel_does_not_show_is_recognized_too(self, bridge):
+        """
+        A source writes out one question per kind of thing it records, which the panel
+        has no room to show; asking for one still runs it.
+        """
+        result = bridge.match_question("give me all beta samples")
+
+        assert result.matched
+        assert result.preset.text == "give me all beta samples"
+
+    def test_an_unlisted_question_stays_off_the_buttons(self, bridge):
+        assert "give me all beta samples" not in [
+            preset.text for preset in bridge.query_presets()
+        ]
+
+    def test_an_unlisted_question_is_matched_by_its_label_alone(self, bridge):
+        """
+        Wording a question means building its query, which is too much work per asked
+        question for a family the panel never shows.
+        """
+        result = bridge.match_question("give me all beta samples")
+
+        assert result.preset.verbalization is None
+
+    def test_a_source_writing_none_out_is_matched_against_its_buttons(self):
+        live_bridge = Bridge()
+        live_bridge.register_query_source(CurrentStateOnlySource())
+
+        assert not live_bridge.match_question("give me all beta samples").matched
 
     def test_an_unrelated_question_is_refused(self, bridge):
         result = bridge.match_question("what's the weather like today")

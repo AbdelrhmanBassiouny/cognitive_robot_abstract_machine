@@ -287,11 +287,47 @@ def _build_insert_action(
     )
 
 
+def _perform_attempt_plan(
+    action: InsertMontessoriShapeAction,
+    context,
+    progress: SortingProgress,
+    attempt: int,
+) -> None:
+    """
+    Perform one attempt's plan, handing it to the live record the moment it exists.
+
+    An attempt's actions are only recorded once it is over, so the plan itself is what a
+    question about which action the robot is carrying out is answered from while it
+    runs.
+
+    :param action: The insertion plan to run, built by :func:`_build_insert_action`.
+    :param context: The CRAM execution context to run the insertion action in.
+    :param progress: The live record the plan is followed in.
+    :param attempt: This attempt's 1-based index, which its actions are recorded under.
+    """
+    from coraplex.plans.factories import execute_single
+
+    node = execute_single(action, context=context)
+    progress.follow_plan(node.plan, action.montessori_shape.shape_key, attempt)
+    # Temporary diagnostic: simulated-time span of the whole pick+place action, as a
+    # proxy for how much the arm hovers/corrects near its Cartesian goals rather than
+    # converging directly onto them.
+    insertion_start_time = context.simulation_clock()
+    node.perform()
+    logger.info(
+        "%s insertion action took %.3fs of simulated time.",
+        action.montessori_shape.name,
+        context.simulation_clock() - insertion_start_time,
+    )
+
+
 def _insert_shape(
     action: InsertMontessoriShapeAction,
     montessori: MontessoriWorld,
     context,
     monitor: WatchesForEvents,
+    progress: SortingProgress,
+    attempt: int,
 ) -> bool:
     """
     Run ``action``, then let the shape physically settle under gravity and contacts
@@ -311,6 +347,9 @@ def _insert_shape(
         settle window, which no motion executes in, so its own
         :class:`~experiments.montessori.event_monitoring.ControlCycleTicking` gets no
         control cycle to tick from.
+    :param progress: The live record, handed this attempt's plan the moment it exists so
+        the viewer can be asked which action the robot is carrying out.
+    :param attempt: This attempt's 1-based index, which its actions are recorded under.
     :raises BodyUnfetchable: If the shape moved less than :data:`MINIMUM_PICKUP_DISPLACEMENT`
         over the whole insertion, i.e. the grasp silently failed to pick it up at all.
 
@@ -331,7 +370,6 @@ def _insert_shape(
     """
     from coraplex.datastructures.enums import ExecutionType
     from coraplex.execution_environment import ExecutionEnvironment
-    from coraplex.plans.factories import execute_single
     from coraplex.plans.failures import BodyUnfetchable
 
     shape = action.montessori_shape
@@ -346,18 +384,7 @@ def _insert_shape(
         # to a fraction of the default (2000 * 12 ticks).
         max_ticks_per_motion_mapping=300,
     ):
-        node = execute_single(action, context=context)
-        # Temporary diagnostic: simulated-time span of the whole pick+place action, as
-        # a proxy for how much the arm hovers/corrects near its Cartesian goals rather
-        # than converging directly onto them.
-        insertion_start_time = context.simulation_clock()
-        node.perform()
-        insertion_duration = context.simulation_clock() - insertion_start_time
-        logger.info(
-            "%s insertion action took %.3fs of simulated time.",
-            shape.name,
-            insertion_duration,
-        )
+        _perform_attempt_plan(action, context, progress, attempt)
 
     montessori.world.update_forward_kinematics()
     release_position = shape.root.global_transform.to_position()
@@ -420,6 +447,7 @@ def _insert_shape_or_none(
     context,
     attempt: int,
     monitor: WatchesForEvents,
+    progress: SortingProgress,
 ) -> tuple[Optional[bool], InsertMontessoriShapeAction, Optional[BaseException]]:
     """
     Attempt one insertion via :func:`_insert_shape`, returning ``None`` instead of
@@ -432,6 +460,7 @@ def _insert_shape_or_none(
     :param attempt: This attempt's 1-based index, used only for the log message.
     :param monitor: Watches the shape for pick-up and insertion, ticked through the
         settle window by :func:`_insert_shape`.
+    :param progress: The live record this attempt's plan is followed in.
     :return: Whether the shape fell through its hole (``None`` if this attempt failed in
         a retryable way), the plan this attempt ran, for the caller to record regardless
         of outcome, and the failure itself, which is the only record of what went wrong
@@ -445,7 +474,8 @@ def _insert_shape_or_none(
 
     action = _build_insert_action(shape, montessori)
     try:
-        return _insert_shape(action, montessori, context, monitor), action, None
+        result = _insert_shape(action, montessori, context, monitor, progress, attempt)
+        return result, action, None
     except (
         PointOccupiedError,
         PlanFailure,
@@ -630,7 +660,7 @@ def _insert_all_shapes(
             )
             attempt_start_times.append(datetime.now())
             fell_through, action, failure = _insert_shape_or_none(
-                shape, montessori, context, attempt, event_monitor
+                shape, montessori, context, attempt, event_monitor, progress
             )
             actions.append(action)
             failures.append(failure)

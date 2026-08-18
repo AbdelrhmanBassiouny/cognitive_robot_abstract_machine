@@ -146,3 +146,36 @@ class TestMatchPayloads:
     def test_matched_is_the_presets_presence(self):
         assert QuestionMatchResult(preset=ROBOT_PRESET, similarity=90.0).matched
         assert not QuestionMatchResult(preset=None, similarity=10.0).matched
+
+
+# %% one question asked within another's words
+class TestAShorterWordingWinsATie:
+    def test_a_question_whose_words_sit_inside_anothers_is_the_one_recognized(self):
+        """
+        "give me all pick up actions" is word for word inside "give me all move and pick
+        up actions", so both score a perfect word overlap; the shorter wording is the
+        more specific one and has to win the tie.
+        """
+        exact = Preset("give me all pick up actions", "the pick up actions")
+        containing = Preset(
+            "give me all move and pick up actions", "the move and pick up actions"
+        )
+        matcher = QuestionMatcher([containing, exact])
+
+        result = matcher.match("give me all pick up actions")
+
+        assert result.preset == exact
+
+    def test_a_longer_question_still_names_the_shorter_wording_it_contains(self):
+        """
+        The tie-break prefers the more specific wording only; asking with extra polite
+        framing around it is still the same question.
+        """
+        exact = Preset("give me all pick up actions", "the pick up actions")
+        matcher = QuestionMatcher(
+            [Preset("give me all move and pick up actions", "the other"), exact]
+        )
+
+        result = matcher.match("please give me all pick up actions now")
+
+        assert result.preset == exact

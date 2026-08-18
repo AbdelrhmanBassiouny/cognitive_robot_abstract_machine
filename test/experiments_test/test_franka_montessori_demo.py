@@ -8,6 +8,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+from coraplex.datastructures.enums import Arms
+from coraplex.plans.factories import sequential
+from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from cramera.live.run_control import RunCommand
 
 from experiments.montessori import franka_montessori_demo
@@ -166,7 +169,7 @@ def test_a_retryable_failure_is_returned_rather_than_only_logged(monkeypatch):
         shape = cube_at(world, Point3(0.0, 0.0, 0.08))
     failure = PointOccupiedError(point=None)
 
-    def fail(action, montessori, context, monitor):
+    def fail(action, montessori, context, monitor, progress, attempt):
         raise failure
 
     monkeypatch.setattr(franka_montessori_demo, "_insert_shape", fail)
@@ -175,11 +178,91 @@ def test_a_retryable_failure_is_returned_rather_than_only_logged(monkeypatch):
     )
 
     fell_through, _, raised = franka_montessori_demo._insert_shape_or_none(
-        shape=shape, montessori=None, context=None, attempt=1, monitor=None
+        shape=shape,
+        montessori=None,
+        context=None,
+        attempt=1,
+        monitor=None,
+        progress=SortingProgress(),
     )
 
     assert fell_through is None
     assert raised is failure
+
+
+# %% the plan is followed while it performs
+
+
+class PerformsNothing:
+    """
+    A plan node that records having been performed instead of moving a robot.
+    """
+
+    def __init__(self, plan):
+        self.plan = plan
+        self.performed = False
+
+    def perform(self):
+        """
+        Stand in for the motion the real node would execute.
+        """
+        self.performed = True
+
+
+class InsertionToPerform:
+    """
+    An insertion action reduced to the shape whose attempt its plan is followed under.
+    """
+
+    def __init__(self, montessori_shape):
+        self.montessori_shape = montessori_shape
+
+
+class ClockThatNeverMoves:
+    """
+    An execution context whose simulated clock stands still, so the timing diagnostic
+    the performed plan logs has something to read.
+    """
+
+    @staticmethod
+    def simulation_clock() -> float:
+        """
+        The simulated time, which never advances here.
+        """
+        return 0.0
+
+
+def test_the_plan_is_followed_before_it_is_performed(monkeypatch):
+    """
+    An attempt's actions are only recorded once it is over, so the record has to be
+    handed the plan while it can still be asked what the robot is doing.
+    """
+    world = World()
+    with world.modify_world():
+        world.add_body(Body(name=PrefixedName("root")))
+        board, _ = board_with_one_hole(world, Point3(0.0, 0.0, 0.05))
+        shape = cube_at(world, Point3(0.0, 0.0, 0.08))
+    progress = SortingProgress()
+    progress.begin_shape(shape, board, world)
+    performing = sequential([ParkArmsAction(Arms.BOTH)]).plan
+    followed_before_performing = []
+
+    def hand_back_the_plan(action, context):
+        node = PerformsNothing(performing)
+        followed_before_performing.append(node)
+        return node
+
+    monkeypatch.setattr("coraplex.plans.factories.execute_single", hand_back_the_plan)
+    franka_montessori_demo._perform_attempt_plan(
+        InsertionToPerform(shape), ClockThatNeverMoves(), progress, 3
+    )
+
+    [node] = followed_before_performing
+    assert node.performed is True
+    assert [performed.attempt_number for performed in progress.actions] == [3]
+    assert [performed.action_type for performed in progress.actions] == [
+        ParkArmsAction.__name__
+    ]
 
 
 # %% driving the run from the viewer

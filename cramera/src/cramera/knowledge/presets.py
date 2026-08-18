@@ -4,6 +4,7 @@ Ready-made EQL queries for the EQL panel.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, replace
 from typing import Tuple
 
@@ -17,6 +18,13 @@ from cramera.knowledge.scene_bundle import SceneBundle
 
 if TYPE_CHECKING:
     from cramera.knowledge.query_runner import EqlQueryRunner
+
+
+WORD_START = re.compile(r"(?<!^)(?=[A-Z])")
+"""
+Where a word begins inside a camel-case class name, which is where a space belongs when
+that name is said out loud.
+"""
 
 
 @dataclass
@@ -165,6 +173,65 @@ class Preset:
                     )
                 )
         return presets
+
+
+@dataclass(frozen=True)
+class PresetsPerType:
+    """
+    The same question asked once per type a record can be, e.g. "give me all pick up
+    events" for every kind of event a demo detects.
+
+    Written out rather than shown as buttons: a panel has room for the question, not for
+    one button per type it can name.
+    """
+
+    class_suffix: str
+    """
+    The word every one of these types' class names ends in, e.g. ``"Event"``.
+    """
+
+    class_names: Tuple[str, ...]
+    """
+    The class name of every type a question may name.
+    """
+
+    code: str
+    """
+    The query answering the question, with ``%s`` for the type's class name.
+    """
+
+    scope: QueryScope = QueryScope.CURRENT_STATE
+    """
+    Which body of knowledge these questions are about.
+    """
+
+    def questions(self) -> List[Preset]:
+        """
+        One question per type, worded the way it is asked out loud.
+        """
+        return [
+            Preset(
+                "give me all %s %s" % (self._spoken_type(name), self._plural_noun),
+                self.code % name,
+                scope=self.scope,
+            )
+            for name in self.class_names
+        ]
+
+    @property
+    def _plural_noun(self) -> str:
+        """
+        What several of these records are called out loud, e.g. ``"events"``.
+        """
+        return self.class_suffix.lower() + "s"
+
+    def _spoken_type(self, class_name: str) -> str:
+        """
+        One type as a question names it: ``"PickUpEvent"`` becomes ``"pick up"``.
+
+        :param class_name: The type's class name.
+        """
+        return WORD_START.sub(" ", class_name[: -len(self.class_suffix)]).lower()
 
 
 ARCHITECTURE_PRESETS: Tuple[Preset, ...] = (

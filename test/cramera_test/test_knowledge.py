@@ -21,7 +21,12 @@ from cramera.knowledge.eql_session import EqlSession  # noqa: E402
 from cramera.knowledge.query_runner import RowRenderer  # noqa: E402
 from cramera.knowledge.graph_payload import KnowledgeGraphPayload  # noqa: E402
 from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase  # noqa: E402
-from cramera.knowledge.presets import ARCHITECTURE_PRESETS, Preset  # noqa: E402
+from cramera.knowledge.presets import (  # noqa: E402
+    ARCHITECTURE_PRESETS,
+    Preset,
+    PresetsPerType,
+)
+from cramera.knowledge.queryable_knowledge import QueryScope  # noqa: E402
 from cramera.knowledge.views.architecture import SubgraphViewPayload  # noqa: E402
 from cramera.knowledge.views.dispatcher import GraphPanelViews  # noqa: E402
 from cramera.knowledge.views.plan_tree import PlanViewPayload  # noqa: E402
@@ -1019,3 +1024,48 @@ class TestPresetSmoke:
             result = EqlSession.of_active_scene().run(preset.code)
             assert result.ok, "%s: %s" % (preset.text, result)
             assert result.count == len(result.rows)
+
+
+# %% one question per type a record can be
+class TestPresetsPerType:
+    """
+    A question that names one type out of many is worth recognizing for every type,
+    which is what :class:`PresetsPerType` writes out.
+    """
+
+    def test_a_camel_case_class_name_is_asked_for_in_plain_words(self):
+        questions = PresetsPerType(
+            class_suffix="Event",
+            class_names=("PickUpEvent", "LossOfContainmentEvent"),
+            code="an(entity(event).where(event.event_type == '%s'))",
+        ).questions()
+
+        assert [question.text for question in questions] == [
+            "give me all pick up events",
+            "give me all loss of containment events",
+        ]
+
+    def test_each_question_names_its_own_type_in_the_query(self):
+        [question] = PresetsPerType(
+            class_suffix="Action",
+            class_names=("PickUpAction",),
+            code="an(entity(action).where(action.action_type == '%s'))",
+        ).questions()
+
+        assert (
+            question.code
+            == "an(entity(action).where(action.action_type == 'PickUpAction'))"
+        )
+
+    def test_every_question_is_about_the_scope_the_family_declares(self):
+        questions = PresetsPerType(
+            class_suffix="Event",
+            class_names=("PickUpEvent", "InsertionEvent"),
+            code="an(entity(event).where(event.event_type == '%s'))",
+            scope=QueryScope.DETECTED_EVENTS,
+        ).questions()
+
+        assert [question.scope for question in questions] == [
+            QueryScope.DETECTED_EVENTS,
+            QueryScope.DETECTED_EVENTS,
+        ]

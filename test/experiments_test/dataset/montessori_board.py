@@ -70,14 +70,18 @@ def board_with_one_hole(world: World, hole_position: Point3):
     return board, hole
 
 
-def cube_at(world: World, position: Point3) -> MontessoriShape:
+def cube_at(
+    world: World, position: Point3, shape_key: str = SHAPE_KEY
+) -> MontessoriShape:
     """
     A cube small enough to pass the hole, spawned at ``position``.
 
     :param world: The world to build it in.
     :param position: Where the cube sits, in the world root frame.
+    :param shape_key: The key pairing the cube with its hole, which a second cube in the
+        same world needs its own of.
     """
-    name = SHAPE_KEY + "_shape"
+    name = shape_key + "_shape"
     body = Body.from_shape_collection(
         PrefixedName(name), ShapeCollection([Box(scale=Scale(0.03, 0.03, 0.03))])
     )
