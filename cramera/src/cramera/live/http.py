@@ -20,6 +20,8 @@ HTTP endpoints of the live bridge (default port 8765).
     GET /presets {ok, title, presets: [{text, code, scope}],
                   scopes: [{name, label, variables}], variables: [name]}
     GET /run     {ok, title, paused, looping, restart_pending, activity, iteration}
+    GET /events  {ok, title, events: [{kind, detected_at, participants}]}
+                  (detected_at in seconds since the epoch)
     POST /eql    {code, scope} -> the rendered answer rows
     POST /run    {command} -> the run state that command produced
     POST /move   queue an object move (applied on the simulation thread)
@@ -47,6 +49,7 @@ from typing_extensions import Any, Dict, Optional
 
 from cramera.logging_setup import get_logger
 from cramera.live.bridge import Bridge, MalformedMoveRequest, MoveRequest
+from cramera.live.events import NoEventSourceRegistered
 from cramera.knowledge.queryable_knowledge import QueryScope, UnknownQueryScope
 from cramera.live.query import NoQuerySourceRegistered
 from cramera.live.run_control import (
@@ -131,6 +134,8 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_query_presets()
         if self.path.startswith("/run"):
             return self._send_run_control_state()
+        if self.path.startswith("/events"):
+            return self._send_detected_events()
         if self.path.startswith("/info"):
             return self._send_json(self.bridge.status())
         self.send_response(404)
@@ -167,6 +172,16 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             payload = {"ok": True, **self.bridge.run_control_payload()}
         except NoRunControlRegistered as error:
             payload = {"ok": False, "error": str(error)}
+        self._send_json(payload)
+
+    def _send_detected_events(self) -> None:
+        """
+        Serve what the running demo has detected, or say why nothing is being watched.
+        """
+        try:
+            payload = {"ok": True, **self.bridge.event_payload()}
+        except NoEventSourceRegistered as error:
+            payload = {"ok": False, "error": str(error), "events": []}
         self._send_json(payload)
 
     def _query_value(self, name: str) -> Optional[str]:

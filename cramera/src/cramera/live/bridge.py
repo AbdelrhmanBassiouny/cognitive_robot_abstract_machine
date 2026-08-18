@@ -70,6 +70,7 @@ from cramera.knowledge.queryable_knowledge import (
 )
 from cramera.live.model_source import LiveModelCatalog
 from cramera.live.query import LiveQuerySource, NoQuerySourceRegistered
+from cramera.live.events import LiveEventSource, NoEventSourceRegistered
 from cramera.live.run_control import (
     LiveRunControl,
     NoRunControlRegistered,
@@ -584,6 +585,12 @@ class BridgeStatus:
     plan: bool
     chart: bool
     query: bool
+    events: bool
+    """
+    Whether a demo offered to say what it has detected, so the timeline knows there is
+    anything to poll for.
+    """
+
     control: Optional[Dict[str, Any]]
     """
     The registered run control's published state, or None when nothing can be driven.
@@ -781,6 +788,12 @@ class Bridge:
     run_control: Optional[LiveRunControl] = None
     """
     What the running demo offers to be driven by, once it registers itself.
+    """
+
+    event_source: Optional[LiveEventSource] = None
+    """
+    What the running demo offers to be asked about its detections, once it registers
+    itself.
     """
 
     _run_control_lock: threading.Lock = field(default_factory=threading.Lock)
@@ -1002,6 +1015,7 @@ class Bridge:
                 plan=bool(self.plan_state.nodes),
                 chart=bool(self.chart_state.nodes),
                 query=self.query_source is not None,
+                events=self.event_source is not None,
                 control=control,
                 sequence_number=self.sequence_number,
                 robot_parts=(
@@ -1156,6 +1170,38 @@ class Bridge:
             payload = control.state().to_payload()
         payload["title"] = control.title()
         return payload
+
+    # %% viewer -> what the run has detected
+    def register_event_source(self, source: LiveEventSource) -> None:
+        """
+        Offer what the running demo detects to the viewer's timeline.
+
+        :param source: What the demo declares as its detections.
+        """
+        self.event_source = source
+        logger.info("detected events reported by '%s'", source.title())
+
+    def _registered_event_source(self) -> LiveEventSource:
+        """
+        The registered event source.
+
+        :raises NoEventSourceRegistered: When no demo offered one.
+        """
+        if self.event_source is None:
+            raise NoEventSourceRegistered()
+        return self.event_source
+
+    def event_payload(self) -> Dict[str, Any]:
+        """
+        The detections and the name of the run they belong to, as the timeline reads it.
+
+        :raises NoEventSourceRegistered: When no demo offered one.
+        """
+        source = self._registered_event_source()
+        return {
+            "title": source.title(),
+            "events": [event.to_payload() for event in source.events()],
+        }
 
     # %% viewer -> world
     def queue_move(self, request: MoveRequest) -> None:
