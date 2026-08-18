@@ -432,3 +432,76 @@ new tip carries it up the stack. Nothing was pushed to `cram2` -- the same
 latent krrood bug is on `cram2/main`, reachable by any dataclass field typed
 with a builtin SQLAlchemy has no column type for.
 
+
+## 2026-08-18: main again, and the whole stack restacked behind it
+
+`main` reached `90c241168`, 23 commits past the `e198ea36` #169 had merged that
+morning, and #169 went `dirty` again. A `stacked-pr-maintenance` pass reported the
+one conflicting file on the pull request, labelled it `needs-resolution` and skipped
+it — the pass never resolves a conflict — but it did restack every dependent onto
+#169's pre-merge tip `9877e5b99` first, so this round only had to redo that cascade
+once the tip moved.
+
+### The conflict was one method, and its answer was already on file
+
+`Body.has_collision`, for the third time this stack has touched it. #169 read
+`shape.volume` and `shape.surface_area`; `main`'s `208cf0e4` short-circuits on volume
+and then falls back to `shape.mesh.area`. That is the same collision the "has_collision
+follow-up" section above records for #170, and the resolution it settled on — main's
+short-circuit shape, `surface_area` for the surface, reworded note — was already
+sitting on #170 as `73abaf67`. So the merge took #170's file verbatim; the two
+branches' copies of `world_entity.py` are now byte-identical.
+
+Its test half came down too, in `f44c76d73`. `main`'s own collision tests cover the
+volume short-circuit but not the surface one, so without `forbid_mesh_building` and
+`test_flat_shape_needs_no_mesh` #169 would have carried the `surface_area` line with
+nothing pinning it — and `test_world.py` would have differed from #170's for no
+reason. Bringing them down made both files identical across the two branches, which
+is why every merge above #169 came out content-neutral.
+
+### The undefined-name scan, third time
+
+`pyflakes` over the 17 non-generated `.py` files main's side touched, minus each
+parent's own findings: nothing new. Compare line numbers stripped, not raw — a
+`world_setup` fixture-shadow warning that `main` shifts by a few lines otherwise
+shows up eighteen times as a false positive. `giskardpy/executor.py`, the file this
+check exists for, merged additively this time; #169 already spelled its field
+`float | None`.
+
+### Restacked
+
+`#169 f44c76d73` → `#170 e72937047` → `#164 7d58c8161` → `#165 b76c8ede8` →
+`#167 aefd9522d` → `#168 b846d2910`, plus `#175 c97594bc4` off #169 directly. Merged,
+not rebased, for the reasons the previous round records. #170 through #168 already
+contained both `main` and #169's old tip, so those five merges changed no content at
+all — `git diff origin/<branch>..HEAD` empty on each. #175 took `main` for the first
+time and came out clean, because #169 now carries the `has_collision` resolution it
+would otherwise have hit: a `git merge-tree` before the round predicted exactly that
+one conflict on #175 and no other.
+
+Every pull request is mergeable and still a draft; #169's `needs-resolution` label
+was cleared once GitHub stopped reporting it dirty.
+
+### Not verified here
+
+No suite was run. This container has no cram workspace — no `sqlalchemy`, no
+installed packages, and `test_world.py` needs ROS's `ament_index_python` — so
+verification was static: the conflict resolved to a file byte-identical to a tip that
+has been tested, `scripts/format_docstrings.py` clean, byte-compilation of everything
+the merge touched, the pyflakes differential above, and `git diff` proving each
+restacked branch's own diff unchanged. CI on the pushed tips is the real check.
+
+### Still red on #169, and still the developer's
+
+`test/coraplex_test/test_warehouse_storage_layout.py` and
+`test_wind_farm_service_layout.py` (from `08257863`) import
+`coraplex_warehouse_storage_demo` and `coraplex_wind_farm_service_demo`, two demo
+directories that were never committed — eight collection errors. Unchanged by this
+round. The other blocker that section listed is gone: `9877e5b99` restored
+`PickUpAction`'s `AttachNode` and `PlacingAction`'s `DetachNode` behind
+`Context.update_world_model_attachment`, the flag all three montessori demos were
+already setting and nothing read.
+
+### Session note
+
+Subscribing to tracking issue #174 worked this time.

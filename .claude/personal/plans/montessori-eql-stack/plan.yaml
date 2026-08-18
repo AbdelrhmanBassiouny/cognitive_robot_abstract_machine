@@ -14,9 +14,11 @@ default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 174
 
 waves:
+
   - id: stack
     name: "The stacked chain"
     description: "A single sequential stack; each item lands on top of the previous."
+
   - id: interactive-ui
     name: "Interactive UI extensions"
     description: >-
@@ -25,17 +27,21 @@ waves:
       these tracks can run in parallel.
 
 tracks:
+
   - id: montessori-eql
     name: "Montessori demo EQL features"
     wave: stack
+
   - id: action-execution
     name: "Acting from the console"
     wave: interactive-ui
     description: "Executing robot actions from the query console."
+
   - id: replay-annotation
     name: "Annotated event replay"
     wave: interactive-ui
     description: "Overlays that explain a replayed segmind event inside the video."
+
   - id: live-panels
     name: "Live tabbed panels"
     wave: interactive-ui
@@ -53,20 +59,22 @@ items:
     status: in_progress
     session: https://claude.ai/code/session_01HPQPiabgjE3yuBHd5skUR3
     notes: >-
-      Base of the stack. Marked ready for review. main was merged in on
-      2026-08-18 to clear the conflicts that had left it mergeable_state
-      dirty, plus the two integration breaks the merge only made visible:
-      a semantic conflict in giskardpy/executor.py and a pacer built the way
-      main no longer allows. What is left red is pre-existing branch work
-      needing the developer - PickUpAction's commented-out AttachNode, and
-      two demo directories its tests expect but that were never committed.
-      The downstream stack still sits on the pre-merge tip and needs
-      restacking. 7a9af9cd0 then fixed the ORMatic bug that had been failing
-      this branch's experiments CI job at collection: the
-      Optional[BaseException] fields this branch introduces made ORMatic emit
-      a column SQLAlchemy cannot build, so experiments.orm.ormatic_interface
-      would not import. It was written on #170 and moved here because this is
-      the branch that introduces those fields.
+      Base of the stack. On 2026-08-18 main was merged in twice. The first
+      merge (608bc7fe6) cleared the conflicts that had left it dirty, plus the
+      two integration breaks it exposed: the giskardpy/executor.py semantic
+      conflict and a pacer built the way main no longer allows. 7a9af9cd0 then
+      fixed the ORMatic bug failing this branch's experiments job at
+      collection, and 9877e5b99 restored PickUpAction's AttachNode and
+      PlacingAction's DetachNode behind Context.update_world_model_attachment,
+      which is what 8cc3cf69 had commented out wholesale. A second main merge
+      (334796ab) followed once main reached 90c241168; its one conflict,
+      Body.has_collision, took the resolution #170 had already settled on, and
+      f44c76d73 brought down the test that pins it. Now f44c76d73, mergeable,
+      and the whole stack plus #175 is restacked on it. What is still red is
+      pre-existing branch work needing the developer: two demo directories,
+      coraplex_warehouse_storage_demo and coraplex_wind_farm_service_demo, that
+      test_warehouse_storage_layout and test_wind_farm_service_layout expect but
+      that were never committed.
 
   - id: cramera_eql_autocomplete
     title: "Name any class of the workspace in a query, and complete as you type"
@@ -87,8 +95,9 @@ items:
       day the branch took the has_collision follow-up (a flat primitive no longer
       builds a mesh) and merged #169's tip 6d944c52e, whose only conflict was
       that both branches had independently fixed the segmind detector tests'
-      frameless matrices; this branch's _move_milk helper was kept. Now
-      cd663196a, mergeable, and the whole stack above it is restacked on it.
+      frameless matrices; this branch's _move_milk helper was kept. Restacked
+      again onto #169's f44c76d73 as e72937047, a content-neutral merge: #169
+      had by then adopted this branch's own has_collision resolution.
 
   - id: montessori_eql_where_is_highlighting
     title: "EQL \"where is ...?\" queries with general viewer highlighting"
@@ -101,7 +110,8 @@ items:
       Rebased onto cramera_eql_autocomplete on 2026-08-18 (was based on
       montessori_fast_inline_monitor); reparent needed a native GitHub-stack
       dissolve, see roadmap. Restacked the same day by merging the base's
-      current tip in rather than rebasing: 10ca075c2, cramera suite 488.
+      current tip in rather than rebasing: 10ca075c2, cramera suite 488, then
+      again onto the post-main-merge base as 7d58c8161.
 
   - id: montessori_event_replay
     title: "Record the live demo and replay it around queried segmind events"
@@ -112,9 +122,9 @@ items:
     status: in_progress
     notes: >-
       Restacked on 2026-08-18 by merging the base in: 4d9d9ad33, cramera suite
-      544. Its history carries stale duplicates of #164's commits and internal
-      pre/post-merge duplicates, which is why the round merged rather than
-      rebased.
+      544, then again onto the post-main-merge base as b76c8ede8. Its history
+      carries stale duplicates of #164's commits and internal pre/post-merge
+      duplicates, which is why the rounds merged rather than rebased.
 
   - id: cramera-question-readback
     title: "Read the asked query back big under the bar, linked to its docs"
@@ -128,7 +138,7 @@ items:
       commits and amended an EqlSuggestions stub into its panel test harness
       (a semantic conflict with the autocomplete feature git could not see).
       Restacked again later that day by merging the base in: 408f4511b,
-      cramera suite 566.
+      cramera suite 566, then onto the post-main-merge base as aefd9522d.
 
   - id: cramera-voice-questions
     title: "Answer a spoken question by running the preset it asks for"
@@ -140,7 +150,8 @@ items:
     notes: >-
       Top of the stack. rapidfuzz dependency is declared in
       cramera/requirements.txt. Restacked on 2026-08-18 by merging the base in:
-      5acc3d83f, cramera suite 598 and all 216 node tests green.
+      5acc3d83f, cramera suite 598 and all 216 node tests green, then onto the
+      post-main-merge base as b846d2910.
 
   - id: montessori_perform_queried_action
     title: "Perform a queried action from a perform button on its result"
@@ -187,12 +198,15 @@ items:
     status: in_progress
     session: https://claude.ai/code/session_01X3d7gwqJqim7D39XJPpJij
     notes: >-
-      Replaces the fixed knowledge-graph frame at the bottom left with a
-      selectable tab widget; its first new tab plots segmind events live as
-      they are detected, on a timeline with a moving vertical now-bar. The
+      Replaces the fixed knowledge-graph frame at the bottom of the right column
+      with a selectable tab widget; its first new tab plots segmind events live
+      as they are detected, on a timeline with a moving vertical now-bar. The
       knowledge graph stays available as one of the tabs. Restacked on
-      2026-08-18 onto #169's current tip 6d944c52e by merging it in, no
-      conflicts: 6b8a347fa, cramera suite 448 and 183 node tests green.
+      2026-08-18 onto #169's 6d944c52e (6b8a347fa, cramera suite 448 and 183
+      node tests green), then onto 9877e5b99, and finally onto the
+      post-main-merge f44c76d73 as c97594bc4 - the first time this branch
+      carries main, and clean, because #169 had already resolved the
+      Body.has_collision conflict it would otherwise have hit.
 
   - id: montessori_plan_graph_tab
     title: "A plan-graph tab highlighting the executing plan node in real time"
