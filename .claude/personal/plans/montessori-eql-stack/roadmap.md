@@ -53,11 +53,12 @@ instead of the branch names.
   rename, semantic_digital_twin ORM duplicate table, costmaps inflation OOM,
   detector-test reference frames). That mechanism keeps working independently
   of this plan; it is not duplicated here.
-- #169 is ready-for-review; #164, #165, #167, #168, #170 and #175 are drafts,
-  per the draft-until-told-otherwise convention in the personal notes. #170 was
-  re-drafted on 2026-08-18 after its main merge was pushed -- its timeline
-  carries no `ready_for_review` event at all, so it had been opened non-draft
-  rather than deliberately promoted.
+- Every PR in this plan is a draft, per the draft-until-told-otherwise
+  convention in the personal notes. Both promotions seen so far were undone by
+  the pushes that followed: #170 was re-drafted on 2026-08-18 after its main
+  merge (its timeline carries no `ready_for_review` event at all, so it had
+  been opened non-draft rather than deliberately promoted), and #169 was
+  re-drafted the same day after its own CI-fix push.
 - Landing order is the stack order; nothing here is parallelizable, which is
   why the plan is one wave / one track with a chained `depends_on`.
 
