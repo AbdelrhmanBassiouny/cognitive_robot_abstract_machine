@@ -68,18 +68,25 @@ def scenes_directory() -> Path:
     return data_directory() / "scenes"
 
 
-def architecture_root() -> Path:
+def repository_root() -> Path:
     """
-    The CRAM repository whose packages/classes the knowledge graph shows.
+    The CRAM repository this package is running from.
 
-    Defaults to the repository this package is checked out in, which is the common case
-    inside the workspace; falls back to the conventional clone location otherwise.
+    Falls back to the conventional clone location when the package is installed outside
+    a checkout, which then simply holds none of its files.
     """
-    configured = _configured_path("CRAMERA_ARCHITECTURE")
-    if configured:
-        return configured
     module_path = Path(__file__).resolve()
     for parent in module_path.parents:
         if (parent / "coraplex").is_dir() and (parent / "krrood").is_dir():
             return parent
     return Path.home() / "cognitive_robot_abstract_machine"
+
+
+def architecture_root() -> Path:
+    """
+    The CRAM repository whose packages/classes the knowledge graph shows.
+
+    Defaults to the repository this package is running from, which is the common case
+    inside the workspace; ``CRAMERA_ARCHITECTURE`` points the scan at another checkout.
+    """
+    return _configured_path("CRAMERA_ARCHITECTURE") or repository_root()
