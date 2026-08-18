@@ -371,6 +371,15 @@ class TestReplayableAnswerRows:
         assert window.start == DETECTED_AT.timestamp() - ReplayWindow.LEAD_SECONDS
         assert window.end == DETECTED_AT.timestamp() + ReplayWindow.TAIL_SECONDS
 
+    def test_the_window_barely_outlasts_its_moment(self):
+        """
+        A clip is watched to see one moment, so it runs only long enough to show that
+        moment in motion rather than to replay the run around it.
+        """
+        window = ReplayWindow.around(DETECTED_AT)
+
+        assert window.end - window.start == 2.0
+
     def test_a_timestamped_entity_row_carries_the_window_around_its_moment(self):
         result = self.make_moment_runner().run("an(entity(moment))")
 
