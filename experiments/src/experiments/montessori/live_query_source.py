@@ -95,17 +95,6 @@ CURRENT_STATE_PRESETS: List[Preset] = [
         "which plan steps failed?",
         "an(entity(plan_step).where(plan_step.status == 'FAILED'))",
     ),
-    # what perception saw
-    Preset(
-        "what was detected, and when?",
-        "set_of(event.shape_key, event.event_type, event.timestamp)"
-        ".ordered_by(event.timestamp)",
-    ),
-    Preset(
-        "insertions and the hole they went through",
-        "set_of(event.shape_key, event.through_hole)"
-        ".where(event.event_type == 'InsertionEvent')",
-    ),
     # what the board looks like now
     Preset(
         "what is on the board?",
@@ -125,6 +114,28 @@ CURRENT_STATE_PRESETS: List[Preset] = [
 ]
 """
 The ready-made questions about the sort in progress.
+"""
+
+DETECTED_EVENTS_PRESETS: List[Preset] = [
+    Preset(
+        "what was detected, and when?",
+        "set_of(event.shape_key, event.event_type, event.timestamp)"
+        ".ordered_by(event.timestamp)",
+        scope=QueryScope.DETECTED_EVENTS,
+    ),
+    Preset(
+        "insertions and the hole they went through",
+        "set_of(event.shape_key, event.through_hole)"
+        ".where(event.event_type == 'InsertionEvent')",
+        scope=QueryScope.DETECTED_EVENTS,
+    ),
+]
+"""
+The ready-made questions about what the detectors saw.
+
+Offered apart from the rest of the sort in progress because their answers are moments
+rather than states: each row names a time, and so carries the window of the demo
+recording worth replaying around it.
 """
 
 GROUPED_BY_SHAPE_KEY = "shape_key = shape_result.shape_key\n"
@@ -167,7 +178,9 @@ krrood's EQL-to-SQL translation does not cover, and there is no portable SQL agg
 behind it. The per-outcome breakdown answers the same thing by reading a column instead.
 """
 
-MONTESSORI_PRESETS: List[Preset] = CURRENT_STATE_PRESETS + EPISODIC_MEMORY_PRESETS
+MONTESSORI_PRESETS: List[Preset] = (
+    CURRENT_STATE_PRESETS + DETECTED_EVENTS_PRESETS + EPISODIC_MEMORY_PRESETS
+)
 """
 The ready-made questions the recorded Franka Montessori bundle declares in its
 ``presets.json``; a test keeps the two in step.
@@ -208,9 +221,10 @@ class MontessoriLiveQuerySource(LiveQuerySource):
 
     def knowledge(self) -> List[QueryableKnowledge]:
         """
-        The sort in progress, and the runs that already finished when there are any.
+        The sort in progress, what its detectors saw, and the runs that already finished
+        when there are any.
         """
-        offered = [self._current_state()]
+        offered = [self._current_state(), self._detected_events()]
         if self.results_database is not None:
             offered.append(self._episodic_memory())
         return offered
@@ -227,11 +241,21 @@ class MontessoriLiveQuerySource(LiveQuerySource):
                 QueryDomain("shape", ShapeUnderTest, self.progress.shapes),
                 QueryDomain("attempt", InsertionAttemptRecord, self.progress.attempts),
                 QueryDomain("plan_step", PlanStep, self.progress.plan_steps),
-                QueryDomain("event", SegmindEventRecord, self.progress.events),
                 QueryDomain("hole", HoleRecord, self.layout.holes),
                 QueryDomain("board", BoardRecord, self.layout.boards),
                 QueryDomain("goal", InsertionGoalRecord, self.layout.goals),
             ],
+        )
+
+    def _detected_events(self) -> QueryableKnowledge:
+        """
+        What a question about the detections may range over: the events the sort has
+        recorded so far, read fresh on every call so an answer names every moment
+        detected up to now.
+        """
+        return QueryableKnowledge(
+            scope=QueryScope.DETECTED_EVENTS,
+            domains=[QueryDomain("event", SegmindEventRecord, self.progress.events)],
         )
 
     def _episodic_memory(self) -> QueryableKnowledge:
@@ -254,10 +278,14 @@ class MontessoriLiveQuerySource(LiveQuerySource):
     def presets(self) -> List[Preset]:
         """
         The ready-made questions the panel offers as buttons, in the groups they belong
-        to: where things are in this scene, then the sort in progress, then the runs
-        that already finished.
+        to: where things are in this scene, then the sort in progress, then what was
+        detected, then the runs that already finished.
         """
-        offered = self._scene_presets() + list(CURRENT_STATE_PRESETS)
+        offered = (
+            self._scene_presets()
+            + list(CURRENT_STATE_PRESETS)
+            + list(DETECTED_EVENTS_PRESETS)
+        )
         if self.results_database is not None:
             offered += EPISODIC_MEMORY_PRESETS
         return offered

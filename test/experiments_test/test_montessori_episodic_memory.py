@@ -2,8 +2,8 @@
 Tests for asking a Montessori demo about the runs it already finished.
 
 Those answers come out of the results database rather than out of the process, so these
-run against a real (sqlite) one seeded with recorded outcomes. No credentials are needed,
-which is what keeps them in the CI suite.
+run against a real (sqlite) one seeded with recorded outcomes. No credentials are
+needed, which is what keeps them in the CI suite.
 """
 
 from __future__ import annotations
@@ -123,21 +123,24 @@ class TestWhatIsOnOffer:
     def test_both_the_present_and_the_recorded_past_are_queryable(self, bridge):
         assert bridge.query_scopes() == [
             QueryScope.CURRENT_STATE,
+            QueryScope.DETECTED_EVENTS,
             QueryScope.EPISODIC_MEMORY,
         ]
 
-    def test_a_demo_with_no_results_database_offers_only_its_present(self):
+    def test_a_demo_with_no_results_database_offers_only_what_it_is_doing(self):
         source = MontessoriLiveQuerySource()
 
         assert [knowledge.scope for knowledge in source.knowledge()] == [
-            QueryScope.CURRENT_STATE
+            QueryScope.CURRENT_STATE,
+            QueryScope.DETECTED_EVENTS,
         ]
 
     def test_a_demo_with_no_results_database_offers_no_recorded_questions(self):
         source = MontessoriLiveQuerySource()
 
         assert all(
-            preset.scope is QueryScope.CURRENT_STATE for preset in source.presets()
+            preset.scope is not QueryScope.EPISODIC_MEMORY
+            for preset in source.presets()
         )
 
     def test_the_recorded_questions_are_offered_under_their_own_heading(self, bridge):
