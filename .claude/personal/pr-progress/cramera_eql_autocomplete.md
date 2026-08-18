@@ -302,3 +302,64 @@ ready themselves, it needs re-drafting after this push. The five branches stacke
 (#164, #165, #167, #168 and #175) are all still based on the pre-merge tip and need
 restacking.
 
+
+### Round 6 (2026-08-18): surface_area, the restack, and lark again
+
+The developer asked for the three loose ends this file and the roadmap had left open.
+
+**1. `Shape.surface_area` reinstated in `has_collision`.** Round 5 resolved the
+`Body.has_collision` conflict to main's short-circuit, which left the five
+`surface_area` implementations reached only by their own tests -- and left main's
+version building a mesh for exactly the flat shapes the surface threshold exists for.
+Fixed by reading `shape.surface_area` in main's shape (volume first, surface second),
+so no primitive builds a mesh at all. Failing test first
+(`test_flat_shape_needs_no_mesh`, which forbids `Box.mesh`), then the fix; the
+duplicated mesh-forbidding closure in the existing test was lifted into a shared
+`forbid_mesh_building` helper. The docstring note, which described the old
+short-circuit, was rewritten to match. Commit `73abaf67b`.
+
+**2. The whole stack restacked** -- #164, #165, #167, #168 onto #170, and #175 onto
+#169. Done by *merging* the base into each branch, not rebasing: #165's history
+carries stale copies of #164's commits plus internal pre/post-merge duplicates of half
+its own work, so a linear replay meant hand-skipping six commits. Merging resolves once
+per branch, pushes as a fast-forward, and still leaves each PR's diff equal to its own
+work. Full reasoning in the roadmap.
+
+Two things surfaced mid-round:
+
+- **#169 moved while the round was running**, to `6d944c52e` (the CI fixes its own main
+  merge exposed). GitHub had been reporting #170 `mergeable_state: dirty` while a local
+  `merge-tree` said clean -- the local check was against the *old* tip. Against the real
+  one the conflict is real: both branches had independently fixed the segmind detector
+  tests' frameless matrices. Kept this branch's `_move_milk` helper over #169's ~30
+  inline `reference_frame=` arguments; identical thirteen tests either way.
+- `db78bfbc5` (the sdt ORM regeneration) is **dead work** now that main keeps every
+  generated interface empty and a hook enforces it. It was dropped from #164's rebase
+  before the round switched to merges; on the merge path it resolves to empty.
+
+New tips: #170 `cd663196a`, #164 `10ca075c2`, #165 `4d9d9ad33`, #167 `408f4511b`,
+#168 `5acc3d83f`, #175 `6b8a347fa`. All six report `mergeable: true`, all still drafts,
+bases intact. PR #170's description now also covers the main merge and the
+`has_collision` follow-up.
+
+**3. lark fixed again.** Round 3's fix had been undone in the venv: `lark-parser`
+0.12.0 back, with an orphan `site-packages/lark/` holding only `parsers/` shadowing the
+real package. Same remedy; `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` is no longer needed.
+`rapidfuzz` had vanished the same way and was reinstalled. Both are correctly declared
+in the repo, so this is local rot -- if it returns a third time, find what is
+reinstalling the dead package.
+
+Verified per tip (cramera): #170 477, #164 488, #165 544, #167 566, #168 598, #175 448.
+Node 216/216 on #168, 183/183 on #175. segmind 46+1 skipped on #168. sdt `test_world`
+124+1, `test_shape` 29, `test_spatial_types` 234, `test_collision_matrix` 30.
+
+Two environment traps that mimic merge breakage: running suites from a git worktree
+needs the workspace `src` dirs *prepended* to `PYTHONPATH` (substituting for it drops
+ROS's entries and turns `test_world.py` into thirteen `ament_index_python` errors); and
+any segmind run regenerates `ormatic_interface.py` at collection time, so revert the
+working tree afterwards -- the committed blobs stayed empty throughout.
+
+**Left for the developer:** #169 itself still has two known-red items its own session
+recorded (the commented-out `AttachNode` in `PickUpAction`, and two demo directories
+that were never committed). Nothing on this branch touches them.
+
