@@ -25,6 +25,11 @@ DEMO_DIRECTORY = (
 The demo whose layout is under test.
 """
 
+pytestmark = pytest.mark.skipif(
+    not DEMO_DIRECTORY.is_dir(),
+    reason=f"{DEMO_DIRECTORY.name} is not present",
+)
+
 
 @pytest.fixture(scope="module", autouse=True)
 def demo_modules_importable():

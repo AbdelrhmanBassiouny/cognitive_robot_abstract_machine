@@ -930,3 +930,23 @@ class ActionWithMissingAggregationsMixin:
     """
 
     domain_object: Cabinet
+
+
+# %% Builtin types SQLAlchemy has no column type for
+
+
+@dataclass
+class HoldsAnException:
+    """
+    Class with a field whose type lives in ``builtins`` yet cannot be a column.
+    """
+
+    name: str
+    """
+    A field that does map to a column, so a skipped neighbour is visibly the exception.
+    """
+
+    cause: Optional[BaseException] = None
+    """
+    The exception that was raised, kept only while the object is alive.
+    """
