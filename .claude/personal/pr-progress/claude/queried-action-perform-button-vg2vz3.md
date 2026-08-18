@@ -8,7 +8,7 @@ The manifest now records the real name (as montessori_replay_event_annotations
 already does for its own session branch). Based on `montessori_event_replay`
 (#165), restacked onto its post-main-merge tip b76c8ede8.
 
-## Status: implemented and pushed (2dee8f57), no PR opened
+## Status: implemented, pushed (2dee8f57), draft PR #176 open
 
 Seven layers, all done, each with tests:
 
@@ -39,5 +39,7 @@ Seven layers, all done, each with tests:
 
 ## Next
 
-Nothing outstanding on the branch. Open a draft PR (bug label does not apply;
-this is a feature) if and when asked, base `montessori_event_replay`.
+Nothing outstanding. Draft PR #176 is open against `montessori_event_replay`; no
+`bug` label, this is a feature. Per the personal notes this session does not watch
+it - re-draft after any further push, and report red CI in chat rather than acting
+on it unprompted.
