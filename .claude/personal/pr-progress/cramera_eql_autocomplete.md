@@ -182,3 +182,45 @@ Still known-broken in this env (not asked, not fixed): `open3d` wants `ipywidget
 `json_msgs` ROS package not built anywhere, so coraplex conftest ORM regeneration
 always drops Giskard ROS2 DAOs locally -- revert that churn after coraplex test runs.
 
+### Round 4 (2026-08-18): the montessori stack rebased onto this branch
+
+The developer asked for every PR stacked on `montessori_fast_inline_monitor` to be
+rebased onto `cramera_eql_autocomplete`. The stack is the chain #164
+`montessori_eql_where_is_highlighting` -> #165 `montessori_event_replay` -> #167
+`claude/cramera-verbalization-voice-ttwcza` -> #168 `claude/cramera-voice-questions-ttwcza`
+(#170 is this branch's own PR, i.e. the new base). All four rebased and force-pushed
+(`--force-with-lease`); new tips d5b4946d4f / d03caf8329 / 4be9b11c71 / f64430d868.
+
+Conflict decisions (all keep-both merges of autocomplete vs the stack's features),
+plus the judgment calls:
+
+- #167 was stale-stacked: it carried old copies of #164/#165 commits from before
+  those were last rebased. Rebased only its two real commits (`ef46d536b5`,
+  `00fe9d7349`) onto the new #165; the stale copies were dropped.
+- Scenes submodule pin conflict in "Pin the scenes submodule": kept the base's
+  `64b98eda` (public cram-scenes main, contains the fix's `2230683` target), so
+  that commit now only carries its test-skip change; its message still talks
+  about moving the pin -- harmless but slightly stale.
+- EQL panel markup: kept `id="query-box"` (suggestions anchor) on the new
+  `.query-bar` structure; welcome text carries both the question-display and the
+  completion hints; preset clicks reload vocabulary on scope change *and* call
+  `showQuestion`.
+- Semantic conflict git could not see: `test_eql_panel.js`'s harness binds
+  panel.js free variables explicitly, and the merged panel now needs
+  `EqlSuggestions`. Added a stub (`of() -> {forget, handledKey:false}`) amended
+  into the harness's own commit (#167 tip), VoiceCapture+EqlSuggestions merged in
+  #168's re-application.
+
+Verified per branch tip: cramera suite 488 (#164) / 540 (#165) / 562 (#167) /
+594 (#168) all pass; `test_eql_panel.js` 10/10 on the tip.
+
+Outstanding (needs the developer):
+
+- **PR #164's base is still `montessori_fast_inline_monitor` on GitHub** -- no
+  `gh` CLI or API token on this machine, so it must be flipped to
+  `cramera_eql_autocomplete` by hand (Edit next to the title on the PR page).
+  #165/#167/#168 bases point at their parent branches and are already correct.
+- `rapidfuzz` (used by #168's `question_matching.py`) is not declared in any
+  pyproject.toml -- installed into cram2 locally (3.14.5) to run the tests, but
+  the dependency gap is #168's own, pre-existing.
+
