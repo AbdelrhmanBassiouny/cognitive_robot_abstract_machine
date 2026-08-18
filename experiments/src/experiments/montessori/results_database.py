@@ -213,17 +213,25 @@ class ResultsDatabase:
     Opens sessions on the engine this database has already prepared, once it has one.
     """
 
-    def open_session(self) -> Session:
+    def open_session(self, *, create_missing_tables: bool = True) -> Session:
         """
         Open a session against the results, preparing the database on the first call.
+
+        :param create_missing_tables: Whether tables this code knows of but the database
+            lacks are created before the session opens. Reading a database this code has
+            no privilege to write to must not demand creating them.
         """
         if self._sessions is None:
-            self._sessions = self._prepared_sessions()
+            self._sessions = self._prepared_sessions(create_missing_tables)
         return self._sessions()
 
-    def _prepared_sessions(self) -> sessionmaker:
+    def _prepared_sessions(self, create_missing_tables: bool) -> sessionmaker:
         """
         Connect, creating this module's tables if they are not there yet.
+
+        Creation is skipped when :paramref:`create_missing_tables` is false, so a
+        database reached through a read-only role still serves the recorded runs it
+        already holds.
 
         Done once per database rather than once per session: reading the whole generated
         ``experiments`` schema and issuing its ``CREATE TABLE`` statements takes the best
@@ -240,8 +248,9 @@ class ResultsDatabase:
         table" error the moment ``CREATE TABLE`` tried to reference it.
         """
         engine = create_results_engine(self.uri)
-        metadata = self._schema()
-        metadata.create_all(engine, tables=self._creatable_tables(metadata))
+        if create_missing_tables:
+            metadata = self._schema()
+            metadata.create_all(engine, tables=self._creatable_tables(metadata))
         return sessionmaker(engine)
 
     @staticmethod

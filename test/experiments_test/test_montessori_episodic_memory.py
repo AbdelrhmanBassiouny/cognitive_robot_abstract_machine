@@ -9,6 +9,8 @@ needed, which is what keeps them in the CI suite.
 from __future__ import annotations
 
 import json
+import shutil
+import sqlite3
 
 import pytest
 from coraplex.plans.plan import Plan
@@ -201,6 +203,34 @@ class TestAskingTheRecordedRuns:
             bridge.run_query(
                 preset_named("every recorded run").code, QueryScope.CURRENT_STATE
             )
+
+
+# %% answering from a database this code cannot write to
+class TestAnsweringFromAReadOnlyDatabase:
+    def test_a_read_only_results_database_that_lacks_a_table_answers_the_recorded_questions(
+        self, recorded_runs, tmp_path
+    ):
+        """
+        The recorded runs may live where this code has no privilege to write and even
+        lack tables this code knows of, which a question asked through the live query
+        source must not treat as an obstacle.
+        """
+        path = tmp_path / "results.db"
+        shutil.copyfile(recorded_runs.uri.removeprefix("sqlite:///"), path)
+        with sqlite3.connect(path) as connection:
+            connection.execute('DROP TABLE "_MockedConvexSetDAO"')
+        read_only_uri = "sqlite:///file:%s?mode=ro&uri=true" % path
+        live_bridge = Bridge()
+        live_bridge.register_query_source(
+            MontessoriLiveQuerySource(
+                results_database=ResultsDatabase(uri=read_only_uri)
+            )
+        )
+
+        result = ask(live_bridge, preset_named("success rate per shape").code)
+
+        assert result.ok
+        assert len(result.rows) == 2
 
 
 # %% the recorded bundle shows the same questions

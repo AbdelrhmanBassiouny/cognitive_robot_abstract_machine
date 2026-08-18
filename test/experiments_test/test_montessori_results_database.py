@@ -4,6 +4,7 @@ Tests for resolving and reaching the database a Montessori run records to.
 
 from __future__ import annotations
 
+import sqlite3
 import threading
 
 import pytest
@@ -75,6 +76,25 @@ class TestOpeningSessions:
         monkeypatch.setenv(DATABASE_URI_ENVIRONMENT_VARIABLE, "sqlite://")
 
         assert ResultsDatabase().uri == "sqlite://"
+
+    def test_a_session_can_be_opened_without_preparing_missing_tables(self, tmp_path):
+        """
+        Reading a database this code has no privilege to write to must not demand
+        creating the tables it lacks.
+        """
+        path = tmp_path / "results.db"
+        ResultsDatabase(uri="sqlite:///%s" % path).open_session().close()
+        with sqlite3.connect(path) as connection:
+            connection.execute('DROP TABLE "_MockedConvexSetDAO"')
+        read_only_uri = "sqlite:///file:%s?mode=ro&uri=true" % path
+
+        with ResultsDatabase(uri=read_only_uri).open_session(
+            create_missing_tables=False
+        ) as session:
+            table_names = inspect(session.bind).get_table_names()
+
+        assert "_MockedConvexSetDAO" not in table_names
+        assert "ShapeInsertionResultDAO" in table_names
 
 
 # %% is it actually reachable

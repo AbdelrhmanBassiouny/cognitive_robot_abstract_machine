@@ -12,6 +12,7 @@ already finished, they are how often each shape was sorted and how its attempts 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import partial
 
 from krrood.entity_query_language.factories import sum as eql_sum
 from cramera.knowledge.database_evaluation import DatabaseEvaluation
@@ -294,7 +295,10 @@ class MontessoriLiveQuerySource(LiveQuerySource):
             scope=QueryScope.EPISODIC_MEMORY,
             domains=[QueryDomain("shape_result", ShapeInsertionResult)],
             evaluation=DatabaseEvaluation(
-                open_session=self.results_database.open_session
+                open_session=partial(
+                    self.results_database.open_session,
+                    create_missing_tables=False,
+                )
             ),
             extra_names={"sum": eql_sum, "InsertionOutcome": InsertionOutcome},
         )
