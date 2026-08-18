@@ -76,8 +76,10 @@ test('boot mounts configured panels into their slots', function () {
   load('core/bus.js');
   load('core/registry.js');
   const mountedRoots = [];
-  window.Panels.define('a', function (root, bus) {
+  const mountedIds = [];
+  window.Panels.define('a', function (root, bus, id) {
     mountedRoots.push(root);
+    mountedIds.push(id);
     assert.strictEqual(bus, window.Bus);
   });
   window.Panels.define('b', function () {});
@@ -88,6 +90,9 @@ test('boot mounts configured panels into their slots', function () {
   assert.strictEqual(slots.right.children.length, 2);
   assert.strictEqual(mountedRoots[0].dataset.panel, 'a');
   assert.ok(mountedRoots[0].className.indexOf('panel-a') >= 0);
+  // handed its own id, so a panel recognizing itself in a broadcast event needs no
+  // second copy of the name it was registered under
+  assert.deepStrictEqual(mountedIds, ['a', 'a']);
 });
 
 test('an unknown configured panel is reported, not fatal', function () {

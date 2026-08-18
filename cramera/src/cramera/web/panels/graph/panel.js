@@ -1,34 +1,36 @@
 /* ============================================================================
- * panels/graph/panel.js — the graph view with four tabs.
+ * panels/graph/panel.js — the graph view with three tabs.
  *
  *   Knowledge   the entity graph + CRAM architecture (double-click drills in)
  *   Kinematics  the robot's URDF tree (links as nodes, joints as edges)
- *   Plan        the executed plan tree, node border = execution status
  *   Statechart  the giskardpy motion statechart of the running motion group
  *
- * Plan and Statechart additionally take LIVE node status from the cramera-live
- * bridge while it is attached: structure changes rebuild the graph, pure
- * status changes only re-colour the rings (no layout jumps).
+ * The plan tree has a panel of its own (panels/plan_graph), where the demo is
+ * watched running.
+ *
+ * Statechart additionally takes LIVE node status from the cramera-live bridge
+ * while it is attached: structure changes rebuild the graph, pure status changes
+ * only re-colour the rings (no layout jumps).
  *
  * Bus events:
  *   emits    entity:select {id, detail, relations}   node clicked
  *   listens  entity:highlight {ids, focus?}          spotlight matching nodes
  *   listens  scene:step {step}                       highlight the running episode
  *   listens  live:changed {on, url}                  start/stop the status poll
+ *   listens  panel:shown {id} / panel:resized        the frame's size changed
  *
- * Rendering is delegated to graph.js (window.Graph, vis-network wrapper).
+ * Rendering is delegated to graph.js (window.GraphView, vis-network wrapper).
  * ==========================================================================*/
-Panels.define('graph', function (root, bus) {
+Panels.define('graph', function (root, bus, panelId) {
   root.innerHTML =
     '<div class="graph-wrap">' +
     '  <div class="graph-tabs" id="graph-tabs">' +
     '    <button data-view="knowledge" class="active" title="the entity graph (EQL / knowledge base)">Knowledge</button>' +
     '    <button data-view="kinematics" title="the robot\'s kinematic structure — URDF links &amp; joints">Kinematics</button>' +
-    '    <button data-view="plan" title="the plan tree, with the execution status of every node">Plan</button>' +
     '    <button data-view="chart" title="the giskardpy motion statechart of the running motion group">Statechart</button>' +
     '    <span class="gt-live" id="gt-live" title="node status is streaming from the running demo">◉ live status</span>' +
     '  </div>' +
-    '  <div id="graph"></div>' +
+    '  <div id="graph" class="graph-canvas"></div>' +
     '  <div class="graph-zoom">' +
     '    <button id="graph-zoom-in" title="Zoom in — or pinch on a touchpad">+</button>' +
     '    <button id="graph-zoom-out" title="Zoom out — or pinch on a touchpad">−</button>' +
@@ -50,20 +52,19 @@ Panels.define('graph', function (root, bus) {
   const navPath = root.querySelector('#gnav-path');
   const tabsEl = root.querySelector('#graph-tabs');
   const liveBadge = root.querySelector('#gt-live');
-  Graph.attach(root.querySelector('#graph'), root.querySelector('#legend'));
+  const graph = GraphView.create(root.querySelector('#graph'), root.querySelector('#legend'));
 
   // %% zoom controls
   // one step in and its exact inverse out, so clicking + then − lands where it started
   const ZOOM_STEP = 1.3;
-  root.querySelector('#graph-zoom-in').addEventListener('click', function () { Graph.zoomBy(ZOOM_STEP); });
-  root.querySelector('#graph-zoom-out').addEventListener('click', function () { Graph.zoomBy(1 / ZOOM_STEP); });
-  root.querySelector('#graph-zoom-fit').addEventListener('click', function () { Graph.fit(); });
+  root.querySelector('#graph-zoom-in').addEventListener('click', function () { graph.zoomBy(ZOOM_STEP); });
+  root.querySelector('#graph-zoom-out').addEventListener('click', function () { graph.zoomBy(1 / ZOOM_STEP); });
+  root.querySelector('#graph-zoom-fit').addEventListener('click', function () { graph.fit(); });
 
   // %% tabs
   const TABS = {
     knowledge:  { url: '/api/knowledge' },
     kinematics: { url: '/api/knowledge/view?name=kinematics' },
-    plan:       { url: '/api/knowledge/view?name=plan' },
     chart:      { url: '/api/knowledge/view?name=chart' },
   };
   let tab = 'knowledge';
@@ -84,7 +85,7 @@ Panels.define('graph', function (root, bus) {
       emptyEl.style.display = empty ? '' : 'none';
       emptyEl.textContent = empty ? (payload.empty || 'Nothing to show in this view.') : '';
     }
-    Graph.build({
+    graph.build({
       nodes: payload.nodes, edges: payload.edges, legend: payload.legend,
       layout: payload.layout, arrows: !!payload.arrows, statusLegend: !!payload.statusLegend,
       key: (payload.key || tab) + '#' + stacks[tab].length,
@@ -163,8 +164,8 @@ Panels.define('graph', function (root, bus) {
     spotlight({ ids: [id], focus: id });
   }
   function labelOf(id) { return (view.details[id] && view.details[id].label) || id; }
-  Graph.onSelect(select);
-  Graph.onDoubleSelect(drill);
+  graph.onSelect(select);
+  graph.onDoubleSelect(drill);
 
   // %% highlights (from EQL results or our own selection)
   function spotlight(p) {
@@ -176,60 +177,36 @@ Panels.define('graph', function (root, bus) {
         .map(function (e) { return e.from === p.focus ? e.to : e.from; });
       hi = hi.concat(neighbours.filter(function (id) { return inGraphSet[id]; }));
     }
-    if (hi.length) Graph.highlight(hi); else Graph.reset();
+    if (hi.length) graph.highlight(hi); else graph.reset();
   }
   bus.on('entity:highlight', spotlight);
+  // vis-network measures its container as it draws, and a tab body that is not the
+  // visible one has no size, so a graph drawn behind a closed tab stays wrong until it
+  // is told the tab opened
+  bus.on('panel:shown', function (p) { if (p.id === panelId) graph.resize(); });
+  bus.on('panel:resized', function () { graph.resize(); });
   bus.on('scene:step', function (p) {
-    if (p.step === '__done__') { Graph.reset(); return; }
+    if (p.step === '__done__') { graph.reset(); return; }
     if (tab === 'knowledge' && !stacks[tab].length && inGraphSet[p.step]) select(p.step);
   });
 
-  // %% live status overlay (Plan / Statechart tabs)
-  // The bridge publishes the plan tree and the executing motion statechart with
-  // per-node status. Structure changes (the plan grows as actions expand, a new
-  // statechart is compiled per motion group) rebuild the graph; a pure status
-  // change only re-colours the rings, so the layout never jumps.
+  // %% live status overlay (Statechart tab)
+  // The bridge publishes the executing motion statechart with per-node status. A
+  // structure change (a new statechart is compiled per motion group) rebuilds the
+  // graph; a pure status change only re-colours the rings, so the layout never jumps.
   const CHART_LEGEND = [
     { group: 'task', label: 'Task (motion constraint)' },
     { group: 'monitor', label: 'Monitor / observation' },
     { group: 'motion_goal', label: 'Goal (contains nodes)' },
     { group: 'motion_end', label: 'End / cancel motion' },
   ];
-  const liveSig = { plan: '', chart: '' };
+  let chartSignature = '';
   let liveTimer = null;
   let liveState = { on: false, url: '' };
 
-  function liveSource() {
-    const p = shown[tab] || base[tab];
-    return (p && p.live) || null;               // 'plan' | 'chart' | null
-  }
-
-  // drop the redundant 'Action' suffix only — a label that merely contains the word,
-  // such as 'ActionNode', must survive intact. Mirrors
-  // PlanViewPayload._shorten_action_label: the bridge sends the raw designator name,
-  // so the live path shortens it here.
-  function shortenActionLabel(label) {
-    const shortened = label.replace(/Action$/, '');
-    return shortened || label;
-  }
-
-  function planPayload(live) {
-    const nodes = [], edges = [], details = {};
-    (live.nodes || []).forEach(function (n) {
-      const label = shortenActionLabel(n.label || '?');
-      const lines = ['a ' + n.kind,
-                     'status: ' + n.status + (n.derived ? ' (derived from the motion statechart)' : '')];
-      if (n.arm) lines.push('arm: ' + n.arm);
-      if (n.target) lines.push('target: ' + n.target);
-      nodes.push({ id: n.id, label: label, group: n.group,
-                   title: [label].concat(lines).join('\n'), status: n.status });
-      details[n.id] = { label: label, group: n.group, lines: lines };
-      if (n.parent) edges.push({ from: n.parent, to: n.id, kind: 'property', label: 'has step' });
-    });
-    return { ok: true, breadcrumb: 'live plan', nodes: nodes, edges: edges, details: details,
-             legend: live.legend || [], layout: 'hier', arrows: true, statusLegend: true,
-             live: 'plan', key: 'plan-live',
-             empty: 'The bridge is attached but the demo has not started its plan yet.' };
+  function showsTheLiveChart() {
+    const payload = shown[tab] || base[tab];
+    return !!payload && payload.live === 'chart';
   }
 
   function chartPayload(live) {
@@ -255,20 +232,18 @@ Panels.define('graph', function (root, bus) {
   }
 
   async function liveRefresh(force) {
-    const src = liveSource();
-    const active = !!src && liveState.on;
+    const active = showsTheLiveChart() && liveState.on;
     liveBadge.classList.toggle('on', active);
     if (!active) return;
     if (stacks[tab].length) return;              // inside a drill-down: leave it alone
     let live;
     try {
-      live = await fetch(liveState.url + (src === 'plan' ? '/plan' : '/chart'))
-        .then(ResponseUtil.parseJson);
+      live = await fetch(liveState.url + '/chart').then(ResponseUtil.parseJson);
     } catch (err) { return; }                    // bridge gone — the 3D side handles it
     if (!live || !live.nodes) return;
-    const payload = src === 'plan' ? planPayload(live) : chartPayload(live);
-    if (force || live.signature !== liveSig[src]) {    // structure changed → rebuild
-      liveSig[src] = live.signature;
+    const payload = chartPayload(live);
+    if (force || live.signature !== chartSignature) {  // structure changed → rebuild
+      chartSignature = live.signature;
       base[tab] = payload;
       setView(payload);
       return;
@@ -276,7 +251,7 @@ Panels.define('graph', function (root, bus) {
     // same structure: only re-colour, and keep the detail lines in sync
     const map = {};
     payload.nodes.forEach(function (n) { map[n.id] = n.status; });
-    if (!Graph.setStatuses(map)) { base[tab] = payload; setView(payload); return; }
+    if (!graph.setStatuses(map)) { base[tab] = payload; setView(payload); return; }
     base[tab] = payload;
     if (view && view.details) view.details = payload.details;
   }
@@ -289,10 +264,10 @@ Panels.define('graph', function (root, bus) {
       liveRefresh(true);
     } else {
       liveBadge.classList.remove('on');
-      liveSig.plan = liveSig.chart = '';
-      // drop the live payloads so both tabs fall back to the recorded bundle
-      ['plan', 'chart'].forEach(function (t) { delete base[t]; delete shown[t]; stacks[t] = []; });
-      if (tab === 'plan' || tab === 'chart') showTab(tab);
+      chartSignature = '';
+      // drop the live payload so the tab falls back to the recorded bundle
+      delete base.chart; delete shown.chart; stacks.chart = [];
+      if (tab === 'chart') showTab(tab);
     }
   });
 

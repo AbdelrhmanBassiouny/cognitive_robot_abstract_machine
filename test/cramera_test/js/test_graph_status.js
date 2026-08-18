@@ -1,6 +1,10 @@
 // Unit tests for panels/graph/graph.js (node:test) against stubbed vis + DOM:
 // status rings, layouts per view kind, in-place status patching and the zoom
 // floor that keeps rings readable on big graphs.
+//
+// The renderer is created per container, so each test makes its own rather than
+// sharing one — that is what lets a panel showing the plan and a panel showing the
+// knowledge graph be on screen at the same time.
 'use strict';
 
 const test = require('node:test');
@@ -82,14 +86,13 @@ function evaluateGraphJs() {
   global.GraphGestures = global.window.GraphGestures;
   global.vis = { DataSet: ItemStore, Network: RecordingRenderer };
   new Function(fs.readFileSync(path.join(WEB, 'panels/graph/graph.js'), 'utf8'))();
-  return global.window.Graph;
+  return global.window.GraphView;
 }
 
 // the renderer must receive its elements from the panel, never look them up itself
 function loadGraphJs(canvas) {
-  const graph = evaluateGraphJs();
-  graph.attach(canvas || makeCanvasStub(), { appendChild() {}, innerHTML: '' });
-  return graph;
+  return evaluateGraphJs().create(canvas || makeCanvasStub(),
+                                  { appendChild() {}, innerHTML: '' });
 }
 
 function planFixture(Graph) {
@@ -116,11 +119,22 @@ function planFixture(Graph) {
 const node = (id) => lastData.nodes.get(id);
 
 // %% the panel owns the DOM
-test('building before attach is refused', function () {
-  const Graph = evaluateGraphJs();
+test('a renderer without a container is refused', function () {
+  const GraphView = evaluateGraphJs();
   assert.throws(function () {
-    Graph.build({ nodes: [], edges: [] });
-  }, /attach/);
+    GraphView.create(null, { appendChild() {}, innerHTML: '' });
+  }, /container/);
+});
+
+test('two renderers draw into their own containers', function () {
+  const GraphView = evaluateGraphJs();
+  const first = makeCanvasStub(), second = makeCanvasStub();
+  const legend = { appendChild() {}, innerHTML: '' };
+  const one = GraphView.create(first, legend);
+  GraphView.create(second, legend);
+  planFixture(one);
+
+  assert.strictEqual(lastRenderer.container, first);
 });
 
 // %% status rings
@@ -135,6 +149,16 @@ test('status renders as a coloured ring + status word', function () {
   assert.strictEqual(node('p1').borderWidthSelected, node('p1').borderWidth);
   assert.ok(Array.isArray(node('p2').shapeProperties.borderDashes)); // created: dashed
   assert.strictEqual(node('p4').color, undefined);                   // no status: group style
+});
+
+test('the node execution has reached outranks the ones running above it', function () {
+  const Graph = loadGraphJs();
+  planFixture(Graph);
+  Graph.setStatuses({ p1: 'RUNNING', p2: 'EXECUTING' });
+
+  assert.strictEqual(node('p2').label, 'MoveTCP\nexecuting now');
+  assert.notStrictEqual(node('p2').color.border, node('p1').color.border);
+  assert.ok(node('p2').borderWidth > node('p1').borderWidth);
 });
 
 test('group fill survives the status ring patch', function () {

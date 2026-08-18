@@ -9,6 +9,7 @@ from experiments.montessori.event_monitoring import (
     build_shape_monitor,
     ControlCycleTicking,
 )
+from experiments.montessori.live_event_source import MontessoriLiveEventSource
 from experiments.montessori.semantics import MontessoriShape, ShapeSortingHole
 from experiments.montessori.world import MontessoriWorld, TABLE_POSITION, TABLE_SCALE
 from segmind.datastructures.events import InsertionEvent, PickUpEvent
@@ -336,3 +337,89 @@ class TestTicksAreSpacedByTheGapBetweenThem:
             ticking.stop()
 
         assert monitor.ticks == 2
+
+
+# %% telling a run what was just detected
+class RecordsWhatItIsTold:
+    """
+    Stands in for whatever a run reports its detections to, keeping each handover apart
+    so a test can see what a single tick produced.
+    """
+
+    def __init__(self):
+        self.handovers = []
+
+    def receive(self, events) -> None:
+        self.handovers.append(list(events))
+
+
+class TestTheListenerHearsWhatEachTickDetected:
+    """
+    A timeline of what is happening now cannot wait for the attempt to finish, so the
+    monitor hands its detections over as it makes them.
+    """
+
+    def test_everything_detected_is_handed_over_exactly_once_and_in_order(self):
+        montessori = MontessoriWorld(shapes_are_movable=True)
+        shape, _ = _shape_and_hole(montessori, "square_hole")
+        listener = RecordsWhatItIsTold()
+        monitor = build_shape_monitor(montessori, shape, listener=listener)
+
+        for _ in range(5):
+            monitor.tick()
+
+        handed_over = [event for batch in listener.handovers for event in batch]
+        assert handed_over == monitor.events
+
+    def test_the_settling_shape_is_detected_doing_something(self):
+        """
+        Guards the test above: an empty handover list would satisfy it just as well.
+        """
+        montessori = MontessoriWorld(shapes_are_movable=True)
+        shape, _ = _shape_and_hole(montessori, "square_hole")
+        listener = RecordsWhatItIsTold()
+        monitor = build_shape_monitor(montessori, shape, listener=listener)
+
+        for _ in range(5):
+            monitor.tick()
+
+        assert listener.handovers
+
+    def test_a_tick_that_detected_nothing_hands_nothing_over(self):
+        montessori = MontessoriWorld(shapes_are_movable=True)
+        shape, _ = _shape_and_hole(montessori, "square_hole")
+        listener = RecordsWhatItIsTold()
+        monitor = build_shape_monitor(montessori, shape, listener=listener)
+
+        for _ in range(5):
+            monitor.tick()
+
+        assert all(listener.handovers)
+
+    def test_a_run_that_reports_to_nobody_still_detects(self):
+        montessori = MontessoriWorld(shapes_are_movable=True)
+        shape, _ = _shape_and_hole(montessori, "square_hole")
+        monitor = build_shape_monitor(montessori, shape)
+
+        for _ in range(5):
+            monitor.tick()
+
+        assert monitor.events
+
+    def test_the_viewers_own_record_can_be_the_listener(self):
+        """
+        Nothing checks a :class:`Protocol` at runtime, so the one seam that matters -- a
+        monitor handing its detections to what the viewer's timeline is drawn from -- is
+        exercised with both real objects rather than a stand-in for either.
+        """
+        montessori = MontessoriWorld(shapes_are_movable=True)
+        shape, _ = _shape_and_hole(montessori, "square_hole")
+        source = MontessoriLiveEventSource()
+        monitor = build_shape_monitor(montessori, shape, listener=source)
+
+        for _ in range(5):
+            monitor.tick()
+
+        assert [detected.kind for detected in source.events()] == [
+            type(event).__name__ for event in monitor.events
+        ]

@@ -69,7 +69,9 @@ that was never picked up.
 
 
 def build_shape_monitor(
-    montessori: MontessoriWorld, shape: MontessoriShape
+    montessori: MontessoriWorld,
+    shape: MontessoriShape,
+    listener: Optional[ReceivesDetectedEvents] = None,
 ) -> MontessoriEventMonitor:
     """
     Build a :class:`MontessoriEventMonitor` tracking a single loose shape's pick-up and
@@ -85,6 +87,8 @@ def build_shape_monitor(
         "still crossing the hole" from "now resting past it" apart either -- the
         landing region (spanning the opening's full depth) fixes both.
     :param shape: The loose shape to track.
+    :param listener: Told what each tick detected, for a run that wants the events as
+        they happen rather than once the attempt they fell within has finished.
     """
     hole = montessori.board.hole_for(shape)
     landing_region = montessori.landing_regions.get(hole.name.name)
@@ -122,7 +126,9 @@ def build_shape_monitor(
         PlacingDetector(tracked_object=shape.root),
         InsertionDetector(tracked_object=shape.root),
     ]
-    return MontessoriEventMonitor(world=montessori.world, detectors=detectors)
+    return MontessoriEventMonitor(
+        world=montessori.world, detectors=detectors, listener=listener
+    )
 
 
 class TicksDetectors(Protocol):
@@ -133,6 +139,19 @@ class TicksDetectors(Protocol):
     def tick(self) -> None:
         """
         Run one detection cycle.
+        """
+
+
+class ReceivesDetectedEvents(Protocol):
+    """
+    Something a monitor tells what it has just noticed.
+    """
+
+    def receive(self, events: List[DetectionEvent]) -> None:
+        """
+        Take what was detected since this was last called, oldest first.
+
+        :param events: The newly detected events.
         """
 
 
@@ -342,6 +361,12 @@ class MontessoriEventMonitor:
     Decides when :meth:`tick` is called between :meth:`start` and :meth:`stop`.
     """
 
+    listener: Optional[ReceivesDetectedEvents] = None
+    """
+    Told what each tick detected, so a run can act on an event before the attempt it
+    fell within has finished.
+    """
+
     context: MotionStatechartContext = field(init=False)
     """
     The motion statechart context detectors run against, holding the shared
@@ -351,6 +376,11 @@ class MontessoriEventMonitor:
     _executor: EpisodeSegmenterExecutor = field(init=False)
     """
     Drives compilation and ticking of the detector statechart.
+    """
+
+    _handed_over_event_count: int = field(init=False, default=0)
+    """
+    How much of :attr:`events` :attr:`listener` has already been told about.
     """
 
     def __post_init__(self) -> None:
@@ -376,6 +406,19 @@ class MontessoriEventMonitor:
         manually posed world.
         """
         self._executor.tick()
+        self._hand_over_new_events()
+
+    def _hand_over_new_events(self) -> None:
+        """
+        Tell :attr:`listener` about whatever the tick just added, and nothing else.
+        """
+        if self.listener is None:
+            return
+        detected = self.events
+        if len(detected) == self._handed_over_event_count:
+            return
+        self.listener.receive(detected[self._handed_over_event_count :])
+        self._handed_over_event_count = len(detected)
 
     def start(self) -> None:
         """
