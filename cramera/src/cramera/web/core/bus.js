@@ -17,6 +17,7 @@
  *   panel:shown          {id}                           panel_tabs → the tab's panel
  *   panel:resized        {}                             split-resize → graph panels
  *   knowledge:ready             {payload}                      eql → anyone
+ *   voice:transcript     {text}                         eql → eql, anyone
  *
  * A new panel is free to define further events; document them in its header.
  * ==========================================================================*/

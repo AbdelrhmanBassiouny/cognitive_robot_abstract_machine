@@ -1,21 +1,22 @@
 """
 What a running Montessori sort offers the viewer's entity query language console.
 
-Three things are on offer. About the scene itself: where the holes, the box and each
-shape's insertion goal are, answered by highlighting them in the viewer. About the sort
-in progress, the questions the buttons exist to answer are: was this shape inserted,
-where was it being inserted, and why could it not be. About the runs that already
-finished, they are how often each shape was sorted and how its attempts ended -- read
-back out of the results database rather than out of this process.
+About the scene itself: where the holes, the box and each shape's insertion goal are,
+answered by highlighting them in the viewer. About the sort in progress, the questions
+the buttons exist to answer are: what the robot is doing at this moment, was this shape
+inserted, where was it being inserted, and why could it not be. About the runs that
+already finished, they are how often each shape was sorted and how its attempts ended
+-- read back out of the results database rather than out of this process.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import partial
 
 from krrood.entity_query_language.factories import sum as eql_sum
 from cramera.knowledge.database_evaluation import DatabaseEvaluation
-from cramera.knowledge.presets import Preset
+from cramera.knowledge.presets import Preset, PresetsPerType
 from cramera.knowledge.query_domain import QueryDomain
 from cramera.knowledge.queryable_knowledge import QueryableKnowledge, QueryScope
 from cramera.live.query import LiveQuerySource
@@ -30,6 +31,7 @@ from experiments.montessori.scene_layout import (
 )
 from experiments.montessori.sorting_progress import (
     InsertionAttemptRecord,
+    PerformedAction,
     PlanStep,
     SegmindEventRecord,
     ShapeUnderTest,
@@ -178,6 +180,28 @@ krrood's EQL-to-SQL translation does not cover, and there is no portable SQL agg
 behind it. The per-outcome breakdown answers the same thing by reading a column instead.
 """
 
+LIVE_ACTIVITY_PRESETS: List[Preset] = [
+    Preset(
+        "what is your current goal?",
+        "an(entity(shape).where(shape.is_current == True))",
+    ),
+    Preset(
+        "what is your current action?",
+        "an(entity(action).where(action.is_current == True))",
+    ),
+    Preset(
+        "what actions did you perform?",
+        "set_of(action.action_type, action.target, action.status, action.duration)"
+        ".ordered_by(action.started_at)",
+    ),
+]
+"""
+The ready-made questions about what the robot is doing at this moment.
+
+Offered by the live demo alone: a recorded bundle answers about a run that is over, and
+a run that is over has neither a goal nor an action.
+"""
+
 MONTESSORI_PRESETS: List[Preset] = (
     CURRENT_STATE_PRESETS + DETECTED_EVENTS_PRESETS + EPISODIC_MEMORY_PRESETS
 )
@@ -241,6 +265,7 @@ class MontessoriLiveQuerySource(LiveQuerySource):
                 QueryDomain("shape", ShapeUnderTest, self.progress.shapes),
                 QueryDomain("attempt", InsertionAttemptRecord, self.progress.attempts),
                 QueryDomain("plan_step", PlanStep, self.progress.plan_steps),
+                QueryDomain("action", PerformedAction, self.progress.actions),
                 QueryDomain("hole", HoleRecord, self.layout.holes),
                 QueryDomain("board", BoardRecord, self.layout.boards),
                 QueryDomain("goal", InsertionGoalRecord, self.layout.goals),
@@ -270,7 +295,10 @@ class MontessoriLiveQuerySource(LiveQuerySource):
             scope=QueryScope.EPISODIC_MEMORY,
             domains=[QueryDomain("shape_result", ShapeInsertionResult)],
             evaluation=DatabaseEvaluation(
-                open_session=self.results_database.open_session
+                open_session=partial(
+                    self.results_database.open_session,
+                    create_missing_tables=False,
+                )
             ),
             extra_names={"sum": eql_sum, "InsertionOutcome": InsertionOutcome},
         )
@@ -283,12 +311,32 @@ class MontessoriLiveQuerySource(LiveQuerySource):
         """
         offered = (
             self._scene_presets()
+            + list(LIVE_ACTIVITY_PRESETS)
             + list(CURRENT_STATE_PRESETS)
             + list(DETECTED_EVENTS_PRESETS)
         )
         if self.results_database is not None:
             offered += EPISODIC_MEMORY_PRESETS
         return offered
+
+    def unlisted_presets(self) -> List[Preset]:
+        """
+        "Give me all pick up events", written out for every type of event this demo
+        records and every type of action its robot carries out.
+        """
+        return (
+            PresetsPerType(
+                class_suffix="Event",
+                class_names=SegmindEventRecord.recordable_event_types(),
+                code="an(entity(event).where(event.event_type == '%s'))",
+                scope=QueryScope.DETECTED_EVENTS,
+            ).questions()
+            + PresetsPerType(
+                class_suffix="Action",
+                class_names=PerformedAction.performable_action_types(),
+                code="an(entity(action).where(action.action_type == '%s'))",
+            ).questions()
+        )
 
     def _scene_presets(self) -> List[Preset]:
         """

@@ -12,12 +12,17 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+from coraplex.datastructures.enums import Arms, TaskStatus
+from coraplex.plans.factories import sequential
 from coraplex.plans.failures import BodyUnfetchable
+from coraplex.plans.plan_node import ActionNode
+from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
 from segmind.datastructures.events import (
     InsertionEvent,
     LossOfContactEvent,
     PickUpEvent,
 )
+from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Point3
 from semantic_digital_twin.world import World
@@ -25,6 +30,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 
 from cramera.body_geometry import pose_label
 from cramera.knowledge.query_runner import EqlQueryRunner
+from cramera.knowledge.question_matching import QuestionMatcher
 from cramera.knowledge.queryable_knowledge import QueryScope
 from cramera.knowledge.replay import ReplayWindow
 from experiments.montessori.insertion_diagnosis import InsertionFailureReason
@@ -36,6 +42,7 @@ from experiments.montessori.live_query_source import (
 from experiments.montessori.scene_layout import SceneLayout
 from experiments.montessori.semantics import SHAPE_NAME_SUFFIX
 from experiments.montessori.sorting_progress import CompletedAttempt, SortingProgress
+from experiments.montessori.sorting_results import InsertionOutcome
 
 from .dataset.montessori_board import (
     SHAPE_KEY,
@@ -148,6 +155,26 @@ def ask_in_scope(source, preset):
     ).run(preset.code)
 
 
+def matcher_over(source):
+    """
+    The matcher the bridge builds for a source: everything it offers, shown or not.
+
+    :param source: The query source whose questions may be recognized.
+    """
+    return QuestionMatcher(source.presets() + source.unlisted_presets())
+
+
+def preset_named(source, text):
+    """
+    One of the source's ready-made questions, by the label it is shown under.
+
+    :param source: The query source to read.
+    :param text: The question's label.
+    """
+    [preset] = [entry for entry in source.presets() if entry.text == text]
+    return preset
+
+
 def ask(source, code, highlightable_ids=frozenset()):
     """
     Run one query about the sort in progress, the way the bridge does.
@@ -173,6 +200,7 @@ class TestTheSource:
             "shape",
             "attempt",
             "plan_step",
+            "action",
             "hole",
             "board",
             "goal",
@@ -442,6 +470,172 @@ class TestReplayingADetectedEvent:
         result = ask_about_events(source, preset.code)
 
         assert result.replay == [ReplayWindow.around(STARTED_AT)]
+
+
+# %% "what are you doing?" — the goal and the action of the moment
+class TestWhatTheRobotIsDoingNow:
+    """
+    The sort is asked about itself while it runs, so the shape it is on and the action
+    it is carrying out are answered from records that keep changing.
+    """
+
+    def test_the_current_goal_is_the_shape_being_sorted_and_where_it_is_aimed(
+        self, source, scene
+    ):
+        world, board, shape = scene
+
+        result = ask(source, preset_named(source, "what is your current goal?").code)
+
+        [row] = result.rows
+        assert row["__entity__"] == SHAPE_OBJECT_NAME
+        assert row["target_hole"] == SHAPE_KEY
+
+    def test_a_finished_shape_is_no_longer_the_goal(self, source):
+        source.progress.finish_shape(SHAPE_KEY, InsertionOutcome.FELL_THROUGH)
+
+        result = ask(source, preset_named(source, "what is your current goal?").code)
+
+        assert result.count == 0
+
+    def test_the_current_action_is_the_one_the_plan_is_running(self, source):
+        parking = ParkArmsAction(Arms.BOTH)
+        performing = sequential([parking, MoveTorsoAction(TorsoState.HIGH)]).plan
+        [node] = [
+            node
+            for node in performing.nodes
+            if isinstance(node, ActionNode) and node.designator is parking
+        ]
+        node.status = TaskStatus.RUNNING
+        source.progress.follow_plan(performing, SHAPE_KEY, 2)
+
+        result = ask(source, preset_named(source, "what is your current action?").code)
+
+        assert [row["action_type"] for row in result.rows] == [ParkArmsAction.__name__]
+
+    def test_every_action_performed_is_answered_with_how_it_went(self, source, scene):
+        _, _, shape = scene
+        source.progress.record_attempt(
+            CompletedAttempt(
+                shape_key=SHAPE_KEY,
+                attempt_number=2,
+                started_at=STARTED_AT,
+                ended_at=STARTED_AT + timedelta(seconds=30),
+                plan=sequential([ParkArmsAction(Arms.BOTH)]).plan,
+                fell_through=True,
+            )
+        )
+
+        result = ask(source, preset_named(source, "what actions did you perform?").code)
+
+        [row] = result.rows
+        assert row["action_type"] == ParkArmsAction.__name__
+        assert row["status"] == TaskStatus.CREATED.name
+
+
+# %% "give me all pick up events" — one question per type, recognized but not shown
+class TestAskingForOneTypeOfThing:
+    def test_a_question_is_written_out_for_every_event_a_record_is_written_for(
+        self, source
+    ):
+        asked = [preset.text for preset in source.unlisted_presets()]
+
+        assert "give me all pick up events" in asked
+        assert "give me all insertion events" in asked
+
+    def test_a_question_is_written_out_for_every_action_the_robot_carries_out(
+        self, source
+    ):
+        asked = [preset.text for preset in source.unlisted_presets()]
+
+        assert "give me all park arms actions" in asked
+
+    def test_asking_for_one_kind_of_event_answers_with_only_that_kind(self, source):
+        [preset] = [
+            preset
+            for preset in source.unlisted_presets()
+            if preset.text == "give me all pick up events"
+        ]
+
+        result = ask_about_events(source, preset.code)
+
+        assert [row["event_type"] for row in result.rows] == [PickUpEvent.__name__]
+
+    def test_asking_for_a_kind_of_event_nothing_was_detected_of_answers_with_nothing(
+        self, source
+    ):
+        [preset] = [
+            preset
+            for preset in source.unlisted_presets()
+            if preset.text == "give me all containment events"
+        ]
+
+        assert ask_about_events(source, preset.code).count == 0
+
+    def test_asking_for_one_kind_of_action_answers_with_only_that_kind(
+        self, source, scene
+    ):
+        _, _, shape = scene
+        source.progress.record_attempt(
+            CompletedAttempt(
+                shape_key=SHAPE_KEY,
+                attempt_number=2,
+                started_at=STARTED_AT,
+                ended_at=STARTED_AT + timedelta(seconds=30),
+                plan=sequential(
+                    [ParkArmsAction(Arms.BOTH), MoveTorsoAction(TorsoState.HIGH)]
+                ).plan,
+                fell_through=True,
+            )
+        )
+        [preset] = [
+            preset
+            for preset in source.unlisted_presets()
+            if preset.text == "give me all park arms actions"
+        ]
+
+        result = ask(source, preset.code)
+
+        assert [row["action_type"] for row in result.rows] == [ParkArmsAction.__name__]
+
+    def test_a_written_out_question_is_about_the_knowledge_it_ranges_over(self, source):
+        by_text = {preset.text: preset for preset in source.unlisted_presets()}
+
+        assert by_text["give me all pick up events"].scope is QueryScope.DETECTED_EVENTS
+        assert (
+            by_text["give me all park arms actions"].scope is QueryScope.CURRENT_STATE
+        )
+
+    def test_none_of_them_crowds_the_buttons(self, source):
+        shown = {preset.text for preset in source.presets()}
+
+        assert shown.isdisjoint(preset.text for preset in source.unlisted_presets())
+
+
+# %% asking these questions out loud
+class TestRecognizingASpokenQuestion:
+    """
+    A spoken question is matched against every ready-made query the demo offers, the
+    ones the panel shows and the ones it writes out per type alike, which is what the
+    bridge hands the matcher.
+    """
+
+    @pytest.mark.parametrize(
+        "asked, recognized",
+        [
+            ("what is your current goal", "what is your current goal?"),
+            ("what is your current action", "what is your current action?"),
+            ("what actions did you perform", "what actions did you perform?"),
+            ("give me all pick up events", "give me all pick up events"),
+            ("show me all insertion events", "give me all insertion events"),
+            ("give me all pick up actions", "give me all pick up actions"),
+            ("give me all park arms actions", "give me all park arms actions"),
+        ],
+    )
+    def test_the_question_asked_is_the_question_run(self, source, asked, recognized):
+        result = matcher_over(source).match(asked)
+
+        assert result.matched
+        assert result.preset.text == recognized
 
 
 # %% the recorded bundle offers the same questions

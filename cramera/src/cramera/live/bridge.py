@@ -63,6 +63,7 @@ from semantic_digital_twin.world_description.connections import (
 
 from cramera.knowledge.enums import PlanNodeGroup
 from cramera.knowledge.presets import Preset
+from cramera.knowledge.question_matching import QuestionMatcher, QuestionMatchResult
 from cramera.knowledge.query_runner import EqlQueryRunner, RenderResult
 from cramera.knowledge.query_vocabulary import QueryVocabulary
 from cramera.knowledge.queryable_knowledge import (
@@ -1167,6 +1168,22 @@ class Bridge:
             return [
                 preset.worded(self._scope_runner(preset.scope)) for preset in presets
             ]
+
+    def match_question(self, text: str) -> QuestionMatchResult:
+        """
+        Recognize which of the running demo's ready-made queries a natural-language
+        question is asking, if any.
+
+        The questions the panel shows are matched against their English wording as well
+        as their label; the ones it does not show are matched against their label alone,
+        which is already the words they are asked in, and wording each of them would
+        mean building that many queries per asked question.
+
+        :param text: The question as asked, in natural language.
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        """
+        unlisted = self._registered_query_source().unlisted_presets()
+        return QuestionMatcher(self.query_presets() + unlisted).match(text)
 
     def query_scopes(self) -> List[QueryScope]:
         """

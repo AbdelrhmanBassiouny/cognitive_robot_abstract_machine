@@ -15,6 +15,7 @@
   const RECORDED_RUN = '/api/eql';
   const RECORDED_VOCABULARY = '/api/eql/vocabulary';
   const RECORDED_MEMBERS = '/api/eql/members';
+  const RECORDED_QUESTION = '/api/question';
 
   function withParameter(url, name, value) {
     return url + (url.indexOf('?') >= 0 ? '&' : '?') + name + '=' + encodeURIComponent(value);
@@ -33,6 +34,7 @@
         return withParameter(
           window.SceneContext.withScene(RECORDED_MEMBERS), 'name', name);
       },
+      questionUrl: window.SceneContext.withScene(RECORDED_QUESTION),
     };
   }
 
@@ -54,6 +56,7 @@
         const url = withParameter(base + '/members', 'name', name);
         return scope ? withParameter(url, 'scope', scope) : url;
       },
+      questionUrl: base + '/question',
     };
   }
 

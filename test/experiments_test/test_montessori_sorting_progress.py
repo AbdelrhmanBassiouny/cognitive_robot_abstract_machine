@@ -12,6 +12,12 @@ from dataclasses import fields
 from datetime import datetime, timedelta
 
 import pytest
+from coraplex.datastructures.enums import Arms, TaskStatus
+from coraplex.plans.factories import sequential
+from coraplex.plans.plan import Plan
+from coraplex.plans.plan_node import ActionNode
+from coraplex.robot_plans.actions.base import ActionDescription
+from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
 from giskardpy.qp.exceptions import SolverReturnedFailureError
 from segmind.datastructures.events import (
     ContactEvent,
@@ -26,6 +32,7 @@ from segmind.datastructures.events import (
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
 from semantic_digital_twin.world import World
+from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.world_description.world_entity import Body
 
 from cramera.body_geometry import NumericPose
@@ -33,6 +40,8 @@ from cramera.body_geometry import NumericPose
 from experiments.montessori.insertion_diagnosis import InsertionFailureReason
 from experiments.montessori.sorting_progress import (
     CompletedAttempt,
+    PerformedAction,
+    SegmindEventRecord,
     SortingProgress,
     UntrackedShapeError,
 )
@@ -86,7 +95,14 @@ def progress(scene):
     return record
 
 
-def attempt(shape, number=1, fell_through=None, events=None, raised_exception=None):
+def attempt(
+    shape,
+    number=1,
+    fell_through=None,
+    events=None,
+    raised_exception=None,
+    plan=None,
+):
     """
     One finished attempt on the scene's shape.
 
@@ -95,18 +111,56 @@ def attempt(shape, number=1, fell_through=None, events=None, raised_exception=No
     :param fell_through: The ground-truth verdict, or None when the attempt raised.
     :param events: Segmind events detected during the attempt.
     :param raised_exception: The exception the attempt raised, if any.
+    :param plan: The plan the attempt ran, or None when it never got one.
     """
     return CompletedAttempt(
         shape_key=SHAPE_KEY,
         attempt_number=number,
         started_at=STARTED_AT,
         ended_at=STARTED_AT + timedelta(seconds=30),
-        plan=None,
+        plan=plan,
         events=events or [],
         fell_through=fell_through,
         raised_exception=raised_exception,
         gripper_bodies=[],
     )
+
+
+def plan_of(*actions: ActionDescription) -> Plan:
+    """
+    One attempt's realized plan, sequencing the given actions.
+
+    :param actions: The actions the plan performs, in order.
+    """
+    return sequential(list(actions)).plan
+
+
+def expanding_plan(outer: ActionDescription, inner: ActionDescription) -> Plan:
+    """
+    A plan whose action expands into a further action, as an action built out of other
+    actions does while it performs.
+
+    :param outer: The action the plan sequences.
+    :param inner: The action it expands into.
+    """
+    plan = plan_of(outer)
+    plan.add_edges_from([(node_of(plan, outer), ActionNode(designator=inner))])
+    return plan
+
+
+def node_of(plan: Plan, action: ActionDescription) -> ActionNode:
+    """
+    The plan's node carrying one action, which is where its status is written.
+
+    :param plan: The plan to look in.
+    :param action: The action whose node is wanted.
+    """
+    [node] = [
+        node
+        for node in plan.nodes
+        if isinstance(node, ActionNode) and node.designator is action
+    ]
+    return node
 
 
 # %% what a shape looks like before anything is tried
@@ -438,3 +492,143 @@ class TestNothingSymbolicIsHandedOut:
         ]
 
         assert symbolic == []
+
+
+# %% which shape the sort is working on right now
+class TestTheShapeBeingSortedNow:
+    def test_the_shape_just_begun_is_the_current_one(self, progress):
+        [tracked] = progress.shapes
+
+        assert tracked.is_current is True
+
+    def test_beginning_the_next_shape_moves_the_mark_along(self, progress, scene):
+        world, board, _, _ = scene
+        with world.modify_world():
+            second = cube_at(world, ABOVE_THE_BOARD, shape_key="round_hole")
+        progress.begin_shape(second, board, world)
+
+        assert [tracked.is_current for tracked in progress.shapes] == [False, True]
+
+    def test_a_finished_shape_is_no_longer_the_current_one(self, progress):
+        progress.finish_shape(SHAPE_KEY, InsertionOutcome.FELL_THROUGH)
+
+        [tracked] = progress.shapes
+        assert tracked.is_current is False
+
+
+# %% the actions of a plan, while it performs and once it is over
+class TestPerformedActions:
+    def test_an_attempt_that_ran_no_plan_performed_no_actions(self, progress, scene):
+        _, _, _, shape = scene
+        progress.record_attempt(attempt(shape, fell_through=False))
+
+        assert progress.actions == []
+
+    def test_a_recorded_plans_actions_are_named_after_their_own_type(
+        self, progress, scene
+    ):
+        _, _, _, shape = scene
+        performed = plan_of(ParkArmsAction(Arms.BOTH), MoveTorsoAction(TorsoState.HIGH))
+        progress.record_attempt(attempt(shape, fell_through=True, plan=performed))
+
+        assert [action.action_type for action in progress.actions] == [
+            ParkArmsAction.__name__,
+            MoveTorsoAction.__name__,
+        ]
+
+    def test_a_node_that_only_sequences_other_nodes_is_no_action(self, progress, scene):
+        """
+        A plan holds sequencing nodes as well as the actions the robot carries out, and
+        a question about what the robot did means the latter.
+        """
+        _, _, _, shape = scene
+        performed = plan_of(ParkArmsAction(Arms.BOTH))
+        progress.record_attempt(attempt(shape, fell_through=True, plan=performed))
+
+        assert len(performed.nodes) == len(progress.actions) + 1
+
+    def test_the_actions_of_the_plan_being_performed_are_read_as_it_performs(
+        self, progress
+    ):
+        """
+        A plan's actions are only recorded once its attempt finishes, so a question
+        about what the robot is doing has to read the plan that is still performing.
+        """
+        parking = ParkArmsAction(Arms.BOTH)
+        performing = plan_of(parking)
+        progress.follow_plan(performing, SHAPE_KEY, 1)
+        before = [action.status for action in progress.actions]
+
+        node_of(performing, parking).status = TaskStatus.SUCCEEDED
+
+        assert before == [TaskStatus.CREATED.name]
+        assert [action.status for action in progress.actions] == [
+            TaskStatus.SUCCEEDED.name
+        ]
+
+    def test_the_running_action_of_that_plan_is_the_one_being_performed(self, progress):
+        parking = ParkArmsAction(Arms.BOTH)
+        performing = plan_of(parking, MoveTorsoAction(TorsoState.HIGH))
+        node_of(performing, parking).status = TaskStatus.RUNNING
+        progress.follow_plan(performing, SHAPE_KEY, 1)
+
+        assert [
+            action.action_type for action in progress.actions if action.is_current
+        ] == [ParkArmsAction.__name__]
+
+    def test_the_innermost_running_action_is_the_one_being_performed(self, progress):
+        """
+        An action that expands into further actions leaves every node on the way down
+        running; what the robot is doing is the innermost of them.
+        """
+        outer, inner = MoveTorsoAction(TorsoState.HIGH), ParkArmsAction(Arms.BOTH)
+        performing = expanding_plan(outer, inner)
+        for action in (outer, inner):
+            node_of(performing, action).status = TaskStatus.RUNNING
+        progress.follow_plan(performing, SHAPE_KEY, 1)
+
+        assert [
+            action.action_type for action in progress.actions if action.is_current
+        ] == [ParkArmsAction.__name__]
+
+    def test_no_action_is_current_once_its_attempt_is_recorded(self, progress, scene):
+        """
+        A plan abandoned mid-action leaves that node reading RUNNING for good, and a
+        finished attempt must not answer as though the robot were still in it.
+        """
+        _, _, _, shape = scene
+        abandoned = ParkArmsAction(Arms.BOTH)
+        performed = plan_of(abandoned)
+        node_of(performed, abandoned).status = TaskStatus.RUNNING
+        progress.follow_plan(performed, SHAPE_KEY, 1)
+
+        progress.record_attempt(attempt(shape, fell_through=False, plan=performed))
+
+        assert [action.is_current for action in progress.actions] == [False]
+
+
+# %% the types a question may name
+class TestTheTypesAQuestionMayName:
+    def test_every_event_a_record_is_written_for_is_named(self):
+        recordable = SegmindEventRecord.recordable_event_types()
+
+        assert PickUpEvent.__name__ in recordable
+        assert InsertionEvent.__name__ in recordable
+
+    def test_an_event_too_fine_grained_to_record_is_not_named(self):
+        """
+        A contact appearing and a motion starting are detected and then left unrecorded
+        (see :data:`ATOMIC_EVENT_TYPES`), so no question can ask for them.
+        """
+        recordable = SegmindEventRecord.recordable_event_types()
+
+        assert ContactEvent.__name__ not in recordable
+        assert TranslationEvent.__name__ not in recordable
+
+    def test_an_action_the_robot_carries_out_is_named(self):
+        assert ParkArmsAction.__name__ in PerformedAction.performable_action_types()
+
+    def test_a_base_class_the_robot_never_carries_out_is_not_named(self):
+        assert (
+            ActionDescription.__name__ not in PerformedAction.performable_action_types()
+        )

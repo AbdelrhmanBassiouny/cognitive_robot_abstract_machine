@@ -153,6 +153,18 @@ body{
   font-weight:700;font-size:13px;padding:0 20px;border-radius:4px;cursor:pointer
 }
 #query-run:active{transform:translateY(1px)}
+/* one press records one spoken question; sits inside the bar beside Run */
+.voice-ask{
+  background:var(--bg2);border:1px solid var(--line2);border-radius:4px;color:var(--ink);
+  font-size:15px;padding:0 13px;cursor:pointer;transition:.15s
+}
+.voice-ask:hover{border-color:var(--accent)}
+.voice-ask:disabled{opacity:.4;cursor:not-allowed}
+.voice-ask.listening{border-color:#ff5470;animation:voice-listening 1.1s ease-in-out infinite}
+@keyframes voice-listening{
+  0%,100%{box-shadow:0 0 0 0 rgba(255,84,112,.55)}
+  50%{box-shadow:0 0 0 6px rgba(255,84,112,0)}
+}
 /* the asked question, big under the bar, in English; the role colours are krrood's
    own inline spans, and its words link to their documentation or source */
 .question{

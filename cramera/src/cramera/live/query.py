@@ -52,3 +52,15 @@ class LiveQuerySource(ABC):
         """
         Ready-made queries the panel offers as buttons.
         """
+
+    def unlisted_presets(self) -> List[Preset]:
+        """
+        Ready-made queries recognized when a question asks for one, but not shown as
+        buttons.
+
+        A question naming one type out of many -- one kind of detected event, one kind
+        of performed action -- is worth recognizing for every type a demo records, which
+        is more questions than a panel has room to show (see
+        :class:`~cramera.knowledge.presets.PresetsPerType`).
+        """
+        return []

@@ -18,6 +18,10 @@ from typing_extensions import List
 from cramera.knowledge.eql_session import EqlSession
 from cramera.knowledge.presets import Preset
 from cramera.knowledge.query_runner import RenderResult
+from cramera.knowledge.question_matching import (
+    UNMATCHED_QUESTION_REPLY,
+    QuestionMatchResult,
+)
 from cramera.paths import WEB_ROOT
 
 JS_DIR = Path(__file__).parent / "js"
@@ -226,6 +230,9 @@ class TestJsUnits:
     def test_eql_panel(self):
         self.run_node("test_eql_panel.js")
 
+    def test_voice_capture(self):
+        self.run_node("test_voice.js")
+
     def test_scene_picker(self):
         self.run_node("test_scene_picker.js")
 
@@ -320,6 +327,44 @@ class TestQueryPanelReadsTheAnswer:
         stylesheet = read("app.css")
         assert ".question{" in stylesheet
         assert ".question a{" in stylesheet
+
+    def test_the_question_match_is_read_under_the_keys_it_is_sent_as(self):
+        """
+        The match outcome is produced in Python and consumed by the panel's voice
+        consumer, so its keys are pinned across the boundary.
+        """
+        matched = QuestionMatchResult(
+            preset=Preset("which robot is this?", "the(entity(robot))"),
+            similarity=90.0,
+        ).to_payload()
+        unmatched = QuestionMatchResult(preset=None, similarity=10.0).to_payload()
+        panel = read("panels/eql/panel.js")
+
+        assert {"matched", "preset", "similarity"} <= matched.keys()
+        assert {"matched", "reply"} <= unmatched.keys()
+        assert "res.matched" in panel
+        assert "res.preset" in panel
+        assert "res.reply" in panel
+
+    def test_the_sorry_reply_has_one_source_and_it_is_not_the_frontend(self):
+        """
+        The reply travels in the payload, so the panel never carries a second copy that
+        could drift from :data:`UNMATCHED_QUESTION_REPLY`.
+        """
+        assert UNMATCHED_QUESTION_REPLY not in read("panels/eql/panel.js")
+
+    def test_the_voice_button_sits_in_the_query_bar_and_is_styled(self):
+        """
+        The record button lives inside the text bar, beside Run.
+        """
+        panel = read("panels/eql/panel.js")
+        bar = panel.split('class="query-bar"', 1)[1].split("</div>", 1)[0]
+        assert 'id="query-run"' in bar
+        assert bar.index('id="query-run"') < bar.index('id="voice-ask"')
+        assert "voice:transcript" in panel
+        stylesheet = read("app.css")
+        assert ".voice-ask{" in stylesheet
+        assert ".voice-ask.listening" in stylesheet
 
 
 class TestQueryPanelHints:

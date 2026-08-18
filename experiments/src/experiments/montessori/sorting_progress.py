@@ -16,8 +16,10 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 
+from coraplex.datastructures.enums import TaskStatus
 from coraplex.plans.plan import Plan
-from coraplex.plans.plan_node import DesignatorNode, PlanNode
+from coraplex.plans.plan_node import ActionNode, DesignatorNode, PlanNode
+from coraplex.robot_plans.actions.base import ActionDescription
 from cramera.body_geometry import NumericPose
 from krrood.exceptions import DataclassException
 from segmind.datastructures.events import (
@@ -30,7 +32,7 @@ from segmind.datastructures.events import (
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import Dict, Iterable, List, Optional, Tuple, Type
+from typing_extensions import Dict, Iterable, List, Optional, Tuple, Type, TypeVar
 
 from experiments.montessori.insertion_diagnosis import (
     InsertionDiagnosis,
@@ -43,6 +45,28 @@ from experiments.montessori.semantics import (
     ShapeSortingBoard,
 )
 from experiments.montessori.sorting_results import InsertionOutcome
+
+Recorded = TypeVar("Recorded")
+
+
+def instantiable_subclasses(base: Type[Recorded]) -> List[Type[Recorded]]:
+    """
+    Every subclass of ``base`` that is not itself subclassed, which for a tree of record
+    types is the set an actual record can be an instance of.
+
+    Only the subclasses this process has imported are found, which for a running demo is
+    every type its own plans and detectors can produce.
+
+    :param base: The root of the class tree to walk.
+    """
+    found: List[Type[Recorded]] = []
+    for subclass in base.__subclasses__():
+        if subclass.__subclasses__():
+            found.extend(instantiable_subclasses(subclass))
+        else:
+            found.append(subclass)
+    return found
+
 
 INSERTION_PHASE_ACTION_NAME = "PlaceAction"
 """
@@ -105,6 +129,12 @@ class ShapeUnderTest:
     is_inserted: bool = False
     """
     Whether the shape is in the box right now, as the world's geometry says.
+    """
+
+    is_current: bool = False
+    """
+    Whether this is the shape the demo is sorting right now, which is what it is trying
+    to achieve and so what a question about its goal is answered with.
     """
 
     outcome: Optional[InsertionOutcome] = None
@@ -245,6 +275,12 @@ class PlanStep:
     The node's execution status.
     """
 
+    is_action: bool
+    """
+    Whether the node carries an action the robot performs, rather than sequencing other
+    nodes.
+    """
+
     reason: Optional[str] = None
     """
     Why the node failed, when it recorded one.
@@ -300,6 +336,7 @@ class PlanStep:
             attempt_number=attempt_number,
             kind=type(node).__name__,
             status=node.status.name,
+            is_action=isinstance(node, ActionNode),
             reason=str(node.reason) if node.reason is not None else None,
             started_at=node.start_time,
             duration=cls._duration_of(node),
@@ -332,6 +369,154 @@ class PlanStep:
             if isinstance(value, (Body, MontessoriShape))
         ]
         return named[0] if named else None
+
+
+@dataclass
+class PerformedAction:
+    """
+    One action of an attempt's plan, as the robot carrying it out.
+
+    A plan step is any node of the tree; an action is the part of it a question about
+    what the robot did or is doing means.
+    """
+
+    name: str
+    """
+    The action's label, e.g. ``"square_hole PickUpAction"``.
+    """
+
+    shape_key: str
+    """
+    Key of the shape whose attempt this action belongs to.
+    """
+
+    attempt_number: int
+    """
+    Index of the attempt this action belongs to.
+    """
+
+    action_type: str
+    """
+    The action's own type, e.g. ``"PickUpAction"``.
+    """
+
+    status: str
+    """
+    The action's execution status.
+    """
+
+    is_current: bool = False
+    """
+    Whether the robot is carrying this action out right now.
+    """
+
+    started_at: Optional[datetime] = None
+    """
+    When the action started performing.
+    """
+
+    duration: Optional[float] = None
+    """
+    How long the action took, in seconds.
+    """
+
+    target: Optional[str] = None
+    """
+    What the action acts on, when it names something.
+    """
+
+    reason: Optional[str] = None
+    """
+    Why the action failed, when it recorded one.
+    """
+
+    @classmethod
+    def of_plan(
+        cls, plan: Plan, shape: ShapeUnderTest, attempt_number: int
+    ) -> List[PerformedAction]:
+        """
+        The actions of one attempt's plan, in execution order.
+
+        :param plan: The realized plan tree.
+        :param shape: The shape whose attempt this plan is.
+        :param attempt_number: Index of the attempt this plan is.
+        """
+        return [
+            cls.of_step(step)
+            for step in PlanStep.of_plan(plan, shape, attempt_number)
+            if step.is_action
+        ]
+
+    @classmethod
+    def of_step(cls, step: PlanStep) -> PerformedAction:
+        """
+        One plan step that carries an action, as that action.
+
+        :param step: The step to read.
+        """
+        return cls(
+            name="%s %s" % (step.shape_key, step.name),
+            shape_key=step.shape_key,
+            attempt_number=step.attempt_number,
+            action_type=step.name,
+            status=step.status,
+            started_at=step.started_at,
+            duration=step.duration,
+            target=step.target,
+            reason=step.reason,
+        )
+
+    @classmethod
+    def performable_action_types(cls) -> Tuple[str, ...]:
+        """
+        The type of every action the robot can be asked for by name, in alphabetical
+        order.
+        """
+        return tuple(
+            sorted(
+                action_type.__name__
+                for action_type in instantiable_subclasses(ActionDescription)
+            )
+        )
+
+
+@dataclass
+class PerformingAttempt:
+    """
+    The attempt being performed right now, read from its plan as the plan grows.
+
+    An attempt's actions are only recorded once it finishes, so this is what a question
+    about what the robot is doing now is answered from.
+    """
+
+    plan: Plan
+    """
+    The plan being performed.
+    """
+
+    shape: ShapeUnderTest
+    """
+    The shape this attempt is being made on.
+    """
+
+    attempt_number: int
+    """
+    The attempt's 1-based index among its shape's attempts.
+    """
+
+    def actions(self) -> List[PerformedAction]:
+        """
+        This attempt's actions so far, with the one being carried out marked.
+        """
+        actions = PerformedAction.of_plan(self.plan, self.shape, self.attempt_number)
+        running = [
+            action for action in actions if action.status == TaskStatus.RUNNING.name
+        ]
+        if running:
+            # an action expanding into further actions leaves every node on the way down
+            # running, and the innermost of them is what the robot is actually doing
+            running[-1].is_current = True
+        return actions
 
 
 ATOMIC_EVENT_TYPES: Tuple[Type[DetectionEvent], ...] = (
@@ -389,6 +574,22 @@ class SegmindEventRecord:
     """
     Name of the hole an insertion was detected through.
     """
+
+    @classmethod
+    def recordable_event_types(cls) -> Tuple[str, ...]:
+        """
+        The type of every event a record can be written for, in alphabetical order.
+
+        The atomic ones :data:`ATOMIC_EVENT_TYPES` names are detected and then left
+        unrecorded, so no question can ask for them.
+        """
+        return tuple(
+            sorted(
+                event_type.__name__
+                for event_type in instantiable_subclasses(DetectionEvent)
+                if not issubclass(event_type, ATOMIC_EVENT_TYPES)
+            )
+        )
 
     @classmethod
     def of_attempt(
@@ -544,6 +745,16 @@ class SortingProgress:
     Every segmind event recorded against the attempt it fell within.
     """
 
+    _actions: List[PerformedAction] = field(default_factory=list)
+    """
+    The actions of every finished attempt, as its plan left them.
+    """
+
+    _performing: Optional[PerformingAttempt] = None
+    """
+    The attempt being performed right now, or None between attempts.
+    """
+
     _tracked_shapes: Dict[str, MontessoriShape] = field(default_factory=dict)
     """
     The live shapes behind :attr:`_shapes`, so the world can be re-read for them.
@@ -589,6 +800,36 @@ class SortingProgress:
         with self._lock:
             return list(self._events)
 
+    @property
+    def actions(self) -> List[PerformedAction]:
+        """
+        Every action performed so far: the finished attempts' as their plans left them,
+        then the attempt being performed read from its own plan, so the action being
+        carried out is named while it is still running.
+        """
+        with self._lock:
+            performed = list(self._actions)
+            performing = self._performing
+        if performing is None:
+            return performed
+        return performed + performing.actions()
+
+    def follow_plan(self, plan: Plan, shape_key: str, attempt_number: int) -> None:
+        """
+        Watch one attempt's plan while it performs, so a question about what the robot
+        is doing is answered from the plan rather than waiting for the attempt to end.
+
+        :param plan: The plan about to be performed.
+        :param shape_key: Key of the shape the attempt is being made on.
+        :param attempt_number: The attempt's 1-based index.
+        :raises UntrackedShapeError: When that shape was never begun.
+        """
+        tracked = self._tracked_record(shape_key)
+        with self._lock:
+            self._performing = PerformingAttempt(
+                plan=plan, shape=tracked, attempt_number=attempt_number
+            )
+
     def begin_shape(
         self, shape: MontessoriShape, board: ShapeSortingBoard, world: World
     ) -> None:
@@ -607,7 +848,10 @@ class SortingProgress:
             target_pose=NumericPose.of_pose(board.insertion_target_for(shape, world)),
             is_inserted=board.has_fallen_through(shape, world),
         )
+        tracked.is_current = True
         with self._lock:
+            for sorted_earlier in self._shapes:
+                sorted_earlier.is_current = False
             self._tracked_shapes[shape.shape_key] = shape
             self._shapes.append(tracked)
 
@@ -646,6 +890,12 @@ class SortingProgress:
             self._attempts.append(record)
             self._events.extend(events)
             self._plan_steps.extend(steps)
+            # a plan abandoned mid-action leaves that node reading RUNNING for good, so
+            # a finished attempt's actions are frozen with none of them current
+            self._actions.extend(
+                PerformedAction.of_step(step) for step in steps if step.is_action
+            )
+            self._performing = None
         self._update_shape(completed, record)
 
     def finish_shape(self, shape_key: str, outcome: InsertionOutcome) -> None:
@@ -659,6 +909,7 @@ class SortingProgress:
             for tracked in self._shapes:
                 if tracked.shape_key == shape_key:
                     tracked.outcome = outcome
+                    tracked.is_current = False
 
     def refresh_world_state(self, board: ShapeSortingBoard, world: World) -> None:
         """

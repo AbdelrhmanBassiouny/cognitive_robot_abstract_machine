@@ -5,9 +5,14 @@ End-to-end tests of the HTTP server: static frontend, scenes and JSON API.
 import importlib
 import json
 import threading
+import urllib.error
 import urllib.request
 
 import pytest
+
+from cramera import paths
+
+from .conftest import reset_knowledge_base_cache
 
 
 @pytest.fixture()
@@ -34,6 +39,26 @@ def get_json(url):
     status, body = get(url)
     assert status == 200
     return json.loads(body)
+
+
+def post_json(url, payload):
+    """
+    POST ``payload`` as JSON and return the decoded answer, error responses included.
+
+    :param url: The endpoint to post to.
+    :param payload: The JSON-serializable request body.
+    """
+    request = urllib.request.Request(
+        url,
+        method="POST",
+        data=json.dumps(payload).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return json.loads(response.read())
+    except urllib.error.HTTPError as error:
+        return json.loads(error.read())
 
 
 class TestStatic:
@@ -185,3 +210,79 @@ class TestVocabularyApi:
 
         assert payload["ok"] is False
         assert "NoSuchType" in payload["error"]
+
+
+class TestAskedQuestions:
+    """
+    A natural-language question — spoken or typed — is matched to the presets the
+    recorded scene can answer, and either runs as if its button had been clicked or is
+    declined with the sorry reply.
+    """
+
+    def test_a_question_is_recognized_and_its_query_runs(self, server):
+        """
+        The full voice flow, minus the microphone: transcript in, matched preset out,
+        the preset's own code answered — exactly what clicking its button runs.
+        """
+        pytest.importorskip("krrood")
+        match = post_json(server + "/api/question", {"text": "which robot is this"})
+
+        assert match["ok"] is True
+        assert match["matched"] is True
+        assert match["preset"]["code"] == "the(entity(robot))"
+
+        answer = post_json(server + "/api/eql", {"code": match["preset"]["code"]})
+        assert answer["ok"] is True
+        assert answer["count"] == 1
+
+    def test_a_paraphrase_is_recognized_too(self, server):
+        pytest.importorskip("krrood")
+        match = post_json(
+            server + "/api/question", {"text": "can you tell me what is in the scene"}
+        )
+
+        assert match["matched"] is True
+        assert match["preset"]["code"] == "an(entity(scene_object))"
+
+    def test_an_unanswerable_question_gets_the_sorry_reply(self, server):
+        pytest.importorskip("krrood")
+        from cramera.knowledge.question_matching import UNMATCHED_QUESTION_REPLY
+
+        match = post_json(
+            server + "/api/question", {"text": "what's the weather like today"}
+        )
+
+        assert match["ok"] is True
+        assert match["matched"] is False
+        assert match["reply"] == UNMATCHED_QUESTION_REPLY
+
+    def test_an_empty_question_is_an_error(self, server):
+        pytest.importorskip("krrood")
+        assert post_json(server + "/api/question", {"text": "   "})["ok"] is False
+
+    def test_a_preset_needing_a_running_demo_is_not_offered(self, server):
+        """
+        A bundle-declared preset ranges over a demo the recording does not have;
+        matching it here would hand the panel a query it cannot run.
+        """
+        pytest.importorskip("krrood")
+        bundle_directory = paths.scenes_directory() / "fixture"
+        (bundle_directory / "presets.json").write_text(
+            json.dumps(
+                {
+                    "presets": [
+                        {
+                            "text": "which shapes are inserted?",
+                            "code": "an(entity(shape))",
+                        }
+                    ]
+                }
+            )
+        )
+        reset_knowledge_base_cache()
+
+        match = post_json(
+            server + "/api/question", {"text": "which shapes are inserted"}
+        )
+
+        assert match["matched"] is False
