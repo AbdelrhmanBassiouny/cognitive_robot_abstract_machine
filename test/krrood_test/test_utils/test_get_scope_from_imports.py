@@ -83,3 +83,10 @@ def test_get_scope_from_imports_relative(tmp_path):
         assert scope["A"] == A
     finally:
         sys.path.remove(str(tmp_path))
+
+
+def test_get_scope_from_imports_from_unimportable_module():
+    source = "from pathlib import Path\nfrom non_existent_module_xyz import Something"
+    scope = get_scope_from_imports(source=source)
+    assert scope["Path"] == Path
+    assert "Something" not in scope

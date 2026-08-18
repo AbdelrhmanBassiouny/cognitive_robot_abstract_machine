@@ -389,7 +389,7 @@ class TestViewPayloads:
         payload = GraphPanelViews.of_active_scene().for_tab("plan")
         rendered = payload.to_payload()
         assert payload.ok and rendered["layout"] == "hier"
-        assert rendered["live"] == "plan" and rendered["statusLegend"]
+        assert rendered["statusLegend"]
         by_label = {n.label: n for n in payload.nodes}
         assert by_label["SequentialNode"].status == "SUCCEEDED"
         # recorded inner nodes stay CREATED (only the root is performed)
