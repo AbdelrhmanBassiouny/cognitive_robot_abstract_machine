@@ -119,6 +119,11 @@
     };
   }
 
+  /* A layout that mounts nothing beside the scene — the ?replay= popup shows the scene
+     alone — has no second pane to resize it against, and nothing below to stack or
+     maximize either; app.css then gives the scene the whole width. */
+  if (!right.children.length) return;
+
   const columns = installDivider(split, right, COLUMNS, 'splitRight:' + page);
 
   // %% the panels a slot stacks

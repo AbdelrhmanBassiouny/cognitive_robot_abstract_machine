@@ -90,20 +90,20 @@ function makePanel(id) {
   return panel;
 }
 
-// the shell as config.js lays it out: the scene on the left, EQL above the graph
-// on the right
-function install(stored) {
+// the shell as config.js lays it out; `rightPanelIds` is what the layout mounts beside
+// the scene, which the full page fills with EQL above the graph and the ?replay= popup
+// leaves empty
+function install(stored, rightPanelIds) {
   const split = makeElement('split');
   const left = makeElement('slot');
   const right = makeElement('slot');
   left.dataset.slot = 'left';
   right.dataset.slot = 'right';
-  const eql = makePanel('eql');
-  const graph = makePanel('graph');
-  eql.appendChild(makeElement('panel-head'));
-  graph.appendChild(makeElement('graph-wrap'));
-  right.appendChild(eql);
-  right.appendChild(graph);
+  (rightPanelIds || ['eql', 'graph']).forEach(function (id) {
+    const panel = makePanel(id);
+    panel.appendChild(makeElement(id === 'graph' ? 'graph-wrap' : 'panel-head'));
+    right.appendChild(panel);
+  });
   split.appendChild(left);
   split.appendChild(right);
 
@@ -125,7 +125,7 @@ function install(stored) {
     window, document, { pathname: '/index.html' }, localStorage, loadSplitSizing());
 
   return {
-    split: split, left: left, right: right, eql: eql, graph: graph, store: store,
+    split: split, left: left, right: right, store: store,
     columnDivider: split.children.filter(function (e) { return matches(e, '.split-divider'); })[0],
     rowDivider: right.children.filter(function (e) { return matches(e, '.slot-divider'); })[0],
   };
@@ -186,4 +186,15 @@ test('dragging the column divider resizes the knowledge column against the scene
 test('a remembered column size is restored on load', function () {
   const shell = install({ 'splitRight:index.html': '0.6' });
   assert.strictEqual(shell.split.style.gridTemplateColumns, 'minmax(0,40fr) auto minmax(0,60fr)');
+});
+
+// %% a layout that mounts nothing beside the scene — the ?replay= popup
+test('no column divider is installed when nothing is mounted beside the scene', function () {
+  const shell = install(undefined, []);
+  assert.strictEqual(shell.columnDivider, undefined);
+});
+
+test('the scene is not sized against an empty slot', function () {
+  const shell = install({ 'splitRight:index.html': '0.6' }, []);
+  assert.strictEqual(shell.split.style.gridTemplateColumns, undefined);
 });
