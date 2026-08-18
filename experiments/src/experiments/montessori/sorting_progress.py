@@ -21,14 +21,16 @@ from coraplex.plans.plan_node import DesignatorNode, PlanNode
 from cramera.body_geometry import NumericPose
 from krrood.exceptions import DataclassException
 from segmind.datastructures.events import (
+    AbstractContactEvent,
     DetectionEvent,
     EventWithTrackedObjects,
     InsertionEvent,
+    MotionEvent,
     PickUpEvent,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Body
-from typing_extensions import Dict, List, Optional
+from typing_extensions import Dict, Iterable, List, Optional, Tuple, Type
 
 from experiments.montessori.insertion_diagnosis import (
     InsertionDiagnosis,
@@ -332,6 +334,21 @@ class PlanStep:
         return named[0] if named else None
 
 
+ATOMIC_EVENT_TYPES: Tuple[Type[DetectionEvent], ...] = (
+    AbstractContactEvent,
+    MotionEvent,
+)
+"""
+The event types too fine-grained to answer a question with: a contact appearing or
+disappearing, and a motion starting or stopping.
+
+Detecting them is what the coarser events are read from, and what
+:mod:`experiments.montessori.insertion_diagnosis` tells a dropped shape from one that
+was never picked up by, so they are detected and then left unrecorded rather than not
+detected at all.
+"""
+
+
 @dataclass
 class SegmindEventRecord:
     """
@@ -372,6 +389,26 @@ class SegmindEventRecord:
     """
     Name of the hole an insertion was detected through.
     """
+
+    @classmethod
+    def of_attempt(
+        cls,
+        events: Iterable[DetectionEvent],
+        shape: ShapeUnderTest,
+        attempt_number: int,
+    ) -> List[SegmindEventRecord]:
+        """
+        The events of one attempt worth answering a question with, as records.
+
+        :param events: Every event detected while the attempt ran.
+        :param shape: The shape the attempt was made on.
+        :param attempt_number: Index of the attempt.
+        """
+        return [
+            cls.of_event(event, shape, attempt_number)
+            for event in events
+            if not isinstance(event, ATOMIC_EVENT_TYPES)
+        ]
 
     @classmethod
     def of_event(
@@ -597,10 +634,9 @@ class SortingProgress:
             failure_detail=diagnosis.detail if diagnosis else None,
             raised_exception=completed.evidence().named_exception(),
         )
-        events = [
-            SegmindEventRecord.of_event(event, tracked, completed.attempt_number)
-            for event in completed.events
-        ]
+        events = SegmindEventRecord.of_attempt(
+            completed.events, tracked, completed.attempt_number
+        )
         steps = (
             PlanStep.of_plan(completed.plan, tracked, completed.attempt_number)
             if completed.plan is not None

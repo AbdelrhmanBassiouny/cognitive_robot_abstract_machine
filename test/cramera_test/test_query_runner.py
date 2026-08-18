@@ -3,6 +3,7 @@ Tests for the domain-agnostic EQL query runner and its row rendering.
 """
 
 from dataclasses import dataclass, field
+from datetime import datetime
 
 import pytest
 
@@ -16,8 +17,10 @@ from cramera.body_geometry import pose_label  # noqa: E402
 from cramera.knowledge.query_domain import QueryDomain  # noqa: E402
 from cramera.knowledge.query_runner import EqlQueryRunner, RowRenderer  # noqa: E402
 from cramera.knowledge.queryable_knowledge import QueryEvaluation  # noqa: E402
+from cramera.knowledge.replay import ReplayWindow  # noqa: E402
 
 from .dataset.queryable_records import (  # noqa: E402
+    MomentRecord,
     NamedRecord,
     PosedRecord,
     RecordWithClassLevelDefaults,
@@ -273,8 +276,8 @@ class TestRowRendering:
 
         row = renderer.rows_of(RecordWithClassLevelDefaults("kept")).rows[0]
 
-        assert row["__entity__"] == "kept"
-        assert "_bookkeeping_" not in row
+        assert row.values["__entity__"] == "kept"
+        assert "_bookkeeping_" not in row.values
 
     def test_a_field_left_at_its_class_level_default_renders_that_default(self):
         """
@@ -285,7 +288,7 @@ class TestRowRendering:
 
         row = renderer.rows_of(RecordWithClassLevelDefaults("kept")).rows[0]
 
-        assert row["revision"] == 0
+        assert row.values["revision"] == 0
 
     def test_rows_stop_at_the_limit_and_say_so(self):
         result = make_runner().run("an(entity(record))", limit=2)
@@ -333,6 +336,84 @@ class TestHighlightableAnswerValues:
         result = runner.run("an(entity(record))")
 
         assert result.highlight == ["beta", "first", "second", "third"]
+
+
+# %% replayable answer rows
+DETECTED_AT = datetime(2026, 8, 13, 12, 0, 30)
+"""
+When the moment record of these tests happened.
+"""
+
+
+class TestReplayableAnswerRows:
+    """
+    An answer row that names a moment carries the window of the demo recording worth
+    replaying around it; rows without a moment offer no replay.
+    """
+
+    def make_moment_runner(self) -> EqlQueryRunner:
+        """
+        A runner over one ``moment`` domain of a single timestamped record.
+        """
+        return EqlQueryRunner(
+            domains=[
+                QueryDomain(
+                    name="moment",
+                    entity_type=MomentRecord,
+                    objects=[MomentRecord("cube PickUpEvent", DETECTED_AT)],
+                )
+            ]
+        )
+
+    def test_the_window_leads_and_trails_the_moment_by_the_fixed_shifts(self):
+        window = ReplayWindow.around(DETECTED_AT)
+
+        assert window.start == DETECTED_AT.timestamp() - ReplayWindow.LEAD_SECONDS
+        assert window.end == DETECTED_AT.timestamp() + ReplayWindow.TAIL_SECONDS
+
+    def test_the_window_barely_outlasts_its_moment(self):
+        """
+        A clip is watched to see one moment, so it runs only long enough to show that
+        moment in motion rather than to replay the run around it.
+        """
+        window = ReplayWindow.around(DETECTED_AT)
+
+        assert window.end - window.start == 2.0
+
+    def test_a_timestamped_entity_row_carries_the_window_around_its_moment(self):
+        result = self.make_moment_runner().run("an(entity(moment))")
+
+        assert result.replay == [ReplayWindow.around(DETECTED_AT)]
+
+    def test_an_asked_for_timestamp_value_makes_its_row_replayable(self):
+        result = self.make_moment_runner().run("set_of(moment.name, moment.timestamp)")
+
+        assert result.replay == [ReplayWindow.around(DETECTED_AT)]
+
+    def test_a_row_without_a_moment_offers_no_replay(self):
+        result = make_runner().run("an(entity(record))")
+
+        assert result.replay == [None, None, None]
+
+    def test_a_row_holds_only_what_the_query_asked_for(self):
+        """
+        A window travels beside its row rather than inside it, so a viewer that knows
+        nothing of replay shows the answer as it always did instead of rendering the
+        window as a column of its own.
+        """
+        result = self.make_moment_runner().run("an(entity(moment))")
+
+        assert list(result.rows[0]) == ["__entity__", "__type__", "timestamp"]
+
+    def test_the_payload_offers_the_windows_beside_the_rows(self):
+        payload = self.make_moment_runner().run("an(entity(moment))").to_payload()
+
+        assert payload["replay"] == [ReplayWindow.around(DETECTED_AT).to_payload()]
+
+    def test_a_timestamp_reads_as_a_time_rather_than_a_repr(self):
+        result = self.make_moment_runner().run("an(entity(moment))")
+
+        assert result.rows[0]["timestamp"] == "2026-08-13 12:00:30"
 
 
 # %% failures reach the caller

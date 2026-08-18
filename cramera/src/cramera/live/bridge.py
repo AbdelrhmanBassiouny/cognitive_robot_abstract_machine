@@ -74,12 +74,14 @@ from cramera.knowledge.workspace_classes import WorkspaceClassIndex
 from cramera.live.model_source import LiveModelCatalog
 from cramera.live.query import LiveQuerySource, NoQuerySourceRegistered
 from cramera.live.events import LiveEventSource, NoEventSourceRegistered
+from cramera.live.recording import DemoRecording
 from cramera.live.run_control import (
     LiveRunControl,
     NoRunControlRegistered,
     RunCommand,
     RunControlState,
 )
+from cramera.live.world_geometry import GeneratedWorldModels
 from cramera.mesh_format import MeshFormat
 from cramera.palette import ObjectPalette
 from cramera.robot_parts import RobotPartAnnotation
@@ -679,6 +681,11 @@ class Bridge:
     The newest world snapshot in the trajectory-frame format.
     """
 
+    recording: DemoRecording = field(default_factory=DemoRecording)
+    """
+    The rolling record of every published snapshot, served as replay clips.
+    """
+
     object_metadata: List[ObjectCatalogEntry] = field(default_factory=list)
     """
     Geometry catalog for the viewer: one entry per loose object.
@@ -746,7 +753,20 @@ class Bridge:
 
     _model_catalog: LiveModelCatalog = field(default_factory=LiveModelCatalog)
     """
-    URDF/xacro sources the world was built from, served without a bundle.
+    The URDF models of the bound world, served without a bundle.
+    """
+
+    _world_geometry: GeneratedWorldModels = field(default_factory=GeneratedWorldModels)
+    """
+    Writes the bound world's own geometry as URDF, for a demo that parsed none.
+    """
+
+    _world_geometry_is_stale: bool = True
+    """
+    Whether the written models still describe what the viewer should be shown.
+
+    Set from any thread, acted on by the tick hook, which is the only place a world
+    may be read.
     """
 
     _plan: Optional[Plan] = None
@@ -833,8 +853,12 @@ class Bridge:
 
     _query_lock: threading.Lock = field(default_factory=threading.Lock)
     """
-    Serializes queries: krrood's ``SymbolGraph`` singleton is not threadsafe, and the
+    Serializes queries: EQL evaluation is not written to run twice at once, and the
     bridge answers several viewers from its own thread pool.
+
+    ..note:: This does not keep a query apart from the demo thread, which evaluates EQL
+        of its own; what they share is the ``SymbolGraph`` singleton, which serializes
+        itself.
     """
 
     # %% one-time installation
@@ -866,6 +890,7 @@ class Bridge:
         if self.world is not None and world is not self.world:
             self._forget_previous_world()
         self.world = world
+        self._world_geometry_is_stale = True
         self.bind()
         logger.info(
             "attached to world (robot=%s, %d joints)",
@@ -878,9 +903,12 @@ class Bridge:
         Drop everything published about the world being replaced.
 
         Its plan tree and statechart describe nodes of a run that has been abandoned, and
-        would otherwise stay on screen as though they belonged to the new one.
+        would otherwise stay on screen as though they belonged to the new one; so would
+        the geometry written from it.
         """
         self.scene_entities = []
+        self._model_catalog.replace_generated([])
+        self.recording.clear()
         self._plan = None
         self._chart = None
         self._chart_structure = None
@@ -901,6 +929,8 @@ class Bridge:
         :param chart: The motion statechart the executor is currently ticking, if any.
         """
         self.apply_moves()
+        if self._world_geometry_is_stale:
+            self.describe_world_geometry()
         self.snapshot()
         self.observe_chart(chart)
         self._tick_count += 1
@@ -948,12 +978,37 @@ class Bridge:
         """
         self._model_catalog.remember(file_path)
 
+    def describe_world_geometry(self) -> None:
+        """
+        Write the bound world's own geometry as URDF, unless a parsed source already
+        describes it.
+
+        Reads the world, so it may only be called on the thread that owns it.
+        """
+        if self.world is None or self._model_catalog.describes_a_parsed_world:
+            self._world_geometry_is_stale = False
+            return
+        # what the viewer draws itself is what the written world leaves out, and a demo
+        # registers the last of that only once the bridge is already up. Binding first
+        # also settles the staleness this very call would otherwise leave behind.
+        self.bind()
+        self._world_geometry_is_stale = False
+        self._model_catalog.replace_generated(
+            self._world_geometry.write(
+                world=self.world,
+                robot=self.robot,
+                drawn_as_objects={str(entity.name) for entity in self._bodies.values()},
+            )
+        )
+
     def publish_bodies(self, bodies: Dict[str, KinematicStructureEntity]) -> None:
         """
         Replace the published bodies and rebuild the viewer's geometry catalog.
 
         :param bodies: The current published bodies and regions, keyed by mesh key.
         """
+        if set(bodies) != set(self._bodies):
+            self._world_geometry_is_stale = True
         self._bodies = bodies
         self._build_object_metadata(bodies)
 
@@ -968,6 +1023,7 @@ class Bridge:
         :param entities: Bodies and regions of the demo's world to publish.
         """
         self.scene_entities = list(entities)
+        self._world_geometry_is_stale = True
 
     # %% what the HTTP layer reads
     def object_catalog(self) -> List[Dict[str, Any]]:
@@ -1433,7 +1489,7 @@ class Bridge:
         for index, (key, body) in enumerate(
             item for item in bodies.items() if item[0] != ROBOT_BASE_KEY
         ):
-            color = palette.color_for(index)
+            color = palette.color_of(body, index)
             object_id = Path(key).stem
             mesh_path = self._servable_mesh_path(key, body)
             if mesh_path is not None:
@@ -1517,12 +1573,28 @@ class Bridge:
                 object_poses[name] = rounded_pose(body)
         with self._lock:
             self.sequence_number += 1
-            self.state = WorldStateSnapshot(
+            state = WorldStateSnapshot(
                 sequence_number=self.sequence_number,
                 frames=frames,
                 base=base_pose,
                 objects=object_poses,
             )
+            self.state = state
+        self.recording.record(time.time(), state)
+
+    def replay_clip(self, start: float, end: float) -> Dict[str, Any]:
+        """
+        The recorded frames within one window, as the replay viewer plays them.
+
+        :param start: When the clip begins, in seconds since the epoch.
+        :param end: When the clip ends, in seconds since the epoch.
+        """
+        return {
+            "ok": True,
+            "start": start,
+            "end": end,
+            "frames": [frame.to_payload() for frame in self.recording.clip(start, end)],
+        }
 
     def get_state(self) -> Dict[str, Any]:
         """

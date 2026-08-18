@@ -80,6 +80,40 @@ test('an answer of bare values is given a single value column', function () {
   assert.deepStrictEqual(cellTexts(table.rows[1]), ['cylinder_1']);
 });
 
+test('a replay window travels beside its row and lands on it', function () {
+  const table = load().of([
+    { __entity__: 'cube PickUpEvent', __type__: 'SegmindEventRecord',
+      timestamp: '2026-08-13 12:00:30' },
+    { __entity__: 'cube InsertionEvent', __type__: 'SegmindEventRecord',
+      timestamp: '2026-08-13 12:00:40' },
+  ], [{ start: 100, end: 110 }, null]);
+  assert.deepStrictEqual(table.columns, ['name', 'timestamp']);
+  assert.deepStrictEqual(table.rows[0].replay, { start: 100, end: 110 });
+  assert.strictEqual(table.rows[1].replay, null);
+});
+
+test('an answer sent without windows is a table of rows that replay nothing', function () {
+  const table = load().of([{ __entity__: 'cube', __type__: 'ShapeUnderTest' }]);
+  assert.strictEqual(table.rows[0].replay, null);
+});
+
+test('a key the table does not know is left out rather than shown as a column',
+  function () {
+    // an older viewer meeting a newer answer: whatever __key__ it carries is the
+    // answer's own bookkeeping, and printing it would put [object Object] in a cell
+    const table = load().of([
+      { name: 'cube', __whatever__: { start: 100, end: 110 } },
+    ]);
+    assert.deepStrictEqual(table.columns, ['name']);
+    assert.deepStrictEqual(cellTexts(table.rows[0]), ['cube']);
+  });
+
+test('a value that is not a scalar reads as its JSON rather than as [object Object]',
+  function () {
+    const table = load().of([{ span: { start: 100, end: 110 } }]);
+    assert.deepStrictEqual(cellTexts(table.rows[0]), ['{"start":100,"end":110}']);
+  });
+
 test('no rows is an empty table rather than a broken one', function () {
   const table = load().of([]);
   assert.deepStrictEqual(table.columns, []);

@@ -32,6 +32,10 @@ body{
 
 /* %% split */
 .split{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px;min-height:0}
+/* a slot the layout mounts nothing into takes no room: the ?replay= popup shows the
+   scene alone and it gets the whole width */
+.split:has(>.slot:empty){grid-template-columns:1fr}
+.split>.slot:empty{display:none}
 /* panel slots: config.js mounts panels into these; several ids stack vertically */
 .slot{display:flex;flex-direction:column;gap:16px;min-height:0;min-width:0}
 .slot>.panel{flex:1;min-height:0}
@@ -93,6 +97,13 @@ body{
 .live-indicator.on{display:inline-flex}
 @keyframes live-pulse{0%,100%{opacity:1}50%{opacity:.55}}
 @media (prefers-reduced-motion:reduce){.live-indicator{animation:none}}
+
+/* blue REPLAY badge — the popup playing a recorded clip instead of the live stream */
+.live-indicator.replay{
+  background:rgba(53,167,255,.94);border-color:#8fdcff;
+  box-shadow:0 0 0 1px rgba(0,0,0,.35),0 10px 26px rgba(53,167,255,.45);
+  animation:none;font-size:15px;letter-spacing:1.2px
+}
 
 .step-caption{
   position:absolute;left:50%;bottom:14px;transform:translateX(-50%);z-index:4;
@@ -230,6 +241,13 @@ body{
 .anstable .ans-false{color:var(--danger);font-weight:600}
 .anstable .ans-empty{color:var(--faint)}
 .anstable .ans-text{color:var(--muted)}
+.anstable .ans-replay{width:1%;white-space:nowrap;text-align:right}
+.replay-btn{
+  background:rgba(53,167,255,.14);border:1px solid #35a7ff;color:#8fdcff;
+  font:inherit;font-size:11.5px;font-weight:700;padding:4px 10px;border-radius:4px;
+  cursor:pointer;transition:.15s;white-space:nowrap
+}
+.replay-btn:hover{background:rgba(53,167,255,.28)}
 .nores{color:var(--warn);font-size:13px}
 .qerr{color:var(--danger);font-family:var(--mono);font-size:12px;white-space:pre-wrap}
 .ansub{font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:#93a4c4;margin:12px 0 6px}

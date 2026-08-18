@@ -9,14 +9,18 @@
  * time (core/panel_tabs.js).
  * ==========================================================================*/
 window.CRAMERA_CONFIG = {
-  layout: {
-    left: ['robot-scene'],
-    right: ['eql', {
-      tabs: [
-        { panel: 'graph', label: 'Graph' },
-        { panel: 'event-timeline', label: 'Events' },
-        { panel: 'plan-graph', label: 'Plan' },
-      ],
-    }],
-  },
+  // a ?replay= popup is just the 3D scene playing a recorded clip of the demo;
+  // every other page gets the full layout
+  layout: /[?&]replay=/.test(window.location.search)
+    ? { left: ['robot-scene'] }
+    : {
+        left: ['robot-scene'],
+        right: ['eql', {
+          tabs: [
+            { panel: 'graph', label: 'Graph' },
+            { panel: 'event-timeline', label: 'Events' },
+            { panel: 'plan-graph', label: 'Plan' },
+          ],
+        }],
+      },
 };

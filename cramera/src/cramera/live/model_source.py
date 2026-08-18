@@ -1,6 +1,11 @@
 """
 Serves a live world's own robot/environment URDF geometry to the viewer.
 
+Two kinds of model are served the same way. A *parsed* one is a URDF/xacro file the
+demo built its world from, which the source hook remembered; a *generated* one is
+written from the running world itself, for a demo whose world came from another format
+(MJCF, say) or was built in code and so has no URDF of its own.
+
 Unlike :mod:`cramera.onboard.bundle_urdf`, nothing is copied to disk: mesh references
 are resolved and streamed on request, the same way loose-object meshes are already
 served via ``/objects`` + ``/mesh?key=``. Models and their mesh references are
@@ -12,6 +17,7 @@ from __future__ import annotations
 
 import os
 import threading
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -32,12 +38,12 @@ How many of a model's links are probed to find its prefix in the composed world.
 @dataclass(frozen=True)
 class LiveModel:
     """
-    One URDF/xacro model the live world was built from.
+    One URDF model of the live world, as the viewer is told about it.
     """
 
     source: str
     """
-    Absolute path of the URDF/xacro source file.
+    Absolute path of the URDF file.
     """
 
     prefix: str
@@ -47,19 +53,97 @@ class LiveModel:
 
     robot: bool
     """
-    Whether this model's links include the live robot's base link.
+    Whether this model describes the live robot.
     """
+
+
+@dataclass(frozen=True)
+class ModelSource(ABC):
+    """
+    One URDF file the bridge can serve, and how it knows what that file describes.
+    """
+
+    path: str
+    """
+    Absolute path of the URDF file.
+    """
+
+    @abstractmethod
+    def identify(
+        self, links: List[str], world_body_names: List[str], base_body: Optional[str]
+    ) -> LiveModel:
+        """
+        The model this source serves.
+
+        :param links: The source's own link names, in document order.
+        :param world_body_names: Every body name in the composed world.
+        :param base_body: The robot's base link name, unprefixed, or None when no robot
+            is bound.
+        """
+
+
+@dataclass(frozen=True)
+class ParsedModelSource(ModelSource):
+    """
+    A URDF/xacro file the demo parsed its world from, whose identity has to be read
+    back out of the composed world's own body names.
+    """
+
+    def identify(
+        self, links: List[str], world_body_names: List[str], base_body: Optional[str]
+    ) -> LiveModel:
+        """
+        The model, with its prefix and robot flag inferred from its links.
+
+        :param links: The source's own link names, in document order.
+        :param world_body_names: Every body name in the composed world.
+        :param base_body: The robot's base link name, unprefixed, or None when no robot
+            is bound.
+        """
+        prefix, is_robot = model_identity(
+            links=links,
+            world_body_names=world_body_names,
+            base_body=base_body,
+            probe_link_count=PREFIX_PROBE_LINKS,
+        )
+        return LiveModel(source=self.path, prefix=prefix, robot=is_robot)
+
+
+@dataclass(frozen=True)
+class GeneratedModelSource(ModelSource):
+    """
+    A URDF written from the running world, which therefore already knows what it
+    describes: its links are world body names, so it carries no prefix of its own.
+    """
+
+    robot: bool
+    """
+    Whether this model describes the live robot.
+    """
+
+    def identify(
+        self, links: List[str], world_body_names: List[str], base_body: Optional[str]
+    ) -> LiveModel:
+        """
+        The model, as it was written.
+
+        :param links: The source's own link names, in document order.
+        :param world_body_names: Every body name in the composed world.
+        :param base_body: The robot's base link name, unprefixed, or None when no robot
+            is bound.
+        """
+        return LiveModel(source=self.path, prefix="", robot=self.robot)
 
 
 @dataclass
 class LiveModelCatalog:
     """
-    URDF/xacro sources a running demo loaded, servable without a bundle.
+    The URDF models of a running demo's world, servable without a bundle.
     """
 
-    sources: List[str] = field(default_factory=list)
+    sources: List[ModelSource] = field(default_factory=list)
     """
-    Absolute source paths, in load order.
+    The servable models, in the order the viewer is told about them.
     """
 
     _text_cache: Dict[str, str] = field(default_factory=dict)
@@ -85,14 +169,35 @@ class LiveModelCatalog:
         :param file_path: Absolute path of the source file.
         """
         with self._lock:
-            if file_path not in self.sources:
-                self.sources.append(file_path)
+            if not any(source.path == file_path for source in self.sources):
+                self.sources.append(ParsedModelSource(path=file_path))
+
+    @property
+    def describes_a_parsed_world(self) -> bool:
+        """
+        Whether any source the world was parsed from is tracked.
+        """
+        with self._lock:
+            return any(isinstance(source, ParsedModelSource) for source in self.sources)
+
+    def replace_generated(self, generated: List[GeneratedModelSource]) -> None:
+        """
+        Serve these models of the running world in place of the ones written before.
+
+        :param generated: The models written from the world as it stands now.
+        """
+        with self._lock:
+            self.sources = [
+                source
+                for source in self.sources
+                if not isinstance(source, GeneratedModelSource)
+            ] + list(generated)
 
     def models(
         self, world_body_names: List[str], base_body: Optional[str]
     ) -> List[LiveModel]:
         """
-        Every tracked source, flagged with its prefix and whether it is the robot.
+        Every tracked model, flagged with its prefix and whether it is the robot.
 
         :param world_body_names: Every body name in the composed world.
         :param base_body: The robot's base link name, unprefixed, or None when no
@@ -100,17 +205,10 @@ class LiveModelCatalog:
         """
         with self._lock:
             sources = list(self.sources)
-        result = []
-        for source in sources:
-            links = self._links(source)
-            prefix, is_robot = model_identity(
-                links=links,
-                world_body_names=world_body_names,
-                base_body=base_body,
-                probe_link_count=PREFIX_PROBE_LINKS,
-            )
-            result.append(LiveModel(source=source, prefix=prefix, robot=is_robot))
-        return result
+        return [
+            source.identify(self._links(source.path), world_body_names, base_body)
+            for source in sources
+        ]
 
     def urdf_text(self, index: int) -> Optional[str]:
         """
@@ -155,12 +253,14 @@ class LiveModelCatalog:
 
     def _source_at(self, index: int) -> Optional[str]:
         """
-        The tracked source at a position, or None if the index is out of range.
+        Path of the tracked source at a position, or None if the index is out of range.
 
         :param index: Position of the source in :attr:`sources`.
         """
         with self._lock:
-            return self.sources[index] if 0 <= index < len(self.sources) else None
+            if not 0 <= index < len(self.sources):
+                return None
+            return self.sources[index].path
 
     def _links(self, source: str) -> List[str]:
         """

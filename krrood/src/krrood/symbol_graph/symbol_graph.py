@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import weakref
 from collections import defaultdict
 from dataclasses import InitVar, dataclass, field
@@ -175,9 +176,16 @@ class WrappedInstance(Generic[TSymbol], SubClassSafeGeneric):
     This is needed to clean it up from the cache after the instance reference died.
     """
 
+    instance_id: Optional[int] = field(init=False, default=None)
+    """
+    The id the instance had while it lived.
+    This is needed to clean it up from the cache after the instance reference died.
+    """
+
     def __post_init__(self, instance: TSymbol):
         self.instance_reference = weakref.ref(instance)
         self.instance_type = type(instance)
+        self.instance_id = id(instance)
 
     @property
     def instance(self) -> Optional[TSymbol]:
@@ -218,6 +226,9 @@ class SymbolGraph(metaclass=SingletonMeta):
 
     The construction of this object will do nothing if a singleton instance of this already exists.
     Make sure to call `clear()` before constructing this object if you want a new one.
+
+    ..note:: Every thread of the process shares this singleton, so adding, removing and
+        reading instances is serialized.
     """
 
     _class_diagram: ClassDiagram = field(default=None)
@@ -251,6 +262,17 @@ class SymbolGraph(metaclass=SingletonMeta):
     _relation_index: Dict[WrappedField, set[tuple[int, int]]] = field(
         default_factory=dict, init=False, repr=False
     )
+
+    _access_lock: threading.RLock = field(
+        default_factory=threading.RLock, init=False, repr=False, compare=False
+    )
+    """
+    Serializes the graph and the indices that describe it, which every thread of the
+    process shares through this singleton.
+
+    Reentrant because an operation that adds or removes instances is written in terms of
+    the ones that add or remove a single one.
+    """
 
     packages: list[str] = field(default_factory=list, kw_only=True)
     """
@@ -295,12 +317,13 @@ class SymbolGraph(metaclass=SingletonMeta):
 
         :param wrapped_instance: The instance to add.
         """
-        wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
-        wrapped_instance.symbol_graph = self
-        self._instance_index[id(wrapped_instance.instance)] = wrapped_instance
-        self._class_to_wrapped_instances[wrapped_instance.instance_type].append(
-            wrapped_instance
-        )
+        with self._access_lock:
+            wrapped_instance.index = self._instance_graph.add_node(wrapped_instance)
+            wrapped_instance.symbol_graph = self
+            self._instance_index[wrapped_instance.instance_id] = wrapped_instance
+            self._class_to_wrapped_instances[wrapped_instance.instance_type].append(
+                wrapped_instance
+            )
 
     def remove_node(self, wrapped_instance: WrappedInstance):
         """
@@ -308,16 +331,27 @@ class SymbolGraph(metaclass=SingletonMeta):
 
         :param wrapped_instance: The instance to remove.
         """
-        self._instance_index.pop(id(wrapped_instance.instance), None)
-        self._class_to_wrapped_instances[wrapped_instance.instance_type].remove(
-            wrapped_instance
-        )
-        self._instance_graph.remove_node(wrapped_instance.index)
+        with self._access_lock:
+            # an id is handed out again once its instance is collected, so the entry
+            # under it may already belong to a later instance
+            if (
+                self._instance_index.get(wrapped_instance.instance_id)
+                is wrapped_instance
+            ):
+                del self._instance_index[wrapped_instance.instance_id]
+            self._class_to_wrapped_instances[wrapped_instance.instance_type].remove(
+                wrapped_instance
+            )
+            self._instance_graph.remove_node(wrapped_instance.index)
 
     def remove_dead_instances(self):
-        for node in self._instance_graph.nodes():
-            if node.instance is None:
-                self.remove_node(node)
+        """
+        Remove the instances whose symbols were garbage collected from the cache.
+        """
+        with self._access_lock:
+            for node in self._instance_graph.nodes():
+                if node.instance is None:
+                    self.remove_node(node)
 
     def get_instances_of_type(self, type_: Type) -> Iterable:
         """
@@ -326,11 +360,13 @@ class SymbolGraph(metaclass=SingletonMeta):
         :param type_: The symbol type to look for
         :return: All wrapped instances that refer to an instance of the given type.
         """
-        yield from (
-            instance.instance
-            for cls in [type_] + recursive_subclasses(type_)
-            for instance in list(self._class_to_wrapped_instances[cls])
-        )
+        with self._access_lock:
+            wrapped_instances = [
+                instance
+                for cls in [type_] + recursive_subclasses(type_)
+                for instance in self._class_to_wrapped_instances[cls]
+            ]
+        yield from (instance.instance for instance in wrapped_instances)
 
     def get_wrapped_instance(self, instance: Any) -> Optional[WrappedInstance]:
         if isinstance(instance, WrappedInstance):
@@ -346,11 +382,12 @@ class SymbolGraph(metaclass=SingletonMeta):
         :param instance: The object to be checked and wrapped if necessary.:
         :return: WrappedInstance: The wrapped object.
         """
-        wrapped_instance = self.get_wrapped_instance(instance)
-        if wrapped_instance is None:
-            wrapped_instance = WrappedInstance(instance)
-            self.add_node(wrapped_instance)
-        return wrapped_instance
+        with self._access_lock:
+            wrapped_instance = self.get_wrapped_instance(instance)
+            if wrapped_instance is None:
+                wrapped_instance = WrappedInstance(instance)
+                self.add_node(wrapped_instance)
+            return wrapped_instance
 
     @classmethod
     def clear(cls) -> None:
@@ -369,17 +406,18 @@ class SymbolGraph(metaclass=SingletonMeta):
 
     def add_relation(self, relation: PredicateClassRelation) -> bool:
         """Add a relation edge to the instance graph."""
-        if self.relation_exists(relation):
-            return False
-        self._instance_graph.add_edge(
-            relation.source.index, relation.target.index, relation
-        )
-        if relation.wrapped_field not in self._relation_index:
-            self._relation_index[relation.wrapped_field] = set()
-        self._relation_index[relation.wrapped_field].add(
-            (relation.source.index, relation.target.index)
-        )
-        return True
+        with self._access_lock:
+            if self.relation_exists(relation):
+                return False
+            self._instance_graph.add_edge(
+                relation.source.index, relation.target.index, relation
+            )
+            if relation.wrapped_field not in self._relation_index:
+                self._relation_index[relation.wrapped_field] = set()
+            self._relation_index[relation.wrapped_field].add(
+                (relation.source.index, relation.target.index)
+            )
+            return True
 
     def relation_exists(self, relation: PredicateClassRelation) -> bool:
         return (
@@ -388,11 +426,14 @@ class SymbolGraph(metaclass=SingletonMeta):
         ) in self._relation_index.get(relation.wrapped_field, set())
 
     def relations(self) -> Iterable[PredicateClassRelation]:
-        yield from self._instance_graph.edges()
+        with self._access_lock:
+            relations = self._instance_graph.edges()
+        yield from relations
 
     @property
     def wrapped_instances(self) -> List[WrappedInstance]:
-        return self._instance_graph.nodes()
+        with self._access_lock:
+            return self._instance_graph.nodes()
 
     def get_incoming_relations_with_type(
         self,
@@ -436,9 +477,9 @@ class SymbolGraph(metaclass=SingletonMeta):
             return
         if wrapped_instance.index is None:
             return
-        yield from (
-            edge for _, _, edge in self._instance_graph.in_edges(wrapped_instance.index)
-        )
+        with self._access_lock:
+            in_edges = self._instance_graph.in_edges(wrapped_instance.index)
+        yield from (edge for _, _, edge in in_edges)
 
     def get_outgoing_relations_with_type(
         self,
@@ -480,10 +521,9 @@ class SymbolGraph(metaclass=SingletonMeta):
         wrapped_instance = self.get_wrapped_instance(wrapped_instance)
         if not wrapped_instance:
             return
-        yield from (
-            edge
-            for _, _, edge in self._instance_graph.out_edges(wrapped_instance.index)
-        )
+        with self._access_lock:
+            out_edges = self._instance_graph.out_edges(wrapped_instance.index)
+        yield from (edge for _, _, edge in out_edges)
 
     def to_dot(
         self,
