@@ -165,9 +165,9 @@ body{
   50%{box-shadow:0 0 0 6px rgba(255,84,112,0)}
 }
 /* the asked question, big under the bar, in English; the role colours are krrood's
-   own inline spans, and its words link to their documentation pages */
+   own inline spans, and its words link to their documentation or source */
 .question{
-  margin-top:10px;background:var(--bg);border:1px solid var(--line2);
+  background:var(--bg);border:1px solid var(--line2);
   border-left:3px solid var(--accent);border-radius:4px;color:var(--ink);
   font-size:17px;line-height:1.55;padding:13px 15px;min-height:24px
 }
@@ -200,6 +200,11 @@ body{
 }
 .completion-origin{font-family:var(--mono);font-size:10.5px;color:var(--faint)}
 
+/* everything the bar produces, in one scrolling region: the question read back, the
+   questions on offer and the answer. A long verbalization would otherwise push the
+   answer past the bottom of a panel that clips whatever does not fit. */
+.console-body{flex:1;min-height:0;overflow-y:auto;padding:14px 16px}
+
 .presets{margin-top:11px}
 /* the heading a body of knowledge's questions are offered under; a scene that only asks
    about one thing gets no heading at all, so the row stands alone as it always did */
@@ -220,7 +225,7 @@ body{
 .preset.unavailable:hover{border-color:var(--line2);color:var(--muted)}
 
 /* %% answer */
-.answer{padding:14px 16px;max-height:34%;overflow:auto;border-bottom:1px solid var(--line)}
+.answer{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
 .answer-empty{color:var(--faint);font-size:13px;font-style:italic}
 .answer .goal{font-family:var(--mono);font-size:12px;color:var(--accent);margin-bottom:8px;word-break:break-all}
 .answer .headline{font-size:13.5px;color:var(--ink);margin:0 0 10px;line-height:1.5}
