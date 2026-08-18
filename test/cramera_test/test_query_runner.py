@@ -20,6 +20,7 @@ from cramera.knowledge.queryable_knowledge import QueryEvaluation  # noqa: E402
 from .dataset.queryable_records import (  # noqa: E402
     NamedRecord,
     PosedRecord,
+    RecordWithClassLevelDefaults,
     UnnamedRecord,
 )
 
@@ -262,6 +263,29 @@ class TestRowRendering:
         assert renderer._row_title(named) == "first"
         assert renderer._row_title(undeclared) is None
         assert renderer._row_title(UnnamedRecord("x")) is None
+
+    def test_an_internal_non_repr_field_is_not_rendered(self):
+        """
+        An engine mixin can add internal ``repr=False`` bookkeeping fields to an entity;
+        a row shows the entity's own data, not those.
+        """
+        renderer = RowRenderer(entity_types=(RecordWithClassLevelDefaults,))
+
+        row = renderer.rows_of(RecordWithClassLevelDefaults("kept")).rows[0]
+
+        assert row["__entity__"] == "kept"
+        assert "_bookkeeping_" not in row
+
+    def test_a_field_left_at_its_class_level_default_renders_that_default(self):
+        """
+        A field declared ``init=False`` with a plain default lives on the class, not in
+        the instance ``__dict__``, and must still render its value.
+        """
+        renderer = RowRenderer(entity_types=(RecordWithClassLevelDefaults,))
+
+        row = renderer.rows_of(RecordWithClassLevelDefaults("kept")).rows[0]
+
+        assert row["revision"] == 0
 
     def test_rows_stop_at_the_limit_and_say_so(self):
         result = make_runner().run("an(entity(record))", limit=2)
