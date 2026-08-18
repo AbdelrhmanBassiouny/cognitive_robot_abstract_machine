@@ -7,7 +7,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from cramera.live import model_source
-from cramera.live.model_source import LiveModelCatalog
+from cramera.live.model_source import GeneratedModelSource, LiveModelCatalog
 
 ONE_MESH_URDF_TEXT = (
     '<robot name="demo">\n'
@@ -33,7 +33,7 @@ real extension right at the end — a bug this exact fixture caught once already
 PLUGIN_REFERENCE_URDF_TEXT = (
     '<robot name="demo">\n'
     '  <link name="base_link"/>\n'
-    '  <gazebo>\n'
+    "  <gazebo>\n"
     '    <plugin filename="libgazebo_ros_control.so" name="control"/>\n'
     "  </gazebo>\n"
     "</robot>\n"
@@ -61,7 +61,7 @@ class TestRemember:
         catalog.remember("/robots/pr2.urdf")
         catalog.remember("/robots/pr2.urdf")
 
-        assert catalog.sources == ["/robots/pr2.urdf"]
+        assert [source.path for source in catalog.sources] == ["/robots/pr2.urdf"]
 
     def test_sources_are_kept_in_load_order(self):
         catalog = LiveModelCatalog()
@@ -69,7 +69,74 @@ class TestRemember:
         catalog.remember("/worlds/kitchen.urdf")
         catalog.remember("/robots/pr2.urdf")
 
-        assert catalog.sources == ["/worlds/kitchen.urdf", "/robots/pr2.urdf"]
+        assert [source.path for source in catalog.sources] == [
+            "/worlds/kitchen.urdf",
+            "/robots/pr2.urdf",
+        ]
+
+
+class TestGeneratedModels:
+    """
+    A model written from the running world states what it is, instead of having it read
+    back out of the composed world's body names: its links already *are* those names.
+    """
+
+    def test_a_generated_robot_needs_no_matching_body_name(self, tmp_path):
+        catalog = LiveModelCatalog()
+        catalog.replace_generated(
+            [
+                GeneratedModelSource(
+                    path=str(_written(tmp_path / "robot.urdf", ONE_MESH_URDF_TEXT)),
+                    robot=True,
+                )
+            ]
+        )
+
+        [model] = catalog.models(
+            world_body_names=["montessori/base_link"], base_body="nothing_matching"
+        )
+
+        assert model.robot is True
+        assert model.prefix == ""
+
+    def test_writing_the_world_again_replaces_the_models_written_before(self, tmp_path):
+        catalog = LiveModelCatalog()
+        first = _written(tmp_path / "first.urdf", ONE_MESH_URDF_TEXT)
+        second = _written(tmp_path / "second.urdf", ONE_MESH_URDF_TEXT)
+
+        catalog.replace_generated([GeneratedModelSource(path=str(first), robot=False)])
+        catalog.replace_generated([GeneratedModelSource(path=str(second), robot=False)])
+
+        assert [source.path for source in catalog.sources] == [str(second)]
+
+    def test_a_parsed_source_survives_the_world_being_written_again(self, tmp_path):
+        catalog = LiveModelCatalog()
+        parsed = _written(tmp_path / "kitchen.urdf", ONE_MESH_URDF_TEXT)
+        catalog.remember(str(parsed))
+
+        catalog.replace_generated([])
+
+        assert [source.path for source in catalog.sources] == [str(parsed)]
+
+    def test_only_a_parsed_source_counts_as_a_parsed_world(self, tmp_path):
+        """
+        The bridge writes the world's geometry itself exactly when nothing parsed it.
+        """
+        catalog = LiveModelCatalog()
+        catalog.replace_generated(
+            [
+                GeneratedModelSource(
+                    path=str(_written(tmp_path / "robot.urdf", ONE_MESH_URDF_TEXT)),
+                    robot=True,
+                )
+            ]
+        )
+
+        assert catalog.describes_a_parsed_world is False
+
+        catalog.remember(str(_written(tmp_path / "kitchen.urdf", ONE_MESH_URDF_TEXT)))
+
+        assert catalog.describes_a_parsed_world is True
 
 
 class TestModels:

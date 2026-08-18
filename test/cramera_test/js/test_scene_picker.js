@@ -84,3 +84,34 @@ test('describe() is null for a name not in the index', function () {
   load();
   assert.strictEqual(window.ScenePicker.describe(SCENES, 'unknown_scene'), null);
 });
+
+// %% the scene the viewer opens on
+
+const INDEX = {
+  default: 'pr2_lab',
+  scenes: [
+    { name: 'pr2_kitchen', robot: 'pr2', environment: 'apartment' },
+    { name: 'pr2_lab', robot: 'pr2', environment: 'lab' },
+  ],
+};
+
+test('defaultScene() opens on the declared default when the index still declares it', function () {
+  load();
+  assert.strictEqual(window.ScenePicker.defaultScene(INDEX), 'pr2_lab');
+});
+
+test('defaultScene() falls back to the first scene when the default is not declared', function () {
+  load();
+  const stale = { default: 'pr2_pantry', scenes: INDEX.scenes };
+  assert.strictEqual(window.ScenePicker.defaultScene(stale), 'pr2_kitchen');
+});
+
+test('defaultScene() falls back to the first scene when no default is declared', function () {
+  load();
+  assert.strictEqual(window.ScenePicker.defaultScene({ scenes: INDEX.scenes }), 'pr2_kitchen');
+});
+
+test('defaultScene() is null for an index declaring no scene at all', function () {
+  load();
+  assert.strictEqual(window.ScenePicker.defaultScene({ default: 'pr2_lab', scenes: [] }), null);
+});

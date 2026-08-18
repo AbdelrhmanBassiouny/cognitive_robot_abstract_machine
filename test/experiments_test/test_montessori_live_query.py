@@ -366,17 +366,10 @@ class TestReplayingADetectedEvent:
 
 # %% the recorded bundle offers the same questions
 class TestDeclaredBundlePresets:
-    @pytest.mark.skipif(
-        not DECLARED_PRESETS_PATH.exists(),
-        reason="the checked-out cram-scenes submodule has no Franka_Montessori bundle",
-    )
     def test_the_bundle_declares_exactly_these_presets(self):
         """
         The bundle's ``presets.json`` is what the viewer shows for the recorded scene, so
         it must not drift from the set the live demo answers.
-
-        Skipped while the checked-out scenes submodule carries no Franka Montessori
-        bundle; once one is published there, the sync is enforced again.
         """
         declared = json.loads(DECLARED_PRESETS_PATH.read_text())["presets"]
 

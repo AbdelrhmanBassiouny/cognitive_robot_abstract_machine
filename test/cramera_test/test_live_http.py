@@ -455,3 +455,51 @@ class TestTwoIndependentBridges:
         finally:
             first_server.shutdown()
             second_server.shutdown()
+
+
+class TestVocabularyEndpoints:
+    """
+    While a demo is attached, the query box asks the demo what it may name.
+    """
+
+    @pytest.fixture()
+    def query_bridge(self, bridge):
+        pytest.importorskip("krrood", reason="EQL requires krrood")
+        from .test_live_query import GrowingRecordSource, make_record
+
+        bridge.register_query_source(
+            GrowingRecordSource(
+                records=[make_record("first")], stored=[make_record("last week")]
+            )
+        )
+        return bridge
+
+    def test_the_vocabulary_offers_the_demos_own_variables(self, server, query_bridge):
+        payload = get_json(server + "/vocabulary")
+
+        assert payload["ok"]
+        offered = {entry["name"]: entry for entry in payload["entries"]}
+        assert offered["record"]["kind"] == "variable"
+        assert offered["record"]["type"] == "NamedRecord"
+
+    def test_the_vocabulary_of_a_scope_offers_that_scopes_variables(
+        self, server, query_bridge
+    ):
+        payload = get_json(server + "/vocabulary?scope=episodic_memory")
+
+        offered = [entry["name"] for entry in payload["entries"]]
+        assert "stored_record" in offered and "record" not in offered
+
+    def test_the_members_of_a_variable_are_served_for_its_type(
+        self, server, query_bridge
+    ):
+        payload = get_json(server + "/members?name=record")
+
+        assert payload["ok"] and payload["name"] == "record"
+        assert "name" in [member["name"] for member in payload["members"]]
+
+    def test_a_vocabulary_without_a_source_reports_why(self, server):
+        payload = get_json(server + "/vocabulary")
+
+        assert payload["ok"] is False
+        assert payload["entries"] == []

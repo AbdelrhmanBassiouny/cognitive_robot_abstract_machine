@@ -276,10 +276,11 @@ print(verbalize_expression(query))
 
 ## Underspecified Constructions (`an`)
 
-An underspecified `an(...)` construction asks the system to *make* something rather than find it —
-*"Generate a … given that …"*. Several single-value settings on one object are combined into one
-*"… respectively"* line (up to three; longer or phrase-length values are said separately, and a `None`
-becomes a *"has no"* line):
+An `an(...)` construction describes a pattern. A fully specified pattern reads as a search —
+*"Find a … given that …"* — while an `Ellipsis` value anywhere in the pattern leaves something to
+generate, so it reads *"Generate a … and predict …"* instead. Several single-value settings on one
+object are combined into one *"… respectively"* line (up to three; longer or phrase-length values
+are said separately, and a `None` becomes a *"has no"* line):
 
 ```{code-cell} ipython3
 from krrood.entity_query_language.factories import an

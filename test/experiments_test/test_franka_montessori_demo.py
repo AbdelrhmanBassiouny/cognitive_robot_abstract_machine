@@ -14,8 +14,14 @@ from experiments.montessori import franka_montessori_demo
 from experiments.montessori.event_monitoring import WatchesNothing
 from experiments.montessori.franka_montessori_demo import (
     _open_recording,
+    _open_results_database,
     _parse_arguments,
     _partition_events_by_attempt,
+)
+from experiments.montessori.results_database import (
+    DATABASE_URI_ENVIRONMENT_VARIABLE,
+    IN_MEMORY_DATABASE_URI,
+    ResultsDatabase,
 )
 from experiments.montessori.results_recording import (
     RecordsIterationsToADatabase,
@@ -298,19 +304,55 @@ def test_recording_can_be_turned_off():
 
 
 def test_a_run_told_not_to_record_keeps_nothing(tmp_path):
-    arguments = _parse_arguments(
-        ["--no-record", "--database-uri", "sqlite:///%s" % (tmp_path / "results.db")]
-    )
+    database = ResultsDatabase(uri="sqlite:///%s" % (tmp_path / "results.db"))
+    arguments = _parse_arguments(["--no-record"])
 
-    assert isinstance(_open_recording(arguments), RecordsNothing)
+    assert isinstance(_open_recording(arguments, database), RecordsNothing)
 
 
 def test_a_run_that_records_opens_the_database_it_was_given(tmp_path):
-    arguments = _parse_arguments(
-        ["--database-uri", "sqlite:///%s" % (tmp_path / "results.db")]
-    )
+    database = ResultsDatabase(uri="sqlite:///%s" % (tmp_path / "results.db"))
 
-    recording = _open_recording(arguments)
+    recording = _open_recording(_parse_arguments([]), database)
 
     assert isinstance(recording, RecordsIterationsToADatabase)
     recording.close()
+
+
+# %% which database a run ends up with
+def test_no_database_is_named_on_the_command_line_by_default():
+    """
+    The run resolves its own database, so it can say where the URI came from.
+    """
+    assert _parse_arguments([]).database_uri is None
+
+
+def test_the_environment_names_the_database_without_a_command_line_flag(
+    monkeypatch, tmp_path
+):
+    """
+    Setting the variable in a shell profile is how a host points every run at its own
+    database, and no run should have to repeat it on the command line.
+    """
+    uri = "sqlite:///%s" % (tmp_path / "results.db")
+    monkeypatch.setenv(DATABASE_URI_ENVIRONMENT_VARIABLE, uri)
+
+    assert _open_results_database(_parse_arguments([])).uri == uri
+
+
+def test_a_database_that_is_not_running_becomes_one_in_memory(monkeypatch):
+    monkeypatch.setenv(
+        DATABASE_URI_ENVIRONMENT_VARIABLE,
+        "postgresql+psycopg://nobody:wrong@127.0.0.1:1/franka_montessori_sorting_results",
+    )
+
+    assert _open_results_database(_parse_arguments([])).uri == IN_MEMORY_DATABASE_URI
+
+
+def test_the_command_line_still_overrides_the_environment(monkeypatch, tmp_path):
+    monkeypatch.setenv(DATABASE_URI_ENVIRONMENT_VARIABLE, "sqlite:///ignored.db")
+    uri = "sqlite:///%s" % (tmp_path / "results.db")
+
+    resolved = _open_results_database(_parse_arguments(["--database-uri", uri]))
+
+    assert resolved.uri == uri

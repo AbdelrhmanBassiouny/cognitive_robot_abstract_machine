@@ -15,6 +15,7 @@ from krrood.entity_query_language.verbalization.grammar.framework.planner import
 from krrood.entity_query_language.verbalization.microplanning.coordination import (
     group_by_owner,
 )
+from krrood.entity_query_language.verbalization.vocabulary.english import Directive
 
 
 @dataclass(frozen=True)
@@ -93,13 +94,14 @@ class AttributeGroup:
 class MatchPlan:
     """
     The *what to say* decomposition of a match: what it selects, the grouped
-    construction-pattern equalities, and the free ``where`` conditions.
+    construction-pattern equalities, the free ``where`` conditions, and the default
+    opening directive.
 
-    A match carries no selective/generative distinction of its own — a domain-less match can
-    still resolve selectively via the ``SymbolGraph`` (see :func:`~krrood.entity_query_language.factories.variable`)
-    — so the opening verb is decided solely by the backend given to ``verbalize_expression``
-    (:class:`~krrood.entity_query_language.verbalization.context.MicroplanningServices.performative_override`),
-    defaulting to *"Generate"* when none is given. See :class:`MatchAssembler`.
+    The default directive is read off the pattern itself: an ``Ellipsis`` anywhere in it
+    leaves a value to generate → *"Generate"*, a fully specified pattern is a search →
+    *"Find"*. A backend given to ``verbalize_expression``
+    (:class:`~krrood.entity_query_language.verbalization.context.MicroplanningServices.performative_override`)
+    overrides it. See :class:`MatchAssembler`.
     """
 
     selection: SymbolicExpression
@@ -125,6 +127,12 @@ class MatchPlan:
     The plan only classifies them as the ``where`` part; deciding how to say a list of
     conditions (including folding bound pairs into a *between*) belongs to the condition
     verbalizer, not here.
+    """
+
+    default_directive: Directive
+    """
+    The opening directive when no backend overrides it: ``GENERATE`` when the pattern
+    contains an ``Ellipsis`` (a value is left to generate), else ``FIND``.
     """
 
 
@@ -166,6 +174,9 @@ class MatchPlanner(Planner[Match, MatchPlan]):
             groups=groups,
             other_conditions=other,
             where_conditions=list(match._where_conditions_),
+            default_directive=(
+                Directive.GENERATE if match.has_ellipsis_attributes else Directive.FIND
+            ),
         )
 
     @staticmethod

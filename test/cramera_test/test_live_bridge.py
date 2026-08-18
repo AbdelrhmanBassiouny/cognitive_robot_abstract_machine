@@ -16,6 +16,7 @@ from __future__ import annotations
 import math
 import threading
 import time
+import xml.etree.ElementTree as ElementTree
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -33,12 +34,13 @@ from semantic_digital_twin.world_description.connections import (
     FixedConnection,
 )
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
-from semantic_digital_twin.world_description.geometry import Box, Scale
+from semantic_digital_twin.world_description.geometry import Box, Color, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
 from typing_extensions import Any, Dict, List, Optional, Tuple
 
 from cramera.knowledge.enums import PlanNodeGroup
+from cramera.palette import ObjectPalette
 from cramera.live.bridge import (
     Bridge,
     ChartEdgeEntry,
@@ -125,6 +127,11 @@ class MeshShapeFromFile:
     """
 
     filename: str
+
+    color: Color = field(default_factory=Color)
+    """
+    The shape's colour, default white like every real shape's.
+    """
 
 
 @dataclass
@@ -757,6 +764,34 @@ class TestViewerAccessors:
         bridge.publish_bodies({"blob.stl": PublishedBody(name="world/blob.stl")})
         assert bridge.object_catalog()[0]["size"] == list(Bridge.DEFAULT_OBJECT_SIZE)
 
+
+class TestPublishedObjectColours:
+    """
+    The catalog shows a body in the colour its world authored for it; only colourless
+    bodies are told apart by the shared cycle.
+    """
+
+    def test_an_authored_colour_is_published(self):
+        bridge = Bridge()
+        cube = Body(
+            name=PrefixedName("cube"),
+            visual=ShapeCollection(
+                shapes=[Box(scale=Scale(0.05, 0.05, 0.05), color=Color.RED())]
+            ),
+        )
+        world = World()
+        with world.modify_world():
+            world.add_body(cube)
+        bridge.publish_bodies({"cube": cube})
+
+        assert bridge.object_catalog()[0]["color"] == "#ff0000"
+
+    def test_a_colourless_body_takes_its_cycle_colour(self):
+        bridge = Bridge()
+        bridge.publish_bodies({"blob.stl": PublishedBody(name="world/blob.stl")})
+
+        assert bridge.object_catalog()[0]["color"] == ObjectPalette().color_for(0)
+
     def test_an_unserved_mesh_has_no_path(self):
         assert Bridge().mesh_path("milk.stl") is None
 
@@ -861,6 +896,99 @@ class TestLiveModels:
 
     def test_an_out_of_range_model_has_no_mesh_path(self):
         assert Bridge().model_mesh_path(0, 0) is None
+
+
+class TestWritingTheWorldNoSourceParsed:
+    """
+    A demo that parsed no URDF -- a world assembled in code, or read out of MJCF --
+    used to leave the viewer with nothing but its loose objects: no robot, no room.
+    The world describes itself, so the bridge writes it, on the one thread allowed to
+    read it.
+    """
+
+    @staticmethod
+    def _links(bridge: Bridge, index: int) -> List[str]:
+        """
+        Link names of a served model.
+
+        :param bridge: The bridge serving it.
+        :param index: Position of the model, as ``live_models`` reports it.
+        """
+        root = ElementTree.fromstring(bridge.model_urdf_text(index))
+        return [element.attrib["name"] for element in root.findall("link")]
+
+    def test_a_tick_serves_the_world_the_demo_built(self):
+        world, _, _ = make_free_floating_object()
+        bridge = Bridge()
+        bridge.attach(world)
+
+        bridge.observe_tick(None)
+
+        assert bridge.live_models() == [{"index": 0, "prefix": "", "robot": False}]
+        assert "world" in self._links(bridge, 0)
+
+    def test_a_loose_object_is_left_out_of_the_written_world(self):
+        """
+        The viewer draws and moves it from ``/objects`` already.
+        """
+        world, _, _ = make_free_floating_object()
+        bridge = Bridge()
+        bridge.attach(world)
+
+        bridge.observe_tick(None)
+
+        assert "milk" not in self._links(bridge, 0)
+
+    def test_a_scene_entity_registered_after_attaching_is_left_out_too(self):
+        """
+        A demo registers what else it wants drawn only once the bridge is up, which is
+        after the world was first written.
+        """
+        world, _, _ = make_free_floating_object()
+        table = Body(name=PrefixedName("table"))
+        with world.modify_world():
+            world.add_connection(FixedConnection(parent=world.root, child=table))
+        bridge = Bridge()
+        bridge.attach(world)
+        bridge.observe_tick(None)
+        assert "table" in self._links(bridge, 0)
+
+        bridge.register_scene_entities([table])
+        bridge.observe_tick(None)
+
+        assert "table" not in self._links(bridge, 0)
+
+    def test_a_world_a_source_already_describes_is_not_written_again(self, tmp_path):
+        """
+        Writing it too would draw every one of its bodies a second time.
+        """
+        urdf = tmp_path / "kitchen.urdf"
+        urdf.write_text(ONE_LINK_URDF_TEXT)
+        world, _, _ = make_free_floating_object()
+        bridge = Bridge()
+        bridge.remember_urdf_source(str(urdf))
+        bridge.attach(world)
+
+        bridge.observe_tick(None)
+
+        assert self._links(bridge, 0) == ["base_link"]
+        assert len(bridge.live_models()) == 1
+
+    def test_a_replaced_world_stops_being_served(self):
+        """
+        A demo restarted from the viewer executes in a world it has just built.
+        """
+        world_a, _, _ = make_free_floating_object()
+        world_b, _, _ = make_free_floating_object()
+        bridge = Bridge()
+        bridge.attach(world_a)
+        bridge.observe_tick(None)
+
+        bridge.attach(world_b)
+
+        assert bridge.live_models() == []
+        bridge.observe_tick(None)
+        assert bridge.live_models() == [{"index": 0, "prefix": "", "robot": False}]
 
 
 class TestLiveModelsDoNotBlockTheSimulationLock:

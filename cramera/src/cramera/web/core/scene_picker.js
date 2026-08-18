@@ -49,6 +49,17 @@
     return match ? match.name : null;
   }
 
+  // the scene a page with no ?scene= opens on: the index's declared default, or
+  // its first scene when that default is not among the scenes it declares — a
+  // bundle can outlive the default recorded beside it (a scene renamed or dropped
+  // upstream), and a scene the bundle does have beats a 404
+  function defaultScene(index) {
+    const scenes = (index && index.scenes) || [];
+    const declared = index && index.default;
+    if (declared && describe(scenes, declared)) return declared;
+    return scenes.length ? scenes[0].name : null;
+  }
+
   // the (robot, environment) a named scene was recorded with, or null if the
   // name isn't in the index
   function describe(scenes, name) {
@@ -61,5 +72,6 @@
     environments: environments,
     sceneFor: sceneFor,
     describe: describe,
+    defaultScene: defaultScene,
   };
 })();

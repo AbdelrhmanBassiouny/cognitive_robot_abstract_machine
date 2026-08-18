@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Mapping
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import MISSING, dataclass, field, fields, is_dataclass
 from datetime import datetime
 
 from typing_extensions import (
@@ -35,7 +35,12 @@ from cramera.knowledge.entity import NamedEntity
 from cramera.knowledge.query_domain import QueryDomain
 from cramera.knowledge.replay import ReplayWindow
 from cramera.knowledge.query_verbalization import QueryVerbalization
+from cramera.knowledge.query_vocabulary import QueryVocabulary
 from cramera.knowledge.queryable_knowledge import InMemoryEvaluation, QueryEvaluation
+from cramera.knowledge.workspace_classes import (
+    WorkspaceClassIndex,
+    WorkspaceClassNamespace,
+)
 from cramera.payload import CrameraPayload
 
 DEFAULT_ROW_LIMIT = 200
@@ -250,6 +255,11 @@ class RowRenderer:
         """
         One entity as an answer row, collecting the ids it lights up.
 
+        A ``repr=False`` field is internal bookkeeping and stays out of the row. A
+        field declared ``init=False`` with a plain default lives on the class rather
+        than in the instance ``__dict__``, so its value is read from the field's
+        default instead.
+
         :param item: The entity to render as a row.
         """
         name = self._row_title(item)
@@ -258,9 +268,16 @@ class RowRenderer:
         if isinstance(item, HighlightsRelatedNodes):
             self.highlight.extend(item.related_highlight_ids())
         row = {"__entity__": name or repr(item), "__type__": type(item).__name__}
+        instance_values = vars(item)
         for entity_field in fields(item):
-            if entity_field.name != "name":
-                row[entity_field.name] = self._jsonable(vars(item)[entity_field.name])
+            if entity_field.name == "name" or not entity_field.repr:
+                continue
+            if entity_field.name in instance_values:
+                row[entity_field.name] = self._jsonable(
+                    instance_values[entity_field.name]
+                )
+            elif entity_field.default is not MISSING:
+                row[entity_field.name] = self._jsonable(entity_field.default)
         if isinstance(item, CarriesATimestamp) and isinstance(item.timestamp, datetime):
             row["__replay__"] = ReplayWindow.around(item.timestamp).to_payload()
         return row
@@ -332,6 +349,13 @@ class EqlQueryRunner:
     Where a query of this runner is worked out.
     """
 
+    class_index: WorkspaceClassIndex = field(
+        default_factory=WorkspaceClassIndex.of_repository
+    )
+    """
+    The workspace classes a query of this runner may name besides its own domains.
+    """
+
     highlightable_ids: FrozenSet[str] = frozenset()
     """
     Ids the viewer can light up; see :attr:`RowRenderer.highlightable_ids`.
@@ -344,11 +368,22 @@ class EqlQueryRunner:
         """
         return tuple(domain.entity_type for domain in self.domains)
 
+    def vocabulary(self) -> QueryVocabulary:
+        """
+        Everything a query of this runner may name, for a query box to offer.
+        """
+        return QueryVocabulary(
+            domains=self.domains,
+            extra_names=self.extra_names,
+            class_index=self.class_index,
+        )
+
     def namespace(self) -> Dict[str, Any]:
         """
         A namespace for evaluating one EQL query (fresh variables each time).
         """
-        namespace: Dict[str, Any] = eql_factory_namespace()
+        namespace = WorkspaceClassNamespace(index=self.class_index)
+        namespace.update(eql_factory_namespace())
         for domain in self.domains:
             namespace[domain.entity_type.__name__] = domain.entity_type
         for domain in self.domains:
