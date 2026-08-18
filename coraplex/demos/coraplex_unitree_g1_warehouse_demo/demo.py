@@ -11,7 +11,7 @@ from __future__ import annotations
 import numpy as np
 
 from coraplex.datastructures.dataclasses import Context
-from coraplex.datastructures.enums import Arms, ApproachDirection, VerticalAlignment
+from coraplex.datastructures.enums import Arms, ApproachDirection, VerticalAlignment, VisualizationBackend
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.execution_environment import simulated_robot
 from coraplex.plans.factories import sequential
@@ -32,7 +32,14 @@ from semantic_digital_twin.robots.unitree_g1 import UnitreeG1
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import Color, Scale
+from coraplex.testing import setup_world, start_visualization
+from coraplex.visualization import WorldVisualization
 
+world = setup_world()
+
+visualization = WorldVisualization.from_environment(
+    world, default_backend=VisualizationBackend.CRAMERA
+).start()
 # %% where everything stands in the warehouse
 
 WORLD_URI = (
@@ -246,7 +253,9 @@ with simulated_robot:
     for _ in range(10):
         build_plan(world, robot).perform()
         build_plan2(world, robot).perform()
+    visualization.attach_plan(build_plan)
     build_plan(world, robot).perform()
+
 
 parcel_position = world.get_body_by_name("parcel").global_pose
 print(f"parcel delivered to {np.round(parcel_position.to_position(), 3)}")

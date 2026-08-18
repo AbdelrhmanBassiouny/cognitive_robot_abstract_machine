@@ -1,0 +1,64 @@
+<?xml version="1.0"?>
+<!-- A robot whose named materials are defined inside link visuals and referenced by
+     name from other links, the way the Tiago description writes them. -->
+<robot name="named_materials">
+  <material name="Blue">
+    <color rgba="0.0 0.0 0.8 1.0"/>
+  </material>
+
+  <link name="base_link">
+    <visual>
+      <geometry>
+        <box size="0.2 0.2 0.2"/>
+      </geometry>
+      <material name="DarkGrey">
+        <color rgba="0.2 0.2 0.2 1.0"/>
+      </material>
+    </visual>
+  </link>
+
+  <link name="referencing_link">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.1"/>
+      </geometry>
+      <material name="DarkGrey"/>
+    </visual>
+  </link>
+
+  <link name="top_level_material_link">
+    <visual>
+      <geometry>
+        <box size="0.1 0.1 0.1"/>
+      </geometry>
+      <material name="Blue"/>
+    </visual>
+  </link>
+
+  <link name="mesh_link">
+    <visual>
+      <geometry>
+        <mesh filename="milk.stl"/>
+      </geometry>
+      <material name="DarkGrey"/>
+    </visual>
+  </link>
+
+  <joint name="base_to_mesh" type="fixed">
+    <parent link="base_link"/>
+    <child link="mesh_link"/>
+    <origin xyz="0 0 0.5" rpy="0 0 0"/>
+  </joint>
+
+  <joint name="base_to_referencing" type="fixed">
+    <parent link="base_link"/>
+    <child link="referencing_link"/>
+    <origin xyz="0.5 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <joint name="base_to_top_level" type="fixed">
+    <parent link="base_link"/>
+    <child link="top_level_material_link"/>
+    <origin xyz="0 0.5 0" rpy="0 0 0"/>
+  </joint>
+</robot>

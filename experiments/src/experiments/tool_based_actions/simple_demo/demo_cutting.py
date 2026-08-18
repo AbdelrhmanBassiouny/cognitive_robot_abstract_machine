@@ -1,9 +1,11 @@
 """
-Cutting demo: a PR2 slices a bread on the apartment kitchen counter with a knife mounted
-on its right gripper.
+Cutting demo: a robot slices a bread on the apartment kitchen counter with a knife
+mounted on its right gripper.
 """
 
 import logging
+
+from typing_extensions import Type
 
 from experiments.tool_based_actions.simple_demo.demo_world import (
     BASE_POSITION_XYZ,
@@ -14,6 +16,7 @@ from experiments.tool_based_actions.simple_demo.demo_world import (
 )
 from semantic_digital_twin.datastructures.definitions import GripperState, TorsoState
 from semantic_digital_twin.robots.pr2 import PR2
+from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Bread,
     CuttingKnife,
@@ -37,11 +40,13 @@ from coraplex.testing import attach_tool, setup_world, start_visualization
 logger = logging.getLogger(__name__)
 
 
-def main() -> None:
+def main(robot_type: Type[AbstractRobot] = PR2) -> None:
     """
     Build the demo world and run the plan on the simulated robot.
+
+    :param robot_type: Robot performing the cut.
     """
-    world = setup_world()
+    world = setup_world(robot_type)
 
     bread_world = parse_object("bread.stl", color=BREAD_COLOR)
     with world.modify_world():
@@ -53,11 +58,11 @@ def main() -> None:
         )
     start_visualization(world)
     logger.debug("World root: %s", world.root)
-    pr2 = PR2.from_world(world)
-    context = Context(world=world, robot=pr2, _debug=False, ros_node=None)
+    robot = robot_type.from_world(world)
+    context = Context(world=world, robot=robot, _debug=False, ros_node=None)
 
     knife_body = attach_tool(
-        world, pr2, Arms.RIGHT, parse_object("big-knife.stl"), CUT_MOUNT
+        world, robot, Arms.RIGHT, parse_object("big-knife.stl"), CUT_MOUNT
     )
     bread_body = world.get_body_by_name("bread.stl")
 

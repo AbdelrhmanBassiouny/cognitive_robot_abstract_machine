@@ -1735,6 +1735,22 @@ class World(HasSimulatorProperties):
             self.kinematic_structure[index] for index in descendants_indices
         ]
 
+    def height_of_lowest_collision_point_of_branch(
+        self, root: KinematicStructureEntity
+    ) -> float:
+        """
+        :param root: The root body of the branch.
+        :return: The height of the branch's lowest collision geometry above the world's
+            root frame.
+        """
+        return min(
+            body.collision.as_bounding_box_collection_in_frame(self.root)
+            .bounding_box()
+            .min_z
+            for body in self.get_kinematic_structure_entities_of_branch(root)
+            if body.collision
+        )
+
     def get_direct_child_bodies_with_collision(self, start_body: Body) -> Set[Body]:
         """
         Collect all child Bodies until a movable connection is found.
