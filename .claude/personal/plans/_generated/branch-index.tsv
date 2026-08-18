@@ -19,7 +19,7 @@ claude/cramera-verbalization-voice-ttwcza	montessori-eql-stack
 claude/cramera-voice-questions-ttwcza	montessori-eql-stack
 montessori_perform_queried_action	montessori-eql-stack
 montessori_run_written_action	montessori-eql-stack
-montessori_replay_event_annotations	montessori-eql-stack
+claude/label-replayed-event-tracking-vj0x2z	montessori-eql-stack
 montessori_live_event_timeline_tab	montessori-eql-stack
 montessori_plan_graph_tab	montessori-eql-stack
 montessori_detachable_panels	montessori-eql-stack

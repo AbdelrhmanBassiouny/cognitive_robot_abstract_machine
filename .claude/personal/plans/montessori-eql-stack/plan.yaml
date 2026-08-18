@@ -179,15 +179,19 @@ items:
 
   - id: montessori_replay_event_annotations
     title: "Label a replayed event in the video, with arrows tracking its objects"
-    branch: montessori_replay_event_annotations
+    branch: claude/label-replayed-event-tracking-vj0x2z
     pull_request_number: null
     track: replay-annotation
     depends_on: [montessori_event_replay]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01XVBfkBE9UCvRtcarKufjUH
     notes: >-
       During replay of a segmind event, show the event's name in the video
       with an arrow from the label to each involved object; the arrow tips
-      follow the objects as they move.
+      follow the objects as they move. Started 2026-08-18 on the session's own
+      designated branch rather than the planned
+      `montessori_replay_event_annotations`, based on #165's current tip
+      5cf53c5a.
 
   - id: montessori_live_event_timeline_tab
     title: "A tabbed panel with a live timeline of detected segmind events"

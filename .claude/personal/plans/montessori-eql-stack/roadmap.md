@@ -505,3 +505,33 @@ already setting and nothing read.
 ### Session note
 
 Subscribing to tracking issue #174 worked this time.
+
+## 2026-08-18: montessori_replay_event_annotations started
+
+Based on `montessori_event_replay` (#165) at 5cf53c5a, on the session's own
+designated branch `claude/label-replayed-event-tracking-vj0x2z` rather than the
+planned branch name; the manifest records the real branch.
+
+### What the item turned out to be
+
+The replay popup already exists; what it lacks is any knowledge of *what* it is
+replaying. A row's replay entry carried only `{start, end}`, so the popup could
+name a wall-clock span and nothing else. The work is therefore mostly about
+carrying the event through: the answer row's replay entry gains the event's
+label and the objects it involved, the popup URL carries both, and the scene
+panel turns them into a caption plus one arrow per object, re-aimed every frame
+from the objects' live positions in the played-back clip.
+
+### Decisions taken
+
+- **The annotation travels in the popup URL, not through the bridge.** The
+  bridge records world states and knows nothing about which event was queried;
+  the EQL answer is the only place both facts meet, and the popup is opened from
+  there.
+- **The demo names its own objects**, through a protocol the query runner
+  declares (`InvolvesObjects`), the way `related_highlight_ids` already works -
+  cramera must not know what a segmind event is.
+- **The caption and arrows are 3D**, like the existing object labels
+  (canvas sprites) and highlight arrows (cone meshes), rather than a DOM/SVG
+  overlay: the arrow tips then follow the objects with no projection maths, and
+  the geometry stays testable in a pure `core/event_annotation.js`.
