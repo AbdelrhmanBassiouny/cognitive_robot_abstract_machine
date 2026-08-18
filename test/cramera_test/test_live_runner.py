@@ -57,7 +57,7 @@ class TestStartingAgainForARebuiltWorld:
         install_no_op_hooks(monkeypatch)
         monkeypatch.setattr(runner, "serve", lambda passed_bridge, port: object())
         runner.start(world=World())
-        bridge.begin_plan(PlanWithRoot(root=make_plan_node("SequentialNode")))
+        bridge.follow_plan(PlanWithRoot(root=make_plan_node("SequentialNode")))
 
         runner.start(world=World())
 
