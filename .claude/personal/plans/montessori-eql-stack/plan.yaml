@@ -197,7 +197,7 @@ items:
   - id: montessori_replay_event_annotations
     title: "Label a replayed event in the video, with arrows tracking its objects"
     branch: claude/label-replayed-event-tracking-vj0x2z
-    pull_request_number: null
+    pull_request_number: 177
     track: replay-annotation
     depends_on: [montessori_event_replay]
     status: in_progress
@@ -208,7 +208,12 @@ items:
       follow the objects as they move. Started 2026-08-18 on the session's own
       designated branch rather than the planned
       `montessori_replay_event_annotations`, based on #165's current tip
-      5cf53c5a.
+      5cf53c5a. Draft #177 opened the same day with the whole item implemented:
+      the answer row's replay entry became a ReplayedMoment (window, label,
+      objects), the demo's SegmindEventRecord names its objects, and the scene
+      panel draws the caption and its arrows from a pure
+      core/event_annotation.js. cramera suite 551 green; test/experiments_test
+      could not run in that environment (no rclpy).
 
   - id: montessori_live_event_timeline_tab
     title: "A tabbed panel with a live timeline of detected segmind events"

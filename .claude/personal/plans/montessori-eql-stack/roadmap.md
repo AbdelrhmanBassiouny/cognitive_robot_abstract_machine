@@ -674,3 +674,15 @@ nothing to restack — but its manifest note still records #165's pre-restack ti
 Worth noting for anyone reading the tip hashes above: three sessions were pushing to
 this stack within the same hour. A restack is only true as of the tip it was run
 against, so check ancestry rather than trusting a recorded hash.
+
+### Landed as draft #177
+
+Based on `montessori_event_replay`, so it stacks above #165 rather than on main.
+The caption reuses the scene panel's own canvas-sprite name tag (`makeLabel`)
+one size up, and the annotation is re-placed inside `applyLive` rather than in
+the render loop: the objects only move when a recorded frame is applied, so
+following them there costs no extra frames.
+
+Two names had to move: `Replay.label` became `Replay.timeSpan` (a moment now
+carries the event's own label, so "label" could not also mean the clip's clock
+span), and the panel's `replayWindow` became `replayedMoment`.
