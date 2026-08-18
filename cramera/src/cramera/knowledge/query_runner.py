@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Mapping
-from dataclasses import dataclass, field, fields, is_dataclass
+from dataclasses import MISSING, dataclass, field, fields, is_dataclass
 
 from typing_extensions import (
     Any,
@@ -229,6 +229,11 @@ class RowRenderer:
         """
         One entity as an answer row, collecting the ids it lights up.
 
+        A ``repr=False`` field is internal bookkeeping and stays out of the row. A
+        field declared ``init=False`` with a plain default lives on the class rather
+        than in the instance ``__dict__``, so its value is read from the field's
+        default instead.
+
         :param item: The entity to render as a row.
         """
         name = self._row_title(item)
@@ -237,9 +242,16 @@ class RowRenderer:
         if isinstance(item, HighlightsRelatedNodes):
             self.highlight.extend(item.related_highlight_ids())
         row = {"__entity__": name or repr(item), "__type__": type(item).__name__}
+        instance_values = vars(item)
         for entity_field in fields(item):
-            if entity_field.name != "name":
-                row[entity_field.name] = self._jsonable(vars(item)[entity_field.name])
+            if entity_field.name == "name" or not entity_field.repr:
+                continue
+            if entity_field.name in instance_values:
+                row[entity_field.name] = self._jsonable(
+                    instance_values[entity_field.name]
+                )
+            elif entity_field.default is not MISSING:
+                row[entity_field.name] = self._jsonable(entity_field.default)
         return row
 
     def _jsonable(self, value: Any) -> Any:
