@@ -5,7 +5,10 @@ Tests for resolving and reaching the database a Montessori run records to.
 from __future__ import annotations
 
 import sqlite3
+import subprocess
+import sys
 import threading
+from pathlib import Path
 
 import pytest
 from sqlalchemy import inspect
@@ -25,6 +28,14 @@ from experiments.montessori.results_database import (
     verify_reachable,
     verify_writable,
 )
+from experiments.montessori.sorting_results import ShapeInsertionResult
+
+RESOLVE_RECORDED_RESULTS_DAO = (
+    Path(__file__).parent / "dataset" / "resolve_recorded_results_dao.py"
+)
+"""
+Resolves the mapping of a recorded result in an interpreter of its own.
+"""
 
 UNREACHABLE_URI = (
     "postgresql+psycopg://nobody:wrong@127.0.0.1:1/franka_montessori_sorting_results"
@@ -76,6 +87,27 @@ class TestOpeningSessions:
         monkeypatch.setenv(DATABASE_URI_ENVIRONMENT_VARIABLE, "sqlite://")
 
         assert ResultsDatabase().uri == "sqlite://"
+
+    def test_a_session_opened_without_preparing_missing_tables_maps_the_results(
+        self, tmp_path
+    ):
+        """
+        Reading a database is answering questions about it, which needs the recorded
+        classes mapped -- so a session must know the schema even where it may not create
+        anything.
+        """
+        path = tmp_path / "results.db"
+        ResultsDatabase(uri="sqlite:///%s" % path).open_session().close()
+        read_only_uri = "sqlite:///file:%s?mode=ro&uri=true" % path
+
+        resolved = subprocess.run(
+            [sys.executable, str(RESOLVE_RECORDED_RESULTS_DAO), read_only_uri],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        assert resolved.stdout.strip() == ShapeInsertionResult.__name__
 
     def test_a_session_can_be_opened_without_preparing_missing_tables(self, tmp_path):
         """

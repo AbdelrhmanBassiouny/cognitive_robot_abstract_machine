@@ -231,7 +231,8 @@ class ResultsDatabase:
 
         Creation is skipped when :paramref:`create_missing_tables` is false, so a
         database reached through a read-only role still serves the recorded runs it
-        already holds.
+        already holds. The schema is read either way: it is what maps the recorded
+        classes, without which a question about them has nothing to select from.
 
         Done once per database rather than once per session: reading the whole generated
         ``experiments`` schema and issuing its ``CREATE TABLE`` statements takes the best
@@ -248,8 +249,8 @@ class ResultsDatabase:
         table" error the moment ``CREATE TABLE`` tried to reference it.
         """
         engine = create_results_engine(self.uri)
+        metadata = self._schema()
         if create_missing_tables:
-            metadata = self._schema()
             metadata.create_all(engine, tables=self._creatable_tables(metadata))
         return sessionmaker(engine)
 
