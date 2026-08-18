@@ -20,7 +20,8 @@ HTTP endpoints of the live bridge (default port 8765).
     GET /presets {ok, title, presets: [{text, code, scope}],
                   scopes: [{name, label, variables}], variables: [name]}
     GET /run     {ok, title, paused, looping, restart_pending, activity, iteration}
-    GET /events  {ok, title, events: [{kind, detected_at, participants}]}
+    GET /events  {ok, title, clock: {elapsed, running},
+                 events: [{kind, detected_at, seconds_into_run, participants}]}
                   (detected_at in seconds since the epoch)
     POST /eql    {code, scope} -> the rendered answer rows
     POST /run    {command} -> the run state that command produced

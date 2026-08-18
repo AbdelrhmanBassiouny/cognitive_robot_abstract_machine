@@ -13,6 +13,7 @@ from __future__ import annotations
 import threading
 from dataclasses import dataclass, field
 
+from cramera.live.run_clock import RunClock
 from cramera.live.run_control import (
     LiveRunControl,
     RunActivity,
@@ -43,6 +44,14 @@ class PausableSimulation(Protocol):
 class SortingRunControl(LiveRunControl):
     """
     A Montessori sort, as something the viewer can pause, restart and loop.
+    """
+
+    clock: RunClock = field(default_factory=RunClock)
+    """
+    How far the iteration in progress has got, for whatever plots the run along it.
+
+    Driven from here because pausing and restarting is what this class is, and stopped
+    along with the run so the two never disagree about where it stands.
     """
 
     wait_poll_seconds: float = 0.2
@@ -88,6 +97,13 @@ class SortingRunControl(LiveRunControl):
     Guards every field above, and wakes the sorting thread when one of them changes.
     """
 
+    def __post_init__(self) -> None:
+        """
+        Hold the clock at zero until an iteration actually begins.
+        """
+        with self._condition:
+            self._match_clock_to_run()
+
     # %% what the viewer asks of it
     def title(self) -> str:
         """
@@ -128,7 +144,20 @@ class SortingRunControl(LiveRunControl):
                 self._looping = True
             elif command is RunCommand.DISABLE_LOOP:
                 self._looping = False
+            self._match_clock_to_run()
             self._condition.notify_all()
+
+    def _match_clock_to_run(self) -> None:
+        """
+        Have :attr:`clock` going exactly when the run is, holding :attr:`_condition`.
+
+        Read off the run's state rather than tracked alongside it, so no transition can
+        leave the two disagreeing.
+        """
+        if self._paused or self._activity is not RunActivity.SORTING:
+            self.clock.pause()
+        else:
+            self.clock.resume()
 
     def _pause(self) -> None:
         """
@@ -163,6 +192,8 @@ class SortingRunControl(LiveRunControl):
             self._iteration = iteration
             self._simulation = simulation
             self._activity = RunActivity.SORTING
+            self.clock.restart()
+            self._match_clock_to_run()
             if self._paused:
                 simulation.pause_simulation()
             self._condition.notify_all()
@@ -173,6 +204,7 @@ class SortingRunControl(LiveRunControl):
         """
         with self._condition:
             self._activity = RunActivity.FINISHED
+            self._match_clock_to_run()
             self._condition.notify_all()
 
     def wait_while_paused(self) -> None:

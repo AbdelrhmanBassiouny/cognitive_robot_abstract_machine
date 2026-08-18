@@ -19,6 +19,7 @@ from cramera.live.events import (
     LiveEventSource,
     NoEventSourceRegistered,
 )
+from cramera.live.run_clock import RunClockReading
 
 
 # %% a stand-in demo
@@ -33,6 +34,11 @@ class ReportingEventSource(LiveEventSource):
     The events this stand-in reports, oldest first.
     """
 
+    reading: RunClockReading = RunClockReading(elapsed=0.0, running=True)
+    """
+    Where this stand-in says its run has got to.
+    """
+
     def title(self) -> str:
         """
         What the viewer names the run these events came from.
@@ -45,17 +51,25 @@ class ReportingEventSource(LiveEventSource):
         """
         return self.detected
 
+    def clock_reading(self) -> RunClockReading:
+        """
+        Where this stand-in says its run has got to.
+        """
+        return self.reading
+
 
 def event_at(second: int, kind: str = "PickUpEvent") -> DetectedEvent:
     """
     One event, at a fixed instant offset by whole seconds, for a readable expectation.
 
-    :param second: Seconds past the epoch the event is stamped with.
+    :param second: Seconds past the epoch the event is stamped with, and how far into
+        the run it was noticed.
     :param kind: What kind of event to build.
     """
     return DetectedEvent(
         kind=kind,
         detected_at=datetime.fromtimestamp(second, tz=timezone.utc),
+        seconds_into_run=float(second),
         participants=["square_shape"],
     )
 
@@ -70,10 +84,18 @@ class TestDetectedEventPayload:
 
         assert event.to_payload()["detected_at"] == 90.0
 
+    def test_the_instant_is_also_sent_as_the_point_of_the_run_it_fell_at(self):
+        """
+        A run that pauses stands still where the wall clock does not, so the timeline
+        plots the run's own axis rather than the wall clock's.
+        """
+        assert event_at(90).to_payload()["seconds_into_run"] == 90.0
+
     def test_the_payload_carries_the_kind_and_every_participant(self):
         event = DetectedEvent(
             kind="InsertionEvent",
             detected_at=datetime.fromtimestamp(5, tz=timezone.utc),
+            seconds_into_run=5.0,
             participants=["square_shape", "square_hole"],
         )
 
@@ -89,6 +111,7 @@ class TestDetectedEventPayload:
         assert set(event_at(0).to_payload()) == {
             "kind",
             "detected_at",
+            "seconds_into_run",
             "participants",
         }
 
@@ -128,6 +151,28 @@ class TestEventSourceRegistration:
         source.detected.append(event_at(2))
 
         assert len(bridge.event_payload()["events"]) == 2
+
+
+class TestTheRunsClockOnTheWire:
+    def test_the_payload_carries_where_the_run_has_got_to(self):
+        """
+        Without it the timeline would point at the wall clock, which keeps moving while
+        the run it plots stands still.
+        """
+        reading = RunClockReading(elapsed=12.5, running=False)
+        bridge = Bridge()
+        bridge.register_event_source(ReportingEventSource(reading=reading))
+
+        assert bridge.event_payload()["clock"] == reading.to_payload()
+
+    def test_the_clock_follows_the_source_as_the_run_carries_on(self):
+        source = ReportingEventSource()
+        bridge = Bridge()
+        bridge.register_event_source(source)
+
+        source.reading = RunClockReading(elapsed=30.0, running=True)
+
+        assert bridge.event_payload()["clock"]["elapsed"] == 30.0
 
 
 class TestEventSourceInTheBridgeStatus:

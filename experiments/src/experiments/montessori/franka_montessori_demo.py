@@ -1012,7 +1012,9 @@ def _attach_cramera(
 
     :param montessori: The Montessori scene the viewer visualizes.
     :param progress: The record questions about this sort are answered from.
-    :param control: What the viewer pauses, restarts and loops this run with.
+    :param control: What the viewer pauses, restarts and loops this run with, and whose
+        clock the timeline plots the detections along so it stands still whenever the
+        run does.
     :param results_database: Where questions about finished runs are answered from.
     :return: The record the viewer's timeline is drawn from, for the sort to report its
         detections to as it makes them.
@@ -1022,7 +1024,7 @@ def _attach_cramera(
         MontessoriLiveQuerySource(progress=progress, results_database=results_database)
     )
     BRIDGE.register_run_control(control)
-    detections = MontessoriLiveEventSource()
+    detections = MontessoriLiveEventSource(clock=control.clock)
     BRIDGE.register_event_source(detections)
     return detections
 

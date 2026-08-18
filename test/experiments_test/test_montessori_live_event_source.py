@@ -10,6 +10,7 @@ import threading
 from datetime import datetime
 
 import pytest
+from cramera.live.run_clock import RunClock
 from segmind.datastructures.events import InsertionEvent, PickUpEvent
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Point3
@@ -19,6 +20,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 from experiments.montessori.live_event_source import MontessoriLiveEventSource
 
 from .dataset.montessori_board import board_with_one_hole, cube_at
+from .dataset.wound_clock import WoundClock
 
 DETECTED_AT = datetime(2026, 8, 13, 12, 0, 0)
 """
@@ -40,8 +42,13 @@ def scene():
 
 
 @pytest.fixture()
-def source():
-    return MontessoriLiveEventSource()
+def run_time():
+    return WoundClock()
+
+
+@pytest.fixture()
+def source(run_time):
+    return MontessoriLiveEventSource(clock=RunClock(monotonic_seconds=run_time.read))
 
 
 # %% one event, as the timeline reads it
@@ -146,3 +153,44 @@ class TestReceivingWhileTheTimelinePolls:
             reader.join()
 
         assert len(source.events()) == batches
+
+
+# %% the axis the timeline plots the detections along
+class TestWhereInTheRunEachDetectionFell:
+    def test_a_detection_is_stamped_with_how_far_the_run_had_got(
+        self, source, scene, run_time
+    ):
+        _, _, shape = scene
+        run_time.advance(7.5)
+
+        source.receive([PickUpEvent(tracked_object=shape.root, timestamp=DETECTED_AT)])
+
+        assert source.events()[0].seconds_into_run == 7.5
+
+    def test_time_the_run_spent_paused_is_left_out_of_the_stamp(
+        self, source, scene, run_time
+    ):
+        """
+        The wall clock keeps going while the run stands still, so a stamp taken from it
+        would put the mark further along the timeline than the run ever got.
+        """
+        _, _, shape = scene
+        run_time.advance(4.0)
+        source.clock.pause()
+        run_time.advance(60.0)
+        source.clock.resume()
+        run_time.advance(1.0)
+
+        source.receive([PickUpEvent(tracked_object=shape.root, timestamp=DETECTED_AT)])
+
+        assert source.events()[0].seconds_into_run == 5.0
+
+    def test_the_timeline_is_told_where_the_run_has_got_to(self, source, run_time):
+        run_time.advance(11.0)
+
+        assert source.clock_reading().elapsed == 11.0
+
+    def test_the_timeline_is_told_that_a_paused_run_is_going_nowhere(self, source):
+        source.clock.pause()
+
+        assert source.clock_reading().running is False

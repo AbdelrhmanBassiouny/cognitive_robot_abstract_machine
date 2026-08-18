@@ -15,6 +15,13 @@
 (function (global) {
   'use strict';
 
+  const NEAR_EDGE = 0.2;
+  /* How close to a side edge a mark has to be for its summary to be pushed
+     inwards rather than centred over it. */
+
+  const ROOM_ABOVE = 0.4;
+  /* How far down the panel a mark has to be for its summary to fit above it. */
+
   global.TimelineLayout = {
     /* The stretch of time on screen, as {start, end}, for a run that began at
        `runStart`, at the instant `now`, showing `span` seconds at a time. */
@@ -51,6 +58,19 @@
     laneCentre: function (index, count, height) {
       const lanes = count > 0 ? count : 1;
       return (index + 0.5) / lanes * height;
+    },
+
+    /* Which way a summary anchored at (`left`, `top`) has to be drawn to stay
+       inside a panel of `width` by `height`: away from whichever edge it is
+       against, and centred over its mark wherever there is room either side. */
+    summaryPlacement: function (left, top, width, height) {
+      const across = width > 0 ? left / width : 0;
+      const down = height > 0 ? top / height : 0;
+      return {
+        horizontal: across < NEAR_EDGE ? 'from-left'
+          : (across > 1 - NEAR_EDGE ? 'from-right' : 'centred'),
+        vertical: down < ROOM_ABOVE ? 'below' : 'above',
+      };
     },
   };
 })(window);

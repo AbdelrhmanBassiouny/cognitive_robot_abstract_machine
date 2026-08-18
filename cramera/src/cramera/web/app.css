@@ -235,15 +235,33 @@ body{
 .timeline-plot{position:absolute;inset:0;overflow:hidden}
 /* one lane per kind of event, labelled at the left edge over its own rule */
 .timeline-lane{
-  position:absolute;left:0;right:0;transform:translateY(-50%);
+  position:absolute;z-index:1;left:0;right:0;transform:translateY(-50%);
   padding-left:10px;border-top:1px dashed var(--line2);
   font:600 10.5px/18px Inter,sans-serif;letter-spacing:.3px;color:var(--muted);
   white-space:nowrap;pointer-events:none
 }
 .timeline-mark{
-  position:absolute;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;border-radius:50%;
-  background:var(--accent);box-shadow:0 0 0 2px var(--bg2)
+  position:absolute;z-index:2;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;
+  border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--bg2);
+  cursor:default
 }
+.timeline-mark:hover{background:var(--warn);box-shadow:0 0 0 3px var(--bg2)}
+/* what a pointed-at mark says: the kind of event, what it happened to, and when */
+.timeline-summary{
+  position:absolute;z-index:9;pointer-events:none;max-width:60%;
+  --summary-across:-50%;--summary-down:-100%;
+  transform:translate(var(--summary-across),var(--summary-down));
+  padding:6px 9px;border:1px solid var(--line2);border-radius:6px;
+  background:var(--bg2);box-shadow:0 6px 18px rgba(0,0,0,.35);
+  font:500 11px/1.45 Inter,sans-serif;white-space:normal
+}
+.timeline-summary.from-left{--summary-across:0}
+.timeline-summary.from-right{--summary-across:-100%}
+.timeline-summary.above{margin-top:-11px}
+.timeline-summary.below{--summary-down:0;margin-top:11px}
+.timeline-summary-kind{font-weight:700;color:var(--ink)}
+.timeline-summary-objects{color:var(--ink);opacity:.85}
+.timeline-summary-time{color:var(--muted);font-size:10.5px;letter-spacing:.2px}
 .timeline-now{
   position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;
   background:var(--warn);opacity:.85;pointer-events:none

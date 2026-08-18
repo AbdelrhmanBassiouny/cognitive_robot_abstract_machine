@@ -89,3 +89,34 @@ test('a single lane sits in the middle of the whole height', function () {
 test('no lanes at all still gives a usable centre rather than nothing', function () {
   assert.strictEqual(TimelineLayout.laneCentre(0, 0, 100), 50);
 });
+
+// %% where a pointed-at mark's summary goes
+test('a mark with room either side gets its summary centred over it', function () {
+  assert.strictEqual(
+    TimelineLayout.summaryPlacement(50, 50, 100, 100).horizontal, 'centred');
+});
+
+test('a mark against the left edge gets its summary pushed rightwards', function () {
+  assert.strictEqual(
+    TimelineLayout.summaryPlacement(4, 50, 100, 100).horizontal, 'from-left');
+});
+
+test('a mark against the right edge gets its summary pushed leftwards', function () {
+  assert.strictEqual(
+    TimelineLayout.summaryPlacement(96, 50, 100, 100).horizontal, 'from-right');
+});
+
+test('a mark low in the panel gets its summary above it', function () {
+  assert.strictEqual(
+    TimelineLayout.summaryPlacement(50, 75, 100, 100).vertical, 'above');
+});
+
+test('a mark near the top has no room above it, so its summary goes below', function () {
+  assert.strictEqual(
+    TimelineLayout.summaryPlacement(50, 12, 100, 100).vertical, 'below');
+});
+
+test('a panel with no extent yet still places the summary somewhere', function () {
+  assert.deepStrictEqual(
+    TimelineLayout.summaryPlacement(0, 0, 0, 0), { horizontal: 'from-left', vertical: 'below' });
+});

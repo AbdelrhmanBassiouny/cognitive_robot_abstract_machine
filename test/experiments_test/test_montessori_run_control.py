@@ -14,9 +14,12 @@ from dataclasses import dataclass, field
 import pytest
 from typing_extensions import List
 
+from cramera.live.run_clock import RunClock
 from cramera.live.run_control import RunActivity, RunCommand
 
 from experiments.montessori.run_control import SortingRunControl
+
+from .dataset.wound_clock import WoundClock
 
 WAIT_TIMEOUT_SECONDS = 10.0
 """
@@ -52,6 +55,21 @@ class RecordingSimulation:
 @pytest.fixture()
 def simulation() -> RecordingSimulation:
     return RecordingSimulation()
+
+
+@pytest.fixture()
+def wound_clock() -> WoundClock:
+    return WoundClock()
+
+
+@pytest.fixture()
+def timed_control(wound_clock) -> SortingRunControl:
+    """
+    A run in progress whose clock a test moves by hand.
+    """
+    control = SortingRunControl(clock=RunClock(monotonic_seconds=wound_clock.read))
+    control.begin_iteration(iteration=1, simulation=RecordingSimulation())
+    return control
 
 
 @pytest.fixture()
@@ -229,3 +247,98 @@ class TestIdlingBetweenRuns:
         control.apply(RunCommand.ENABLE_LOOP)
 
         assert released.wait(WAIT_TIMEOUT_SECONDS)
+
+
+# %% the clock whatever plots the run measures it along
+class TestTheRunsOwnClock:
+    def test_a_run_that_has_not_begun_has_got_nowhere(self, wound_clock):
+        """
+        A world is still being built at that point, so nothing has happened to plot.
+        """
+        control = SortingRunControl(clock=RunClock(monotonic_seconds=wound_clock.read))
+
+        wound_clock.advance(30.0)
+
+        assert control.clock.elapsed_seconds() == 0.0
+
+    def test_a_sorting_run_carries_its_clock_along(self, timed_control, wound_clock):
+        wound_clock.advance(12.0)
+
+        assert timed_control.clock.elapsed_seconds() == 12.0
+
+    def test_pausing_the_run_stops_its_clock(self, timed_control, wound_clock):
+        wound_clock.advance(4.0)
+
+        timed_control.apply(RunCommand.PAUSE)
+        wound_clock.advance(60.0)
+
+        assert timed_control.clock.elapsed_seconds() == 4.0
+
+    def test_a_paused_run_says_its_clock_is_not_going(self, timed_control):
+        timed_control.apply(RunCommand.PAUSE)
+
+        assert timed_control.clock.reading().running is False
+
+    def test_resuming_the_run_carries_its_clock_on_past_the_pause(
+        self, timed_control, wound_clock
+    ):
+        wound_clock.advance(4.0)
+        timed_control.apply(RunCommand.PAUSE)
+        wound_clock.advance(60.0)
+
+        timed_control.apply(RunCommand.RESUME)
+        wound_clock.advance(2.0)
+
+        assert timed_control.clock.elapsed_seconds() == 6.0
+
+    def test_the_next_iteration_measures_from_its_own_start(
+        self, timed_control, wound_clock
+    ):
+        wound_clock.advance(40.0)
+
+        timed_control.begin_iteration(iteration=2, simulation=RecordingSimulation())
+        wound_clock.advance(3.0)
+
+        assert timed_control.clock.elapsed_seconds() == 3.0
+
+    def test_an_iteration_begun_while_paused_starts_out_stopped(
+        self, timed_control, wound_clock
+    ):
+        """
+        A run paused across a rebuild stays paused, so its clock has to as well.
+        """
+        timed_control.apply(RunCommand.PAUSE)
+
+        timed_control.begin_iteration(iteration=2, simulation=RecordingSimulation())
+        wound_clock.advance(5.0)
+
+        assert timed_control.clock.elapsed_seconds() == 0.0
+
+    def test_a_finished_run_stops_its_clock_where_it_ended(
+        self, timed_control, wound_clock
+    ):
+        """
+        A finished run holds its final state for inspection, and a clock still running
+        would say it was getting somewhere.
+        """
+        wound_clock.advance(9.0)
+
+        timed_control.finish_iteration()
+        wound_clock.advance(60.0)
+
+        assert timed_control.clock.elapsed_seconds() == 9.0
+
+    def test_resuming_a_finished_run_leaves_its_clock_where_it_ended(
+        self, timed_control, wound_clock
+    ):
+        """
+        Nothing is carrying on, so nothing may make the clock carry on either.
+        """
+        wound_clock.advance(9.0)
+        timed_control.finish_iteration()
+
+        timed_control.apply(RunCommand.PAUSE)
+        timed_control.apply(RunCommand.RESUME)
+        wound_clock.advance(60.0)
+
+        assert timed_control.clock.elapsed_seconds() == 9.0

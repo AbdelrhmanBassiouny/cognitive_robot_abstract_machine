@@ -1195,11 +1195,15 @@ class Bridge:
         """
         The detections and the name of the run they belong to, as the timeline reads it.
 
+        The run's clock rides along, so the timeline points at where the run has got to
+        rather than at the wall clock, and stands still whenever the run does.
+
         :raises NoEventSourceRegistered: When no demo offered one.
         """
         source = self._registered_event_source()
         return {
             "title": source.title(),
+            "clock": source.clock_reading().to_payload(),
             "events": [event.to_payload() for event in source.events()],
         }
 

@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 
+from cramera.live.run_clock import RunClockReading
 from krrood.exceptions import DataclassException
 from typing_extensions import Any, Dict, List
 
@@ -46,6 +47,12 @@ class DetectedEvent:
     When the demo noticed it.
     """
 
+    seconds_into_run: float
+    """
+    How far into the run it was noticed, excluding the time the run spent paused, which
+    is the axis the viewer's timeline plots along.
+    """
+
     participants: List[str] = field(default_factory=list)
     """
     What the event happened to, the primary thing first.
@@ -78,4 +85,10 @@ class LiveEventSource(ABC):
     def events(self) -> List[DetectedEvent]:
         """
         Everything detected so far, oldest first.
+        """
+
+    @abstractmethod
+    def clock_reading(self) -> RunClockReading:
+        """
+        How far the run has got along the axis its detections are stamped against.
         """

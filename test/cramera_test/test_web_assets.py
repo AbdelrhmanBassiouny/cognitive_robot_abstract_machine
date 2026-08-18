@@ -176,6 +176,9 @@ class TestJsUnits:
     def test_timeline_layout(self):
         self.run_node("test_timeline_layout.js")
 
+    def test_event_summary(self):
+        self.run_node("test_event_summary.js")
+
     def test_event_timeline_panel(self):
         self.run_node("test_event_timeline_panel.js")
 
