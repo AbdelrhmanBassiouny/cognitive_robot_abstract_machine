@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 from collections.abc import Mapping
 from dataclasses import MISSING, dataclass, field, fields, is_dataclass
+from enum import Enum
 
 from typing_extensions import (
     Any,
@@ -232,7 +233,8 @@ class RowRenderer:
         A ``repr=False`` field is internal bookkeeping and stays out of the row. A
         field declared ``init=False`` with a plain default lives on the class rather
         than in the instance ``__dict__``, so its value is read from the field's
-        default instead.
+        default instead. A thing that names nothing of its own -- an instance a query
+        built rather than found -- is left untitled, and reads as its fields alone.
 
         :param item: The entity to render as a row.
         """
@@ -241,7 +243,9 @@ class RowRenderer:
             self.highlight.append(name)
         if isinstance(item, HighlightsRelatedNodes):
             self.highlight.extend(item.related_highlight_ids())
-        row = {"__entity__": name or repr(item), "__type__": type(item).__name__}
+        row = {"__type__": type(item).__name__}
+        if name:
+            row["__entity__"] = name
         instance_values = vars(item)
         for entity_field in fields(item):
             if entity_field.name == "name" or not entity_field.repr:
@@ -258,6 +262,9 @@ class RowRenderer:
         """
         A JSON-serializable rendering of one query result value.
 
+        An enum member reads as the member's own name, unless its value is already the
+        text the rest of the answer is written in.
+
         :param value: The raw query result value to render.
         """
         if isinstance(value, NumericPose):
@@ -268,6 +275,8 @@ class RowRenderer:
             return pose_label(value)
         if is_dataclass(value) and not isinstance(value, type):
             return self._row_title(value) or repr(value)
+        if isinstance(value, Enum) and not isinstance(value, str):
+            return value.name
         if isinstance(value, float):
             return round(value, 4)
         if isinstance(value, (str, int, bool)) or value is None:
@@ -329,13 +338,23 @@ class EqlQueryRunner:
         """
         return tuple(domain.entity_type for domain in self.domains)
 
+    @property
+    def names(self) -> Dict[str, Any]:
+        """
+        Every name besides the domains a query of this runner may use.
+
+        The evaluation's own names are added last: a query cannot be answered without
+        them, whereas what a source declares is its own to name.
+        """
+        return {**self.extra_names, **self.evaluation.names()}
+
     def vocabulary(self) -> QueryVocabulary:
         """
         Everything a query of this runner may name, for a query box to offer.
         """
         return QueryVocabulary(
             domains=self.domains,
-            extra_names=self.extra_names,
+            extra_names=self.names,
             class_index=self.class_index,
         )
 
@@ -353,7 +372,7 @@ class EqlQueryRunner:
                 if domain.objects is None
                 else eql_factories.variable(domain.entity_type, domain=domain.objects)
             )
-        namespace.update(self.extra_names)
+        namespace.update(self.names)
         return namespace
 
     def run(self, code: str, limit: int = DEFAULT_ROW_LIMIT) -> RenderResult:

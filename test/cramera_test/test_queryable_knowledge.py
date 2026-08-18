@@ -44,6 +44,7 @@ class TestQueryScope:
     def test_every_scope_has_a_heading_to_show_it_under(self):
         assert QueryScope.CURRENT_STATE.label == "Current State Queries"
         assert QueryScope.EPISODIC_MEMORY.label == "Episodic Memory Queries"
+        assert QueryScope.UNDERSPECIFIED.label == "Underspecified Queries"
 
     def test_a_scope_is_read_back_from_the_name_it_travels_as(self):
         assert QueryScope.of_name("episodic_memory") is QueryScope.EPISODIC_MEMORY
@@ -69,3 +70,6 @@ class TestQueryableKnowledge:
             evaluation=RecordingEvaluation(),
         )
         assert knowledge.domains == domains
+
+    def test_an_evaluation_puts_no_names_in_reach_unless_it_says_so(self):
+        assert RecordingEvaluation().names() == {}

@@ -9,6 +9,7 @@ cramera owns.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from enum import Enum, auto
 
 from typing_extensions import Optional
 
@@ -94,4 +95,45 @@ class UnnamedRecord:
     identifier: str
     """
     This record's identity, deliberately not called ``name``.
+    """
+
+
+class Hand(Enum):
+    """
+    Which hand does the work, as an enumerable field a question may leave open.
+    """
+
+    LEFT = auto()
+    RIGHT = auto()
+
+
+class Approach(Enum):
+    """
+    Where the work is approached from, so combinations of two open fields have more
+    than one member each to combine.
+    """
+
+    FROM_ABOVE = auto()
+    FROM_THE_SIDE = auto()
+
+
+@dataclass
+class RecordWithEnumFields:
+    """
+    A record whose enum fields can be left open for a query to fill in.
+    """
+
+    hand: Hand
+    """
+    Which hand does the work.
+    """
+
+    approach: Approach = Approach.FROM_ABOVE
+    """
+    Where the work is approached from.
+    """
+
+    label: str = "unlabelled"
+    """
+    A field no enum bounds, so leaving it open cannot be answered by enumerating.
     """

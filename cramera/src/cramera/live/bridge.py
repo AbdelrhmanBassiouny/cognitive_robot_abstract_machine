@@ -1081,10 +1081,21 @@ class Bridge:
         :raises NoQuerySourceRegistered: When no demo offered one.
         :raises UnknownQueryScope: When the demo offers no such body of knowledge.
         """
+        return self._query_runner(scope).vocabulary()
+
+    def _query_runner(self, scope: QueryScope) -> EqlQueryRunner:
+        """
+        What runs a query of one scope, and knows everything such a query may name.
+
+        :param scope: The body of knowledge being asked.
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        :raises UnknownQueryScope: When the demo offers no such body of knowledge.
+        """
         knowledge = self._queryable_knowledge(scope)
-        return QueryVocabulary(
+        return EqlQueryRunner(
             domains=knowledge.domains,
             extra_names=knowledge.extra_names,
+            evaluation=knowledge.evaluation,
             class_index=WorkspaceClassIndex.of_repository(),
         )
 
@@ -1112,13 +1123,9 @@ class Bridge:
         :raises NoQuerySourceRegistered: When no demo offered one.
         :raises UnknownQueryScope: When the demo offers no such body of knowledge.
         """
-        knowledge = self._queryable_knowledge(scope)
+        runner = self._query_runner(scope)
         with self._query_lock:
-            return EqlQueryRunner(
-                domains=knowledge.domains,
-                extra_names=knowledge.extra_names,
-                evaluation=knowledge.evaluation,
-            ).run(code)
+            return runner.run(code)
 
     # %% viewer -> driving the run
     def register_run_control(self, control: LiveRunControl) -> None:

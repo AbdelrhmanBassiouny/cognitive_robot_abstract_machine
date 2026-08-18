@@ -69,13 +69,30 @@ questioned about.
 
 A demo usually knows more than one thing, so `knowledge()` returns one
 `QueryableKnowledge` per `QueryScope` — `CURRENT_STATE` for what is true of
-the run right now, `EPISODIC_MEMORY` for what its finished runs recorded.
+the run right now, `EPISODIC_MEMORY` for what its finished runs recorded,
+`UNDERSPECIFIED` for what it could do.
 Each carries the `domains` a query of that scope may range over (a
 `QueryDomain(name, entity_type, objects)` per variable), any `extra_names` its
 questions need in scope, and the `evaluation` that works the answer out:
-`InMemoryEvaluation` by default, or `DatabaseEvaluation` to translate the query
+`InMemoryEvaluation` by default, `DatabaseEvaluation` to translate the query
 into SQL (`krrood.ormatic.eql_interface.eql_to_sql`) and run it where the
-results live. A domain answered from a database names no `objects`.
+results live, or `GenerativeEvaluation` to build the answer instead of looking
+it up. A domain answered from a database names no `objects`.
+
+An `UNDERSPECIFIED` question names a pattern and writes `...` for a field it
+leaves open, and is answered once per value that field could take:
+
+```python
+an(PickUpAction)(object_designator=cup, arm=...)      # one answer per arm
+insertions = generate(an(PickUpAction)(object_designator=cup, arm=...))
+set_of(insertions.arm)                                # the values filled in
+```
+
+`generate` is in scope because the evaluation answering the question puts it
+there (`QueryEvaluation.names()`); it hands back a variable over what was
+built, so the next question can ask what the open fields were filled in with.
+A field no enum bounds cannot be enumerated, and is refused rather than
+answered.
 
 The bridge then serves four more endpoints:
 
