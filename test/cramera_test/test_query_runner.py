@@ -17,10 +17,11 @@ from cramera.body_geometry import pose_label  # noqa: E402
 from cramera.knowledge.query_domain import QueryDomain  # noqa: E402
 from cramera.knowledge.query_runner import EqlQueryRunner, RowRenderer  # noqa: E402
 from cramera.knowledge.queryable_knowledge import QueryEvaluation  # noqa: E402
-from cramera.knowledge.replay import ReplayWindow  # noqa: E402
+from cramera.knowledge.replay import ReplayedMoment, ReplayWindow  # noqa: E402
 
 from .dataset.queryable_records import (  # noqa: E402
     MomentRecord,
+    MomentRecordNamingItsObjects,
     NamedRecord,
     PosedRecord,
     RecordWithClassLevelDefaults,
@@ -344,26 +345,32 @@ DETECTED_AT = datetime(2026, 8, 13, 12, 0, 30)
 When the moment record of these tests happened.
 """
 
+MOMENT_NAME = "cube PickUpEvent"
+"""
+What the moment record of these tests is titled with.
+"""
+
+
+def make_moment_runner() -> EqlQueryRunner:
+    """
+    A runner over one ``moment`` domain of a single timestamped record.
+    """
+    return EqlQueryRunner(
+        domains=[
+            QueryDomain(
+                name="moment",
+                entity_type=MomentRecord,
+                objects=[MomentRecord(MOMENT_NAME, DETECTED_AT)],
+            )
+        ]
+    )
+
 
 class TestReplayableAnswerRows:
     """
     An answer row that names a moment carries the window of the demo recording worth
     replaying around it; rows without a moment offer no replay.
     """
-
-    def make_moment_runner(self) -> EqlQueryRunner:
-        """
-        A runner over one ``moment`` domain of a single timestamped record.
-        """
-        return EqlQueryRunner(
-            domains=[
-                QueryDomain(
-                    name="moment",
-                    entity_type=MomentRecord,
-                    objects=[MomentRecord("cube PickUpEvent", DETECTED_AT)],
-                )
-            ]
-        )
 
     def test_the_window_leads_and_trails_the_moment_by_the_fixed_shifts(self):
         window = ReplayWindow.around(DETECTED_AT)
@@ -381,14 +388,14 @@ class TestReplayableAnswerRows:
         assert window.end - window.start == 2.0
 
     def test_a_timestamped_entity_row_carries_the_window_around_its_moment(self):
-        result = self.make_moment_runner().run("an(entity(moment))")
+        result = make_moment_runner().run("an(entity(moment))")
 
-        assert result.replay == [ReplayWindow.around(DETECTED_AT)]
+        assert result.replay[0].window == ReplayWindow.around(DETECTED_AT)
 
     def test_an_asked_for_timestamp_value_makes_its_row_replayable(self):
-        result = self.make_moment_runner().run("set_of(moment.name, moment.timestamp)")
+        result = make_moment_runner().run("set_of(moment.name, moment.timestamp)")
 
-        assert result.replay == [ReplayWindow.around(DETECTED_AT)]
+        assert result.replay[0].window == ReplayWindow.around(DETECTED_AT)
 
     def test_a_row_without_a_moment_offers_no_replay(self):
         result = make_runner().run("an(entity(record))")
@@ -401,19 +408,90 @@ class TestReplayableAnswerRows:
         nothing of replay shows the answer as it always did instead of rendering the
         window as a column of its own.
         """
-        result = self.make_moment_runner().run("an(entity(moment))")
+        result = make_moment_runner().run("an(entity(moment))")
 
         assert list(result.rows[0]) == ["__entity__", "__type__", "timestamp"]
 
     def test_the_payload_offers_the_windows_beside_the_rows(self):
-        payload = self.make_moment_runner().run("an(entity(moment))").to_payload()
+        payload = make_moment_runner().run("an(entity(moment))").to_payload()
 
-        assert payload["replay"] == [ReplayWindow.around(DETECTED_AT).to_payload()]
+        assert payload["replay"] == [
+            ReplayedMoment(
+                window=ReplayWindow.around(DETECTED_AT), label=MOMENT_NAME
+            ).to_payload()
+        ]
 
     def test_a_timestamp_reads_as_a_time_rather_than_a_repr(self):
-        result = self.make_moment_runner().run("an(entity(moment))")
+        result = make_moment_runner().run("an(entity(moment))")
 
         assert result.rows[0]["timestamp"] == "2026-08-13 12:00:30"
+
+
+# %% what a replay shows
+INVOLVED_OBJECTS = ["cube_shape", "square_hole"]
+"""
+The objects the moment record of these tests happened to.
+"""
+
+
+class TestWhatAReplayShows:
+    """
+    A replay is opened to watch one thing happen, so its offer carries what that thing
+    was: the row's own title, and the objects it happened to.
+    """
+
+    def make_involving_runner(self) -> EqlQueryRunner:
+        """
+        A runner over one ``moment`` domain whose record names the objects it involved.
+        """
+        return EqlQueryRunner(
+            domains=[
+                QueryDomain(
+                    name="moment",
+                    entity_type=MomentRecordNamingItsObjects,
+                    objects=[
+                        MomentRecordNamingItsObjects(
+                            MOMENT_NAME, DETECTED_AT, INVOLVED_OBJECTS
+                        )
+                    ],
+                )
+            ]
+        )
+
+    def test_a_replay_is_labelled_with_the_title_of_the_row_offering_it(self):
+        result = self.make_involving_runner().run("an(entity(moment))")
+
+        assert result.replay[0].label == MOMENT_NAME
+
+    def test_a_replay_carries_the_objects_its_moment_happened_to(self):
+        result = self.make_involving_runner().run("an(entity(moment))")
+
+        assert result.replay[0].objects == INVOLVED_OBJECTS
+
+    def test_a_moment_naming_no_objects_leaves_the_replay_pointing_at_none(self):
+        """
+        Naming its objects is an offer an entity makes, not something every timestamped
+        record can be asked for.
+        """
+        result = make_moment_runner().run("an(entity(moment))")
+
+        assert result.replay[0].objects == []
+
+    def test_an_asked_for_timestamp_replays_unnamed(self):
+        """
+        A unification row is a set of asked-for values rather than one thing that
+        happened, so there is nothing for the replay to name.
+        """
+        result = make_moment_runner().run("set_of(moment.name, moment.timestamp)")
+
+        assert result.replay[0].label == ""
+        assert result.replay[0].objects == []
+
+    def test_the_payload_carries_what_the_replay_shows(self):
+        payload = self.make_involving_runner().run("an(entity(moment))").to_payload()
+
+        assert payload["replay"][0]["label"] == MOMENT_NAME
+        assert payload["replay"][0]["objects"] == INVOLVED_OBJECTS
 
 
 # %% failures reach the caller

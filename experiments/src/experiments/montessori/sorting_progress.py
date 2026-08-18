@@ -390,6 +390,22 @@ class SegmindEventRecord:
     Name of the hole an insertion was detected through.
     """
 
+    def involved_object_names(self) -> List[str]:
+        """
+        The bodies the event happened to, named as the viewer publishes them, so a
+        replay of the event can point at each of them.
+
+        The record is named after what the piece is (``"cube"``), while the viewer shows
+        its body under the name it was built with, so the piece is named the way
+        :meth:`ShapeUnderTest.related_highlight_ids` names it.
+        """
+        named = [
+            self.shape_key + SHAPE_NAME_SUFFIX,
+            self.with_object,
+            self.through_hole,
+        ]
+        return [name for name in named if name is not None]
+
     @classmethod
     def of_attempt(
         cls,

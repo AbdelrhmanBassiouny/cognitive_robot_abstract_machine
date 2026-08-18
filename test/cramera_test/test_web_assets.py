@@ -158,6 +158,9 @@ class TestJsUnits:
     def test_highlight_arrow(self):
         self.run_node("test_highlight_arrow.js")
 
+    def test_event_annotation(self):
+        self.run_node("test_event_annotation.js")
+
     def test_answer_table(self):
         self.run_node("test_answer_table.js")
 
@@ -197,6 +200,13 @@ class TestSceneHighlightVisibility:
 
     def test_the_arrow_module_ships_with_the_shell(self):
         assert 'src="core/highlight_arrow.js"' in read("index.html")
+
+    def test_the_event_annotation_module_ships_with_the_shell(self):
+        """
+        The replay popup names the event it replays out of this module, so a shell
+        without it would play an unlabelled clip.
+        """
+        assert 'src="core/event_annotation.js"' in read("index.html")
 
     def test_the_panel_places_and_animates_the_arrow_from_the_shared_module(self):
         panel = read("panels/robot_scene/panel.js")

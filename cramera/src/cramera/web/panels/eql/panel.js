@@ -242,20 +242,23 @@ Panels.define('eql', function (root, bus) {
   // %% replaying an answered moment
   // The popup is its own viewer window playing the bridge's recording, so the live
   // view in this window keeps running untouched.
+
+  // the moments the shown answer offers to replay, one per row of its table and read
+  // back by the index its button carries: a moment names an event and its objects, and
+  // a button would otherwise have to re-encode all of that as markup
+  let shownReplays = [];
+
   function wireReplayButtons() {
     answerEl.querySelectorAll('.replay-btn').forEach(function (button) {
       button.addEventListener('click', function () {
-        openReplay({
-          start: parseFloat(button.dataset.start),
-          end: parseFloat(button.dataset.end),
-        });
+        openReplay(shownReplays[Number(button.dataset.row)]);
       });
     });
   }
 
-  function openReplay(replayWindow) {
+  function openReplay(moment) {
     window.open(
-      Replay.popupUrl(window.location.pathname, window.location.search, replayWindow),
+      Replay.popupUrl(window.location.pathname, window.location.search, moment),
       'cramera-replay',
       'popup=yes,width=980,height=720'
     );
@@ -273,6 +276,7 @@ Panels.define('eql', function (root, bus) {
   // a replay button on rows naming a moment the bridge's recording can play back
   function answerTable(rows, replay) {
     const table = AnswerTable.of(rows, replay);
+    shownReplays = table.rows.map(function (row) { return row.replay; });
     if (!table.columns.length) return '';
     const typed = table.rows.some(function (row) { return row.type; });
     const replayable = source.live && table.rows.some(function (row) { return row.replay; });
@@ -281,21 +285,20 @@ Panels.define('eql', function (root, bus) {
     table.columns.forEach(function (column) { html += '<th>' + esc(column) + '</th>'; });
     if (replayable) html += '<th class="ans-replay"></th>';
     html += '</tr></thead><tbody>';
-    table.rows.forEach(function (row) {
+    table.rows.forEach(function (row, index) {
       html += '<tr>' + (typed ? '<td class="ans-type">' + typeTag(row.type) + '</td>' : '');
       row.cells.forEach(function (cell) {
         html += '<td class="ans-' + cell.kind + '">' + esc(cell.text) + '</td>';
       });
-      if (replayable) html += '<td class="ans-replay">' + replayButton(row.replay) + '</td>';
+      if (replayable) html += '<td class="ans-replay">' + replayButton(row.replay, index) + '</td>';
       html += '</tr>';
     });
     return html + '</tbody></table></div>';
   }
 
-  function replayButton(replay) {
+  function replayButton(replay, index) {
     if (!replay) return '';
-    return '<button class="replay-btn" data-start="' + Number(replay.start) +
-      '" data-end="' + Number(replay.end) +
+    return '<button class="replay-btn" data-row="' + index +
       '" title="replay the demo recording around this moment">▶ replay</button>';
   }
 
