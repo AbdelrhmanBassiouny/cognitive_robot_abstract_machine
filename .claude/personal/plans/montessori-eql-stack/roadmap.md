@@ -186,6 +186,27 @@ Nothing on the branch referenced the giskardpy behaviour-tree modules `main`
 deleted, and the `cramera/scenes` submodule pin came through unchanged at
 `64b98eda`.
 
+### The conflict git could not see
+
+The seven textual conflicts were not the whole of it. `giskardpy/executor.py`
+auto-merged cleanly and was still broken: `main` had dropped this module's
+`typing_extensions.Optional` import along with its last use, while the branch
+had added a new `SimulationTimePacer._next_target_time: Optional[float]`. Both
+sides were internally consistent, so git merged them without a murmur, and
+importing `giskardpy.executor` then raised `NameError: name 'Optional' is not
+defined`. `test/conftest.py` imports it transitively through
+`coraplex.plans.executables`, so every library's CI job failed at collection —
+including `random_events` and `version`, which the merge does not touch. Fixed
+in `a5080fd0` by spelling the field `float | None`, as the rest of the module
+now does.
+
+Caught by running `pyflakes` over the whole merged tree and subtracting the
+findings each parent already had; that difference is empty now. Only five
+non-generated files were touched by both sides, and the other four
+(`coraplex/plans/executables.py`, `adapters/ros/tf_publisher.py`,
+`semantic_digital_twin/exceptions.py`, `test/conftest.py`) merged additively,
+with every symbol they reference resolving in the merged tree.
+
 ### Not done here
 
 The other five stack branches are still based on the pre-merge `30bd734f`, so
