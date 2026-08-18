@@ -1058,3 +1058,73 @@ carries the panel tab container, the live event timeline, the run clock those ma
 plotted against, and the plan-graph tab with its executing-node highlighting - plus the
 bridge fix that made the plan tab show anything at all. The five branches stacked above
 it inherit all of it at their next restack; none of them has been restacked since.
+
+## 2026-08-18: underspecified queries get a section of their own
+
+The developer asked for a new item: questions that write `...` for an enumerable
+field, answered by every value that field could take, offered under a heading of
+their own beside Current State and Episodic Memory (session:
+https://claude.ai/code/session_01SmNyQsR4yhwF5wGyfrj6sH). Added as item
+`montessori_underspecified_queries` in a new `underspecified-queries` track of
+the `interactive-ui` wave.
+
+### Why it is based on #170 and not on the stack top
+
+The console has to name a class to build an instance of it, which is exactly
+what `cramera_eql_autocomplete` (#170) adds — the workspace class index and the
+namespace that resolves a bare class name on first use. Nothing above #170 in
+the chain is needed: the where-is highlighting, the recording/replay and the
+verbalization work are all unrelated to it. So the item depends on
+`cramera_eql_autocomplete` alone, and the branch is based on #170's current tip
+`42f3e464`.
+
+### What the item turned out to be
+
+The machinery for it already existed in krrood: a `Match` whose attribute is
+`...` is refused by every selective backend and built by
+`EntityQueryLanguageGenerativeBackend`, which enumerates an enum-typed open
+field over its members and constructs one instance per combination. coraplex's
+plan `Context` already resolves its underspecified actions through exactly that
+backend. What was missing was a way to *ask* it from the console. So:
+
+- `QueryScope.UNDERSPECIFIED` ("Underspecified Queries") — the panel's grouping
+  and the `/presets` scopes payload were already generic, so the section appears
+  with no frontend change at all.
+- `GenerativeEvaluation` answers a pattern by building it, and anything else
+  where it stands — that second half is what makes "and now ask what the values
+  were" work.
+- `QueryEvaluation.names()` is new: an evaluation can put names in reach of the
+  question it answers. `GenerativeEvaluation` puts `generate` there, which hands
+  back a variable over what was built, so a follow-up `set_of(...)` selects the
+  values the open fields were filled in with. `EqlQueryRunner.names` merges it
+  with the source's own `extra_names`, and the bridge now builds one runner for
+  both running a query and advertising its vocabulary, so the console offers
+  `generate` where it applies.
+
+### Two rendering changes it needed
+
+Both are in `RowRenderer` and both are about answers that were *built*:
+
+- An enum member read back as its member name unless its value is already text
+  (`Arms.RIGHT` rendered as `1` before, since `Arms` is an `IntEnum`).
+- An instance that names nothing of its own is rendered as its fields alone. It
+  used to be titled by its `repr`, which for a constructed action is a paragraph
+  of nested dataclass reprs in the answer table's name column.
+
+### The demo's own questions
+
+`MontessoriLiveQuerySource` takes the board it is sorting into and offers
+`an(InsertMontessoriShapeAction)(montessori_shape=montessori_shape, board=board,
+arm=...)` — the shapes and the board are domains, the arm is what is left open.
+The three presets are the pattern itself, the shape/arm pairs that were filled
+in, and the same narrowed with `where(... != Arms.BOTH)`. They are deliberately
+not in `MONTESSORI_PRESETS`: that list is what the recorded bundle mirrors in
+its `presets.json`, and these range over the shapes of a running sort.
+
+Opened as draft **#180**, based on #170. `pytest test/cramera_test` 486 passed and
+`test_montessori_live_query.py` 19 passed in the session's container; the rest of
+`test/experiments_test` needs generated ORM interfaces and a ROS install it has
+neither of, so it is left to CI. Running anything at all there took a Python 3.12
+virtualenv built by hand (the repo uses 3.12 syntax, the container ships 3.11) plus
+stand-ins for the ROS packages on the import path -- worth knowing for any session
+that lands in the same container.

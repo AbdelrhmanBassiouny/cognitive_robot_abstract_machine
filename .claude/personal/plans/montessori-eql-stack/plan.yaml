@@ -42,6 +42,13 @@ tracks:
     wave: interactive-ui
     description: "Overlays that explain a replayed segmind event inside the video."
 
+  - id: underspecified-queries
+    name: "Questions the demo answers by construction"
+    wave: interactive-ui
+    description: >-
+      Asking the console what could be done rather than what is: a question
+      leaves a field open and the answer is built once per value it could take.
+
   - id: live-panels
     name: "Live tabbed panels"
     wave: interactive-ui
@@ -268,6 +275,30 @@ items:
       both branches are the one commit f980badc80 and GitHub closed #175 as
       merged. The whole timeline feature now ships inside #169, and everything
       stacked on #169 inherits it at its next restack.
+
+  - id: montessori_underspecified_queries
+    title: "Leave a field open with `...` and read back what it could be"
+    branch: claude/eql-underspecified-queries-hwufbl
+    pull_request_number: 180
+    track: underspecified-queries
+    depends_on: [cramera_eql_autocomplete]
+    status: in_progress
+    session: https://claude.ai/code/session_01SmNyQsR4yhwF5wGyfrj6sH
+    notes: >-
+      A section of its own in the console, beside Current State and Episodic
+      Memory: a question writes `...` for an enumerable field, and every value
+      that field could take is built into an answer. Based on #170 rather than
+      the stack top because naming a workspace class in a query is exactly what
+      #170 adds, and nothing above it is needed. cramera gains
+      `QueryScope.UNDERSPECIFIED`, a `GenerativeEvaluation` over krrood's
+      `EntityQueryLanguageGenerativeBackend`, and `QueryEvaluation.names()` so
+      that evaluation puts `generate` in reach of a follow-up question about
+      what was built. The montessori demo offers the insertions it could carry
+      out on the shapes it is sorting, with the arm left open. Implemented and
+      opened as draft #180 on 2026-08-18; cramera suite 486 passed and
+      test_montessori_live_query 19 passed in the session's container, the rest
+      of test/experiments_test left to CI (no ROS, no generated ORM
+      interfaces).
 
   - id: montessori_plan_graph_tab
     title: "A plan-graph tab highlighting the executing plan node in real time"
