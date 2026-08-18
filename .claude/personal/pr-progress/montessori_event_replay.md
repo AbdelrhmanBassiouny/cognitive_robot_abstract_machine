@@ -74,9 +74,39 @@ is on HEAD as a warm-up, as the round-13 notes say.
   that the landing page draws the live world, but a viewer opened with no demo
   running still says "Scene failed to load". Fixing it means a commit in
   `cram2/cram-scenes`, so left alone.
-- The local `cramera/scenes` checkout is still at `2438a52` with
-  `Franka_Montessori/` untracked, while the superproject records `64b98ed`. All
-  68 bundle files are byte-identical to what `64b98ed` carries, plus one extra
-  on disk (`stacking_scene.urdf`). `git submodule update` will refuse until the
-  identical untracked copies are removed - the developer's delete to make, not
-  mine.
+- ~~The local `cramera/scenes` checkout is still at `2438a52`.~~ Done on
+  2026-08-18: the 69 untracked files were tarred to the session scratchpad, the
+  68 identical ones deleted, `git submodule update` detached the checkout at
+  `64b98ed`, and `stacking_scene.urdf` (the one file that pin does not carry)
+  was restored. The submodule's local `main` still points at `2438a52`, which is
+  on no remote, so nothing was lost.
+## Recovering the shelved changes the 11:04 update set aside
+
+**What happened.** PyCharm's *Update Project* at 2026-08-18 11:04 merged
+`origin/montessori_event_replay` (`8e966d23e`, no conflicts) and shelved the six
+dirty files first, so `git status` came back clean and the edits looked lost. They
+were in
+`.idea/shelf/Uncommitted_changes_before_Update_at_8_18_26,_11_04 AM_[Changes]/shelved.patch`
+(the directory name carries a U+202F before "AM", so quote it or find it).
+
+**What was recovered**, applied with `git apply --3way` and committed as three
+commits on top of the merge:
+
+- `7ecf4d199` `[KRROOD]` - `ThreadExitSentinel` plus the three files that were
+  untracked (module, test, and the `evaluate_query_on_worker_thread.py` dataset
+  script), and the `Evaluable._default_backend_` hook from the shelf that uses it.
+- `281309034` `[Montessori]` - `ATOMIC_EVENT_TYPES` and
+  `SegmindEventRecord.of_attempt`, keeping contact/motion events out of the record,
+  with the two tests from the shelf.
+- `42add487b` `[Cramera]` - `ReplayWindow` lead and tail from 5.0 s to 1.0 s, with
+  the test asserting the window lasts 2.0 s.
+
+**Deliberately dropped**: the shelf's sixth file,
+`test_underspecified_designator.py`, whose whole change was adding an unused
+`SelectiveBackend` import and deleting a blank line.
+
+**Verified.** 566 tests pass (`test/cramera_test` + montessori sorting progress),
+and the 4 `test_thread_exit_sentinel.py` tests pass on their own (2 min - they spawn
+interpreters).
+
+**Still open.** Not pushed; branch is 7 ahead of `origin/montessori_event_replay`.
