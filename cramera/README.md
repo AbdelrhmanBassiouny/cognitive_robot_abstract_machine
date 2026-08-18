@@ -53,6 +53,29 @@ while it is reachable the viewer shows a *Live* button that renders the
 running world instead of the recording, and dragging an object writes its
 pose back into the demo's world.
 
+### Asking the running demo about itself
+
+While the viewer is attached, the EQL panel asks the demo rather than the
+recorded scene: its buttons answer what the robot is holding right now, what
+it is doing and what it is trying to achieve, read off the plan and the world
+the bridge already publishes. Two variables are in scope for questions typed by
+hand:
+
+| variable      | ranges over                                                  |
+| ------------- | ------------------------------------------------------------ |
+| `action`      | every action of the plan being performed, with its `status`, `depth`, `arm`, `target`, and whether it is the current `is_goal` / `is_current_step` |
+| `held_object` | every object hanging off the robot right now, with the body and arm carrying it |
+
+```python
+an(entity(action).where(action.status == 'FAILED'))
+set_of(held_object.name, held_object.arm)
+```
+
+Nothing here touches the run: the answers come from the snapshots the viewer's
+panels are drawn from anyway. A demo that offers no state of its own (nothing
+registered a query source) leaves the recorded scene answering, exactly as
+before attaching.
+
 ## Panels — how the UI is composed
 
 The frontend (`src/cramera/web/`) is a set of **panels** mounted into layout

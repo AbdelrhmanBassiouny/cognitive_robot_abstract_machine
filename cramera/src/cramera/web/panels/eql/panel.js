@@ -1,9 +1,13 @@
 /* ============================================================================
  * panels/eql/panel.js — the EQL (Entity Query Language) console.
  *
- * Query box + presets + answer panel. Queries are executed server-side
- * (POST /api/eql) against the episode knowledge base; the knowledge-base overview
- * (GET /api/knowledge) provides presets and per-entity details.
+ * Query box + presets + answer panel. Where a query is sent depends on what the viewer
+ * is showing (see core/query-source.js): a recorded scene is asked of the server
+ * (POST /api/eql) against its episode knowledge base, while a demo the viewer is
+ * attached to is asked of its own live bridge (POST <bridge>/eql) about what it is
+ * doing right now. The knowledge-base overview (GET /api/knowledge) provides the
+ * recorded presets and per-entity details; a running demo offers its own
+ * (GET <bridge>/presets).
  *
  * Bus events:
  *   emits    knowledge:ready {payload}          the /api/knowledge overview, once loaded
@@ -11,6 +15,7 @@
  *   listens  scene:part-clicked {id}     describe the clicked part
  *   listens  scene:step {step}           describe the running episode
  *   listens  entity:select {id, detail, relations}   node clicked in a graph
+ *   listens  live:changed {on, url}      ask the running demo instead of the recording
  * ==========================================================================*/
 Panels.define('eql', function (root, bus) {
   root.innerHTML =
@@ -34,9 +39,10 @@ Panels.define('eql', function (root, bus) {
   const presetsEl = root.querySelector('#presets');
 
   let knowledge = null;   // /api/knowledge overview (presets + entity details)
+  let source = QuerySource.of(null);   // where questions are sent, recorded until live
 
   // %% boot
-  fetch(SceneContext.withScene('/api/knowledge')).then(ResponseUtil.parseJson).then(boot).catch(function (err) {
+  fetch(source.presetsUrl).then(ResponseUtil.parseJson).then(boot).catch(function (err) {
     knowledgeStatus.textContent = 'EQL unavailable';
     answerEl.innerHTML = '<div class="qerr">EQL unavailable: ' + esc(errorText(err)) + '</div>';
   });
@@ -48,9 +54,10 @@ Panels.define('eql', function (root, bus) {
       return;
     }
     knowledge = payload;
-    knowledgeStatus.textContent = payload.status;
     knowledgeStatus.classList.add('ready');
-    buildPresets(payload.presets || []);
+    // the viewer can attach to a demo before this arrives; the demo it attached to
+    // stays the one being asked
+    if (!source.live) askTheRecording();
     welcome();
     bus.emit('knowledge:ready', { payload: payload });
   }
@@ -102,6 +109,41 @@ Panels.define('eql', function (root, bus) {
     if (p.step !== '__done__' && knowledge && knowledge.details && knowledge.details[p.step]) describe(p.step);
   });
 
+  // %% who answers: the recorded scene, or the demo the viewer is attached to
+  bus.on('live:changed', function (state) {
+    const next = QuerySource.of(state);
+    if (next.live === source.live) return;
+    source = next;
+    if (source.live) askTheRunningDemo();
+    else askTheRecording();
+  });
+
+  function askTheRecording() {
+    knowledgeStatus.textContent = (knowledge && knowledge.status) || 'EQL ready';
+    buildPresets((knowledge && knowledge.presets) || []);
+  }
+
+  /* A demo is only asked while it offers something to ask; one that registered no
+     query source (or that cannot be reached) leaves the recorded scene answering,
+     which is what the panel showed before it attached. */
+  function askTheRunningDemo() {
+    const asked = source;
+    fetch(asked.presetsUrl).then(ResponseUtil.parseJson).then(function (payload) {
+      if (source !== asked) return;
+      if (!payload.ok) return fallBackToTheRecording();
+      knowledgeStatus.classList.add('ready');
+      knowledgeStatus.textContent = 'asking ' + payload.title;
+      buildPresets(payload.presets || []);
+    }).catch(function () {
+      if (source === asked) fallBackToTheRecording();
+    });
+  }
+
+  function fallBackToTheRecording() {
+    source = QuerySource.of(null);
+    askTheRecording();
+  }
+
   // %% presets
   function buildPresets(presets) {
     presetsEl.innerHTML = '';
@@ -124,7 +166,7 @@ Panels.define('eql', function (root, bus) {
     running = true;
     runBtn.textContent = '…';
     try {
-      const r = await fetch(SceneContext.withScene('/api/eql'), {
+      const r = await fetch(source.runUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code: code }),

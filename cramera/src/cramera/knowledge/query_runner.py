@@ -1,0 +1,315 @@
+"""
+Running one EQL query over a set of declared domains and rendering its result.
+
+Knows nothing about where the domains came from: a recorded episode and a running demo
+are queried through the same runner.
+"""
+
+from __future__ import annotations
+
+import ast
+from collections.abc import Mapping
+from dataclasses import dataclass, field, fields, is_dataclass
+
+from typing_extensions import (
+    Any,
+    Dict,
+    List,
+    Optional,
+    Protocol,
+    runtime_checkable,
+)
+
+from krrood.entity_query_language import factories as eql_factories
+from krrood.entity_query_language.evaluable import Evaluable
+from krrood.entity_query_language.scope import eql_factory_namespace
+from semantic_digital_twin.spatial_types import Point3
+
+from cramera.body_geometry import position_label
+from cramera.knowledge.entity import NamedEntity
+from cramera.knowledge.query_domain import QueryDomain
+from cramera.payload import CrameraPayload
+
+DEFAULT_ROW_LIMIT = 200
+"""
+Maximum number of answer rows a query returns unless the caller asks for fewer.
+"""
+
+
+class EmptyQuery(Exception):
+    """
+    Raised when a query carries no code to run.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("empty query")
+
+
+@runtime_checkable
+class HighlightsRelatedNodes(Protocol):
+    """
+    An entity whose answer row lights up graph nodes besides its own.
+    """
+
+    def related_highlight_ids(self) -> List[str]:
+        """
+        Ids of the further graph nodes a row for this entity highlights.
+        """
+
+
+@dataclass(kw_only=True)
+class RenderResult(CrameraPayload):
+    """
+    The rendered result of one EQL query.
+
+    Not a :class:`~cramera.knowledge.subgraph.GraphPanelPayload`: the EQL panel shows
+    answer rows, not a graph, so this carries no nodes or edges.
+    """
+
+    kind: str
+    """
+    ``"rows"`` for arbitrary answer rows, ``"entities"`` when every row names an entity.
+    """
+
+    rows: List[Dict[str, Any]]
+    """
+    The query's answer rows; each row's own keys depend on what the query asked for.
+    """
+
+    count: int
+    """
+    Number of rows returned (``len(rows)``).
+    """
+
+    more: bool
+    """
+    Whether the result was truncated at ``limit``.
+    """
+
+    highlight: List[str]
+    """
+    Ids of the graph nodes this result should highlight, sorted and deduplicated.
+    """
+
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The JSON-serializable shape the frontend's EQL panel expects.
+        """
+        return {
+            "ok": self.ok,
+            "kind": self.kind,
+            "rows": self.rows,
+            "count": self.count,
+            "more": self.more,
+            "highlight": self.highlight,
+        }
+
+
+@dataclass
+class _RenderedRows:
+    """
+    A query result rendered into answer rows, before it is wrapped as a RenderResult.
+    """
+
+    rows: List[Dict[str, Any]]
+    """
+    The rendered answer rows.
+    """
+
+    highlight: List[str]
+    """
+    Ids of the graph nodes to highlight, collected while rendering.
+    """
+
+    more: bool
+    """
+    Whether rendering stopped early because ``limit`` was reached.
+    """
+
+
+@dataclass
+class RowRenderer:
+    """
+    Renders one evaluated EQL result into the answer rows the panel shows.
+
+    Collects the graph-node ids to highlight while rendering, so the walk does not have
+    to thread an output list through every level.
+    """
+
+    limit: int = DEFAULT_ROW_LIMIT
+    """
+    Maximum number of answer rows to render.
+    """
+
+    highlight: List[str] = field(default_factory=list)
+    """
+    Ids of the graph nodes the rendered rows should highlight.
+    """
+
+    def rows_of(self, result: Any) -> _RenderedRows:
+        """
+        Render a query result into answer rows.
+
+        :param result: The evaluated query result to render.
+        """
+        rows: List[Dict[str, Any]] = []
+        if result is None:
+            return _RenderedRows(rows, self.highlight, False)
+        if isinstance(result, (str, int, float, bool, Point3)):
+            rows.append({"value": self._jsonable(result)})
+            return _RenderedRows(rows, self.highlight, False)
+        if is_dataclass(result) and not isinstance(result, type):
+            rows.append(self._entity_row(result))
+            return _RenderedRows(rows, self.highlight, False)
+        try:
+            iterator = iter(result)
+        except TypeError:
+            rows.append({"value": self._jsonable(result)})
+            return _RenderedRows(rows, self.highlight, False)
+        for item in iterator:
+            if len(rows) >= self.limit:
+                return _RenderedRows(rows, self.highlight, True)
+            rows.append(self._item_row(item))
+        return _RenderedRows(rows, self.highlight, False)
+
+    def _item_row(self, item: Any) -> Dict[str, Any]:
+        """
+        One arbitrary query result item as an answer row.
+
+        :param item: The query result item to render as a row.
+        """
+        if isinstance(item, Point3):
+            return {"value": self._jsonable(item)}
+        if is_dataclass(item) and not isinstance(item, type):
+            return self._entity_row(item)
+        if isinstance(item, Mapping):  # a unification row from set_of()
+            row = {}
+            for key, value in item.items():
+                name = self._entity_name(value)
+                if name and is_dataclass(value) and not isinstance(value, type):
+                    self.highlight.append(name)
+                row[str(key)] = self._jsonable(value)
+            return row
+        return {"value": self._jsonable(item)}
+
+    def _entity_row(self, item: Any) -> Dict[str, Any]:
+        """
+        One entity as an answer row, collecting the ids it lights up.
+
+        :param item: The entity to render as a row.
+        """
+        name = self._entity_name(item)
+        if name:
+            self.highlight.append(name)
+        if isinstance(item, HighlightsRelatedNodes):
+            self.highlight.extend(item.related_highlight_ids())
+        row = {"__entity__": name or repr(item), "__type__": type(item).__name__}
+        for entity_field in fields(item):
+            if entity_field.name != "name":
+                row[entity_field.name] = self._jsonable(vars(item)[entity_field.name])
+        return row
+
+    @classmethod
+    def _jsonable(cls, value: Any) -> Any:
+        """
+        A JSON-serializable rendering of one query result value.
+
+        :param value: The raw query result value to render.
+        """
+        if isinstance(value, Point3):
+            return position_label(value)
+        if is_dataclass(value) and not isinstance(value, type):
+            return cls._entity_name(value) or repr(value)
+        if isinstance(value, float):
+            return round(value, 4)
+        if isinstance(value, (str, int, bool)) or value is None:
+            return value
+        return repr(value)
+
+    @staticmethod
+    def _entity_name(value: Any) -> Optional[str]:
+        """
+        The entity's name, or None for a value that is not one of our entities.
+
+        :param value: The query result value to name.
+        """
+        return str(value.name) if isinstance(value, NamedEntity) else None
+
+
+@dataclass
+class EqlQueryRunner:
+    """
+    Executes EQL query strings against a fixed set of domains.
+    """
+
+    domains: List[QueryDomain]
+    """
+    The ready-made variables every query of this runner may range over.
+    """
+
+    extra_names: Dict[str, Any] = field(default_factory=dict)
+    """
+    Further names a query may use, such as constants or the raw domain lists.
+    """
+
+    def namespace(self) -> Dict[str, Any]:
+        """
+        A namespace for evaluating one EQL query (fresh variables each time).
+        """
+        namespace: Dict[str, Any] = eql_factory_namespace()
+        for domain in self.domains:
+            namespace[domain.entity_type.__name__] = domain.entity_type
+        for domain in self.domains:
+            namespace[domain.name] = eql_factories.variable(
+                domain.entity_type, domain=domain.objects
+            )
+        namespace.update(self.extra_names)
+        return namespace
+
+    def build(self, code: str) -> Any:
+        """
+        Build an EQL query string into the expression it stands for, unevaluated.
+
+        The last expression of ``code`` is the query; preceding statements are executed
+        as setup.
+
+        :param code: The EQL query source.
+        :raises EmptyQuery: When ``code`` holds no statement to run.
+        """
+        namespace = self.namespace()
+        tree = ast.parse(code, mode="exec")
+        if not tree.body:
+            raise EmptyQuery()
+        last = tree.body[-1]
+        if isinstance(last, ast.Expr):
+            if len(tree.body) > 1:
+                preamble = ast.Module(body=tree.body[:-1], type_ignores=[])
+                exec(compile(preamble, "<eql>", "exec"), namespace)
+            return eval(compile(ast.Expression(last.value), "<eql>", "eval"), namespace)
+        exec(compile(tree, "<eql>", "exec"), namespace)
+        return namespace.get("result")
+
+    def run(self, code: str, limit: int = DEFAULT_ROW_LIMIT) -> RenderResult:
+        """
+        Execute an EQL query string and return its rendered result.
+
+        :param code: The EQL query source.
+        :param limit: Maximum number of result rows to return.
+        :raises EmptyQuery: When ``code`` holds no statement to run.
+        """
+        result = self.build(code)
+        if isinstance(result, Evaluable):
+            result = result.evaluate()
+        rendered = RowRenderer(limit=limit).rows_of(result)
+        kind = (
+            "rows"
+            if rendered.rows and "__entity__" not in rendered.rows[0]
+            else "entities"
+        )
+        return RenderResult(
+            kind=kind,
+            rows=rendered.rows,
+            count=len(rendered.rows),
+            more=rendered.more,
+            highlight=sorted(set(rendered.highlight)),
+        )

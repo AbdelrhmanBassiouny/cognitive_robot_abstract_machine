@@ -134,8 +134,8 @@ class TestAssetConsistency:
 # %% mesh format loaders
 class TestBinaryGltfLoading:
     """
-    The viewer must be able to load the compact mesh format scene bundles are
-    converted to, wherever it loads a mesh from.
+    The viewer must be able to load the compact mesh format scene bundles are converted
+    to, wherever it loads a mesh from.
     """
 
     SCENE_PANEL = "panels/robot_scene/panel.js"
@@ -205,6 +205,9 @@ class TestJsUnits:
 
     def test_scene_context(self):
         self.run_node("test_scene_context.js")
+
+    def test_query_source(self):
+        self.run_node("test_query_source.js")
 
     def test_scene_picker(self):
         self.run_node("test_scene_picker.js")

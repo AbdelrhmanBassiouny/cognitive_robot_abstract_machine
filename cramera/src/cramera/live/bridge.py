@@ -54,7 +54,9 @@ from semantic_digital_twin.world_description.connections import (
 )
 
 from cramera.knowledge.enums import PlanNodeGroup
+from cramera.live.held_objects import HeldObject
 from cramera.live.markers import MarkerEntry, MarkerStore
+from cramera.live.query import LiveQuerySource, NoQuerySourceRegistered
 from cramera.live.shape_catalog import ShapeEntry, served_mesh_file, shape_entry
 from cramera.live.transforms import TransformGraph, TransformSnapshot
 from cramera.mesh_format import MeshFormat
@@ -68,6 +70,8 @@ if TYPE_CHECKING:
     from semantic_digital_twin.world import World
     from semantic_digital_twin.world_description.world_entity import Body, Connection
 
+    from cramera.knowledge.presets import Preset
+    from cramera.knowledge.query_domain import QueryDomain
     from cramera.live.recording import Recording
 
 logger = get_logger(__name__)
@@ -790,6 +794,22 @@ class Bridge:
     :mod:`cramera.live.visualization`); None before anything has ever attached.
     """
 
+    held_objects: List[HeldObject] = field(default_factory=list)
+    """
+    The objects the robot is holding, as of the last world discovery (see
+    :meth:`bind`).
+    """
+
+    query_source: Optional[LiveQuerySource] = None
+    """
+    What the running demo offers the viewer's questions, once it registered itself.
+    """
+
+    query_lock: threading.Lock = field(default_factory=threading.Lock)
+    """
+    Serializes queries: krrood's SymbolGraph singleton is not threadsafe.
+    """
+
     # %% what the visualization drives
     def attach(self, world: World) -> None:
         """
@@ -1026,6 +1046,25 @@ class Bridge:
                 self._published_marker_revision = -1
         return self.marker_topics_payload()
 
+    def refresh_held_objects(self) -> None:
+        """
+        Re-read which published objects hang off the robot right now.
+
+        Runs on the simulation thread, alongside the body discovery whose model changes
+        (a grasp, a release) are what move an object onto or off the robot.
+        """
+        try:
+            held = HeldObject.of_bodies(self.robot, self.object_bodies())
+        except Exception as error:
+            # boundary guard: the world is mid-modification and its kinematic tree
+            # cannot be walked right now. Keep the objects held as of the last scan
+            # rather than reporting empty hands the demo would have to be asked twice
+            # about.
+            logger.debug("held-object scan skipped this bind: %s", error)
+            return
+        with self._lock:
+            self.held_objects = held
+
     def publish_bodies(self, bodies: Dict[str, Body]) -> None:
         """
         Replace the published bodies and rebuild the viewer's geometry catalog.
@@ -1049,6 +1088,22 @@ class Bridge:
         """
         with self._lock:
             return [key for key in self._bodies if key != ROBOT_BASE_KEY]
+
+    def object_bodies(self) -> Dict[str, Body]:
+        """
+        The published loose objects by mesh key, excluding the robot root.
+        """
+        with self._lock:
+            return {
+                key: body for key, body in self._bodies.items() if key != ROBOT_BASE_KEY
+            }
+
+    def get_held_objects(self) -> List[HeldObject]:
+        """
+        The objects the robot is holding (safe to call from HTTP threads).
+        """
+        with self._lock:
+            return list(self.held_objects)
 
     def mesh_path(self, key: str) -> Optional[str]:
         """
@@ -1132,6 +1187,59 @@ class Bridge:
                     else []
                 ),
             ).to_payload()
+
+    # %% viewer -> questions about the running demo
+    def register_query_source(self, source: LiveQuerySource) -> None:
+        """
+        Offer the running demo's state to the viewer's queries.
+
+        :param source: What the demo declares as queryable.
+        """
+        self.query_source = source
+        logger.info("live queries answered by '%s'", source.title())
+
+    def _registered_query_source(self) -> LiveQuerySource:
+        """
+        The registered query source.
+
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        """
+        if self.query_source is None:
+            raise NoQuerySourceRegistered()
+        return self.query_source
+
+    def query_title(self) -> str:
+        """
+        Short name of what queries are answered from.
+
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        """
+        return self._registered_query_source().title()
+
+    def query_presets(self) -> List[Preset]:
+        """
+        The ready-made queries the panel offers as buttons.
+
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        """
+        return self._registered_query_source().presets()
+
+    def query_domains(self) -> List[QueryDomain]:
+        """
+        The variables a question about the running demo may range over, over the demo's
+        state as it stands now.
+
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        """
+        return self._registered_query_source().domains()
+
+    def query_variables(self) -> List[str]:
+        """
+        Names a question may range over, for the panel to advertise.
+
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        """
+        return [domain.name for domain in self.query_domains()]
 
     # %% viewer -> world
     def queue_move(self, request: MoveRequest) -> None:
@@ -1255,6 +1363,7 @@ class Bridge:
             for key, body in self._bodies.items():
                 bodies.setdefault(key, body)
         self.publish_bodies(bodies)
+        self.refresh_held_objects()
 
     def _discover_overlay_bodies(
         self, bodies_by_name: Dict[str, Body]
@@ -1593,6 +1702,13 @@ class Bridge:
         """
         with self._lock:
             return self.plan_state.to_payload()
+
+    def plan_nodes(self) -> List[PlanNodeEntry]:
+        """
+        The newest plan snapshot's entries (safe to call from HTTP threads).
+        """
+        with self._lock:
+            return list(self.plan_state.nodes)
 
     # %% motion statechart
     def observe_chart(self, chart: Optional[MotionStatechart]) -> None:

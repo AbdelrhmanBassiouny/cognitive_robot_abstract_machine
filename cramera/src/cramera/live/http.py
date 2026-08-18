@@ -24,7 +24,11 @@ HTTP endpoints of the live bridge (default port 8765).
                       :mod:`cramera.live.transforms`)
     GET /recording  {state: idle|recording|finalized, frameCount, durationSeconds,
                       sceneName}  see :mod:`cramera.live.recording`
+    GET /presets {ok, title, presets: [{text, code}], variables: [name]}  the
+                  ready-made questions the running demo offers about itself
     POST /move   queue an object move (applied on the simulation thread)
+    POST /eql    {code} -> the rendered answer rows of one question about the running
+                  demo (see :mod:`cramera.knowledge.query_runner`)
     POST /recording/stop     finalize the current recording into a scene bundle under
                               :func:`cramera.paths.local_scenes_directory`
     POST /recording/discard  drop the current recording and its bundle, if any
@@ -47,6 +51,7 @@ import os
 import sys
 import threading
 import urllib.parse
+from dataclasses import asdict
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -55,6 +60,7 @@ from typing_extensions import Any, ClassVar, Dict, Optional, Tuple, Type
 from cramera.live.bridge import Bridge, MalformedMoveRequest, MoveRequest
 from cramera.live.frame_range import FrameRange, InvalidFrameRange
 from cramera.live.live_bundle import build_live_scene
+from cramera.live.query import NoQuerySourceRegistered
 from cramera.live.recording import Recording, RecordingState
 from cramera.live.recording_bundle import finalize_recording
 from cramera.live.recording_storage import (
@@ -72,6 +78,21 @@ from cramera.onboard.scene_index import InvalidSceneName
 logger = get_logger(__name__)
 
 DEFAULT_PORT = int(os.environ.get("LIVE_VIZ_PORT", "8765"))
+
+try:
+    import krrood  # noqa: F401  (the EQL engine)
+
+    from cramera.knowledge.query_runner import EqlQueryRunner
+
+    EQL_AVAILABLE = True
+except ImportError:  # pragma: no cover - depends on the environment
+    EQL_AVAILABLE = False
+    logger.warning("krrood not importable - the running demo cannot be queried")
+
+NO_EQL_MESSAGE = "krrood is not importable, so questions cannot be answered"
+"""
+What the viewer is told when the demo runs without the EQL engine.
+"""
 
 
 class BridgeRequestHandler(BaseHTTPRequestHandler):
@@ -138,6 +159,8 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_json(self.bridge.status())
         if self.path.startswith("/recording"):
             return self._send_json(self._recording_status())
+        if self.path.startswith("/presets"):
+            return self._send_query_presets()
         self.send_response(404)
         self.end_headers()
 
@@ -148,6 +171,21 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         if self.bridge.recording is None:
             return Recording().status_payload()
         return self.bridge.recording.status_payload()
+
+    def _send_query_presets(self) -> None:
+        """
+        Serve the ready-made questions the running demo offers about itself.
+        """
+        try:
+            payload = {
+                "ok": True,
+                "title": self.bridge.query_title(),
+                "presets": [asdict(preset) for preset in self.bridge.query_presets()],
+                "variables": self.bridge.query_variables(),
+            }
+        except NoQuerySourceRegistered as error:
+            payload = {"ok": False, "error": str(error), "presets": []}
+        self._send_json(payload)
 
     def _query_value(self, name: str) -> Optional[str]:
         """
@@ -210,6 +248,8 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._discard_recording()
         if self.path == "/recording/save":
             return self._save_recording()
+        if self.path.startswith("/eql"):
+            return self.answer_requested_query()
         self.queue_requested_move()
 
     def _stop_recording(self) -> None:
@@ -290,6 +330,30 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
                 str(payload.get("topic") or ""), bool(payload.get("subscribed", True))
             )
         )
+
+    def answer_requested_query(self) -> None:
+        """
+        Answer one EQL query about the running demo.
+
+        A query is arbitrary user input, so every way it can go wrong is reported as an
+        error payload the panel renders, rather than as a traceback.
+        """
+        if not EQL_AVAILABLE:
+            return self._send_json({"ok": False, "error": NO_EQL_MESSAGE})
+        length = int(self.headers.get("Content-Length") or 0)
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        code = str(payload.get("code") or "")
+        try:
+            with self.bridge.query_lock:
+                runner = EqlQueryRunner(domains=self.bridge.query_domains())
+                return self._send_json(runner.run(code).to_payload())
+        except NoQuerySourceRegistered as error:
+            return self._send_json({"ok": False, "error": str(error)})
+        except Exception as error:
+            # a query is user input: a name it got wrong is an answer, not a crash
+            return self._send_json(
+                {"ok": False, "error": "%s: %s" % (type(error).__name__, error)}
+            )
 
     def queue_requested_move(self) -> None:
         """

@@ -27,6 +27,7 @@ from cramera.live.bridge import BRIDGE, Bridge
 from cramera.live.http import DEFAULT_PORT, serve
 from cramera.live.recording import Recording
 from cramera.live.recording_bundle import finalize_recording
+from cramera.live.robot_state import RobotStateQuerySource
 from cramera.live.ros_markers import RosMarkerListener
 from cramera.logging_setup import get_logger
 
@@ -169,11 +170,13 @@ class LiveVisualization:
 
         Reuses the already running HTTP server when one exists, so starting a second
         visualization in the same process rebinds the world instead of failing on the
-        port.
+        port. The demo's own state is registered as what the viewer's queries are
+        answered from, so its EQL panel can ask what the robot is doing right now.
 
         :return: This visualization.
         """
         self.bridge.attach(self.world)
+        self.bridge.register_query_source(RobotStateQuerySource(bridge=self.bridge))
         self.bridge.recording = Recording()
         self.bridge.recording.start()
         atexit.register(_finalize_recording_at_exit, self.bridge)

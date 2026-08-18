@@ -11,6 +11,9 @@ from enum import StrEnum
 from typing_extensions import Any, Dict, List, Optional, Tuple
 
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, AbstractRobotPart
+from semantic_digital_twin.world_description.world_entity import (
+    KinematicStructureEntity,
+)
 
 # %% the published shape of a robot part
 
@@ -112,17 +115,23 @@ class RobotPartAnnotation:
         )
 
     @staticmethod
-    def link_names(part: AbstractRobotPart) -> List[str]:
+    def body_name(body: KinematicStructureEntity) -> str:
+        """
+        A body's name, stripped of the model-name prefix a composed world gives it.
+
+        :param body: The body whose name is read.
+        """
+        name = str(body.name)
+        return name.split("/", 1)[1] if "/" in name else name
+
+    @classmethod
+    def link_names(cls, part: AbstractRobotPart) -> List[str]:
         """
         A robot part's link names, stripped of their model-name prefix.
 
         :param part: The robot part whose link names are read.
         """
-        names = []
-        for body in part.bodies or []:
-            name = str(body.name)
-            names.append(name.split("/", 1)[1] if "/" in name else name)
-        return names
+        return [cls.body_name(body) for body in part.bodies or []]
 
     @staticmethod
     def _arm_sides(robot: AbstractRobot) -> Dict[int, ArmSide]:

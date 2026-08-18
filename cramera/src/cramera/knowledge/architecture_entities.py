@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from cramera.knowledge.entity import NamedEntity
 
-from typing_extensions import Tuple
+from typing_extensions import List, Tuple
 
 
 @dataclass(unsafe_hash=True)
@@ -93,6 +93,15 @@ class PythonClass(NamedEntity):
     """
     First docstring line, or ``''``.
     """
+
+    def related_highlight_ids(self) -> List[str]:
+        """
+        The graph nodes an answer row for this class lights up.
+
+        A class is not a graph node of its own, so its row highlights the subpackage
+        and the package it is defined in instead.
+        """
+        return [self.subpackage, self.package]
 
     @property
     def qualified_name(self) -> str:

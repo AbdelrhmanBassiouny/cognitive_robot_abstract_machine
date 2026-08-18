@@ -55,6 +55,7 @@ from coraplex.robot_plans.actions.core.robot_body import (
     ParkArmsAction,
     SetGripperAction,
 )
+from coraplex.testing import start_visualization
 from coraplex.view_manager import ViewManager
 from giskardpy.utils.utils_for_tests import BIG_NUMBER
 from krrood.entity_query_language.factories import a
@@ -263,14 +264,21 @@ class StretchApartmentDemonstration(RobotDemonstration):
         """
         Acquire a world, populate it if needed, and perform the plan against it.
 
+        The run is served to the cramera viewer, whose query console can then be asked
+        what the robot is holding, what it is doing and what it is trying to achieve
+        while the plan runs. ``CORAPLEX_VISUALIZATION`` selects a different backend, or
+        none.
+
         :return: The world the demonstration acted on.
         """
         world = self.acquire_world()
+        visualization = start_visualization(world)
         try:
             if not self.is_scene_populated(world):
                 self.populate_scene(world)
             for _ in range(1):
                 plan = self.build_plan(self.build_context(world))
+                visualization.attach_plan(plan.plan)
                 with ExecutionEnvironment(
                     execution_type=self.execution_type,
                     collision_avoidance=self.collision_avoidance,

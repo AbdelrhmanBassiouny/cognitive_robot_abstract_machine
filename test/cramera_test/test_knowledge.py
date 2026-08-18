@@ -18,7 +18,8 @@ from semantic_digital_twin.spatial_types import Point3  # noqa: E402
 from semantic_digital_twin.world_description.world_entity import Body  # noqa: E402
 
 from cramera.knowledge.entities import BenchObject  # noqa: E402
-from cramera.knowledge.eql_session import EqlSession, RowRenderer  # noqa: E402
+from cramera.knowledge.eql_session import EqlSession  # noqa: E402
+from cramera.knowledge.query_runner import RowRenderer  # noqa: E402
 from cramera.knowledge.graph_payload import KnowledgeGraphPayload  # noqa: E402
 from cramera.knowledge.knowledge_base import EpisodeKnowledgeBase  # noqa: E402
 from cramera.knowledge.presets import Preset  # noqa: E402
