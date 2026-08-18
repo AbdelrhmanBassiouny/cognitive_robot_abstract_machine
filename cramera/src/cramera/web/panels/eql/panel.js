@@ -4,7 +4,8 @@
  * Query bar + question display + presets + answer panel. Queries are typed into the
  * bar or picked as presets; underneath, the question asked is shown big, in English
  * (core/question_display.js) — the query's verbalization, with class and attribute
- * words linking to their documentation pages. Queries go wherever
+ * words linking to what explains them: their documentation, or their source. The
+ * question, the presets and the answer scroll together under the bar. Queries go wherever
  * core/query_source.js points: the server, answering from the recorded episode
  * knowledge base, or an attached demo, answering from its own live state. The
  * knowledge-base overview (GET /api/knowledge) always provides the per-entity details
@@ -29,10 +30,12 @@ Panels.define('eql', function (root, bus) {
     '    <textarea id="query-input" rows="2" spellcheck="false" placeholder="the(entity(scene_object).where(scene_object.name == \'milk\'))   —  vars: scene_object, episode, arm, joint, robot"></textarea>' +
     '    <button id="query-run">Run</button>' +
     '  </div>' +
+    '</div>' +
+    '<div class="console-body">' +
     '  <div id="question" class="question"></div>' +
     '  <div id="presets" class="presets"></div>' +
-    '</div>' +
-    '<div id="answer" class="answer"><div class="answer-empty">Loading the episode knowledge base…</div></div>';
+    '  <div id="answer" class="answer"><div class="answer-empty">Loading the episode knowledge base…</div></div>' +
+    '</div>';
 
   const knowledgeStatus = root.querySelector('#knowledge-status');
   const answerEl = root.querySelector('#answer');
@@ -40,6 +43,16 @@ Panels.define('eql', function (root, bus) {
   const runBtn = root.querySelector('#query-run');
   const questionEl = root.querySelector('#question');
   const presetsEl = root.querySelector('#presets');
+
+  // %% showing an answer
+  // The answer sits at the bottom of a scrolling console, under everything that can be
+  // asked, so an answered query is scrolled to as well as written. Only a query: the
+  // descriptions written here arrive unasked — a graph selects a node as it loads, and
+  // the running episode replaces its own step as it goes.
+  function showAnswer(html) {
+    answerEl.innerHTML = html;
+    answerEl.scrollIntoView({ block: 'nearest' });
+  }
 
   const ASK_HINT = 'The question you ask appears here in English — run a query, or pick one below.';
   questionEl.innerHTML = QuestionDisplay.hint(ASK_HINT);
@@ -130,7 +143,8 @@ Panels.define('eql', function (root, bus) {
       '(CRAM packages, subpackages, classes). ' +
       'Build queries like <code>the(entity(scene_object).where(scene_object.name == \'milk\'))</code> — ' +
       'or click a preset below, or a node in the graph. The question asked is read back under the ' +
-      'bar as English, coloured by semantic role and linked to the documentation.</p>' +
+      'bar as English, coloured by semantic role and linked to the documentation or source ' +
+      'of every class and attribute it names.</p>' +
       '<p class="hint-txt">Start typing in the box to see everything this scene lets you ' +
       'name — its variables, EQL’s own keywords and every class of the CRAM workspace — ' +
       'and type a dot after a name for what it holds. ArrowUp / ArrowDown pick, ' +
@@ -244,18 +258,18 @@ Panels.define('eql', function (root, bus) {
     }
     let html = '<div class="goal">&gt;&gt;&gt; ' + esc(code) + '</div>';
     if (!res.ok) {
-      answerEl.innerHTML = html + '<div class="qerr">' + esc(res.error || 'query failed') + '</div>';
+      showAnswer(html + '<div class="qerr">' + esc(res.error || 'query failed') + '</div>');
       bus.emit('entity:highlight', { ids: [] });
       return;
     }
     if (!res.count) {
-      answerEl.innerHTML = html + '<div class="nores">No solutions — the query returned nothing.</div>';
+      showAnswer(html + '<div class="nores">No solutions — the query returned nothing.</div>');
       bus.emit('entity:highlight', { ids: [] });
       return;
     }
     html += '<p class="headline"><b>' + res.count + '</b> result' + (res.count === 1 ? '' : 's') +
       (res.more ? ' (truncated)' : '') + '.</p>' + answerTable(res.rows, res.replay);
-    answerEl.innerHTML = html;
+    showAnswer(html);
     wireReplayButtons();
     bus.emit('entity:highlight', { ids: res.highlight || [] });
   }

@@ -52,6 +52,8 @@ function makeElement(tag) {
       remove(c) { this.classes.delete(c); },
     },
     appendChild(child) { this.children.push(child); return child; },
+    scrolledIntoView: 0,
+    scrollIntoView() { this.scrolledIntoView += 1; },
     addEventListener(event, cb) { (listeners[event] = listeners[event] || []).push(cb); },
     click() { (listeners.click || []).forEach(function (cb) { cb(); }); },
     querySelectorAll() { return []; },
@@ -265,4 +267,30 @@ test('a failed query is reported in the answer area, not swallowed', async funct
 
   const answer = panel.root.part('#answer').innerHTML;
   assert.ok(answer.indexOf('NameError: shape') >= 0, answer);
+});
+
+// %% the answer sits under everything asked, so it is scrolled to when it arrives
+test('an answered query is scrolled to', async function () {
+  const panel = mountPanel();
+  await flush(); await flush();
+  const answer = panel.root.part('#answer');
+  assert.strictEqual(answer.scrolledIntoView, 0);
+
+  presetButtons(panel.root.part('#presets'))[0].click();
+  await flush(); await flush();
+
+  assert.strictEqual(answer.scrolledIntoView, 1);
+});
+
+test('a described entity is shown where the answer is, without scrolling to it', async function () {
+  const panel = mountPanel();
+  await flush(); await flush();
+
+  panel.bus.emit('entity:select', {
+    id: 'tracy', detail: { group: 'robot', label: 'Tracy', lines: [] }, relations: [],
+  });
+
+  const answer = panel.root.part('#answer');
+  assert.ok(answer.innerHTML.indexOf('Tracy') >= 0, answer.innerHTML);
+  assert.strictEqual(answer.scrolledIntoView, 0);
 });
