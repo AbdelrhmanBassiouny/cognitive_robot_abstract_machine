@@ -187,8 +187,10 @@ between the built-in panels:
 | `scene:step`         | `{step}` (`'__done__'` at end)   | robot-scene → eql, graph       |
 | `live:changed`       | `{on, url}`                      | robot-scene → graph            |
 | `entity:highlight`   | `{ids, focus?}`                  | eql → robot-scene, graph       |
-| `entity:select`      | `{id, detail, relations}`        | graph → eql                    |
+| `entity:select`      | `{id, detail, relations}`        | graph, plan-graph → eql        |
 | `kb:ready`           | `{payload}`                      | eql → anyone                   |
+| `panel:shown`        | `{id}`                           | panel_tabs → the tab's panel   |
+| `panel:resized`      | `{}`                             | split-resize → graph panels    |
 
 ### Built-in panels
 
@@ -196,21 +198,29 @@ between the built-in panels:
 | ------------- | ------------------------------------------------------------ |
 | `robot-scene` | three.js scene: environment, robot, draggable objects, playback + live controls |
 | `eql`         | EQL query console + entity answer panel                      |
-| `graph`       | four tabs: Knowledge / Kinematics / Plan / Statechart        |
+| `graph`       | three tabs: Knowledge / Kinematics / Statechart              |
+| `event-timeline` | the events the running demo detects, on a moving timeline |
+| `plan-graph`  | the plan tree, with the step being executed highlighted      |
 
-On the Plan and Statechart tabs the node border is its execution status —
-running (amber), succeeded/done (green), failed (red), paused (blue),
-interrupted (orange), not started (dim, dashed) — streamed live from the
-bridge while attached.
+`graph`, `event-timeline` and `plan-graph` share one frame as tabs
+(`web/core/panel_tabs.js`); `config.js` decides which.
+
+On the plan tree and the Statechart tab the node border is its execution
+status — executing now (white, thick), running (amber), succeeded/done
+(green), failed (red), paused (blue), interrupted (orange), not started (dim,
+dashed) — streamed live from the bridge while attached.
 
 Two things to know about those statuses: coraplex performs only the plan
-**root** (`Plan.perform` → `root.perform`), while `ActionNode.notify` merely
-expands its children into one merged motion statechart. So a *recorded* plan
-tree has real status on the root only. Live, the bridge derives per-step
-status from the statechart life cycle via `GiskardExecutable.motion_mappings`
+**root**, while `ActionNode.notify` merely expands its children into one
+merged motion statechart. So a *recorded* plan tree has real status on the
+root only. Live, the bridge derives per-step status from the statechart life
+cycle via `GiskardExecutable.motion_mappings`
 (`{MotionNode: Task}`) and propagates it up the tree; those nodes are flagged
-`derived`. Statecharts exist only during execution, so the Statechart tab is
-live-only.
+`derived`. That derivation is also why *running* and *executing now* differ: a
+running parent is running because a node below it is, so `/plan` names the
+running nodes with no running child of their own as `executing`, and those are
+the ones the plan panel highlights and follows. Statecharts exist only during
+execution, so the Statechart tab is live-only.
 
 ## Layout
 
@@ -226,7 +236,7 @@ src/cramera/
     views/             the graph-panel tabs and their drill-downs
   live/            stream a running coraplex demo into the viewer
     bridge.py      bridge state + serializers (runs on the sim thread)
-    hooks.py       Executor/Plan/GiskardExecutable/mesh hooks
+    hooks.py       Executor/PlanNode/GiskardExecutable/mesh hooks
     http.py        the bridge's HTTP endpoints (port 8765)
     __main__.py    cramera-live entry point
   onboard/         turn a demo run into a scene bundle

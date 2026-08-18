@@ -65,13 +65,12 @@ class PlanViewPayload(GraphPanelPayload):
 
     def panel_options(self) -> Dict[str, Any]:
         """
-        The plan legend and the live/status flags the plan tab is rendered with.
+        The plan legend and the status flags the plan tab is rendered with.
         """
         return {
             "breadcrumb": self.breadcrumb,
             "legend": [asdict(entry) for entry in PLAN_LEGEND],
             "layout": "hier",
-            "live": "plan",
             "statusLegend": True,
             "empty": self.empty_message,
         }
@@ -139,12 +138,11 @@ class PlanViewPayload(GraphPanelPayload):
         """
         The executed plan as a tree, one node per plan node the demo ran.
 
-        The recorded statuses are thin on purpose: coraplex performs only the
-        plan *root* (``Plan.perform`` → ``root.perform``), while
-        ``ActionNode.notify`` merely expands its children into the merged motion
-        statechart. So every inner node of a recorded tree reads ``CREATED``, and
-        real per-step progress only shows up while the live bridge is attached
-        (it derives it from the statechart life cycle).
+        The recorded statuses are thin on purpose: coraplex performs only the plan
+        *root*, while ``ActionNode.notify`` merely expands its children into the merged
+        motion statechart. So every inner node of a recorded tree reads ``CREATED``, and
+        real per-step progress only shows up while the live bridge is attached (it
+        derives it from the statechart life cycle).
 
         :param knowledge_base: Unused — the plan tree is read from the scene bundle.
         """

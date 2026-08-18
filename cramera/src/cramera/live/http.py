@@ -13,7 +13,8 @@ HTTP endpoints of the live bridge (default port 8765).
                   extension has to be the URL's own trailing characters, since the
                   frontend's URDF loader dispatches to a mesh format by regex-
                   matching it, not by any query parameter)
-    GET /plan    {signature, nodes: [{id, parent, kind, label, status, derived}]}
+    GET /plan    {signature, nodes: [{id, parent, kind, label, status, derived}],
+                  executing: [node id]} (the nodes being executed right now)
     GET /chart   {signature, title,
                   nodes: [{id, parent, name, class_name, life_cycle, observation}],
                   edges: [{from, to, kind}]}

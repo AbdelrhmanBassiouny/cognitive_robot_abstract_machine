@@ -7,10 +7,10 @@ singleton whose snapshot methods run on the *simulation* thread (see
 finished, plain-dict snapshots to the HTTP layer.
 
 Node status is where the plan and the statechart differ: coraplex only performs the plan
-root (``Plan.perform`` → ``root.perform``); ``ActionNode.notify`` expands its children
-but never performs them, so every inner ``PlanNode`` keeps status ``CREATED`` for the
-whole run. The real per-step progress lives in the giskardpy motion statechart's life
-cycle. ``GiskardExecutable.motion_mappings`` (a ``{MotionNode: Task}`` dict) is the
+root; ``ActionNode.notify`` expands its children but never performs them, so every inner
+``PlanNode`` keeps status ``CREATED`` for the whole run. The real per-step progress
+lives in the giskardpy motion statechart's life cycle.
+``GiskardExecutable.motion_mappings`` (a ``{MotionNode: Task}`` dict) is the
 bridge between the two — the life cycle of each motion node's task is read and
 propagated up the plan tree; those statuses are flagged ``derived``.
 """
@@ -155,7 +155,7 @@ class LiveHook(Enum):
 
     PLAN = "plan"
     """
-    ``Plan.perform`` and ``GiskardExecutable.execute`` — follow the plan tree.
+    ``PlanNode.perform`` and ``GiskardExecutable.execute`` — follow the plan tree.
     """
 
     MESH = "mesh"
@@ -426,12 +426,25 @@ class PlanSnapshot:
     Every node in the tree, flattened with parent references.
     """
 
+    @property
+    def executing(self) -> List[str]:
+        """
+        Ids of the nodes execution has reached: running, with no running child.
+
+        A running parent is running because a node below it is, so the running nodes
+        alone name a whole path down the tree rather than the step being done now.
+        """
+        running = [node for node in self.nodes if node.status == TaskStatusName.RUNNING]
+        awaiting_a_child = {node.parent for node in running}
+        return [node.id for node in running if node.id not in awaiting_a_child]
+
     def to_payload(self) -> Dict[str, Any]:
         """
-        The snapshot plus the legend its groups are drawn with, so the viewer does not
-        keep its own copy of the plan-node colour table.
+        The snapshot plus the nodes being executed and the legend its groups are drawn
+        with, so the viewer does not keep its own copy of the plan-node colour table.
         """
         payload = asdict(self)
+        payload["executing"] = self.executing
         payload["legend"] = [
             {"group": group.value, "label": group.label}
             for group in PlanNodeGroup.legend()
@@ -722,7 +735,7 @@ class Bridge:
 
     _plan: Optional[Plan] = None
     """
-    The coraplex plan captured by the ``Plan.perform`` hook.
+    The coraplex plan the performing nodes belong to.
     """
 
     _chart: Optional[MotionStatechart] = None
@@ -877,15 +890,19 @@ class Bridge:
         if self._tick_count % self.plan_snapshot_tick_interval == 0:
             self.snapshot_plan()
 
-    def begin_plan(self, plan: Plan) -> None:
+    def follow_plan(self, plan: Optional[Plan]) -> None:
         """
-        Record the plan that started performing and publish its tree.
+        Record the plan being performed and publish its tree.
 
-        Drops the previous plan's per-node progress, so a long-running process does not
-        accumulate entries for nodes that no longer exist.
+        Every node reports the plan it belongs to as it starts performing, so
+        re-entering the plan already being followed changes nothing. Moving to a
+        different one drops the previous plan's per-node progress, so a long-running
+        process does not accumulate entries for nodes that no longer exist.
 
-        :param plan: The plan that started performing.
+        :param plan: The plan the performing node belongs to, if it belongs to one.
         """
+        if plan is None or plan is self._plan:
+            return
         self._plan = plan
         self._motion_nodes.clear()
         self.snapshot_plan()

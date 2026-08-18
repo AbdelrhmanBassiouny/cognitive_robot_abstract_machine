@@ -15,6 +15,7 @@ window.CRAMERA_CONFIG = {
       tabs: [
         { panel: 'graph', label: 'Graph' },
         { panel: 'event-timeline', label: 'Events' },
+        { panel: 'plan-graph', label: 'Plan' },
       ],
     }],
   },
