@@ -211,10 +211,10 @@ status — executing now (white, thick), running (amber), succeeded/done
 dashed) — streamed live from the bridge while attached.
 
 Two things to know about those statuses: coraplex performs only the plan
-**root** (`Plan.perform` → `root.perform`), while `ActionNode.notify` merely
-expands its children into one merged motion statechart. So a *recorded* plan
-tree has real status on the root only. Live, the bridge derives per-step
-status from the statechart life cycle via `GiskardExecutable.motion_mappings`
+**root**, while `ActionNode.notify` merely expands its children into one
+merged motion statechart. So a *recorded* plan tree has real status on the
+root only. Live, the bridge derives per-step status from the statechart life
+cycle via `GiskardExecutable.motion_mappings`
 (`{MotionNode: Task}`) and propagates it up the tree; those nodes are flagged
 `derived`. That derivation is also why *running* and *executing now* differ: a
 running parent is running because a node below it is, so `/plan` names the
@@ -236,7 +236,7 @@ src/cramera/
     views/             the graph-panel tabs and their drill-downs
   live/            stream a running coraplex demo into the viewer
     bridge.py      bridge state + serializers (runs on the sim thread)
-    hooks.py       Executor/Plan/GiskardExecutable/mesh hooks
+    hooks.py       Executor/PlanNode/GiskardExecutable/mesh hooks
     http.py        the bridge's HTTP endpoints (port 8765)
     __main__.py    cramera-live entry point
   onboard/         turn a demo run into a scene bundle

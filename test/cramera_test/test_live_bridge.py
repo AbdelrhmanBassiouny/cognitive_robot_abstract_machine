@@ -196,7 +196,7 @@ def plan_bridge():
             ROBOT_BASE_KEY: PublishedBody(name="world/base_link"),
         }
     )
-    bridge.begin_plan(PlanWithRoot(root=root))
+    bridge.follow_plan(PlanWithRoot(root=root))
     return bridge, root, action, condition, motion
 
 
@@ -351,7 +351,7 @@ class TestPlanSnapshot:
         first = make_plan_node("MotionNode")
         second = make_plan_node("MotionNode")
         root = make_plan_node("SequentialNode", children=[first, second])
-        bridge.begin_plan(PlanWithRoot(root=root))
+        bridge.follow_plan(PlanWithRoot(root=root))
         bridge.freeze_motion_group(
             MotionGroup(motion_mappings={first: None}), TaskStatusName.FAILED
         )
@@ -370,8 +370,33 @@ class TestPlanSnapshot:
         bridge.freeze_motion_group(
             MotionGroup(motion_mappings={motion: None}), TaskStatusName.SUCCEEDED
         )
-        bridge.begin_plan(PlanWithRoot(root=motion))
+        bridge.follow_plan(PlanWithRoot(root=motion))
         assert nodes_by_kind(bridge)["MotionNode"]["status"] == TaskStatusName.CREATED
+
+    def test_re_entering_the_same_plan_keeps_the_progress(self):
+        """
+        Every node of a plan reports the plan it belongs to as it starts performing, so
+        the steps already done must survive the plan being named again.
+        """
+        bridge = Bridge()
+        motion = make_plan_node("MotionNode")
+        plan = PlanWithRoot(root=make_plan_node("SequentialNode", children=[motion]))
+        bridge.follow_plan(plan)
+        bridge.freeze_motion_group(
+            MotionGroup(motion_mappings={motion: None}), TaskStatusName.SUCCEEDED
+        )
+        bridge.follow_plan(plan)
+        assert nodes_by_kind(bridge)["MotionNode"]["status"] == TaskStatusName.SUCCEEDED
+
+    def test_a_node_belonging_to_no_plan_leaves_the_tree_alone(self, plan_bridge):
+        """
+        ``PlanNode.plan`` is optional, and a node outside a plan says nothing about
+        what is being performed.
+        """
+        bridge, root, action, condition, motion = plan_bridge
+        published = bridge.get_plan()
+        bridge.follow_plan(None)
+        assert bridge.get_plan() == published
 
 
 # %% hook installation
