@@ -535,3 +535,71 @@ from the objects' live positions in the played-back clip.
   (canvas sprites) and highlight arrows (cone meshes), rather than a DOM/SVG
   overlay: the arrow tips then follow the objects with no projection maths, and
   the geometry stays testable in a pure `core/event_annotation.js`.
+
+
+## 2026-08-18: montessori_perform_queried_action, implemented (no PR yet)
+
+Built directly from `plan.yaml` + this roadmap rather than through
+`/plan-item-kickoff`: the session was non-interactive, so plan mode was unavailable.
+Based on `montessori_event_replay` (#165), the item's declared dependency, and
+restacked onto its post-main-merge tip `b76c8ede8` once the notes branch showed the
+base had moved. Pushed as `2dee8f57`; no pull request opened, since none was asked
+for.
+
+### What the item turned out to be
+
+The load-bearing decision is *how a row says it is an action*. It is the same shape
+#165 uses for replay: the entity declares itself by returning a `PerformableAction`
+from a `performable_action()` method, and the runner carries one per row **beside**
+the rows (`RenderResult.perform`), never inside them - so a viewer that knows nothing
+of performing renders the answer unchanged. `CarriesAPerformableAction` sits next to
+`CarriesATimestamp` in `query_runner.py` and works the same way.
+
+`PerformableAction` deliberately carries no plan, only a `name` the demo identifies
+the action by and a `description` the button says out loud. What the action *is*
+stays with the demo, exactly as `LiveRunControl` keeps the meaning of "pause" there.
+
+### Decisions taken
+
+- **The bridge relays, it does not execute.** `LiveActionExecution` mirrors
+  `LiveRunControl` line for line: `title()`, `state()`, `perform(name)`, registered
+  on the bridge, served at `GET`/`POST /perform`, and announced on `/info` so the
+  viewer's existing 3 s poll keeps every button current instead of a poll of its own.
+- **A pressed button queues; the sorting thread takes it.** The robot is mid-motion
+  when a button is pressed, so `SortingActionExecution` only appends, and
+  `_insert_all_shapes` takes requests at the checkpoint *between shapes*. Between
+  *attempts* was rejected: an out-of-turn insertion there would interleave with the
+  attempt bookkeeping the retry loop is in the middle of writing.
+- **A performed insertion stays out of the sort's attempt records.** It is not one of
+  the sort's attempts, and entering it as one would count it in every question about
+  how the sort is going. `progress.refresh_world_state(...)` runs afterwards, so the
+  world-derived half of those records (is_inserted) still answers about the board as
+  it stands.
+- **`offer()` clears pending requests.** A restarted run replaces every body, so a
+  request made against the old world names a shape that no longer exists.
+- **The perform preset is live-only**, alongside `_scene_presets()`: the recorded
+  bundle answers about a run that is over, so nothing it names can be carried out and
+  `presets.json` must not declare it.
+- **No action text reaches the markup.** The buttons are emitted empty and identified
+  by their position among the buttons; `showPerformState()` gives each its wording
+  from `shownActions` and the demo's published state. `esc()` does not escape quotes,
+  so putting a demo-supplied description into an attribute would have been an
+  injection hole.
+
+### Landing hazard
+
+`live/bridge.py`, `live/http.py`, `web/index.html`, `web/app.css`,
+`web/panels/eql/panel.js` and `web/core/answer_table.js` are touched by
+`montessori_live_event_timeline_tab` (#175) and by
+`montessori_replay_event_annotations` too. No duplicated purpose - this item adds
+`/perform`, `core/perform.js` and a perform column - but expect textual conflicts in
+those files wherever two of the three meet.
+
+### Environment note
+
+The experiments suite cannot run outside the CI container in a Claude Code on the
+web session: `rclpy` is absent (its conftest imports it), `experiments.orm.ormatic_interface`
+is empty by design, and `cramera/scenes` is an uninitialised submodule. The new
+experiments tests were therefore run with `--noconftest`; the two failures that
+remain there (`TestDeclaredBundlePresets`) reproduce identically on the untouched
+base, being the missing submodule.

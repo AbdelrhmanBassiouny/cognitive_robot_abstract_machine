@@ -155,15 +155,24 @@ items:
 
   - id: montessori_perform_queried_action
     title: "Perform a queried action from a perform button on its result"
-    branch: montessori_perform_queried_action
+    branch: claude/queried-action-perform-button-vg2vz3
     pull_request_number: null
     track: action-execution
     depends_on: [montessori_event_replay]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_018omV81SkveD53Q5mvEiKtP
     notes: >-
       Mirrors the replay button queried segmind events get in #165: an action
       returned by a query carries a perform button that executes it on the
-      robot when pressed.
+      robot when pressed. Implemented on 2026-08-18 and pushed as 2dee8f57,
+      based on #165 and restacked onto its post-main-merge tip b76c8ede8 in the
+      same session; no pull request opened yet. The branch keeps the session's
+      own designated name rather than the manifest's, as
+      montessori_replay_event_annotations already does - the harness allows
+      pushing nowhere else. cramera suite 566 green; the experiments suite
+      cannot run outside the CI container (no rclpy, empty ORM interfaces,
+      uninitialised cramera/scenes submodule), so its new tests were run with
+      --noconftest instead.
 
   - id: montessori_run_written_action
     title: "Write a new under-specified action and run it with a run button"
