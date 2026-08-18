@@ -1,9 +1,9 @@
 """
 The ORM interfaces the packages of this repository generate with ORMatic.
 
-The repository tracks every ``ormatic_interface.py`` as an empty placeholder, so a fresh
-checkout carries no database mapping at all: nothing can be persisted, and nothing can
-be turned into a data access object, until the interfaces have been generated once.
+The interfaces are generated rather than written, so the repository ignores them instead
+of tracking them: a fresh checkout carries no database mapping at all, and nothing can
+be persisted or turned into a data access object until they have been generated once.
 """
 
 from __future__ import annotations
@@ -15,33 +15,17 @@ from pathlib import Path
 
 from typing_extensions import Sequence
 
-from cognitive_robot_abstract_machine.exceptions import (
-    MissingOrmGeneratorError,
-    MissingOrmInterfaceError,
-)
+from cognitive_robot_abstract_machine.exceptions import MissingOrmGeneratorError
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 """
 Root of the checkout this package is installed from.
 """
 
-
-def let_git_ignore_changes(repository_root: Path, path: Path) -> None:
-    """
-    Set git's skip-worktree bit on a tracked file.
-
-    Git then treats the working-tree content as always equal to what is committed: the
-    file never shows up in ``git status``/``git diff``, and ``git add`` cannot stage it.
-
-    :param repository_root: Root of the checkout the file belongs to.
-    :param path: Repository-relative path of the tracked file.
-    """
-    subprocess.run(
-        ["git", "update-index", "--skip-worktree", str(path)],
-        cwd=repository_root,
-        check=True,
-    )
-
+INTERFACE_FILE_NAME = "ormatic_interface.py"
+"""
+Name every package's generator writes its interface to.
+"""
 
 # %% a single package's interface
 
@@ -80,25 +64,22 @@ class OrmInterface:
             / "src"
             / self.package_name
             / "orm"
-            / "ormatic_interface.py"
+            / INTERFACE_FILE_NAME
         )
 
     @property
     def is_generated(self) -> bool:
         """
-        Whether the interface holds generated content rather than the empty placeholder
-        the repository tracks.
+        Whether this checkout holds the interface.
         """
-        return self.path.exists() and self.path.stat().st_size > 0
+        return self.path.exists()
 
-    def clear(self) -> None:
+    def remove(self) -> None:
         """
-        Empty the interface without deleting it, so that a stale version cannot be
-        imported while the new one is generated.
+        Delete the interface, so that a stale version cannot be imported while the new
+        one is generated.
         """
-        if not self.path.exists():
-            raise MissingOrmInterfaceError(self.package_name, self.path)
-        self.path.write_text("", encoding="utf-8")
+        self.path.unlink(missing_ok=True)
 
     def generate(self) -> None:
         """
@@ -110,14 +91,6 @@ class OrmInterface:
             [sys.executable, str(self.generator)],
             cwd=self.generator.parent,
             check=True,
-        )
-
-    def protect_from_commits(self) -> None:
-        """
-        Keep git from ever offering the generated content for staging.
-        """
-        let_git_ignore_changes(
-            self.repository_root, self.path.relative_to(self.repository_root)
         )
 
 
@@ -151,13 +124,10 @@ class WorkspaceOrmInterfaces:
             its whole class hierarchy.
         """
         for interface in self.interfaces:
-            interface.clear()
+            interface.remove()
 
         for interface in self.interfaces:
             interface.generate()
-
-        for interface in self.interfaces:
-            interface.protect_from_commits()
 
     def ensure_generated(self) -> bool:
         """
