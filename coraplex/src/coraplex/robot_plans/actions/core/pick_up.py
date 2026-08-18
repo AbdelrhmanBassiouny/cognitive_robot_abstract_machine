@@ -197,38 +197,40 @@ class PickUpAction(
         :return: One reach-and-close attempt at grasping :attr:`object_designator`,
             without lifting it.
         """
-        return sequential(
-            children=[
-                # defining the target_pose relative to the object ensures it stays correct even if the object pose is
-                # updated after defining the goal
-                ReachAction(
-                    target_pose=Pose(reference_frame=self.object_designator),
-                    object_designator=self.object_designator,
-                    arm=self.arm,
-                    grasp_description=self.grasp_description,
-                    pre_approach_linear_velocity=self.pre_approach_linear_velocity,
-                    final_approach_linear_velocity=self.final_approach_linear_velocity,
-                    open_gripper_at_pre_pose=True,
-                ),
-                MoveGripperMotion(
-                    motion=GripperState.CLOSE,
-                    gripper=self.arm,
-                    finger_velocity=self.grasp_closing_velocity,
-                    stall_minimum_time=self.grasp_stall_minimum_time,
-                    tolerate_stall=self.tolerate_grasp_stall,
-                    # Size the close to the object instead of the gripper's
-                    # nominal fully-closed state, which a grasped object makes
-                    # unreachable and which therefore squeezes it back out.
-                    grasped_object=self.object_designator,
-                ),
-                # AttachNode(
-                #     body=self.object_designator,
-                #     new_parent=ViewManager.get_end_effector_view(
-                #         self.arm, self.robot
-                #     ).tool_frame,
-                # ),
-            ],
-        )
+        children = [
+            # defining the target_pose relative to the object ensures it stays correct even if the object pose is
+            # updated after defining the goal
+            ReachAction(
+                target_pose=Pose(reference_frame=self.object_designator),
+                object_designator=self.object_designator,
+                arm=self.arm,
+                grasp_description=self.grasp_description,
+                pre_approach_linear_velocity=self.pre_approach_linear_velocity,
+                final_approach_linear_velocity=self.final_approach_linear_velocity,
+                open_gripper_at_pre_pose=True,
+            ),
+            MoveGripperMotion(
+                motion=GripperState.CLOSE,
+                gripper=self.arm,
+                finger_velocity=self.grasp_closing_velocity,
+                stall_minimum_time=self.grasp_stall_minimum_time,
+                tolerate_stall=self.tolerate_grasp_stall,
+                # Size the close to the object instead of the gripper's
+                # nominal fully-closed state, which a grasped object makes
+                # unreachable and which therefore squeezes it back out.
+                grasped_object=self.object_designator,
+            ),
+        ]
+        if self.context.update_world_model_attachment:
+            children.append(
+                AttachNode(
+                    body=self.object_designator,
+                    new_parent=ViewManager.get_end_effector_view(
+                        self.arm, self.robot
+                    ).tool_frame,
+                )
+            )
+        return sequential(children=children)
 
     @property
     def _action_plan(self) -> PlanNode:
