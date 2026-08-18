@@ -363,3 +363,31 @@ working tree afterwards -- the committed blobs stayed empty throughout.
 recorded (the commented-out `AttachNode` in `PickUpAction`, and two demo directories
 that were never committed). Nothing on this branch touches them.
 
+
+## 2026-08-18: the ORM-interface generation crash, fixed on the branch
+
+`run_montessori_demo.sh`'s pre-flight (`scripts/ensure_orm_interfaces.py`) crashed while
+generating the semantic_digital_twin interface. Chain: `get_type_hints` on
+`WorldSynchronizer` raises `NameError: 'InferenceExplanation'` (Symbol's TYPE_CHECKING-only
+annotation), the resolver falls back to extracting the import scope of
+`world_synchronizer.py`, and that crashed with `ModuleNotFoundError` on the inline
+`from semantic_digital_twin.orm.ormatic_interface import WorldMappingDAO` -- the very
+module being generated. Fixed in krrood `utils.py` (`fb0ef552e9`): a from-import whose
+module cannot be imported now contributes no names to the scope (logged once at debug
+level), so resolution continues to the next MRO base. Two tests first (TDD, both failed
+with the exact production crash), plus a dataset mimic
+(`class_in_module_with_unimportable_import.py`) mirroring world_synchronizer's
+inline-import shape.
+
+Not branch-caused, despite appearances: the base (#169) crashes identically once
+`geometry_msgs` is importable (the shell's PYTHONPATH carries /opt/ros/jazzy plus the
+ros2_ws overlays) and the checkout has no generated interfaces. Two triggers, both
+inherited: the interfaces are no longer tracked (the untracking fix), and the class
+collection only includes `WorldSynchronizer` when the ROS import works. A worktree check
+that "proved" the base fine had replaced PYTHONPATH and silently dropped ROS -- the class
+was skipped, not fixed.
+
+Verified: krrood 982 passed + test_eql 1185 passed (its `test_typing` subpackage needs
+`mypy`, absent from the venv), cramera 520 passed; `ensure_orm_interfaces.py` completes.
+The base branch's tip (da2e062e3d, the plan-graph fold) was merged in locally and pushed
+along with the fix (42f3e464ca..fb0ef552e9, fast-forward).
