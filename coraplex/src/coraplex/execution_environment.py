@@ -73,7 +73,9 @@ class ExecutionEnvironment:
     environments.
     """
 
-    previous_max_ticks_per_motion_mapping: int = field(init=False, default=0)
+    previous_max_ticks_per_motion_mapping: Optional[int] = field(
+        init=False, default=None
+    )
     """
     Tick budget before entering this environment, used for nested
     environments.
