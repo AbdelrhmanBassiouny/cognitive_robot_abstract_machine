@@ -243,6 +243,10 @@ split into three causes, only one of them the merge's own.
   `coraplex_warehouse_storage_demo` and `coraplex_wind_farm_service_demo`, two
   demo directories that were never committed — eight collection errors.
 
+  Both of these were fixed by `9877e5b99` later the same day; see "Both of the
+  blockers this roadmap kept listing are already gone" below before treating this
+  paragraph as current.
+
 `main` at `e198ea36`, this merge's base, is green, so none of the above is
 inherited from the base branch.
 
@@ -491,16 +495,24 @@ has been tested, `scripts/format_docstrings.py` clean, byte-compilation of every
 the merge touched, the pyflakes differential above, and `git diff` proving each
 restacked branch's own diff unchanged. CI on the pushed tips is the real check.
 
-### Still red on #169, and still the developer's
+### Both of the blockers this roadmap kept listing are already gone
 
-`test/coraplex_test/test_warehouse_storage_layout.py` and
-`test_wind_farm_service_layout.py` (from `08257863`) import
-`coraplex_warehouse_storage_demo` and `coraplex_wind_farm_service_demo`, two demo
-directories that were never committed — eight collection errors. Unchanged by this
-round. The other blocker that section listed is gone: `9877e5b99` restored
-`PickUpAction`'s `AttachNode` and `PlacingAction`'s `DetachNode` behind
-`Context.update_world_model_attachment`, the flag all three montessori demos were
-already setting and nothing read.
+`9877e5b99` closed them, and it was already the tip when this round started — this
+section originally repeated the earlier CI account without rereading the files, and
+was wrong on both counts.
+
+`PickUpAction`'s `AttachNode` and `PlacingAction`'s `DetachNode` are back, each
+behind `Context.update_world_model_attachment` — the flag all three montessori demos
+were already setting and nothing read. And `test_warehouse_storage_layout` /
+`test_wind_farm_service_layout` now carry a module-level `skipif` on their demo
+directory's absence, following the `PANDA_SCENE_PATH` guard
+`test_franka_panda_equipment` already uses, so they skip cleanly instead of erroring
+at collection and start running by themselves once
+`coraplex_warehouse_storage_demo` and `coraplex_wind_farm_service_demo` land.
+
+The lesson for this roadmap: a "still red, needs the developer" note is a claim about
+the current tree, so recheck the file before repeating it. Both of these had been
+fixed hours earlier.
 
 ### Session note
 
@@ -640,3 +652,25 @@ the session's start.
 meta-package that depends on it - a dependency cycle - so the honest fix is moving
 `orm_interfaces.py` somewhere both can depend on, most likely `krrood`. Left for the
 developer to decide.
+
+## 2026-08-18: a second restack, one commit later
+
+`06582ca32` landed on #169 from another session — the ORM-interface pre-flight, plus
+a real PR description replacing GitHub's auto-generated one — which made every branch
+above it stale again by exactly that commit. The cascade was rerun the same way:
+merge the parent in, push, no force.
+
+`#169 06582ca32` → `#170 0e6f0bd32` → `#164 f1bbd6b82` → `#165 07c8cf9c7` →
+`#167 04a4f60d5` → `#168 31a649485`, plus `#175 907e92f64` off #169 and
+`#176 acc2a1c0a` off #165. All clean, all fast-forward pushes.
+
+`#176` (`claude/queried-action-perform-button-vg2vz3`) was included because it hangs
+off #165: it was current before this round and would have been left stale by the very
+merge that refreshed its base. The plan's other in-flight `interactive-ui` item,
+`montessori_replay_event_annotations`, has no branch on the remote yet, so there was
+nothing to restack — but its manifest note still records #165's pre-restack tip
+`5cf53c5a` as its base, which that session will want to rebase off `07c8cf9c7`.
+
+Worth noting for anyone reading the tip hashes above: three sessions were pushing to
+this stack within the same hour. A restack is only true as of the tip it was run
+against, so check ancestry rather than trusting a recorded hash.
