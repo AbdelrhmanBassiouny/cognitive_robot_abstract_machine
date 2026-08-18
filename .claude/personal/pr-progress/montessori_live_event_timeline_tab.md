@@ -45,9 +45,44 @@ binding style `test_graph_panel.js` documents, each new JS file wired into
 `pytest test/cramera_test` → 448 passed. Experiments tests can only be run here
 with `--noconftest` (no ROS in this container).
 
+## Round 2 (2026-08-18): the bar follows the run, and marks explain themselves
+
+Two things the developer asked for after trying the tab.
+
+1. **The now-bar kept sweeping while the run was paused.** The timeline was
+   plotted against the wall clock, which knows nothing about pausing. It now
+   plots against the run's own clock: `cramera/live/run_clock.py` (`RunClock`,
+   `RunClockReading`), driven by `SortingRunControl` through one declarative
+   `_match_clock_to_run()` — the clock is going exactly when the run is
+   (`not paused and activity is SORTING`), read off the state rather than
+   tracked alongside it, so no transition can leave the two disagreeing.
+   `begin_iteration` restarts it, `finish_iteration` stops it. Each
+   `DetectedEvent` carries `seconds_into_run` and `GET /events` carries
+   `clock: {elapsed, running}`; the panel extrapolates between the 1 s polls
+   only while `running`, which is the whole of the fix.
+2. **Hovering a mark now shows a small summary** — kind, the objects involved,
+   and `HH:MM:SS · +M:SS.s`. Wording lives in `core/event_summary.js`, the
+   anchoring in `TimelineLayout.summaryPlacement` (flips away from an edge,
+   goes below a mark too near the top).
+
+Making the hover work needed the plot to stop rebuilding itself: it used to
+`plot.innerHTML = ''` every 200 ms, which destroys whatever the pointer is on.
+Lanes/marks/now-bar are now grown into and repositioned, surplus ones hidden.
+Marks are keyed by index into `events` and read `events[index]` at hover time,
+so a restart re-purposes them correctly with no rebuild.
+
+`WoundClock` (time a test moves by hand) lives in both `dataset/` directories —
+cramera's tests must not import experiments'.
+
+Verified: `pytest test/cramera_test` 467 passed (was 448); experiments
+run-control/live-event-source/franka-demo 66 passed with `--noconftest`.
+`test_shape_falling_through_its_hole_…` still fails here, as it does on the
+base branch.
+
 ## Next
 
-- Nothing outstanding for this session. Awaiting review.
+- Not yet pushed. Round 2 is committed nowhere yet — commit and push, then
+  re-draft #175 and update its description.
 
 ## Decisions worth remembering
 
