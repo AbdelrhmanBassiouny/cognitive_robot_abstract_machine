@@ -115,9 +115,9 @@ if ! "${python_executable}" -m experiments.montessori.results_database \
     exit 1
 fi
 
-# the database mappings are generated code the repository tracks as empty placeholders,
-# so a fresh checkout has none and the run would die on the first thing it records or
-# reads back. Generating them takes about a minute and only happens once per checkout
+# the database mappings are generated code the repository does not track, so a fresh
+# checkout has none and the run would die on the first thing it records or reads back.
+# Generating them takes about a minute and only happens once per checkout
 if ! "${python_executable}" "${repository_root}/scripts/ensure_orm_interfaces.py"; then
     echo "The ORM interfaces could not be generated." >&2
     exit 1
