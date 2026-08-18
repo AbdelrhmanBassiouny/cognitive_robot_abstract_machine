@@ -686,3 +686,53 @@ following them there costs no extra frames.
 Two names had to move: `Replay.label` became `Replay.timeSpan` (a moment now
 carries the event's own label, so "label" could not also mean the clip's clock
 span), and the panel's `replayWindow` became `replayedMoment`.
+
+## 2026-08-18: the generated ORM interfaces are no longer tracked
+
+The whole workspace was stuck on whichever branch it happened to be on. Every
+`ormatic_interface.py` was tracked as an empty placeholder while a working checkout
+needs the real, megabyte-sized generated content at that same path, and git refuses to
+overwrite a tracked path whose working-tree copy it did not write - so any checkout,
+merge, rebase or stash that had to touch one aborted with "your local changes would be
+overwritten". Git's skip-worktree bit, which `regenerate_all_orm.py` set on them, hides
+the copies from `status` and `add` but does not lift that refusal, so it had never
+addressed this. This roadmap's own environment notes had been recording the symptom for
+rounds ("revert that churn after coraplex test runs", "any segmind run regenerates
+`ormatic_interface.py` at collection time, so revert the working tree afterwards")
+without naming the cause.
+
+Fixed on #169 in `232b8ba19` by ignoring the interfaces instead of tracking them. Git no
+longer owns the path, so it never has to write it and never refuses; regeneration is
+unchanged, and a checkout missing its interfaces still builds them through
+`scripts/ensure_orm_interfaces.py`. Verified by switching between #169, #170 and the
+612-commit-stale local `main` - which tracks 1.1 MB of generated content and used to be
+unreachable - in both directions with the generated interfaces on disk.
+
+The placeholder's machinery went with it: the skip-worktree marking
+(`scripts/protect_generated_orm_interfaces.py`), the pre-commit hook that truncated
+staged content back to empty (`scripts/empty_generated_orm_interfaces.py`), and
+`MissingOrmInterfaceError`, which only existed for a placeholder that had gone missing.
+An interface is now simply there or not, so `WorkspaceOrmInterfaces.regenerate` deletes
+one rather than emptying it. The CI backstop asks the invariant that now holds - that no
+interface is tracked - and the tests pin it for this repository, the five packages'
+interfaces and krrood's test dataset alike.
+
+### Restacked, so the whole stack gets it
+
+An existing checkout holds a generated copy at a path the fix deletes, which is exactly
+what git will not overwrite, so a branch that still tracks the interfaces stays stuck
+until the fix reaches it. All eight dependents were therefore merged onto the new tip in
+the same round: `#170 42f3e464c`, `#164 dc28b7d56`, `#165 b8f970a93`, `#167 3964d20eb`,
+`#168 c567ee221`, `#175 2d7f7b183`, `#176 7a73346df`, `#177 17b2a07de`. All clean, all
+fast-forward pushes, every branch's own diff unchanged - except #177, which was still
+based on #165's pre-restack tip and picked up the intervening work as well.
+
+A developer whose clone predates the fix needs the generated copies out of the way once
+before the first switch onto a fixed branch; the commit message carries the two commands.
+
+### Same shape, not fixed here
+
+`test.srdf` at the repository root is a tracked file that a test run rewrites in place,
+so it blocks a branch switch for the same reason the interfaces did. Left alone: unlike
+the interfaces it is a checked-in input, so the fix is to make the test write its output
+elsewhere, which is a different change.

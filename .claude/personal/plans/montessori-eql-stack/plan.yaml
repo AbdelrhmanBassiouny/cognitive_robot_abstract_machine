@@ -81,8 +81,11 @@ items:
       the meta-package and running it as a second pre-flight in
       run_montessori_demo.sh. The PR description, which was still GitHub's
       auto-generated one describing unrelated demo scripts, was replaced with
-      the branch's real one in the same round. Now 06582ca32, mergeable, with
-      the whole stack, #175 and #176 restacked on it a second time.
+      the branch's real one in the same round. 232b8ba19 then stopped tracking
+      the generated ormatic_interface.py files altogether, which is what had
+      made every branch switch abort while a checkout held its own generated
+      copy; the whole stack, #175, #176 and #177 were restacked onto it so the
+      fix reaches all of them. Now 232b8ba19, mergeable.
 
   - id: cramera_eql_autocomplete
     title: "Name any class of the workspace in a query, and complete as you type"
@@ -105,7 +108,8 @@ items:
       that both branches had independently fixed the segmind detector tests'
       frameless matrices; this branch's _move_milk helper was kept. Restacked
       again onto #169's f44c76d73 as 0e6f0bd32 (via e72937047), a content-neutral merge: #169
-      had by then adopted this branch's own has_collision resolution.
+      had by then adopted this branch's own has_collision resolution. Restacked
+      again for the ORM-untracking fix 232b8ba19: 42f3e464c.
 
   - id: montessori_eql_where_is_highlighting
     title: "EQL \"where is ...?\" queries with general viewer highlighting"
@@ -119,7 +123,8 @@ items:
       montessori_fast_inline_monitor); reparent needed a native GitHub-stack
       dissolve, see roadmap. Restacked the same day by merging the base's
       current tip in rather than rebasing: 10ca075c2, cramera suite 488, then
-      again onto the post-main-merge base, and once more for 06582ca32: f1bbd6b82.
+      again onto the post-main-merge base, once more for 06582ca32, and again
+      for the ORM-untracking fix: dc28b7d56.
 
   - id: montessori_event_replay
     title: "Record the live demo and replay it around queried segmind events"
@@ -130,7 +135,8 @@ items:
     status: in_progress
     notes: >-
       Restacked on 2026-08-18 by merging the base in: 4d9d9ad33, cramera suite
-      544, then again onto the post-main-merge base, and once more for 06582ca32: 07c8cf9c7. Its history
+      544, then again onto the post-main-merge base, once more for 06582ca32,
+      and again for the ORM-untracking fix: b8f970a93. Its history
       carries stale duplicates of #164's commits and internal pre/post-merge
       duplicates, which is why the rounds merged rather than rebased.
 
@@ -146,7 +152,8 @@ items:
       commits and amended an EqlSuggestions stub into its panel test harness
       (a semantic conflict with the autocomplete feature git could not see).
       Restacked again later that day by merging the base in: 408f4511b,
-      cramera suite 566, then onto the post-main-merge base, and once more for 06582ca32: 04a4f60d5.
+      cramera suite 566, then onto the post-main-merge base, once more for
+      06582ca32, and again for the ORM-untracking fix: 3964d20eb.
 
   - id: cramera-voice-questions
     title: "Answer a spoken question by running the preset it asks for"
@@ -159,7 +166,8 @@ items:
       Top of the stack. rapidfuzz dependency is declared in
       cramera/requirements.txt. Restacked on 2026-08-18 by merging the base in:
       5acc3d83f, cramera suite 598 and all 216 node tests green, then onto the
-      post-main-merge base, and once more for 06582ca32: 31a649485.
+      post-main-merge base, once more for 06582ca32, and again for the
+      ORM-untracking fix: c567ee221.
 
   - id: montessori_perform_queried_action
     title: "Perform a queried action from a perform button on its result"
@@ -174,7 +182,8 @@ items:
       returned by a query carries a perform button that executes it on the
       robot when pressed. Implemented on 2026-08-18 and pushed as 2dee8f57,
       based on #165 and restacked onto its post-main-merge tip b76c8ede8 in the
-      same session, then onto its 06582ca32 restack as acc2a1c0a. The branch keeps the session's
+      same session, then onto its 06582ca32 restack as acc2a1c0a and onto the
+      ORM-untracking fix as 7a73346df. The branch keeps the session's
       own designated name rather than the manifest's, as
       montessori_replay_event_annotations already does - the harness allows
       pushing nowhere else. Draft PR #176 opened the same day, based on #165. cramera suite 566 green; the experiments suite
@@ -213,7 +222,8 @@ items:
       objects), the demo's SegmindEventRecord names its objects, and the scene
       panel draws the caption and its arrows from a pure
       core/event_annotation.js. cramera suite 551 green; test/experiments_test
-      could not run in that environment (no rclpy).
+      could not run in that environment (no rclpy). Restacked onto #165's
+      current tip together with the ORM-untracking fix: 17b2a07de.
 
   - id: montessori_live_event_timeline_tab
     title: "A tabbed panel with a live timeline of detected segmind events"
@@ -230,7 +240,8 @@ items:
       knowledge graph stays available as one of the tabs. Restacked on
       2026-08-18 onto #169's 6d944c52e (6b8a347fa, cramera suite 448 and 183
       node tests green), then onto 9877e5b99, and finally onto the
-      post-main-merge f44c76d73 as c97594bc4, then onto 06582ca32 as 907e92f64 - c97594bc4 was the first time this branch
+      post-main-merge f44c76d73 as c97594bc4, then onto 06582ca32 as 907e92f64,
+      and onto the ORM-untracking fix as 2d7f7b183 - c97594bc4 was the first time this branch
       carries main, and clean, because #169 had already resolved the
       Body.has_collision conflict it would otherwise have hit.
 
