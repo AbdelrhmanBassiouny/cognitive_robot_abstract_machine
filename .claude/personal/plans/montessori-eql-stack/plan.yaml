@@ -1,0 +1,87 @@
+schema_version: 1
+id: montessori-eql-stack
+title: "Montessori demo EQL stack"
+description: >
+  The six-PR stacked chain that takes the Montessori demo from a fast inline
+  monitor to a fully interactive EQL console: workspace-wide class naming with
+  as-you-type completion, "where is ...?" queries with viewer highlighting,
+  demo recording with replay around queried events, the asked question read
+  back in English, and spoken questions answered by matching presets. One
+  strict stack: each PR is based on the previous one (GitHub stack #173).
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 174
+
+waves:
+  - id: stack
+    name: "The stacked chain"
+    description: "A single sequential stack; each item lands on top of the previous."
+
+tracks:
+  - id: montessori-eql
+    name: "Montessori demo EQL features"
+    wave: stack
+
+items:
+  - id: montessori_fast_inline_monitor
+    title: "A monitor tick cheap enough to stay on the planning thread"
+    branch: montessori_fast_inline_monitor
+    pull_request_number: 169
+    track: montessori-eql
+    depends_on: []
+    status: in_progress
+    notes: "Base of the stack. Marked ready for review."
+
+  - id: cramera_eql_autocomplete
+    title: "Name any class of the workspace in a query, and complete as you type"
+    branch: cramera_eql_autocomplete
+    pull_request_number: 170
+    track: montessori-eql
+    depends_on: [montessori_fast_inline_monitor]
+    status: in_progress
+    session: https://claude.ai/code/session_01PwwiAsZeaJSjECjsWEtkog
+    notes: >-
+      Marked ready for review. Also carries the local-environment fixes (lark,
+      sdt ORM duplicate table, costmaps inflation memory, detector-test frames)
+      and the Symbol/Match-default rounds; per-round detail in
+      pr-progress/cramera_eql_autocomplete.md.
+
+  - id: montessori_eql_where_is_highlighting
+    title: "EQL \"where is ...?\" queries with general viewer highlighting"
+    branch: montessori_eql_where_is_highlighting
+    pull_request_number: 164
+    track: montessori-eql
+    depends_on: [cramera_eql_autocomplete]
+    status: in_progress
+    notes: >-
+      Rebased onto cramera_eql_autocomplete on 2026-08-18 (was based on
+      montessori_fast_inline_monitor); reparent needed a native GitHub-stack
+      dissolve, see roadmap.
+
+  - id: montessori_event_replay
+    title: "Record the live demo and replay it around queried segmind events"
+    branch: montessori_event_replay
+    pull_request_number: 165
+    track: montessori-eql
+    depends_on: [montessori_eql_where_is_highlighting]
+    status: in_progress
+
+  - id: cramera-question-readback
+    title: "Read the asked query back big under the bar, linked to its docs"
+    branch: claude/cramera-verbalization-voice-ttwcza
+    pull_request_number: 167
+    track: montessori-eql
+    depends_on: [montessori_event_replay]
+    status: in_progress
+    notes: >-
+      The 2026-08-18 restack dropped this branch's stale copies of #164/#165
+      commits and amended an EqlSuggestions stub into its panel test harness
+      (a semantic conflict with the autocomplete feature git could not see).
+
+  - id: cramera-voice-questions
+    title: "Answer a spoken question by running the preset it asks for"
+    branch: claude/cramera-voice-questions-ttwcza
+    pull_request_number: 168
+    track: montessori-eql
+    depends_on: [cramera-question-readback]
+    status: in_progress
+    notes: "Top of the stack. rapidfuzz dependency is declared in cramera/requirements.txt."

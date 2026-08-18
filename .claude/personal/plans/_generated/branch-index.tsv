@@ -11,6 +11,12 @@ claude/eql-verbalization-p1-surface-verification-eqltzc	eql-verbalization
 claude/eql-verbalization-operand-naming-n0gb95	eql-verbalization
 claude/eql-verbalization-p3-albw76	eql-verbalization
 eql-symbolic-function-sdt	eql-verbalization
+montessori_fast_inline_monitor	montessori-eql-stack
+cramera_eql_autocomplete	montessori-eql-stack
+montessori_eql_where_is_highlighting	montessori-eql-stack
+montessori_event_replay	montessori-eql-stack
+claude/cramera-verbalization-voice-ttwcza	montessori-eql-stack
+claude/cramera-voice-questions-ttwcza	montessori-eql-stack
 query-class-refactor	rdr-refactor
 eql-core-prep	rdr-refactor
 code-extraction	rdr-refactor
