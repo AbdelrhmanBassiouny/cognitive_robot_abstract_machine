@@ -104,7 +104,17 @@ Local-environment landmines (pre-existing, NOT from this round; tell the develop
   changes stashed, so pre-existing on this branch, likely a semantic_digital_twin
   spatial-types drift.
 
-### Round 3 (2026-08-18, uncommitted): the landmines above are FIXED
+### Committed and pushed (2026-08-18)
+
+Rounds 2 and 3 are now committed as six focused commits, `db78bfbc5b..d3321a4e97`,
+pushed to `origin/cramera_eql_autocomplete` (authored as AbdelrhmanBassiouny, no
+assistant trailer): sdt ORM regeneration, lark pyproject fix, costmaps inflation
+memory fix + test, segmind detector-test reference frames, Match Find/Generate
+default, and the Symbol feature (coraplex/segmind/cramera + all new tests). Only
+untracked local junk remains (montessori.db, cram_architecture/, franka assets,
+scheduled_tasks.lock). Still no PR, matching the parent branch.
+
+### Round 3 (2026-08-18): the landmines above are FIXED
 
 The developer asked to fix all of the Round-2 landmines. All four are resolved:
 
