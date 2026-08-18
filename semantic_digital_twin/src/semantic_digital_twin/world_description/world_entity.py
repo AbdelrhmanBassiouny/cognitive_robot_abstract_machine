@@ -591,14 +591,17 @@ class Body(KinematicStructureEntity):
         :param surface_threshold: Ignore simple geometry shapes with a surface area less
             than this (in m^2)
         :return: True if collision geometry is mesh or simple shape exceeding thresholds
+
+        .. note:: A primitive is measured by :attr:`~...geometry.Shape.volume` rather than
+            by the volume of the mesh standing in for it, so only a shape that is too
+            flat to be caught by volume has to build that mesh for its surface area.
         """
         for shape in self.collision:
             if isinstance(shape, Mesh):
                 return True
-            if (
-                shape.volume > volume_threshold
-                or shape.surface_area > surface_threshold
-            ):
+            if shape.volume > volume_threshold:
+                return True
+            if shape.mesh.area > surface_threshold:
                 return True
         return False
 
