@@ -1,36 +1,84 @@
-## What this session was for
+# montessori_live_event_timeline_tab — PR #175 (draft)
 
-`/plan-item-resolve montessori-eql-stack montessori_fast_inline_monitor` - fix
-#169's merge conflicts with `main` and restack everything that depends on it.
-This branch, `claude/merge-conflicts-restack-g1hbz3`, carries no commits and
-has no pull request: a conflict fix and a restack only mean anything on the
-stack's own branches, so all work went there (approved in the session's plan).
+Plan item `montessori-eql-stack` / `montessori_live_event_timeline_tab`, first
+item of the `live-panels` track. Based on `montessori_fast_inline_monitor`
+(#169). Full approved plan and its reasoning: the item's section in
+`plans/montessori-eql-stack/roadmap.md` (2026-08-18).
 
-## Done
+## The plan
 
-- Merged `origin/main` (`90c241168`) into `montessori_fast_inline_monitor`.
-  One conflict, `Body.has_collision`, resolved to the version #170 already
-  carried - main's short-circuit shape reading `shape.surface_area` - making
-  `world_entity.py` byte-identical across the two branches. Merge `334796ab`.
-- `f44c76d73`: brought down `73abaf67`'s test half (`forbid_mesh_building`,
-  `test_flat_shape_needs_no_mesh`), so the `surface_area` line #169 carries is
-  pinned by a test and `test_world.py` matches #170's too.
-- Verified statically: pyflakes differential over the files main touched
-  (empty once line numbers are stripped), byte-compilation, docstring
-  formatter clean, file-level diffs against #170.
-- Restacked and pushed the whole chain: #170 `e72937047`, #164 `7d58c8161`,
-  #165 `b76c8ede8`, #167 `aefd9522d`, #168 `b846d2910`, #175 `c97594bc4`.
-  The five above #170 were content-neutral; #175 took `main` for the first
-  time, clean.
-- Cleared #169's `needs-resolution` label. Every pull request is still a draft
-  and reports mergeable.
-- `plan.yaml` notes and `roadmap.md` updated and saved; dashboard republished.
+Make the viewer's lower-right frame a tab widget holding whole panels — the
+knowledge graph becomes one tab, a live segmind-event timeline the other.
+
+1. **cramera backend**, following `live/run_control.py` as the template:
+   `live/events.py` (`DetectedEvent`, `LiveEventSource`,
+   `NoEventSourceRegistered`), `bridge.register_event_source()` /
+   `event_payload()` / an `events` flag in `status()`, and `GET /events` in
+   `live/http.py`.
+2. **cramera frontend**: `core/panel_tabs.js` (the container, emits
+   `panel:shown`), `core/registry.js` (a layout entry may be a tab group),
+   `core/timeline_layout.js` (geometry as plain arithmetic, per
+   `core/split-sizing.js`'s precedent), `panels/event_timeline/panel.js`, plus
+   `config.js` / `index.html` / `app.css` / `core/split-resize.js`.
+3. **experiments/montessori**: `MontessoriEventMonitor.tick()` notifies a
+   listener with just that tick's new events, into a thread-safe append-only
+   log; a `LiveEventSource` over it registered in `_attach_cramera`.
+   `progress.record_attempt(...)` untouched.
+
+Tests first throughout: Python under `test/cramera_test` and
+`test/experiments_test`, JS under `test/cramera_test/js` in the free-variable
+binding style `test_graph_panel.js` documents, each new JS file wired into
+`TestJsUnits` in `test_web_assets.py`.
+
+## Done — all four steps implemented and pushed (draft PR #175)
+
+1. `6b8062ce` cramera backend: `live/events.py`, bridge registration,
+   `GET /events`, `events` flag in `/info`.
+2. `458339bd` `core/panel_tabs.js` + registry tab groups; also the guard that a
+   node test file with no `TestJsUnits` entry never runs.
+3. `f39d8b3c` `core/timeline_layout.js`, `panels/event_timeline/panel.js`,
+   `config.js`/`index.html`/`app.css`/`split-resize.js`; a panel is now handed
+   its own registered id, and the graph re-fits on `panel:shown`.
+4. `2da15ffd` demo side: monitor listener, `live_event_source.py`,
+   `_attach_cramera` registration.
+
+`pytest test/cramera_test` → 448 passed. Experiments tests can only be run here
+with `--noconftest` (no ROS in this container).
 
 ## Next
 
-Nothing outstanding on this session's own work. Left for the developer:
-`test_warehouse_storage_layout` / `test_wind_farm_service_layout` import
-`coraplex_warehouse_storage_demo` and `coraplex_wind_farm_service_demo`, two
-demo directories never committed - eight collection errors on #169, unrelated
-to any merge. CI is running on all seven pushed tips; no suite could be run in
-this container (no cram workspace).
+- Nothing outstanding for this session. Awaiting review.
+
+## Decisions worth remembering
+
+- Two `test_web_assets.py` guards were added because this change needed them: a
+  node test file with no `run_node` entry never ran and nothing said so, and a
+  tab group's ids sit behind a `panel:` key the old layout reader skipped.
+- `Panels.define`'s factory now takes `(root, bus, id)`. The alternative — a
+  `PANEL_ID` constant in the graph panel — broke
+  `test_configured_panels_are_defined`, which regex-reads the literal out of
+  `Panels.define('graph', …)`.
+- Timeline geometry: a run younger than the 60 s window is drawn from its own
+  start so the now-bar sweeps; past that the window scrolls and marks slide left.
+
+## Known gaps and hazards
+
+- **Untested by design:** the two wiring lines in `franka_montessori_demo.py`.
+  Covering them means starting the real bridge (fixed port + global monkey
+  patches) in the suite; `_attach_cramera` has no test today for that reason.
+  Stated openly in the PR description.
+- Two experiments tests fail in this container and **also fail on the base
+  branch**: `test_shape_falling_through_its_hole_…`
+  (`MissingReferenceFrameError`) and `test_a_run_that_records_opens_the_database…`
+  (no `rclpy`). Not caused by this branch.
+- `config.js`, `index.html`, `app.css`, `bridge.py`, `http.py` are also touched
+  by #165 — textual conflicts expected whenever the two meet.
+
+## 2026-08-18 (other session): restacked onto #169's main merge
+
+Session `claude/merge-conflicts-restack-g1hbz3` resolved #169's second conflict
+with `main` and restacked this branch onto the new tip `f44c76d73`, pushing
+`c97594bc4`. First time this branch carries `main`, and clean: the
+`Body.has_collision` conflict a pre-round `git merge-tree` predicted here was
+already resolved on #169. Nothing of this branch's own work changed - its diff
+against its base is still the same 25 files.
