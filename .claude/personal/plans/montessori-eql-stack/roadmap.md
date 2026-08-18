@@ -152,3 +152,52 @@ textual conflicts in those five files whenever the two meet.
 
 Subscribing to tracking issue #174 was blocked by the kickoff session's auto-mode
 classifier, so that session does not see structural changes posted there.
+
+## 2026-08-18: #169's conflicts with main resolved
+
+`montessori_fast_inline_monitor` was `mergeable_state: dirty` against `main`
+(noted as "its own problem" in the section above). `origin/main` was merged
+into the branch and pushed as a fast-forward, `30bd734f..608bc7fe`; the PR now
+reports `unstable`, so only CI stands between it and mergeable.
+
+Seven files conflicted, in three groups:
+
+- **Five `ormatic_interface.py` files** (coraplex, experiments, segmind,
+  semantic_digital_twin, `test/krrood_test/dataset`). `main` emptied every
+  generated ORM interface in #543 and added the `empty-ormatic-interface`
+  pre-commit hook; this branch still carried the generated content. Resolved
+  to `main`'s empty side, which is the convention `AGENTS.md` now states. CI
+  regenerates them for the test runs.
+- **`experiments/scripts/generate_orm.py`** — both sides changed the same
+  `ORMatic.from_package(...)` call: this branch added
+  `segmind.orm.ormatic_interface` to the interface list, `main` replaced the
+  empty ignored-classes set with `ignored_classes` (the control-loop
+  benchmarking modules). Both kept.
+- **`semantic_digital_twin/robots/armar7.py`** — an import-block conflict.
+  `main` rewrote the module (adding `Armar7Joint`, importing `OmniDrive`);
+  this branch had added `HomogeneousTransformationMatrix`, `Box` and `Scale`
+  for the platform collision box its `Armar7MobileBase` builds. Unioned, and
+  the branch's duplicate `FieldOfView` import dropped — the module already
+  imports it higher up. `pyflakes` reports the merged file clean; the rest of
+  the branch's armar7 changes (the collision box, `_get_root_body_name`
+  returning `"root"`) auto-merged on top of `main`'s rewrite.
+
+Nothing on the branch referenced the giskardpy behaviour-tree modules `main`
+deleted, and the `cramera/scenes` submodule pin came through unchanged at
+`64b98eda`.
+
+### Not done here
+
+The other five stack branches are still based on the pre-merge `30bd734f`, so
+the whole chain needs restacking onto the new tip before any of it lands.
+`montessori_live_event_timeline_tab` (#175) is based on #169 too and is in the
+same position.
+
+### Session note
+
+Subscribing to tracking issue #174 was again blocked by the session's auto-mode
+classifier, so this session did not see structural changes posted there either.
+The suites could not be run locally: this container has no cram environment
+(no `pytest`, no installed workspace packages), so verification was static —
+byte-compilation, `pyflakes`, symbol-usage checks, and a `git merge-tree`
+against `main` that now comes back clean.
