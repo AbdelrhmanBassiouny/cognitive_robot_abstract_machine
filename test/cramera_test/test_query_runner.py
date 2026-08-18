@@ -276,8 +276,8 @@ class TestRowRendering:
 
         row = renderer.rows_of(RecordWithClassLevelDefaults("kept")).rows[0]
 
-        assert row["__entity__"] == "kept"
-        assert "_bookkeeping_" not in row
+        assert row.values["__entity__"] == "kept"
+        assert "_bookkeeping_" not in row.values
 
     def test_a_field_left_at_its_class_level_default_renders_that_default(self):
         """
@@ -288,7 +288,7 @@ class TestRowRendering:
 
         row = renderer.rows_of(RecordWithClassLevelDefaults("kept")).rows[0]
 
-        assert row["revision"] == 0
+        assert row.values["revision"] == 0
 
     def test_rows_stop_at_the_limit_and_say_so(self):
         result = make_runner().run("an(entity(record))", limit=2)
@@ -383,21 +383,32 @@ class TestReplayableAnswerRows:
     def test_a_timestamped_entity_row_carries_the_window_around_its_moment(self):
         result = self.make_moment_runner().run("an(entity(moment))")
 
-        assert result.rows[0]["__replay__"] == (
-            ReplayWindow.around(DETECTED_AT).to_payload()
-        )
+        assert result.replay == [ReplayWindow.around(DETECTED_AT)]
 
     def test_an_asked_for_timestamp_value_makes_its_row_replayable(self):
         result = self.make_moment_runner().run("set_of(moment.name, moment.timestamp)")
 
-        assert result.rows[0]["__replay__"] == (
-            ReplayWindow.around(DETECTED_AT).to_payload()
-        )
+        assert result.replay == [ReplayWindow.around(DETECTED_AT)]
 
     def test_a_row_without_a_moment_offers_no_replay(self):
         result = make_runner().run("an(entity(record))")
 
-        assert all("__replay__" not in row for row in result.rows)
+        assert result.replay == [None, None, None]
+
+    def test_a_row_holds_only_what_the_query_asked_for(self):
+        """
+        A window travels beside its row rather than inside it, so a viewer that knows
+        nothing of replay shows the answer as it always did instead of rendering the
+        window as a column of its own.
+        """
+        result = self.make_moment_runner().run("an(entity(moment))")
+
+        assert list(result.rows[0]) == ["__entity__", "__type__", "timestamp"]
+
+    def test_the_payload_offers_the_windows_beside_the_rows(self):
+        payload = self.make_moment_runner().run("an(entity(moment))").to_payload()
+
+        assert payload["replay"] == [ReplayWindow.around(DETECTED_AT).to_payload()]
 
     def test_a_timestamp_reads_as_a_time_rather_than_a_repr(self):
         result = self.make_moment_runner().run("an(entity(moment))")

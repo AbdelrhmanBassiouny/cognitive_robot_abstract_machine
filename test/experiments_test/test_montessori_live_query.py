@@ -348,8 +348,7 @@ class TestReplayingADetectedEvent:
     def test_an_event_row_carries_the_window_around_its_detection(self, source):
         result = ask(source, "an(entity(event))")
 
-        [row] = result.rows
-        assert row["__replay__"] == ReplayWindow.around(STARTED_AT).to_payload()
+        assert result.replay == [ReplayWindow.around(STARTED_AT)]
 
     def test_the_what_was_detected_preset_offers_a_replay_per_detection(self, source):
         [preset] = [
@@ -360,8 +359,7 @@ class TestReplayingADetectedEvent:
 
         result = ask(source, preset.code)
 
-        [row] = result.rows
-        assert row["__replay__"] == ReplayWindow.around(STARTED_AT).to_payload()
+        assert result.replay == [ReplayWindow.around(STARTED_AT)]
 
 
 # %% the recorded bundle offers the same questions

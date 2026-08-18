@@ -233,7 +233,7 @@ Panels.define('eql', function (root, bus) {
       return;
     }
     html += '<p class="headline"><b>' + res.count + '</b> result' + (res.count === 1 ? '' : 's') +
-      (res.more ? ' (truncated)' : '') + '.</p>' + answerTable(res.rows);
+      (res.more ? ' (truncated)' : '') + '.</p>' + answerTable(res.rows, res.replay);
     answerEl.innerHTML = html;
     wireReplayButtons();
     bus.emit('entity:highlight', { ids: res.highlight || [] });
@@ -271,8 +271,8 @@ Panels.define('eql', function (root, bus) {
 
   // the answer as one table: stable columns, every value coloured by what it is, and
   // a replay button on rows naming a moment the bridge's recording can play back
-  function answerTable(rows) {
-    const table = AnswerTable.of(rows);
+  function answerTable(rows, replay) {
+    const table = AnswerTable.of(rows, replay);
     if (!table.columns.length) return '';
     const typed = table.rows.some(function (row) { return row.type; });
     const replayable = source.live && table.rows.some(function (row) { return row.replay; });

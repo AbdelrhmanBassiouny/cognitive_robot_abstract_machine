@@ -104,6 +104,16 @@ class RenderResult(CrameraPayload):
     Ids of the graph nodes this result should highlight, sorted and deduplicated.
     """
 
+    replay: List[Optional[ReplayWindow]] = field(default_factory=list)
+    """
+    The window worth replaying around each row's moment, one entry per row and None for
+    a row naming no moment.
+
+    Beside the rows rather than in them: a row holds what its query asked for, so a
+    viewer that knows nothing of replay shows the answer unchanged instead of rendering
+    the window as a column.
+    """
+
     verbalization: Optional[QueryVerbalization] = None
     """
     The query read back as English, or None when there was no expression to word.
@@ -120,6 +130,10 @@ class RenderResult(CrameraPayload):
             "count": self.count,
             "more": self.more,
             "highlight": self.highlight,
+            "replay": [
+                window.to_payload() if window is not None else None
+                for window in self.replay
+            ],
             "verbalization": (
                 self.verbalization.to_payload()
                 if self.verbalization is not None
@@ -129,12 +143,30 @@ class RenderResult(CrameraPayload):
 
 
 @dataclass
+class AnswerRow:
+    """
+    One rendered answer row and what the viewer may do with it.
+    """
+
+    values: Dict[str, Any]
+    """
+    The row's own columns, keyed as the panel shows them.
+    """
+
+    replay: Optional[ReplayWindow] = None
+    """
+    The window of the demo recording worth replaying around this row's moment, or None
+    when the row names no moment.
+    """
+
+
+@dataclass
 class _RenderedRows:
     """
     A query result rendered into answer rows, before it is wrapped as a RenderResult.
     """
 
-    rows: List[Dict[str, Any]]
+    rows: List[AnswerRow]
     """
     The rendered answer rows.
     """
@@ -191,11 +223,11 @@ class RowRenderer:
 
         :param result: The evaluated query result to render.
         """
-        rows: List[Dict[str, Any]] = []
+        rows: List[AnswerRow] = []
         if result is None:
             return _RenderedRows(rows, self.highlight, False)
         if isinstance(result, (str, int, float, bool, Point3, Pose, NumericPose)):
-            rows.append({"value": self._jsonable(result)})
+            rows.append(AnswerRow({"value": self._jsonable(result)}))
             return _RenderedRows(rows, self.highlight, False)
         if is_dataclass(result) and not isinstance(result, type):
             rows.append(self._entity_row(result))
@@ -203,7 +235,7 @@ class RowRenderer:
         try:
             iterator = iter(result)
         except TypeError:
-            rows.append({"value": self._jsonable(result)})
+            rows.append(AnswerRow({"value": self._jsonable(result)}))
             return _RenderedRows(rows, self.highlight, False)
         for item in iterator:
             if len(rows) >= self.limit:
@@ -211,19 +243,19 @@ class RowRenderer:
             rows.append(self._item_row(item))
         return _RenderedRows(rows, self.highlight, False)
 
-    def _item_row(self, item: Any) -> Dict[str, Any]:
+    def _item_row(self, item: Any) -> AnswerRow:
         """
         One arbitrary query result item as an answer row.
 
         :param item: The query result item to render as a row.
         """
         if isinstance(item, (Point3, Pose, NumericPose)):
-            return {"value": self._jsonable(item)}
+            return AnswerRow({"value": self._jsonable(item)})
         if is_dataclass(item) and not isinstance(item, type):
             return self._entity_row(item)
         if isinstance(item, Mapping):  # a unification row from set_of()
             columns = self._column_names([str(key) for key in item])
-            row = {}
+            values = {}
             window: Optional[ReplayWindow] = None
             for column, value in zip(columns, item.values()):
                 name = self._row_title(value)
@@ -231,11 +263,9 @@ class RowRenderer:
                     self.highlight.append(name)
                 if window is None and isinstance(value, datetime):
                     window = ReplayWindow.around(value)
-                row[column] = self._jsonable(value)
-            if window is not None:
-                row["__replay__"] = window.to_payload()
-            return row
-        return {"value": self._jsonable(item)}
+                values[column] = self._jsonable(value)
+            return AnswerRow(values, window)
+        return AnswerRow({"value": self._jsonable(item)})
 
     @staticmethod
     def _column_names(keys: List[str]) -> List[str]:
@@ -251,7 +281,7 @@ class RowRenderer:
         shortened = [key.rsplit(".", 1)[-1] for key in keys]
         return shortened if len(set(shortened)) == len(keys) else keys
 
-    def _entity_row(self, item: Any) -> Dict[str, Any]:
+    def _entity_row(self, item: Any) -> AnswerRow:
         """
         One entity as an answer row, collecting the ids it lights up.
 
@@ -267,20 +297,24 @@ class RowRenderer:
             self.highlight.append(name)
         if isinstance(item, HighlightsRelatedNodes):
             self.highlight.extend(item.related_highlight_ids())
-        row = {"__entity__": name or repr(item), "__type__": type(item).__name__}
+        values = {"__entity__": name or repr(item), "__type__": type(item).__name__}
         instance_values = vars(item)
         for entity_field in fields(item):
             if entity_field.name == "name" or not entity_field.repr:
                 continue
             if entity_field.name in instance_values:
-                row[entity_field.name] = self._jsonable(
+                values[entity_field.name] = self._jsonable(
                     instance_values[entity_field.name]
                 )
             elif entity_field.default is not MISSING:
-                row[entity_field.name] = self._jsonable(entity_field.default)
-        if isinstance(item, CarriesATimestamp) and isinstance(item.timestamp, datetime):
-            row["__replay__"] = ReplayWindow.around(item.timestamp).to_payload()
-        return row
+                values[entity_field.name] = self._jsonable(entity_field.default)
+        window = (
+            ReplayWindow.around(item.timestamp)
+            if isinstance(item, CarriesATimestamp)
+            and isinstance(item.timestamp, datetime)
+            else None
+        )
+        return AnswerRow(values, window)
 
     def _jsonable(self, value: Any) -> Any:
         """
@@ -434,14 +468,15 @@ class EqlQueryRunner:
         ).rows_of(result)
         kind = (
             "rows"
-            if rendered.rows and "__entity__" not in rendered.rows[0]
+            if rendered.rows and "__entity__" not in rendered.rows[0].values
             else "entities"
         )
         return RenderResult(
             kind=kind,
-            rows=rendered.rows,
+            rows=[row.values for row in rendered.rows],
             count=len(rendered.rows),
             more=rendered.more,
             highlight=sorted(set(rendered.highlight)),
+            replay=[row.replay for row in rendered.rows],
             verbalization=verbalization,
         )
