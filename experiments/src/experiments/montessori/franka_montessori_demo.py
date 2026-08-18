@@ -1006,7 +1006,11 @@ def _attach_cramera(
     """
     start_live_bridge(world=montessori.world)
     BRIDGE.register_query_source(
-        MontessoriLiveQuerySource(progress=progress, results_database=results_database)
+        MontessoriLiveQuerySource(
+            progress=progress,
+            results_database=results_database,
+            board=montessori.board,
+        )
     )
     BRIDGE.register_run_control(control)
 

@@ -1,11 +1,12 @@
 """
 What a running Montessori sort offers the viewer's entity query language console.
 
-Two things are on offer. About the sort in progress, the questions the buttons exist to
-answer are: was this shape inserted, where was it being inserted, and why could it not
-be. About the runs that already finished, they are how often each shape was sorted and
-how its attempts ended -- read back out of the results database rather than out of this
-process.
+Three things are on offer. About the sort in progress, the questions the buttons exist
+to answer are: was this shape inserted, where was it being inserted, and why could it
+not be. About the runs that already finished, they are how often each shape was sorted
+and how its attempts ended -- read back out of the results database rather than out of
+this process. About what the demo could do, they are the insertions it can carry out on
+the shapes it is sorting, built rather than looked up.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from dataclasses import dataclass, field
 
 from krrood.entity_query_language.factories import sum as eql_sum
 from cramera.knowledge.database_evaluation import DatabaseEvaluation
+from cramera.knowledge.generative_evaluation import GenerativeEvaluation
 from cramera.knowledge.presets import Preset
 from cramera.knowledge.query_domain import QueryDomain
 from cramera.knowledge.queryable_knowledge import QueryableKnowledge, QueryScope
@@ -21,6 +23,7 @@ from cramera.live.query import LiveQuerySource
 from typing_extensions import List, Optional
 
 from experiments.montessori.results_database import ResultsDatabase
+from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
 from experiments.montessori.sorting_progress import (
     InsertionAttemptRecord,
     PlanStep,
@@ -160,13 +163,66 @@ krrood's EQL-to-SQL translation does not cover, and there is no portable SQL agg
 behind it. The per-outcome breakdown answers the same thing by reading a column instead.
 """
 
+EVERY_INSERTION = (
+    "an(InsertMontessoriShapeAction)(\n"
+    "    montessori_shape=montessori_shape, board=board, arm=...\n"
+    ")"
+)
+"""
+The pattern the questions about what could be done are asked around.
+
+Every field but the arm is filled in from the sort itself, so what is left open is which
+arm carries the insertion out.
+"""
+
+ARM_OF_EVERY_INSERTION = (
+    "insertions = generate(%s)\n"
+    "set_of(insertions.montessori_shape, insertions.arm)" % EVERY_INSERTION
+)
+"""
+The arm each built insertion was filled in with, beside the shape it inserts.
+"""
+
+SINGLE_ARM_INSERTIONS = (
+    "insertion = %s\n"
+    "insertion.where(insertion.variable.arm != Arms.BOTH)" % EVERY_INSERTION
+)
+"""
+The insertions one arm can carry out on its own.
+"""
+
+UNDERSPECIFIED_PRESETS: List[Preset] = [
+    Preset(
+        "how could each shape be inserted?",
+        EVERY_INSERTION,
+        scope=QueryScope.UNDERSPECIFIED,
+    ),
+    Preset(
+        "which arm could insert which shape?",
+        ARM_OF_EVERY_INSERTION,
+        scope=QueryScope.UNDERSPECIFIED,
+    ),
+    Preset(
+        "which insertions need one arm only?",
+        SINGLE_ARM_INSERTIONS,
+        scope=QueryScope.UNDERSPECIFIED,
+    ),
+]
+"""
+The ready-made questions about what the demo could do.
+
+Answered by building an insertion per value the arm could take rather than by looking
+one up, so they are about the shapes being sorted right now: a recording has none.
+"""
+
 MONTESSORI_PRESETS: List[Preset] = CURRENT_STATE_PRESETS + EPISODIC_MEMORY_PRESETS
 """
-Every ready-made question the viewer offers as a button for this demo.
+The ready-made questions the recorded Franka Montessori bundle declares in its
+``presets.json``; a test keeps the two in step.
 
-The recorded Franka Montessori bundle declares the same list in its ``presets.json``, so
-the same questions are shown whether or not a demo is attached; a test keeps the two in
-step.
+The live demo offers these plus the questions about what it could do (see
+:meth:`MontessoriLiveQuerySource.presets`), which range over the shapes it is sorting
+and so have nothing to be asked of in a recording.
 """
 
 
@@ -186,6 +242,11 @@ class MontessoriLiveQuerySource(LiveQuerySource):
     Where finished runs were recorded, or None when nothing is asking about them.
     """
 
+    board: Optional[ShapeSortingBoard] = None
+    """
+    The board being sorted into, or None before a scene has been built.
+    """
+
     def title(self) -> str:
         """
         What the panel names this source.
@@ -194,9 +255,12 @@ class MontessoriLiveQuerySource(LiveQuerySource):
 
     def knowledge(self) -> List[QueryableKnowledge]:
         """
-        The sort in progress, and the runs that already finished when there are any.
+        The sort in progress, what it could do once there is a board to do it on, and
+        the runs that already finished when there are any.
         """
         offered = [self._current_state()]
+        if self.board is not None:
+            offered.append(self._underspecified())
         if self.results_database is not None:
             offered.append(self._episodic_memory())
         return offered
@@ -215,6 +279,24 @@ class MontessoriLiveQuerySource(LiveQuerySource):
                 QueryDomain("plan_step", PlanStep, self.progress.plan_steps),
                 QueryDomain("event", SegmindEventRecord, self.progress.events),
             ],
+        )
+
+    def _underspecified(self) -> QueryableKnowledge:
+        """
+        The insertions the demo could carry out on the shapes it is sorting.
+
+        The shapes and the board are what an insertion is built from, so both are ranged
+        over; which arm carries it out is what a question leaves open.
+        """
+        return QueryableKnowledge(
+            scope=QueryScope.UNDERSPECIFIED,
+            domains=[
+                QueryDomain(
+                    "montessori_shape", MontessoriShape, self.progress.tracked_shapes
+                ),
+                QueryDomain("board", ShapeSortingBoard, [self.board]),
+            ],
+            evaluation=GenerativeEvaluation(),
         )
 
     def _episodic_memory(self) -> QueryableKnowledge:
@@ -240,6 +322,8 @@ class MontessoriLiveQuerySource(LiveQuerySource):
         to.
         """
         offered = list(CURRENT_STATE_PRESETS)
+        if self.board is not None:
+            offered += UNDERSPECIFIED_PRESETS
         if self.results_database is not None:
             offered += EPISODIC_MEMORY_PRESETS
         return offered

@@ -12,6 +12,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
+from coraplex.datastructures.enums import Arms
 from coraplex.plans.failures import BodyUnfetchable
 from segmind.datastructures.events import (
     InsertionEvent,
@@ -28,7 +29,11 @@ from cramera.knowledge.query_runner import EqlQueryRunner
 from cramera.knowledge.queryable_knowledge import QueryScope
 from experiments.montessori.insertion_diagnosis import InsertionFailureReason
 from experiments.montessori.live_query_source import (
+    ARM_OF_EVERY_INSERTION,
+    EVERY_INSERTION,
     MONTESSORI_PRESETS,
+    SINGLE_ARM_INSERTIONS,
+    UNDERSPECIFIED_PRESETS,
     MontessoriLiveQuerySource,
 )
 from experiments.montessori.sorting_progress import CompletedAttempt, SortingProgress
@@ -100,9 +105,7 @@ def current_state_of(source):
     :param source: The query source to read.
     """
     [knowledge] = [
-        entry
-        for entry in source.knowledge()
-        if entry.scope is QueryScope.CURRENT_STATE
+        entry for entry in source.knowledge() if entry.scope is QueryScope.CURRENT_STATE
     ]
     return knowledge
 
@@ -115,6 +118,25 @@ def ask(source, code):
     :param code: The query to run.
     """
     return EqlQueryRunner(domains=current_state_of(source).domains).run(code)
+
+
+def ask_what_could_be_done(source, code):
+    """
+    Run one query about what the demo could do, the way the bridge does.
+
+    :param source: The query source to ask.
+    :param code: The query to run.
+    """
+    [knowledge] = [
+        entry
+        for entry in source.knowledge()
+        if entry.scope is QueryScope.UNDERSPECIFIED
+    ]
+    return EqlQueryRunner(
+        domains=knowledge.domains,
+        extra_names=knowledge.extra_names,
+        evaluation=knowledge.evaluation,
+    ).run(code)
 
 
 # %% the source's own shape
@@ -205,10 +227,7 @@ class TestWhyAnAttemptFailed:
         )
 
         [row] = result.rows
-        assert (
-            row["failure_reason"]
-            == InsertionFailureReason.PLAN_FAILED
-        )
+        assert row["failure_reason"] == InsertionFailureReason.PLAN_FAILED
         assert "BodyUnfetchable" in row["failure_detail"]
 
     def test_a_shape_that_was_never_picked_up_is_named(self, scene):
@@ -268,6 +287,79 @@ class TestWhyAnAttemptFailed:
         )
 
         assert [row["event_type"] for row in result.rows] == ["PickUpEvent"]
+
+
+# %% "how could this shape be inserted?"
+@pytest.fixture()
+def sorting_on_a_board(scene):
+    """
+    A source over a sort with a board to insert into and one shape to insert.
+    """
+    world, board, shape = scene
+    progress = SortingProgress()
+    progress.begin_shape(shape, board, world)
+    return MontessoriLiveQuerySource(progress=progress, board=board)
+
+
+class TestWhatTheDemoCouldDo:
+    def test_the_questions_are_offered_once_there_is_a_board(
+        self, source, sorting_on_a_board
+    ):
+        assert QueryScope.UNDERSPECIFIED not in [
+            knowledge.scope for knowledge in source.knowledge()
+        ]
+        assert QueryScope.UNDERSPECIFIED in [
+            knowledge.scope for knowledge in sorting_on_a_board.knowledge()
+        ]
+
+    def test_the_questions_are_offered_apart_from_the_ones_a_recording_answers(
+        self, sorting_on_a_board
+    ):
+        """
+        The recorded bundle declares the questions it can answer itself; these range
+        over the shapes of a running sort, so they are the live source's alone.
+        """
+        assert [
+            preset
+            for preset in sorting_on_a_board.presets()
+            if preset.scope is QueryScope.UNDERSPECIFIED
+        ] == UNDERSPECIFIED_PRESETS
+        assert not [
+            preset
+            for preset in MONTESSORI_PRESETS
+            if preset.scope is QueryScope.UNDERSPECIFIED
+        ]
+
+    def test_an_insertion_is_built_for_every_arm(self, sorting_on_a_board):
+        result = ask_what_could_be_done(sorting_on_a_board, EVERY_INSERTION)
+
+        assert [row["arm"] for row in result.rows] == [arm.name for arm in Arms]
+
+    def test_the_shape_and_the_arm_of_each_insertion_are_selectable(
+        self, sorting_on_a_board, scene
+    ):
+        _, _, shape = scene
+
+        result = ask_what_could_be_done(sorting_on_a_board, ARM_OF_EVERY_INSERTION)
+
+        assert {(row["montessori_shape"], row["arm"]) for row in result.rows} == {
+            (str(shape.name), arm.name) for arm in Arms
+        }
+
+    def test_a_condition_narrows_the_insertions_that_were_built(
+        self, sorting_on_a_board
+    ):
+        result = ask_what_could_be_done(sorting_on_a_board, SINGLE_ARM_INSERTIONS)
+
+        assert [row["arm"] for row in result.rows] == [
+            arm.name for arm in Arms if arm is not Arms.BOTH
+        ]
+
+    def test_every_question_about_what_could_be_done_runs(self, sorting_on_a_board):
+        for preset in UNDERSPECIFIED_PRESETS:
+            assert ask_what_could_be_done(
+                sorting_on_a_board, preset.code
+            ).ok, preset.text
 
 
 # %% the recorded bundle offers the same questions
