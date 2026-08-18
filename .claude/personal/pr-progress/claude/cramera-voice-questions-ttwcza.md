@@ -39,6 +39,44 @@ Tests: 611 passed (full cramera suite, was 598); 221 node tests across 23 files.
 The new test (`a spoken question nothing answers is scrolled to like any other`)
 was run against the unfixed panel first and fails there.
 
+### More questions, asked aloud (2026-08-18)
+
+The matcher now recognizes four kinds of question beyond the preset buttons.
+Live-only buttons: `what is your current goal?` (the shape being sorted, from a
+new `ShapeUnderTest.is_current`), `what is your current action?` (the running
+plan's innermost RUNNING node, via `progress.follow_plan` reading the plan while
+it performs), and `what actions did you perform?` (a new `action` domain over
+`PerformedAction`, whose plan-step counterpart gained `PlanStep.is_action`).
+Written out per type, matched but never shown as buttons (new
+`LiveQuerySource.unlisted_presets`, `PresetsPerType` in cramera): "give me all
+pick up events" for every segmind event type a record is written for
+(`SegmindEventRecord.recordable_event_types()`), and the same for actions
+(`PerformedAction.performable_action_types()`).
+
+The demo hands the plan over before `node.perform()` (new
+`_perform_attempt_plan`), which is what makes the current-action answer live.
+`MONTESSORI_PRESETS` is untouched, so the recorded bundle's presets.json needs
+no submodule change.
+
+Matching gained a tie-break: token_set_ratio gives a perfect score to any
+wording that contains the asked words, so "give me all pick up actions" scored
+100 against "give me all move and pick up actions" too and lost the tie by list
+order. `_comparison` now pairs the score with how many words the wording added,
+so the more specific wording wins; pinned in `TestAShorterWordingWinsATie`.
+Caught only by running the full experiments suite — the matcher's inputs change
+with what a run imports.
+
+Tests: cramera 620; experiments 477 passed with 5 failures that all reproduce
+at HEAD (`presets.json` drift with the upstream scenes submodule, two
+results-recording ones, one event-monitoring one, two franka-panda-equipment
+grasp-contact ones — see next).
+
 ### Outstanding
 - CI not checked on #167/#168.
-- experiments suite not runnable here (rclpy/ROS missing — pre-existing).
+- Pre-existing red in this checkout: `presets.json` in the scenes submodule
+  (upstream cram2/cram-scenes, no fork to fix it from) is out of step with
+  `MONTESSORI_PRESETS` ordering/scopes; `test_franka_panda_equipment`'s two
+  grasp-contact tests call `apply_grasp_contact_parameters` without its new
+  `friction` argument; two `test_montessori_results_recording` tests log
+  nothing for an unreachable database here; one event-monitoring test raises
+  `MissingReferenceFrameError`.
