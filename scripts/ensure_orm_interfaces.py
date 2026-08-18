@@ -1,10 +1,10 @@
 """
 Generate the ORM interfaces of this checkout unless it already has them.
 
-The repository tracks every ``ormatic_interface.py`` as an empty placeholder, so a fresh
-clone carries no database mapping at all and anything that persists an object or reads
-one back fails until the interfaces have been generated once. Runnable before anything
-that needs them, since a checkout that has them already pays nothing.
+The repository ignores every ``ormatic_interface.py`` rather than tracking it, so a
+fresh clone carries no database mapping at all and anything that persists an object or
+reads one back fails until the interfaces have been generated once. Runnable before
+anything that needs them, since a checkout that has them already pays nothing.
 
 Use ``scripts/regenerate_all_orm.py`` instead to build them anew after changing a mapped
 datastructure; this one leaves interfaces that are already there alone.
