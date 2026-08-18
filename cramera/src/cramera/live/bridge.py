@@ -63,11 +63,13 @@ from semantic_digital_twin.world_description.connections import (
 from cramera.knowledge.enums import PlanNodeGroup
 from cramera.knowledge.presets import Preset
 from cramera.knowledge.query_runner import EqlQueryRunner, RenderResult
+from cramera.knowledge.query_vocabulary import QueryVocabulary
 from cramera.knowledge.queryable_knowledge import (
     QueryableKnowledge,
     QueryScope,
     UnknownQueryScope,
 )
+from cramera.knowledge.workspace_classes import WorkspaceClassIndex
 from cramera.live.model_source import LiveModelCatalog
 from cramera.live.query import LiveQuerySource, NoQuerySourceRegistered
 from cramera.live.events import LiveEventSource, NoEventSourceRegistered
@@ -1099,6 +1101,23 @@ class Bridge:
         :raises UnknownQueryScope: When the demo offers no such body of knowledge.
         """
         return [domain.name for domain in self._queryable_knowledge(scope).domains]
+
+    def query_vocabulary(
+        self, scope: QueryScope = QueryScope.CURRENT_STATE
+    ) -> QueryVocabulary:
+        """
+        Everything a query of one scope may name, for the query box to offer.
+
+        :param scope: The body of knowledge the names belong to.
+        :raises NoQuerySourceRegistered: When no demo offered one.
+        :raises UnknownQueryScope: When the demo offers no such body of knowledge.
+        """
+        knowledge = self._queryable_knowledge(scope)
+        return QueryVocabulary(
+            domains=knowledge.domains,
+            extra_names=knowledge.extra_names,
+            class_index=WorkspaceClassIndex.of_repository(),
+        )
 
     def _queryable_knowledge(self, scope: QueryScope) -> QueryableKnowledge:
         """

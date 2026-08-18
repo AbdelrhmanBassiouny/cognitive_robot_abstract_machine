@@ -7,6 +7,7 @@ from functools import cached_property
 
 from typing_extensions import Optional, List
 
+from krrood.symbol_graph.symbol_graph import Symbol
 from segmind.datastructures.object_tracker import (
     ObjectEventTracker,
     ObjectTrackerFactory,
@@ -19,7 +20,13 @@ from semantic_digital_twin.world_description.world_entity import Body, Region
 
 
 @dataclass
-class DetectionEvent(ABC):
+class DetectionEvent(Symbol, ABC):
+    """
+    Base class for events detected while segmenting an episode.
+
+    As a :class:`Symbol`, every instance is tracked in the SymbolGraph.
+    """
+
     timestamp: datetime = field(default_factory=datetime.now)
     """
     The time at which the event occurred, defaults to current time.

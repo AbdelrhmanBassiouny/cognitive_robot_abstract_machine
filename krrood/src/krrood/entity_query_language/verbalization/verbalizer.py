@@ -50,7 +50,9 @@ class EQLVerbalizer:
         :param expression: Any EQL symbolic expression.
         :param services: Shared verbalization state; created automatically when omitted.
         :param performative: Explicit opening directive (Find / Generate) — usually resolved from
-            the evaluating backend. When omitted the verb is derived from the query type.
+            the evaluating backend. When omitted the verb is derived from the expression itself
+            (a match reads *"Find"* unless an ``Ellipsis`` in its pattern leaves a value to
+            generate).
         :return: Root of the fragment tree representing *expression* in natural language.
 
         >>> from krrood.entity_query_language.verbalization.fragments.base import flatten_fragment_to_plain_text

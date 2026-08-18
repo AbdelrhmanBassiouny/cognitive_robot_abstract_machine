@@ -1,14 +1,14 @@
 """
 Tests for verbalizing EQL *match* expressions built with ``an``.
 
-A match verbalized on its own opens with *"Generate"* — it is a construction
-description, and whether a backend *finds* (selective) or *generates* (generative) is
-the backend's concern. A match has two condition parts: the construction-pattern
-equalities (the ``kwargs``) → *"given that"*, and the ``.where(...)`` conditions →
-*"where"*.  Each condition is its own point; equality assignments on the same object are
-grouped (*"x, y, and z of the Position are 1, 2, and 3 respectively"*); an ``Ellipsis``
-value is a value to generate → folded into the header (*"… and predict its x, y, and z
-values"*).
+A match verbalized on its own opens with *"Find"* — a fully specified pattern is a
+search — unless an ``Ellipsis`` anywhere in its pattern leaves a value to generate, in
+which case it opens with *"Generate"*; an explicit backend still overrides either. A
+match has two condition parts: the construction-pattern equalities (the ``kwargs``) →
+*"given that"*, and the ``.where(...)`` conditions → *"where"*.  Each condition is its
+own point; equality assignments on the same object are grouped (*"x, y, and z of the
+Position are 1, 2, and 3 respectively"*); an ``Ellipsis`` value is a value to generate →
+folded into the header (*"… and predict its x, y, and z values"*).
 """
 
 from __future__ import annotations
@@ -66,25 +66,41 @@ def _hierarchical(expression) -> str:
 # ── Generate vs Find ─────────────────────────────────────────────────────────
 
 
-def test_match_opens_with_generate():
+def test_fully_specified_match_opens_with_find():
     """
-    A match verbalized on its own (no backend) opens with *"Generate"* — the default
-    reading is generative (a construction description).
+    A match verbalized on its own (no backend) opens with *"Find"* — a fully specified
+    pattern reads as a search over existing instances.
 
-    The query alone no longer encodes find-vs-generate; that is backend- driven (see
+    An explicit backend still overrides the default (see
     :mod:`...test_backend_performative`).
     """
-    assert verbalize_expression(a(Position)(x=1)).startswith("Generate")
+    assert verbalize_expression(a(Position)(x=1)).startswith("Find")
 
 
-def test_domain_carrying_match_also_opens_with_generate():
+def test_match_with_an_ellipsis_value_opens_with_generate():
     """
-    A domain-carrying ``an(...).from_(...)`` still opens with *"Generate"* by
-    default: the domain does not by itself make it a search — that is the
-    backend's call.
+    An ``Ellipsis`` anywhere in the pattern leaves a value to generate, so the match
+    opens with *"Generate"* by default.
+    """
+    assert verbalize_expression(a(Position)(x=1, y=...)).startswith("Generate")
+
+
+def test_nested_ellipsis_also_opens_with_generate():
+    """
+    An ``Ellipsis`` inside a nested match counts: the whole match opens with
+    *"Generate"*.
+    """
+    nested = a(Pose)(position=a(Position)(x=...))
+    assert verbalize_expression(nested).startswith("Generate")
+
+
+def test_domain_carrying_match_also_opens_with_find():
+    """
+    A domain-carrying ``an(...).from_(...)`` with a fully specified pattern also opens
+    with *"Find"* — same default as without a domain.
     """
     search = a(Position)(x=1, y=2).from_([Position(1, 2, 3)])
-    assert verbalize_expression(search).startswith("Generate")
+    assert verbalize_expression(search).startswith("Find")
 
 
 # ── given that: grouped equality conditions ──────────────────────────────────
@@ -96,7 +112,7 @@ def test_grouped_attributes_say_respectively():
     """
     text = verbalize_expression(a(Position)(x=1, y=2, z=3))
     assert text == (
-        "Generate a Position given that the x, y, and z of the Position are 1, 2, and 3 respectively"
+        "Find a Position given that the x, y, and z of the Position are 1, 2, and 3 respectively"
     )
 
 
@@ -106,7 +122,7 @@ def test_single_attribute_pronominalises_and_uses_is_not_respectively():
     to *"its x is …"* and never uses *"respectively"*.
     """
     text = verbalize_expression(a(Position)(x=5))
-    assert text == "Generate a Position given that its x is 5"
+    assert text == "Find a Position given that its x is 5"
     assert "respectively" not in text
 
 
@@ -116,7 +132,7 @@ def test_given_that_is_its_own_block_with_one_point_per_group():
     """
     text = _hierarchical(a(Position)(x=1, y=2, z=3))
     assert text == (
-        "Generate a Position\n"
+        "Find a Position\n"
         "  given that\n"
         "    - the x, y, and z of the Position are 1, 2, and 3 respectively"
     )
@@ -137,7 +153,7 @@ def test_over_cap_singles_pronominalise_and_coordinate_with_and():
 
     text = verbalize_expression(a(_Quad)(x=1, w=45, y=2, t=4))
     assert text == (
-        "Generate a _Quad given that its x is 1, its w is 45, its y is 2, and its t is 4"
+        "Find a _Quad given that its x is 1, its w is 45, its y is 2, and its t is 4"
     )
 
 
@@ -182,7 +198,7 @@ def test_where_conditions_are_their_own_block():
     match.where(match.variable.y > 2)
     text = _hierarchical(match)
     assert text == (
-        "Generate a Position\n"
+        "Find a Position\n"
         "  given that\n"
         "    - its x is 1\n"
         "  where\n"
@@ -198,7 +214,7 @@ def test_where_only_match_has_no_given_that_block():
     match.resolve()
     match.where(match.variable.x > 0)
     text = _hierarchical(match)
-    assert text == "Generate a Position\n  where\n    - its x is greater than 0"
+    assert text == "Find a Position\n  where\n    - its x is greater than 0"
 
 
 def test_where_folds_a_range_pair_into_one_between_point():
@@ -211,7 +227,7 @@ def test_where_folds_a_range_pair_into_one_between_point():
     match.resolve()
     match.where(match.variable.x > 0.0, match.variable.x < 5.0)
     text = _hierarchical(match)
-    assert text == "Generate a Position\n  where\n    - its x is between 0.0 and 5.0"
+    assert text == "Find a Position\n  where\n    - its x is between 0.0 and 5.0"
 
 
 # ── nested matches: per-sub-object grouping ──────────────────────────────────

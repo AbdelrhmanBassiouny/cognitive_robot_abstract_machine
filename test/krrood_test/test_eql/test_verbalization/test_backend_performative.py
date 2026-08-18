@@ -3,8 +3,9 @@ The opening verb (performative) of a verbalized query depends on the *backend* i
 be evaluated with, not only on the query type: a generative backend reads *"Generate"*,
 a selective backend reads *"Find"*.
 
-With no backend the verb falls back to the query-type default (a match generates, a
-plain query finds), so all existing output is unchanged.
+With no backend the verb falls back to the expression's own default: a plain query
+finds, and a match finds unless an ``Ellipsis`` in its pattern leaves a value to
+generate, in which case it generates.
 """
 
 from __future__ import annotations
@@ -34,11 +35,30 @@ class Position:
     z: float
 
 
-def test_match_without_backend_defaults_to_generate():
+def test_fully_specified_match_without_backend_defaults_to_find():
     """
-    With no backend the query-type default holds: a match reads *"Generate"*.
+    With no backend a fully specified match reads *"Find"* — the pattern is a search
+    over existing instances.
     """
-    assert verbalize_expression(a(Position)(x=1)).startswith("Generate")
+    assert verbalize_expression(a(Position)(x=1)).startswith("Find")
+
+
+def test_ellipsis_match_without_backend_defaults_to_generate():
+    """
+    With no backend a match whose pattern contains an ``Ellipsis`` reads *"Generate"* —
+    a value is left to generate.
+    """
+    assert verbalize_expression(a(Position)(x=1, y=...)).startswith("Generate")
+
+
+def test_ellipsis_match_with_selective_backend_still_reads_find():
+    """
+    An explicit backend overrides the ``Ellipsis``-derived default.
+    """
+    text = verbalize_expression(
+        a(Position)(x=1, y=...), backend=EntityQueryLanguageBackend()
+    )
+    assert text.startswith("Find")
 
 
 def test_match_with_selective_backend_reads_find():
