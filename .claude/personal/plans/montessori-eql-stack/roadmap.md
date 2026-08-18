@@ -871,52 +871,52 @@ raised before the merge and the developer went ahead.
 
 ## 2026-08-18: #167's console scrolls, and its words are links at last
 
-The developer reported two things about  from running
+The developer reported two things about `cramera-question-readback` from running
 the demo: the answer had become unreachable, and the documentation links the item
 is named for never appeared at all. Both were fixed on the branch and pushed
-(, ); the pull request description was rewritten to match.
+(`06a5297b3`, `c045c9f5b`); the pull request description was rewritten to match.
 
 ### The answer was pushed out of a panel that clips
 
-The EQL panel is one grid track,  clips its overflow, and the answer had
- inside it — so once the big verbalization and a few rows of presets
+The EQL panel is one grid track, `.panel` clips its overflow, and the answer had
+`max-height:34%` inside it -- so once the big verbalization and a few rows of presets
 sat above it, the answer was simply outside the panel and nothing scrolled. The
 question, the presets and the answer now share one scrolling region under the bar.
 
-The bar deliberately stays out of it: the suggestion menu is ,
+The bar deliberately stays out of it: the suggestion menu is `position: fixed`,
 placed once from the input's own rectangle and never moved again, so a bar that
 scrolled would leave its menu hanging in mid-air.
 
-An answered query is scrolled to as well as written. Only a query — the first
+An answered query is scrolled to as well as written. Only a query -- the first
 attempt revealed every description written there and left the console showing an
-answer nobody asked for on load, because the graph panel emits  as
+answer nobody asked for on load, because the graph panel emits `entity:select` as
 it lays out and the running episode replaces its own step as it goes.
 
 ### The links had never worked outside the tests
 
- lists the six packages the docs site publishes, and **a scene
+`DOCUMENTED_PACKAGES` lists the six packages the docs site publishes, and **a scene
 is queried through none of them**: the recorded scene's domains are
-, the montessori demo's are .
+`cramera.knowledge.entities`, the montessori demo's are `experiments.montessori`.
 The resolver was correct and its tests passed against a krrood example class; every
 word a real query produced fell through it. Worth remembering as a shape: a test
 that proves a mapping works says nothing about whether anything real is in its domain.
 
- answers for the rest, linking a word to the line its class
-is declared on, with  asking the published documentation first.
+`RepositorySourceResolver` answers for the rest, linking a word to the line its class
+is declared on, with `WordLinkResolver` asking the published documentation first.
 
-Two things that only showed up by running it rather than by testing it:
+Two things only showed up by running it rather than by testing it:
 
-- **Which revision to read.**  would have 404'd for every word — 
-  exists on no main branch at all, only on this stack's own branches. The link now
-  reads the file at the commit the checkout is on, which GitHub serves from the
+- **Which revision to read.** `main` would have 404'd for every word -- the `cramera`
+  package exists on no main branch at all, only on this stack's own branches. The link
+  now reads the file at the commit the checkout is on, which GitHub serves from the
   upstream URL for any commit pushed to a fork of it (verified against the live site).
-- **Which checkout.** The first version asked , which
-   points wherever the knowledge graph should scan — under the
+- **Which checkout.** The first version asked `paths.architecture_root()`, which
+  `CRAMERA_ARCHITECTURE` points wherever the knowledge graph should scan -- under the
   test fixture's miniature repository every link vanished again. Split into
-  , the checkout the running code is read from, which
-   now falls back to.
+  `paths.repository_root()`, the checkout the running code is read from, which
+  `architecture_root` now falls back to.
 
 ### Not done here
 
-The branch is still based on #165's pre-fold tip, so it has yet to take the
-timeline work  brought into the stack.
+The branch is still based on #165's pre-fold tip, so it has yet to take the timeline
+work the #175 fold brought into the stack.
