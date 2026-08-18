@@ -88,3 +88,67 @@ not a continuation of the strict chain: `montessori_live_event_timeline_tab`
 only needs #169, the action and replay items need #165. Branch names are
 planned, not yet created; ids equal the planned branch names, following the
 stack items' convention.
+
+## 2026-08-18: montessori_live_event_timeline_tab, planned and opened (#175)
+
+Kicked off from `plan.yaml` + this roadmap, based on `montessori_fast_inline_monitor`
+(#169), which `check_dependency_readiness.py` reports `open_ready` — open and
+non-draft, which this repo's workflow treats as stackable. (#169 is itself
+`mergeable_state: dirty` against `main`; that is its own problem, not a blocker for
+branching off it.)
+
+### What the item turned out to be
+
+The panel-level tab container is the load-bearing part, not the timeline.
+`panels/graph/panel.js` already carries its *own* four-tab bar
+(Knowledge / Kinematics / Plan / Statechart), so the new widget cannot be another tab
+in there — and `montessori_detachable_panels` ("every tab in the panel widget can be
+detached into its own window") only makes sense if a tab holds a whole panel. So the
+widget is a container that mounts registered panels as tabs, the knowledge graph
+becoming one of them, and the two later `live-panels` items build on that container.
+
+### Decisions taken
+
+- **Events are published per monitor tick, not per finished attempt.** Segmind events
+  currently reach `SortingProgress` only in `record_attempt(...)`, so a timeline fed
+  from there would fill in bursts seconds apart. `MontessoriEventMonitor.tick()`
+  instead notifies a listener with just the events that tick appended, draining into a
+  thread-safe append-only log the demo registers with the bridge. Written on the
+  planning thread, read by the HTTP thread — the discipline `cramera.live.hooks`
+  warns about. `progress.record_attempt(...)` is left alone; the EQL side keeps its
+  per-attempt records.
+- **cramera defines its own wire dataclass** (`DetectedEvent`) rather than importing
+  the demo's `SegmindEventRecord`. The viewer must not depend on the demo — that is
+  what `LiveRunControl` / `LiveQuerySource` already exist for, and `live/events.py`
+  follows `live/run_control.py` line for line.
+- **Timeline geometry lives in `core/timeline_layout.js`**, apart from the panel, for
+  the reason `core/split-sizing.js` states in its own header: it keeps the panel down
+  to DOM wiring and makes the arithmetic testable without a DOM.
+- **The branch keeps its manifest name**, `montessori_live_event_timeline_tab`, rather
+  than the session's own designated branch — confirmed with the developer, since every
+  dashboard and kickoff link expects the declared name.
+
+### Corrections to earlier notes
+
+- This roadmap's interactive-UI section calls the knowledge-graph frame "bottom left".
+  It is the bottom of the **right** column — `config.js` has
+  `right: ['eql', 'graph']`, and `core/split-resize.js`'s own comment reads "EQL above
+  the graph". Same frame, so no scope change.
+- **`montessori_plan_graph_tab` may be partly redundant.** It asks for a tab showing
+  the current plan graph with the executing node highlighted live, which
+  `panels/graph/panel.js` already provides as its Plan tab, fed from the bridge's
+  `/plan` route. Worth re-scoping that item before it starts.
+
+### Landing hazard
+
+`config.js`, `index.html`, `app.css`, `live/bridge.py` and `live/http.py` are also
+touched by #165 (`montessori_event_replay`). No duplicated purpose — #165 adds
+recording/replay (`live/recording.py`, `web/core/replay.js`, `GET /replay`), neither a
+tab container nor a timeline — so this stays its own item rather than folding into
+#165. But because this item is deliberately based on #169 and not on #165, expect
+textual conflicts in those five files whenever the two meet.
+
+### Session note
+
+Subscribing to tracking issue #174 was blocked by the kickoff session's auto-mode
+classifier, so that session does not see structural changes posted there.
