@@ -53,7 +53,7 @@ instead of the branch names.
   rename, semantic_digital_twin ORM duplicate table, costmaps inflation OOM,
   detector-test reference frames). That mechanism keeps working independently
   of this plan; it is not duplicated here.
-- #169 and #170 are ready-for-review; #164–#168 are drafts, per the
+- PRs #169 and #170 are ready-for-review; #164–#168 are drafts, per the
   draft-until-told-otherwise convention in the personal notes.
 - Landing order is the stack order; nothing here is parallelizable, which is
   why the plan is one wave / one track with a chained `depends_on`.
@@ -144,9 +144,9 @@ becoming one of them, and the two later `live-panels` items build on that contai
 `config.js`, `index.html`, `app.css`, `live/bridge.py` and `live/http.py` are also
 touched by #165 (`montessori_event_replay`). No duplicated purpose — #165 adds
 recording/replay (`live/recording.py`, `web/core/replay.js`, `GET /replay`), neither a
-tab container nor a timeline — so this stays its own item rather than folding into
-#165. But because this item is deliberately based on #169 and not on #165, expect
-textual conflicts in those five files whenever the two meet.
+tab container nor a timeline — so this stays its own item rather than folding
+into #165. But because this item is deliberately based on #169 and not on #165,
+expect textual conflicts in those five files whenever the two meet.
 
 ### Session note
 
