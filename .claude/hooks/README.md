@@ -45,6 +45,13 @@ To do the same by hand:
 
 `check-setup.sh` prints one row per check and exits non-zero if anything still needs doing.
 
+Every session start prints its own summary, so neither of the two things below has to be
+remembered. Its `setup:` line runs `check-setup.sh` and names any check that still needs setup;
+its `plan:` line distinguishes *no plans are tracked here* from *plans exist and no item tracks
+this branch* — the second being the cue to add the item before starting work, not after. Both
+lines appear only once a personal-notes branch exists, so a clone that uses none of this stays
+silent.
+
 ## Editing your notes
 
 - **Ask Claude** — *"add \<X\> to my personal notes"*, *"edit my personal notes"*. Nothing else to
@@ -154,7 +161,11 @@ regenerates from every manifest on each save, so it can't drift.
 
 - `merged` — the changes landed but GitHub's merge API never recorded it (branch pushed directly,
   PR then closed by hand). Treated exactly like a real merge.
-- `in-review`, `bug` — recognized so they don't read as unknown labels; no script acts on them yet.
+- `bug` — marks the item with a `bug` chip in the dashboard's "What to do next" sidebar, in
+  whichever action group it already belongs to, and is what the sidebar's "Bug fixes only" filter
+  keeps. Being a bug fix is a property of the work, not a next action of its own, so it never
+  moves an item into a group or out of one.
+- `in-review` — recognized so it doesn't read as an unknown label; no script acts on it yet.
 
 Any other label is preserved but not interpreted.
 

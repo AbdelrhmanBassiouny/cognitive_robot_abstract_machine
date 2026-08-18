@@ -355,6 +355,44 @@ plan_id_for_branch() {
     | awk -F'\t' -v branch="${branch}" '$1 == branch { print $2; exit }'
 }
 
+# branch_can_hold_plan_item: whether a plan item could ever track the given
+# branch. False for a detached HEAD, the repo's default branch, and the
+# personal-notes branch: none of the three is per-change work, so telling a
+# session "no item tracks this branch" there is noise rather than a prompt to
+# record one - work done from them is typically a personal-notes edit that
+# never becomes a pull request at all.
+#
+# Deliberately its own copy of the three cases pr_progress_path excludes,
+# rather than a shared helper: the two answer different questions and are
+# expected to diverge. A branch whose pull request targets the notes branch
+# still wants PR progress tracked, but still never wants a plan item.
+branch_can_hold_plan_item() {
+  local branch="$1"
+  case "${branch}" in
+    HEAD|"$(default_branch_name)"|"${NOTES_BRANCH}"|"") return 1 ;;
+  esac
+  return 0
+}
+
+# plan_branch_index_exists / tracked_plan_count: whether any plan is tracked on
+# the notes branch at all, and how many distinct ones there are. Same FETCH_HEAD
+# precondition as plan_id_for_branch above.
+#
+# These exist so a caller can tell apart the two situations plan_id_for_branch
+# collapses into a single "no": nobody tracks plans here, versus plans exist and
+# this branch is in none of them. Only the second is worth a word to a session,
+# and only these two functions know which is which, since the index path is
+# theirs alone to read.
+plan_branch_index_exists() {
+  git cat-file -e "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null
+}
+
+tracked_plan_count() {
+  plan_branch_index_exists || { printf '0\n'; return 0; }
+  git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
+    | awk -F'\t' 'NF >= 2 { seen[$2] = 1 } END { print length(seen) }'
+}
+
 # PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit
 # SHA that was FETCH_HEAD the last time this clone read plan state (either
 # session-start.sh's own auto-discovery, or ./plan-updates-since.sh). This is
