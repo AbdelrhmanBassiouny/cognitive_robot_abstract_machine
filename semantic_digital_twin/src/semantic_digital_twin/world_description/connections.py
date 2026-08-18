@@ -788,6 +788,26 @@ class Connection6DoF(Connection):
             qw=world.get_degree_of_freedom_by_id(self.qw.id),
         )
 
+    def copy_with_new_parent(
+        self,
+        new_parent: KinematicStructureEntity,
+        parent_T_connection_expression: HomogeneousTransformationMatrix,
+    ) -> Self:
+        # Reuse the same degrees of freedom so the world state layout is kept.
+        return self.__class__(
+            parent=new_parent,
+            child=self.child,
+            parent_T_connection_expression=parent_T_connection_expression,
+            connection_T_child_expression=self.connection_T_child_expression,
+            x=self.x,
+            y=self.y,
+            z=self.z,
+            qx=self.qx,
+            qy=self.qy,
+            qz=self.qz,
+            qw=self.qw,
+        )
+
 
 @dataclass(eq=False)
 class WheeledDrive(ActiveConnection, HasUpdateState, ABC):

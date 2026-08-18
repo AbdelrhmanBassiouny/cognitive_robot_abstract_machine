@@ -13,6 +13,7 @@ from abc import ABC, abstractmethod
 from typing_extensions import Iterator, List, Optional, TYPE_CHECKING
 
 from krrood.entity_query_language.utils import make_list
+from krrood.thread_exit_sentinel import ThreadExitSentinel
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.backends import QueryBackend
@@ -45,10 +46,27 @@ class Evaluable(ABC):
         :return: An iterator over the results.
         """
         if backend is None:
-            from krrood.entity_query_language.backends import EntityQueryLanguageBackend
-
-            backend = EntityQueryLanguageBackend()
+            backend = self._default_backend_()
         return backend.evaluate(self)
+
+    @staticmethod
+    def _default_backend_() -> QueryBackend:
+        """
+        Load and instantiate the backend used when the caller names none.
+
+        The backend module is imported here rather than at the top of this one because
+        it imports :class:`Evaluable` back. The module chain it drags in registers an
+        interpreter exit sentinel of its own, which would leave the thread that first
+        evaluates a query unjoinable, so the calling thread's sentinel is put back
+        afterwards.
+
+        :return: A backend that evaluates natively in this process.
+        """
+        sentinel = ThreadExitSentinel()
+        from krrood.entity_query_language.backends import EntityQueryLanguageBackend
+
+        sentinel.ensure_registered()
+        return EntityQueryLanguageBackend()
 
     def tolist(self, backend: Optional[QueryBackend] = None) -> List:
         """

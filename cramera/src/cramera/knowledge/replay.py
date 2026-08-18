@@ -15,17 +15,16 @@ class ReplayWindow:
     """
     The span of a recorded demo worth replaying around one moment.
 
-    A moment by itself is too short to watch, so the window leads and trails it by
-    fixed shifts: the motion that caused the moment and what it led to are on screen
-    with it.
+    A moment by itself is too short to watch, so the window leads and trails it by fixed
+    shifts, just far enough to show it happening.
     """
 
-    LEAD_SECONDS: ClassVar[float] = 5.0
+    LEAD_SECONDS: ClassVar[float] = 1.0
     """
     How long before its moment a replay begins.
     """
 
-    TAIL_SECONDS: ClassVar[float] = 5.0
+    TAIL_SECONDS: ClassVar[float] = 1.0
     """
     How long after its moment a replay ends.
     """

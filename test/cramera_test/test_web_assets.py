@@ -234,13 +234,13 @@ class TestQueryPanelReadsTheAnswer:
         assert "verbalization" in payload
         assert "res.verbalization" in read("panels/eql/panel.js")
 
-    def test_the_replay_window_is_read_under_the_key_it_is_sent_as(self):
+    def test_the_replay_windows_are_read_from_where_they_are_sent(self):
         """
-        A replayable row carries its window under ``__replay__`` (see
-        :class:`~cramera.knowledge.replay.ReplayWindow`); the table strips the key into
-        ``row.replay`` and the panel builds the replay button from it.
+        An answer carries its replay windows beside its rows (see
+        :attr:`~cramera.knowledge.query_runner.RenderResult.replay`); the table pairs
+        each with its row and the panel builds the replay button from it.
         """
-        assert "'__replay__'" in read("core/answer_table.js")
+        assert "res.replay" in read("panels/eql/panel.js")
         assert "row.replay" in read("panels/eql/panel.js")
 
     def test_the_preset_verbalization_is_read_under_the_key_it_is_sent_as(self):
