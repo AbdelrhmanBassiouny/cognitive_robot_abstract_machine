@@ -53,8 +53,11 @@ instead of the branch names.
   rename, semantic_digital_twin ORM duplicate table, costmaps inflation OOM,
   detector-test reference frames). That mechanism keeps working independently
   of this plan; it is not duplicated here.
-- PRs #169 and #170 are ready-for-review; #164–#168 are drafts, per the
-  draft-until-told-otherwise convention in the personal notes.
+- #169 is ready-for-review; #164, #165, #167, #168, #170 and #175 are drafts,
+  per the draft-until-told-otherwise convention in the personal notes. #170 was
+  re-drafted on 2026-08-18 after its main merge was pushed -- its timeline
+  carries no `ready_for_review` event at all, so it had been opened non-draft
+  rather than deliberately promoted.
 - Landing order is the stack order; nothing here is parallelizable, which is
   why the plan is one wave / one track with a chained `depends_on`.
 
@@ -259,8 +262,8 @@ here, one finding.
 pre-merge tip; they are now also based on #170's pre-merge tip. #175 remains on #169's.
 None of that was addressed here -- the developer asked only for this branch.
 
-Not done: PR #170's draft state was left untouched, because `gh` was unauthenticated in
-the session's environment and the state could not be read. The dashboard was not
-republished either -- the `plan-dashboard` dependencies (`markdown`, `nh3`) are still not
-installed on this machine, as the session-start check reports.
+Once the developer re-authenticated `gh`, #170 was converted back to draft (its
+timeline shows it was opened non-draft, never promoted, so the "left ready because I
+promoted it myself" exception did not apply) and this dashboard was republished. The
+`plan-dashboard` dependencies (`markdown`, `nh3`) were installed to do it.
 
