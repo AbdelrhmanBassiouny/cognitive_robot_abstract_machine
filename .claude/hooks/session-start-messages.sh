@@ -54,6 +54,42 @@ plan_line_tracked() {
   printf "'%s' (tracking issue: %s)" "${plan_id}" "${tracking_issue}"
 }
 
+# %% the git identity line
+
+# git_identity_line_not_recorded: the notes branch carries no identity at all,
+# so there is nothing to write into this clone.
+git_identity_line_not_recorded() {
+  local notes_branch="$1"
+  local identity_path="$2"
+  printf "not recorded on '%s' (%s) - run ./save-git-identity.sh to record one" \
+    "${notes_branch}" "${identity_path}"
+}
+
+# git_identity_line_incomplete: an identity is recorded but only half of it,
+# and half an identity cannot author a commit.
+git_identity_line_incomplete() {
+  local identity_path="$1"
+  local notes_branch="$2"
+  printf "%s on '%s' needs both user.name and user.email - nothing written" \
+    "${identity_path}" "${notes_branch}"
+}
+
+# git_identity_line_already_set: this clone has an identity of its own, which
+# the hook only ever fills a gap around rather than overriding.
+git_identity_line_already_set() {
+  local identity="$1"
+  printf 'already set in this clone: %s - left unchanged' "${identity}"
+}
+
+# git_identity_line_written: the recorded identity was written into this
+# clone's repository-local config.
+git_identity_line_written() {
+  local notes_branch="$1"
+  local identity_path="$2"
+  local identity="$3"
+  printf "set from '%s' (%s): %s" "${notes_branch}" "${identity_path}" "${identity}"
+}
+
 # %% the setup line
 
 # setup_line_not_checked: check-setup.sh is not in this checkout, so there is
