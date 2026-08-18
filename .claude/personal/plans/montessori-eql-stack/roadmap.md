@@ -969,3 +969,59 @@ The roadmap entry above says the cramera pytest suite could not run in this bran
 session. It runs fine in this one: 474 passed. `test_demonstrations.py`'s
 `test_spin_thread_ends_quietly_when_somebody_else_ends_the_context` fails in coraplex,
 on this branch and on its parent alike, so it is not this work's.
+
+## 2026-08-18: #168 took #167's two fixes, and the conflict was the invisible one
+
+`claude/cramera-voice-questions-ttwcza` merged its base in as `abcb6ee7a`, bringing
+down the scrolling console and the source-link fallback #167 had been given that
+morning. A fast-forward push; #168 was already a draft, so nothing to re-draft.
+
+Git found one conflict and it was the trivial kind: both branches had appended a
+section of tests to the end of `test/cramera_test/js/test_eql_panel.js`, so both
+blocks were kept. The harness merged additively on its own — #167's
+`scrolledIntoView` counter on the fake elements and #168's `recognizerClass()` /
+`speak()` / `mountPanel(overrides, recognizer)` sit side by side without either
+side having to know about the other. `app.css` and `test_web_assets.py` likewise:
+the two `+45` line counts on `test_web_assets.py` looked like a duplicated change
+and were a coincidence, one side's tests landing inside an existing class and the
+other's in a new one.
+
+### The one that mattered merged cleanly
+
+#167 introduced `showAnswer(html)` — write the answer, then scroll to it — and
+routed the three answer writes in `renderAnswer` through it, deliberately leaving
+the four unasked writes alone (load failure, hint, entity description). #168 had
+meanwhile added three answer writes of its own on the voice path: the sorry reply,
+the matcher's error, and the voice-capture failure. Different lines, different
+functions, so git merged them without a word — and every one of them still wrote
+straight to `answerEl.innerHTML`.
+
+The result would have been the bug #167 exists to fix, reintroduced on exactly the
+path #168 is about: the console now scrolls, so a spoken question's reply is
+written below the fold of it and the user watches nothing happen. All three now go
+through `showAnswer`. The judgement is #167's own rule read one step further — a
+question asked aloud is asked, so its answer is scrolled to like a typed or picked
+one; the comment's "Only a query" became "Only what was asked", the unasked
+descriptions still being the exception.
+
+The matched path needed nothing: it already runs through `runQuery` → `renderAnswer`.
+
+### Worth generalising
+
+This is the third silent conflict this stack has recorded — after
+`giskardpy/executor.py`'s dropped `Optional` import, twice. The shape is the same
+every time: one side removes or replaces a way of doing something, the other adds a
+new use of the old way, and the two never touch the same line. `pyflakes` catches
+the import-shaped one and would not have caught this, because the bypassed function
+is a style rule rather than a name error. What did catch it: after any merge, list
+every call site of whatever the base side has just centralised
+(`grep -n 'answerEl.innerHTML\|showAnswer'`) and ask whether the incoming side
+added one that should have been converted.
+
+### Verified
+
+`pytest test/cramera_test` 611 passed (was 598 on this branch, 579 on #167); 221
+node tests across 23 files green. The new test
+(`a spoken question nothing answers is scrolled to like any other`) was run against
+the unfixed panel first and fails there, so it pins the behaviour rather than
+describing it.

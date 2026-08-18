@@ -173,7 +173,14 @@ items:
       cramera/requirements.txt. Restacked on 2026-08-18 by merging the base in:
       5acc3d83f, cramera suite 598 and all 216 node tests green, then onto the
       post-main-merge base, once more for 06582ca32, and again for the
-      ORM-untracking fix: c567ee221.
+      ORM-untracking fix: c567ee221. Took #167's two fixes (the scrolling
+      console, the source-link fallback) as abcb6ee7a; its one textual conflict
+      was both sides appending tests to test_eql_panel.js, and its one silent
+      conflict was that #167's showAnswer() - which writes an answer and scrolls
+      to it - had not reached this branch's three voice-path answer writes, so a
+      spoken question's reply would have landed below the fold. All three now go
+      through it, pinned by a test verified to fail without the change. cramera
+      suite 611, 221 node tests green.
 
   - id: montessori_perform_queried_action
     title: "Perform a queried action from a perform button on its result"
