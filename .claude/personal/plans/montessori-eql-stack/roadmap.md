@@ -1209,3 +1209,37 @@ names as the project SDK, runs everything cleanly with no `PYTEST_DISABLE_PLUGIN
 Note that `~/.virtualenvs/cram2` has `cramera` installed from a *different* checkout
 (`Projects/copied/...`), so a suite run there tests the wrong tree.
 
+## 2026-08-18: a read-only results database must still answer the episodic queries
+
+The developer queried the episodic database from the running demo and got
+`permission denied for schema public` on a `CREATE TABLE` — `ResultsDatabase.open_session`
+prepared the database before reading it, and preparing issues a `CREATE TABLE` for every
+table the generated schema knows of but the database lacks. The database in question was
+the shared one: `FRANKA_MONTESSORI_SORTING_DATABASE_URI` is set in `~/.bashrc` to
+`localhost:5433`, an ssh tunnel to a remote PostgreSQL 17 whose
+`semantic_digital_twin_readonly` role has USAGE only on `public` (the local 5432 cluster
+is writable but holds a tenth of the rows). The record path already degraded — the
+pre-flight's `verify_writable` fails, `open_recording` returns `RecordsNothing` — only
+the query path crashed, because the branch's regenerated schema has tables the remote
+database predates.
+
+`open_session` gained a keyword-only `create_missing_tables`, and the episodic-memory
+evaluation asks for sessions with it false: reading what a database holds must not
+demand the right to add to it. Recording keeps preparing, and every other caller keeps
+the default. Two tests pin it, both verified to fail without the fix: the unit-level
+`test_a_session_can_be_opened_without_preparing_missing_tables` (a SQLite file reopened
+`mode=ro` with one table dropped, so creation would genuinely have been attempted) and
+the end-to-end `TestAnsweringFromAReadOnlyDatabase`, which asks the success-rate preset
+through `MontessoriLiveQuerySource` against such a database. The first version of the
+end-to-end test passed without the fix and had to be strengthened: the fixture database
+already held every table, so `create_all`'s checkfirst had nothing to create and the
+read-only refusal never fired — a test must leave the database missing the thing whose
+creation is being refused.
+
+Committed and pushed as 22845f77b; the PR description gained a matching section. The
+three database test files run here: 52 passed, the one failure being the known
+`presets.json` submodule drift. Left open: whether the mocks (`_MockedConvexSetDAO` and
+its association table) belong in the production `experiments` ORM interface at all, and
+whether this fix deserves its own bug-fix PR instead of riding #168 — it touches
+`results_database.py`, which the voice-questions work otherwise leaves alone.
+

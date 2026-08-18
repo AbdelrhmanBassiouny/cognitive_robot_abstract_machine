@@ -211,7 +211,11 @@ items:
       (PerformedAction.performable_action_types), matched through the new
       LiveQuerySource.unlisted_presets. The matcher gained a specificity
       tie-break because token_set_ratio scores any wording that contains the
-      asked words at 100. See roadmap.
+      asked words at 100. See roadmap. On 2026-08-18 a live run against the
+      shared read-only results database crashed every episodic query
+      (`permission denied for schema public`, because open_session prepared
+      the database before reading); fixed and pushed as 22845f77b, two new
+      tests verified red without the fix.
 
   - id: montessori_perform_queried_action
     title: "Perform a queried action from a perform button on its result"
