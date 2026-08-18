@@ -537,14 +537,13 @@ from the objects' live positions in the played-back clip.
   the geometry stays testable in a pure `core/event_annotation.js`.
 
 
-## 2026-08-18: montessori_perform_queried_action, implemented (no PR yet)
+## 2026-08-18: montessori_perform_queried_action, implemented and opened (#176)
 
 Built directly from `plan.yaml` + this roadmap rather than through
 `/plan-item-kickoff`: the session was non-interactive, so plan mode was unavailable.
 Based on `montessori_event_replay` (#165), the item's declared dependency, and
 restacked onto its post-main-merge tip `b76c8ede8` once the notes branch showed the
-base had moved. Pushed as `2dee8f57`; no pull request opened, since none was asked
-for.
+base had moved. Pushed as `2dee8f57` and opened as draft #176.
 
 ### What the item turned out to be
 

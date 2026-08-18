@@ -156,7 +156,7 @@ items:
   - id: montessori_perform_queried_action
     title: "Perform a queried action from a perform button on its result"
     branch: claude/queried-action-perform-button-vg2vz3
-    pull_request_number: null
+    pull_request_number: 176
     track: action-execution
     depends_on: [montessori_event_replay]
     status: in_progress
@@ -169,7 +169,7 @@ items:
       same session; no pull request opened yet. The branch keeps the session's
       own designated name rather than the manifest's, as
       montessori_replay_event_annotations already does - the harness allows
-      pushing nowhere else. cramera suite 566 green; the experiments suite
+      pushing nowhere else. Draft PR #176 opened the same day, based on #165. cramera suite 566 green; the experiments suite
       cannot run outside the CI container (no rclpy, empty ORM interfaces,
       uninitialised cramera/scenes submodule), so its new tests were run with
       --noconftest instead.
