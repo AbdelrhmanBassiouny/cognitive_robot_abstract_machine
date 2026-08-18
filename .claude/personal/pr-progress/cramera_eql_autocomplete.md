@@ -214,13 +214,27 @@ plus the judgment calls:
 Verified per branch tip: cramera suite 488 (#164) / 540 (#165) / 562 (#167) /
 594 (#168) all pass; `test_eql_panel.js` 10/10 on the tip.
 
-Outstanding (needs the developer):
+Both outstanding items resolved later the same day:
 
-- **PR #164's base is still `montessori_fast_inline_monitor` on GitHub** -- no
-  `gh` CLI or API token on this machine, so it must be flipped to
-  `cramera_eql_autocomplete` by hand (Edit next to the title on the PR page).
-  #165/#167/#168 bases point at their parent branches and are already correct.
-- `rapidfuzz` (used by #168's `question_matching.py`) is not declared in any
-  pyproject.toml -- installed into cram2 locally (3.14.5) to run the tests, but
-  the dependency gap is #168's own, pre-existing.
+- **#164 reparented onto `cramera_eql_autocomplete`.** It was a native
+  GitHub-stack member (stack #166), so a plain base change would 422; followed
+  the stacked-pr-maintenance dissolve procedure: recorded the stack list
+  (scratchpad `stacks-before-unstack.json`), `POST /stacks/166/unstack`,
+  `gh pr edit 164 --base cramera_eql_autocomplete`, re-created as **stack #172**
+  (`cramera_eql_autocomplete` -> #164 -> #165 -> #167 -> #168, confirmed on every
+  member). #164's diff is clean: 2 commits, 15 files. Stack #171
+  (`main` -> #169 -> #170) untouched.
+- **`rapidfuzz` was a false alarm**: it *is* declared, in
+  `cramera/requirements.txt`, which is where `cramera/pyproject.toml` sources
+  its dynamic dependencies. Only the local cram2 venv predated the branch;
+  rapidfuzz 3.14.5 installed there.
+
+Tooling now on this machine (was missing when Round 4 started): `gh` 2.97.0 in
+`~/.local/bin`, authenticated as AbdelrhmanBassiouny (web device flow); the
+official GitHub MCP server registered for this project (local scope in
+`~/.claude.json`) with `Authorization: Bearer <gh auth token>` -- connects, so
+future sessions have `mcp__github__*` including the `update_pull_request` the
+stacked-pr-maintenance skill mandates. Note the stored header holds the gh
+OAuth token verbatim; if gh re-authenticates, re-run the `claude mcp add` with
+the fresh token.
 
