@@ -207,7 +207,7 @@ def plan_bridge():
             ROBOT_BASE_KEY: PublishedBody(name="world/base_link"),
         }
     )
-    bridge.begin_plan(PlanWithRoot(root=root))
+    bridge.follow_plan(PlanWithRoot(root=root))
     return bridge, root, action, condition, motion
 
 
@@ -307,6 +307,40 @@ class TestPlanSnapshot:
         )
         assert nodes_by_kind(bridge)["ActionNode"]["status"] == TaskStatusName.FAILED
 
+    def test_only_the_innermost_running_node_is_executing(self, plan_bridge):
+        """
+        The ancestors a running status bubbles up to are not what is being executed.
+        """
+        bridge, root, action, condition, motion = plan_bridge
+        bridge.bind_motion_group(running_group(motion))
+        bridge.snapshot_plan()
+        payload = bridge.get_plan()
+
+        assert payload["executing"] == [nodes_by_kind(bridge)["MotionNode"]["id"]]
+
+    def test_every_running_branch_is_executing(self, plan_bridge):
+        """
+        Two motions running at once are two steps being executed, not one.
+        """
+        bridge, root, action, condition, motion = plan_bridge
+        bridge.bind_motion_group(running_group(condition, motion))
+        bridge.snapshot_plan()
+        nodes = nodes_by_kind(bridge)
+
+        assert bridge.get_plan()["executing"] == [
+            nodes["ConditionNode"]["id"],
+            nodes["MotionNode"]["id"],
+        ]
+
+    def test_a_finished_plan_is_executing_nothing(self, plan_bridge):
+        bridge, root, action, condition, motion = plan_bridge
+        bridge.freeze_motion_group(
+            MotionGroup(motion_mappings={motion: None}, pre_condition_node=condition),
+            TaskStatusName.SUCCEEDED,
+        )
+
+        assert bridge.get_plan()["executing"] == []
+
     def test_signature_is_stable_across_status_changes(self, plan_bridge):
         bridge, root, action, condition, motion = plan_bridge
         bridge.bind_motion_group(running_group(motion))
@@ -328,7 +362,7 @@ class TestPlanSnapshot:
         first = make_plan_node("MotionNode")
         second = make_plan_node("MotionNode")
         root = make_plan_node("SequentialNode", children=[first, second])
-        bridge.begin_plan(PlanWithRoot(root=root))
+        bridge.follow_plan(PlanWithRoot(root=root))
         bridge.freeze_motion_group(
             MotionGroup(motion_mappings={first: None}), TaskStatusName.FAILED
         )
@@ -347,8 +381,33 @@ class TestPlanSnapshot:
         bridge.freeze_motion_group(
             MotionGroup(motion_mappings={motion: None}), TaskStatusName.SUCCEEDED
         )
-        bridge.begin_plan(PlanWithRoot(root=motion))
+        bridge.follow_plan(PlanWithRoot(root=motion))
         assert nodes_by_kind(bridge)["MotionNode"]["status"] == TaskStatusName.CREATED
+
+    def test_re_entering_the_same_plan_keeps_the_progress(self):
+        """
+        Every node of a plan reports the plan it belongs to as it starts performing, so
+        the steps already done must survive the plan being named again.
+        """
+        bridge = Bridge()
+        motion = make_plan_node("MotionNode")
+        plan = PlanWithRoot(root=make_plan_node("SequentialNode", children=[motion]))
+        bridge.follow_plan(plan)
+        bridge.freeze_motion_group(
+            MotionGroup(motion_mappings={motion: None}), TaskStatusName.SUCCEEDED
+        )
+        bridge.follow_plan(plan)
+        assert nodes_by_kind(bridge)["MotionNode"]["status"] == TaskStatusName.SUCCEEDED
+
+    def test_a_node_belonging_to_no_plan_leaves_the_tree_alone(self, plan_bridge):
+        """
+        ``PlanNode.plan`` is optional, and a node outside a plan says nothing about
+        what is being performed.
+        """
+        bridge, root, action, condition, motion = plan_bridge
+        published = bridge.get_plan()
+        bridge.follow_plan(None)
+        assert bridge.get_plan() == published
 
 
 # %% hook installation

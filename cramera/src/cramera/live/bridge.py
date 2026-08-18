@@ -7,10 +7,10 @@ singleton whose snapshot methods run on the *simulation* thread (see
 finished, plain-dict snapshots to the HTTP layer.
 
 Node status is where the plan and the statechart differ: coraplex only performs the plan
-root (``Plan.perform`` → ``root.perform``); ``ActionNode.notify`` expands its children
-but never performs them, so every inner ``PlanNode`` keeps status ``CREATED`` for the
-whole run. The real per-step progress lives in the giskardpy motion statechart's life
-cycle. ``GiskardExecutable.motion_mappings`` (a ``{MotionNode: Task}`` dict) is the
+root; ``ActionNode.notify`` expands its children but never performs them, so every inner
+``PlanNode`` keeps status ``CREATED`` for the whole run. The real per-step progress
+lives in the giskardpy motion statechart's life cycle.
+``GiskardExecutable.motion_mappings`` (a ``{MotionNode: Task}`` dict) is the
 bridge between the two — the life cycle of each motion node's task is read and
 propagated up the plan tree; those statuses are flagged ``derived``.
 """
@@ -73,6 +73,7 @@ from cramera.knowledge.queryable_knowledge import (
 from cramera.knowledge.workspace_classes import WorkspaceClassIndex
 from cramera.live.model_source import LiveModelCatalog
 from cramera.live.query import LiveQuerySource, NoQuerySourceRegistered
+from cramera.live.events import LiveEventSource, NoEventSourceRegistered
 from cramera.live.recording import DemoRecording
 from cramera.live.run_control import (
     LiveRunControl,
@@ -162,7 +163,7 @@ class LiveHook(Enum):
 
     PLAN = "plan"
     """
-    ``Plan.perform`` and ``GiskardExecutable.execute`` — follow the plan tree.
+    ``PlanNode.perform`` and ``GiskardExecutable.execute`` — follow the plan tree.
     """
 
     MESH = "mesh"
@@ -433,12 +434,25 @@ class PlanSnapshot:
     Every node in the tree, flattened with parent references.
     """
 
+    @property
+    def executing(self) -> List[str]:
+        """
+        Ids of the nodes execution has reached: running, with no running child.
+
+        A running parent is running because a node below it is, so the running nodes
+        alone name a whole path down the tree rather than the step being done now.
+        """
+        running = [node for node in self.nodes if node.status == TaskStatusName.RUNNING]
+        awaiting_a_child = {node.parent for node in running}
+        return [node.id for node in running if node.id not in awaiting_a_child]
+
     def to_payload(self) -> Dict[str, Any]:
         """
-        The snapshot plus the legend its groups are drawn with, so the viewer does not
-        keep its own copy of the plan-node colour table.
+        The snapshot plus the nodes being executed and the legend its groups are drawn
+        with, so the viewer does not keep its own copy of the plan-node colour table.
         """
         payload = asdict(self)
+        payload["executing"] = self.executing
         payload["legend"] = [
             {"group": group.value, "label": group.label}
             for group in PlanNodeGroup.legend()
@@ -592,6 +606,12 @@ class BridgeStatus:
     plan: bool
     chart: bool
     query: bool
+    events: bool
+    """
+    Whether a demo offered to say what it has detected, so the timeline knows there is
+    anything to poll for.
+    """
+
     control: Optional[Dict[str, Any]]
     """
     The registered run control's published state, or None when nothing can be driven.
@@ -751,7 +771,7 @@ class Bridge:
 
     _plan: Optional[Plan] = None
     """
-    The coraplex plan captured by the ``Plan.perform`` hook.
+    The coraplex plan the performing nodes belong to.
     """
 
     _chart: Optional[MotionStatechart] = None
@@ -817,6 +837,12 @@ class Bridge:
     run_control: Optional[LiveRunControl] = None
     """
     What the running demo offers to be driven by, once it registers itself.
+    """
+
+    event_source: Optional[LiveEventSource] = None
+    """
+    What the running demo offers to be asked about its detections, once it registers
+    itself.
     """
 
     _run_control_lock: threading.Lock = field(default_factory=threading.Lock)
@@ -911,15 +937,19 @@ class Bridge:
         if self._tick_count % self.plan_snapshot_tick_interval == 0:
             self.snapshot_plan()
 
-    def begin_plan(self, plan: Plan) -> None:
+    def follow_plan(self, plan: Optional[Plan]) -> None:
         """
-        Record the plan that started performing and publish its tree.
+        Record the plan being performed and publish its tree.
 
-        Drops the previous plan's per-node progress, so a long-running process does not
-        accumulate entries for nodes that no longer exist.
+        Every node reports the plan it belongs to as it starts performing, so
+        re-entering the plan already being followed changes nothing. Moving to a
+        different one drops the previous plan's per-node progress, so a long-running
+        process does not accumulate entries for nodes that no longer exist.
 
-        :param plan: The plan that started performing.
+        :param plan: The plan the performing node belongs to, if it belongs to one.
         """
+        if plan is None or plan is self._plan:
+            return
         self._plan = plan
         self._motion_nodes.clear()
         self.snapshot_plan()
@@ -1087,6 +1117,7 @@ class Bridge:
                 plan=bool(self.plan_state.nodes),
                 chart=bool(self.chart_state.nodes),
                 query=self.query_source is not None,
+                events=self.event_source is not None,
                 control=control,
                 sequence_number=self.sequence_number,
                 robot_parts=(
@@ -1287,6 +1318,42 @@ class Bridge:
             payload = control.state().to_payload()
         payload["title"] = control.title()
         return payload
+
+    # %% viewer -> what the run has detected
+    def register_event_source(self, source: LiveEventSource) -> None:
+        """
+        Offer what the running demo detects to the viewer's timeline.
+
+        :param source: What the demo declares as its detections.
+        """
+        self.event_source = source
+        logger.info("detected events reported by '%s'", source.title())
+
+    def _registered_event_source(self) -> LiveEventSource:
+        """
+        The registered event source.
+
+        :raises NoEventSourceRegistered: When no demo offered one.
+        """
+        if self.event_source is None:
+            raise NoEventSourceRegistered()
+        return self.event_source
+
+    def event_payload(self) -> Dict[str, Any]:
+        """
+        The detections and the name of the run they belong to, as the timeline reads it.
+
+        The run's clock rides along, so the timeline points at where the run has got to
+        rather than at the wall clock, and stands still whenever the run does.
+
+        :raises NoEventSourceRegistered: When no demo offered one.
+        """
+        source = self._registered_event_source()
+        return {
+            "title": source.title(),
+            "clock": source.clock_reading().to_payload(),
+            "events": [event.to_payload() for event in source.events()],
+        }
 
     # %% viewer -> world
     def queue_move(self, request: MoveRequest) -> None:

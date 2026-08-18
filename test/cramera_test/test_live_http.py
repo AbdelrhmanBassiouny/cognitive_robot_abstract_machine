@@ -103,6 +103,7 @@ class TestReadOnlyEndpoints:
             "plan": False,
             "chart": False,
             "query": False,
+            "events": False,
             "control": None,
             "sequenceNumber": 0,
             "partAnnotations": [],
@@ -443,6 +444,39 @@ class TestOptions:
             assert response.status == 204
             assert response.headers["Access-Control-Allow-Origin"] == "*"
             assert "POST" in response.headers["Access-Control-Allow-Methods"]
+
+
+class TestDetectedEvents:
+    """
+    The timeline polls the same bridge the rest of the viewer does.
+    """
+
+    @pytest.fixture()
+    def watching_bridge(self, bridge):
+        from .test_live_events import ReportingEventSource, event_at
+
+        source = ReportingEventSource(detected=[event_at(1), event_at(2)])
+        bridge.register_event_source(source)
+        return bridge, source
+
+    def test_the_detections_are_served(self, server, watching_bridge):
+        _, source = watching_bridge
+
+        payload = get_json(server + "/events")
+
+        assert payload["ok"] is True
+        assert payload["title"] == "record demo"
+        assert payload["events"] == [event.to_payload() for event in source.detected]
+
+    def test_the_detections_without_a_demo_report_why(self, server):
+        payload = get_json(server + "/events")
+
+        assert payload["ok"] is False
+        assert "no event source" in payload["error"].lower()
+        assert payload["events"] == []
+
+    def test_info_says_whether_anything_is_detecting(self, server, watching_bridge):
+        assert get_json(server + "/info")["events"] is True
 
 
 class TestTwoIndependentBridges:
