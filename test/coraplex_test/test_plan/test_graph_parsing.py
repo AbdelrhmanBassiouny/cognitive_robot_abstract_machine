@@ -26,7 +26,15 @@ from coraplex.robot_plans.actions.core.pick_up import ReachAction, PickUpAction
 from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
 from coraplex.robot_plans.motions.misc import DetectingMotion, PerceptionTask
+from coraplex.language import (
+    ParallelNode,
+    SequentialNode,
+    TryAllNode,
+    TryInOrderNode,
+)
+from coraplex.language_giskard_templates import TryAll, TryInOrder
 from coraplex.utils import split_list_by_type
+from giskardpy.motion_statechart.goals.templates import Parallel, Sequence
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
@@ -53,6 +61,47 @@ def test_parse_simple_action(immutable_model_world):
     assert executable.post_condition_node
     assert len(executable.motion_mappings) == 1
     assert type(list(executable.motion_mappings.values())[0]) == JointPositionList
+
+
+# %% the chart mirrors the plan tree
+
+
+def test_language_nodes_create_a_goal_of_their_template():
+    """
+    Each language node contributes a goal of the template it declares, which is what gives
+    the motion state chart the plan's sequential/parallel/try semantics.
+    """
+    assert type(SequentialNode().create_goal()) is Sequence
+    assert type(ParallelNode().create_goal()) is Parallel
+    assert type(TryAllNode().create_goal()) is TryAll
+    assert type(TryInOrderNode().create_goal()) is TryInOrder
+
+
+def test_sequential_plan_nests_a_goal_per_plan_node(immutable_model_world):
+    """
+    Parsing a sequential plan builds a goal per language and action node, with the motions
+    as tasks at the leaves, rather than one flat list of tasks.
+    """
+    world, view, context = immutable_model_world
+
+    plan = sequential(
+        [MoveTorsoAction(TorsoState.LOW), MoveTorsoAction(TorsoState.HIGH)],
+        context=context,
+    )
+    plan.notify()
+    executable = plan.parse()
+
+    root_goal = executable.root_node
+    assert type(root_goal) is Sequence
+    assert root_goal.name == "SequentialNode"
+
+    action_goals = root_goal.nodes
+    assert len(action_goals) == 2
+    assert [type(goal) for goal in action_goals] == [Sequence, Sequence]
+    assert [goal.name for goal in action_goals] == ["ActionNode", "ActionNode"]
+
+    tasks = list(executable.motion_mappings.values())
+    assert [goal.nodes for goal in action_goals] == [[tasks[0]], [tasks[1]]]
 
 
 def test_merge_motions(immutable_model_world, rclpy_node):

@@ -986,11 +986,16 @@ class Goal(MotionStatechartNode):
     def add_node(self, node: MotionStatechartNode) -> None:
         """
         Adds a node to this goal and the motion statechart this goal belongs to.
-        Should be used in expand().
+
+        A node that is already registered in a motion statechart is not registered a
+        second time, so a goal may be populated before compilation and still be expanded
+        as usual.
         """
         self._add_node_sanity_check(node)
         if node not in self.nodes:
             self.nodes.append(node)
+        if node.belongs_to_motion_statechart():
+            return
         node.parent_node = self
         self.motion_statechart.add_node(node)
 

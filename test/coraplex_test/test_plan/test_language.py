@@ -33,6 +33,7 @@ from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
 from semantic_digital_twin.datastructures.definitions import TorsoState
+from semantic_digital_twin.spatial_types import Pose
 
 
 def test_factory_construction():

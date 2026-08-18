@@ -9,7 +9,7 @@ from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.factories import variable_from, and_, ConditionType
 from coraplex.config.action_conf import ActionConfig
 from coraplex.datastructures.dataclasses import Context
-from coraplex.plans.factories import execute_single
+from coraplex.plans.factories import execute_single, sequential
 from coraplex.plans.plan_node import PlanNode
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.motions.navigation import MoveMotion
@@ -88,3 +88,12 @@ class LookAtAction(ActionDescription):
     def _action_plan(self) -> PlanNode:
         camera = self.camera or self.robot.get_default_camera()
         return execute_single(LookingMotion(target=self.target, camera=camera))
+
+
+@dataclass
+class ElevatorNavigation(ActionDescription):
+    pass
+
+    @property
+    def _action_plan(self) -> PlanNode:
+        return sequential([NavigateAction()])
