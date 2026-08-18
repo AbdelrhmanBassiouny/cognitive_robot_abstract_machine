@@ -1,10 +1,13 @@
 """
 Unit tests for the live hooks' wrapper methods.
 
-Exercised against mimics of the CRAM interfaces and of the bridge itself, so no coraplex
-or giskardpy import is needed and no real world binding happens. What is covered is each
+Exercised against mimics of the CRAM interfaces and of the bridge itself, so no
+giskardpy import is needed and no real world binding happens. What is covered is each
 wrapper's own contract: when it forwards to the bridge, when it falls through to the
 original call, and how it behaves when the bridge itself misbehaves.
+
+The one exception is the plan hook, which is also driven through a real coraplex plan
+node: which method it sits on is the whole point of it, and no mimic can pin that down.
 """
 
 from __future__ import annotations
@@ -14,8 +17,14 @@ from dataclasses import dataclass, field
 import pytest
 from typing_extensions import Any, List, Optional, Tuple
 
-from cramera.live.bridge import TaskStatusName
-from cramera.live.hooks import LiveHooks
+from coraplex.language import SequentialNode
+from coraplex.plans.executables import GiskardExecutable
+from coraplex.plans.plan import Plan
+from coraplex.plans.plan_node import PlanNode
+
+import cramera.live.hooks
+from cramera.live.bridge import Bridge, TaskStatusName
+from cramera.live.hooks import LiveHooks, install_plan_hooks
 
 
 # %% mimics of the interfaces the hooks read
@@ -28,7 +37,7 @@ class FakeBridge:
     world: Optional[Any] = None
     attached: List[Any] = field(default_factory=list)
     observed_charts: List[Any] = field(default_factory=list)
-    began_plans: List[Any] = field(default_factory=list)
+    followed_plans: List[Any] = field(default_factory=list)
     bound_motion_groups: List[Any] = field(default_factory=list)
     frozen_motion_groups: List[Tuple[Any, Any]] = field(default_factory=list)
     remembered_mesh_files: List[str] = field(default_factory=list)
@@ -44,8 +53,8 @@ class FakeBridge:
             raise RuntimeError("bridge misbehaved")
         self.observed_charts.append(chart)
 
-    def begin_plan(self, plan: Any) -> None:
-        self.began_plans.append(plan)
+    def follow_plan(self, plan: Any) -> None:
+        self.followed_plans.append(plan)
 
     def bind_motion_group(self, executable: Any) -> None:
         self.bound_motion_groups.append(executable)
@@ -77,6 +86,15 @@ class FakeExecutor:
 
     context: FakeExecutorContext
     motion_statechart: Any = None
+
+
+@dataclass
+class FakePlanNode:
+    """
+    A plan node, of which the plan hook reads only the plan it belongs to.
+    """
+
+    plan: Any
 
 
 @dataclass
@@ -116,9 +134,10 @@ class TestObserveTick:
 
     def test_a_rebuilt_world_replaces_the_one_bound_before_it(self):
         """
-        A demo restarted from the viewer executes in a world it has just built. Staying
-        bound to the abandoned one publishes its last poses forever, which reads as a
-        viewer that attaches but never shows anything happening.
+        A demo restarted from the viewer executes in a world it has just built.
+
+        Staying bound to the abandoned one publishes its last poses forever, which reads
+        as a viewer that attaches but never shows anything happening.
         """
         bridge = FakeBridge(world="the-abandoned-world")
         hooks = LiveHooks(bridge=bridge)
@@ -147,21 +166,66 @@ class TestObserveTick:
 
 
 # %% plan hook
-class TestBeginPlan:
-    def test_the_plan_is_captured_before_it_performs(self):
+@pytest.fixture
+def installed_on_a_bridge(monkeypatch):
+    """
+    The plan hooks installed the way the runner installs them, on a bridge of this
+    test's own, and taken off both classes again afterwards.
+    """
+    bridge = Bridge()
+    monkeypatch.setattr(cramera.live.hooks, "BRIDGE", bridge)
+    monkeypatch.setattr(cramera.live.hooks, "_LIVE_HOOKS", LiveHooks(bridge=bridge))
+    # re-setting each method to what it already is registers it for restoration, so the
+    # patches the install leaves behind come off with the fixture
+    monkeypatch.setattr(PlanNode, "perform", PlanNode.perform)
+    monkeypatch.setattr(GiskardExecutable, "execute", GiskardExecutable.execute)
+    install_plan_hooks()
+    return bridge
+
+
+class TestFollowPlan:
+    def test_the_performing_node_s_plan_is_captured_before_it_performs(self):
+        """
+        A demo performs a plan *node*, so the plan is read off the node.
+
+        ``Plan.perform`` is one way in but not the only one: coraplex's own
+        ``execute_single`` hands back the root node and the caller performs that, which
+        never enters ``Plan.perform`` at all.
+        """
         bridge = FakeBridge()
         hooks = LiveHooks(bridge=bridge)
+        node = FakePlanNode(plan="the-plan")
         order = []
 
-        def original(plan: Any) -> str:
-            order.append(plan)
+        def original(node: Any) -> str:
+            order.append(node)
             return "performed"
 
-        result = hooks._begin_plan(original, "the-plan")
+        result = hooks._follow_plan(original, node)
 
-        assert bridge.began_plans == ["the-plan"]
-        assert order == ["the-plan"]
+        assert bridge.followed_plans == ["the-plan"]
+        assert order == [node]
         assert result == "performed"
+
+    def test_a_node_performed_on_its_own_publishes_its_plan(
+        self, installed_on_a_bridge
+    ):
+        """
+        The hooks have to sit on the method a demo actually calls.
+
+        coraplex's ``execute_single`` hands back the root node and the caller performs
+        that, so hooks watching ``Plan.perform`` see nothing of such a run and the
+        viewer is left with no plan to draw.
+        """
+        plan = Plan()
+        node = SequentialNode()
+        plan.add_node(node)
+
+        node.perform()
+
+        assert [
+            entry["kind"] for entry in installed_on_a_bridge.get_plan()["nodes"]
+        ] == ["SequentialNode"]
 
 
 # %% motion-group hook

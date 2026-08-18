@@ -6,15 +6,20 @@
  * mounted into which layout slot. Swapping a visualization = editing
  * config.js, no other file changes.
  *
- *   Panels.define('my-panel', function (root, bus) {
+ *   Panels.define('my-panel', function (root, bus, id) {
  *     root.innerHTML = '…';               // the panel owns its DOM subtree
  *     bus.on('entity:highlight', …);      // talk to others via the bus only
  *     return { destroy: function () {…} } // optional cleanup
  *   });
  *
+ * A panel is handed the id it was registered under, so one that has to recognize
+ * itself in a broadcast bus event does not carry a second copy of its own name.
+ *
  * Slots are elements with a data-slot attribute in index.html. Panels.boot()
- * reads window.CRAMERA_CONFIG.layout = {slotName: [panelId, …]} and mounts
- * every configured panel; unknown ids are reported, not fatal.
+ * reads window.CRAMERA_CONFIG.layout = {slotName: [entry, …]} and mounts every
+ * configured panel; unknown ids are reported, not fatal. An entry is either a
+ * panel id, stacked in the slot, or {tabs: [{panel, label}, …]} — several panels
+ * sharing one frame, one visible at a time (core/panel_tabs.js).
  * ==========================================================================*/
 (function () {
   'use strict';
@@ -22,23 +27,34 @@
   const factories = {};   // id -> factory(root, bus)
   const mounted = [];     // {id, instance}
 
-  function mountInto(slotEl, id) {
+  /* Mount one panel into `parentEl` and return its root, or nothing when no such
+     panel is defined — core/panel_tabs.js reads that to skip a tab whose panel
+     never mounted. */
+  function mountInto(parentEl, id) {
     const factory = factories[id];
     if (!factory) {
       console.error('[panels] "' + id + '" is configured but not defined — ' +
         'is its panel.js included in index.html?');
-      return;
+      return null;
     }
     const root = document.createElement('section');
     root.className = 'panel panel-' + id;
     root.dataset.panel = id;
-    slotEl.appendChild(root);
+    parentEl.appendChild(root);
     try {
-      mounted.push({ id: id, instance: factory(root, window.Bus) || {} });
+      mounted.push({ id: id, instance: factory(root, window.Bus, id) || {} });
     } catch (err) {
       console.error('[panels] mounting "' + id + '" failed:', err);
       root.innerHTML = '<div class="panel-error">panel "' + id + '" failed to mount — see console</div>';
     }
+    return root;
+  }
+
+  /* A layout entry is either a panel id or a group of tabs; core/panel_tabs.js
+     owns everything about the second case except which panels go in it. */
+  function mountEntry(slotEl, entry) {
+    if (typeof entry === 'string') return mountInto(slotEl, entry);
+    window.PanelTabs.mount(slotEl, entry.tabs || [], mountInto, window.Bus);
   }
 
   window.Panels = {
@@ -54,7 +70,7 @@
           console.error('[panels] no slot element for "' + slotName + '"');
           return;
         }
-        layout[slotName].forEach(function (id) { mountInto(slotEl, id); });
+        layout[slotName].forEach(function (entry) { mountEntry(slotEl, entry); });
       });
     },
     // tear every mounted panel down, so its timers and observers stop

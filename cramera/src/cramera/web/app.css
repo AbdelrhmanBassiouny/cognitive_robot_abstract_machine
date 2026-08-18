@@ -40,7 +40,8 @@ body{
 .slot{display:flex;flex-direction:column;gap:16px;min-height:0;min-width:0}
 .slot>.panel{flex:1;min-height:0}
 .slot>.panel-eql{flex:0 1 auto;min-height:150px}
-.slot>.panel-graph{flex:1 1 0}
+/* the tab group holding the graph takes the share the graph used to take on its own */
+.slot>.panel-tabs{flex:1 1 0}
 .panel-error{margin:auto;color:var(--danger);font-size:13px;padding:20px;text-align:center}
 .panel{
   background:linear-gradient(180deg,var(--panel),var(--panel2));
@@ -253,11 +254,76 @@ body{
 .answer .rel{font-family:var(--mono);font-size:11px;color:var(--accent2);padding:0 3px}
 .hint-txt{font-size:12px;color:var(--muted);line-height:1.5;margin:10px 0 0}
 
+/* %% panel tabs — several panels sharing one frame, one shown at a time */
+.panel-tabs{display:flex;flex-direction:column;min-height:0;min-width:0}
+.tab-bar{
+  display:flex;align-items:center;gap:2px;padding:0 4px;flex:0 0 auto;
+}
+.tab-bar button{
+  appearance:none;background:none;border:0;border-bottom:2px solid transparent;
+  color:var(--muted);font:700 11.5px/1 Inter,sans-serif;letter-spacing:.4px;
+  text-transform:uppercase;padding:8px 12px 6px;cursor:pointer;transition:.15s
+}
+.tab-bar button:hover{color:var(--ink)}
+.tab-bar button.active{color:var(--accent);border-bottom-color:var(--accent)}
+/* a tab body is the frame the panel inside it fills, so the panel keeps its own chrome */
+.tab-body{flex:1 1 0;min-height:0;display:flex}
+.tab-body>.panel{flex:1;min-height:0;min-width:0}
+
+/* %% event timeline */
+.timeline-wrap{position:relative;flex:1;min-height:0;display:flex;flex-direction:column}
+.timeline-head{
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+  padding:8px 14px;border-bottom:1px solid var(--line2);flex:0 0 auto;
+  font:600 11.5px/1 Inter,sans-serif;letter-spacing:.3px;color:var(--muted)
+}
+.timeline-title{color:var(--ink)}
+.timeline-body{position:relative;flex:1;min-height:0}
+.timeline-plot{position:absolute;inset:0;overflow:hidden}
+/* one lane per kind of event, labelled at the left edge over its own rule */
+.timeline-lane{
+  position:absolute;z-index:1;left:0;right:0;transform:translateY(-50%);
+  padding-left:10px;border-top:1px dashed var(--line2);
+  font:600 10.5px/18px Inter,sans-serif;letter-spacing:.3px;color:var(--muted);
+  white-space:nowrap;pointer-events:none
+}
+.timeline-mark{
+  position:absolute;z-index:2;width:9px;height:9px;margin:-4.5px 0 0 -4.5px;
+  border-radius:50%;background:var(--accent);box-shadow:0 0 0 2px var(--bg2);
+  cursor:default
+}
+.timeline-mark:hover{background:var(--warn);box-shadow:0 0 0 3px var(--bg2)}
+/* what a pointed-at mark says: the kind of event, what it happened to, and when */
+.timeline-summary{
+  position:absolute;z-index:9;pointer-events:none;max-width:60%;
+  --summary-across:-50%;--summary-down:-100%;
+  transform:translate(var(--summary-across),var(--summary-down));
+  padding:6px 9px;border:1px solid var(--line2);border-radius:6px;
+  background:var(--bg2);box-shadow:0 6px 18px rgba(0,0,0,.35);
+  font:500 11px/1.45 Inter,sans-serif;white-space:normal
+}
+.timeline-summary.from-left{--summary-across:0}
+.timeline-summary.from-right{--summary-across:-100%}
+.timeline-summary.above{margin-top:-11px}
+.timeline-summary.below{--summary-down:0;margin-top:11px}
+.timeline-summary-kind{font-weight:700;color:var(--ink)}
+.timeline-summary-objects{color:var(--ink);opacity:.85}
+.timeline-summary-time{color:var(--muted);font-size:10.5px;letter-spacing:.2px}
+.timeline-now{
+  position:absolute;top:0;bottom:0;width:2px;margin-left:-1px;
+  background:var(--warn);opacity:.85;pointer-events:none
+}
+.timeline-empty{
+  position:absolute;inset:0;display:grid;place-items:center;padding:0 16%;
+  text-align:center;color:var(--muted);font-size:12.5px;pointer-events:none
+}
+
 /* %% graph */
 .graph-wrap{position:relative;flex:1;min-height:0}
-#graph{position:absolute;inset:34px 0 0}
+/* a class rather than an id: every panel drawing a graph has a canvas of its own */
+.graph-canvas{position:absolute;inset:34px 0 0}
 
-/* view tabs: knowledge graph / kinematics / plan / motion statechart */
+/* view tabs: knowledge graph / kinematics / motion statechart */
 .graph-tabs{
   position:absolute;left:0;right:0;top:0;height:34px;z-index:7;display:flex;align-items:center;gap:2px;
   padding:0 10px;background:var(--bg2);border-bottom:1px solid var(--line2)
@@ -288,6 +354,25 @@ body{
 .legend .dot{width:11px;height:11px;border-radius:50%}
 /* execution status shows up as a node ring, so the legend uses rings too */
 .legend .ring{width:18px;height:18px;border-radius:50%;border:6px solid;border-style:solid;box-sizing:border-box}
+
+/* %% plan graph — the head line above the tree names the step being executed */
+.plan-head{
+  position:absolute;left:0;right:0;top:0;height:34px;z-index:7;display:flex;align-items:center;gap:10px;
+  padding:0 10px;background:var(--bg2);border-bottom:1px solid var(--line2)
+}
+.plan-executing{
+  font:600 11.5px/1 Inter,sans-serif;letter-spacing:.3px;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+}
+.plan-follow{
+  margin-left:auto;display:flex;align-items:center;gap:5px;flex:none;
+  font:600 10.5px/1 Inter,sans-serif;letter-spacing:.3px;color:var(--muted);cursor:pointer
+}
+.plan-head .gt-live{
+  display:none;font:600 10.5px/1 Inter,sans-serif;letter-spacing:.4px;
+  color:#0b1220;background:var(--warn);border-radius:3px;padding:4px 7px
+}
+.plan-head .gt-live.on{display:inline-block}
 
 /* %% resizable split — core/split-resize.js inserts these between two panes */
 .pane-divider{position:relative;z-index:6;border-radius:4px;transition:background .15s}
@@ -342,7 +427,7 @@ body{
   position:fixed;inset:0;z-index:1000;background:var(--bg);
   border:none;border-radius:0;padding:0;margin:0;
 }
-.graph-wrap.graph-fullscreen #graph{inset:34px 0 0}
+.graph-wrap.graph-fullscreen .graph-canvas{inset:34px 0 0}
 /* keep the page from scrolling behind the overlay */
 body.graph-full-open{overflow:hidden}
 

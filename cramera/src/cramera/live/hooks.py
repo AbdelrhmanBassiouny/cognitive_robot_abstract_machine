@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from typing_extensions import Any, Callable
 
 from coraplex.plans.executables import GiskardExecutable
-from coraplex.plans.plan import Plan
+from coraplex.plans.plan_node import PlanNode
 from giskardpy.executor import Executor
 from semantic_digital_twin.adapters.mesh import MeshParser
 from semantic_digital_twin.adapters.urdf import URDFParser
@@ -76,19 +76,23 @@ class LiveHooks:
             logger.exception("bridge snapshot failed this tick")
         return result
 
-    def _begin_plan(
-        self, original: Callable[..., Any], plan: Plan, *args: Any, **kwargs: Any
+    def _follow_plan(
+        self, original: Callable[..., Any], node: PlanNode, *args: Any, **kwargs: Any
     ) -> Any:
         """
-        Capture the plan the moment it starts performing.
+        Capture the plan a node belongs to the moment that node starts performing.
 
-        :param original: The real, unpatched ``Plan.perform`` bound method.
-        :param plan: The plan starting to perform.
+        A demo performs a plan *node*, not the plan: ``execute_single`` hands back the
+        root node and the caller performs that, so ``Plan.perform`` is one way in among
+        others and watching it alone leaves the viewer with no plan to draw.
+
+        :param original: The real, unpatched ``PlanNode.perform`` bound method.
+        :param node: The plan node starting to perform.
         :param args: Positional arguments forwarded to the wrapped call.
         :param kwargs: Keyword arguments forwarded to the wrapped call.
         """
-        self.bridge.begin_plan(plan)
-        return original(plan, *args, **kwargs)
+        self.bridge.follow_plan(node.plan)
+        return original(node, *args, **kwargs)
 
     def _track_motion_group(
         self,
@@ -178,7 +182,7 @@ def install_plan_hooks() -> None:
     if not BRIDGE.claim_hook(LiveHook.PLAN):
         logger.debug("plan hooks already installed")
         return
-    MethodPatch(Plan, "perform").install(_LIVE_HOOKS._begin_plan)
+    MethodPatch(PlanNode, "perform").install(_LIVE_HOOKS._follow_plan)
     MethodPatch(GiskardExecutable, "execute").install(_LIVE_HOOKS._track_motion_group)
 
 
