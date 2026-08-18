@@ -29,6 +29,7 @@ from cramera.knowledge.queryable_knowledge import QueryScope
 from cramera.knowledge.replay import ReplayWindow
 from experiments.montessori.insertion_diagnosis import InsertionFailureReason
 from experiments.montessori.live_query_source import (
+    DETECTED_EVENTS_PRESETS,
     MONTESSORI_PRESETS,
     MontessoriLiveQuerySource,
 )
@@ -110,6 +111,43 @@ def current_state_of(source):
     return knowledge
 
 
+def detected_events_of(source):
+    """
+    What a source offers about what its detectors saw.
+
+    :param source: The query source to read.
+    """
+    [knowledge] = [
+        entry
+        for entry in source.knowledge()
+        if entry.scope is QueryScope.DETECTED_EVENTS
+    ]
+    return knowledge
+
+
+def ask_about_events(source, code):
+    """
+    Run one question about what was detected, the way the bridge does.
+
+    :param source: The query source to ask.
+    :param code: The query to run.
+    """
+    return EqlQueryRunner(domains=detected_events_of(source).domains).run(code)
+
+
+def ask_in_scope(source, preset):
+    """
+    Run one preset against the body of knowledge its own scope names.
+
+    :param source: The query source to ask.
+    :param preset: The ready-made question to run.
+    """
+    [knowledge] = [entry for entry in source.knowledge() if entry.scope is preset.scope]
+    return EqlQueryRunner(
+        domains=knowledge.domains, extra_names=knowledge.extra_names
+    ).run(preset.code)
+
+
 def ask(source, code, highlightable_ids=frozenset()):
     """
     Run one query about the sort in progress, the way the bridge does.
@@ -135,7 +173,6 @@ class TestTheSource:
             "shape",
             "attempt",
             "plan_step",
-            "event",
             "hole",
             "board",
             "goal",
@@ -143,7 +180,7 @@ class TestTheSource:
 
     def test_every_preset_runs(self, source):
         for preset in source.presets():
-            assert ask(source, preset.code).ok, preset.text
+            assert ask_in_scope(source, preset).ok, preset.text
 
 
 # %% "was this shape inserted?"
@@ -271,7 +308,7 @@ class TestWhyAnAttemptFailed:
         assert result.count == 1
 
     def test_what_segmind_saw_for_a_shape_is_queryable(self, source):
-        result = ask(
+        result = ask_about_events(
             source, "an(entity(event).where(event.shape_key == '%s'))" % SHAPE_KEY
         )
 
@@ -338,6 +375,51 @@ class TestWhereSomethingIs:
         assert result.highlight == [SHAPE_KEY]
 
 
+# %% what was detected is its own body of knowledge
+class TestAskingWhatWasDetected:
+    """
+    A detection is answered under its own heading: unlike the shapes and attempts it is
+    read back as a moment of the run, with the recording to replay around it.
+    """
+
+    def test_the_detections_are_offered_between_the_present_and_the_recorded_past(
+        self, source
+    ):
+        assert [knowledge.scope for knowledge in source.knowledge()] == [
+            QueryScope.CURRENT_STATE,
+            QueryScope.DETECTED_EVENTS,
+        ]
+
+    def test_the_detections_are_the_only_thing_it_ranges_over(self, source):
+        assert [domain.name for domain in detected_events_of(source).domains] == [
+            "event"
+        ]
+
+    def test_the_event_questions_are_offered_under_that_heading(self, source):
+        assert [
+            preset.text
+            for preset in source.presets()
+            if preset.scope is QueryScope.DETECTED_EVENTS
+        ] == [preset.text for preset in DETECTED_EVENTS_PRESETS]
+
+    def test_every_event_question_runs(self, source):
+        for preset in DETECTED_EVENTS_PRESETS:
+            assert ask_about_events(source, preset.code).ok, preset.text
+
+    def test_a_detection_answers_with_what_was_seen_and_when(self, source):
+        result = ask_about_events(
+            source, "set_of(event.shape_key, event.event_type, event.timestamp)"
+        )
+
+        assert result.rows == [
+            {
+                "shape_key": SHAPE_KEY,
+                "event_type": "PickUpEvent",
+                "timestamp": STARTED_AT.isoformat(sep=" ", timespec="seconds"),
+            }
+        ]
+
+
 # %% "show me what happened" — a detected event replays the demo around itself
 class TestReplayingADetectedEvent:
     """
@@ -346,10 +428,9 @@ class TestReplayingADetectedEvent:
     """
 
     def test_an_event_row_carries_the_window_around_its_detection(self, source):
-        result = ask(source, "an(entity(event))")
+        result = ask_about_events(source, "an(entity(event))")
 
-        [row] = result.rows
-        assert row["__replay__"] == ReplayWindow.around(STARTED_AT).to_payload()
+        assert result.replay == [ReplayWindow.around(STARTED_AT)]
 
     def test_the_what_was_detected_preset_offers_a_replay_per_detection(self, source):
         [preset] = [
@@ -358,10 +439,9 @@ class TestReplayingADetectedEvent:
             if offered.text == "what was detected, and when?"
         ]
 
-        result = ask(source, preset.code)
+        result = ask_about_events(source, preset.code)
 
-        [row] = result.rows
-        assert row["__replay__"] == ReplayWindow.around(STARTED_AT).to_payload()
+        assert result.replay == [ReplayWindow.around(STARTED_AT)]
 
 
 # %% the recorded bundle offers the same questions

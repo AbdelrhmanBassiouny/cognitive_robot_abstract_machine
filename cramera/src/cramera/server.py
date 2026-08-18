@@ -93,9 +93,14 @@ class Handler(http.server.SimpleHTTPRequestHandler):
 
     def end_headers(self) -> None:
         """
-        Disable caching so a rebuilt scene/frontend is never served stale.
+        Forbid caching so a rebuilt scene/frontend is never served stale.
+
+        ..note:: ``no-cache`` would not do: it lets a browser keep its copy and
+            revalidate, and the only validator this handler offers is the file's
+            modification time, which an edit does not always push past the date the
+            stored copy carries.
         """
-        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
     def log_message(self, format: str, *args) -> None:

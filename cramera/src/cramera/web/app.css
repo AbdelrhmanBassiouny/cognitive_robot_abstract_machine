@@ -32,6 +32,10 @@ body{
 
 /* %% split */
 .split{flex:1;display:grid;grid-template-columns:1fr 1fr;gap:16px;padding:16px;min-height:0}
+/* a slot the layout mounts nothing into takes no room: the ?replay= popup shows the
+   scene alone and it gets the whole width */
+.split:has(>.slot:empty){grid-template-columns:1fr}
+.split>.slot:empty{display:none}
 /* panel slots: config.js mounts panels into these; several ids stack vertically */
 .slot{display:flex;flex-direction:column;gap:16px;min-height:0;min-width:0}
 .slot>.panel{flex:1;min-height:0}

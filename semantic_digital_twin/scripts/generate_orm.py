@@ -25,9 +25,11 @@ from semantic_digital_twin.semantic_annotations.position_descriptions import (
 from semantic_digital_twin.spatial_computations.forward_kinematics import (
     ForwardKinematicsManager,
 )
+from semantic_digital_twin.testing import StateChangeCounter
 from semantic_digital_twin.world import (
     ResetStateContextManager,
     WorldModelUpdateContextManager,
+    WorldStateBatchContextManager,
 )
 from semantic_digital_twin.world_description.mesh_file_storage import MeshFileStorage
 
@@ -35,6 +37,8 @@ from semantic_digital_twin.world_description.mesh_file_storage import MeshFileSt
 ignore_classes = {
     ResetStateContextManager,
     WorldModelUpdateContextManager,
+    WorldStateBatchContextManager,
+    StateChangeCounter,
     ForwardKinematicsManager,
     MeshFileStorage,
     semantic_digital_twin.adapters.procthor.procthor_resolver.ProcthorResolver,

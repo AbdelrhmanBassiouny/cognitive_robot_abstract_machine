@@ -1,9 +1,9 @@
 """
 The bodies of knowledge a demo offers to be questioned about.
 
-A running demo knows two different things: what is true of it right now, and what its
-finished runs left behind. Both are asked in the same language, but one is answered from
-objects in the process and the other from a database, so each declares how it answers.
+A running demo knows several different things: what is true of it right now, what its
+detectors saw it do, and what its finished runs left behind. All are asked in the same
+language, but each is answered from somewhere else, so each declares how it answers.
 """
 
 from __future__ import annotations
@@ -27,6 +27,12 @@ class QueryScope(StrEnum):
     CURRENT_STATE = "current_state"
     """
     What is true of the run in progress, read from the objects it keeps as it goes.
+    """
+
+    DETECTED_EVENTS = "detected_events"
+    """
+    The moments of the run its detectors saw, each answered with the window of the
+    recording worth replaying around it.
     """
 
     EPISODIC_MEMORY = "episodic_memory"

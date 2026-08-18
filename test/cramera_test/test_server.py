@@ -87,6 +87,18 @@ class TestStatic:
         index = get_json(server + "/scenes/index.json")
         assert index["default"] == "fixture"
 
+    def test_a_static_asset_may_not_be_stored_by_the_browser(self, server):
+        """
+        The frontend is edited while a browser holds it open, and the only cache
+        validator this server offers is the file's modification time — so a stored copy
+        outlives every edit that leaves that time behind the date the copy carries.
+
+        Forbidding the store is what keeps an edited frontend from being served from an
+        old page load.
+        """
+        with urllib.request.urlopen(server + "/config.js", timeout=10) as response:
+            assert response.headers["Cache-Control"] == "no-store"
+
     def test_scene_path_traversal_is_blocked(self, server):
         request = urllib.request.Request(server + "/scenes/../../etc/passwd")
         try:
