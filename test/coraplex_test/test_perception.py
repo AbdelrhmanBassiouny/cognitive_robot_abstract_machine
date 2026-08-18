@@ -53,17 +53,17 @@ from coraplex.robot_plans import MoveToolCenterPointMotion
 from coraplex.robot_plans.actions.core.pick_up import PickUpAction
 from coraplex.robot_plans.motions.misc import DetectingMotion, PerceptionTask
 from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.data_types import ObservationStateValues
 from giskardpy.motion_statechart.graph_node import EndMotion
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
+from giskardpy.motion_statechart.ros_context import RosContextExtension
+from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPosition
 from krrood.adapters.json_serializer import from_json, to_json
 from semantic_digital_twin.adapters.world_entity_kwargs_tracker import (
     WorldEntityWithIDKwargsTracker,
 )
-from giskardpy.motion_statechart.data_types import ObservationStateValues
-from giskardpy.motion_statechart.ros_context import RosContextExtension
-from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Bowl, Milk
-from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Point3
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.geometry import BoundingBox
@@ -833,10 +833,10 @@ def test_detection_in_a_chart_corrects_a_reach_planned_before_it(
     milk_body = world.get_body_by_name("milk.stl")
     query = PerceptionQuery(Milk, whole_scene_region, view, world)
     detection = PerceptionTask(query=query, execution_type=ExecutionType.REAL)
-    reach = CartesianPose(
+    reach = CartesianPosition(
         root_link=world.root,
         tip_link=view.right_arm.end_effector.tool_frame,
-        goal_pose=Pose(reference_frame=milk_body),
+        goal_point=Point3(reference_frame=milk_body),
         name="MoveTCP",
     )
     build_context = build_perception_task(detection, world, rclpy_node)
