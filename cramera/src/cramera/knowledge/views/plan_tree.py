@@ -65,13 +65,12 @@ class PlanViewPayload(GraphPanelPayload):
 
     def panel_options(self) -> Dict[str, Any]:
         """
-        The plan legend and the live/status flags the plan tab is rendered with.
+        The plan legend and the status flags the plan tab is rendered with.
         """
         return {
             "breadcrumb": self.breadcrumb,
             "legend": [asdict(entry) for entry in PLAN_LEGEND],
             "layout": "hier",
-            "live": "plan",
             "statusLegend": True,
             "empty": self.empty_message,
         }

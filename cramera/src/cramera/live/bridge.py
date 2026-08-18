@@ -426,12 +426,25 @@ class PlanSnapshot:
     Every node in the tree, flattened with parent references.
     """
 
+    @property
+    def executing(self) -> List[str]:
+        """
+        Ids of the nodes execution has reached: running, with no running child.
+
+        A running parent is running because a node below it is, so the running nodes
+        alone name a whole path down the tree rather than the step being done now.
+        """
+        running = [node for node in self.nodes if node.status == TaskStatusName.RUNNING]
+        awaiting_a_child = {node.parent for node in running}
+        return [node.id for node in running if node.id not in awaiting_a_child]
+
     def to_payload(self) -> Dict[str, Any]:
         """
-        The snapshot plus the legend its groups are drawn with, so the viewer does not
-        keep its own copy of the plan-node colour table.
+        The snapshot plus the nodes being executed and the legend its groups are drawn
+        with, so the viewer does not keep its own copy of the plan-node colour table.
         """
         payload = asdict(self)
+        payload["executing"] = self.executing
         payload["legend"] = [
             {"group": group.value, "label": group.label}
             for group in PlanNodeGroup.legend()

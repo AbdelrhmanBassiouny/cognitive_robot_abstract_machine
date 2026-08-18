@@ -273,9 +273,10 @@ body{
 
 /* %% graph */
 .graph-wrap{position:relative;flex:1;min-height:0}
-#graph{position:absolute;inset:34px 0 0}
+/* a class rather than an id: every panel drawing a graph has a canvas of its own */
+.graph-canvas{position:absolute;inset:34px 0 0}
 
-/* view tabs: knowledge graph / kinematics / plan / motion statechart */
+/* view tabs: knowledge graph / kinematics / motion statechart */
 .graph-tabs{
   position:absolute;left:0;right:0;top:0;height:34px;z-index:7;display:flex;align-items:center;gap:2px;
   padding:0 10px;background:var(--bg2);border-bottom:1px solid var(--line2)
@@ -306,6 +307,25 @@ body{
 .legend .dot{width:11px;height:11px;border-radius:50%}
 /* execution status shows up as a node ring, so the legend uses rings too */
 .legend .ring{width:18px;height:18px;border-radius:50%;border:6px solid;border-style:solid;box-sizing:border-box}
+
+/* %% plan graph — the head line above the tree names the step being executed */
+.plan-head{
+  position:absolute;left:0;right:0;top:0;height:34px;z-index:7;display:flex;align-items:center;gap:10px;
+  padding:0 10px;background:var(--bg2);border-bottom:1px solid var(--line2)
+}
+.plan-executing{
+  font:600 11.5px/1 Inter,sans-serif;letter-spacing:.3px;color:var(--ink);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap
+}
+.plan-follow{
+  margin-left:auto;display:flex;align-items:center;gap:5px;flex:none;
+  font:600 10.5px/1 Inter,sans-serif;letter-spacing:.3px;color:var(--muted);cursor:pointer
+}
+.plan-head .gt-live{
+  display:none;font:600 10.5px/1 Inter,sans-serif;letter-spacing:.4px;
+  color:#0b1220;background:var(--warn);border-radius:3px;padding:4px 7px
+}
+.plan-head .gt-live.on{display:inline-block}
 
 /* %% resizable split — core/split-resize.js inserts these between two panes */
 .pane-divider{position:relative;z-index:6;border-radius:4px;transition:background .15s}
@@ -360,7 +380,7 @@ body{
   position:fixed;inset:0;z-index:1000;background:var(--bg);
   border:none;border-radius:0;padding:0;margin:0;
 }
-.graph-wrap.graph-fullscreen #graph{inset:34px 0 0}
+.graph-wrap.graph-fullscreen .graph-canvas{inset:34px 0 0}
 /* keep the page from scrolling behind the overlay */
 body.graph-full-open{overflow:hidden}
 

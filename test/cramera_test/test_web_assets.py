@@ -123,7 +123,7 @@ class TestAssetConsistency:
         A tabbed panel's id sits behind a ``panel:`` key rather than in the slot's own
         list, so a reader of bare entries alone would stop checking it and say nothing.
         """
-        assert "event-timeline" in configured_panel_ids()
+        assert {"event-timeline", "plan-graph"} <= configured_panel_ids()
 
     def test_panels_only_query_their_own_root(self):
         """
@@ -187,6 +187,9 @@ class TestJsUnits:
 
     def test_graph_panel(self):
         self.run_node("test_graph_panel.js")
+
+    def test_plan_graph_panel(self):
+        self.run_node("test_plan_graph_panel.js")
 
     def test_response_util(self):
         self.run_node("test_response_util.js")
