@@ -56,6 +56,9 @@ Examples:
   ./$(basename "$0") --only-shape square_hole
   ./$(basename "$0") --no-browser --no-viewer --only-shape square_hole
 
+The first run of a fresh checkout generates the packages' database mappings, which
+takes about a minute; later runs find them already there.
+
 The demo records every iteration to the database named by
 FRANKA_MONTESSORI_SORTING_DATABASE_URI, or to a local Postgres one when that is not
 set; see experiments/src/experiments/montessori/README.md for the one-time
@@ -109,6 +112,14 @@ echo "Running with ${python_executable}."
 # not recorded to -- so only a broken pre-flight itself does
 if ! "${python_executable}" -m experiments.montessori.results_database \
     ${demo_arguments[@]+"${demo_arguments[@]}"}; then
+    exit 1
+fi
+
+# the database mappings are generated code the repository tracks as empty placeholders,
+# so a fresh checkout has none and the run would die on the first thing it records or
+# reads back. Generating them takes about a minute and only happens once per checkout
+if ! "${python_executable}" "${repository_root}/scripts/ensure_orm_interfaces.py"; then
+    echo "The ORM interfaces could not be generated." >&2
     exit 1
 fi
 
