@@ -13,7 +13,16 @@ from datetime import datetime, timedelta
 
 import pytest
 from giskardpy.qp.exceptions import SolverReturnedFailureError
-from segmind.datastructures.events import InsertionEvent, PickUpEvent
+from segmind.datastructures.events import (
+    ContactEvent,
+    InsertionEvent,
+    LossOfContactEvent,
+    PickUpEvent,
+    RotationEvent,
+    StopRotationEvent,
+    StopTranslationEvent,
+    TranslationEvent,
+)
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose
 from semantic_digital_twin.world import World
@@ -245,6 +254,56 @@ class TestRecordingEvents:
         )
 
         assert progress.events[0].name == "%s PickUpEvent" % SHAPE_OBJECT_NAME
+
+    def test_atomic_events_are_left_out_of_the_record(self, progress, scene):
+        """
+        A contact appearing or a motion starting is detected to diagnose an attempt,
+        not to be read back: recording them would bury what the shape was actually
+        seen doing.
+        """
+        _, _, _, shape = scene
+        progress.record_attempt(
+            attempt(
+                shape,
+                fell_through=True,
+                events=[
+                    ContactEvent(tracked_object=shape.root, timestamp=STARTED_AT),
+                    LossOfContactEvent(tracked_object=shape.root, timestamp=STARTED_AT),
+                    TranslationEvent(tracked_object=shape.root, timestamp=STARTED_AT),
+                    RotationEvent(tracked_object=shape.root, timestamp=STARTED_AT),
+                    StopTranslationEvent(
+                        tracked_object=shape.root, timestamp=STARTED_AT
+                    ),
+                    StopRotationEvent(tracked_object=shape.root, timestamp=STARTED_AT),
+                    PickUpEvent(tracked_object=shape.root, timestamp=STARTED_AT),
+                ],
+            )
+        )
+
+        assert [recorded.event_type for recorded in progress.events] == ["PickUpEvent"]
+
+    def test_an_attempt_is_still_diagnosed_from_the_events_left_out(
+        self, progress, scene
+    ):
+        """
+        Dropping atomic events from the record does not take them away from the
+        diagnosis, which tells a dropped shape from one never picked up by them.
+        """
+        _, _, _, shape = scene
+        progress.record_attempt(
+            attempt(
+                shape,
+                fell_through=False,
+                events=[
+                    LossOfContactEvent(tracked_object=shape.root, timestamp=STARTED_AT)
+                ],
+            )
+        )
+
+        assert progress.events == []
+        assert (
+            progress.attempts[0].failure_reason == InsertionFailureReason.NOT_PICKED_UP
+        )
 
     def test_a_detected_pick_up_shows_on_the_shape(self, progress, scene):
         _, _, _, shape = scene
