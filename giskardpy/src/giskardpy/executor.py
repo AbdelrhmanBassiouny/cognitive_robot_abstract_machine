@@ -116,15 +116,13 @@ class SimulationPacer(ScheduledPacer):
 @dataclass
 class SimulationTimePacer(Pacer):
     """
-    Paces a control loop against a simulation's own clock instead of the wall
-    clock.
+    Paces a control loop against a simulation's own clock instead of the wall clock.
 
-    A simulator that cannot hold real time still advances its own clock
-    correctly, just slower. Pacing on the wall clock therefore lets the
-    controller issue commands faster than the simulated plant can execute
-    them, so setpoints outrun the hardware by a margin that varies with
-    whatever else the machine is doing. Waiting on simulated time instead
-    keeps one control cycle worth of simulation between commands however
+    A simulator that cannot hold real time still advances its own clock correctly, just
+    slower. Pacing on the wall clock therefore lets the controller issue commands faster
+    than the simulated plant can execute them, so setpoints outrun the hardware by a
+    margin that varies with whatever else the machine is doing. Waiting on simulated
+    time instead keeps one control cycle worth of simulation between commands however
     fast the simulation happens to run.
     """
 
@@ -143,7 +141,7 @@ class SimulationTimePacer(Pacer):
     How long to wait between checks that simulated time has advanced.
     """
 
-    _next_target_time: Optional[float] = field(default=None, init=False)
+    _next_target_time: float | None = field(default=None, init=False)
     """
     Simulated time the next control cycle may start at.
     """
