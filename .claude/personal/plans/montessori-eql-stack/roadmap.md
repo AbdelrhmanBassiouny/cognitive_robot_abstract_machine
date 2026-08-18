@@ -920,3 +920,52 @@ Two things only showed up by running it rather than by testing it:
 
 The branch is still based on #165's pre-fold tip, so it has yet to take the timeline
 work the #175 fold brought into the stack.
+
+## 2026-08-18: the plan tab was blank because the bridge had no plan
+
+The developer ran the demo and saw the plan tree for a moment at startup and then
+nothing. Three defects of the old tab had already been fixed on this branch; this was
+a fourth, and it sat a layer lower than any of them.
+
+`GET /plan` was serving an empty tree for the whole run. `Bridge._plan` is set by one
+hook, on `Plan.perform` - and the montessori demo never calls it. coraplex's
+`execute_single` builds a `Plan`, adds the node, and hands the **node** back; the caller
+performs that, and `PlanNode.perform` does not go through `Plan.perform`. So the bridge
+watched a method nothing in this demo enters.
+
+What the viewer showed follows from that: the panel draws the recorded plan on load, and
+the moment `live:changed` arrives it switches to `/plan`, whose empty node list replaces
+the drawn tree with "Attached, but the demo has not started its plan yet." The plan
+"appearing for a moment" was the recorded one; the disappearance was the switch.
+
+Fixed by moving the hook to `PlanNode.perform` and reading `node.plan`. That covers
+`Plan.perform` too, since it performs its root, so the demos that do call it are
+unaffected. `PlanNode` has no subclass overriding `perform`, so one patch reaches every
+node.
+
+`Bridge.begin_plan` became `follow_plan`, because the hook now fires per node rather
+than once per run: re-entering the plan already being followed returns immediately, and
+only a move to a different plan clears `_motion_nodes`. A node outside any plan
+(`PlanNode.plan` is optional) is ignored rather than blanking the tree.
+
+### Pinning it
+
+No mimic can catch this class of bug - the wrapper was correct, the method it was
+installed on was not. `test_live_hooks.py` therefore drives the plan hook through a real
+coraplex plan node: the hooks are installed exactly as `runner.start` installs them, on
+a `Bridge` of the test's own, and an empty `SequentialNode` is performed on its own. It
+fails against `Plan.perform` and passes against `PlanNode.perform`. That file's "no
+coraplex import" convention now carries this one exception, stated in its docstring.
+
+### Also fixed
+
+`test_knowledge_views` had been red since this branch dropped `PlanViewPayload`'s
+`live: "plan"` flag - the test still asserted it. The plan panel knows its own live
+source now, so the expectation is `None`.
+
+### Environment correction
+
+The roadmap entry above says the cramera pytest suite could not run in this branch's
+session. It runs fine in this one: 474 passed. `test_demonstrations.py`'s
+`test_spin_thread_ends_quietly_when_somebody_else_ends_the_context` fails in coraplex,
+on this branch and on its parent alike, so it is not this work's.

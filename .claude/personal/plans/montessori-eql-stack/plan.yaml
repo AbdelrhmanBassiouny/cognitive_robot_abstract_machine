@@ -289,7 +289,19 @@ items:
       `panel:resized` on the bus instead of reaching for the renderer global.
       205 node tests green; the cramera pytest suite could not run in this
       session's container (random_events_lib is a workspace C++ extension that
-      is not built there), so its Python tests were left to CI.
+      is not built there), so its Python tests were left to CI. On 2026-08-18
+      the developer reported the plan showing for a moment at startup and then
+      disappearing: a fourth defect, and this one in the bridge rather than the
+      panel. `/plan` had no tree at all, because the plan was captured by a hook
+      on `Plan.perform`, which a montessori run never calls - coraplex's
+      `execute_single` hands back the root *node* and the caller performs that.
+      Fixed in da2e062e3d by moving the hook to `PlanNode.perform` and reading
+      the plan off the node (which covers `Plan.perform` too, since that
+      performs its root); `Bridge.begin_plan` became `follow_plan`, a no-op when
+      re-entering the plan already being followed. That round also fixed
+      `test_knowledge_views`, red since this branch dropped the plan view's
+      `live: "plan"` flag. 474 cramera tests and 234 node tests green - the
+      suite does run in this session's container.
 
   - id: montessori_detachable_panels
     title: "Detach, reattach, resize, and maximize any of the panel tabs"
