@@ -78,8 +78,12 @@ items:
       pr-progress/cramera_eql_autocomplete.md. On 2026-08-18 cram2/main was
       merged in and the branch force-pushed as 03b3130a5; its one conflict
       (Body.has_collision) went to main's version, and the giskardpy executor
-      NameError that a5080fd08 fixed on #169 was fixed here too. Every branch
-      stacked above it still sits on the pre-merge tip and needs restacking.
+      NameError that a5080fd08 fixed on #169 was fixed here too. Later the same
+      day the branch took the has_collision follow-up (a flat primitive no longer
+      builds a mesh) and merged #169's tip 6d944c52e, whose only conflict was
+      that both branches had independently fixed the segmind detector tests'
+      frameless matrices; this branch's _move_milk helper was kept. Now
+      cd663196a, mergeable, and the whole stack above it is restacked on it.
 
   - id: montessori_eql_where_is_highlighting
     title: "EQL \"where is ...?\" queries with general viewer highlighting"
@@ -91,7 +95,8 @@ items:
     notes: >-
       Rebased onto cramera_eql_autocomplete on 2026-08-18 (was based on
       montessori_fast_inline_monitor); reparent needed a native GitHub-stack
-      dissolve, see roadmap.
+      dissolve, see roadmap. Restacked the same day by merging the base's
+      current tip in rather than rebasing: 10ca075c2, cramera suite 488.
 
   - id: montessori_event_replay
     title: "Record the live demo and replay it around queried segmind events"
@@ -100,6 +105,11 @@ items:
     track: montessori-eql
     depends_on: [montessori_eql_where_is_highlighting]
     status: in_progress
+    notes: >-
+      Restacked on 2026-08-18 by merging the base in: 4d9d9ad33, cramera suite
+      544. Its history carries stale duplicates of #164's commits and internal
+      pre/post-merge duplicates, which is why the round merged rather than
+      rebased.
 
   - id: cramera-question-readback
     title: "Read the asked query back big under the bar, linked to its docs"
@@ -112,6 +122,8 @@ items:
       The 2026-08-18 restack dropped this branch's stale copies of #164/#165
       commits and amended an EqlSuggestions stub into its panel test harness
       (a semantic conflict with the autocomplete feature git could not see).
+      Restacked again later that day by merging the base in: 408f4511b,
+      cramera suite 566.
 
   - id: cramera-voice-questions
     title: "Answer a spoken question by running the preset it asks for"
@@ -120,7 +132,10 @@ items:
     track: montessori-eql
     depends_on: [cramera-question-readback]
     status: in_progress
-    notes: "Top of the stack. rapidfuzz dependency is declared in cramera/requirements.txt."
+    notes: >-
+      Top of the stack. rapidfuzz dependency is declared in
+      cramera/requirements.txt. Restacked on 2026-08-18 by merging the base in:
+      5acc3d83f, cramera suite 598 and all 216 node tests green.
 
   - id: montessori_perform_queried_action
     title: "Perform a queried action from a perform button on its result"
@@ -170,7 +185,9 @@ items:
       Replaces the fixed knowledge-graph frame at the bottom left with a
       selectable tab widget; its first new tab plots segmind events live as
       they are detected, on a timeline with a moving vertical now-bar. The
-      knowledge graph stays available as one of the tabs.
+      knowledge graph stays available as one of the tabs. Restacked on
+      2026-08-18 onto #169's current tip 6d944c52e by merging it in, no
+      conflicts: 6b8a347fa, cramera suite 448 and 183 node tests green.
 
   - id: montessori_plan_graph_tab
     title: "A plan-graph tab highlighting the executing plan node in real time"

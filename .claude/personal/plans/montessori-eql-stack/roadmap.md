@@ -302,3 +302,93 @@ timeline shows it was opened non-draft, never promoted, so the "left ready becau
 promoted it myself" exception did not apply) and this dashboard was republished. The
 `plan-dashboard` dependencies (`markdown`, `nh3`) were installed to do it.
 
+
+## 2026-08-18: the whole stack restacked, by merging rather than rebasing
+
+The five branches this roadmap kept listing as "still on the pre-merge tip" are
+now all based on their real parents, and every PR in the plan reports
+`mergeable: true`. New tips: #170 `cd663196a`, #164 `10ca075c2`, #165
+`4d9d9ad33`, #167 `408f4511b`, #168 `5acc3d83f`, #175 `6b8a347fa`.
+
+### Why merge and not rebase
+
+The first attempt followed the Round-4 precedent and rebased. #164 came out
+clean — two commits, fifteen files, after dropping `db78bfbc5`, whose ORM
+regeneration is dead work now that `main` keeps every generated interface empty
+and a hook enforces it. #165 did not. Its history carries stale copies of #164's
+two commits *and* internal pre/post-merge duplicates of half its own work
+(`Record the running demo`, `Serve the running world's own geometry`, `Pin that
+detected events replay`, and a `SymbolGraph` commit all appear twice, on either
+side of a merge of the base branch). Replaying that linearly means hand-skipping
+six commits and resolving each duplicate against its own earlier self.
+
+So the round merged the new base into each branch instead. It is what these
+branches already do — #165 carries three such merges — and it has three
+properties rebasing does not: the conflict is resolved once per branch rather
+than once per commit, the pushes are fast-forwards so nothing is force-written,
+and each PR's diff still comes out as exactly its own work, because merging the
+base in makes the base tip the merge base.
+
+The cost is a merge commit per branch, and that the duplicate commits stay in
+the history rather than being cleaned out. Worth revisiting if anyone wants
+these branches' histories tidied — but that is a separate job from restacking,
+and doing it under a restack is what produced the duplicates in the first place.
+
+### The base moved twice during the round
+
+`cramera_eql_autocomplete` was itself one commit behind `#169`, which GitHub
+reported as `mergeable_state: dirty` while a local `git merge-tree` said clean.
+GitHub was right and the local check was asking the wrong question: it was run
+against `a5080fd08`, and #169 had meanwhile advanced to `6d944c52e` with the CI
+fixes its own main merge had exposed. Re-running the check against the real tip
+reproduced the conflict immediately.
+
+That conflict is worth recording, because both branches had independently fixed
+the same bug: the segmind detector tests assigned frameless matrices to
+`Connection.origin`. #169 passes `reference_frame=...world.root` at each of the
+~30 call sites; #170 had already added a `_move_milk` helper that builds the
+origin from `milk.parent_connection.parent`. The two cover an identical set of
+thirteen tests, so the helper was kept — one place to change rather than thirty.
+`6d944c52e`'s other fixes (the `Pacer` rework in `_build_pacer`,
+`PANDA_SCENE_BODIES_TO_DISCARD`) merged without comment and now reach the whole
+stack, which previously would have inherited the broken `_build_pacer`.
+
+### Verified
+
+Per tip, cramera suite: #170 477, #164 488, #165 544, #167 566, #168 598, #175
+448. Node tests 216/216 on #168 and 183/183 on #175; segmind 46+1 skipped on
+#168, 40+1 on #175. Undefined-name scan (`pyflakes` over the files the base side
+touched, the check this stack has needed twice) clean on both tips.
+
+Two environment traps worth knowing, both of which look like merge breakage and
+are not. Running the suites from a worktree needs the workspace `src` directories
+*prepended* to `PYTHONPATH`, not substituted for it — dropping ROS's own entries
+turns `test_world.py` into thirteen errors on `ament_index_python`. And any
+`segmind` run regenerates `ormatic_interface.py` at collection time; the
+committed blobs are all still empty, but the working tree needs reverting
+afterwards.
+
+### The has_collision follow-up
+
+The previous section left `Shape.surface_area` reached only by its own tests,
+after the conflict resolution took main's `shape.mesh.area`. Resolved by putting
+`surface_area` back into `has_collision`, keeping main's short-circuit shape
+(volume first, surface second). This is strictly better than either side had:
+main's version builds a mesh for exactly the flat shapes the surface threshold
+exists for, and a new test forbids mesh building for a flat body to pin that
+down. The docstring note, which described the old short-circuit, was updated to
+match. `test_world.py` 124 passed, `test_shape.py` 29, `test_spatial_types.py`
+234, `test_collision_matrix.py` 30.
+
+### The local lark install regressed again
+
+Round 3's fix was gone from the venv: `lark-parser` 0.12.0 reinstalled, with an
+orphaned `site-packages/lark/` holding nothing but `parsers/` shadowing it, so
+`from lark import Lark` failed and ROS jazzy's `launch_testing` plugin aborted
+collection. Same fix as Round 3 — uninstall `lark-parser`, delete the orphan
+`lark`/`lark-stubs` directories, install `lark` (1.3.1). `PYTEST_DISABLE_PLUGIN_
+AUTOLOAD=1` is no longer needed. `rapidfuzz` had gone the same way and was
+reinstalled; it is correctly declared in `cramera/requirements.txt` on #168.
+The repo-side pin was already right both times, so this is purely local rot —
+if it comes back a third time, something in this environment is reinstalling
+the dead package and that is the thing to find.
