@@ -24,8 +24,10 @@ HTTP endpoints of the live bridge (default port 8765).
     GET /replay  {ok, start, end, frames: [{at, frames, base, objects}]}
                   (start/end query parameters in seconds since the epoch)
     GET /run     {ok, title, paused, looping, restart_pending, activity, iteration}
+    GET /perform {ok, title, performing, requested}
     POST /eql    {code, scope} -> the rendered answer rows
     POST /run    {command} -> the run state that command produced
+    POST /perform {action} -> the state asking for that action produced
     POST /move   queue an object move (applied on the simulation thread)
 
 Every ``pose`` above is ``[x, y, z, qx, qy, qz, qw]``.
@@ -54,6 +56,10 @@ from cramera.logging_setup import get_logger
 from cramera.live.bridge import Bridge, MalformedMoveRequest, MoveRequest
 from cramera.knowledge.query_vocabulary import UnknownVocabularyName
 from cramera.knowledge.queryable_knowledge import QueryScope, UnknownQueryScope
+from cramera.live.action_execution import (
+    NoActionExecutionRegistered,
+    UnknownPerformableAction,
+)
 from cramera.live.query import NoQuerySourceRegistered
 from cramera.live.run_control import (
     NoRunControlRegistered,
@@ -143,6 +149,8 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self._send_replay_clip()
         if self.path.startswith("/run"):
             return self._send_run_control_state()
+        if self.path.startswith("/perform"):
+            return self._send_action_execution_state()
         if self.path.startswith("/info"):
             return self._send_json(self.bridge.status())
         self.send_response(404)
@@ -218,6 +226,17 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
         try:
             payload = {"ok": True, **self.bridge.run_control_payload()}
         except NoRunControlRegistered as error:
+            payload = {"ok": False, "error": str(error)}
+        self._send_json(payload)
+
+    def _send_action_execution_state(self) -> None:
+        """
+        Serve what the running demo is doing with the actions asked of it, or say why
+        nothing can be asked.
+        """
+        try:
+            payload = {"ok": True, **self.bridge.action_execution_payload()}
+        except NoActionExecutionRegistered as error:
             payload = {"ok": False, "error": str(error)}
         self._send_json(payload)
 
@@ -340,6 +359,8 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
             return self.answer_requested_query()
         if self.path.startswith("/run"):
             return self.apply_requested_run_command()
+        if self.path.startswith("/perform"):
+            return self.perform_requested_action()
         self.queue_requested_move()
 
     def _posted_payload(self) -> Optional[Dict[str, Any]]:
@@ -402,6 +423,25 @@ class BridgeRequestHandler(BaseHTTPRequestHandler):
                 {"ok": True, **self.bridge.apply_run_command(command)}
             )
         except NoRunControlRegistered as error:
+            return self._send_json({"ok": False, "error": str(error)})
+
+    def perform_requested_action(self) -> None:
+        """
+        Ask the running demo to carry out the action a viewer pressed perform on, and
+        answer with what that request produced.
+        """
+        payload = self._posted_payload()
+        if payload is None:
+            return self._send_json(
+                {"ok": False, "error": "body must be a JSON object"}, code=400
+            )
+        try:
+            return self._send_json(
+                {"ok": True, **self.bridge.perform_action(payload.get("action") or "")}
+            )
+        except UnknownPerformableAction as error:
+            return self._send_json({"ok": False, "error": str(error)}, code=400)
+        except NoActionExecutionRegistered as error:
             return self._send_json({"ok": False, "error": str(error)})
 
     def queue_requested_move(self) -> None:

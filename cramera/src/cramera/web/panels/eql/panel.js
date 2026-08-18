@@ -13,6 +13,7 @@
  *   listens  scene:step {step}           describe the running episode
  *   listens  entity:select {id, detail, relations}   node clicked in a graph
  *   listens  live:changed {on, url}      answer from the demo instead of the recording
+ *   listens  perform:state {state}       what the demo is doing with the actions asked of it
  * ==========================================================================*/
 Panels.define('eql', function (root, bus) {
   root.innerHTML =
@@ -42,6 +43,10 @@ Panels.define('eql', function (root, bus) {
   // which body of knowledge the box asks about: the last preset picked, since editing
   // a question keeps it a question about the same thing
   let askedScope = null;
+  // what the demo is doing with the actions asked of it, as the bridge last published it
+  let performState = null;
+  // the actions the answer on screen offers, in the order their buttons carry
+  let shownActions = [];
 
   // %% boot
   fetch(SceneContext.withScene('/api/knowledge')).then(ResponseUtil.parseJson).then(boot).catch(function (err) {
@@ -233,9 +238,10 @@ Panels.define('eql', function (root, bus) {
       return;
     }
     html += '<p class="headline"><b>' + res.count + '</b> result' + (res.count === 1 ? '' : 's') +
-      (res.more ? ' (truncated)' : '') + '.</p>' + answerTable(res.rows, res.replay);
+      (res.more ? ' (truncated)' : '') + '.</p>' + answerTable(res.rows, res.replay, res.perform);
     answerEl.innerHTML = html;
     wireReplayButtons();
+    wirePerformButtons();
     bus.emit('entity:highlight', { ids: res.highlight || [] });
   }
 
@@ -261,6 +267,44 @@ Panels.define('eql', function (root, bus) {
     );
   }
 
+  // %% performing an answered action
+  // Pressing a button asks the demo to carry the action out; the demo answers with what
+  // it is now doing, which is what every button on screen is redrawn from.
+  function wirePerformButtons() {
+    performButtons().forEach(function (button, index) {
+      button.addEventListener('click', function () { requestPerform(shownActions[index].name); });
+    });
+    showPerformState(performState);
+  }
+
+  function performButtons() {
+    return Array.prototype.slice.call(answerEl.querySelectorAll('.perform-btn'));
+  }
+
+  function requestPerform(name) {
+    fetch(source.performUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: name }),
+    }).then(ResponseUtil.parseJson)
+      .then(function (payload) { showPerformState(payload.ok ? payload : null); })
+      .catch(function () { showPerformState(null); });
+  }
+
+  bus.on('perform:state', function (p) { showPerformState(p.state); });
+
+  function showPerformState(state) {
+    performState = state;
+    performButtons().forEach(function (button, index) {
+      const spec = PerformControl.buttonFor(shownActions[index], state);
+      button.textContent = spec.label;
+      button.title = spec.title;
+      button.disabled = spec.disabled;
+    });
+    const status = answerEl.querySelector('.perform-status');
+    if (status) status.textContent = PerformControl.statusOf(state);
+  }
+
   // the question in English, coloured by semantic role. The markup is krrood's own
   // <span> colouring and its display text is escaped server-side, so it goes in as-is.
   function verbalization(res) {
@@ -269,17 +313,21 @@ Panels.define('eql', function (root, bus) {
       res.verbalization.html + '</div>';
   }
 
-  // the answer as one table: stable columns, every value coloured by what it is, and
-  // a replay button on rows naming a moment the bridge's recording can play back
-  function answerTable(rows, replay) {
-    const table = AnswerTable.of(rows, replay);
+  // the answer as one table: stable columns, every value coloured by what it is, a
+  // replay button on rows naming a moment the bridge's recording can play back, and a
+  // perform button on rows naming an action the robot can be asked to carry out
+  function answerTable(rows, replay, perform) {
+    const table = AnswerTable.of(rows, replay, perform);
+    shownActions = [];
     if (!table.columns.length) return '';
     const typed = table.rows.some(function (row) { return row.type; });
     const replayable = source.live && table.rows.some(function (row) { return row.replay; });
+    const performable = source.live && table.rows.some(function (row) { return row.perform; });
     let html = '<div class="anstable-wrap"><table class="anstable"><thead><tr>';
     if (typed) html += '<th class="ans-type"></th>';
     table.columns.forEach(function (column) { html += '<th>' + esc(column) + '</th>'; });
     if (replayable) html += '<th class="ans-replay"></th>';
+    if (performable) html += '<th class="ans-perform"></th>';
     html += '</tr></thead><tbody>';
     table.rows.forEach(function (row) {
       html += '<tr>' + (typed ? '<td class="ans-type">' + typeTag(row.type) + '</td>' : '');
@@ -287,9 +335,20 @@ Panels.define('eql', function (root, bus) {
         html += '<td class="ans-' + cell.kind + '">' + esc(cell.text) + '</td>';
       });
       if (replayable) html += '<td class="ans-replay">' + replayButton(row.replay) + '</td>';
+      if (performable) html += '<td class="ans-perform">' + performButton(row.perform) + '</td>';
       html += '</tr>';
     });
-    return html + '</tbody></table></div>';
+    html += '</tbody></table></div>';
+    return performable ? html + '<div class="perform-status"></div>' : html;
+  }
+
+  // built empty, and identified only by its place among the buttons: showPerformState()
+  // gives each of them its wording from the demo's own state and from shownActions, so
+  // no answer text of the demo's own ever reaches the markup
+  function performButton(action) {
+    if (!action) return '';
+    shownActions.push(action);
+    return '<button class="perform-btn"></button>';
   }
 
   function replayButton(replay) {

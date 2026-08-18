@@ -40,6 +40,13 @@ test('an attached demo answers instead of the recorded scene', function () {
   assert.strictEqual(source.runUrl, 'http://localhost:8765/eql');
 });
 
+test('only an attached demo can be asked to perform an action', function () {
+  assert.strictEqual(load('').of({ on: false }).performUrl, null);
+  assert.strictEqual(
+    load('').of({ on: true, url: 'http://localhost:8765' }).performUrl,
+    'http://localhost:8765/perform');
+});
+
 test('a live demo url is not given the scene parameter', function () {
   // the demo has no scene bundle; ?scene= would be meaningless to its bridge
   const source = load('?scene=Franka_Montessori').of({ on: true, url: 'http://host:1/' });

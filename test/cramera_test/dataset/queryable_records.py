@@ -15,6 +15,8 @@ from typing_extensions import Optional
 
 from semantic_digital_twin.spatial_types import Point3, Pose
 
+from cramera.knowledge.performable_action import PerformableAction
+
 
 @dataclass
 class NamedRecord:
@@ -113,3 +115,27 @@ class UnnamedRecord:
     """
     This record's identity, deliberately not called ``name``.
     """
+
+
+@dataclass
+class ActionRecord:
+    """
+    A record naming an action the robot can be asked to carry out, as a queried action
+    is.
+    """
+
+    name: str
+    """
+    What the rendered row is titled with.
+    """
+
+    goal: str
+    """
+    What carrying the action out would achieve, in words.
+    """
+
+    def performable_action(self) -> PerformableAction:
+        """
+        The action a row for this record offers to perform.
+        """
+        return PerformableAction(name=self.name, description=self.goal)

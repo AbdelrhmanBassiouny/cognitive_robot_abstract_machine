@@ -71,6 +71,10 @@ from cramera.knowledge.queryable_knowledge import (
     UnknownQueryScope,
 )
 from cramera.knowledge.workspace_classes import WorkspaceClassIndex
+from cramera.live.action_execution import (
+    LiveActionExecution,
+    NoActionExecutionRegistered,
+)
 from cramera.live.model_source import LiveModelCatalog
 from cramera.live.query import LiveQuerySource, NoQuerySourceRegistered
 from cramera.live.recording import DemoRecording
@@ -597,6 +601,12 @@ class BridgeStatus:
     The registered run control's published state, or None when nothing can be driven.
     """
 
+    perform: Optional[Dict[str, Any]]
+    """
+    The registered action execution's published state, or None when nothing can be
+    asked to act.
+    """
+
     sequence_number: int
     robot_parts: List[RobotPartAnnotation] = field(default_factory=list)
     """
@@ -819,10 +829,21 @@ class Bridge:
     What the running demo offers to be driven by, once it registers itself.
     """
 
+    action_execution: Optional[LiveActionExecution] = None
+    """
+    What the running demo offers to have act, once it registers itself.
+    """
+
     _run_control_lock: threading.Lock = field(default_factory=threading.Lock)
     """
     Serializes commands: several viewers are answered from the bridge's own thread pool,
     and two of them pausing at once must not interleave inside the demo's own flags.
+    """
+
+    _action_execution_lock: threading.Lock = field(default_factory=threading.Lock)
+    """
+    Serializes perform requests, for the reason :attr:`_run_control_lock` serializes
+    commands.
     """
 
     _query_lock: threading.Lock = field(default_factory=threading.Lock)
@@ -1078,6 +1099,11 @@ class Bridge:
         # read before taking :attr:`_lock`: the demo's own control takes its own lock to
         # answer, and the tick hook holds this one while it publishes every snapshot
         control = self.run_control_payload() if self.run_control is not None else None
+        perform = (
+            self.action_execution_payload()
+            if self.action_execution is not None
+            else None
+        )
         with self._lock:
             return BridgeStatus(
                 running=self.world is not None,
@@ -1088,6 +1114,7 @@ class Bridge:
                 chart=bool(self.chart_state.nodes),
                 query=self.query_source is not None,
                 control=control,
+                perform=perform,
                 sequence_number=self.sequence_number,
                 robot_parts=(
                     RobotPartAnnotation.of_robot(self.robot)
@@ -1268,6 +1295,55 @@ class Bridge:
             control.apply(command)
             payload = control.state().to_payload()
         payload["title"] = control.title()
+        return payload
+
+    # %% viewer -> having the demo act
+    def register_action_execution(self, execution: LiveActionExecution) -> None:
+        """
+        Offer the running demo to the viewer's perform buttons.
+
+        :param execution: What the demo declares it can be asked to carry out.
+        """
+        self.action_execution = execution
+        logger.info("actions performed by '%s'", execution.title())
+
+    def _registered_action_execution(self) -> LiveActionExecution:
+        """
+        The registered action execution.
+
+        :raises NoActionExecutionRegistered: When no demo offered one.
+        """
+        if self.action_execution is None:
+            raise NoActionExecutionRegistered()
+        return self.action_execution
+
+    def action_execution_payload(self) -> Dict[str, Any]:
+        """
+        That state and the name of the demo it belongs to, as the viewer reads it.
+
+        :raises NoActionExecutionRegistered: When no demo offered one.
+        """
+        execution = self._registered_action_execution()
+        payload = execution.state().to_payload()
+        payload["title"] = execution.title()
+        return payload
+
+    def perform_action(self, name: str) -> Dict[str, Any]:
+        """
+        Ask the running demo to carry out one of the actions a query answered with.
+
+        :param name: Name of the action the viewer asked for.
+        :return: The state the request produced, in the same shape
+            :meth:`action_execution_payload` publishes, so a viewer that asks for an
+            action and one that polls read the same thing.
+        :raises NoActionExecutionRegistered: When no demo offered one.
+        :raises UnknownPerformableAction: When the demo performs no action by that name.
+        """
+        execution = self._registered_action_execution()
+        with self._action_execution_lock:
+            execution.perform(name)
+            payload = execution.state().to_payload()
+        payload["title"] = execution.title()
         return payload
 
     # %% viewer -> world

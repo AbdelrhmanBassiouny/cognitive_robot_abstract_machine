@@ -103,6 +103,7 @@ class TestReadOnlyEndpoints:
             "chart": False,
             "query": False,
             "control": None,
+            "perform": None,
             "sequenceNumber": 0,
             "partAnnotations": [],
         }
@@ -399,6 +400,68 @@ class TestRunControlEndpoints:
         post_json(server + "/run", {"command": "enable_loop"})
 
         assert get_json(server + "/info")["control"]["looping"] is True
+
+
+class TestPerformEndpoints:
+    """
+    A perform button asks the same bridge the viewer polls for what the demo is doing.
+    """
+
+    @pytest.fixture()
+    def acting_bridge(self, bridge):
+        from .test_live_action_execution import (
+            OFFERED_ACTION,
+            RecordingActionExecution,
+        )
+
+        execution = RecordingActionExecution()
+        bridge.register_action_execution(execution)
+        return bridge, execution, OFFERED_ACTION
+
+    def test_what_the_demo_is_doing_is_served(self, server, acting_bridge):
+        payload = get_json(server + "/perform")
+
+        assert payload["ok"] is True
+        assert payload["title"] == "record demo"
+        assert payload["requested"] == []
+
+    def test_the_state_without_a_demo_reports_why(self, server):
+        payload = get_json(server + "/perform")
+
+        assert payload["ok"] is False
+        assert "no action execution" in payload["error"].lower()
+
+    def test_a_pressed_button_reaches_the_demo(self, server, acting_bridge):
+        _, execution, action = acting_bridge
+
+        payload = post_json(server + "/perform", {"action": action})
+
+        assert payload["ok"] is True
+        assert payload["requested"] == [action]
+        assert execution.asked == [action]
+
+    def test_an_action_the_demo_does_not_perform_is_refused(
+        self, server, acting_bridge
+    ):
+        _, execution, _ = acting_bridge
+
+        payload = post_json(server + "/perform", {"action": "fly_away"})
+
+        assert payload["ok"] is False
+        assert "fly_away" in payload["error"]
+        assert execution.asked == []
+
+    def test_a_request_without_a_demo_reports_why(self, server):
+        payload = post_json(server + "/perform", {"action": "insert_cube"})
+
+        assert payload["ok"] is False
+        assert "no action execution" in payload["error"].lower()
+
+    def test_info_carries_what_the_perform_buttons_render(self, server, acting_bridge):
+        _, _, action = acting_bridge
+        post_json(server + "/perform", {"action": action})
+
+        assert get_json(server + "/info")["perform"]["requested"] == [action]
 
 
 class TestReplay:

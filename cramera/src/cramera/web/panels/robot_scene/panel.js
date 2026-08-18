@@ -11,6 +11,7 @@
  *   emits    scene:part-clicked {id}   click on a robot part / object
  *   emits    scene:step {step}         playback entered a plan step ('__done__' at end)
  *   emits    live:changed {on, url}    live bridge attached / detached
+ *   emits    perform:state {state}     what the demo is doing with the actions asked of it
  *   listens  entity:highlight {ids}    glow the matching 3D objects
  *
  * window.RobotView stays exported for the console and split-resize.
@@ -1073,6 +1074,9 @@ Panels.define('robot-scene', function (root, bus) {
         if (info) adoptLivePartAnnotations(info.partAnnotations);
         if (liveBtn && !liveOn) liveBtn.style.display = info && !replayWindow ? '' : 'none';
         showRunControls(replayWindow ? null : info && info.control);
+        // what the demo is doing with the actions asked of it rides along on this poll
+        // too; the EQL panel's perform buttons are drawn from it
+        bus.emit('perform:state', { state: replayWindow ? null : info && info.perform });
         // re-decided on every probe, so a demo that restarted is picked up again
         if (LiveAttach.shouldAttach({
           reachable: !!info,
@@ -1084,6 +1088,7 @@ Panels.define('robot-scene', function (root, bus) {
       .catch(function () {
         if (liveBtn && !liveOn) liveBtn.style.display = 'none';
         showRunControls(null);
+        bus.emit('perform:state', { state: null });
       });
   }
 
