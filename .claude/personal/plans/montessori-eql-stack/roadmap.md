@@ -222,3 +222,45 @@ The suites could not be run locally: this container has no cram environment
 (no `pytest`, no installed workspace packages), so verification was static —
 byte-compilation, `pyflakes`, symbol-usage checks, and a `git merge-tree`
 against `main` that now comes back clean.
+
+## 2026-08-18: #170 merged cram2/main; the stack above it is now stale twice over
+
+`cramera_eql_autocomplete` (#170) had `cram2/main`'s 23 newer commits merged in and was
+force-pushed to `origin` as `03b3130a5` (previous tip `d3321a4e9`). The developer asked
+for the conflicts to be resolved toward whichever side is most up to date and proven.
+
+**The one textual conflict** was `Body.has_collision` in
+`semantic_digital_twin/world_description/world_entity.py`. Upstream's `208cf0e44` had
+independently rewritten the same method: it reads a primitive's `volume` analytically and
+still falls back to `shape.mesh.area` for the surface, whereas this branch's `bb75a7157`
+had added an analytic `Shape.surface_area` and used it for both. Resolved to upstream's,
+for two reasons beyond currency -- the `.. note::` both sides carry (it merged without
+conflicting) describes upstream's short-circuit precisely, and upstream shipped collision
+tests written against it. Nothing on this branch depended on the other choice.
+
+The cost is that `Shape.surface_area`, five implementations in `geometry.py`, is now
+reached only by its own tests in `test_shape.py`. Under AGENTS.md that is a
+consult-the-developer call: remove it, or put it back into `has_collision` in upstream's
+short-circuit shape.
+
+**A second, invisible conflict** repeated the `giskardpy/executor.py` story this roadmap
+records for #169: `main` removed the module's `typing_extensions.Optional` import with its
+last use, this branch added `_next_target_time: Optional[float]`, and the two merged
+without a murmur into a `NameError` that `test/conftest.py` reaches transitively, breaking
+collection everywhere. #169 fixed it in `a5080fd08`; #170 forked from `608bc7fe6`, one
+commit earlier, so it arrived here unfixed and got the same `float | None` spelling.
+
+Worth generalising: this class of conflict has now bitten the same file twice. Finding it
+is cheap -- `pyflakes` over the merged tree restricted to the files the *upstream* side
+touched, since pyflakes is per-file and nothing else can be newly broken. Seventeen files
+here, one finding.
+
+**Restacking debt has doubled.** #164, #165, #167 and #168 were already based on #169's
+pre-merge tip; they are now also based on #170's pre-merge tip. #175 remains on #169's.
+None of that was addressed here -- the developer asked only for this branch.
+
+Not done: PR #170's draft state was left untouched, because `gh` was unauthenticated in
+the session's environment and the state could not be read. The dashboard was not
+republished either -- the `plan-dashboard` dependencies (`markdown`, `nh3`) are still not
+installed on this machine, as the session-start check reports.
+

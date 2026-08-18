@@ -71,7 +71,11 @@ items:
       Marked ready for review. Also carries the local-environment fixes (lark,
       sdt ORM duplicate table, costmaps inflation memory, detector-test frames)
       and the Symbol/Match-default rounds; per-round detail in
-      pr-progress/cramera_eql_autocomplete.md.
+      pr-progress/cramera_eql_autocomplete.md. On 2026-08-18 cram2/main was
+      merged in and the branch force-pushed as 03b3130a5; its one conflict
+      (Body.has_collision) went to main's version, and the giskardpy executor
+      NameError that a5080fd08 fixed on #169 was fixed here too. Every branch
+      stacked above it still sits on the pre-merge tip and needs restacking.
 
   - id: montessori_eql_where_is_highlighting
     title: "EQL \"where is ...?\" queries with general viewer highlighting"
