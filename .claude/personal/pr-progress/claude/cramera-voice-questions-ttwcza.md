@@ -71,6 +71,10 @@ at HEAD (`presets.json` drift with the upstream scenes submodule, two
 results-recording ones, one event-monitoring one, two franka-panda-equipment
 grasp-contact ones — see next).
 
+Committed and pushed as 564c1f0fa; the PR description gained a "More
+questions, asked aloud" section (gh's GraphQL edit path is broken by the
+classic-Projects deprecation, so it went through the REST API). Still a draft.
+
 ### Outstanding
 - CI not checked on #167/#168.
 - Pre-existing red in this checkout: `presets.json` in the scenes submodule
