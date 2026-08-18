@@ -147,10 +147,11 @@ items:
   - id: montessori_live_event_timeline_tab
     title: "A tabbed panel with a live timeline of detected segmind events"
     branch: montessori_live_event_timeline_tab
-    pull_request_number: null
+    pull_request_number: 175
     track: live-panels
     depends_on: [montessori_fast_inline_monitor]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01X3d7gwqJqim7D39XJPpJij
     notes: >-
       Replaces the fixed knowledge-graph frame at the bottom left with a
       selectable tab widget; its first new tab plots segmind events live as
