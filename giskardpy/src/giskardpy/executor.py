@@ -148,7 +148,7 @@ class SimulationTimePacer(Pacer):
     How long to wait between checks that simulated time has advanced.
     """
 
-    _next_target_time: Optional[float] = field(default=None, init=False)
+    _next_target_time: float | None = field(default=None, init=False)
     """
     Simulated time the next control cycle may start at.
     """
