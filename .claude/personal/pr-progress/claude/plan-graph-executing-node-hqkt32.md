@@ -1,8 +1,7 @@
 # montessori_plan_graph_tab (plan item of montessori-eql-stack)
 
 Branch `claude/plan-graph-executing-node-hqkt32`, based on #175
-(`montessori_live_event_timeline_tab`). No PR opened - the developer asked for the
-implementation only.
+(`montessori_live_event_timeline_tab`). Draft PR #178.
 
 ## Plan
 
@@ -29,7 +28,7 @@ a different project. Python tests are left to CI; node tests run fine (`node --t
 
 ## Next
 
-- Open a draft PR based on #175 if the developer asks for one (label it `bug`? no - this
-  is a feature item, though it carries two fixes to the old tab).
+- Nothing outstanding. #178 is a draft, as every PR in this plan is; re-draft it after
+  any further push.
 - `montessori_detachable_panels` builds on this: each tab now holds a whole panel, which
   is what makes detaching one meaningful.
