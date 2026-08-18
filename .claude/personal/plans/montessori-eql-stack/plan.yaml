@@ -247,14 +247,36 @@ items:
 
   - id: montessori_plan_graph_tab
     title: "A plan-graph tab highlighting the executing plan node in real time"
-    branch: montessori_plan_graph_tab
+    branch: claude/plan-graph-executing-node-hqkt32
     pull_request_number: null
     track: live-panels
     depends_on: [montessori_live_event_timeline_tab]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_011zuYnHUJtJLYs48VikWaYn
     notes: >-
-      Adds a tab to the panel widget showing the robot's current plan graph,
-      with the node currently being executed highlighted live.
+      Implemented on 2026-08-18 as 8de5cf76, based on #175 and restacked onto
+      its ORM-untracking tip 2d7f7b183 in the same session (6a496668). No pull
+      request opened yet - the developer asked for the implementation only. The
+      branch keeps the session's own designated name rather than the manifest's,
+      as `montessori_perform_queried_action` and
+      `montessori_replay_event_annotations` already did. The item was *not*
+      redundant, but it is a replacement rather than an addition: the plan tree
+      already existed as one of four sub-tabs inside the graph panel, so it was
+      extracted into a panel of its own (`panels/plan_graph`) and mounted as a
+      tab beside Graph and Events, and the graph panel's own Plan tab was
+      dropped. Two real defects of the old tab were fixed on the way: every node
+      between the root and the running step read RUNNING (the bridge now
+      publishes `executing` on `/plan` - the running nodes with no running child
+      - which the panel draws with its own EXECUTING ring, names above the tree,
+      and centres on as execution moves), and the tab only reached the bridge
+      once the recorded plan view had loaded, so a bundle whose plan view errors
+      never showed the running plan at all. `graph.js` became
+      `GraphView.create(container, legend)`, since two panels drawing graphs
+      cannot share one renderer; `core/split-resize` now announces a drag as
+      `panel:resized` on the bus instead of reaching for the renderer global.
+      205 node tests green; the cramera pytest suite could not run in this
+      session's container (random_events_lib is a workspace C++ extension that
+      is not built there), so its Python tests were left to CI.
 
   - id: montessori_detachable_panels
     title: "Detach, reattach, resize, and maximize any of the panel tabs"

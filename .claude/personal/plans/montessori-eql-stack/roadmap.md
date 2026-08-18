@@ -736,3 +736,62 @@ before the first switch onto a fixed branch; the commit message carries the two 
 so it blocks a branch switch for the same reason the interfaces did. Left alone: unlike
 the interfaces it is a checked-in input, so the fix is to make the test write its output
 elsewhere, which is a different change.
+
+## 2026-08-18: montessori_plan_graph_tab, implemented
+
+The developer asked for the item to be implemented directly, and — reading the
+"may be partly redundant" note the timeline item left above — to check whether
+the plan tab already there works, and to fix or replace it.
+
+### It worked, and it was still the wrong thing
+
+`panels/graph/panel.js` did poll the bridge's `/plan` and colour node rings by
+status, so the tab was not broken in the "nothing appears" sense. Three things
+were wrong with it:
+
+- **It never said where execution was.** The bridge propagates a running motion
+  up the plan tree, so every node from the root down to the running step reads
+  `RUNNING`. Colouring the running nodes therefore lights up a whole path and
+  points at nothing.
+- **The live plan waited on the recorded one.** `showTab('plan')` fetched
+  `/api/knowledge/view?name=plan` first and returned early on an error, leaving
+  `base['plan']` unset — which is what `liveSource()` reads to decide there is a
+  live source at all. On a bundle whose plan view errors, the tab reported that
+  error and never showed the running demo, for as long as the page lived.
+- **It could not become a tab of the panel widget.** `window.Graph` was a
+  singleton bound to one container by `attach()`, so a second panel drawing a
+  graph would have taken the first one's canvas — and `montessori_detachable_panels`
+  needs a tab to hold a whole panel.
+
+### What was built
+
+The plan tree became `panels/plan_graph`, mounted as a third tab beside Graph
+and Events, and the graph panel's Plan tab was dropped (it keeps Knowledge,
+Kinematics and Statechart). Decisions worth keeping:
+
+- **The bridge decides which node is being executed, the viewer decides how it
+  looks.** `/plan` gained `executing`: the running nodes with no running child.
+  `PlanSnapshot.executing` computes it from the serialized tree, so it costs one
+  pass over nodes already built and needs no second walk of the plan.
+- **`EXECUTING` is a viewer status, not a coraplex one.** `TaskStatusName` mirrors
+  what coraplex reports and must keep doing so, so the distinction lives in
+  `graph.js`'s `STATUS_STYLE`, alongside the giskardpy life-cycle names it already
+  carries. The panel substitutes it for the ids the bridge named, which means the
+  in-place re-colour path highlights the moving step without a rebuild.
+- **The renderer is created per container.** `GraphView.create(container, legend)`
+  replaces `window.Graph` + `attach()`. That also removed the one remaining reader
+  of the global, `core/split-resize`'s `refit()`, which now emits `panel:resized`
+  on the bus — so every panel drawing a graph re-fits after a drag, not just
+  whichever one had attached last.
+- **The two sources are independent.** Live polling and the recorded fallback each
+  load on their own, which is what makes the second defect above unrepeatable; a
+  node test pins it (`a live plan is shown even when the recorded one has no
+  backend`).
+- **`PlanViewPayload` dropped its `live: "plan"` flag.** Nothing reads it any more:
+  the new panel knows its own source, and the graph panel now keys only on
+  `live === 'chart'`.
+
+The cramera pytest suite could not run in this session's container — `random_events`
+needs its `random_events_lib` C++ extension built from the workspace — so the Python
+tests (the three new `executing` cases in `test_live_bridge.py`, the asset checks and
+the JS-suite registration) are left to CI. All 205 node tests are green locally.

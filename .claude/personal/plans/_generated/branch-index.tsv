@@ -21,7 +21,7 @@ claude/queried-action-perform-button-vg2vz3	montessori-eql-stack
 montessori_run_written_action	montessori-eql-stack
 claude/label-replayed-event-tracking-vj0x2z	montessori-eql-stack
 montessori_live_event_timeline_tab	montessori-eql-stack
-montessori_plan_graph_tab	montessori-eql-stack
+claude/plan-graph-executing-node-hqkt32	montessori-eql-stack
 montessori_detachable_panels	montessori-eql-stack
 query-class-refactor	rdr-refactor
 eql-core-prep	rdr-refactor
