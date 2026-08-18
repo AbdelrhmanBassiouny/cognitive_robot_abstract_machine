@@ -74,7 +74,13 @@ items:
       pre-existing branch work needing the developer: two demo directories,
       coraplex_warehouse_storage_demo and coraplex_wind_farm_service_demo, that
       test_warehouse_storage_layout and test_wind_farm_service_layout expect but
-      that were never committed.
+      that were never committed. 06582ca32 then made a checkout with no
+      generated ORM interfaces build them instead of failing a world build into
+      the run, porting ijcai-tutorial's OrmInterface/WorkspaceOrmInterfaces into
+      the meta-package and running it as a second pre-flight in
+      run_montessori_demo.sh. The PR description, which was still GitHub's
+      auto-generated one describing unrelated demo scripts, was replaced with
+      the branch's real one in the same round.
 
   - id: cramera_eql_autocomplete
     title: "Name any class of the workspace in a query, and complete as you type"

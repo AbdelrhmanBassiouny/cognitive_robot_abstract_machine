@@ -602,3 +602,41 @@ is empty by design, and `cramera/scenes` is an uninitialised submodule. The new
 experiments tests were therefore run with `--noconftest`; the two failures that
 remain there (`TestDeclaredBundlePresets`) reproduce identically on the untouched
 base, being the missing submodule.
+
+## 2026-08-18: #169 generates the ORM interfaces a run needs
+
+The demo could not be started from a fresh checkout. Every `ormatic_interface.py` is
+tracked as an empty placeholder, and an empty module still *imports* - so nothing failed
+early, and `ResultsDatabase._schema()` died on `AttributeError: module
+'experiments.orm.ormatic_interface' has no attribute 'Base'` a whole world build into
+the run.
+
+The fix already existed on `ijcai-tutorial`, in `d65ec4244`, which needed the same thing
+for its notebook: the regeneration moved out of `scripts/regenerate_all_orm.py` into the
+installed meta-package as `OrmInterface` / `WorkspaceOrmInterfaces`, with
+`scripts/regenerate_all_orm.py` and `scripts/protect_generated_orm_interfaces.py` left
+as thin CLIs over it. That commit is unchanged on `origin/ijcai-tutorial`'s tip (the
+local ref was stale at `49b7744`), and it was ported here verbatim, tests and CI matrix
+entry included.
+
+What it was missing is the part this branch needed: it wired the check into the IJCAI
+notebook only. Added on top, `WorkspaceOrmInterfaces.ensure_generated()` builds them
+only when the checkout has none, `scripts/ensure_orm_interfaces.py` announces the minute
+before spending it, and `run_montessori_demo.sh` runs it as a second pre-flight beside
+the database one - before the cramera server and the CRAM stack import, so a fresh
+checkout pays up front rather than a world build later. A checkout missing one interface
+is rebuilt whole, since each generator reads the interfaces of the packages before it.
+
+Verified in this environment rather than statically: `regenerate_all_orm.py` completes
+and fills all five interfaces, emptying `segmind`'s and running the new script rebuilds
+the workspace back to identical sizes, a second run is instant, and the new suite is
+10/10. Pushed as `06582ca32` after rebasing onto `f44c76d73`, which had moved ahead of
+the session's start.
+
+### Not covered
+
+`python -m experiments.montessori.franka_montessori_demo` still hits the raw
+`AttributeError` on a fresh checkout. Covering it would mean `experiments` importing the
+meta-package that depends on it - a dependency cycle - so the honest fix is moving
+`orm_interfaces.py` somewhere both can depend on, most likely `krrood`. Left for the
+developer to decide.
