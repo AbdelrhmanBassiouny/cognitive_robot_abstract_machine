@@ -12,8 +12,10 @@ from collections.abc import Mapping
 from dataclasses import MISSING, dataclass, field, fields, is_dataclass
 
 from typing_extensions import (
+    AbstractSet,
     Any,
     Dict,
+    FrozenSet,
     List,
     Optional,
     Protocol,
@@ -159,6 +161,14 @@ class RowRenderer:
     one of those is a plain value rather than something the graph can light up.
     """
 
+    highlightable_ids: AbstractSet[str] = frozenset()
+    """
+    Ids the viewer can light up, such as the scene objects it currently shows.
+
+    Any string answer value equal to one of these is highlighted, whatever the query
+    asked for; answer values naming nothing the viewer shows are left alone.
+    """
+
     highlight: List[str] = field(default_factory=list)
     """
     Ids of the graph nodes the rendered rows should highlight.
@@ -270,7 +280,11 @@ class RowRenderer:
             return self._row_title(value) or repr(value)
         if isinstance(value, float):
             return round(value, 4)
-        if isinstance(value, (str, int, bool)) or value is None:
+        if isinstance(value, str):
+            if value in self.highlightable_ids:
+                self.highlight.append(value)
+            return value
+        if isinstance(value, (int, bool)) or value is None:
             return value
         return repr(value)
 
@@ -320,6 +334,11 @@ class EqlQueryRunner:
     )
     """
     The workspace classes a query of this runner may name besides its own domains.
+    """
+
+    highlightable_ids: FrozenSet[str] = frozenset()
+    """
+    Ids the viewer can light up; see :attr:`RowRenderer.highlightable_ids`.
     """
 
     @property
@@ -388,9 +407,11 @@ class EqlQueryRunner:
             # evaluable, whereas the evaluated result is rows and no longer a question
             verbalization = QueryVerbalization.of_expression(result)
             result = self.evaluation.evaluate(result)
-        rendered = RowRenderer(limit=limit, entity_types=self.entity_types).rows_of(
-            result
-        )
+        rendered = RowRenderer(
+            limit=limit,
+            entity_types=self.entity_types,
+            highlightable_ids=self.highlightable_ids,
+        ).rows_of(result)
         kind = (
             "rows"
             if rendered.rows and "__entity__" not in rendered.rows[0]

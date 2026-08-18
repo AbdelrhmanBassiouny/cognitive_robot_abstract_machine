@@ -76,6 +76,7 @@ from experiments.montessori.results_recording import (
     open_recording,
 )
 from experiments.montessori.run_control import SortingRunControl
+from experiments.montessori.scene_layout import SceneLayout, scene_entities_of
 from experiments.montessori.semantics import (
     MontessoriShape,
     MontessoriShapeCategory,
@@ -1020,8 +1021,13 @@ def _attach_cramera(
         detections to as it makes them.
     """
     start_live_bridge(world=montessori.world)
+    BRIDGE.register_scene_entities(scene_entities_of(montessori.world))
     BRIDGE.register_query_source(
-        MontessoriLiveQuerySource(progress=progress, results_database=results_database)
+        MontessoriLiveQuerySource(
+            progress=progress,
+            layout=SceneLayout.of_world(montessori.world),
+            results_database=results_database,
+        )
     )
     BRIDGE.register_run_control(control)
     detections = MontessoriLiveEventSource(clock=control.clock)

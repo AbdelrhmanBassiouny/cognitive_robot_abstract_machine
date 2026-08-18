@@ -18,7 +18,10 @@ from cramera.mesh_format import MeshFormat
 if TYPE_CHECKING:
     from semantic_digital_twin.robots.robot_parts import AbstractRobot
     from semantic_digital_twin.world import World
-    from semantic_digital_twin.world_description.world_entity import Body
+    from semantic_digital_twin.world_description.world_entity import (
+        Body,
+        KinematicStructureEntity,
+    )
 
 
 @dataclass(frozen=True)
@@ -38,14 +41,14 @@ class LooseObjects:
     """
 
     @staticmethod
-    def key_of(body: Body) -> str:
+    def key_of(entity: KinematicStructureEntity) -> str:
         """
-        The key a body's geometry and poses are published under: its local name, without
-        the prefix a composed world gives it.
+        The key an entity's geometry and poses are published under: its local name,
+        without the prefix a composed world gives it.
 
-        :param body: The body to key.
+        :param entity: The body or region to key.
         """
-        return str(body.name).split("/")[-1]
+        return str(entity.name).split("/")[-1]
 
     def keyed_bodies(self) -> Dict[str, Body]:
         """

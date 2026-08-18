@@ -31,6 +31,8 @@ from experiments.montessori.live_query_source import (
     MONTESSORI_PRESETS,
     MontessoriLiveQuerySource,
 )
+from experiments.montessori.scene_layout import SceneLayout
+from experiments.montessori.semantics import SHAPE_NAME_SUFFIX
 from experiments.montessori.sorting_progress import CompletedAttempt, SortingProgress
 
 from .dataset.montessori_board import (
@@ -90,7 +92,9 @@ def source(scene):
             raised_exception=BodyUnfetchable(body=shape.root, arm=None),
         )
     )
-    return MontessoriLiveQuerySource(progress=progress)
+    return MontessoriLiveQuerySource(
+        progress=progress, layout=SceneLayout.of_world(world)
+    )
 
 
 def current_state_of(source):
@@ -100,21 +104,24 @@ def current_state_of(source):
     :param source: The query source to read.
     """
     [knowledge] = [
-        entry
-        for entry in source.knowledge()
-        if entry.scope is QueryScope.CURRENT_STATE
+        entry for entry in source.knowledge() if entry.scope is QueryScope.CURRENT_STATE
     ]
     return knowledge
 
 
-def ask(source, code):
+def ask(source, code, highlightable_ids=frozenset()):
     """
     Run one query about the sort in progress, the way the bridge does.
 
     :param source: The query source to ask.
     :param code: The query to run.
+    :param highlightable_ids: Ids the viewer is said to show, as the bridge passes its
+        published objects.
     """
-    return EqlQueryRunner(domains=current_state_of(source).domains).run(code)
+    return EqlQueryRunner(
+        domains=current_state_of(source).domains,
+        highlightable_ids=highlightable_ids,
+    ).run(code)
 
 
 # %% the source's own shape
@@ -122,12 +129,15 @@ class TestTheSource:
     def test_it_titles_itself_after_the_demo(self, source):
         assert "montessori" in source.title().lower()
 
-    def test_it_offers_the_shape_attempt_step_and_event_variables(self, source):
+    def test_it_offers_the_sort_and_scene_variables(self, source):
         assert [domain.name for domain in current_state_of(source).domains] == [
             "shape",
             "attempt",
             "plan_step",
             "event",
+            "hole",
+            "board",
+            "goal",
         ]
 
     def test_every_preset_runs(self, source):
@@ -205,10 +215,7 @@ class TestWhyAnAttemptFailed:
         )
 
         [row] = result.rows
-        assert (
-            row["failure_reason"]
-            == InsertionFailureReason.PLAN_FAILED
-        )
+        assert row["failure_reason"] == InsertionFailureReason.PLAN_FAILED
         assert "BodyUnfetchable" in row["failure_detail"]
 
     def test_a_shape_that_was_never_picked_up_is_named(self, scene):
@@ -268,6 +275,66 @@ class TestWhyAnAttemptFailed:
         )
 
         assert [row["event_type"] for row in result.rows] == ["PickUpEvent"]
+
+
+# %% "where is ...?" — answered by highlighting what it names
+class TestWhereSomethingIs:
+    """
+    The scene's own layout answers "where is" questions, each lighting up what it names
+    in the viewer.
+    """
+
+    def test_the_square_hole_is_found_and_highlighted(self, source):
+        result = ask(source, "the(entity(hole).where(hole.name == '%s'))" % SHAPE_KEY)
+
+        assert [row["__entity__"] for row in result.rows] == [SHAPE_KEY]
+        assert result.highlight == [SHAPE_KEY]
+
+    def test_every_hole_is_highlighted_at_once(self, source):
+        result = ask(source, "an(entity(hole))")
+
+        assert result.highlight == [SHAPE_KEY]
+
+    def test_the_montessori_box_is_found_and_highlighted(self, source):
+        result = ask(source, "the(entity(board))")
+
+        assert [row["__entity__"] for row in result.rows] == ["board"]
+        assert result.highlight == ["board"]
+
+    def test_the_goal_for_the_cube_highlights_its_hole(self, source):
+        result = ask(
+            source,
+            "the(entity(goal).where(goal.shape == '%s'))" % SHAPE_OBJECT_NAME,
+        )
+
+        [row] = result.rows
+        assert row["hole"] == SHAPE_KEY
+        assert result.highlight == ["%s goal" % SHAPE_OBJECT_NAME, SHAPE_KEY]
+
+    def test_a_shape_row_lights_up_its_published_body(self, source):
+        """
+        The shape record is named after what the piece is (``"cube"``) while the viewer
+        shows its body under the name it was built with, so the row has to say both.
+        """
+        result = ask(source, "an(entity(shape).where(shape.is_inserted == False))")
+
+        assert result.highlight == [
+            SHAPE_OBJECT_NAME,
+            SHAPE_KEY + SHAPE_NAME_SUFFIX,
+        ]
+
+    def test_an_answer_naming_a_published_object_highlights_it(self, source):
+        """
+        Highlighting is not tied to any particular query: an answer value that names
+        something the viewer shows glows, here the hole a shape is aimed at.
+        """
+        result = ask(
+            source,
+            "set_of(shape.name, shape.target_hole)",
+            highlightable_ids=frozenset({SHAPE_KEY}),
+        )
+
+        assert result.highlight == [SHAPE_KEY]
 
 
 # %% the recorded bundle offers the same questions
