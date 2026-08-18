@@ -109,7 +109,8 @@ therefore resolves the mapping in a **fresh interpreter**
 
 Tests: `test_montessori_results_database.py` 35 passed;
 `test_montessori_episodic_memory.py` 10 passed with the known `presets.json`
-submodule drift still failing. Not committed yet.
+submodule drift still failing. Committed and pushed as `20099c089`; the PR
+description's read-only section gained the follow-up. Still a draft.
 
 ### Outstanding
 - CI not checked on #167/#168.
