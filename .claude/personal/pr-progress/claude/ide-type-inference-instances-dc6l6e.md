@@ -23,6 +23,13 @@ error.
 ## Status
 - [x] Environment set up (venv312, krrood + deps editable)
 - [x] Baseline typing test passes; complaint reproduced under mypy
-- [ ] Failing tests written
-- [ ] Implementation
-- [ ] Full test pass, push
+- [x] Failing tests written (new fixture sections + 6 runtime tests in test_match.py)
+- [x] Implementation: overloads return Union[T, Match[T]]; Match.__getattr__/__dir__
+      delegate to expression; noun state renamed to _x_ convention (Match,
+      AbstractMatchExpression, AttributeMatch, HasFactoryAndKwargs) so public
+      namespace belongs to the matched class (parent/child/name no longer shadowed);
+      CalledMatchAfterResolution guard; consumers updated (backends, parameterizer,
+      verbalization match planner, coraplex plan_node)
+- [x] krrood suite green (992 passed; assembler doctest fixed to _variable_ form
+      because delegated attrs verbalize as "the battery of the Robot" not "its")
+- [ ] Final full-suite confirmation, commit + push
