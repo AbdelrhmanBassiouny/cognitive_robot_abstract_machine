@@ -32,4 +32,14 @@ error.
       verbalization match planner, coraplex plan_node)
 - [x] krrood suite green (992 passed; assembler doctest fixed to _variable_ form
       because delegated attrs verbalize as "the battery of the Robot" not "its")
-- [ ] Final full-suite confirmation, commit + push
+- [x] Final full-suite confirmation: 2154 passed, 6 skipped, 0 failed
+      (test_object_diagram deselected - `dot` binary missing in container,
+      fails identically on clean main)
+- [x] Committed (147d098d2) and pushed to
+      claude/ide-type-inference-instances-dc6l6e. No PR opened (not requested).
+
+## Next steps
+- None outstanding. Possible follow-ups if wanted: modernize doc examples
+  (`.expression.parent` -> `.parent`), and delegated attributes verbalize as
+  "the battery of the Robot" rather than "its battery" (cosmetic difference
+  vs `_variable_`-based attributes, could be unified in the verbalizer).
