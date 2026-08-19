@@ -56,33 +56,48 @@ items:
       Cross-reference eql-existential-semantics (issue 137): its
       evaluation-model wave targets the same uncorrelated-evaluation family;
       check during kickoff whether that work subsumes or informs this fix,
-      and record the outcome on both plans' mailboxes.
+      and record the outcome on both plans' mailboxes. Urgency raised
+      2026-08-19: item 2's branch already exists and forwards attribute
+      access to the lowered query, so this bug now sits under the natural
+      match.where(match.attr ...) spelling; re-verified through that
+      forwarding on the item-2 branch.
   - id: match-underscore-rename-and-forwarding
     title: "Match behaves like a variable: underscore-sandwich rename + guarded __getattr__ forwarding"
-    branch: null
+    branch: claude/ide-type-inference-instances-dc6l6e
     pull_request_number: null
     track: match-api
     depends_on:
       - where-query-rooted-attribute-no-filter
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01PUMacEHWrFMr5wXdFLx7qG
+    blockers:
+      - >-
+        Must not land before where-query-rooted-attribute-no-filter: on the
+        branch, q.where(q.battery >= 50) via the new forwarding silently
+        returns the whole domain (verified 2026-08-19), so the branch makes
+        the wave-1 bug the natural default inside where.
     notes: >
-      Rename Match/AbstractMatchExpression/AttributeMatch state to the
-      underscore-sandwich convention (parent, children, resolved, id, name,
-      root, descendants have zero external consumers; variable, type,
-      conditions, domain and the HasFactoryAndKwargs factory/kwargs have
-      consumers in backends.py, parameterizer.py, verbalization planners,
-      coraplex plan_node.py:434, probabilistic_model rspn.py). Add a
-      dunder-guarded __getattr__ forwarding to the lowered query so
-      fixed_connection.parent and match.where(match.battery >= 0) work
-      through one access pattern. Keep expression and variable as working
-      public properties in this PR so downstream stays green; fluent verbs
-      (where, from_, tolist, first, construct_instance) stay public, same
-      shadowing trade-off Query already makes. Hazard: after forwarding, a
-      missed rename fails silently as a symbolic Attribute instead of an
-      AttributeError - the krrood-internal migration must be exhaustive in
-      this PR. Coordination: the in-flight D-core stack (PRs 63-67) adds
-      test_underspecified_match.py consuming the current Match API; time the
-      landing or provide the compatibility surface above.
+      Implemented on the branch (commit 147d098d2, full krrood suite green)
+      by an independent IDE-typing session that converged on this item's
+      design without knowing the plan existed: underscore-sandwich rename
+      across Match/AbstractMatchExpression/AttributeMatch/HasFactoryAndKwargs
+      (_declared_type_, _type_, _variable_, _conditions_, _parent_,
+      _children_, _resolved_, _id_, _name_, _root_, _descendants_,
+      _matches_with_variables_, _has_ellipsis_attributes_, _domain_,
+      _factory_, _kwargs_), dunder- and underscore-guarded __getattr__
+      forwarding to the lowered query, __dir__ completion, a new
+      CalledMatchAfterResolution guard, and all krrood-internal consumers
+      migrated (backends, parameterizer, verbalization planners, coraplex
+      plan_node, probabilistic_model rspn). Beyond the item's scope it also
+      fixes the static half: an()/a()/the() type/factory overloads return
+      Union[T, Match[T]] and Match.__call__ returns Union[T, Self], pinned
+      by the mypy fixture. Deviations from the item notes, still to
+      reconcile before a PR: variable and matches_with_variables were
+      renamed with consumers migrated in-branch instead of kept as public
+      compatibility properties (the D-core stack's
+      test_underspecified_match.py uses both, so its cascade will break
+      loudly on rebase), and the planned old-names-are-really-gone guard
+      test is not yet added.
   - id: factories-unwrap-match-and-migrate
     title: "Factories accept a Match directly; migrate consumers and docs off the detours"
     branch: null
@@ -96,9 +111,13 @@ items:
       its lowered query so the(match), an(match) and set_of(match.parent,
       ...) work (today the(match) mis-routes into Match(factory=match) and
       dies in _initialize_type_'s assert_never). Migrate the ~30 .expression
-      and ~20 .variable user-facing sites (krrood tests, coraplex,
-      experiments, probabilistic_model, semantic_digital_twin tests) and the
-      docs that teach the detours (underspecified.md,
-      inference_explanation.md, graph_and_visualization.md, match.md), then
-      decide with the developer whether the public expression/variable
-      properties are removed or kept as documented escape hatches.
+      user-facing sites (krrood tests, coraplex, experiments,
+      probabilistic_model) and the docs that teach the detours
+      (underspecified.md, inference_explanation.md,
+      graph_and_visualization.md, match.md), then decide with the developer
+      whether the public expression property is removed or kept as a
+      documented escape hatch. Scope update 2026-08-19: the ~20 .variable
+      sites were already migrated to _variable_ by item 2's branch, and the
+      public variable property no longer exists there - so this item's
+      variable-side decision collapses into however item 2 resolves its
+      compatibility deviation.

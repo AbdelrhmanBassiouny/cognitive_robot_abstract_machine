@@ -105,3 +105,47 @@ dependency of the refactor, not an optional cleanup.
   wrong) instead of raising `AttributeError`. Item 2's krrood-internal
   migration must therefore be exhaustive in the same PR, and its test plan
   should include a guard that the old names are really gone.
+
+## 7. 2026-08-19: item 2 landed on a branch ahead of order (IDE-typing session)
+
+A session answering a separate developer request — "the IDE doesn't treat
+`a/an/the(ClassName)` like an instance of ClassName" — implemented item 2
+near-verbatim on `claude/ide-type-inference-instances-dc6l6e` (commit
+`147d098d2`, full krrood suite green, no PR) without knowing this plan
+existed: it independently re-derived the same root cause (§2) and the same
+design decisions (§4 — forward to the lowered query, underscore-sandwich
+rename, fluent verbs stay public). It additionally delivered the static
+half this plan had not scoped: the type/factory overloads of
+`an()`/`a()`/`the()` now return `Union[T, Match[T]]` and
+`Match.__call__` returns `Union[T, Self]`, pinned by the mypy fixture in
+`test_typing/`, plus `__dir__` completion and a `CalledMatchAfterResolution`
+guard for kwargs-after-lowering.
+
+**The wave-1 dependency proved load-bearing, empirically.** On that branch:
+
+- `q.where(q.battery >= 50)` (the new forwarded spelling) silently returns
+  the whole domain — the §3 no-filter bug, now under the natural syntax;
+- `q.where(q._variable_.battery >= 50)` filters correctly;
+- selection (`set_of(q.parent, q.child)`) via forwarding is correct and
+  covered by new tests.
+
+So the branch must not land before item 1. Its own tests stayed green only
+because the `where`-side tests it migrated use `_variable_`-rooted
+conditions and the new forwarding tests exercise selection, not `where`.
+
+**Deviations from the item-2 notes, to reconcile before a PR:**
+
+- `variable` and `matches_with_variables` were renamed outright with all
+  in-repo consumers migrated, instead of being kept as public compatibility
+  properties. The D-core stack's `test_underspecified_match.py` (verified
+  present on `D-core-underspecified` .. `D-core-expert`) uses
+  `match.variable` and `match.matches_with_variables`, so its cascade will
+  break loudly (iteration is blocked and the identity assert fails) when
+  the two lines meet.
+- The old-names-are-really-gone guard test (§6, silent-miss hazard) is not
+  yet added.
+
+**One new data point for the verbalizer:** a forwarded attribute
+verbalizes as "the battery of the Robot" where a `_variable_`-rooted one
+says "its battery" — cosmetic divergence noted for whenever item 3
+modernizes docs/doctests.
