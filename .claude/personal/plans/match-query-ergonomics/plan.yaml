@@ -42,11 +42,12 @@ tracks:
 items:
   - id: where-query-rooted-attribute-no-filter
     title: "Bug: where-condition from a query-rooted attribute silently does not filter"
-    branch: null
-    pull_request_number: null
+    branch: claude/match-query-ergonomics-where-rooted-b876wm
+    pull_request_number: 182
     track: correctness
     depends_on: []
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01AoBPcJ2koNUkKxuGERs8eC
     notes: >
       q.where(q.expression.battery >= 50) returns the whole domain with no
       error (verified 2026-08-19 on main 90c241168); only
