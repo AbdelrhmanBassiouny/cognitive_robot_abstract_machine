@@ -61,7 +61,15 @@ items:
       2026-08-19: item 2's branch already exists and forwards attribute
       access to the lowered query, so this bug now sits under the natural
       match.where(match.attr ...) spelling; re-verified through that
-      forwarding on the item-2 branch.
+      forwarding on the item-2 branch. Kickoff outcome 2026-08-19: #137 does
+      not subsume this - binding the outer relation first still leaves the
+      chain rooted at the query and still evaluates the query as a subquery,
+      so the self-reference has to be resolved structurally; recorded on
+      issues 181 and 137. Fixed by re-rooting chains taken from the query
+      onto the variable it selects, at the point conditions are attached
+      (Query.where / Query.having), which leaves selection-side chains and
+      chains rooted at another query alone; a query selecting several
+      variables raises AmbiguousQueryAttribute. Full krrood suite green.
   - id: match-underscore-rename-and-forwarding
     title: "Match behaves like a variable: underscore-sandwich rename + guarded __getattr__ forwarding"
     branch: claude/ide-type-inference-instances-dc6l6e
