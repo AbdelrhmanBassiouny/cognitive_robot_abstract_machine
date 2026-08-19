@@ -149,3 +149,59 @@ conditions and the new forwarding tests exercise selection, not `where`.
 verbalizes as "the battery of the Robot" where a `_variable_`-rooted one
 says "its battery" — cosmetic divergence noted for whenever item 3
 modernizes docs/doctests.
+
+## 8. 2026-08-19: item 1 kickoff — the fix is a self-reference rewrite, not an evaluation-model change
+
+Branch `claude/match-query-ergonomics-where-rooted-b876wm`, PR #182 (draft),
+off `main` at `90c241168`. The item was implemented directly at the
+developer's instruction rather than through the usual plan-mode approval.
+
+**Re-confirmed the bug and pinned its mechanism.** On `main`, both spellings
+of a query-rooted `where` condition are uncorrelated:
+
+- `query.where(query.battery >= 50)` returns the full domain;
+- `query.where(query.battery >= 1000)` returns `[]`;
+- `query.where(query.battery >= -1)` returns **four** rows over a two-robot
+  domain.
+
+So it is not "the condition is ignored" but existential-plus-cross-product:
+the chain `query.battery` is rooted at the query, and inside that query's own
+`Where` it re-evaluates the query as a nested (cached, uncorrelated) subquery,
+answering "some row satisfies this" once and then letting the selected
+variable enumerate freely. The row multiplication at `>= -1` is the tell.
+
+**#137 does not subsume this (the cross-check §4 asked for).** The
+`binding-order-planner` item of `eql-existential-semantics` covers the same
+"uncorrelated condition returns every row" family, and its own notes describe
+the identical symptom for `exists`. But binding the outer relation first does
+not make `query.battery` mean "this row's battery": the chain would still be
+rooted at the query and still evaluate it as a subquery. The self-reference has
+to be resolved structurally. The two fixes are complementary, not overlapping,
+and neither blocks the other. Recorded on both plans.
+
+**Design chosen.** Conditions attached to a query have every attribute chain
+rooted at that same query re-rooted onto the variable the query selects. The
+rewrite happens at the point conditions are attached (`Query.where` /
+`Query.having`), which confines it to the query's own conditions and leaves the
+two things §4 depends on untouched: a chain rooted at a *different* query stays
+an uncorrelated subquery, and the same chain used as a *selection*
+(`set_of(match.expression.parent, ...)`, which is what carries the match's
+conditions) is not rewritten at all.
+
+Correlating rather than raising is what §4 requires: item 2 forwards
+`match.<attr>` to the lowered query, so raising would make the natural spelling
+an error rather than the default.
+
+A query selecting more than one variable has no single subject for such an
+attribute, so it raises `AmbiguousQueryAttribute` rather than guessing —
+the "or raises" half of the item's brief, kept for the case correlation cannot
+cover.
+
+Chain rebuilding is a new `MappedVariable._reroot_on_`, with each mapping
+subclass reporting the constructor arguments after the child that reproduce it,
+so a new mapping type cannot silently be skipped by the rewrite.
+
+**Detection is by expression id, not identity.** Attaching a mapped variable to
+a query copies the query node while preserving `_id_`, and `Query._compile_`
+replays the conditions onto a product sharing the specification's `_id_`. Any
+self-reference test that used `is` would miss both.
