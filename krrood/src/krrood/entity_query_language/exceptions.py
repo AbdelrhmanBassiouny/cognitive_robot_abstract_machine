@@ -866,6 +866,32 @@ class CalledMatchMultipleTimes(DataclassException):
 
 
 @dataclass
+class CalledMatchAfterResolution(DataclassException):
+    """
+    Raised when a match expression is called with keyword arguments after it was already
+    resolved into its query expression, so the keyword arguments could no longer
+    constrain the query.
+    """
+
+    match: AbstractMatchExpression
+    """
+    The match that was called after its resolution.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Match expression '{self.match}' was called after it was already resolved "
+            f"into its query expression (symbolic attribute access and `where` both "
+            f"resolve a match). The keyword arguments can no longer constrain the query."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Pass the keyword arguments before accessing attributes or calling `where`."
+        )
+
+
+@dataclass
 class UnderspecifiedStatementInfeasibleForEntityQueryLanguageGeneration(
     DataclassException
 ):
@@ -900,7 +926,7 @@ class MatchTypeCannotBeDetermined(DataclassException):
     def error_message(self) -> str:
         return (
             f"Match type cannot be determined for {self.match}. "
-            f"Tried to infer the type from {self.match.factory}."
+            f"Tried to infer the type from {self.match._factory_}."
             f"The factory given to the match must ether be a classmethod the returns its class or a "
             f"method where the return type is a class which has been concretely imported (not via "
             f"TYPE_CHECKING). If that is not an option for you, set the `target_type` keyword "

@@ -143,7 +143,7 @@ class ExchangeableDistributionTemplate:
         ]
         part_circuit.marginal_in_place(non_latent_variables)
         prefix = (
-            str(part.variable)
+            str(part._variable_)
             if isinstance(part, AbstractMatchExpression)
             else str(index)
         )
@@ -484,7 +484,7 @@ class RelationalProbabilisticCircuit:
         circuit, product_nodes_to_extend = self._condition_class_circuit(
             circuit, determined_statistics, template.latent_variables
         )
-        query_parts = query.kwargs[exchangeable_part_name]
+        query_parts = query._kwargs_[exchangeable_part_name]
 
         sampled_assignments = self._sample_undetermined_latents(
             circuit, undetermined_latents

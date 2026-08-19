@@ -10,7 +10,11 @@ from krrood.entity_query_language.factories import (
     an,
     a,
 )
-from krrood.entity_query_language.exceptions import MatchTypeCannotBeDetermined
+from krrood.entity_query_language.exceptions import (
+    CalledMatchAfterResolution,
+    MatchTypeCannotBeDetermined,
+    SymbolicDunderAccessError,
+)
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.core.base_expressions import UnificationDict
@@ -150,7 +154,7 @@ def test_domain_carrying_an_is_a_select():
     # whether to select over it or generate from it, so from_ does not collapse it to an Entity.
     query = a(Robot)(name="R2D2", battery=100).from_(robots)
     assert isinstance(query, Match)
-    assert query.domain is robots
+    assert query._domain_ is robots
     assert query.tolist()[0].name == "R2D2"
 
 
@@ -170,6 +174,58 @@ def test_expression_gives_symbolic_access(handles_and_containers_world):
     answers = container_and_handle.tolist()[0]
     assert answers[container].name == "Container1"
     assert answers[handle].name == "Handle1"
+
+
+# %% direct symbolic attribute access on a match
+
+
+def test_attribute_access_is_the_expression_attribute():
+    match = a(KRROODPosition)(x=1.0, y=2.0, z=3.0)
+    assert match.x is match.expression.x
+
+
+def test_attribute_access_works_for_names_previously_shadowed_by_match_internals(
+    handles_and_containers_world,
+):
+    # `parent`, `child` and `name` are fields of the matched classes here; they must
+    # resolve symbolically instead of hitting internals of the match machinery.
+    world = handles_and_containers_world
+    fixed_connection = a(FixedConnection)(
+        parent=a(Container)(name="Container1"), child=a(Handle)(name="Handle1")
+    ).from_(world.connections)
+    container_and_handle = the(
+        set_of(
+            container := fixed_connection.parent,
+            handle := fixed_connection.child,
+        )
+    )
+    answers = container_and_handle.tolist()[0]
+    assert answers[container].name == "Container1"
+    assert answers[handle].name == "Handle1"
+
+
+def test_name_attribute_of_matched_class_is_symbolic():
+    match = a(Handle)()
+    assert match.name is match.expression.name
+
+
+def test_calling_match_after_resolution_raises():
+    match = a(KRROODPosition)
+    _ = match.x
+    with pytest.raises(CalledMatchAfterResolution):
+        match(x=1.0)
+
+
+def test_dunder_attribute_access_is_not_symbolic():
+    match = a(KRROODPosition)
+    with pytest.raises(SymbolicDunderAccessError):
+        _ = match.__missing_dunder__
+
+
+def test_underscore_attribute_access_is_not_symbolic():
+    match = a(KRROODPosition)
+    with pytest.raises(AttributeError):
+        _ = match._missing_internal_
 
 
 def test_from_restricts_the_search():
@@ -198,7 +254,7 @@ def test_from_after_where_still_restricts_the_search():
 
     subset = [Robot("R2D2", 100), Robot("C3PO", 0)]
     query = a(Robot)()
-    query.where(query.variable.battery >= 0)
+    query.where(query._variable_.battery >= 0)
     query.from_(subset)
     selected = query.tolist()
     assert {robot.name for robot in selected} == {"R2D2", "C3PO"}
@@ -214,9 +270,11 @@ def test_from_without_kwargs_selects_all(handles_and_containers_world):
 
 def test_match_without_domain_selects_from_symbol_graph():
     """
-    A domain-less match evaluated standalone (default selective backend) *selects* from the
-    SymbolGraph for ``Symbol`` types: it returns the existing registered instance rather than
-    constructing a new one. Generation requires an explicit generative backend.
+    A domain-less match evaluated standalone (default selective backend) *selects* from
+    the SymbolGraph for ``Symbol`` types: it returns the existing registered instance
+    rather than constructing a new one.
+
+    Generation requires an explicit generative backend.
     """
     existing = KRROODPosition(1.0, 2.0, 3.0)
     result = an(KRROODPosition)(x=1.0, y=2.0, z=3.0).tolist()
@@ -254,7 +312,7 @@ def test_an_infers_target_type_from_annotated_callable():
         return KRROODPosition(x, y, z)
 
     match = an(make_position)
-    assert match.type is KRROODPosition
+    assert match._type_ is KRROODPosition
 
 
 def test_the_infers_target_type_from_annotated_callable():
@@ -262,7 +320,7 @@ def test_the_infers_target_type_from_annotated_callable():
         return KRROODPosition(x, y, z)
 
     match = the(make_position)
-    assert match.type is KRROODPosition
+    assert match._type_ is KRROODPosition
 
 
 def test_an_uses_explicit_target_type_for_unannotated_callable():
@@ -270,7 +328,7 @@ def test_an_uses_explicit_target_type_for_unannotated_callable():
         return KRROODPosition(x, y, z)
 
     match = an(make_position, target_type=KRROODPosition)
-    assert match.type is KRROODPosition
+    assert match._type_ is KRROODPosition
 
 
 def test_an_raises_when_callable_type_cannot_be_determined():
@@ -286,7 +344,7 @@ def test_a_infers_target_type_from_annotated_callable():
         return KRROODPosition(x, y, z)
 
     match = a(make_position)
-    assert match.type is KRROODPosition
+    assert match._type_ is KRROODPosition
 
 
 def test_a_uses_explicit_target_type_for_unannotated_callable():
@@ -294,20 +352,20 @@ def test_a_uses_explicit_target_type_for_unannotated_callable():
         return KRROODPosition(x, y, z)
 
     match = a(make_position, target_type=KRROODPosition)
-    assert match.type is KRROODPosition
+    assert match._type_ is KRROODPosition
 
 
-# ── Match.has_ellipsis_attributes ─────────────────────────────────────────────
+# ── Match._has_ellipsis_attributes_ ─────────────────────────────────────────────
 
 
 def test_has_ellipsis_attributes_true_for_direct_ellipsis():
     match = a(KRROODPosition)(x=..., y=2, z=3)
-    assert match.has_ellipsis_attributes is True
+    assert match._has_ellipsis_attributes_ is True
 
 
 def test_has_ellipsis_attributes_false_without_ellipsis():
     match = a(KRROODPosition)(x=1, y=2, z=3)
-    assert match.has_ellipsis_attributes is False
+    assert match._has_ellipsis_attributes_ is False
 
 
 def test_has_ellipsis_attributes_true_for_nested_ellipsis():
@@ -315,7 +373,7 @@ def test_has_ellipsis_attributes_true_for_nested_ellipsis():
         positions=[a(KRROODPosition)(x=..., y=2, z=3)],
         some_strings=["a"],
     )
-    assert match.has_ellipsis_attributes is True
+    assert match._has_ellipsis_attributes_ is True
 
 
 def test_has_ellipsis_attributes_true_for_ellipsis_element_in_plain_list():
@@ -328,7 +386,7 @@ def test_has_ellipsis_attributes_true_for_ellipsis_element_in_plain_list():
         positions=[KRROODPosition(1, 2, 3)],
         some_strings=["a", ..., "c"],
     )
-    assert match.has_ellipsis_attributes is True
+    assert match._has_ellipsis_attributes_ is True
 
 
 def test_has_ellipsis_attributes_true_for_ellipsis_mixed_with_nested_match_in_list():
@@ -336,7 +394,7 @@ def test_has_ellipsis_attributes_true_for_ellipsis_mixed_with_nested_match_in_li
         positions=[a(KRROODPosition)(x=1, y=2, z=3), ...],
         some_strings=["a", "b"],
     )
-    assert match.has_ellipsis_attributes is True
+    assert match._has_ellipsis_attributes_ is True
 
 
 def test_has_ellipsis_attributes_true_for_ellipsis_element_in_plain_set():
@@ -344,4 +402,4 @@ def test_has_ellipsis_attributes_true_for_ellipsis_element_in_plain_set():
         positions=[KRROODPosition(1, 2, 3)],
         some_strings={"a", ..., "c"},
     )
-    assert match.has_ellipsis_attributes is True
+    assert match._has_ellipsis_attributes_ is True

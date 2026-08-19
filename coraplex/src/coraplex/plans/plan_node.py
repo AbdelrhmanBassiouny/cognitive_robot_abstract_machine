@@ -431,7 +431,7 @@ class UnderspecifiedNode(ExecutionBoundaryNode):
 
     @property
     def designator_type(self) -> Type:
-        return self.underspecified_action.type
+        return self.underspecified_action._type_
 
     def _next_candidate(self) -> Optional[ActionNode]:
         """
@@ -542,9 +542,19 @@ class DesignatorNode(PlanNode, ABC):
 
     def __node_info__(self):
         parent_infos = super().__node_info__()
-        designator_field = [f"{field.name}: {getattr(self.designator, field.name)}" for field in self.designator.fields]
-        parent_infos.append("---------------- Designator Parameter --------------------")
-        parent_infos.extend([f"Designator Type: {self.designator.__class__.__name__}", *designator_field])
+        designator_field = [
+            f"{field.name}: {getattr(self.designator, field.name)}"
+            for field in self.designator.fields
+        ]
+        parent_infos.append(
+            "---------------- Designator Parameter --------------------"
+        )
+        parent_infos.extend(
+            [
+                f"Designator Type: {self.designator.__class__.__name__}",
+                *designator_field,
+            ]
+        )
         return parent_infos
 
     def __node_label__(self):

@@ -316,6 +316,10 @@ def _quantify_or_build_match(
       and generative-ready through a
       :class:`~krrood.entity_query_language.backends.GenerativeBackend`. Restrict the search to
       specific instances with :meth:`~krrood.entity_query_language.query.match.Match.from_`.
+      The match reads like an instance of the matched class, both statically (the
+      overloads return ``Union[T, Match[T]]``, so IDEs offer the class's own attributes)
+      and at runtime (attribute access is delegated symbolically, see
+      :meth:`~krrood.entity_query_language.query.match.Match.__getattr__`).
 
     :param arg: An entity/set/variable/attribute to quantify, or a type/callable to match.
     :param quantifier_type: The result quantifier to apply (``An`` or ``The``).
@@ -328,7 +332,7 @@ def _quantify_or_build_match(
             arg = entity(arg)
         return arg._quantify_(quantifier_type, quantification_constraint=quantification)
 
-    match_ = Match(factory=arg, type_=target_type)
+    match_ = Match(_factory_=arg, _declared_type_=target_type)
     match_._quantifier_type_ = quantifier_type
     return match_
 
@@ -355,7 +359,7 @@ def an(
     quantification: None = ...,
     *,
     target_type: None = ...,
-) -> Match[T]: ...
+) -> Union[T, Match[T]]: ...
 
 
 @overload
@@ -373,7 +377,7 @@ def an(
     quantification: None = ...,
     *,
     target_type: Type[T] = ...,
-) -> Match[T]: ...
+) -> Union[T, Match[T]]: ...
 
 
 @overload
@@ -416,7 +420,7 @@ def a(
     quantification: None = ...,
     *,
     target_type: None = ...,
-) -> Match[T]: ...
+) -> Union[T, Match[T]]: ...
 
 
 @overload
@@ -434,7 +438,7 @@ def a(
     quantification: None = ...,
     *,
     target_type: Type[T] = ...,
-) -> Match[T]: ...
+) -> Union[T, Match[T]]: ...
 
 
 @overload
@@ -472,7 +476,7 @@ def the(
     entity_: Type[T],
     *,
     target_type: None = ...,
-) -> Match[T]: ...
+) -> Union[T, Match[T]]: ...
 
 
 @overload
@@ -488,7 +492,7 @@ def the(
     entity_: Callable[..., T],
     *,
     target_type: Type[T] = ...,
-) -> Match[T]: ...
+) -> Union[T, Match[T]]: ...
 
 
 @overload

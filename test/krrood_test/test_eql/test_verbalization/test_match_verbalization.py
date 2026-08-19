@@ -179,7 +179,7 @@ def test_where_conditions_are_their_own_block():
     """
     match = a(Position)(x=1)
     match.resolve()
-    match.where(match.variable.y > 2)
+    match.where(match._variable_.y > 2)
     text = _hierarchical(match)
     assert text == (
         "Generate a Position\n"
@@ -196,7 +196,7 @@ def test_where_only_match_has_no_given_that_block():
     """
     match = a(Position)()
     match.resolve()
-    match.where(match.variable.x > 0)
+    match.where(match._variable_.x > 0)
     text = _hierarchical(match)
     assert text == "Generate a Position\n  where\n    - its x is greater than 0"
 
@@ -209,7 +209,7 @@ def test_where_folds_a_range_pair_into_one_between_point():
     """
     match = a(Position)()
     match.resolve()
-    match.where(match.variable.x > 0.0, match.variable.x < 5.0)
+    match.where(match._variable_.x > 0.0, match._variable_.x < 5.0)
     text = _hierarchical(match)
     assert text == "Generate a Position\n  where\n    - its x is between 0.0 and 5.0"
 
@@ -248,7 +248,7 @@ def test_nested_predict_with_where_range_on_sub_object():
     """
     pose = a(Pose)(position=a(Position)(x=..., y=..., z=...))
     pose.expression
-    pose.where(pose.variable.position.x > 0.0, pose.variable.position.x < 5.0)
+    pose.where(pose._variable_.position.x > 0.0, pose._variable_.position.x < 5.0)
     text = _hierarchical(pose)
     assert text == (
         "Generate a Pose\n"

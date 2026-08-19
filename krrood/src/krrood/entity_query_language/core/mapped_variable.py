@@ -19,6 +19,7 @@ from typing_extensions import (
     Any,
     Type,
     Optional,
+    Set,
     Tuple,
     Dict,
     List,
@@ -42,6 +43,28 @@ from krrood.entity_query_language.utils import (
     convert_args_and_kwargs_into_hashable_key,
 )
 from krrood.symbol_graph.helpers import get_field_type_endpoint
+
+
+def attribute_names_for_completion(type_: Any) -> Set[str]:
+    """
+    Collect the non-dunder attribute and annotation names of a type, for interactive
+    completion on expressions that stand for a value of that type.
+
+    :param type_: The value type whose attribute names to collect; anything that is not
+        a class yields no names.
+    :return: The collected names.
+    """
+    names: Set[str] = set()
+    if not isinstance(type_, type):
+        return names
+    names.update(
+        name
+        for name in dir(type_)
+        if not (name.startswith("__") and name.endswith("__"))
+    )
+    for klass in type_.__mro__:
+        names.update(getattr(klass, "__annotations__", {}).keys())
+    return names
 
 
 @dataclass(eq=False, repr=False)
@@ -122,15 +145,7 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
         ``None``). This does not affect attribute resolution in any way.
         """
         names = set(super().__dir__())
-        type_ = self.__dict__.get("_type_")
-        if isinstance(type_, type):
-            names.update(
-                name
-                for name in dir(type_)
-                if not (name.startswith("__") and name.endswith("__"))
-            )
-            for klass in type_.__mro__:
-                names.update(getattr(klass, "__annotations__", {}).keys())
+        names.update(attribute_names_for_completion(self.__dict__.get("_type_")))
         return sorted(names)
 
     def __getitem__(self, key) -> CanBehaveLikeAVariable[T]:

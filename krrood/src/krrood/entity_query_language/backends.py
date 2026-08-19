@@ -26,6 +26,7 @@ from krrood.entity_query_language.factories import entity, set_of, variable
 from krrood.entity_query_language.query.match import Match, AttributeMatch
 from krrood.entity_query_language.query.query import Query
 from krrood.ormatic.eql_interface import eql_to_sql
+
 try:
     from krrood.parametrization.model_registries import (
         ModelRegistry,
@@ -84,7 +85,7 @@ class SelectiveBackend(QueryBackend, ABC):
     """
 
     def evaluate(self, expression: Evaluable) -> Iterable[T]:
-        if isinstance(expression, Match) and expression.has_ellipsis_attributes:
+        if isinstance(expression, Match) and expression._has_ellipsis_attributes_:
             raise SelectiveBackendCannotResolveEllipsisMatch(expression)
         yield from self._evaluate(expression)
 
@@ -156,17 +157,17 @@ class EntityQueryLanguageGenerativeBackend(GenerativeBackend):
 
     def _evaluate(self, expression: Match[T]) -> Iterable[T]:
         variables: Dict[str, Variable] = {}
-        for attribute_match in expression.matches_with_variables:
+        for attribute_match in expression._matches_with_variables_:
             self._check_attribute_match_is_suitable_for_generation(attribute_match)
             variables[attribute_match.name_from_variable_access_path] = (
                 self._convert_attribute_match_to_variable(attribute_match)
             )
 
-        expression.variable._update_domain_(
+        expression._variable_._update_domain_(
             self._generate_raw_results(expression, variables)
         )
 
-        filtered_results = entity(expression.variable)._quantify_(
+        filtered_results = entity(expression._variable_)._quantify_(
             expression._quantifier_type_
         )
         if expression._where_conditions_:
