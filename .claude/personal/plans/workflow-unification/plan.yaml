@@ -1845,7 +1845,7 @@ items:
     pull_request_number: 126
     track: personal-data
     depends_on: [session-start-plan-and-setup-guards]
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_011qPaY1qP7B8hhGQauH4k61
     notes: >
       Recorded 2026-08-01 while working session-start-plan-and-setup-guards, after that
