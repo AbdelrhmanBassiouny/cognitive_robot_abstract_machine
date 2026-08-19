@@ -314,7 +314,7 @@ class MatchAssembler(Assembler[Match, MatchPlan]):
         >>> from krrood.entity_query_language.backends import EntityQueryLanguageBackend
         >>> robot_match = a(Robot)(name="R2")
         >>> verbalize_expression(
-        ...     robot_match.where(robot_match.variable.battery > 50),
+        ...     robot_match.where(robot_match._variable_.battery > 50),
         ...     backend=EntityQueryLanguageBackend(),
         ... )
         "Find a Robot given that its name is 'R2', where its battery is greater than 50"

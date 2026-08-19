@@ -2009,7 +2009,7 @@ class TestQuaternion:
 
 def test_underspecification_of_vector():
     q = a(Vector3)(x=1, y=2, z=3)
-    q = q.where(q.variable.x > 0)
+    q = q.where(q._variable_.x > 0)
     v1 = q.construct_instance()
     assert v1.x == 1
     assert v1.y == 2
@@ -2018,6 +2018,6 @@ def test_underspecification_of_vector():
 
 def test_underspecification_of_transformation():
     q = a(HomogeneousTransformationMatrix.from_xyz_rpy)(x=1)
-    q = q.where(q.variable.x > 0)
+    q = q.where(q._variable_.x > 0)
     t1 = q.construct_instance()
     assert t1.x == 1

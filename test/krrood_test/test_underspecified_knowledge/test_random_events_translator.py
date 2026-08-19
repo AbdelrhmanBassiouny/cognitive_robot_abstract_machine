@@ -72,12 +72,12 @@ def assert_equal_events(actual: Event, expected: Event) -> None:
 def test_underspecification_with_where():
     pose = underspecified_pose()
     query = pose.where(
-        pose.variable.position.y > 0.0,
-        pose.variable.position.x == 0.0,
-        pose.variable.position.y < 10.0,
-        pose.variable.position.z >= -1.0,
-        pose.variable.position.z <= 1.0,
-        pose.variable.orientation.x != 1.0,
+        pose._variable_.position.y > 0.0,
+        pose._variable_.position.x == 0.0,
+        pose._variable_.position.y < 10.0,
+        pose._variable_.position.z >= -1.0,
+        pose._variable_.position.z <= 1.0,
+        pose._variable_.orientation.x != 1.0,
     )
 
     translated = translate_where_conditions(query)
@@ -98,7 +98,7 @@ def test_underspecification_with_where():
 
 
 def test_disjunction_of_conjunctions():
-    pose_variable = underspecified_pose().variable
+    pose_variable = underspecified_pose()._variable_
 
     translated = translate(
         or_(
@@ -143,7 +143,7 @@ def test_disjunction_of_conjunctions():
 
 def test_where_condition_outside_disjunctive_normal_form():
     pose = underspecified_pose()
-    pose_variable = pose.variable
+    pose_variable = pose._variable_
     query = pose.where(
         or_(
             pose_variable.position.x > 0.0,
@@ -172,7 +172,7 @@ def test_where_condition_outside_disjunctive_normal_form():
 
 
 def test_disjunction_nested_in_conjunction_keeps_shared_variable():
-    pose_variable = underspecified_pose().variable
+    pose_variable = underspecified_pose()._variable_
 
     translated = translate(
         and_(
@@ -195,7 +195,7 @@ def test_disjunction_nested_in_conjunction_keeps_shared_variable():
 
 
 def test_negation_equals_inverted_comparator():
-    pose_variable = underspecified_pose().variable
+    pose_variable = underspecified_pose()._variable_
 
     translated = translate(not_(pose_variable.position.x > 0.0))
 
@@ -203,7 +203,7 @@ def test_negation_equals_inverted_comparator():
 
 
 def test_negated_conjunction_is_disjunction_of_negations():
-    pose_variable = underspecified_pose().variable
+    pose_variable = underspecified_pose()._variable_
 
     translated = translate(
         not_(
@@ -240,7 +240,7 @@ def test_quantified_where_condition():
 
 
 def test_comparison_between_two_variables_is_refused():
-    pose_variable = underspecified_pose().variable
+    pose_variable = underspecified_pose()._variable_
 
     with pytest.raises(WhereExpressionHasNoRandomEventRepresentation):
         translate(pose_variable.position.x > pose_variable.position.y)
