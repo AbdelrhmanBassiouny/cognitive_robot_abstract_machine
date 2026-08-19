@@ -1,0 +1,104 @@
+schema_version: 1
+id: match-query-ergonomics
+title: "EQL match query ergonomics: drop the .expression / .variable detours"
+description: >
+  Remove the two documented detours match queries force on users -
+  match.expression for symbolic attribute access and quantification, and
+  match.variable for where-conditions. Root cause: Match does not follow the
+  CanBehaveLikeAVariable underscore-sandwich convention Query uses, so its
+  plain public fields (parent, variable, type, conditions, domain, factory,
+  kwargs, ...) shadow domain attribute names and symbolic access cannot be
+  forwarded. The two handles also silently diverge: a where-condition built
+  from a query-rooted attribute does not filter at all, and a selection built
+  from match.variable drops the match's conditions. Fix the semantics bug
+  first, then make Match behave like a variable, then let the factories
+  accept a Match directly and migrate consumers and docs.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 181
+
+waves:
+  - id: semantics
+    name: "Wave 1 - attribute-rooting semantics"
+    description: >
+      Reconcile the divergent semantics of variable-rooted vs query-rooted
+      attributes before any forwarding is built on top of them: forwarding to
+      the lowered query is only safe once a query-rooted attribute either
+      correlates correctly inside that query's own where-clause or raises.
+  - id: ergonomics
+    name: "Wave 2 - match-as-variable API"
+    description: >
+      The API change itself: Match participates in the underscore-sandwich
+      convention and forwards symbolic access, the factories unwrap a Match,
+      and every consumer and doc migrates off the detours.
+
+tracks:
+  - id: correctness
+    name: "Query-rooted attribute correctness"
+    wave: semantics
+  - id: match-api
+    name: "Match API refactor and migration"
+    wave: ergonomics
+
+items:
+  - id: where-query-rooted-attribute-no-filter
+    title: "Bug: where-condition from a query-rooted attribute silently does not filter"
+    branch: null
+    pull_request_number: null
+    track: correctness
+    depends_on: []
+    status: not_started
+    notes: >
+      q.where(q.expression.battery >= 50) returns the whole domain with no
+      error (verified 2026-08-19 on main 90c241168); only
+      q.variable.battery filters. Focused bug-fix PR off main with the bug
+      label: failing test first, then either make the condition correlate
+      with the enclosing query's bindings or raise a meaningful exception.
+      Cross-reference eql-existential-semantics (issue 137): its
+      evaluation-model wave targets the same uncorrelated-evaluation family;
+      check during kickoff whether that work subsumes or informs this fix,
+      and record the outcome on both plans' mailboxes.
+  - id: match-underscore-rename-and-forwarding
+    title: "Match behaves like a variable: underscore-sandwich rename + guarded __getattr__ forwarding"
+    branch: null
+    pull_request_number: null
+    track: match-api
+    depends_on:
+      - where-query-rooted-attribute-no-filter
+    status: not_started
+    notes: >
+      Rename Match/AbstractMatchExpression/AttributeMatch state to the
+      underscore-sandwich convention (parent, children, resolved, id, name,
+      root, descendants have zero external consumers; variable, type,
+      conditions, domain and the HasFactoryAndKwargs factory/kwargs have
+      consumers in backends.py, parameterizer.py, verbalization planners,
+      coraplex plan_node.py:434, probabilistic_model rspn.py). Add a
+      dunder-guarded __getattr__ forwarding to the lowered query so
+      fixed_connection.parent and match.where(match.battery >= 0) work
+      through one access pattern. Keep expression and variable as working
+      public properties in this PR so downstream stays green; fluent verbs
+      (where, from_, tolist, first, construct_instance) stay public, same
+      shadowing trade-off Query already makes. Hazard: after forwarding, a
+      missed rename fails silently as a symbolic Attribute instead of an
+      AttributeError - the krrood-internal migration must be exhaustive in
+      this PR. Coordination: the in-flight D-core stack (PRs 63-67) adds
+      test_underspecified_match.py consuming the current Match API; time the
+      landing or provide the compatibility surface above.
+  - id: factories-unwrap-match-and-migrate
+    title: "Factories accept a Match directly; migrate consumers and docs off the detours"
+    branch: null
+    pull_request_number: null
+    track: match-api
+    depends_on:
+      - match-underscore-rename-and-forwarding
+    status: not_started
+    notes: >
+      Teach _quantify_or_build_match / entity / set_of to unwrap a Match to
+      its lowered query so the(match), an(match) and set_of(match.parent,
+      ...) work (today the(match) mis-routes into Match(factory=match) and
+      dies in _initialize_type_'s assert_never). Migrate the ~30 .expression
+      and ~20 .variable user-facing sites (krrood tests, coraplex,
+      experiments, probabilistic_model, semantic_digital_twin tests) and the
+      docs that teach the detours (underspecified.md,
+      inference_explanation.md, graph_and_visualization.md, match.md), then
+      decide with the developer whether the public expression/variable
+      properties are removed or kept as documented escape hatches.
