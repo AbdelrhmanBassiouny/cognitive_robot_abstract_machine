@@ -32,6 +32,12 @@ Done:
   test_underspecified_match.py); no existing plan covers EQL match API
   ergonomics.
 
-Next: awaiting the developer's decision on creating the plan
-(/plan-create) and on whether the where no-filter bug belongs here or in
-eql-existential-semantics.
+2026-08-19: developer approved tracking. Created plan
+`match-query-ergonomics` (2 waves / 2 tracks / 3 items, tracking issue
+#181, dashboard
+https://claude.ai/code/artifact/cc14baa7-487a-4ff3-b902-516ec077e1d4).
+Developer chose (AskUserQuestion) to home the where no-filter bug in this
+plan (item where-query-rooted-attribute-no-filter, with a cross-check
+against eql-existential-semantics #137 at kickoff) and to create the
+tracking issue. This session's investigation role is complete; item work
+starts via /plan-item-kickoff from the dashboard.
