@@ -38,8 +38,21 @@ error.
 - [x] Committed (147d098d2) and pushed to
       claude/ide-type-inference-instances-dc6l6e. No PR opened (not requested).
 
+## Plan linkage (added 2026-08-19)
+This branch is now item `match-underscore-rename-and-forwarding` of the
+`match-query-ergonomics` plan (tracking issue #181) - it implemented that
+item ahead of its dependency. Verified: `q.where(q.battery >= 50)` via the
+new forwarding silently does not filter (the plan's wave-1 bug,
+`where-query-rooted-attribute-no-filter`), so this branch must not land
+before that bug fix.
+
 ## Next steps
-- None outstanding. Possible follow-ups if wanted: modernize doc examples
-  (`.expression.parent` -> `.parent`), and delegated attributes verbalize as
-  "the battery of the Robot" rather than "its battery" (cosmetic difference
-  vs `_variable_`-based attributes, could be unified in the verbalizer).
+- Blocked on plan item `where-query-rooted-attribute-no-filter` (fix off
+  main, bug label) before any PR for this branch.
+- Reconcile before PR: decide whether to restore `variable` /
+  `matches_with_variables` as transitional public properties (D-core
+  stack's test_underspecified_match.py consumes both) or time the landing
+  after the stack cascades; add the old-names-are-really-gone guard test.
+- Cosmetic follow-ups for item 3: doc examples still teach
+  `.expression.parent`; delegated attributes verbalize as "the battery of
+  the Robot" rather than "its battery".
