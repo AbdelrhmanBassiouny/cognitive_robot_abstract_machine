@@ -7180,3 +7180,58 @@ The "Conventions" section still ends "…and subscribe to its activity". That wa
 by `no-pr-subscriptions` (#153, merged) and is now forbidden outright by the personal
 notes. Recorded here rather than edited in place, since the Conventions section is
 historical text this plan's entries were written against.
+
+## Update 2026-08-20 (implemented): the cross-item check ships as #184, and it found the case it was written for
+
+Implemented in the same session as the kickoff above, commit `40d9d6dd` on
+`claude/deferred-dependency-drift-pr-qxpfsm`. Tests first: 22 failing, then the
+implementation. `.claude/skills/plan-dashboard/tests/` is at 239 passed and
+`.claude/hooks/tests/` at 107.
+
+### The live run is the part worth recording
+
+Building `rdr-refactor` through the new code flags exactly one item:
+
+```
+D-ui-rendering (in_progress):
+  depends on 'D-ui-splice-fix', which is deferred - consider reparenting onto d-core-backend
+```
+
+`D-ui` is correctly unflagged - its own base, `D-ui-rendering`, is alive. Before this
+change that plan reported **zero** drift, with eight deferred items in it and one live
+dependent hanging off one of them. The dashboard has been republished, so the flag is
+on the page rather than only in this entry.
+
+`workflow-unification` itself gains no flag, which is the expected result: it has no
+deferred item at all.
+
+### The shapes the implementation settled
+
+- **`_classify_items` moves `drift_descriptions` into its second pass.** The first pass
+  fills `live_state` for every item; a cross-item check cannot read another item's
+  before that has happened, and a dependency can appear after its dependent in
+  `items[]`. The two-pass structure already existed for `_action_for`; this is the
+  second reader that needs it, so the docstring stops naming one caller.
+- **The reparent suggestion is omitted, not emptied.** A stalled dependency with no
+  `depends_on` of its own has nothing to suggest, and a trailing "consider reparenting
+  onto " would be worse than saying nothing.
+- **`_resolved_dependencies_of` absorbed three copies of one comprehension.**
+  `_compute_next_steps`, `_compute_ready_to_review` and `_dependencies_are_ready` each
+  resolved `depends_on` against `items_by_identifier` with the same skip-the-unknown
+  guard, written out three times. The new check would have been a fourth. Incidental to
+  the fix and small, but it is the same one-operation-one-name rule the 2026-08-01 entry
+  on #122 was arguing about from the other direction: sharing the *resolution* is right
+  precisely because it shares no threshold - each caller still applies its own predicate.
+- **The item card renders one line per description**, and the sidebar banner counts
+  flags rather than items, which is why `DashboardSummary` gained `drift_flag_count`
+  beside the existing `drift_count`. The JSON wire format only gains a key; nothing
+  existing changed meaning.
+
+### One test lesson
+
+`test_render_shows_one_drift_line_per_description_on_the_item_card` first failed on a
+real difference rather than a real bug: the description embeds a quoted identifier, and
+the template autoescapes, so the page carries `&#39;`. The assertion now derives the
+expected markup through `markupsafe.escape` - the same function Jinja's autoescaping
+uses - rather than hand-writing the entity, so it cannot drift from the escaping the
+template actually applies.
