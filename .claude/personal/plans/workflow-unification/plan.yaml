@@ -1396,11 +1396,13 @@ items:
       independent of the #101 chain; build_dashboard.py overlap with #103/#105/#111.
 
   - id: deferred-dependency-drift-check
-    branch: null
+    branch: claude/deferred-dependency-drift-pr-qxpfsm
     title: "Flag an item stacked on a deferred/closed dependency instead of leaving it to a stale note"
     track: dashboards
     depends_on: []
-    status: not_started
+    status: in_progress
+    pull_request_number: 184
+    session: https://claude.ai/code/session_01VBa9VPHJW4VjpWtdq1XLE2
     notes: >
       Found 2026-08-12 while investigating rdr-refactor's D-ui stack: D-ui-splice-fix (#78)
       was closed as superseded (the fix landed elsewhere, via dag-facade-hardening's
