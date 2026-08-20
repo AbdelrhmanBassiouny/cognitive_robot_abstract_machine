@@ -87,8 +87,13 @@ items:
       written as query[variable].attribute, works - it did not, and on main it
       returned the cross product. Handled in 87fb3983: re-rooting now replaces
       whichever expression stands for the row, so an index naming a selected
-      variable re-roots onto it. CI has one unrelated failure: the experiments
-      job times out on a ROS WorldFetcher service.
+      variable re-roots onto it. Fourth round (roadmap section 12): naming a
+      selection is now a behaviour of set_of alone - indexing a single-variable
+      query indexes its value - and indexing a set_of by anything it does not
+      select raises UnselectedQueryVariable at the index rather than at the
+      condition; the rebuild memo key became a Rerooting dataclass (62ec184aa).
+      CI has one unrelated failure: the experiments job times out on a ROS
+      WorldFetcher service.
   - id: match-underscore-rename-and-forwarding
     title: "Match behaves like a variable: underscore-sandwich rename + guarded __getattr__ forwarding"
     branch: claude/ide-type-inference-instances-dc6l6e

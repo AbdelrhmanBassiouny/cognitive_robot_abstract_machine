@@ -358,3 +358,44 @@ not rewritten.
 
 Full krrood suite green (2159 passed; the two `test_object_diagram` failures are
 this container missing the Graphviz `dot` binary).
+
+## 12. 2026-08-20: indexing belongs to `set_of`, and is checked where it is written
+
+Three review comments on §11's implementation, all acted on in `62ec184aa`.
+
+**Indexing a single-variable query is a value operation.** §11 gave every `Query`
+the rule "an index by a selected variable names that variable", which was wrong
+for `entity`: a single-variable query stands for the value its variable takes, so
+`entity(body)[body]` means `body[body]`, not `body`. Measured before the fix, the
+index step was silently dropped and the condition filtered as though it had been
+written `body.size > 1`.
+
+Made polymorphic rather than conditional: `Query._selection_indexed_by_` returns
+`None`, and `SetOf` overrides it — only a query yielding rows of several
+variables has a selection to pick out. Pinned by a test that the entity spelling
+now raises `TypeError` at evaluation, because a `Body` is not subscriptable,
+which is what indexing its value means.
+
+**The index is where the mistake is made.** Indexing a `set_of` by something it
+does not select used to reach `AmbiguousQueryAttribute` only once the condition
+was attached. `SetOf.__getitem__` now validates the key and raises a new
+`UnselectedQueryVariable`, whose suggestion lists the variables the query does
+select. It rejects any key that is not a selected variable, since a row is a
+`UnificationDict` keyed by exactly those.
+
+That settles §11's open question about name strings: `query["Body"]` now fails at
+the point of writing instead of reaching evaluation and dying on
+`AttributeError: 'str' object has no attribute '_id_'`. Name-based selection
+remains a language addition nobody has asked for yet, not a correlation fix.
+
+`AmbiguousQueryAttribute` keeps only the case it is really about — a bare
+attribute of a query that selects several variables.
+
+**The rebuild memo key is a `Rerooting` dataclass** rather than a pair of
+identifiers, `kw_only` because both fields are `UUID` and would otherwise be
+silently swappable. Its docstring records why the expressions are identified
+rather than held: comparing two symbolic expressions builds a `Comparator`
+instead of answering whether they are the same.
+
+Full krrood suite green (2160 passed; the two `test_object_diagram` failures are
+this container missing the Graphviz `dot` binary).
