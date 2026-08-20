@@ -224,7 +224,6 @@ import semantic_digital_twin.pipeline.mesh_decomposition.coacd
 import semantic_digital_twin.pipeline.mesh_decomposition.vhacd
 import semantic_digital_twin.pipeline.pipeline
 import semantic_digital_twin.predetermined_maps.apartment_environment
-import semantic_digital_twin.predetermined_maps.building_floor
 import semantic_digital_twin.reasoning.predicates
 import semantic_digital_twin.reasoning.reasoner
 import semantic_digital_twin.reasoning.world_reasoner
@@ -271,7 +270,6 @@ import semantic_digital_twin.world_description.world_state
 import semantic_digital_twin.world_description.world_state_trajectory_plotter
 import sqlalchemy.sql.sqltypes
 import trimesh.base
-import types
 import typing
 import typing_extensions
 import uuid
@@ -294,7 +292,6 @@ class Base(DeclarativeBase):
         uuid.UUID: sqlalchemy.sql.sqltypes.UUID,
         pathlib.Path: krrood.ormatic.custom_types.PathType,
         krrood.adapters.json_serializer.JSONData: krrood.ormatic.custom_types.JSONDataType,
-        types.NoneType: krrood.ormatic.custom_types.TypeType,
         numpy.ndarray: coraplex.orm.model.NumpyType,
     }
 
@@ -25128,70 +25125,6 @@ class ApartmentEnvironmentDAO(
 
     database_id: Mapped[builtins.int] = mapped_column(
         Integer, primary_key=True, use_existing_column=True
-    )
-
-
-class BuildingFloorDAO(
-    Base,
-    DataAccessObject[
-        semantic_digital_twin.predetermined_maps.building_floor.BuildingFloor
-    ],
-):
-    __tablename__ = "BuildingFloorDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-    floor_scale_id: Mapped[int] = mapped_column(
-        ForeignKey("ScaleDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-    room_id: Mapped[int] = mapped_column(
-        ForeignKey("GenericRoomDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    floor_scale: Mapped[ScaleDAO] = relationship(
-        "ScaleDAO", uselist=False, foreign_keys=[floor_scale_id], post_update=True
-    )
-    room: Mapped[GenericRoomDAO] = relationship(
-        "GenericRoomDAO", uselist=False, foreign_keys=[room_id], post_update=True
-    )
-
-
-class GenericRoomDAO(
-    Base,
-    DataAccessObject[
-        semantic_digital_twin.predetermined_maps.building_floor.GenericRoom
-    ],
-):
-    __tablename__ = "GenericRoomDAO"
-
-    database_id: Mapped[builtins.int] = mapped_column(
-        Integer, primary_key=True, use_existing_column=True
-    )
-
-    wall_thickness: Mapped[builtins.float] = mapped_column(use_existing_column=True)
-
-    scale_id: Mapped[int] = mapped_column(
-        ForeignKey("ScaleDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-    door_scale_id: Mapped[int] = mapped_column(
-        ForeignKey("ScaleDAO.database_id", use_alter=True),
-        nullable=True,
-        use_existing_column=True,
-    )
-
-    scale: Mapped[ScaleDAO] = relationship(
-        "ScaleDAO", uselist=False, foreign_keys=[scale_id], post_update=True
-    )
-    door_scale: Mapped[ScaleDAO] = relationship(
-        "ScaleDAO", uselist=False, foreign_keys=[door_scale_id], post_update=True
     )
 
 

@@ -36,7 +36,7 @@ class TryAll(Goal):
         for node in self.nodes:
             self.add_node(node)
 
-    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
+    def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
         Build an observation that is True as soon as any child node is True.
         """
@@ -82,7 +82,7 @@ class TryInOrder(Goal):
             )
             last_node = node
 
-    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
+    def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
         Build an observation that is True as soon as any child node is True.
         """
