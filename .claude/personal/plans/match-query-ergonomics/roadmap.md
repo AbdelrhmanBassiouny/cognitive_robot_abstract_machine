@@ -199,7 +199,8 @@ cover.
 
 Chain rebuilding is a new `MappedVariable._reroot_on_`, with each mapping
 subclass reporting the constructor arguments after the child that reproduce it,
-so a new mapping type cannot silently be skipped by the rewrite.
+so a new mapping type cannot silently be skipped by the rewrite. (The
+constructor-arguments half of that is superseded by §10.)
 
 **Detection is by expression id, not identity.** Attaching a mapped variable to
 a query copies the query node while preserving `_id_`, and `Query._compile_`
@@ -242,3 +243,75 @@ rather than doing what it asked, so the choice is the developer's.
 the ROS `/semantic_digital_twin/fetch_world` service. `main` at the same base
 (`90c241168`) was green, so it is not red-on-base, but nothing in this diff
 leaves `krrood/entity_query_language`; the push of `c1206318` re-runs it.
+
+## 10. 2026-08-20: the reviewer's smell was real — flattenings are iteration variables
+
+Asked to be critical about whether `flat_variable` or `CanBehaveLikeAVariable`
+smelled, and whether `__iter__` should be implemented. Measured all three, and
+the investigation found a correctness bug in §8's own rebuild.
+
+**Why `FlatVariable` is an outlier — two independent reasons.**
+
+1. It is the only *one-to-many* mapping. `apply_mapping_on_external_root` takes
+   `next(...)` of each step, so it is a first-value walk, not a chain walk. That
+   is already lossy for flattening on real values today: over a cabinet with
+   drawers `['Handle1', 'Handle3']`, `flat_variable(cabinet.drawers).handle.name`
+   returns `'Handle1'` and drops the other. Its docstring (`:return: An iterable
+   of the mapped values`) describes what it should do, not what it does.
+   Note the direction: fixing that method moves it *further* from a structural
+   rebuild, since the rebuild wants exactly one node.
+2. It has no traced operator. The other three re-root under that method only
+   because `getattr` / `[]` / `()` happen to be intercepted, an unstated
+   invariant that nothing enforces.
+
+**`__iter__ = None` is a guard, not a smell.** Removing it does not yield a
+`TypeError`; it re-enables Python's legacy `__getitem__` sequence protocol,
+because `CanBehaveLikeAVariable` defines `__getitem__` — measured:
+`iter(cabinet_var)` then yields `Cabinet[0]`, `Cabinet[1]`, … forever. Writing a
+real `__iter__` yielding one symbolic element would make `for x in variable` run
+exactly once — a quiet wrong answer replacing a loud error — and would give
+flattening two spellings.
+
+**The real distinction, and the bug.** A projection (`Attribute`, `Index`,
+`Call`) is deterministic, so shared identity is correct and is what
+`_get_mapped_variable_` gives. A flattening is an *iteration variable*, so each
+one written must be its own variable — which is why `flat_variable` constructs
+`FlatVariable(var)` directly rather than through the cache, and why
+`explanation.py` can write `child1 = flat_variable(...)`,
+`child2 = flat_variable(...)`, `node_id(child1) != node_id(child2)`.
+
+§8's `_reroot_on_` rebuilt *everything* through `_get_mapped_variable_`, which
+keys on the child plus the mapping's arguments — and a flattening has none. So
+two flattenings collapsed into one node and `a != b` silently became `a != a`.
+Measured over the two-cabinet fixture:
+
+| spelling | variable-rooted | query-rooted before the fix |
+| --- | --- | --- |
+| two flattenings, `handle.name` of one drawer vs `container.name` of another | 1 cabinet | **0** |
+| one flattening used by two conditions | 1 cabinet | 1 cabinet |
+
+The second row rules out the naive fix of always constructing fresh: sharing has
+to survive too.
+
+**Fixed in `b88a7e81`**, both rows pinned as tests: a flattening rebuilds as a
+fresh node, and every mapping is rebuilt once per root (memoized on the node,
+keyed by the root's identifier) so chains that shared one still share it.
+`_mapping_arguments_` is replaced by a per-subclass `_rebuild_on_`, which also
+removes a fragility nobody had noticed: the old property returned a *positional*
+tuple that silently had to match its own constructor's field order.
+
+So the reviewer's second comment was right — the property should not exist — but
+not by the route it proposed: any mechanism built on `_apply_mapping_` can only
+express projections, because the projection/iteration distinction lives in
+identity, which `_apply_mapping_` never sees.
+
+**Two things left open on the thread for the developer:**
+
+- `apply_mapping_on_external_root`'s `next(...)` truncation is a latent bug for
+  its five callers in `parametrization/feature_extraction`: a feature chain
+  containing a flattening reads only the first element. Possibly its own issue.
+- The projection/iteration split is still implicit in the hierarchy. Making it
+  explicit is a wider refactor than this bug fix.
+
+Full krrood suite green (2157 passed; the two `test_object_diagram` failures are
+this container missing the Graphviz `dot` binary, which CI installs).

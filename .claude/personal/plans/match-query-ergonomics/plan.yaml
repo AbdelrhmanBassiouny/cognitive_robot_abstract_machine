@@ -75,7 +75,14 @@ items:
       Attribute/Index/Call chains but not a flattened one, so the structural
       rebuild stays and the thread is left open on the developer's call.
       Session https://claude.ai/code/session_0138pFr29XH5xpEzvpmcpzV7 added
-      the flatten test (c1206318). CI has one unrelated failure: the
+      the flatten test (c1206318). Follow-up round (roadmap section 10):
+      pursuing the reviewer's smell found a real bug in the rebuild - it
+      routed every mapping through the mapped-variable cache, collapsing two
+      flattenings of one attribute into one node, so a condition relating two
+      elements became one relating an element to itself. Fixed in b88a7e81:
+      a flattening rebuilds as a fresh node, every mapping rebuilds once per
+      root so sharing survives, and _mapping_arguments_ is replaced by a
+      per-subclass _rebuild_on_. CI has one unrelated failure: the
       experiments job times out on a ROS WorldFetcher service.
   - id: match-underscore-rename-and-forwarding
     title: "Match behaves like a variable: underscore-sandwich rename + guarded __getattr__ forwarding"
