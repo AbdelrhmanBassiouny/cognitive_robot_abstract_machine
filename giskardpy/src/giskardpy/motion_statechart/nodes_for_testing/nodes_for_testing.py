@@ -4,7 +4,16 @@ from dataclasses import dataclass, field
 
 import krrood.symbolic_math.symbolic_math as sm
 from giskardpy.motion_statechart.context import MotionStatechartContext
-from giskardpy.motion_statechart.goals.templates import Sequence
+from typing_extensions import Optional
+
+from giskardpy.motion_statechart.data_types import (
+    LifeCycleValues,
+    ObservationStateValues,
+)
+from giskardpy.motion_statechart.goals.templates import (
+    RepeatUntil,
+    Sequence,
+)
 from giskardpy.motion_statechart.graph_node import (
     MotionStatechartNode,
     Goal,
@@ -235,4 +244,73 @@ class TestUnpauseUnknownFromParentPause(Goal):
     def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(
             observation=sm.Scalar(self.count_ticks1.observation_variable)
+        )
+
+
+@dataclass(eq=False, repr=False)
+class CountNodeResets(MotionStatechartNode):
+    """
+    Turns True once :attr:`node` has been reset :attr:`target` times.
+
+    Counts attempts rather than control cycles, by watching the node re-enter
+    NOT_STARTED. Its count is never cleared, unlike the counters that reset themselves
+    when they start, so it survives the resets it is counting.
+    """
+
+    node: MotionStatechartNode = field(kw_only=True)
+    """
+    The node whose resets are counted.
+    """
+
+    target: int = field(kw_only=True)
+    """
+    Number of resets after which this turns True.
+    """
+
+    resets: int = field(default=0, init=False)
+    """
+    Resets of :attr:`node` seen so far.
+    """
+
+    _previous_life_cycle: Optional[LifeCycleValues] = field(
+        default=None, init=False, repr=False
+    )
+    """
+    Life cycle state of :attr:`node` on the previous control cycle.
+    """
+
+    def on_tick(
+        self, context: MotionStatechartContext
+    ) -> Optional[ObservationStateValues]:
+        current_life_cycle = self.node.life_cycle_state
+        if (
+            self._previous_life_cycle is not None
+            and current_life_cycle == LifeCycleValues.NOT_STARTED
+            and self._previous_life_cycle != LifeCycleValues.NOT_STARTED
+        ):
+            self.resets += 1
+        self._previous_life_cycle = current_life_cycle
+        if self.resets >= self.target:
+            return ObservationStateValues.TRUE
+        return ObservationStateValues.FALSE
+
+
+@dataclass(repr=False, eq=False)
+class RepeatOnTimeout(RepeatUntil):
+    """
+    Runs a task again from the start whenever an attempt has not succeeded within
+    :attr:`control_cycles` control cycles.
+
+    Exercises repeating without a converging task or a world, and stands for the failure
+    signals other than a stall.
+    """
+
+    control_cycles: int = field(default=2, kw_only=True)
+    """
+    Control cycles an attempt is given before it counts as failed.
+    """
+
+    def create_failure_monitor(self, attempt: Sequence) -> MotionStatechartNode:
+        return CountControlCycles(
+            name=f"{self.name}/timeout", control_cycles=self.control_cycles
         )

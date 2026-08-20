@@ -130,7 +130,7 @@ class MonitoredGoal(Goal, ABC):
         Connect the monitor's observation to the monitored node's life cycle.
         """
 
-    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
+    def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(observation=self.monitored_node.observation_variable)
 
 
@@ -157,7 +157,7 @@ class StoppedWhenTrue(MonitoredGoal):
     def wire_monitor(self) -> None:
         self.monitored_node.end_condition = self.monitor.observation_variable
 
-    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
+    def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(
             observation=trinary_logic_or(
                 self.monitored_node.observation_variable,
