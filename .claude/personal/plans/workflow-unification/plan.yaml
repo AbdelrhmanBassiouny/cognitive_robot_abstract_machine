@@ -3209,8 +3209,8 @@ items:
       `test_the_report_keys_are_the_ones_a_caller_parses` - the only guard left on the wire format
       since the mirror schema, and the test a reply had once claimed existed when it did not - and
       the shared registry of script paths, where 25+ sites resolve paths the same way and
-      `bastler-package` deletes the layer they exist for. `INTEGRATION_SCRIPT` does now
-      read `Path(integration.__file__)`, which was the free half of that ask.
+      `bastler-package` deletes the layer they exist for. `INTEGRATION_SCRIPT` does now read
+      `Path(integration.__file__)`, which was the free half of that ask.
 
       Correcting the previous entry's process note rather than repeating it: the four hook tests do
       not fail here. They fail when `pytest` and the dependencies sit in different interpreters,
@@ -3303,6 +3303,40 @@ items:
       Worth carrying: **a test that pins a contract must read the artifact the contract is about.**
       This one named the right hazard and checked the wrong object for two rounds, and the tell was
       available the whole time - it imported nothing that produced a document.
+
+      Fifth round of 2026-08-20, one comment, same thread, no code change: *"if we update the enum
+      name then this test will fail and we have to update this test as well right? so how would this
+      benefit us?"*
+
+      "Enum name" splits two ways and the cases have opposite answers, so both were measured.
+      Renaming the *member* - `EXIT_CODE` to `PROCESS_EXIT_CODE`, applied across production and
+      every reference in the suite - leaves all 13 tests in the module green, because both tests
+      read `str(key)` and never `key.name`. That cost does not exist, and it did exist under the
+      previous version of the test, which read `key.name`; reading the documents removed it as a
+      side effect nobody had noticed. Renaming the *value* fails 1 of 227 across the directory,
+      which is the guard working: the value is the wire format, so changing it is a breaking change
+      by definition and the one-line edit is the record that somebody meant it.
+
+      The strongest form of the objection is one the reply conceded rather than answered: a test
+      updated reflexively is theatre. If the failure reads only "set differs, fix the set", the next
+      person edits the literal without registering that two other programs parse it, and the test
+      has cost maintenance for nothing. The docstring is the only thing mitigating that, and it is
+      weak mitigation.
+
+      Three options were put to the user with a recommendation and nothing was changed, since the
+      choice is intent rather than fact: leave it, move the 23 keys into a `report-wire-format.json`
+      read in by the test (recommended - `AGENTS.md:87` already requires a schema to live in a file
+      of its own type, and it makes a contract change show up in review as a diff on a contract file
+      rather than a line moving inside a test), or delete both tests, which is defensible because
+      nothing outside this repository executes the format today and `integration-branch-ci-verdict`
+      may create a real consumer whose own tests become the guard.
+
+      Worth carrying: **four rounds of objection to one test were all aimed at a real defect that
+      nobody had named.** Delete it, put the enum in the tests, document it with an example,
+      reproduce the situation, why does it benefit us - each was answered on its own terms and the
+      underlying fault, that the test asserted the enum against a copy of itself, survived all four.
+      A reviewer returning to the same line is evidence the answer has not landed, not that the
+      question has been asked already.
   - id: setup-runs-without-asking
     title: "Run the personal-notes setup from the planning skills instead of asking first"
     branch: claude/auto-run-setup-notes-02nhxv
