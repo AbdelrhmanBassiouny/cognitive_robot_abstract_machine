@@ -1,7 +1,3 @@
-"""
-Minimal demo: the Panda picks up one cube and places it on top of another.
-"""
-
 import logging
 import os
 import time
@@ -48,7 +44,7 @@ arm = panda.get_arms()[0]
 
 with world.modify_world():
     ground_plane = Body(name=PrefixedName("ground_plane"))
-    ground_plane.collision = ShapeCollection(
+    ground_plane_geometry = ShapeCollection(
         [
             Box(
                 origin=HomogeneousTransformationMatrix.from_xyz_rpy(
@@ -59,6 +55,10 @@ with world.modify_world():
             )
         ],
         reference_frame=ground_plane,
+    )
+    ground_plane.collision, ground_plane.visual = (
+        ground_plane_geometry,
+        ground_plane_geometry,
     )
     world.add_connection(
         FixedConnection(
@@ -71,7 +71,7 @@ with world.modify_world():
     )
 
     cube_bottom = Body(name=PrefixedName("cube_bottom"))
-    cube_bottom.collision = ShapeCollection(
+    cube_bottom_geometry = ShapeCollection(
         [
             Box(
                 origin=HomogeneousTransformationMatrix.from_xyz_rpy(
@@ -82,6 +82,10 @@ with world.modify_world():
             )
         ],
         reference_frame=cube_bottom,
+    )
+    cube_bottom.collision, cube_bottom.visual = (
+        cube_bottom_geometry,
+        cube_bottom_geometry,
     )
     world.add_connection(
         Connection6DoF.create_with_dofs(
@@ -95,7 +99,7 @@ with world.modify_world():
     )
 
     cube_to_pick = Body(name=PrefixedName("cube_to_pick"))
-    cube_to_pick.collision = ShapeCollection(
+    cube_to_pick_geometry = ShapeCollection(
         [
             Box(
                 origin=HomogeneousTransformationMatrix.from_xyz_rpy(
@@ -106,6 +110,10 @@ with world.modify_world():
             )
         ],
         reference_frame=cube_to_pick,
+    )
+    cube_to_pick.collision, cube_to_pick.visual = (
+        cube_to_pick_geometry,
+        cube_to_pick_geometry,
     )
     world.add_connection(
         Connection6DoF.create_with_dofs(
