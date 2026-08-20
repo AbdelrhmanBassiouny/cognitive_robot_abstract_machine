@@ -3071,13 +3071,12 @@ items:
       a dict.
 
       The same round asked to rename `spelling` to `name`, and the two asks are mutually exclusive:
-      a dataclass field called `name` fails at class creation on any enum mixin
-      (`AttributeError: <enum 'Enum'> cannot set attribute 'name'`). The user chose `name` when the
-      measurement was put in front of them, which is the second time this item has been settled that
-      way. What did land: `carried` became `integrated` and swept through the selection vocabulary,
-      and the member now carries its specification rather than copying each field off it, so both
-      fields are declared exactly once - which is what the neighbouring thread had actually asked
-      for.
+      a dataclass field called `name` fails at class creation on any enum mixin (`AttributeError:
+      <enum 'Enum'> cannot set attribute 'name'`). The user chose `name` when the measurement was
+      put in front of them, which is the second time this item has been settled that way. What did
+      land: `carried` became `integrated` and swept through the selection vocabulary, and the member
+      now carries its specification rather than copying each field off it, so both fields are
+      declared exactly once - which is what the neighbouring thread had actually asked for.
 
       A defect the sweep found rather than confirmed: `tips_of`'s docstring cited
       `:func:`carried_by_a_build``, a function that has never existed.
@@ -3120,8 +3119,8 @@ items:
       in this container for an environment reason rather than a code one - `check-setup.sh` probes
       whichever `python3` is on `PATH`, which is not the interpreter holding the dependencies unless
       the run arranges it. They pass at the pre-merge head too, and CI is green. Running the suite
-      with the right interpreter first on `PATH` is the fix, not a change to anything.
-      Resolved 2026-08-20, a second round the same day (session
+      with the right interpreter first on `PATH` is the fix, not a change to anything. Resolved
+      2026-08-20, a second round the same day (session
       https://claude.ai/code/session_01Ra51SAHQKy7TVYRG2HRERW). Twenty threads, drafted 13:15 to
       14:04 and submitted as one review at 14:46 - after the entry above was written, which had
       recorded the branch as having nothing outstanding. All twenty are answered, 14 resolved and 6
@@ -3169,6 +3168,53 @@ items:
       which is a fixable container state rather than a property of the suite. Installing `pytest`
       into the interpreter already holding PyYAML, Jinja2, markdown and nh3 makes all 620 pass
       locally. The observation stands; the remedy is one install, not a note to remember.
+
+      Resolved again 2026-08-20, a third round the same day (same session). Five comments, posted
+      20:36 to 20:49 - after the entry above had recorded the round before it as answered. All five
+      addressed in `f09e110f`; 4 resolved, 1 left open. 621 tests pass across the three directories
+      CI runs, from 620.
+
+      The round's centre is the previous round's own fix, taken one step further. Binding a branch
+      *name* to a local removed the duplicate spelling; binding the branch *object* removes the name
+      from the assertion entirely - `reviewed = create_branch_object(...)` and then `reviewed.name`,
+      with `parent=bottom.name` becoming a real reference rather than a third copy. It also removed
+      two things the name-local form had left: a `number = 7` duplicated the same way, and a local
+      that shadowed its own result (the arrange bound `unreviewed`, the act rebound it to the list
+      of branches left out). Swept the whole suite rather than the tests commented on - a grep for
+      `^    [a-z_]* = "` returns nothing now - which caught two more push refspecs retyping a tip's
+      name.
+
+      `stage_conflict` returned a dict built from bare `"worktree"` / `"conflicting_paths"` keys
+      while `ReportKey` names every other document this module writes; it is a `StagedConflict` now,
+      keyed through that enum, and the pair it reproduces is named `branch` and `attributed_to` -
+      what a build's own report already calls a skipped tip and what it collided with - rather than
+      a second vocabulary for the same two things. Nothing read the old spellings, checked rather
+      than assumed: the skill says "the worktree it names" without naming a key. A new test covers
+      the document, which nothing did before -only the in-process field read was checked, which is
+      the half a caller does not see.
+
+      `branch_names_in` is deleted rather than changed. The ask was to return the iterable and
+      convert at the assertion; doing that left a one-line pass-through, since `git.branch_names()`
+      already returns a tuple. The docstring explaining why the return type was a set was the only
+      content the helper had left, and the reason now sits at the subtraction that needs it.
+
+      The `# noqa: F401` comment said what pytest does rather than why the import must stay, which
+      is the only thing a reader of that line needs. The fixture is defined in `test_maintenance.py`
+      and no conftest shares it, so pytest resolves it from the requesting module's own namespace
+      and the import is what binds the name. Measured rather than asserted: deleting that one line
+      gives `2 passed, 8 errors`, every error `fixture 'fork_checkout' not found`.
+
+      One thread stays open: deleting `test_the_report_keys_are_the_ones_a_caller_parses`. The user
+      asked instead that it be documented with an example, which it now is - the rename it exists to
+      catch, spelled out in its own docstring. Its second paragraph was also wrong in a way nobody
+      had caught: it said the `asdict`-backed keys were "pinned by nothing else", where those are
+      exactly the ones pinned elsewhere.
+
+      Worth carrying: a helper whose only content is a type conversion is a docstring explaining a
+      surprise. Both deletions this round - `branch_names_in` and, last round,
+      `create_pull_request_object` - were helpers that existed to supply one value, and in both
+      cases removing the value removed the helper. The test to apply before writing one is whether
+      anything remains once the single defaulted argument is passed at the call site.
   - id: setup-runs-without-asking
     title: "Run the personal-notes setup from the planning skills instead of asking first"
     branch: claude/auto-run-setup-notes-02nhxv
