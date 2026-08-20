@@ -769,8 +769,11 @@ class Item:
     live_state: LiveState = field(default=LiveState.NO_PULL_REQUEST, init=False)
     """This item's live GitHub state, filled in by :meth:`DashboardRenderer.render`."""
 
-    drift_description: str | None = field(default=None, init=False)
-    """Why :attr:`status` disagrees with :attr:`live_state`, if it does."""
+    drift_descriptions: list[str] = field(default_factory=list, init=False)
+    """Everything about this item that needs a human's attention: why
+    :attr:`status` disagrees with :attr:`live_state`, and one entry per
+    dependency that has stalled under it. A list because both can apply at
+    once, and reporting only one of them would hide the other."""
 
     pull_request_url: str | None = field(default=None, init=False)
     """This item's pull request URL on GitHub, filled in by
@@ -821,8 +824,8 @@ class Item:
     @property
     def status_and_drift_css_class(self) -> str:
         """The item card's dynamic CSS class suffix: ``status-<value>``,
-        plus ``has-drift`` once :attr:`drift_description` is set."""
-        drift_suffix = " has-drift" if self.drift_description else ""
+        plus ``has-drift`` once :attr:`drift_descriptions` is non-empty."""
+        drift_suffix = " has-drift" if self.drift_descriptions else ""
         return f"status-{self.status.value}{drift_suffix}"
 
     @classmethod
@@ -870,6 +873,21 @@ class Item:
             reviewing the branch above it is not.
         """
         return self.has_open_pull_request or self.is_effectively_done()
+
+    def is_stalled(self) -> bool:
+        """Whether this item has stopped moving toward landing, so anything
+        stacked on it is waiting for a base that will never arrive:
+        deliberately deferred, or its pull request was closed without merging.
+
+        ..note:: Not the negation of :meth:`is_ready_to_unblock_dependents`,
+            which is also false for a not-started dependency and for an open
+            draft - and stacking on an open draft is this repo's normal
+            workflow, well before that draft is safe to call finished.
+        """
+        return (
+            self.status is ItemStatus.DEFERRED
+            or self.live_state is LiveState.CLOSED_UNMERGED
+        )
 
 
 @dataclass
@@ -929,7 +947,12 @@ class DashboardSummary:
     """How many items carry each :class:`ItemStatus`."""
 
     drift_items: list[str]
-    """Titles of items whose manifest status disagrees with live GitHub state."""
+    """Titles of items carrying at least one drift flag."""
+
+    drift_flag_count: int
+    """How many drift flags those items carry between them - more than one
+    per item where an item's manifest status and its dependencies both need
+    attention."""
 
     ready_to_start: list[str]
     """Titles of not-started items whose dependencies are all ready."""
@@ -948,6 +971,7 @@ class DashboardSummary:
                 status.value: count for status, count in self.status_counts.items()
             },
             "drift_count": len(self.drift_items),
+            "drift_flag_count": self.drift_flag_count,
             "drift_items": self.drift_items,
             "ready_to_start": self.ready_to_start,
             "blocker_maybe_cleared": self.blocker_maybe_cleared,
@@ -1063,7 +1087,8 @@ class DashboardRenderer:
         :return: The rendered HTML, and the summary to print on stdout.
         """
         self._classify_items()
-        drift_items = [item for item in self.plan.items if item.drift_description]
+        drift_items = [item for item in self.plan.items if item.drift_descriptions]
+        drift_flag_count = sum(len(item.drift_descriptions) for item in drift_items)
         ready_to_start, blocker_maybe_cleared = self._compute_next_steps()
         ready_to_review = self._compute_ready_to_review()
         next_step_items = (
@@ -1081,6 +1106,7 @@ class DashboardRenderer:
             item_statuses=list(ItemStatus),
             status_counts=self._status_counts(),
             drift_items=drift_items,
+            drift_flag_count=drift_flag_count,
             ready_to_start=ready_to_start,
             blocker_maybe_cleared=blocker_maybe_cleared,
             ready_to_review=ready_to_review,
@@ -1093,6 +1119,7 @@ class DashboardRenderer:
         summary = DashboardSummary(
             status_counts=self._status_counts(),
             drift_items=[item.title for item in drift_items],
+            drift_flag_count=drift_flag_count,
             ready_to_start=[item.title for item in ready_to_start],
             blocker_maybe_cleared=[item.title for item in blocker_maybe_cleared],
             ready_to_review=[item.title for item in ready_to_review],
@@ -1101,18 +1128,17 @@ class DashboardRenderer:
 
     def _classify_items(self) -> None:
         """Fill in every item's :attr:`Item.live_state`,
-        :attr:`Item.drift_description`, :attr:`Item.pull_request_url`,
+        :attr:`Item.drift_descriptions`, :attr:`Item.pull_request_url`,
         :attr:`Item.is_bug_fix`, :attr:`Item.needs_review`,
         :attr:`Item.dependency_chips`, and :attr:`Item.action` from live pull
         request data and the plan's other items, in place.
 
         Runs in two passes: :attr:`Item.live_state` must be filled in for
-        every item before :meth:`_action_for` can check whether *another*
-        item's dependencies are ready, since dependencies can appear later
-        in :attr:`Plan.items` than their dependents."""
+        every item before anything can read *another* item's, since
+        dependencies can appear later in :attr:`Plan.items` than their
+        dependents."""
         for item in self.plan.items:
             item.live_state = self._live_state_of(item)
-            item.drift_description = self._drift_description_of(item)
             item.pull_request_url = self._pull_request_url_of(item)
             item.is_bug_fix = self._is_bug_fix(item)
             item.needs_review = (
@@ -1120,6 +1146,7 @@ class DashboardRenderer:
                 and item.status is not ItemStatus.DEFERRED
             )
         for item in self.plan.items:
+            item.drift_descriptions = self._drift_descriptions_of(item)
             item.dependency_chips = self._dependency_chips_of(item)
             item.action = self._action_for(item)
 
@@ -1170,11 +1197,8 @@ class DashboardRenderer:
         (:meth:`Item.is_ready_to_unblock_dependents`) - vacuously true for
         an item with no dependencies."""
         return all(
-            self.items_by_identifier[
-                dependency_identifier
-            ].is_ready_to_unblock_dependents()
-            for dependency_identifier in item.depends_on
-            if dependency_identifier in self.items_by_identifier
+            dependency.is_ready_to_unblock_dependents()
+            for dependency in self._resolved_dependencies_of(item)
         )
 
     def _dependency_chips_of(self, item: Item) -> list[DependencyChip]:
@@ -1226,6 +1250,59 @@ class DashboardRenderer:
             and PullRequestLabel.BUG in pull_request.identified_labels
         )
 
+    def _drift_descriptions_of(self, item: Item) -> list[str]:
+        """Everything about one item that needs a human's attention: its own
+        manifest status disagreeing with live GitHub state, plus every
+        dependency it is still stacked on that has stalled."""
+        own_drift = self._drift_description_of(item)
+        stalled = self._stalled_dependency_descriptions_of(item)
+        return ([own_drift] if own_drift else []) + stalled
+
+    def _stalled_dependency_descriptions_of(self, item: Item) -> list[str]:
+        """Describe every dependency of one item that has stalled
+        (:meth:`Item.is_stalled`), suggesting what to reparent onto.
+
+        Only the item's own ``depends_on`` is checked, not the whole chain:
+        an item further up is stacked on a base that is itself alive, and
+        becomes correct as soon as its own dependency reparents, so flagging
+        it too would name one root cause once per link. A done or deferred
+        dependent is skipped - a landed item is past caring where it was
+        based, and a paused one is not waiting on anything."""
+        if item.status in (ItemStatus.DONE, ItemStatus.DEFERRED):
+            return []
+        return [
+            self._stalled_dependency_description(dependency)
+            for dependency in self._resolved_dependencies_of(item)
+            if dependency.is_stalled()
+        ]
+
+    @staticmethod
+    def _stalled_dependency_description(dependency: Item) -> str:
+        """Describe one stalled dependency: why it stopped, and what its
+        dependent could be reparented onto instead - the dependency's own
+        ``depends_on``, omitted entirely when it has none."""
+        if dependency.status is ItemStatus.DEFERRED:
+            reason = "which is deferred"
+        else:
+            reason = (
+                f"whose pull request #{dependency.pull_request_number} "
+                "was closed without merging"
+            )
+        description = f"depends on {dependency.identifier!r}, {reason}"
+        if not dependency.depends_on:
+            return description
+        reparent_target = ", ".join(dependency.depends_on)
+        return f"{description} - consider reparenting onto {reparent_target}"
+
+    def _resolved_dependencies_of(self, item: Item) -> list[Item]:
+        """The items one item's :attr:`Item.depends_on` names, in that order,
+        skipping any identifier this plan doesn't know."""
+        return [
+            self.items_by_identifier[dependency_identifier]
+            for dependency_identifier in item.depends_on
+            if dependency_identifier in self.items_by_identifier
+        ]
+
     @staticmethod
     def _drift_description_of(item: Item) -> str | None:
         """Describe why :attr:`Item.status` disagrees with its live state, if it does."""
@@ -1263,11 +1340,7 @@ class DashboardRenderer:
         ready_to_start: list[Item] = []
         blocker_maybe_cleared: list[Item] = []
         for item in self.plan.items:
-            dependencies = [
-                self.items_by_identifier[identifier]
-                for identifier in item.depends_on
-                if identifier in self.items_by_identifier
-            ]
+            dependencies = self._resolved_dependencies_of(item)
             if item.status not in (
                 ItemStatus.NOT_STARTED,
                 ItemStatus.BLOCKED,
@@ -1297,11 +1370,7 @@ class DashboardRenderer:
         for item in self.plan.items:
             if not item.needs_review or item.status is ItemStatus.BLOCKED:
                 continue
-            dependencies = [
-                self.items_by_identifier[identifier]
-                for identifier in item.depends_on
-                if identifier in self.items_by_identifier
-            ]
+            dependencies = self._resolved_dependencies_of(item)
             if all(
                 dependency.is_ready_for_dependent_review()
                 for dependency in dependencies

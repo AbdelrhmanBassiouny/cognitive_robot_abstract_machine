@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 import yaml
+from markupsafe import escape
 
 from build_dashboard import (
     AVAILABLE_MODELS,
@@ -417,7 +418,7 @@ def test_status_and_drift_css_class_without_drift():
 
 def test_status_and_drift_css_class_with_drift():
     drifted_item = Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE)
-    drifted_item.drift_description = "marked done, but pull request #1 is still open"
+    drifted_item.drift_descriptions = ["marked done, but pull request #1 is still open"]
     assert drifted_item.status_and_drift_css_class == "status-done has-drift"
 
 
@@ -475,6 +476,49 @@ def test_is_ready_for_dependent_review_false_when_there_is_no_pull_request():
         title="A", branch="a", track="track-1", status=ItemStatus.NOT_STARTED
     )
     assert not fresh_item.is_ready_for_dependent_review()
+
+
+def test_is_stalled_true_when_deferred():
+    deferred_item = Item(
+        title="A", branch="a", track="track-1", status=ItemStatus.DEFERRED
+    )
+    assert deferred_item.is_stalled()
+
+
+def test_is_stalled_true_when_the_pull_request_was_closed_without_merging():
+    closed_item = Item(
+        title="A", branch="a", track="track-1", status=ItemStatus.IN_PROGRESS
+    )
+    closed_item.live_state = LiveState.CLOSED_UNMERGED
+    assert closed_item.is_stalled()
+
+
+def test_is_stalled_false_when_done():
+    done_item = Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE)
+    done_item.live_state = LiveState.MERGED
+    assert not done_item.is_stalled()
+
+
+@pytest.mark.parametrize(
+    "live_state",
+    [LiveState.OPEN_DRAFT, LiveState.OPEN_READY, LiveState.NO_PULL_REQUEST],
+)
+def test_is_stalled_false_while_the_work_can_still_land(live_state):
+    # An open draft in particular: stacking on one is this repo's normal
+    # workflow, which is why is_ready_to_unblock_dependents() - false for a
+    # draft - is the wrong predicate for this question.
+    live_item = Item(
+        title="A", branch="a", track="track-1", status=ItemStatus.IN_PROGRESS
+    )
+    live_item.live_state = live_state
+    assert not live_item.is_stalled()
+
+
+def test_is_stalled_false_when_not_started():
+    fresh_item = Item(
+        title="A", branch="a", track="track-1", status=ItemStatus.NOT_STARTED
+    )
+    assert not fresh_item.is_stalled()
 
 
 def test_stacked_item_indent_style_exposes_both_indent_levels_as_css_variables():
@@ -784,6 +828,190 @@ def test_matching_status_and_live_state_is_not_drifted():
     )
     _, summary = renderer.render()
     assert summary.drift_items == []
+
+
+# %% DashboardRenderer - stalled dependency drift
+
+# The cross-item half of drift: an item is still stacked on a dependency that
+# has stopped moving toward landing, so its base will never arrive. Nothing
+# else catches this - _compute_next_steps only looks at not-started/blocked
+# items, so an in-progress item stranded on a dead base slips past every other
+# check.
+
+
+def drift_descriptions_of(renderer: DashboardRenderer, identifier: str) -> list[str]:
+    """
+    One item's drift descriptions, after rendering has classified the whole plan.
+
+    :param renderer: The renderer, already rendered.
+    :param identifier: The item to look up.
+    """
+    return renderer.items_by_identifier[identifier].drift_descriptions
+
+
+def test_deferred_dependency_flags_its_in_progress_dependent():
+    items = [
+        item("a", ItemStatus.DEFERRED),
+        item("b", ItemStatus.IN_PROGRESS, depends_on=["a"]),
+    ]
+    renderer = make_renderer(items)
+    _, summary = renderer.render()
+    assert drift_descriptions_of(renderer, "b") == ["depends on 'a', which is deferred"]
+    assert summary.drift_items == ["b"]
+
+
+def test_dependency_whose_pull_request_was_closed_unmerged_flags_its_dependent():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.CLOSED)}
+    }
+    items = [
+        item("a", ItemStatus.NOT_STARTED, pull_request_number=1),
+        item("b", ItemStatus.IN_PROGRESS, depends_on=["a"]),
+    ]
+    renderer = make_renderer(
+        items, pull_requests_by_repository=pull_requests_by_repository
+    )
+    renderer.render()
+    assert drift_descriptions_of(renderer, "b") == [
+        "depends on 'a', whose pull request #1 was closed without merging"
+    ]
+
+
+def test_open_draft_dependency_does_not_flag_its_dependent():
+    # Stacking on an open draft is this repo's normal workflow, so a check
+    # built on is_ready_to_unblock_dependents() - which excludes a draft -
+    # would flag most of a plan. This is the guard against that.
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
+    }
+    items = [
+        item("a", ItemStatus.IN_PROGRESS, pull_request_number=1),
+        item("b", ItemStatus.IN_PROGRESS, depends_on=["a"]),
+    ]
+    renderer = make_renderer(
+        items, pull_requests_by_repository=pull_requests_by_repository
+    )
+    renderer.render()
+    assert drift_descriptions_of(renderer, "b") == []
+
+
+def test_merged_dependency_does_not_flag_its_dependent():
+    items = [
+        item("a", ItemStatus.DONE),
+        item("b", ItemStatus.IN_PROGRESS, depends_on=["a"]),
+    ]
+    renderer = make_renderer(items)
+    renderer.render()
+    assert drift_descriptions_of(renderer, "b") == []
+
+
+def test_not_started_dependency_does_not_flag_its_dependent():
+    items = [
+        item("a", ItemStatus.NOT_STARTED),
+        item("b", ItemStatus.IN_PROGRESS, depends_on=["a"]),
+    ]
+    renderer = make_renderer(items)
+    renderer.render()
+    assert drift_descriptions_of(renderer, "b") == []
+
+
+def test_done_dependent_of_a_stalled_dependency_is_not_flagged():
+    items = [
+        item("a", ItemStatus.DEFERRED),
+        item("b", ItemStatus.DONE, depends_on=["a"]),
+    ]
+    renderer = make_renderer(items)
+    renderer.render()
+    assert drift_descriptions_of(renderer, "b") == []
+
+
+def test_deferred_dependent_of_a_stalled_dependency_is_not_flagged():
+    items = [
+        item("a", ItemStatus.DEFERRED),
+        item("b", ItemStatus.DEFERRED, depends_on=["a"]),
+    ]
+    renderer = make_renderer(items)
+    renderer.render()
+    assert drift_descriptions_of(renderer, "b") == []
+
+
+def test_stalled_dependency_flag_names_what_to_reparent_onto():
+    items = [
+        item("base", ItemStatus.DONE),
+        item("a", ItemStatus.DEFERRED, depends_on=["base"]),
+        item("b", ItemStatus.IN_PROGRESS, depends_on=["a"]),
+    ]
+    renderer = make_renderer(items)
+    renderer.render()
+    assert drift_descriptions_of(renderer, "b") == [
+        "depends on 'a', which is deferred - consider reparenting onto base"
+    ]
+
+
+def test_stalled_dependency_flag_omits_the_suggestion_when_it_has_no_dependency():
+    items = [
+        item("a", ItemStatus.DEFERRED),
+        item("b", ItemStatus.IN_PROGRESS, depends_on=["a"]),
+    ]
+    renderer = make_renderer(items)
+    renderer.render()
+    assert "reparenting" not in drift_descriptions_of(renderer, "b")[0]
+
+
+def test_only_the_direct_dependent_of_a_stalled_item_is_flagged():
+    # c's own base, b, is alive: it becomes correct the moment b reparents,
+    # so repeating the flag up the chain would name one root cause twice.
+    items = [
+        item("a", ItemStatus.DEFERRED),
+        item("b", ItemStatus.IN_PROGRESS, depends_on=["a"]),
+        item("c", ItemStatus.IN_PROGRESS, depends_on=["b"]),
+    ]
+    renderer = make_renderer(items)
+    _, summary = renderer.render()
+    assert drift_descriptions_of(renderer, "c") == []
+    assert summary.drift_items == ["b"]
+
+
+def test_every_stalled_dependency_of_one_item_is_flagged_separately():
+    items = [
+        item("a", ItemStatus.DEFERRED),
+        item("b", ItemStatus.DEFERRED),
+        item("c", ItemStatus.IN_PROGRESS, depends_on=["a", "b"]),
+    ]
+    renderer = make_renderer(items)
+    _, summary = renderer.render()
+    assert drift_descriptions_of(renderer, "c") == [
+        "depends on 'a', which is deferred",
+        "depends on 'b', which is deferred",
+    ]
+    assert summary.drift_items == ["c"]
+    assert summary.drift_flag_count == 2
+
+
+def test_manifest_drift_and_a_stalled_dependency_are_both_reported():
+    # The reason drift is a list: reporting only the first would drop the
+    # other, which is the failure this cross-item check exists to fix.
+    pull_requests_by_repository = {
+        "owner/repo": {
+            "1": PullRequestRecord(
+                state=PullRequestState.CLOSED, merged_at=datetime(2026, 1, 1)
+            )
+        }
+    }
+    items = [
+        item("a", ItemStatus.DEFERRED),
+        item("b", ItemStatus.IN_PROGRESS, pull_request_number=1, depends_on=["a"]),
+    ]
+    renderer = make_renderer(
+        items, pull_requests_by_repository=pull_requests_by_repository
+    )
+    _, summary = renderer.render()
+    assert drift_descriptions_of(renderer, "b") == [
+        "marked in_progress, but pull request #1 is merged",
+        "depends on 'a', which is deferred",
+    ]
+    assert summary.drift_items == ["b"]
+    assert summary.drift_flag_count == 2
 
 
 # %% DashboardRenderer - ready-to-start / blocker-maybe-cleared
@@ -1956,6 +2184,52 @@ def test_render_links_a_drift_sidebar_entry_to_its_item_card():
     output, _ = renderer.render()
     assert 'href="#item-a"' in output
     assert 'data-item-identifier="a"' in output
+
+
+def test_render_shows_one_drift_line_per_description_on_the_item_card():
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[
+            item("a", ItemStatus.DEFERRED),
+            item("b", ItemStatus.DEFERRED),
+            item("c", ItemStatus.IN_PROGRESS, depends_on=["a", "b"]),
+        ],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output, _ = renderer.render()
+    for description in renderer.items_by_identifier["c"].drift_descriptions:
+        # escape() rather than a hand-written copy: the template autoescapes,
+        # so the quotes around a dependency's identifier arrive as entities.
+        assert f'<div class="drift">⚠ {escape(description)}</div>' in output
+
+
+def test_render_banner_counts_drift_flags_rather_than_drifted_items():
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[
+            item("a", ItemStatus.DEFERRED),
+            item("b", ItemStatus.DEFERRED),
+            item("c", ItemStatus.IN_PROGRESS, depends_on=["a", "b"]),
+        ],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output, summary = renderer.render()
+    assert summary.drift_items == ["c"]
+    assert f"<strong>{summary.drift_flag_count} drift flag(s)</strong>" in output
 
 
 # %% status counts

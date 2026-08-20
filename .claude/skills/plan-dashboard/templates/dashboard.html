@@ -664,9 +664,9 @@
             {% endif %}
             {{ action_button(item) }}
           </div>
-          {% if item.drift_description %}
-          <div class="drift">⚠ {{ item.drift_description }}</div>
-          {% endif %}
+          {% for description in item.drift_descriptions %}
+          <div class="drift">⚠ {{ description }}</div>
+          {% endfor %}
           {% if item.notes %}
           <details class="notes-details">
             <summary>Notes</summary>
@@ -748,11 +748,11 @@
         </label>
         {% if drift_items %}
         <div class="alert-banner drift-banner">
-          <strong>{{ drift_items | length }} drift flag(s)</strong>
+          <strong>{{ drift_flag_count }} drift flag(s)</strong>
           <ul>
-          {% for item in drift_items %}
-            <li>{{ item.title }} — {{ item.drift_description }}</li>
-          {% endfor %}
+          {% for item in drift_items %}{% for description in item.drift_descriptions %}
+            <li>{{ item.title }} — {{ description }}</li>
+          {% endfor %}{% endfor %}
           </ul>
         </div>
         {% else %}
@@ -793,7 +793,7 @@
         </label>
         {% endif %}
         {% if drift_items or ready_to_review or ready_to_start or blocker_maybe_cleared %}
-          {% call(item) next_step_group("next-drift", "Fix the manifest", drift_items) %}{{ item.drift_description }}{% endcall %}
+          {% call(item) next_step_group("next-drift", "Fix the manifest", drift_items) %}{{ item.drift_descriptions | join("; ") }}{% endcall %}
           {% call(item) next_step_group("next-ready", "Ready to start", ready_to_start) %}every dependency is at least ready for review — nothing structurally blocking it{% endcall %}
           {% call(item) next_step_group("next-recheck", "Blocker may be cleared", blocker_maybe_cleared) %}at least one dependency is now ready for review — worth resolving the blocker{% endcall %}
           {% call(item) next_step_group("next-review", "Ready to review", ready_to_review, show_review_link=true) %}open draft pull request, ready for your review{% endcall %}
