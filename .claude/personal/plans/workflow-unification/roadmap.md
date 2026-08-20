@@ -7595,3 +7595,50 @@ tier stays stdlib-only; the bash→Python conversion chain keeps its shape and s
 the new names. `bastler-github-api-unification` keeps its own item and its open backend question —
 the migration unifies what is already duplicated, it does not decide the gh-vs-token-vs-library
 question early.
+
+## Update 2026-08-20 (sixth round): the wire-format guard is deleted, deliberately
+
+*"Delete both tests."* One of the three options the previous reply had put up, chosen with
+the trade already stated — a decision, not an ask to re-argue.
+
+`test_the_report_keys_are_the_ones_a_caller_parses` and
+`test_every_report_key_names_something_a_document_carries` are gone, and
+`every_document_this_module_writes` and `keys_in` with them since nothing else called
+them. A pure deletion, 117 lines. 620 tests pass across the three directories CI runs,
+which is where the day started: one added for the `stage-conflict` document, two removed
+here.
+
+### The consequence is recorded rather than dropped
+
+With writer and reader both going through `ReportKey`, a value rename changes both sides
+identically. Measured after the deletion rather than asserted: renaming
+`ReportKey.EXIT_CODE`'s value to `exitCode` leaves **all 226 tests in
+`.claude/stack/tests` passing**.
+
+So the pull request description now says the format is unguarded by choice, in place of
+the paragraph that used to describe the guard. Quietly removing that paragraph would have
+left a reader with no way to know, which is the failure this plan keeps recording in other
+costumes.
+
+The reasoning accepted for it, which is sound: nothing outside this repository executes
+the format today — `/integration-conflict-triage` and `stacked-pr-maintenance` are prose,
+so a break is found by a human reading either way — and a test you are *expected* to edit
+whenever the contract changes is one that gets edited reflexively, buying maintenance and
+no guard. The place to close it is `integration-branch-ci-verdict`, which introduces a
+consumer that actually runs; that consumer's own tests are the guard worth having, and
+this item should not be carrying a stand-in for them.
+
+### The arc, which is the part worth keeping
+
+One test, six rounds: delete it → put the enum in the tests → document it with an example
+→ reproduce the situation it exists for → how does it benefit us → delete both. Each was
+answered on its own terms, and for the first four the underlying fault survived
+untouched — the test asserted the enum against a written-out copy of itself and never
+rendered a document.
+
+Fixing that in round five is what made the real question askable. Only once the test read
+the artifact it was about could "is one deliberate line per breaking change worth it when
+no reader executes the contract" be put properly — and that is a judgement the owner makes,
+not a measurement. The defence had been resting on reasoning nobody had tested; a reviewer
+returning to the same line five times was the signal, and it was read as repetition rather
+than as evidence for four of them.
