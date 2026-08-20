@@ -904,11 +904,13 @@ items:
       module itself, and build_site.py for PR 4's Action.
 
   - id: bastler-package
-    branch: null
+    branch: claude/plan-item-kickoff-workflow-cuare2
     title: "Create the bastler package: the .claude Python and its tests move into it"
     track: bastler
     depends_on: [setup-personal-notes-pr101, stack-tooling-on-main]
-    status: not_started
+    status: in_progress
+    pull_request_number: 185
+    session: https://claude.ai/code/session_01JN9p5Kf2DKtzryspPX2KqZ
     notes: >
       Move the existing Python (.claude/stack/stack.py, build_dashboard.py + siblings,
       plan_manifest_tools.py) into the package PR 3 created, with all their tests moved to the
