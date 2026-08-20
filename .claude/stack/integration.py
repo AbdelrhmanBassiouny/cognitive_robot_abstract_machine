@@ -133,11 +133,23 @@ class ReportKey(StrEnum):
     EXIT_CODE = "exit_code"
     """The same conclusion as the number the process exits with."""
 
+    BUILD_BRANCH = "build_branch"
+    """The branch a run assembled onto."""
+
+    BASE = "base"
+    """The upstream base it started from."""
+
     TIPS = "tips"
     """What became of each tip the build tried to integrate."""
 
+    TESTS_PASSED = "tests_passed"
+    """Whether the suite passed, absent when it was not run."""
+
     UNREVIEWED = "unreviewed"
     """The branches left out because their author has not reviewed them."""
+
+    TIPS_TESTED = "tips_tested"
+    """The tips a search ran the suite over, in order."""
 
     INTEGRATION_TEST_FAILURE = "integration_test_failure"
     """The pair a localised failure was narrowed to, absent when nothing was localised."""
@@ -145,17 +157,35 @@ class ReportKey(StrEnum):
     BRANCH = "branch"
     """Which branch an entry is about."""
 
+    PULL_REQUEST_NUMBER = "pull_request_number"
+    """The fork pull request that publishes the branch an entry is about."""
+
+    ATTRIBUTED_TO = "attributed_to"
+    """The other branch an outcome is about, absent when there is none."""
+
+    CONFLICTING_PATHS = "conflicting_paths"
+    """The paths a conflict was on."""
+
+    RESOLVED_BY = "resolved_by"
+    """Who wrote the resolution a replay reused."""
+
+    EXPLANATION = "explanation"
+    """What git said about a refusal that is the build's own to fix."""
+
     CULPRIT = "culprit"
     """The tip whose arrival turned the suite."""
+
+    CULPRIT_PULL_REQUEST_NUMBER = "culprit_pull_request_number"
+    """The fork pull request that publishes the culprit."""
+
+    ALREADY_INCLUDED = "already_included"
+    """What was in the build when the suite turned, in merge order."""
 
     BREAKS_AGAINST = "breaks_against"
     """The earlier tip the culprit fails against alone."""
 
     BLOCKED = "blocked"
     """The branch a block-branch run labelled."""
-
-    PULL_REQUEST_NUMBER = "pull_request_number"
-    """The fork pull request that publishes the blocked branch."""
 
     LABEL = "label"
     """The label applied to hold it out of promotion."""
@@ -346,6 +376,25 @@ class PullRequestStackTipOutcome:
     def is_integrated(self) -> bool:
         """:return: Whether the tip's commits are in the finished branch."""
         return self.status.specification.integrated
+
+    @classmethod
+    def from_json(cls, document: dict[str, Any]) -> PullRequestStackTipOutcome:
+        """Read one outcome back out of a report's document.
+
+        :param document: The outcome's own object, as :meth:`IntegrationReport.as_json`
+            wrote it.
+        :return: The outcome it describes.
+        """
+        resolved_by = document.get(ReportKey.RESOLVED_BY)
+        return cls(
+            branch=document[ReportKey.BRANCH],
+            pull_request_number=document[ReportKey.PULL_REQUEST_NUMBER],
+            status=TipStatus(document[ReportKey.STATUS]),
+            attributed_to=document.get(ReportKey.ATTRIBUTED_TO),
+            conflicting_paths=tuple(document.get(ReportKey.CONFLICTING_PATHS, ())),
+            resolved_by=None if resolved_by is None else ResolutionAuthor(resolved_by),
+            explanation=document.get(ReportKey.EXPLANATION, ""),
+        )
 
 
 # %% selecting what to build from
@@ -647,6 +696,21 @@ class IntegrationTestFailure:
     """The single earlier tip the culprit fails against alone, or ``None`` when only the
     combination fails - which is a materially different thing to tell somebody."""
 
+    @classmethod
+    def from_json(cls, document: dict[str, Any]) -> IntegrationTestFailure:
+        """Read a localised failure back out of a report's document.
+
+        :param document: The failure's own object, as
+            :meth:`FailureLocationReport.as_json` wrote it.
+        :return: The failure it describes.
+        """
+        return cls(
+            culprit=document[ReportKey.CULPRIT],
+            culprit_pull_request_number=document[ReportKey.CULPRIT_PULL_REQUEST_NUMBER],
+            already_included=tuple(document[ReportKey.ALREADY_INCLUDED]),
+            breaks_against=document.get(ReportKey.BREAKS_AGAINST),
+        )
+
     def comment(self, session: str | None) -> str:
         """Write the comment telling a branch's owner that their branch breaks another.
 
@@ -683,12 +747,12 @@ class IntegrationTestFailure:
 
     def block_the_branch_that_causes_it(
         self, configuration: Configuration, fork: ForkPullRequests
-    ) -> str:
+    ) -> BlockedBranchReport:
         """Label the branch that breaks another, and tell its owner why.
 
         :param configuration: The resolved configuration, naming the label to apply.
         :param fork: The fork to label and comment on.
-        :return: The comment posted.
+        :return: What was written where.
         """
         number = self.culprit_pull_request_number
         pull_request = fork.pull_request(number)
@@ -702,7 +766,51 @@ class IntegrationTestFailure:
         )
         comment = self.comment(get_session_link_in(body))
         fork.add_comment(number, comment)
-        return comment
+        return BlockedBranchReport(
+            blocked=self.culprit,
+            pull_request_number=number,
+            breaks_against=self.breaks_against,
+            label=configuration.integration_conflict_label,
+            comment=comment,
+        )
+
+
+@dataclass(frozen=True)
+class BlockedBranchReport:
+    """What blocking one branch wrote, and where."""
+
+    blocked: str
+    """The branch that was labelled."""
+
+    pull_request_number: int
+    """The fork pull request that publishes it."""
+
+    breaks_against: str | None
+    """The earlier tip it fails against alone, or ``None`` when only the combination
+    fails."""
+
+    label: str
+    """The label applied to hold it out of promotion."""
+
+    comment: str
+    """What was said on its pull request."""
+
+    def as_json(self) -> str:
+        """:return: The block as one machine-readable document."""
+        return json.dumps(
+            {
+                ReportKey.BLOCKED: self.blocked,
+                ReportKey.PULL_REQUEST_NUMBER: self.pull_request_number,
+                ReportKey.BREAKS_AGAINST: self.breaks_against,
+                ReportKey.LABEL: self.label,
+                ReportKey.COMMENT: self.comment,
+            },
+            indent=2,
+        )
+
+    def as_line(self) -> str:
+        """:return: The block as the one tab-separated line a shell caller reads."""
+        return f"{self.blocked}\tblocked\t{self.label}"
 
 
 @dataclass(frozen=True)
@@ -738,6 +846,24 @@ class FailureLocationReport:
                 **asdict(self),
             },
             indent=2,
+        )
+
+    @classmethod
+    def from_json(cls, text: str) -> FailureLocationReport:
+        """Read a search back out of the document it was written to.
+
+        :param text: A document :meth:`as_json` wrote.
+        :return: The search it describes.
+        """
+        document = json.loads(text)
+        failure = document.get(ReportKey.INTEGRATION_TEST_FAILURE)
+        return cls(
+            build_branch=document[ReportKey.BUILD_BRANCH],
+            base=document[ReportKey.BASE],
+            tips_tested=tuple(document[ReportKey.TIPS_TESTED]),
+            integration_test_failure=(
+                None if failure is None else IntegrationTestFailure.from_json(failure)
+            ),
         )
 
 
@@ -906,6 +1032,31 @@ class IntegrationReport:
                 **asdict(self),
             },
             indent=2,
+        )
+
+    @classmethod
+    def from_json(cls, text: str) -> IntegrationReport:
+        """Read a build back out of the document it was written to.
+
+        The status and exit code are not read: both are derived from what the build left
+        behind, so a document claiming otherwise would be describing a different build.
+
+        :param text: A document :meth:`as_json` wrote.
+        :return: The build it describes.
+        """
+        document = json.loads(text)
+        return cls(
+            build_branch=document[ReportKey.BUILD_BRANCH],
+            base=document[ReportKey.BASE],
+            tips=tuple(
+                PullRequestStackTipOutcome.from_json(outcome)
+                for outcome in document[ReportKey.TIPS]
+            ),
+            tests_passed=document.get(ReportKey.TESTS_PASSED),
+            unreviewed=tuple(
+                PullRequestStackTipOutcome.from_json(outcome)
+                for outcome in document[ReportKey.UNREVIEWED]
+            ),
         )
 
     @property
@@ -1348,27 +1499,8 @@ class BlockBranchCommand(IntegrationCommand):
         if localised is None:
             print_failure_location(report)
             return IntegrationExitCode.SUCCESS
-        comment = localised.block_the_branch_that_causes_it(run.configuration, fork)
-        if arguments.json:
-            print(
-                json.dumps(
-                    {
-                        ReportKey.BLOCKED: localised.culprit,
-                        ReportKey.PULL_REQUEST_NUMBER: (
-                            localised.culprit_pull_request_number
-                        ),
-                        ReportKey.BREAKS_AGAINST: localised.breaks_against,
-                        ReportKey.LABEL: run.configuration.integration_conflict_label,
-                        ReportKey.COMMENT: comment,
-                    },
-                    indent=2,
-                )
-            )
-        else:
-            print(
-                f"{localised.culprit}\tblocked\t"
-                f"{run.configuration.integration_conflict_label}"
-            )
+        blocked = localised.block_the_branch_that_causes_it(run.configuration, fork)
+        print(blocked.as_json() if arguments.json else blocked.as_line())
         return report.exit_code
 
 

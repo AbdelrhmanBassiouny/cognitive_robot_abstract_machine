@@ -99,6 +99,12 @@ UPSTREAM_BASE = "main"
 The branch every stack in these tests ultimately targets.
 """
 
+UPSTREAM_REMOTE = "cram2"
+"""
+The name :class:`ForkCheckout` registers the upstream under, matching what
+``stack.toml`` names as the default a checkout gets before configuring one.
+"""
+
 A_LABEL_THIS_TOOL_NEVER_WRITES = "a-label-somebody-else-put-here"
 """
 Stands for whatever else a pull request happens to carry - the labels a write must
@@ -118,7 +124,7 @@ def make_configuration() -> Configuration:
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
-        upstream_remote="cram2",
+        upstream_remote=UPSTREAM_REMOTE,
         upstream_base=UPSTREAM_BASE,
         upstream_setup_command=None,
         integration_test_command="true",
@@ -175,12 +181,14 @@ class ForkCheckout:
         checkout.run_git("config", "user.name", "Scratch Fork")
         checkout.run_git("config", "user.email", "scratch-fork@example.com")
         checkout.run_git("remote", "add", "origin", checkout.fork_path.as_uri())
-        checkout.run_git("remote", "add", "cram2", checkout.upstream_path.as_uri())
+        checkout.run_git(
+            "remote", "add", UPSTREAM_REMOTE, checkout.upstream_path.as_uri()
+        )
         checkout.commit("a-file", "the first line\n")
         checkout.run_git("push", "--quiet", "origin", UPSTREAM_BASE)
-        checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
+        checkout.run_git("push", "--quiet", UPSTREAM_REMOTE, UPSTREAM_BASE)
         checkout.run_git("fetch", "--quiet", "origin")
-        checkout.run_git("fetch", "--quiet", "cram2")
+        checkout.run_git("fetch", "--quiet", UPSTREAM_REMOTE)
         return checkout
 
     @staticmethod
@@ -460,7 +468,7 @@ def test_a_description_naming_no_session_yields_none():
 def test_the_fork_base_is_fast_forwarded_to_the_upstream(fork_checkout: ForkCheckout):
     fork_checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
     advanced = fork_checkout.commit("another-file", "upstream moved\n")
-    fork_checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
+    fork_checkout.run_git("push", "--quiet", UPSTREAM_REMOTE, UPSTREAM_BASE)
     fork_checkout.run_git(
         "push", "--quiet", "--force", "origin", f"HEAD~1:{UPSTREAM_BASE}"
     )
@@ -493,10 +501,10 @@ def test_a_non_fast_forward_is_refused_and_the_fork_base_is_untouched(
     fork_checkout.run_git("checkout", "--quiet", "-B", "a-divergent-line", "HEAD~1")
     fork_checkout.commit("an-upstream-only-file", "only upstream\n")
     fork_checkout.run_git(
-        "push", "--quiet", "--force", "cram2", f"HEAD:{UPSTREAM_BASE}"
+        "push", "--quiet", "--force", UPSTREAM_REMOTE, f"HEAD:{UPSTREAM_BASE}"
     )
     fork_checkout.run_git("fetch", "--quiet", "origin")
-    fork_checkout.run_git("fetch", "--quiet", "cram2")
+    fork_checkout.run_git("fetch", "--quiet", UPSTREAM_REMOTE)
     before = fork_checkout.published_commit("origin", UPSTREAM_BASE)
 
     report = fast_forward(make_configuration(), fork_checkout.git)
@@ -1481,7 +1489,10 @@ def a_report(
     """
     return MaintenanceReport(
         fast_forward=FastForwardReport(
-            fast_forward_outcome, "cram2/main", "origin/main", "a-commit"
+            fast_forward_outcome,
+            f"{UPSTREAM_REMOTE}/{UPSTREAM_BASE}",
+            f"origin/{UPSTREAM_BASE}",
+            "a-commit",
         ),
         restacked=(
             BranchOutcome(
@@ -1565,7 +1576,7 @@ def test_a_non_zero_status_says_what_it_means_on_the_way_out(
     """
     A caller reading a bare number has to look it up; the executor already knows.
     """
-    fork_checkout.run_git("remote", "remove", "cram2")
+    fork_checkout.run_git("remote", "remove", UPSTREAM_REMOTE)
 
     result = run_maintenance(fork_checkout, RestackCommand())
 
@@ -1797,7 +1808,7 @@ def test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status(
     """
     Distinguishable from a missing board, since the fix is a token rather than a fetch.
     """
-    fork_checkout.run_git("remote", "remove", "cram2")
+    fork_checkout.run_git("remote", "remove", UPSTREAM_REMOTE)
 
     assert (
         run_maintenance(fork_checkout, BoardCommand()).returncode
@@ -1816,7 +1827,7 @@ def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
     ``stack.toml``, whose upstream is this repository's own - against which both of the
     fixture's remotes look like candidate forks, and inference rightly refuses to guess.
     """
-    fork_checkout.run_git("remote", "remove", "cram2")
+    fork_checkout.run_git("remote", "remove", UPSTREAM_REMOTE)
 
     assert (
         run_maintenance(fork_checkout, RestackCommand()).returncode

@@ -182,6 +182,55 @@ class GitCommandRunner:
         """
         return self.run("branch", "--show-current")
 
+    def checkout_orphan(self, branch: str) -> None:
+        """
+        Start a branch with no history behind it, leaving the index as it was.
+
+        :param branch: The branch to start.
+        """
+        self.run("checkout", "--quiet", "--orphan", branch)
+
+    def branch_names(self) -> tuple[str, ...]:
+        """
+        :return: Every branch this checkout holds, whichever one is checked out.
+        """
+        return tuple(
+            line.strip().lstrip("* ")
+            for line in self.run("branch", "--list").splitlines()
+        )
+
+    def worktree_paths(self) -> tuple[str, ...]:
+        """
+        :return: The working trees attached to this checkout, the main one included.
+        """
+        return tuple(
+            line.split()[0] for line in self.run("worktree", "list").splitlines()
+        )
+
+    def remote_reference(self, remote: str, reference: str) -> str:
+        """
+        Ask a remote what it holds a reference at, without fetching from it.
+
+        :param remote: The remote to ask.
+        :param reference: The fully qualified reference to look up.
+        :return: What the remote answered, empty when it holds no such reference.
+        """
+        return self.run("ls-remote", remote, reference)
+
+    def remove_remote(self, remote: str) -> None:
+        """
+        :param remote: The remote to stop tracking.
+        """
+        self.run("remote", "remove", remote)
+
+    def configure(self, setting: GitSetting) -> None:
+        """
+        Write a setting into this checkout's own configuration.
+
+        :param setting: The setting to write.
+        """
+        self.run("config", setting.key, setting.value)
+
     def switch_to(self, branch: str) -> None:
         """
         Check out a branch that already exists, leaving where it points alone.
