@@ -1,41 +1,35 @@
 ## claude/fix-ci-failing-tests-202965 -> PR #183 (draft, `bug`)
 
-The **ormatic PR**. Six commits:
+The **ormatic PR**. Seven commits, head `df64ab60`:
 
 - `a4990cfe` krrood: import scope past an unimportable module + unit test
 - `a2385ec0` full-recovery regression test
 - `6884cfcf` design B: ignore + untrack every interface, delete the guard
   machinery, build once per test run
 - `d70a8d03` drop CI's redundant Build ORM step for test jobs
-- `0ac188b0` tqdm bar, generator output captured, `--debug`,
-  `OrmGenerationFailedError`
+- `0ac188b0` tqdm bar, generator output captured, `--debug`
 - `01be730e` build only where interfaces are read; bar counts classes
+- `df64ab60` docstring/`__future__` stay first in a building conftest
 
-**CI was all 15 green** at `d70a8d03`. Re-running for `01be730e`.
+**CI at `01be730e`: 2 red.**
 
-**Measured cost that drove `01be730e`.** Root conftest ran for every session, so
-the 7 libs that never read a mapping paid ~99s each (min 88, max 106) for a
-build they never touched. Now only `semantic_digital_twin_test`,
-`coraplex_test`, `giskardpy_test`, `experiments_test` build - the only four
-that reference a workspace interface (`krrood_test` uses its own dataset one,
-generated in-process by its own conftest). `regenerate_orm_interfaces` is
-`@cache`d so a multi-package run builds once.
+1. `experiments` - **mine, fixed in `df64ab60`.** Its conftest opens with a
+   module docstring *and* `from __future__ import annotations`; prepending the
+   build pushed both down -> SyntaxError, whole package failed to collect. Only
+   experiments_test has a future import; the other three open with `import os`.
+   Now covered by `test_interface_building_conftests.py`, which compiles every
+   building conftest and checks none lost its docstring. Verified it fails on
+   the broken form. My local runs used `--noconftest`, which is exactly why this
+   got through - remember that gap.
 
-**Per-class bar.** Profiled a real generation: `ClassDiagram(...)` is ~95% of
-the time, `make_all_tables()` ~0% - so instrumenting the table pass would have
-given a bar that never moves. Progress is emitted from
-`ClassDiagram._create_association_relations`, the per-class loop that resolves
-field types. Generators run as subprocesses, so krrood carries the protocol
-(`krrood/class_diagrams/progress_report.py`) - krrood may not import cram, so
-it has to live there and cram imports it. Env var `KRROOD_REPORT_CLASS_DIAGRAM_
-PROGRESS` turns emission on; the parent pipes stdout+stderr, routes progress
-lines to the bar and keeps the rest for the failure report. `--debug` sets no
-env var and does not pipe, so logging stays live and there is no bar.
+2. `semantic_digital_twin` - **not an assertion, a worker crash:**
+   `worker 'gw0' crashed while running test_gazebo.py::
+   TestSmallWarehouseWorld::test_world_is_valid` (1 failed, 1215 passed).
+   Segfault/OOM signature in COLLADA mesh loading, which this PR does not touch.
+   Green on `d70a8d03` and on main. **Not yet concluded - the `df64ab60` run is
+   the second data point.** If it crashes again it is real and needs digging;
+   do not write it off as a flake on one occurrence.
 
-**Not validated locally:** the real generators (no robotics env here). Both
-halves are covered by real code - krrood's emission against a real ClassDiagram,
-cram's reading against a dataset generator calling krrood's real
-`report_progress` - but the join only runs in CI.
-
-**Still open, user's call:** nothing outstanding. Not subscribed to any PR; no
-check-ins armed.
+**Next.** Read the `df64ab60` run: confirm experiments collects, and see whether
+the SDT gazebo worker crash reproduces. Not subscribed to any PR; no check-ins
+armed.
