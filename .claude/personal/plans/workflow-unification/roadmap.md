@@ -7235,3 +7235,95 @@ the template autoescapes, so the page carries `&#39;`. The assertion now derives
 expected markup through `markupsafe.escape` - the same function Jinja's autoescaping
 uses - rather than hand-writing the entity, so it cannot drift from the escaping the
 template actually applies.
+
+## Update 2026-08-20 (resolved, second round the same day): #154's twenty threads, and which duplication is worth removing
+
+`/plan-item-resolve workflow-unification integration-branch`, session
+https://claude.ai/code/session_01Ra51SAHQKy7TVYRG2HRERW. Twenty threads, drafted 13:15 to 14:04 and
+submitted as one review at 14:46. All answered, 14 resolved, 6 open on purpose, in `434ace04`. 620
+tests across the three directories CI runs, deliberately unchanged.
+
+### The stall was the manifest describing a moment that had passed
+
+The entry directly above this one, written by the previous session at 08:32, ends *"nothing is
+outstanding on this branch. It is waiting on review"* - and so does the branch's PR-progress note.
+Six hours later a twenty-thread round landed. Nothing was wrong with either statement when it was
+written; both were simply still being read as current.
+
+This plan has now recorded that shape twice, and the pair is worth reading together. On 2026-08-12
+it was a *hedged* statement outliving its condition (`#139`'s "not blocked" note against a `dirty`
+pull request). Here it is an *unhedged* one, which is the commoner and quieter case: "nothing
+outstanding" is true of every branch at the instant it is written and false of most of them within
+a day. A resolve session's first move is therefore to read the pull request rather than the entry,
+and the entry only to learn what has already been decided.
+
+### The round is one finding, twenty times
+
+A branch name spelled in the arrange and again in the assert. It was sweepable, and the sweep went
+through the whole of `test_integration_selection.py` rather than only the seven tests a comment
+landed on - the four the reviewer had not reached had the same shape, and a module half converted
+reads worse than one not converted at all.
+
+The half of it with no single source anywhere was the *file* those tests check for.
+`ForkCheckout.branch_from` commits `f"{name}-file"`, and four assertions plus a push refspec retyped
+that suffix. `file_added_by` is that spelling now, and `branch_from` calls it, so the two cannot
+drift.
+
+### Two asks answered by measuring rather than by doing
+
+The fourth round of this item settled that way, and both measurements point the same direction.
+
+**Multiplying the expected statuses by `len(report.tips)`** was mutation checked by making the
+second tip a draft, so the build carries one tip of the two the test arranges. The literal form
+**passes** - both sides shrink together, so the length stops being checked at all - and in that run
+the mutation was caught two lines further down by an unrelated assertion, which is accidental
+coverage of exactly the kind this branch already found itself relying on once. Multiplying by the
+*arranged* count removes the repeated literal and keeps the assertion.
+
+**`create_pull_request_object` went and the other six factories stayed**, measured one at a time
+rather than as a class. It supplied only `draft=False`, since `labels` already has a
+`default_factory`, so it genuinely was the constructor under another name. `create_branch_object`
+supplies `strategy` and `labels`, which `Branch` requires with no default, at 21 call sites about
+neither - removing it would put a strategy and an empty label list in front of the branch names each
+test is actually about.
+
+### The generalizable half: a repeated literal is not always a duplication
+
+Both asks would have replaced a literal with an expression that no longer said anything - a length
+derived from the thing under test, and a constructor call whose required fields become the noise. So
+the rule this round adds to the plan's collection: **a repeated literal is a defect when the two
+copies can drift apart, and not one when the second copy is the assertion.** The arrange and the
+assert naming the same branch is duplication; the arrange and the assert both stating the count is
+the test.
+
+That is the same distinction the 2026-08-01 entry on #122 drew from the other side - sharing the
+*resolution* of a dependency is right precisely because it shares no threshold - and the one the
+mirror-schema round drew when single-sourcing the wire format deleted its own guard.
+
+### One defect the review found that nothing mechanical could have
+
+`integration_fixtures.py` carried the same three-line comment and `__all__ = ["fork_checkout"]`
+twice, thirty lines apart. A second `__all__` silently rebinds the first, so with both binding the
+same value there is no error, no warning, and no test that could fail. It survived a 1564-line file
+being split into seven modules the round before. Only reading it found it.
+
+All six modules now use the ordinary `# noqa: F401` this repository already uses for a deliberately
+unused import, which is one line on the import itself rather than four lines thirty lines below it.
+
+### Six threads open, and one correction to the entry above
+
+Open: the four the previous round left, plus **deleting
+`test_the_report_keys_are_the_ones_a_caller_parses`** - answered rather than done, because it is the
+only guard left on the wire format since the mirror schema, and because it is the very test a reply
+on this pull request once claimed existed when it had never been written - and the **shared registry
+of script paths**, where 25+ sites across `.claude/hooks/`, `.claude/skills/plan-dashboard/` and
+`.claude/stack/` resolve paths the same way and `dev-tooling-python-package` deletes the layer they
+exist for. `INTEGRATION_SCRIPT` does now read `Path(integration.__file__)`, which was the free half.
+
+**Correction to the previous entry's process note.** It records four hook tests as failing in a
+session container for an environment reason. They do not fail here, and the difference is not the
+container: `pytest` was installed as a `uv` tool with its own interpreter, while PyYAML, Jinja2,
+markdown and nh3 sit in `/usr/local/bin/python3`. Installing `pytest` into *that* interpreter makes
+all 620 pass locally. So the observation stands and the remedy is one install rather than a caveat
+to carry - worth knowing before the next session reads that note and concludes the failures are
+expected.

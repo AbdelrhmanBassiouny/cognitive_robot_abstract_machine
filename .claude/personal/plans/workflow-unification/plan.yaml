@@ -2713,7 +2713,7 @@ items:
       - manifest-currency-first
     status: in_progress
     pull_request_number: 154
-    session: https://claude.ai/code/session_01RXr6gpbCyaa9K3V8F5kwRk
+    session: https://claude.ai/code/session_01Ra51SAHQKy7TVYRG2HRERW
     notes: >
       Designed 2026-08-10; no code exists. Three implementation attempts were blocked in the
       designing session, so this enters the plan as a design with nothing behind it.
@@ -3121,6 +3121,54 @@ items:
       whichever `python3` is on `PATH`, which is not the interpreter holding the dependencies unless
       the run arranges it. They pass at the pre-merge head too, and CI is green. Running the suite
       with the right interpreter first on `PATH` is the fix, not a change to anything.
+      Resolved 2026-08-20, a second round the same day (session
+      https://claude.ai/code/session_01Ra51SAHQKy7TVYRG2HRERW). Twenty threads, drafted 13:15 to
+      14:04 and submitted as one review at 14:46 - after the entry above was written, which had
+      recorded the branch as having nothing outstanding. All twenty are answered, 14 resolved and 6
+      left open, in `434ace04`. 620 tests still pass across the three directories CI runs,
+      deliberately unchanged, and `test_claude_dev_tooling` is green on the new head.
+
+      Almost the whole round is one finding: a branch name spelled in the arrange and again in the
+      assert. Every selection and build test names its branches once now, swept across the whole
+      module rather than only the tests a comment landed on, since leaving the rest inconsistent
+      would have been worse. The half with no single source at all was the file those tests look
+      for. `ForkCheckout.branch_from` writes `<branch>-file`, and that suffix was retyped at four
+      assertions and a push refspec; `file_added_by` is now the one spelling, and `branch_from`
+      reads it too.
+
+      The `__all__` block that kept a linter quiet became the ordinary noqa suppression this
+      repository already uses, across the six modules carrying it. One carried it twice, thirty
+      lines apart, which is what the "repeated from above" comment found - and nothing mechanical
+      could have: a second `__all__` silently rebinds the first, so there is no error, no warning,
+      and no test that could fail.
+
+      Two asks were answered with a measurement rather than done as written, which is the fourth
+      round of this item settled that way. Multiplying the expected statuses by `len(report.tips)`
+      was mutation checked by making the second tip a draft: the literal form *passes* a build that
+      carried one tip of the two the test arranges, because both sides shrink together, so it
+      multiplies by the arranged count instead. And `create_pull_request_object` went while the
+      other six factories stayed, measured one at a time: it supplied only `draft=False`, since
+      `labels` already defaults, where `create_branch_object` supplies `strategy` and `labels`,
+      which `Branch` requires with no default, at 21 call sites about neither.
+
+      The generalizable half is about which duplication is worth removing. Two of the round's asks
+      would each have replaced a literal with an expression that no longer said anything: a length
+      that derives itself from the thing under test, and a constructor call whose required fields
+      become the noise the branch names get lost in. A repeated literal is a defect when the two
+      copies can drift, and not one when the second copy is the assertion.
+
+      Six threads stay open: the four the previous round left, plus deleting
+      `test_the_report_keys_are_the_ones_a_caller_parses` - the only guard left on the wire format
+      since the mirror schema, and the test a reply had once claimed existed when it did not - and
+      the shared registry of script paths, where 25+ sites resolve paths the same way and
+      `dev-tooling-python-package` deletes the layer they exist for. `INTEGRATION_SCRIPT` does now
+      read `Path(integration.__file__)`, which was the free half of that ask.
+
+      Correcting the previous entry's process note rather than repeating it: the four hook tests do
+      not fail here. They fail when `pytest` and the dependencies sit in different interpreters,
+      which is a fixable container state rather than a property of the suite. Installing `pytest`
+      into the interpreter already holding PyYAML, Jinja2, markdown and nh3 makes all 620 pass
+      locally. The observation stands; the remedy is one install, not a note to remember.
   - id: setup-runs-without-asking
     title: "Run the personal-notes setup from the planning skills instead of asking first"
     branch: claude/auto-run-setup-notes-02nhxv
