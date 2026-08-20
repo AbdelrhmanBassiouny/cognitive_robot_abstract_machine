@@ -3,17 +3,23 @@
 
 `workflow-unification` plan, `stack-tooling` track. Branch
 `claude/plan-item-kickoff-workflow-ixbvxl`, containing `main` (which carries #139)
-and #151. Draft PR #154, head `78c90007` pushed 2026-08-20.
+and #151. Draft PR #154, head `35eed0dd` pushed 2026-08-20.
 Sessions: https://claude.ai/code/session_01Ue4PvfV5LDxHGRRS5BZB4g (built it),
 https://claude.ai/code/session_01AYLtTRh7uZu64oLpMhGjQR (parts A/B/C/E),
 https://claude.ai/code/session_01RhwNdD7ChskkomV1TCiRLU (the 08-13 round; Part D split out),
 https://claude.ai/code/session_01RXr6gpbCyaa9K3V8F5kwRk (the 08-19 round and the base merge),
 https://claude.ai/code/session_01Ra51SAHQKy7TVYRG2HRERW (this one — all three 08-20 rounds).
 
-## Status: three rounds answered and pushed, nothing uncommitted
+## Status: six rounds answered and pushed, nothing uncommitted
 
-622 tests across the three directories CI runs, from 620 — two additions, both covering a
-document nothing was looking at. `mergeable_state: clean`, 0 behind
+620 tests across the three directories CI runs — where the day started. One test added
+for the `stage-conflict` document, which nothing was looking at, and two deleted on
+review for the wire format, which nothing is looking at now.
+
+**The report wire format is deliberately unguarded**, and the pull request description
+says so. Measured after the deletion: renaming `ReportKey.EXIT_CODE`'s value to
+`exitCode` leaves all 226 tests in `.claude/stack/tests` passing. Closing it belongs to
+`integration-branch-ci-verdict`, which introduces a consumer that actually runs. `mergeable_state: clean`, 0 behind
 `main`, still a draft.
 
 **Read the pull request before this note.** Two consecutive entries here have said
@@ -50,8 +56,8 @@ enum, catching a member nothing emits and a key emitted outside it. Measured: re
 
 ## Next steps
 
-1. Nothing outstanding on this branch as of `78c90007`. Waiting on review.
-2. Ten threads are open on purpose. Straightforward if the user overrules: remove the six
+1. Nothing outstanding on this branch as of `35eed0dd`. Waiting on review.
+2. Nine threads are open on purpose. Straightforward if the user overrules: remove the six
    remaining factories, delete the report-keys test, build the shared script-path registry.
 3. The reparent onto #151's branch stays wrong until #151 merges `main` — #154 already
    contains #151's head and is 195 commits ahead of it.
@@ -71,9 +77,14 @@ enum, catching a member nothing emits and a key emitted outside it. Measured: re
   second copy is the assertion.** Two of the previous round's asks would have replaced a
   literal with an expression that no longer said anything.
 - **A test that pins a contract must read the artifact the contract is about.** The
-  report-keys test named the right hazard, was defended across three rounds, and checked
-  the wrong object throughout. The cheap check is what the test *imports*: a wire-format
-  test that imports no serializer is asserting something other than the wire format.
+  report-keys test named the right hazard, was defended across four rounds, and checked
+  the wrong object throughout — it asserted the enum against a copy of itself. The cheap
+  check is what the test *imports*: a wire-format test that imports no serializer is
+  asserting something other than the wire format.
+- **Fixing that is what made the real question askable**, and the answer went the other
+  way: it was deleted in the round after. Is one deliberate line per breaking change worth
+  it when no reader executes the contract — that is the owner's call, not a measurement,
+  and it could not be put properly while the test was checking the wrong thing.
 - **A local test failure can be about which interpreter has `pytest`.** It was a `uv` tool
   with its own interpreter while the dependencies were in `/usr/local/bin/python3`. One
   install, and all 621 pass.
