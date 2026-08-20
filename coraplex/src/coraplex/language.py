@@ -6,14 +6,25 @@ import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing_extensions import (
-    Callable,
     Any,
+    Callable,
     List,
+    Optional,
     Type,
 )
 
-from giskardpy.motion_statechart.goals.templates import Sequence, Parallel
-from giskardpy.motion_statechart.graph_node import Goal, MotionStatechartNode
+from giskardpy.motion_statechart.goals.templates import (
+    Parallel,
+    RepeatOnStall,
+    RepeatUntil,
+    Sequence,
+)
+from giskardpy.motion_statechart.graph_node import (
+    CancelMotion,
+    Goal,
+    MotionStatechartNode,
+)
+from giskardpy.motion_statechart.monitors.payload_monitors import CountNodeResets
 from coraplex.language_giskard_templates import (
     MonitoredGoal,
     PausedWhileTrue,
@@ -26,7 +37,11 @@ from coraplex.plans.executables import (
     Executable,
 )
 from coraplex.datastructures.enums import TaskStatus
-from coraplex.plans.failures import PlanFailure, AllChildrenFailed
+from coraplex.plans.failures import (
+    AllChildrenFailed,
+    PlanFailure,
+    RepetitionsExhausted,
+)
 from coraplex.plans.plan_node import PlanNode
 
 logger = logging.getLogger(__name__)
@@ -144,17 +159,81 @@ class ParallelNode(ExecutesInParallel):
 @dataclass(eq=False)
 class RepeatNode(ExecutesSequentially):
     """
-    Executes all children a given number of times in sequential order.
+    Executes all children, and executes them again whenever an attempt fails.
+
+    Attempting stops as soon as the children succeed. Running out of attempts is a
+    failure, raising :class:`~coraplex.plans.failures.RepetitionsExhausted`.
+
+    .. note:: The default template treats an attempt as failed once it stops making
+        progress, which needs at least one converging task among the children.
     """
 
-    repetitions: int = 1
+    maximum_repetitions: int = 1
     """
-    The number of repetitions of the children.
+    How many times the children are attempted before the repeating is given up on.
     """
 
-    def notify(self):
-        for _ in range(self.repetitions):
-            super().notify()
+    repeat_template: Callable[..., RepeatUntil] = field(
+        kw_only=True, default=RepeatOnStall
+    )
+    """
+    Builds the giskard goal deciding what counts as a failed attempt.
+
+    Use it for a decision derived from the children, such as a stall. It is called with
+    the children's goal, the attempt counter and :attr:`failure_monitor`, so a template
+    needing more configuration is passed pre-configured, for instance
+    ``partial(RepeatOnStall, timeout=1.0)``.
+    """
+
+    failure_monitor: Optional[MotionStatechartNode] = field(default=None, kw_only=True)
+    """
+    Node whose True observation means an attempt failed.
+
+    Use it for a decision that stands on its own, such as a force spike, together with
+    :class:`~giskardpy.motion_statechart.goals.templates.RepeatUntil` as the template.
+    Templates that derive their own reject it.
+    """
+
+    def parse(self) -> Executable:
+        return self.create_giskard_executable([self])
+
+    def add_to_motion_state_chart(
+        self, parent_goal: Goal, executable: GiskardExecutable
+    ) -> Goal:
+        """
+        Add a goal below `parent_goal` that runs this node's children over and over.
+
+        The counter, the children's goal and the node that reports running out of
+        attempts all become children of that goal, because a transition condition may
+        only name a sibling.
+        """
+        children_goal = self.create_goal()
+        counter = CountNodeResets(
+            name=f"{type(self).__name__}/attempts",
+            node=children_goal,
+            target=self.maximum_repetitions,
+        )
+        loop = self.repeat_template(
+            name=type(self).__name__,
+            task=children_goal,
+            monitor=counter,
+            failure_monitor=self.failure_monitor,
+        )
+        parent_goal.add_node(loop)
+        loop.add_node(children_goal)
+        self.add_children_to_motion_state_chart(
+            children_goal, self.children, executable
+        )
+
+        exhausted = CancelMotion(
+            name=f"{type(self).__name__}/exhausted",
+            exception=RepetitionsExhausted(
+                language_node=self, maximum_repetitions=self.maximum_repetitions
+            ),
+        )
+        exhausted.start_condition = counter.observation_variable
+        loop.add_node(exhausted)
+        return loop
 
 
 @dataclass(eq=False)
@@ -198,8 +277,8 @@ class MonitorNode(LanguageNode, ABC):
     """
     Executes its children under the observation of a motion state chart monitor.
 
-    The monitor is evaluated by the control loop alongside the children, so it can act on
-    them while they are running.
+    The monitor is evaluated by the control loop alongside the children, so it can act
+    on them while they are running.
     """
 
     monitor: MotionStatechartNode = field(kw_only=True)
@@ -214,7 +293,8 @@ class MonitorNode(LanguageNode, ABC):
         self, parent_goal: Goal, executable: GiskardExecutable
     ) -> Goal:
         """
-        Add a goal below `parent_goal` that runs this node's children next to its monitor.
+        Add a goal below `parent_goal` that runs this node's children next to its
+        monitor.
 
         The monitor and the children's goal become siblings, which is what lets the
         monitor's observation drive the children's life cycle.
@@ -242,7 +322,8 @@ class CancelMonitor(MonitorNode):
     """
     Stops its children once the monitor observes True.
 
-    The plan continues with the next node afterwards; a stopped subtree is not a failure.
+    The plan continues with the next node afterwards; a stopped subtree is not a
+    failure.
     """
 
     def create_monitored_goal(self) -> MonitoredGoal:

@@ -107,12 +107,20 @@ def cancel_when(
 
 def repeat(
     children: List[ActionLike],
-    repetitions: int,
+    maximum_repetitions: int,
     context: Optional[Context] = None,
+    **repeat_arguments,
 ) -> RepeatNode:
+    """
+    Attempt `children` until they succeed, at most `maximum_repetitions` times.
+
+    :param maximum_repetitions: How many attempts before the repeating is given up on.
+    :param repeat_arguments: Passed to :class:`~coraplex.language.RepeatNode`, for
+        instance a `repeat_template` or a `failure_monitor`.
+    """
     from coraplex.language import RepeatNode
 
-    root = RepeatNode(repetitions=repetitions)
+    root = RepeatNode(maximum_repetitions=maximum_repetitions, **repeat_arguments)
     return _make_plan_from_type_and_children(root, children, context)
 
 

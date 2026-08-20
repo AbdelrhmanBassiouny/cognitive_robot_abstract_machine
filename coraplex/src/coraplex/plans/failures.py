@@ -56,6 +56,35 @@ class AllChildrenFailed(PlanFailure):
 
 
 @dataclass
+class RepetitionsExhausted(PlanFailure):
+    """
+    Thrown when a repeating plan node ran out of attempts.
+    """
+
+    language_node: LanguageNode
+    """
+    The repeating node whose children never succeeded.
+    """
+
+    maximum_repetitions: int
+    """
+    How many attempts were allowed.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.language_node} attempted its children {self.maximum_repetitions} "
+            f"times without succeeding."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Allow more repetitions, or check whether the children can succeed at all "
+            "from the state each attempt starts in."
+        )
+
+
+@dataclass
 class RobotInCollision(PlanFailure):
     """Thrown when the robot is in collision with the environment."""
 

@@ -21,6 +21,7 @@ from coraplex.plans.factories import (
     cancel_when,
     execute_single,
     pause_while,
+    repeat,
     sequential,
 )
 from coraplex.plans.plan_node import MotionNode, PlanNode, ExecutionBoundaryNode
@@ -45,7 +46,13 @@ from coraplex.language_giskard_templates import (
 )
 from coraplex.utils import split_list_by_type
 from giskardpy.motion_statechart.context import MotionStatechartContext
-from giskardpy.motion_statechart.goals.templates import Parallel, Sequence
+from giskardpy.motion_statechart.goals.templates import (
+    Parallel,
+    RepeatOnStall,
+    Sequence,
+)
+from giskardpy.motion_statechart.graph_node import CancelMotion
+from giskardpy.motion_statechart.monitors.payload_monitors import CountNodeResets
 from giskardpy.motion_statechart.nodes_for_testing.nodes_for_testing import (
     ConstFalseNode,
 )
@@ -83,8 +90,8 @@ def test_parse_simple_action(immutable_model_world):
 
 def test_language_nodes_create_a_goal_of_their_template():
     """
-    Each language node contributes a goal of the template it declares, which is what gives
-    the motion state chart the plan's sequential/parallel/try semantics.
+    Each language node contributes a goal of the template it declares, which is what
+    gives the motion state chart the plan's sequential/parallel/try semantics.
     """
     assert type(SequentialNode().create_goal()) is Sequence
     assert type(ParallelNode().create_goal()) is Parallel
@@ -94,8 +101,8 @@ def test_language_nodes_create_a_goal_of_their_template():
 
 def test_sequential_plan_nests_a_goal_per_plan_node(immutable_model_world):
     """
-    Parsing a sequential plan builds a goal per language and action node, with the motions
-    as tasks at the leaves, rather than one flat list of tasks.
+    Parsing a sequential plan builds a goal per language and action node, with the
+    motions as tasks at the leaves, rather than one flat list of tasks.
     """
     world, view, context = immutable_model_world
 
@@ -134,8 +141,8 @@ def _parse_and_compile(plan, world, context):
     """
     Parse `plan` and compile its motion state chart.
 
-    Compiling is what expands the goals, so it is required before any condition wired by a
-    template can be observed.
+    Compiling is what expands the goals, so it is required before any condition wired by
+    a template can be observed.
     """
     plan.notify()
     executable = plan.parse()
@@ -209,6 +216,34 @@ def test_monitored_subtree_nested_in_a_sequence_compiles(
     executable = _parse_and_compile(plan, world, context)
 
     assert len(executable.motion_state_chart.get_nodes_by_type(StoppedWhenTrue)) == 1
+
+
+# %% repeating a subtree
+
+
+def test_repeat_node_wraps_its_children_in_a_repeating_goal(
+    immutable_model_world, rclpy_node
+):
+    """
+    A repeat contributes a goal that holds the children, the attempt counter and the
+    node that reports running out of attempts, all as siblings so the wiring between
+    them is legal.
+    """
+    world, view, context = immutable_model_world
+
+    plan = repeat(
+        [MoveTorsoAction(TorsoState.HIGH)], maximum_repetitions=3, context=context
+    )
+    executable = _parse_and_compile(plan, world, context)
+
+    [loop] = executable.root_node.nodes
+    assert type(loop) is RepeatOnStall
+    assert loop.task in loop.nodes
+    [counter] = [node for node in loop.nodes if isinstance(node, CountNodeResets)]
+    assert counter.target == 3
+    assert counter is loop.monitor
+    [exhausted] = [node for node in loop.nodes if isinstance(node, CancelMotion)]
+    assert exhausted.start_condition.free_variables() == [counter.observation_variable]
 
 
 def test_merge_motions(immutable_model_world, rclpy_node):

@@ -1,6 +1,5 @@
 from __future__ import division
 
-from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import List
 
@@ -14,6 +13,10 @@ from krrood.symbolic_math.symbolic_math import (
     trinary_logic_or,
 )
 from giskardpy.motion_statechart.context import MotionStatechartContext
+from giskardpy.motion_statechart.exceptions import (
+    ConflictingFailureMonitorError,
+    MissingFailureMonitorError,
+)
 from giskardpy.motion_statechart.graph_node import (
     Goal,
     MotionStatechartNode,
@@ -88,20 +91,24 @@ class Parallel(Goal):
 
 
 @dataclass(repr=False, eq=False)
-class RepeatUntil(Goal, ABC):
+class RepeatUntil(Goal):
     """
     Runs a task again from the start whenever an attempt at it fails.
 
-    Its observation turns True once the task succeeds and False once :attr:`monitor` calls
-    the retrying off, so a caller can tell "eventually worked" from "gave up".
+    Its observation turns True once the task succeeds and False once :attr:`monitor`
+    calls the retrying off, so a caller can tell "eventually worked" from "gave up".
 
-    Subclasses decide what a failed attempt is by implementing
-    :meth:`create_failure_monitor`.
+    Hand it a :attr:`failure_monitor` to decide what a failed attempt is, or subclass it
+    and override :meth:`create_failure_monitor` when that decision has to be derived
+    from the task itself.
     """
 
     task: MotionStatechartNode = field(kw_only=True)
     """
     The node to run, and to run again after every failed attempt.
+
+    Resetting a goal resets everything below it, so a composite task starts over as a
+    unit.
     """
 
     monitor: MotionStatechartNode = field(kw_only=True)
@@ -109,82 +116,66 @@ class RepeatUntil(Goal, ABC):
     Stops the retrying once it observes True, which makes this goal observe False.
     """
 
-    _attempt: Optional[Sequence] = field(default=None, init=False, repr=False)
+    failure_monitor: Optional[MotionStatechartNode] = field(default=None, kw_only=True)
     """
-    Wraps :attr:`task`, so that one run of it can be reset as a unit.
-    """
+    Decides that an attempt failed and the task should run again.
 
-    _failure_monitor: Optional[MotionStatechartNode] = field(
-        default=None, init=False, repr=False
-    )
-    """
-    Detects that the current attempt failed, created by :meth:`create_failure_monitor`.
+    Subclasses that derive one from the task leave this unset and override
+    :meth:`create_failure_monitor`; it holds the node in use once this goal was expanded.
     """
 
-    @property
-    def attempt(self) -> Sequence:
+    def create_failure_monitor(
+        self, task: MotionStatechartNode
+    ) -> MotionStatechartNode:
         """
-        :return: The goal wrapping the task, one run of which is one attempt.
+        :param task: The node whose one run is an attempt.
+        :return: A node whose True observation means the attempt failed.
         """
-        return self._attempt
-
-    @property
-    def failure_monitor(self) -> MotionStatechartNode:
-        """
-        :return: The node whose observation decides that an attempt failed.
-        """
-        return self._failure_monitor
-
-    @abstractmethod
-    def create_failure_monitor(self, attempt: Sequence) -> MotionStatechartNode:
-        """
-        :param attempt: The goal wrapping the task, one run of which is one attempt.
-        :return: A node whose True observation means the attempt failed and the task
-            should be run again.
-        """
+        if self.failure_monitor is None:
+            raise MissingFailureMonitorError(node=self)
+        return self.failure_monitor
 
     def expand(self, context: MotionStatechartContext) -> None:
         """
         Wire the retry loop.
 
-        The failure monitor resets the attempt and itself with the same observation. A
-        node that has been reset observes Unknown, so the reset lasts a single control
-        cycle instead of holding the attempt at the start line, and the monitor is armed
-        again for the next attempt.
+        The failure monitor resets the task and itself with the same observation. A node
+        that has been reset observes Unknown, so the reset lasts a single control cycle
+        instead of holding the task at the start line, and the monitor is armed again
+        for the next attempt.
         """
-        self._attempt = Sequence(nodes=[self.task], name=f"{self.name}/attempt")
-        self.add_node(self._attempt)
-        self._failure_monitor = self.create_failure_monitor(self._attempt)
-        self.add_nodes([self._failure_monitor, self.monitor])
+        self.add_node(self.task)
+        self.failure_monitor = self.create_failure_monitor(self.task)
+        self.add_nodes([self.failure_monitor, self.monitor])
 
         # Each observation is compared against True, so that an undecided Unknown counts
         # as neither, and the results combine as plain booleans.
         attempt_succeeded = sm.Scalar(
-            self._attempt.observation_variable == sm.Scalar.const_true()
+            self.task.observation_variable == sm.Scalar.const_true()
         )
         attempt_failed = sm.Scalar(
-            self._failure_monitor.observation_variable == sm.Scalar.const_true()
+            self.failure_monitor.observation_variable == sm.Scalar.const_true()
         )
         still_trying = trinary_logic_not(
             sm.Scalar(self.monitor.observation_variable == sm.Scalar.const_true())
         )
 
-        # Starting is gated as well as ending, because a reset attempt is not started and
+        # Starting is gated as well as ending, because a reset task is not started and
         # ending is not considered while it is not.
-        self._attempt.start_condition = still_trying
+        self.task.start_condition = still_trying
         # A failure that arrives on the same control cycle as the success must not undo
         # it, and resetting takes precedence over ending.
-        self._attempt.reset_condition = trinary_logic_and(
+        self.task.reset_condition = trinary_logic_and(
             attempt_failed, trinary_logic_not(attempt_succeeded), still_trying
         )
-        self._attempt.end_condition = trinary_logic_or(
-            self._attempt.observation_variable,
+        self.task.end_condition = trinary_logic_or(
+            self.task.observation_variable,
             self.monitor.observation_variable,
         )
-        self._failure_monitor.reset_condition = trinary_logic_and(
+        self.failure_monitor.reset_condition = trinary_logic_and(
             attempt_failed, still_trying
         )
-        self._failure_monitor.end_condition = self.monitor.observation_variable
+        self.failure_monitor.end_condition = self.monitor.observation_variable
 
     def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
@@ -198,7 +189,7 @@ class RepeatUntil(Goal, ABC):
                 cases=[
                     (
                         sm.Scalar(
-                            self._attempt.observation_variable == sm.Scalar.const_true()
+                            self.task.observation_variable == sm.Scalar.const_true()
                         ),
                         sm.Scalar.const_true(),
                     ),
@@ -237,10 +228,14 @@ class RepeatOnStall(RepeatUntil):
     task's own threshold per second.
     """
 
-    def create_failure_monitor(self, attempt: Sequence) -> MotionStatechartNode:
+    def create_failure_monitor(
+        self, task: MotionStatechartNode
+    ) -> MotionStatechartNode:
+        if self.failure_monitor is not None:
+            raise ConflictingFailureMonitorError(node=self)
         return ProgressStalled(
             name=f"{self.name}/stalled",
-            monitored_node=attempt,
+            monitored_node=task,
             timeout=self.timeout,
             minimum_convergence_rate=self.minimum_convergence_rate,
         )
