@@ -7327,3 +7327,108 @@ markdown and nh3 sit in `/usr/local/bin/python3`. Installing `pytest` into *that
 all 620 pass locally. So the observation stands and the remedy is one install rather than a caveat
 to carry - worth knowing before the next session reads that note and concludes the failures are
 expected.
+
+## Update 2026-08-20 (third round the same day): binding the object, and a helper that was a type conversion
+
+Five comments on #154, posted 20:36 to 20:49 — after the entry above had recorded the
+round before it as answered, which is the third time in two days that has happened on
+this branch. All five addressed in `f09e110f`; four resolved, one left open. 621 tests
+pass across the three directories CI runs, from 620.
+
+### The previous round's own fix, taken one step further
+
+That round replaced a branch name spelled in the arrange and again in the assert with a
+name bound to a local. The reviewer's answer is that the local should be the *branch*,
+not its name:
+
+```python
+    reviewed = create_branch_object("reviewed", 1)
+    unreviewed = create_branch_object("unreviewed", 2, status=BranchStatus.DRAFT)
+
+    tips = tips_of(create_stack_object([reviewed, unreviewed]))
+
+    assert [tip.name for tip in tips] == [reviewed.name]
+```
+
+It is better for a reason the name-local form does not have: `parent=bottom.name` is a
+real reference, so a renamed branch cannot leave its child pointing at one that no
+longer exists — where `parent=bottom` with `bottom` a string is a third copy that
+happens to agree.
+
+It also removed two things the intermediate form had left in place, both invisible until
+the objects were bound: a `number = 7` duplicated exactly the way the names were, and a
+local shadowing its own result — the arrange bound `unreviewed`, and the act rebound it
+to the list of branches left out, so the test named one thing twice. Swept the whole
+suite rather than the tests commented on, and `grep '^    [a-z_]* = "'` now returns
+nothing across every module; that caught two more push refspecs still retyping a tip's
+name, the pair missed when the same fix was applied to `SECOND_TIP` the round before.
+
+### A helper whose only content was a type conversion
+
+`branch_names_in` returned `set(checkout.git.branch_names())`. The ask was to return the
+iterable and convert at the assertion — and doing that left a one-line pass-through,
+because `git.branch_names()` already returns `tuple[str, ...]`. So the helper is deleted
+and the one call site reads git directly, converting where the subtraction needs it.
+
+The tell is worth keeping, because it is the second instance in two rounds:
+**the helper's docstring existed to explain a surprise the helper itself created.** It
+said the set was "not because branch names could repeat — git already guarantees they
+cannot", which is a sentence only necessary because the return type was doing something
+the caller had not asked for. Moving the conversion to the assertion moved the reason to
+where a reader meets it.
+
+`create_pull_request_object`, deleted the round before, is the same shape: a factory that
+supplied one defaulted argument. The test to apply before writing either is whether
+anything remains once that single value is passed at the call site.
+
+### The staged conflict gets the schema every other document here has
+
+`stage_conflict` returned a `dict` built from bare `"worktree"` / `"conflicting_paths"`
+keys while `ReportKey` names every other document this module writes — the gap flagged on
+the `_replay.py` thread last round and granted this one. It returns a `StagedConflict`
+whose `as_json` reads through that enum.
+
+One decision inside it goes beyond the two keys the comment named. The old dict called
+the pair `tip` and `against`; a build's own report already calls exactly that pair
+`branch` and `attributed_to`, and `attributed_to`'s docstring is *"the other branch an
+outcome is about"*. So the pair is named once across the module rather than twice, and
+only `worktree` needed a new member. Checked rather than assumed that nothing reads the
+old spellings: `SKILL.md` says "the worktree it names" without naming a key, and
+`--worktree` on `record-resolution` is a flag.
+
+The document had **no test at all** — only the in-process `staged["conflicting_paths"]`
+read was checked, which is precisely the half a caller does not see. That is the same
+gap `block-branch` had before the round that gave it `BlockedBranchReport`, met a second
+time in the same module: a document built inside the method that returns it has its
+field names written once, in the only place nothing is looking.
+
+### The comment said what pytest does, not why the import must stay
+
+*"What do you mean by pytest collects it as a fixture?"* — a fair question about a
+comment that described the mechanism instead of the consequence. `fork_checkout` is a
+`@pytest.fixture` in `test_maintenance.py` and no `conftest.py` shares it, so pytest
+resolves it from the requesting module's own namespace and the import is what binds the
+name there.
+
+Measured rather than asserted, since the reply is the answer: deleting that one line from
+`test_integration_replay.py` gives `2 passed, 8 errors`, every error
+`fixture 'fork_checkout' not found`. The comment is now
+`# noqa: F401  (imported so pytest finds the fixture by name)` across all six modules.
+
+### The contract test is documented rather than deleted
+
+The user did not accept the previous round's answer that
+`test_the_report_keys_are_the_ones_a_caller_parses` should stay unexplained — the
+instruction was *"you can at least document why this test exists with an example"*. Its
+docstring now carries the rename it exists to catch, spelled out end to end: rename
+`EXIT_CODE`'s value and every other test still passes, because writer and reader both go
+through the member.
+
+Writing that example also found the docstring's second paragraph was wrong in a way
+nobody had caught across two rounds. It claimed the `asdict`-backed keys were "pinned by
+nothing else", which is exactly backwards — those *are* pinned elsewhere, because a field
+rename fails wherever the field is read. What is pinned by nothing else is `status`,
+`exit_code`, and everything `block-branch` and now `stage-conflict` emit.
+
+Left open, per the rule that a thread answered differently from what it asked is the
+user's to close.
