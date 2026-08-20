@@ -1,54 +1,42 @@
 ## claude/fix-ci-failing-tests-202965 -> PR #183 (draft, `bug`)
 
-**Shipped.** krrood's import-scope builder aborted the whole scope when one
-from-import named an unimportable module, while already tolerating a missing
-*name*. Two commits:
-- `a4990cfe` fix + unit test (`test_get_scope_from_imports.py`)
+Now the **ormatic-focused PR**: user chose design B (ignore the interfaces) and
+asked for it to live here rather than in #169. Four commits:
+
+- `a4990cfe` krrood: build an import scope past an unimportable module + unit test
 - `a2385ec0` full-recovery regression test
-  (`test_type_resolution_with_unimportable_import.py`)
+- `6884cfcf` design B: ignore + untrack every interface, delete the guard
+  machinery, build once per test run from the root conftest
+- `d70a8d03` drop CI's now-redundant Build ORM step for test jobs
 
-**Full chain (verified by code, not guessed).** Every mapped datastructure
-descends from `Symbol`, whose `_inference_explanation_` is annotated with a
-TYPE_CHECKING-only `InferenceExplanation` -> resolving any of them raises
-NameError -> hierarchy search builds each module's scope -> SDT's
-`world_synchronizer.py` / `procthor_parser.py` hold *function-local*
-`from semantic_digital_twin.orm.ormatic_interface import WorldMappingDAO`,
-which `ast.walk` visits like any other import -> module absent during
-generation -> search died before reaching `Symbol`. All 10 red jobs on #169
-share this one cause.
+**Decisions the user made.** B over tracked-empty. Do (a) krrood fix and (b)
+conftest build. **No freshness check (c)** - always regenerate instead, because
+they believe regeneration is ~3s.
 
-**Verified.** Whole collectible krrood suite: zero newly broken, 9 newly
-passing. Local-only failures are env: robotics deps, and
-`make_dataclass(module=...)` needing 3.12 (container has 3.11).
+**Ported from #169** (so #169 must drop its copies): `orm_interfaces.py`,
+`exceptions.py`, `ensure_orm_interfaces.py`, rewritten `regenerate_all_orm.py`,
+`test/cognitive_robot_abstract_machine_test/`, gitignore rule, CI untracked
+check, AGENTS.md rule, contributing.rst.
 
-## ORM interface design: evidence gathered (awaiting user's decision)
+**Ordering, measured not assumed.** For `pytest test/<lib>_test` pytest imports
+*every* conftest of the run before calling *any* hook, and several per-package
+conftests import a mapped datastructure at module level. So the build is a
+plain call at the top of `test/conftest.py`, not a hook. Controller-only guard
+verified: controller imports conftest first, gw0/gw1 after.
 
-Ran real-git experiments in scratchpad (`orm_experiment/`). Findings:
+**Consolidation.** Replaced four per-package hooks (coraplex, giskardpy,
+segmind, semantic_digital_twin) - each built only its own package, which cannot
+build a checkout that has none, since a generator reads the interfaces before
+it. Logic lives in `test/orm_interface_build.py` so it is testable without
+importing the heavy root conftest.
 
-- **Design A (tracked-empty, main) fails every branch switch that moves the
-  interface path**: to a branch that ignores it, to one with different content,
-  to one adding a mapped package. **skip-worktree does not help** - it only
-  hides the file from `git status`/`git add`, so the checkout still fails but
-  now nothing explains why. Worst failure mode of the lot.
-- Design A without skip-worktree: dirty tree, `git add -A` stages generated
-  content, and `git stash` *loses* it.
-- **Design B (ignored, #169) passes all of them**, keeps generated content.
-- Import diagnostics are poor under both: A gives `ImportError: cannot import
-  name ...` (reads like a typo), B gives `ModuleNotFoundError`. Neither names
-  the generator.
-- Tested a package `__getattr__` shim to make B self-explaining: **only
-  intercepts `from pkg.orm import ormatic_interface`**, not the dotted form the
-  codebase actually uses. So prettifying the failure does not work; bootstrap
-  before running is the real answer.
-- Both designs silently keep a **stale** interface across a branch switch;
-  `are_generated` checks existence only. Shared hole, unsolved by either.
-- #169 deletes 113 lines of guard machinery (empty_generated 41 +
-  protect_generated 60 + pre-commit 12) and a whole AGENTS.md rule paragraph.
+**Open, flagged in the PR body.** The ~3s premise looks wrong: CI's Build ORM
+step took 99-108s on main and #169's own docstring says "about a minute". With
+always-regenerate *and* the root conftest, every job pays it now - including
+libs that never touch the ORM. If CI confirms, `ensure_generated()` instead of
+`regenerate()` is a one-word change. **Waiting on CI timings before pushing
+that.**
 
-**Recommendation given to user:** adopt B, plus (1) #183 (done), (2) wire
-`ensure_generated()` into `test/conftest.py` - #169 wires it into
-`run_montessori_demo.sh` and docs but *not* pytest, (3) add a freshness check
-so a stale interface is rebuilt rather than silently used.
-
-**Next.** Waiting on the user's choice before implementing (2) and (3). Not
-subscribed to any PR; no check-ins armed.
+**Next.** CI running (run 32385354680 / 32385354507, started 15:18Z). Check
+job durations for the real regeneration cost, and whether the 10 previously red
+#169-shaped jobs are green. Not subscribed to any PR; no check-ins armed.
