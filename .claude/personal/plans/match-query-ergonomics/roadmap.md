@@ -315,3 +315,46 @@ identity, which `_apply_mapping_` never sees.
 
 Full krrood suite green (2157 passed; the two `test_object_diagram` failures are
 this container missing the Graphviz `dot` binary, which CI installs).
+
+## 11. 2026-08-20: naming one selection of a multi-variable query
+
+The developer asked whether a condition may constrain one selection of a
+`set_of` query through `query[variable].attribute`, and said to handle it if
+not. It did not work, and the pre-existing behaviour was the same bug this item
+is about. Over a two-selection query whose correct answer is three rows:
+
+| spelling | `main` | branch before | after |
+| --- | --- | --- | --- |
+| `set_of(body, handle).where(body.size > 1)` | 3 | 3 | 3 |
+| `query.where(query[body].size > 1)` | **54** | `AmbiguousQueryAttribute` | 3 |
+
+So §8's `AmbiguousQueryAttribute` had converted a silent cross product into a
+loud rejection of a spelling that should work.
+
+**Why indexing is the right reference.** A `set_of` result is a
+`UnificationDict` keyed by the selected variables, and that is how rows are
+already read in the tests (`result[container].name`). `query[body]` symbolically
+mirrors `row[body]`, so it is an existing reference rather than a new
+convention. Indexing by a name string is not a spelling the language has:
+`UnificationDict.__getitem__` reads `key._id_`, so `query["Body"]` raises
+`AttributeError` at evaluation on `main` today. Left as a question on the
+thread rather than invented here.
+
+**The generalisation.** Re-rooting replaced the chain's base. It now replaces
+whichever expression stands for the row: the query itself, or — when the chain's
+first step indexes the query by one of its selected variables — that step, which
+drops out as the chain re-roots onto the variable it names. `_reroot_on_`
+therefore takes the expression the new root replaces, and the per-node rebuild
+memo is keyed by that pair rather than by the root alone.
+
+`AmbiguousQueryAttribute` still fires for a bare attribute of a multi-selection
+query and for an index by a variable the query does not select; its suggestion
+now offers `query[body].name` as the second way out.
+
+**Boundaries confirmed by measurement, not assumed:** `where` and `having` both
+correlate; `having` on a `set_of` fails identically for both spellings (a
+separate pre-existing limitation, untouched); selection-side chains are still
+not rewritten.
+
+Full krrood suite green (2159 passed; the two `test_object_diagram` failures are
+this container missing the Graphviz `dot` binary).
