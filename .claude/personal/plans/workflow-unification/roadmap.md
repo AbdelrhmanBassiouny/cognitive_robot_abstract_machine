@@ -7098,3 +7098,85 @@ is shown failing somewhere else.
 `needs-resolution` is left for the next maintenance pass to clear itself, as with every other item
 here. The base stays `main`: `git merge-base --is-ancestor` re-confirms #154 already contains #151's
 head and is 195 commits ahead of it, so the recorded deferral of the reparent is still correct.
+
+## Update 2026-08-20 (kickoff): the cross-item drift check opens as #184, and the item's own root-cause sentence is wrong
+
+Kicked off `deferred-dependency-drift-check` (`dashboards` track). The case it was
+filed from still reproduces exactly, checked against `rdr-refactor`'s live manifest
+rather than taken from the item's notes:
+
+```
+D-ui-splice-fix  -> deferred     | pr 78 | depends_on ['d-core-backend']
+D-ui-rendering   -> in_progress  | pr 79 | depends_on ['D-ui-splice-fix']   <- stranded, unflagged
+D-ui             -> in_progress  | pr 76 | depends_on ['D-ui-rendering']
+```
+
+Eight of `rdr-refactor`'s forty-five items are deferred, and exactly one live dependent
+hangs off one of them today.
+
+### The item's own notes name the wrong predicate
+
+Worth recording, because the note reads as settled: *"`Item.is_ready_to_unblock_dependents()`
+has the right predicate already (correctly False for a deferred/closed_unmerged
+dependency)"*. It is false for those, but it is `is_effectively_done() or OPEN_READY` -
+so it is also false for a `not_started` dependency and for an `OPEN_DRAFT` one. Stacking
+on an open draft is this repo's normal workflow, so a drift check built on that predicate
+would flag most of every plan.
+
+The same note's *"Proposed fix"* sentence - "an item that is itself deferred or
+closed_unmerged" - is the correct condition, and the two halves of the note disagree with
+each other. The plan follows the second.
+
+This is exactly what the 2026-08-01 entry on #122 ("The consolidation this plan proposed
+three times is wrong") predicted: the sidebar's admission rules each need *their own*
+named predicate, and reaching for an existing one because it is nearly right is the
+recurring mistake. `Item.is_stalled()` - deferred, or the pull request was closed without
+merging - becomes the third sibling beside `is_ready_to_unblock_dependents()` and
+`is_ready_for_dependent_review()`.
+
+### Two design calls, put to the user rather than assumed
+
+- **The drift field becomes a list.** An item can carry manifest drift *and* a stalled
+  dependency at once, and `Item.drift_description: str | None` would silently drop one -
+  which is the failure this item exists to fix. It becomes
+  `drift_descriptions: list[str]`, and `DashboardSummary` gains `drift_flag_count` because
+  the banner counts flags rather than items.
+- **Direct dependencies only.** `D-ui-rendering` is flagged; `D-ui` is not. `D-ui`'s own
+  base is alive, and it becomes correct the moment `D-ui-rendering` reparents - a
+  transitive flag would repeat one root cause up the whole chain. The item's notes name
+  both #79 and #76 as affected, so this narrows the item deliberately rather than by
+  oversight.
+
+### Scope, tested rather than eyeballed
+
+`git ls-tree origin/main` returns all four touched paths (`build_dashboard.py`,
+`templates/dashboard.html`, `tests/test_build_dashboard.py`, `SKILL.md`), so this edits
+landed files and stands alone. Compared by purpose as well as path against every in-flight
+dashboards-track pull request: #157 owns the *visibility* of deferred items and its diff
+touches neither `_drift_description_of`, `_classify_items`, `Item.drift_description` nor
+the drift template blocks (and is already ready-for-review); #111 owns LOC/CI chips; #150
+owns the URL cache; #149/#151 are skill documents. Conflict-adjacent with #157 in the test
+file and one sidebar template region, both additive - the whichever-lands-second-merges
+convention covers it.
+
+Opened as draft PR **#184** off `main` with the `bug` label.
+
+### Left out on purpose
+
+- `_compute_next_steps` needs no change: a `not_started` item with a stalled dependency
+  already fails `_dependencies_are_ready`, so it is already kept out of "ready to start"
+  and already gets no action button. It was only ever missing the *explanation*.
+- The `example/` fixture is untouched - checked, not assumed: none of its six items is
+  deferred and none has a closed-unmerged dependency, so the new check produces no flag
+  there. `example-walkthrough.md`, its counts assertion and the committed screenshots stay
+  as they are, and no screenshot regeneration is needed.
+- `check_dependency_readiness.py` keeps its current JSON. Reporting `is_stalled` there
+  would help `plan-item-kickoff`/`plan-item-resolve` explain *why* a dependency is not
+  ready, but that is a different surface and would widen this pull request.
+
+### A stale line in this roadmap's own Conventions
+
+The "Conventions" section still ends "…and subscribe to its activity". That was inverted
+by `no-pr-subscriptions` (#153, merged) and is now forbidden outright by the personal
+notes. Recorded here rather than edited in place, since the Conventions section is
+historical text this plan's entries were written against.
