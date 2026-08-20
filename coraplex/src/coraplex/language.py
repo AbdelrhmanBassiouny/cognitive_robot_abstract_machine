@@ -1,31 +1,32 @@
 # used for delayed evaluation of typing until python 3.11 becomes mainstream
 from __future__ import annotations
 
-import atexit
 import logging
 import threading
-import time
-from abc import ABC
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing_extensions import (
-    Optional,
     Callable,
     Any,
     List,
-    Union,
     Type,
 )
 
 from giskardpy.motion_statechart.goals.templates import Sequence, Parallel
 from giskardpy.motion_statechart.graph_node import Goal, MotionStatechartNode
-from coraplex.language_giskard_templates import TryAll, TryInOrder
+from coraplex.language_giskard_templates import (
+    MonitoredGoal,
+    PausedWhileTrue,
+    StoppedWhenTrue,
+    TryAll,
+    TryInOrder,
+)
 from coraplex.plans.executables import (
     GiskardExecutable,
     Executable,
 )
-from coraplex.datastructures.enums import TaskStatus, MonitorBehavior
+from coraplex.datastructures.enums import TaskStatus
 from coraplex.plans.failures import PlanFailure, AllChildrenFailed
-from coraplex.fluent import Fluent
 from coraplex.plans.plan_node import PlanNode
 
 logger = logging.getLogger(__name__)
@@ -193,25 +194,74 @@ class TryAllNode(ExecutesInParallel):
 
 
 @dataclass(eq=False)
-class MonitorNode(LanguageNode):
+class MonitorNode(LanguageNode, ABC):
+    """
+    Executes its children under the observation of a motion state chart monitor.
 
-    monitor: MotionStatechartNode = field(default=None, kw_only=True)
+    The monitor is evaluated by the control loop alongside the children, so it can act on
+    them while they are running.
+    """
 
-    def notify(self):
-        self.child.notify()
+    monitor: MotionStatechartNode = field(kw_only=True)
+    """
+    The node whose observation controls this node's children.
+    """
 
     def parse(self) -> Executable:
-        pass
+        return self.create_giskard_executable([self])
+
+    def add_to_motion_state_chart(
+        self, parent_goal: Goal, executable: GiskardExecutable
+    ) -> Goal:
+        """
+        Add a goal below `parent_goal` that runs this node's children next to its monitor.
+
+        The monitor and the children's goal become siblings, which is what lets the
+        monitor's observation drive the children's life cycle.
+        """
+        monitored_goal = self.create_monitored_goal()
+        parent_goal.add_node(monitored_goal)
+        monitored_goal.add_node(self.monitor)
+        children_goal = self.create_goal()
+        monitored_goal.add_node(children_goal)
+        monitored_goal.monitored_node = children_goal
+        self.add_children_to_motion_state_chart(
+            children_goal, self.children, executable
+        )
+        return monitored_goal
+
+    @abstractmethod
+    def create_monitored_goal(self) -> MonitoredGoal:
+        """
+        :return: An empty goal that runs this node's children under its monitor.
+        """
 
 
 @dataclass(eq=False)
 class CancelMonitor(MonitorNode):
-    pass
+    """
+    Stops its children once the monitor observes True.
+
+    The plan continues with the next node afterwards; a stopped subtree is not a failure.
+    """
+
+    def create_monitored_goal(self) -> MonitoredGoal:
+        return StoppedWhenTrue(monitor=self.monitor, name=type(self).__name__)
 
 
 @dataclass(eq=False)
 class PauseMonitor(MonitorNode):
-    pass
+    """
+    Holds its children for as long as the monitor observes True.
+
+    .. warning:: A monitor that never turns False again holds the children forever, so the
+        motion runs out of control cycles and fails with
+        :class:`~coraplex.exceptions.MotionDidNotFinish`. Use :class:`CancelMonitor` to end
+        a subtree for good.
+    """
+
+    def create_monitored_goal(self) -> MonitoredGoal:
+        return PausedWhileTrue(monitor=self.monitor, name=type(self).__name__)
 
 
 @dataclass

@@ -17,7 +17,12 @@ from coraplex.plans.executables import (
     GiskardExecutable,
     ModelChangeExecutable,
 )
-from coraplex.plans.factories import execute_single, sequential
+from coraplex.plans.factories import (
+    cancel_when,
+    execute_single,
+    pause_while,
+    sequential,
+)
 from coraplex.plans.plan_node import MotionNode, PlanNode, ExecutionBoundaryNode
 from coraplex.robot_plans import MoveToolCenterPointMotion
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
@@ -32,9 +37,19 @@ from coraplex.language import (
     TryAllNode,
     TryInOrderNode,
 )
-from coraplex.language_giskard_templates import TryAll, TryInOrder
+from coraplex.language_giskard_templates import (
+    PausedWhileTrue,
+    StoppedWhenTrue,
+    TryAll,
+    TryInOrder,
+)
 from coraplex.utils import split_list_by_type
+from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.goals.templates import Parallel, Sequence
+from giskardpy.motion_statechart.nodes_for_testing.nodes_for_testing import (
+    ConstFalseNode,
+)
+from giskardpy.ros_executor import Ros2Executor
 from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
 from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
@@ -102,6 +117,98 @@ def test_sequential_plan_nests_a_goal_per_plan_node(immutable_model_world):
 
     tasks = list(executable.motion_mappings.values())
     assert [goal.nodes for goal in action_goals] == [[tasks[0]], [tasks[1]]]
+
+
+# %% monitored subtrees
+
+
+def _monitored_goal_of(executable):
+    """
+    :return: The single monitored goal below the executable's root goal.
+    """
+    [monitored_goal] = executable.root_node.nodes
+    return monitored_goal
+
+
+def _parse_and_compile(plan, world, context):
+    """
+    Parse `plan` and compile its motion state chart.
+
+    Compiling is what expands the goals, so it is required before any condition wired by a
+    template can be observed.
+    """
+    plan.notify()
+    executable = plan.parse()
+    with simulated_robot:
+        executable.prepare_for_execution()
+    executor = Ros2Executor(
+        context=MotionStatechartContext(world=world), ros_node=context.ros_node
+    )
+    executor.compile(executable.motion_state_chart)
+    return executable
+
+
+def test_pause_monitor_pauses_the_children_goal(immutable_model_world, rclpy_node):
+    """
+    The monitor and the children's goal are siblings inside the monitored goal, which is
+    what makes the pause condition legal: it may only reference a sibling.
+    """
+    world, view, context = immutable_model_world
+    monitor = ConstFalseNode(name="never")
+
+    plan = pause_while(
+        [MoveTorsoAction(TorsoState.HIGH)], monitor=monitor, context=context
+    )
+    executable = _parse_and_compile(plan, world, context)
+
+    monitored_goal = _monitored_goal_of(executable)
+    assert type(monitored_goal) is PausedWhileTrue
+    assert monitored_goal.nodes == [monitor, monitored_goal.monitored_node]
+    assert monitored_goal.monitored_node.pause_condition.free_variables() == [
+        monitor.observation_variable
+    ]
+
+
+def test_cancel_monitor_ends_the_children_goal(immutable_model_world, rclpy_node):
+    world, view, context = immutable_model_world
+    monitor = ConstFalseNode(name="never")
+
+    plan = cancel_when(
+        [MoveTorsoAction(TorsoState.HIGH)], monitor=monitor, context=context
+    )
+    executable = _parse_and_compile(plan, world, context)
+
+    monitored_goal = _monitored_goal_of(executable)
+    assert type(monitored_goal) is StoppedWhenTrue
+    assert monitored_goal.nodes == [monitor, monitored_goal.monitored_node]
+    assert monitored_goal.monitored_node.end_condition.free_variables() == [
+        monitor.observation_variable
+    ]
+
+
+def test_monitored_subtree_nested_in_a_sequence_compiles(
+    immutable_model_world, rclpy_node
+):
+    """
+    A monitored subtree is a node like any other in the surrounding sequence.
+
+    Compiling is the real assertion: it runs the condition scope validation that this
+    structure exists to satisfy.
+    """
+    world, view, context = immutable_model_world
+
+    plan = sequential(
+        [
+            MoveTorsoAction(TorsoState.LOW),
+            cancel_when(
+                [MoveTorsoAction(TorsoState.HIGH)], monitor=ConstFalseNode(name="never")
+            ),
+        ],
+        context=context,
+    )
+    executable = _parse_and_compile(plan, world, context)
+
+    assert len(executable.motion_state_chart.get_nodes_by_type(StoppedWhenTrue)) == 1
 
 
 def test_merge_motions(immutable_model_world, rclpy_node):

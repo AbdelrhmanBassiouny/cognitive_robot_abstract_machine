@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-from typing import Union, Callable
+from typing import Callable
 
 from typing_extensions import List, assert_never, Optional, TYPE_CHECKING, Type, TypeVar
 
+from giskardpy.motion_statechart.graph_node import MotionStatechartNode
 from krrood.entity_query_language.query.match import Match
 from coraplex.datastructures.dataclasses import Context
-from coraplex.datastructures.enums import MonitorBehavior
-from coraplex.fluent import Fluent
 from coraplex.plans.plan import Plan
 
 if TYPE_CHECKING:
@@ -17,7 +16,8 @@ if TYPE_CHECKING:
         ParallelNode,
         TryInOrderNode,
         TryAllNode,
-        MonitorNode,
+        CancelMonitor,
+        PauseMonitor,
         RepeatNode,
         CodeNode,
     )
@@ -71,16 +71,37 @@ def try_all(
     return _make_plan_from_type_and_children(TryAllNode(), children, context)
 
 
-def monitor(
+def pause_while(
     children: List[ActionLike],
-    condition: Union[Callable, Fluent],
-    behavior: MonitorBehavior = MonitorBehavior.INTERRUPT,
+    monitor: MotionStatechartNode,
     context: Optional[Context] = None,
-) -> MonitorNode:
-    from coraplex.language import MonitorNode
+) -> PauseMonitor:
+    """
+    Hold `children` for as long as `monitor` observes True.
+
+    :param monitor: The motion state chart node observed while the children run.
+    """
+    from coraplex.language import PauseMonitor
 
     return _make_plan_from_type_and_children(
-        MonitorNode(condition=condition, behavior=behavior), children, context
+        PauseMonitor(monitor=monitor), children, context
+    )
+
+
+def cancel_when(
+    children: List[ActionLike],
+    monitor: MotionStatechartNode,
+    context: Optional[Context] = None,
+) -> CancelMonitor:
+    """
+    Stop `children` once `monitor` observes True; the plan continues afterwards.
+
+    :param monitor: The motion state chart node observed while the children run.
+    """
+    from coraplex.language import CancelMonitor
+
+    return _make_plan_from_type_and_children(
+        CancelMonitor(monitor=monitor), children, context
     )
 
 

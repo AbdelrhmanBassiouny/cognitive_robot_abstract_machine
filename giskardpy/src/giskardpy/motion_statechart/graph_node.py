@@ -987,14 +987,14 @@ class Goal(MotionStatechartNode):
         """
         Adds a node to this goal and the motion statechart this goal belongs to.
 
-        A node that is already registered in a motion statechart is not registered a
-        second time, so a goal may be populated before compilation and still be expanded
-        as usual.
+        A node this goal's motion statechart already holds is not registered a second
+        time, so a goal may be populated before compilation and still be expanded as
+        usual. A node coming from an earlier motion statechart is moved into this one.
         """
         self._add_node_sanity_check(node)
         if node not in self.nodes:
             self.nodes.append(node)
-        if node.belongs_to_motion_statechart():
+        if node._motion_statechart is self.motion_statechart:
             return
         node.parent_node = self
         self.motion_statechart.add_node(node)
@@ -1008,7 +1008,14 @@ class Goal(MotionStatechartNode):
             raise EndMotionInGoalError(node=self)
 
     def _check_node_doesnt_belong_to_different_parent(self, node: MotionStatechartNode):
-        if node.belongs_to_motion_statechart() and node.parent_node != self:
+        """
+        .. note:: A node held by a *different* motion statechart is allowed, because it is
+            moved into this goal's statechart; only two parents within one statechart are
+            an error.
+        """
+        if node._motion_statechart is not self.motion_statechart:
+            return
+        if node.parent_node != self:
             raise NodeAlreadyBelongsToDifferentNodeError(node=self, new_node=node)
 
     def add_nodes(self, nodes: List[MotionStatechartNode]) -> None:

@@ -1,18 +1,16 @@
 import threading
-import time
-
 import numpy as np
 import pytest
 
 from coraplex.datastructures.enums import (
     TaskStatus,
-    MonitorBehavior,
     DetectionTechnique,
 )
 
 from coraplex.plans.failures import PlanFailure
 from coraplex.fluent import Fluent
 from coraplex.language import (
+    CancelMonitor,
     SequentialNode,
     TryAllNode,
     ParallelNode,
@@ -24,7 +22,7 @@ from coraplex.plans.factories import (
     parallel,
     try_in_order,
     try_all,
-    monitor,
+    cancel_when,
     repeat,
     code,
 )
@@ -32,6 +30,10 @@ from coraplex.robot_plans import *
 from coraplex.robot_plans.actions.core.misc import DetectAction
 from coraplex.robot_plans.actions.core.navigation import NavigateAction
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction, ParkArmsAction
+from giskardpy.motion_statechart.nodes_for_testing.nodes_for_testing import (
+    ConstFalseNode,
+    ConstTrueNode,
+)
 from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.spatial_types import Pose
 
@@ -251,4 +253,62 @@ def test_exception_try_all(immutable_model_world):
         _ = plan.perform()
 
     assert type(plan.root) is TryAllNode
+    assert plan.root.status == TaskStatus.SUCCEEDED
+
+
+# %% monitored subtrees
+
+
+def test_cancel_monitor_construction():
+    act = ParkArmsAction(Arms.BOTH)
+    act2 = MoveTorsoAction(TorsoState.HIGH)
+
+    root = cancel_when([act, act2], monitor=ConstFalseNode(name="never"))
+    assert isinstance(root, CancelMonitor)
+    assert len(root.children) == 2
+    root.plan.validate()
+
+
+def _torso_position(world):
+    return world.state[
+        world.get_degree_of_freedom_by_name("torso_lift_joint").id
+    ].position
+
+
+def test_cancel_monitor_stops_the_motion_it_wraps(immutable_model_world):
+    """
+    A monitor that is true from the start stops the motion before it moves, and the plan
+    still finishes successfully - stopping is not a failure.
+    """
+    world, robot_view, context = immutable_model_world
+    start_position = _torso_position(world)
+
+    plan = cancel_when(
+        [MoveTorsoAction(TorsoState.HIGH)],
+        monitor=ConstTrueNode(name="always"),
+        context=context,
+    ).plan
+    with simulated_robot:
+        plan.perform()
+
+    assert _torso_position(world) == pytest.approx(start_position, abs=0.05)
+    assert plan.root.status == TaskStatus.SUCCEEDED
+
+
+def test_never_firing_cancel_monitor_leaves_the_motion_alone(immutable_model_world):
+    """
+    The control for the test above: the same plan with a monitor that never fires runs the
+    motion to its target.
+    """
+    world, robot_view, context = immutable_model_world
+
+    plan = cancel_when(
+        [MoveTorsoAction(TorsoState.HIGH)],
+        monitor=ConstFalseNode(name="never"),
+        context=context,
+    ).plan
+    with simulated_robot:
+        plan.perform()
+
+    assert _torso_position(world) == pytest.approx(0.3, abs=0.05)
     assert plan.root.status == TaskStatus.SUCCEEDED

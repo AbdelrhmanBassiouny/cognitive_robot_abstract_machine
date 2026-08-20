@@ -44,7 +44,7 @@ class Print(MotionStatechartNode):
         return ObservationStateValues.TRUE
 
 
-@dataclass
+@dataclass(eq=False, repr=False)
 class CountSeconds(MotionStatechartNode):
     """
     This node counts X seconds and then turns True.
@@ -250,7 +250,7 @@ class ThreadedPredicateMonitor(MotionStatechartNode):
         self._thread = None
 
 
-@dataclass
+@dataclass(eq=False, repr=False)
 class Pulse(MotionStatechartNode):
     """
     Will stay True for a single tick, then turn False.

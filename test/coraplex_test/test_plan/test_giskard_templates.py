@@ -22,17 +22,31 @@ from giskardpy.motion_statechart.nodes_for_testing.nodes_for_testing import (
 )
 from semantic_digital_twin.world import World
 
+from giskardpy.motion_statechart.monitors.payload_monitors import (
+    CountControlCycles,
+    Pulse,
+)
+
 from coraplex.language import TryAllNode, TryInOrderNode
-from coraplex.language_giskard_templates import TryAll, TryInOrder
+from coraplex.language_giskard_templates import (
+    PausedWhileTrue,
+    StoppedWhenTrue,
+    TryAll,
+    TryInOrder,
+)
 
 # Number of ticks after which the templates below have settled into their final observation.
 SETTLE_TICKS = 4
 
 
-def _compile_and_tick(goal: MotionStatechartNode, ticks: int = SETTLE_TICKS) -> None:
+def _compile_and_tick(
+    goal: MotionStatechartNode, ticks: int = SETTLE_TICKS
+) -> Executor:
     """
     Add the goal to a fresh statechart, compile it and tick the executor ``ticks``
     times.
+
+    :return: The executor, so a caller can keep ticking and inspect intermediate states.
     """
     msc = MotionStatechart()
     msc.add_node(goal)
@@ -40,6 +54,27 @@ def _compile_and_tick(goal: MotionStatechartNode, ticks: int = SETTLE_TICKS) -> 
     executor.compile(motion_statechart=msc)
     for _ in range(ticks):
         executor.tick()
+    return executor
+
+
+MAX_TICKS = 20
+"""Upper bound for the tick loops below, so a never-settling chart fails instead of hanging."""
+
+
+def _ticks_until_observed_true(
+    goal: MotionStatechartNode, node: MotionStatechartNode
+) -> int:
+    """
+    Compile `goal` and tick until `node` observes True.
+
+    :return: The number of ticks that took.
+    """
+    executor = _compile_and_tick(goal, ticks=0)
+    for tick in range(1, MAX_TICKS + 1):
+        executor.tick()
+        if node.observation_state == ObservationStateValues.TRUE:
+            return tick
+    raise AssertionError(f"{node.name} never observed True within {MAX_TICKS} ticks")
 
 
 # --------------------------------------------------------------------------- #
@@ -126,3 +161,97 @@ def test_try_in_order_single_child():
     _compile_and_tick(goal)
 
     assert goal.observation_state == ObservationStateValues.TRUE
+
+
+# %% monitored subtrees
+
+
+def test_paused_while_true_holds_the_monitored_node_while_the_monitor_is_true():
+    """
+    The monitored node is held in PAUSED for exactly as long as the monitor observes True,
+    and runs again once it turns False.
+    """
+    pulse_length = 2
+    goal = PausedWhileTrue(
+        monitor=Pulse(length=pulse_length, name="pulse"),
+        monitored_node=CountControlCycles(control_cycles=2, name="work"),
+    )
+    executor = _compile_and_tick(goal, ticks=0)
+
+    for _ in range(pulse_length):
+        executor.tick()
+        assert goal.monitor.observation_state == ObservationStateValues.TRUE
+        assert goal.monitored_node.life_cycle_state == LifeCycleValues.PAUSED
+
+    executor.tick()
+    assert goal.monitor.observation_state == ObservationStateValues.FALSE
+    assert goal.monitored_node.life_cycle_state == LifeCycleValues.RUNNING
+
+
+def test_paused_while_true_costs_the_monitored_node_the_paused_ticks():
+    """
+    Pausing does not merely delay the observation, it stops the monitored node from making
+    progress: it needs the paused ticks *on top of* the ticks it needs on its own.
+    """
+    pulse_length = 2
+    unmonitored = PausedWhileTrue(
+        monitor=ConstFalseNode(name="never"),
+        monitored_node=CountControlCycles(control_cycles=2, name="work"),
+    )
+    ticks_without_pause = _ticks_until_observed_true(
+        unmonitored, unmonitored.monitored_node
+    )
+
+    paused = PausedWhileTrue(
+        monitor=Pulse(length=pulse_length, name="pulse"),
+        monitored_node=CountControlCycles(control_cycles=2, name="work"),
+    )
+    ticks_with_pause = _ticks_until_observed_true(paused, paused.monitored_node)
+
+    assert ticks_with_pause == ticks_without_pause + pulse_length
+
+
+def test_stopped_when_true_ends_the_monitored_node():
+    """
+    The monitored node is retired as soon as the monitor fires, without ever having
+    succeeded.
+    """
+    goal = StoppedWhenTrue(
+        monitor=CountControlCycles(control_cycles=2, name="trip"),
+        monitored_node=CountControlCycles(control_cycles=99, name="work"),
+    )
+    _compile_and_tick(goal)
+
+    assert goal.monitor.observation_state == ObservationStateValues.TRUE
+    assert goal.monitored_node.life_cycle_state == LifeCycleValues.DONE
+    assert goal.monitored_node.observation_state == ObservationStateValues.FALSE
+
+
+def test_stopped_when_true_succeeds_once_it_stopped_the_monitored_node():
+    """
+    Its observation turns True even though the monitored node never did, so a stopped
+    subtree still lets the surrounding motion advance and terminate.
+    """
+    goal = StoppedWhenTrue(
+        monitor=CountControlCycles(control_cycles=2, name="trip"),
+        monitored_node=CountControlCycles(control_cycles=99, name="work"),
+    )
+    _compile_and_tick(goal)
+
+    assert goal.observation_state == ObservationStateValues.TRUE
+
+
+def test_monitored_goals_observe_the_monitored_node_when_the_monitor_never_fires():
+    """
+    A monitor that stays False leaves the monitored node's outcome untouched.
+    """
+    for goal_type in (PausedWhileTrue, StoppedWhenTrue):
+        goal = goal_type(
+            monitor=ConstFalseNode(name="never"),
+            monitored_node=ConstTrueNode(name="work"),
+        )
+        _compile_and_tick(goal)
+
+        assert goal.monitored_node.life_cycle_state == LifeCycleValues.RUNNING
+        assert goal.observation_state == goal.monitored_node.observation_state
+        assert goal.observation_state == ObservationStateValues.TRUE
