@@ -13,7 +13,11 @@ description: >
   superseded session-hooks and stack-workflow-tooling branches. Portability rule
   throughout: runnable on repos other than cram2 (native or fork-overlay install, no
   hardcoded repo names outside config defaults; hand-rolled restack derivation survives
-  as the fallback for repos without the stacks preview).
+  as the fallback for repos without the stacks preview). Since the 2026-08-20 Bastler
+  pivot (decision 13), the reviewed-machinery home is concretely the bastler package:
+  every tooling Python file and its tests move into it first, ahead of the remaining
+  feature work, because the recorded duplication carriers kept multiplying while the
+  migration waited at the back of the queue.
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 102
 
@@ -38,6 +42,10 @@ tracks:
   - id: dashboards
     name: "Dashboard unification"
     wave: upstream
+  - id: bastler
+    name: "Bastler package extraction"
+    wave: upstream
+    description: "The tooling Python and its tests move into the bastler package; the bash layer follows as shims."
   - id: cutover
     name: "Cutover & retirements"
     wave: cutover
@@ -172,7 +180,7 @@ items:
       round-robin/WIP-cap subsystem, per-user config layering from the personal-notes branch,
       canonical ROUTINE.md + 1-page README, tests via ScratchRepository; restack.js and board
       rendering not ported (board deferred to PR 3/PR 4 as planned). Landed as plain scripts — the
-      dev-tooling Python package is created in PR 3 instead (see dev-tooling-python-package).
+      dev-tooling Python package is created in PR 3 instead (see bastler-package).
       Self-reviewed and un-drafted since: open and ready, so it unblocks its dependents by the
       plan's normal open-and-ready rule. Now also the parent of #107, which was restacked onto it
       (2026-07-30) so the upstream wave is a linear chain rather than two siblings on #101.
@@ -252,7 +260,7 @@ items:
       ProposedCommitMove; label tests read their labels from the configuration that defines them;
       promotion writes its compare link into the fork pull request's description so it outlives the
       summary. Settled 2026-08-02 (user decision): stack.py is not split in this PR. It stays ~1,540
-      lines here and dev-tooling-python-package does the surgery once, when it moves every .claude/
+      lines here and bastler-package does the surgery once, when it moves every .claude/
       Python file into the package - rather than twice, with #110 and #111 rebasing across the first
       attempt. The review comment that raised it stays answered rather than resolved. Manual step
       still due: register the routine's prompt as a call to /stacked-pr-maintenance with fork=,
@@ -594,7 +602,7 @@ items:
 
       Three threads left open deliberately: the two asking why not gh or PyGithub - answered with
       the reason for now (gh absent, stdlib-only tier) and deferred to
-      dev-tooling-github-api-unification, which exists to settle exactly that once - and the
+      bastler-github-api-unification, which exists to settle exactly that once - and the
       question about supplying a credential that can reparent, which is answered but calls for no
       change here. 364 tests pass, was 361; two new (what the export reads out of each field's own
       shape, and that every field is named by a string) plus the board-deletion one, each checked by
@@ -694,7 +702,7 @@ items:
       was tried: a commands module cannot both be imported by maintenance.py and import everything
       the commands do. So maintenance.py is the command line and nothing else now, and the work sits
       below it in eleven modules named for what they do. The earlier deferral to
-      dev-tooling-python-package - the one that kept stack.py unsplit - is therefore overridden for
+      bastler-package - the one that kept stack.py unsplit - is therefore overridden for
       maintenance.py alone, on the user's explicit instruction; stack.py is untouched and still
       waits for that item.
 
@@ -720,7 +728,7 @@ items:
       keeps its assertion and instantiates rather than defining. Two threads stay open deliberately:
       the --quiet question, which is answered and calls for no change, and the doc-formatting one,
       whose outstanding half is whether to sweep main's 8 unformatted files in a separate pull
-      request. The gh/PyGithub pair stays deferred to dev-tooling-github-api-unification as before.
+      request. The gh/PyGithub pair stays deferred to bastler-github-api-unification as before.
       Session: https://claude.ai/code/session_01DHbsXEZCDRYbegKU4iVGyP
 
       /plan-item-resolve run 2026-08-12 (session in this manifest's own history at the time of
@@ -839,7 +847,7 @@ items:
     title: "PR 3: shared pr_state module + LOC/CI/conflict chips in plan dashboards"
     pull_request_number: 111
     track: dashboards
-    depends_on: [stack-tooling-on-main]
+    depends_on: [stack-tooling-on-main, bastler-package]
     status: in_progress
     session: https://claude.ai/code/session_014KoJeaTUxyECZZpfWiVmvr
     notes: >
@@ -886,11 +894,20 @@ items:
       (357 + 44); pushed as merge 52e3ede4, mergeable again, label clears on the next
       pass. The stack-chip addition recorded above is still not implemented.
 
-  - id: dev-tooling-python-package
+      Re-scoped 2026-08-20 by the Bastler pivot (decision 13): this pull request no longer
+      creates the tooling package - bastler-package does, off main, and gained the inverted
+      dependency recorded here. Once that branch exists, #111 rebases onto it and folds its
+      development_tooling modules (pr_state, personal_notes) and test/development_tooling_test
+      suite into bastler under its naming, deleting the repo-root sys.path insert in stack.py
+      and the interim states the 2026-07-30 kickoff note listed for the migration to clean up.
+      What stays this item's own is the feature half: the chips, the pr_state fetch/compute
+      module itself, and build_site.py for PR 4's Action.
+
+  - id: bastler-package
     branch: null
-    title: "Migrate the .claude Python into the dev-tooling package, tests under test/"
-    track: dashboards
-    depends_on: [setup-personal-notes-pr101, stack-tooling-on-main, shared-pr-state-chips]
+    title: "Create the bastler package: the .claude Python and its tests move into it"
+    track: bastler
+    depends_on: [setup-personal-notes-pr101, stack-tooling-on-main]
     status: not_started
     notes: >
       Move the existing Python (.claude/stack/stack.py, build_dashboard.py + siblings,
@@ -927,14 +944,46 @@ items:
       was declined for #143: it holds a dependency-free immediate-wave item behind an unlanded
       stack-tooling pull request and still does not let either import the other.
 
-  - id: dev-tooling-notes-core-python
+      Re-scoped, renamed and moved to the front 2026-08-20 (decision 13, user's call - see the
+      roadmap entry of that date). The package is named bastler (from the first letters of the
+      user's surname Bassiouny, and the German word for a tinkerer), superseding the
+      development_tooling name settled 2026-07-30; this item was dev-tooling-python-package. Two
+      structural changes. First, this item now creates the package itself, branched off main,
+      instead of inheriting the one #111 carries - the depends_on entry for shared-pr-state-chips
+      is dropped and the dependency inverted: #111 rebases onto this branch and folds its
+      development_tooling modules (pr_state, personal_notes, test/development_tooling_test) in
+      under the bastler name. Second, the "sequence it last in the upstream wave" constraint in
+      the first paragraph is reversed: this lands first. The cost is measured, not guessed - every
+      open tooling pull request except #155 touches Python this item moves (git diff against the
+      merge base per branch, 2026-08-20: #154 41 files, #151 28, #110 16, #162 10, #111 8, #107 7,
+      #158 4, #135 3, #146 3, #184/#150/#149/#157/#160 2, #156 1) - and accepted: each merges main
+      across the move and re-applies its delta in the package, the resolution pattern #111 already
+      exercised 2026-08-05, with the maintenance pass's needs-resolution flow reporting each
+      conflict to its owner. A pull request already through review may instead land just before
+      the migration's own final merge-main, which folds it in on the migration side - cheaper,
+      and the user decides per pull request at merge time. Scope at creation is everything Python
+      already on main: .claude/stack/ (stack.py, the maintenance modules, class_property.py,
+      tests), .claude/skills/plan-dashboard/ (the seven modules plus tests), and .claude/hooks/
+      (plan_item_bootstrap.py, plan_manifest_tools.py, plan_updates_since_support.py, tests),
+      with the tests under test/bastler_test/ and the test_claude_dev_tooling CI job repointed
+      and renamed test_bastler. The duplication carriers recorded on this item and its siblings
+      are unified in the move rather than after it: run_git three times (#135, #143, stack.py's
+      deliberately-opposite _git stays distinct), the command-class base plus classproperty twice
+      (#139, #151), ItemStatus, and the personal-notes precedence rules' second Python copy. The
+      GitHub backend rule stays with bastler-github-api-unification, which keeps its own item.
+      Boundaries unchanged from decisions 8 and 12: SKILL.md files, settings.json and the bash
+      entry points stay in .claude/ as thin wrappers; zero-install survives (importable from the
+      repo root, pyproject for optional install); the SessionStart-reachable tier stays
+      stdlib-only.
+
+  - id: bastler-notes-core-python
     branch: null
     title: "Bash→Python 1: notes-core modules (config, git seam, writer, markers)"
-    track: dashboards
-    depends_on: [dev-tooling-python-package]
+    track: bastler
+    depends_on: [bastler-package]
     status: not_started
     notes: >
-      Pure addition to development_tooling, no bash file changes (decision 12):
+      Pure addition to bastler, no bash file changes (decision 12):
       errors.py (stdlib-only dataclass-exception base mirroring krrood's
       DataclassException idiom — typed context fields, abstract
       error_message/suggest_correction composed in __post_init__ — without importing
@@ -962,22 +1011,22 @@ items:
       callers waiting, not one, and the same subprocess.run(["git", ...]) boilerplate is
       written out three times. Not unified at the time of finding: all three files are
       unlanded on three branches targeting three different directories, and main has no
-      shared module to hold the seam until dev-tooling-python-package creates one - so
+      shared module to hold the seam until bastler-package creates one - so
       extracting early would mean either a cross-dependency between three in-flight pull
       requests or the sys.path hackery decision 8 exists to end. Note the precedent does
       not cover this one: #143's own review accepted the stack.py overlap because the
       contracts were deliberately opposite (_git returns "" where run_git raises), and
       #135's and #143's contracts are not opposite.
-  - id: dev-tooling-save-commands-python
+  - id: bastler-save-commands-python
     branch: null
     title: "Bash→Python 2: the four notes writers become python -m subcommands"
-    track: dashboards
-    depends_on: [dev-tooling-notes-core-python]
+    track: bastler
+    depends_on: [bastler-notes-core-python]
     status: not_started
     notes: >
       save-personal-notes.sh, save-pr-progress.sh, write-personal-notes-file.sh and
       create-personal-notes-branch.sh become three-line shims (cd to root, exec
-      python3 -m development_tooling <subcommand> "$@"); their bodies move onto the
+      python3 -m bastler <subcommand> "$@"); their bodies move onto the
       core modules, collapsing the four near-identical scratch-worktree write dances
       into NotesBranchWriter. Known defects fixed here, each proven by a failing
       test first: a missing BEGIN-PERSONAL-NOTES marker pushed the entire
@@ -991,11 +1040,11 @@ items:
       #121 #126) land — a wholesale body rewrite cannot be merged by the
       whichever-lands-second-merges convention.
 
-  - id: dev-tooling-save-plan-python
+  - id: bastler-save-plan-python
     branch: null
     title: "Bash→Python 3: save-plan and the plan manifest tools"
-    track: dashboards
-    depends_on: [dev-tooling-save-commands-python]
+    track: bastler
+    depends_on: [bastler-save-commands-python]
     status: not_started
     notes: >
       save-plan.sh becomes a shim; plan_manifest_tools.py is absorbed as
@@ -1006,11 +1055,11 @@ items:
       test_plan_manifest_tools.py carries over with an import change;
       test_save_plan_sh.py carries over as the shim contract test.
 
-  - id: dev-tooling-session-start-python
+  - id: bastler-session-start-python
     branch: null
     title: "Bash→Python 4: session-start behind an inert probing shim"
-    track: dashboards
-    depends_on: [dev-tooling-notes-core-python, session-start-plan-and-setup-guards, git-identity-from-personal-notes]
+    track: bastler
+    depends_on: [bastler-notes-core-python, session-start-plan-and-setup-guards, git-identity-from-personal-notes]
     status: not_started
     notes: >
       session-start.sh keeps its path (settings.json stays byte-identical) but its
@@ -1026,11 +1075,11 @@ items:
       returning None. Depends on #121 and #126 so their run_hook_script subprocess
       tests carry over as the shim contract tests instead of colliding.
 
-  - id: dev-tooling-setup-checks-python
+  - id: bastler-setup-checks-python
     branch: null
     title: "Bash→Python 5: check-setup as typed rows"
-    track: dashboards
-    depends_on: [dev-tooling-notes-core-python]
+    track: bastler
+    depends_on: [bastler-notes-core-python]
     status: not_started
     notes: >
       check-setup.sh becomes a shim over setup_checks.py: SetupCheckIdentifier and
@@ -1044,15 +1093,15 @@ items:
       heredoc becomes missing_requirements() via importlib.metadata. Runs parallel
       to the other conversions off the core item.
 
-  - id: dev-tooling-dashboard-refresh-python
+  - id: bastler-dashboard-refresh-python
     branch: null
     title: "Bash→Python 6: refresh_dashboard orchestration in-process"
-    track: dashboards
-    depends_on: [dev-tooling-save-commands-python]
+    track: bastler
+    depends_on: [bastler-save-commands-python]
     status: not_started
     notes: >
       refresh_dashboard.sh becomes a shim over dashboard_refresh.py, which calls
-      sync_manifest_status/build_dashboard in-process (dev-tooling-python-package has
+      sync_manifest_status/build_dashboard in-process (bastler-package has
       moved them into the package by this point) and pushes manifest corrections
       through NotesBranchWriter instead of shelling out to
       write-personal-notes-file.sh. refresh_dashboard_support.py — which exists only
@@ -1062,11 +1111,11 @@ items:
       --plan-id flag surface stay unchanged; test_refresh_dashboard_sh.py carries
       over as the shim contract test.
 
-  - id: dev-tooling-config-shim-slimming
+  - id: bastler-config-shim-slimming
     branch: null
     title: "Bash→Python 7: slim the sourced config file to constants"
-    track: dashboards
-    depends_on: [dev-tooling-save-commands-python, dev-tooling-save-plan-python, dev-tooling-session-start-python, dev-tooling-setup-checks-python, dev-tooling-dashboard-refresh-python]
+    track: bastler
+    depends_on: [bastler-save-commands-python, bastler-save-plan-python, bastler-session-start-python, bastler-setup-checks-python, bastler-dashboard-refresh-python]
     status: not_started
     notes: >
       resolve-personal-notes-config.sh keeps its sourcing contract (10 doc locations
@@ -1079,7 +1128,7 @@ items:
       grep of all SKILL.md/*.md confirms no prose instructs a session to call them.
       The residual bash/python duplication of the precedence rules is guarded by a
       CI consistency test asserting the sourced variables equal python3 -m
-      development_tooling configuration output. hooks/README.md and plan-schema.md
+      bastler configuration output. hooks/README.md and plan-schema.md
       prose touch-ups ride along.
       Second carrier found 2026-08-05, while answering a review question on #143 about
       duplication with stack.py: stack.py already reimplements the same precedence in
@@ -1090,17 +1139,17 @@ items:
       third: its fetch_notes_branch sources the shell file and calls its own
       fetch_personal_notes_branch rather than restating the rules.
 
-  - id: dev-tooling-github-api-unification
+  - id: bastler-github-api-unification
     branch: null
     title: "One github backend: the gh-CLI-else-token rule implemented once"
-    track: dashboards
-    depends_on: [setup-personal-notes-script, shared-pr-state-chips, dev-tooling-notes-core-python]
+    track: bastler
+    depends_on: [setup-personal-notes-script, shared-pr-state-chips, bastler-notes-core-python]
     status: not_started
     notes: >
       github-api.sh (decision 9, arrives with #107) and pr_state (arrives with #111)
       implement the same gh-CLI-else-GH_TOKEN/GITHUB_TOKEN+curl dual-backend rule
       twice — the strongest concrete duplication on record in this plan. One
-      development_tooling github_backend.py implements it once; github-api.sh
+      bastler github_backend.py implements it once; github-api.sh
       becomes a shim. Blocked until both carriers land; scope-boxed to the backend
       rule, not the callers' features.
 
@@ -1576,7 +1625,7 @@ items:
       else: the upstream is a new optional plan.yaml field (upstream_repository, plus an
       optional upstream_base defaulting to the fork's own base), never a hardcoded cram2;
       a plan without it renders no group and no links. Decisions settled with the user at
-      planning time (2026-08-01): the link builder lands in the development_tooling package
+      planning time (2026-08-01): the link builder lands in the bastler package
       PR 3 creates, next to pr_state, so the scheduled Action can reuse it verbatim; the
       prefilled body is the fork pull request's own description truncated to one paragraph
       plus a "Full detail" link back to it, matching the doctrine's existing warning that a
@@ -1588,7 +1637,7 @@ items:
       need. Requires three new fields in pr_data.json that PR 3's pull request entry does
       not yet carry (base, title, body) plus pr-data-fetching.md's minimum field set updated
       to match; mergeable and the check rollup come from PR 3 as-is. Sequence before
-      dev-tooling-python-package, which moves build_dashboard.py wholesale.
+      bastler-package, which moves build_dashboard.py wholesale.
 
   - id: sidebar-bug-fix-chips
     branch: claude/dashboard-bugfix-pr-section-161vf8
@@ -1629,7 +1678,7 @@ items:
       is downstream, recorded as a depends_on on ready-to-promote-upstream-links: that
       item adds a fifth sidebar group, which is one next_step_group call once this macro
       has landed and a fifth copy of the markup if it has not. Also sequence before
-      dev-tooling-python-package, which moves build_dashboard.py wholesale. Opened as
+      bastler-package, which moves build_dashboard.py wholesale. Opened as
       draft pull request #120 on 2026-08-01, no bug label, subscribed to its activity.
       State 2026-08-12: no longer a draft - the user took it out of draft themselves, and
       it carries in-review, so the upstream pull request is open and this session does not
@@ -1777,7 +1826,7 @@ items:
       check-setup.sh's dependency row into a row that says python3 is missing - as Python, that
       whole block becomes nothing. That is also the rule resolve-personal-notes-config.sh:343
       already states for itself. Not converted; replied with the measurement and left open for
-      the user, since dev-tooling-session-start-python is the item that takes the floor raise
+      the user, since bastler-session-start-python is the item that takes the floor raise
       deliberately, behind a shim that probes for python3 and exits 0 without it.
 
       Third round the same day, five comments, all naming, applied in a438bcdc. The
@@ -2108,7 +2157,7 @@ items:
       key changes them identically and nothing notices, verified by renaming SHARED_PATHS and
       watching all 8 tests still pass. One test now pins the member names to their wire
       values, so a rename fails exactly there; 9 tests, was 8. (2) The run_git duplication
-      question is answered and recorded on dev-tooling-notes-core-python as a third carrier
+      question is answered and recorded on bastler-notes-core-python as a third carrier
       for the git_interface.py seam it already plans; not unified here, and that thread is
       left open for the user rather than resolved.
 
@@ -2185,7 +2234,7 @@ items:
       roadmap section) and an open request (branch name, base branch, session URL, pull
       request title and body), each with its own result - not steps a session re-improvises.
       It belongs beside plan_manifest_tools.py in .claude/hooks/ rather than in a skill
-      directory, since two skills call into it and dev-tooling-save-plan-python already
+      directory, since two skills call into it and bastler-save-plan-python already
       absorbs that file into the package - this rides the same migration instead of inventing
       a second destination that would have to be moved again.
       Exactly one part cannot be pure script, and the item's job is to hand it back explicitly
@@ -2210,7 +2259,7 @@ items:
       Portability is the reason the credential still matters even though it is inert here: the
       same script run from a terminal or from routine-cutover's Action has no proxy and the
       token is the credential. So creation goes through the one shared backend
-      dev-tooling-github-api-unification builds, never a third copy of the gh-CLI-else-token
+      bastler-github-api-unification builds, never a third copy of the gh-CLI-else-token
       rule that github-api.sh and pr_state already carry.
       Basing was decided by running add-plan-item's own check_scope_overlap.py against main
       rather than by feel. Everything the work builds on is already on main -
@@ -2234,7 +2283,7 @@ items:
       claude/plan-item-kickoff-workflow-vocs6b, bootstrapped by hand in the order this item
       itself prescribes - branch, draft pull request, manifest, roadmap, dashboard, and only
       then the implementation. Two calls settled at kickoff. The notes' instruction that pull
-      request creation "goes through the one shared backend dev-tooling-github-api-unification
+      request creation "goes through the one shared backend bastler-github-api-unification
       builds" cannot be honoured from main: that item is not_started, github-api.sh is on #107
       only, and main carries no GitHub-calling Python at all (render_common.py imports urlsplit
       and nothing else). #115's recorded precedent applies instead - implement the call inline,
@@ -2270,7 +2319,7 @@ items:
       draft pull request and records the item before the first edit.
       Four review rounds (19 + 5 + 1 + 1 comments), every thread replied to and resolved except
       the ItemStatus/build_dashboard.py unification question, which was answered with a
-      recommendation and left for the user; it belongs to dev-tooling-python-package, the item
+      recommendation and left for the user; it belongs to bastler-package, the item
       that actually moves build_dashboard.py.
       Residue needing out-of-harness deletion: the remote branch
       claude/plan-item-bootstrap-probe-vocs6b, from the live creation probe (sessions cannot
@@ -2448,7 +2497,7 @@ items:
       "signing server returned status 520". It also halved the suite's runtime.
 
       Deferred with the user's agreement: plan_item_bootstrap.py is not renamed, though its name
-      stops being true once it carries update and check - dev-tooling-save-plan-python absorbs the
+      stops being true once it carries update and check - bastler-save-plan-python absorbs the
       file into the package regardless, so that migration renames it once rather than twice with
       three branches rebasing across the first attempt. The one line into add-plan-item/SKILL.md
       still cannot be written from main, and #135 is marked ready for review, so it lands here only
@@ -2656,7 +2705,7 @@ items:
       Four production `sys.path` inserts are the cost, and they are the first in this repository
       -the hackery decision 8 exists to end. They are what let a script invoked as `python3
       .claude/hooks/plan_item_bootstrap.py` reach a sibling directory, and
-      `dev-tooling-python-package` removes all four when it creates `development_tooling`. Two of
+      `bastler-package` removes all four when it creates `bastler`. Two of
       the six recorded duplications stay carriers because this branch cannot reach them: #135's
       `run_git` is on neither `main` nor #139, and two of the three GitHub-backend copies are on
       #107 and #111.
@@ -3160,7 +3209,7 @@ items:
       `test_the_report_keys_are_the_ones_a_caller_parses` - the only guard left on the wire format
       since the mirror schema, and the test a reply had once claimed existed when it did not - and
       the shared registry of script paths, where 25+ sites resolve paths the same way and
-      `dev-tooling-python-package` deletes the layer they exist for. `INTEGRATION_SCRIPT` does now
+      `bastler-package` deletes the layer they exist for. `INTEGRATION_SCRIPT` does now
       read `Path(integration.__file__)`, which was the free half of that ask.
 
       Correcting the previous entry's process note rather than repeating it: the four hook tests do

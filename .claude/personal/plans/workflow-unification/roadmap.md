@@ -7513,3 +7513,85 @@ test that imports no serializer is asserting something other than the wire forma
 
 622 tests pass across the three directories CI runs, from 621. The thread stays open: its
 original ask was to delete the test, and it was answered differently.
+
+## Update 2026-08-20 (decision 13): the tooling Python becomes the `bastler` package, and the migration moves to the front
+
+Session: https://claude.ai/code/session_01FkXYGjckkyGZrhrkjS4kCf (plan refactor only, no code).
+User's decision, in their own words: moving the tooling scripts, tests and files into their own
+package is a priority *now*, because the duplication of code keeps increasing and reviewers are
+complaining about it.
+
+### The name
+
+The package is **`bastler`**. The name comes from the first three letters of the user's surname
+(Bassiouny) and is the German word *Bastler* — a tinkerer, someone who builds things themselves —
+which is what this package is: the workflow tooling the user built around the repository. It
+supersedes `development_tooling`, the name settled at PR 3's kickoff on 2026-07-30. That name was
+chosen abbreviation-free per AGENTS.md; `bastler` keeps that property (it is a name and a real
+word, not an abbreviation of a phrase).
+
+### Why the front of the queue, with the evidence already on record
+
+Decision 8 (2026-07-29) created the migration item and deliberately sequenced it **last** in the
+upstream wave, to avoid moving files under in-flight pull requests. Since then the manifest has
+accumulated duplication carriers faster than the queue has drained — each one recorded on an item
+at the time it was found, none fixable before the migration because `.claude/hooks/`,
+`.claude/stack/` and `.claude/skills/plan-dashboard/` are separate `sys.path` roots that cannot
+import each other:
+
+- `run_git`-style subprocess seams three times (#135's `check_scope_overlap.py`, #143's
+  `plan_item_bootstrap.py`, plus stack.py's deliberately-opposite `_git`).
+- The frozen-dataclass command-class base twice (#139's `MaintenanceCommand`, #151's
+  `Subcommand`), where making them identical today would mean copying `class_property.py` into
+  `.claude/hooks/` — a fifth duplicated file in answer to a complaint about duplication.
+- The GitHub gh-CLI-else-token backend rule three times (`github-api.sh`, #111's `pr_state`,
+  #139's urllib client), already called "the strongest concrete duplication on record in this
+  plan" by the item that exists to end it.
+- The personal-notes precedence rules twice in Python (stack.py against the sourced shell file).
+- `ItemStatus` and the scratch-repository fixtures duplicated across test trees.
+
+Review rounds on #139, #151 and #154 each asked about one of these directly. The sequencing that
+protected in-flight work has become the thing manufacturing the complaints, so it is reversed.
+
+### What changed structurally in the manifest
+
+- New track `bastler` ("Bastler package extraction") in the upstream wave; the nine package items
+  move into it out of `dashboards`.
+- Item ids renamed (`dev-tooling-python-package` → `bastler-package`;
+  `dev-tooling-<x>` → `bastler-<x>` for the seven decision-12 conversion items and
+  `github-api-unification`). Older roadmap sections keep the old ids as history; the manifest and
+  every forward-looking note read the new ones.
+- `bastler-package` is re-scoped: it now **creates** the package itself, branched off `main`,
+  rather than inheriting the one #111 carries. Its dependency on `shared-pr-state-chips` is
+  dropped and inverted — #111 rebases onto the bastler branch and folds its
+  `development_tooling` modules in under the new name, keeping only its feature half (pr_state's
+  fetch/compute, the chips, `build_site.py`). With both remaining dependencies long done,
+  `bastler-package` is ready to start today, and it is the plan's next kickoff.
+- The CI job repoints and renames `test_claude_dev_tooling` → `test_bastler`; tests land under
+  `test/bastler_test/`.
+
+### The cost, measured rather than guessed
+
+Every open tooling pull request except #155 touches Python the migration moves (per-branch
+`git diff` against the merge base, 2026-08-20): #154 (41 files), #151 (28), #110 (16), #162 (10),
+#111 (8), #107 (7), #158 (4), #135 (3), #146 (3), #184/#150/#149/#157/#160 (2 each), #156 (1).
+Doctrine for crossing the move, in both directions:
+
+- A pull request still open when the migration lands merges `main` across it and re-applies its
+  delta inside the package — the same resolution pattern #111 exercised on 2026-08-05 when #106
+  landed under it. The maintenance pass's needs-resolution flow labels and reports each conflict
+  to its owner; nobody resolves someone else's out of band.
+- A pull request already through review may land first, and the migration folds it in with its
+  own final merge of `main` — cheaper, because a move-then-edit absorbs an edit more easily than
+  an edit absorbs a move. Which pull requests get that treatment is the user's call per pull
+  request at merge time, not a schedule this plan fixes.
+
+### What decision 13 does *not* change
+
+Decisions 8 and 12 stand in every other respect: SKILL.md files, settings.json and the bash entry
+points stay in `.claude/` as thin wrappers; zero-install survives (plain top-level directory,
+importable from the repo root, pyproject for optional installation); the SessionStart-reachable
+tier stays stdlib-only; the bash→Python conversion chain keeps its shape and simply runs under
+the new names. `bastler-github-api-unification` keeps its own item and its open backend question —
+the migration unifies what is already duplicated, it does not decide the gh-vs-token-vs-library
+question early.
