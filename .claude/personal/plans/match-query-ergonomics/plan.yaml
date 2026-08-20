@@ -70,6 +70,13 @@ items:
       (Query.where / Query.having), which leaves selection-side chains and
       chains rooted at another query alone; a query selecting several
       variables raises AmbiguousQueryAttribute. Full krrood suite green.
+      Review round 2026-08-20 (roadmap section 9): the developer asked why
+      the rebuild does not reuse apply_mapping_on_external_root; it rebuilds
+      Attribute/Index/Call chains but not a flattened one, so the structural
+      rebuild stays and the thread is left open on the developer's call.
+      Session https://claude.ai/code/session_0138pFr29XH5xpEzvpmcpzV7 added
+      the flatten test (c1206318). CI has one unrelated failure: the
+      experiments job times out on a ROS WorldFetcher service.
   - id: match-underscore-rename-and-forwarding
     title: "Match behaves like a variable: underscore-sandwich rename + guarded __getattr__ forwarding"
     branch: claude/ide-type-inference-instances-dc6l6e

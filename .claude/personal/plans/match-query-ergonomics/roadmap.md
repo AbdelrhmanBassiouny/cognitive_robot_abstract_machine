@@ -205,3 +205,40 @@ so a new mapping type cannot silently be skipped by the rewrite.
 a query copies the query node while preserving `_id_`, and `Query._compile_`
 replays the conditions onto a product sharing the specification's `_id_`. Any
 self-reference test that used `is` would miss both.
+
+## 9. 2026-08-20: review round on #182 — why the rebuild is not `apply_mapping_on_external_root`
+
+The developer asked, on `_reroot_on_`, why it does not reuse
+`MappedVariable.apply_mapping_on_external_root`, and — if it could — whether
+`_mapping_arguments_` is needed at all.
+
+Measured on the branch. `apply_mapping_on_external_root(root)` walks
+`_access_path_` applying `_apply_mapping_` at each step, and with a *symbolic*
+root those value-level mappings do rebuild the chain, because the operators
+they use are traced: `getattr` gives an `Attribute`, `value[key]` an `Index`,
+`value(...)` a `Call`. All three re-root correctly onto the selected variable.
+
+`FlatVariable` is the one that does not. Its mapping is `yield from value`, and
+`CanBehaveLikeAVariable.__iter__` is `None` deliberately, so re-rooting
+`flat_variable(query.drawers).handle.name` raises
+`TypeError: 'Attribute' object is not iterable`. Underneath that:
+`apply_mapping_on_external_root` takes `next(...)` of each mapping — the first
+value along the path — while re-rooting needs the structural node, and for
+flattening the two differ even on real values.
+
+The six tests already on the PR all pass with the simpler version, so the gap
+was uncovered rather than absent.
+`test_query_rooted_condition_through_a_flattened_attribute_filters` (commit
+`c1206318`) pins it: it is the only one of the seven that fails when
+`_reroot_on_` is replaced by the reuse.
+
+Dropping `_mapping_arguments_` therefore costs either an `_apply_mapping_` that
+knows about symbolic values or a re-enabled `__iter__`. The structural rebuild
+stays for now and the review thread is left open — this answers the question
+rather than doing what it asked, so the choice is the developer's.
+
+**CI on #182**: one failure, `test_each_lib (experiments)` —
+`test_real_stretch_demo_process_boundary.py` timing out after 300s waiting for
+the ROS `/semantic_digital_twin/fetch_world` service. `main` at the same base
+(`90c241168`) was green, so it is not red-on-base, but nothing in this diff
+leaves `krrood/entity_query_language`; the push of `c1206318` re-runs it.
