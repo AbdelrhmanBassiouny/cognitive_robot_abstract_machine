@@ -3215,6 +3215,45 @@ items:
       `create_pull_request_object` - were helpers that existed to supply one value, and in both
       cases removing the value removed the helper. The test to apply before writing one is whether
       anything remains once the single defaulted argument is passed at the call site.
+
+      Fourth round of 2026-08-20, one comment, on the same report-keys thread the third round had
+      answered with a worked example: *"can you make a test that reproduces the situation that this
+      test fails in? do you think this situation can ever happen again?"*
+
+      The first question could not be answered as a test in the ordinary sense - the situation is a
+      rename that no test catches, so reproducing it is a mutation rather than an assertion - but
+      asking for one exposed a real weakness in the test, which is that it asserted the enum against
+      a written-out copy of the enum. Nothing in it ever rendered a document. So it caught a rename
+      by noticing that a table beside the enum disagreed, rather than by noticing that what a caller
+      parses had changed.
+
+      It reads the documents now. `every_document_this_module_writes` builds one fully populated
+      instance of each of the four - the build report, the localised failure, the blocked branch and
+      the staged conflict - and collects every key at every depth; the literals are compared against
+      that. Which then made the second half free and it had been missing entirely:
+      `test_every_report_key_names_something_a_document_carries` asserts the same collected set
+      equals the enum, catching a member nothing emits and a key emitted without going through the
+      enum. Neither was visible before, and the first is the shape a future member arrives in.
+
+      The reproduction is measured rather than described. Renaming `EXIT_CODE`'s value to `exitCode`
+      and running the whole stack directory gives 226 passed, 1 failed - the literals test, alone,
+      out of 227. A member added that nothing emits fails only the second test; a key emitted
+      outside the enum fails both, correctly, since it is both a wire-format change and an unnamed
+      key.
+
+      The answer to the second question is that it can, and that nothing in this repository can stop
+      it. The mirror schema made writer and reader read the same member, which is the whole reason a
+      rename is silent; the other two consumers of this format, `/integration-conflict-triage` and
+      `stacked-pr-maintenance`, are prose documents, so nothing executes them. Only a reader outside
+      this code, exercised in CI, closes it - and then only for the keys that reader touches. It has
+      already happened once here: the 2026-08-13 round records a review reply describing this
+      contract test when it did not exist, found by renaming a key and noticing nothing failed.
+
+      622 tests pass across the three directories CI runs, from 621.
+
+      Worth carrying: **a test that pins a contract must read the artifact the contract is about.**
+      This one named the right hazard and checked the wrong object for two rounds, and the tell was
+      available the whole time - it imported nothing that produced a document.
   - id: setup-runs-without-asking
     title: "Run the personal-notes setup from the planning skills instead of asking first"
     branch: claude/auto-run-setup-notes-02nhxv
