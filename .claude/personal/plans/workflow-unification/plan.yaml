@@ -3337,6 +3337,36 @@ items:
       underlying fault, that the test asserted the enum against a copy of itself, survived all four.
       A reviewer returning to the same line is evidence the answer has not landed, not that the
       question has been asked already.
+
+      Sixth round of 2026-08-20, one instruction: *"Delete both tests."* Taken as given - it was one
+      of the three options the previous reply had put up, chosen with the trade already stated, so
+      it is a decision rather than an ask to re-argue.
+
+      `test_the_report_keys_are_the_ones_a_caller_parses` and
+      `test_every_report_key_names_something_a_document_carries` are gone, and
+      `every_document_this_module_writes` and `keys_in` with them, since nothing else called them.
+      117 lines, a pure deletion. 620 tests pass across the three directories CI runs, which is
+      where the day started.
+
+      **The wire format is now deliberately unguarded, and that is recorded on the pull request
+      rather than quietly dropped.** With writer and reader both going through `ReportKey`, a value
+      rename changes both sides identically and the whole suite stays green. The reasoning accepted
+      for removing the guard: nothing outside this repository executes the format today -
+      `/integration-conflict-triage` and `stacked-pr-maintenance` are prose documents, so a break is
+      found by a human reading either way - and a test you are expected to edit whenever the
+      contract changes is one that gets edited reflexively, which buys maintenance and no guard. The
+      natural place to close the exposure is `integration-branch-ci-verdict`, which introduces a
+      consumer that actually runs; that consumer's own tests are the guard worth having, and this
+      item should not be carrying a stand-in for them.
+
+      Worth carrying, and it is the whole arc of this thread rather than its last turn: the test was
+      defended across five rounds and deleted in the sixth, and both were right at the time. What
+      changed is that the fault under it got named. For four rounds the objection was answered on
+      its own terms while the test asserted the enum against a copy of itself; fixing that in round
+      five made the real question askable - is one deliberate line per breaking change worth it when
+      no reader executes the contract - and the answer to that is the user's to give, not a
+      measurement. A defence that survives on reasoning nobody has tested is worth less than the
+      objection it is answering.
   - id: setup-runs-without-asking
     title: "Run the personal-notes setup from the planning skills instead of asking first"
     branch: claude/auto-run-setup-notes-02nhxv
