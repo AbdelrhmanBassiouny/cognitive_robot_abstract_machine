@@ -6,16 +6,19 @@ reads it as.
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 import pytest
 
 from integration import (
+    BlockedBranchReport,
     FailureLocationReport,
     IntegrationExitCode,
     IntegrationReport,
     PullRequestStackTipOutcome,
     ReportKey,
     ResolutionAuthor,
+    StagedConflict,
     TipStatus,
     exit_code_for,
 )
@@ -134,48 +137,121 @@ def test_every_status_names_itself_for_a_caller():
     assert IntegrationExitCode.TIP_LEFT_OUT.name_for_a_caller == "tip-left-out"
 
 
+# %% the documents a caller reads
+
+
+def every_document_this_module_writes() -> set[str]:
+    """
+    :return: Every key, at every nesting level, of one fully populated instance of each
+        of the four documents this module hands to another program.
+
+    Built from the documents rather than from :class:`ReportKey`, because what a caller
+    parses is the document - an enum member nobody emits and a key emitted without a
+    member are both invisible to a check that reads the enum.
+    """
+    outcome = PullRequestStackTipOutcome(
+        branch=SECOND_TIP,
+        pull_request_number=2,
+        status=TipStatus.SKIPPED,
+        attributed_to=FIRST_TIP,
+        conflicting_paths=("a-file",),
+        resolved_by=ResolutionAuthor.SKILL,
+        explanation="what git said",
+    )
+    documents = (
+        create_report(
+            tips=(outcome,), tests_passed=False, unreviewed=(outcome,)
+        ).as_json(),
+        FailureLocationReport(
+            build_branch=A_BUILD_BRANCH,
+            base=UPSTREAM_BASE,
+            tips_tested=(FIRST_TIP,),
+            integration_test_failure=create_integration_test_failure(),
+        ).as_json(),
+        BlockedBranchReport(
+            blocked=SECOND_TIP,
+            pull_request_number=2,
+            breaks_against=FIRST_TIP,
+            label="integration-conflict",
+            comment="what was said on its pull request",
+        ).as_json(),
+        StagedConflict(
+            worktree=Path("/tmp/a-worktree"),
+            branch=SECOND_TIP,
+            attributed_to=FIRST_TIP,
+            conflicting_paths=("a-file",),
+        ).as_json(),
+    )
+    return {key for document in documents for key in keys_in(json.loads(document))}
+
+
+def keys_in(document: object) -> set[str]:
+    """
+    :param document: A parsed document, or any part of one.
+    :return: Every mapping key it holds, at every depth.
+    """
+    if isinstance(document, dict):
+        return set(document) | {
+            key for value in document.values() for key in keys_in(value)
+        }
+    if isinstance(document, list):
+        return {key for value in document for key in keys_in(value)}
+    return set()
+
+
 def test_the_report_keys_are_the_ones_a_caller_parses():
     """
-    The one place this document's wire format is pinned, because everything else reads
-    the enum on both sides and a rename there changes writer and reader identically.
+    The one place this module's wire format is pinned, because everything else reads
+    :class:`ReportKey` on both sides and a rename there changes writer and reader
+    identically.
 
-    Concretely: rename ``EXIT_CODE``'s value to ``exitCode`` and every other test still
-    passes, because ``as_json`` writes ``document[ReportKey.EXIT_CODE]`` and every reader
-    - this suite, ``/integration-conflict-triage``, ``stacked-pr-maintenance`` - reads it
-    back through the same member. The document a shell caller pipes into ``jq
-    .exit_code`` is the only thing that broke, and nothing in the repository is looking
-    at it. This test is what fails instead.
+    Concretely, and this is the situation the test exists for: rename ``EXIT_CODE``'s
+    value to ``exitCode``. ``as_json`` then writes ``exitCode``, every reader in the
+    repository - this suite, ``/integration-conflict-triage``, ``stacked-pr-maintenance``
+    - reads it back through the same member, and nothing fails. What broke is the
+    document a shell caller pipes into ``jq .exit_code``, and nothing here is looking at
+    that. These literals are what looks.
 
-    Most keys are a dataclass field name that ``asdict`` produces, so a rename of those
-    does fail elsewhere as well. ``status`` and ``exit_code`` are not - ``as_json``
-    injects them - and neither is anything ``block-branch`` or ``stage-conflict`` emits,
-    which no ``asdict`` backs at all.
+    They are compared against the documents themselves rather than against the enum, so
+    the failure is the caller-visible one - the key a document carries changed - rather
+    than a table beside the enum disagreeing with it.
     """
-    assert {key.name: str(key) for key in ReportKey} == {
-        "STATUS": "status",
-        "EXIT_CODE": "exit_code",
-        "BUILD_BRANCH": "build_branch",
-        "BASE": "base",
-        "TIPS": "tips",
-        "TESTS_PASSED": "tests_passed",
-        "UNREVIEWED": "unreviewed",
-        "TIPS_TESTED": "tips_tested",
-        "INTEGRATION_TEST_FAILURE": "integration_test_failure",
-        "BRANCH": "branch",
-        "PULL_REQUEST_NUMBER": "pull_request_number",
-        "ATTRIBUTED_TO": "attributed_to",
-        "CONFLICTING_PATHS": "conflicting_paths",
-        "RESOLVED_BY": "resolved_by",
-        "EXPLANATION": "explanation",
-        "CULPRIT": "culprit",
-        "CULPRIT_PULL_REQUEST_NUMBER": "culprit_pull_request_number",
-        "ALREADY_INCLUDED": "already_included",
-        "BREAKS_AGAINST": "breaks_against",
-        "BLOCKED": "blocked",
-        "LABEL": "label",
-        "COMMENT": "comment",
-        "WORKTREE": "worktree",
+    assert every_document_this_module_writes() == {
+        "status",
+        "exit_code",
+        "build_branch",
+        "base",
+        "tips",
+        "tests_passed",
+        "unreviewed",
+        "tips_tested",
+        "integration_test_failure",
+        "branch",
+        "pull_request_number",
+        "attributed_to",
+        "conflicting_paths",
+        "resolved_by",
+        "explanation",
+        "culprit",
+        "culprit_pull_request_number",
+        "already_included",
+        "breaks_against",
+        "blocked",
+        "label",
+        "comment",
+        "worktree",
     }
+
+
+def test_every_report_key_names_something_a_document_carries():
+    """
+    The other half, which the literals above cannot see: a member added and never
+    emitted, or a key emitted without going through the enum.
+
+    Both are silent - the first leaves a name that looks like part of the wire format
+    and is not, the second puts a key in the format that nothing names.
+    """
+    assert every_document_this_module_writes() == {str(key) for key in ReportKey}
 
 
 def test_the_report_serialises_what_the_build_left_behind():
