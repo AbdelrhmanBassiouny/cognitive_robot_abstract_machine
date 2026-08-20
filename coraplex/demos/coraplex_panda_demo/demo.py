@@ -10,12 +10,9 @@ from pathlib import Path
 logging.basicConfig(level=logging.DEBUG)
 
 from coraplex.datastructures.dataclasses import Context
-from coraplex.datastructures.enums import Arms, ApproachDirection, VerticalAlignment
-from coraplex.datastructures.grasp import GraspDescription
+from coraplex.datastructures.enums import Arms
 from coraplex.execution_environment import simulated_robot
 from coraplex.plans.factories import sequential
-from coraplex.robot_plans.actions.core.pick_up import PickUpAction
-from coraplex.robot_plans.actions.core.placing import PlaceAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 
 from panda_mesh_assets import PandaMeshAssets
@@ -35,10 +32,15 @@ from semantic_digital_twin.world_description.geometry import Box, Color, Scale
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body
 
-SCENE_PATH = Path(__file__).parent / "panda.xml"
+SCENE_PATH = (
+    Path(__file__).parent.parent.parent
+    / "resources"
+    / "robots"
+    / "franka_panda"
+    / "panda.xml"
+)
 CUBE_SIZE = 0.05
 
-# %% World setup
 PandaMeshAssets(scene=SCENE_PATH).download_if_missing()
 world = MJCFParser(str(SCENE_PATH)).parse()
 panda = Panda.from_world(world)
@@ -116,13 +118,6 @@ with world.modify_world():
         )
     )
 
-# %% Visualization
-# The arm's actuator gains assume gravity is separately cancelled out via MuJoCo's
-# own gravcomp mechanism, not held against by the position controller alone.
-# Without it, each joint settles with a steady-state gravity-sag error large enough
-# to keep failing Giskard's convergence check, so a motion holding the arm under
-# gravity never registers as done and the controller keeps sending corrective
-# commands indefinitely.
 for connection in arm.active_connections:
     connection.child.simulator_additional_properties.append(
         MujocoBody(gravitation_compensation_factor=1.0)
@@ -132,7 +127,6 @@ headless = os.environ.get("CI", "false").lower() == "true"
 multi_sim = MujocoSim(world=world, headless=headless, step_size=1e-3)
 multi_sim.start_simulation()
 
-# %% Plan
 context = Context(world=world, robot=panda, evaluate_conditions=False)
 
 target_pose = cube_bottom.global_pose
@@ -148,17 +142,6 @@ try:
         sequential(
             [
                 ParkArmsAction(Arms.BOTH),
-                # PickUpAction(
-                #     cube_to_pick,
-                #     Arms.LEFT,
-                #     GraspDescription(
-                #         ApproachDirection.FRONT,
-                #         VerticalAlignment.TOP,
-                #         arm.end_effector,
-                #     ),
-                # ),
-                # PlaceAction(cube_to_pick, place_location, Arms.LEFT),
-                # ParkArmsAction(Arms.BOTH),
             ],
             context=context,
         ).perform()
