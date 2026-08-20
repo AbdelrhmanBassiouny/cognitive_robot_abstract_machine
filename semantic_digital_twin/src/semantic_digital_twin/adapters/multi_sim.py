@@ -3030,7 +3030,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
     def _write_1dof_to_qpos(
         self,
         connection: ActiveConnection1DOF,
-        qpos_adress: int,
+        qpos_address: int,
         ctrl_address: Optional[int],
         positions: numpy.ndarray,
         previous_positions: numpy.ndarray,
@@ -3049,7 +3049,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         idx = state_index[connection.raw_dof.id]
         if positions[idx] == previous_positions[idx]:
             return
-        self.simulator._mj_data.qpos[qpos_adress] = positions[idx]
+        self.simulator._mj_data.qpos[qpos_address] = positions[idx]
         if ctrl_address is not None:
             self.simulator._mj_data.ctrl[ctrl_address] = positions[idx]
 
