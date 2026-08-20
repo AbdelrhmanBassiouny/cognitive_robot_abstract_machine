@@ -1,56 +1,31 @@
-# PR #182 — query-rooted attribute in a query's own conditions does not filter
+PR #182 (draft) — `where-query-rooted-attribute-no-filter`, wave 1 of the
+`match-query-ergonomics` plan. This session handled the 2026-08-20 review round.
 
-Plan item `match-query-ergonomics` / `where-query-rooted-attribute-no-filter`.
-Branch `claude/match-query-ergonomics-where-rooted-b876wm`, off `main`, draft PR
-#182, `bug` label. Roadmap §8 carries the reasoning.
+**Plan for this round**
+1. Answer the review thread on `_reroot_on_` (why not `apply_mapping_on_external_root`,
+   and is `_mapping_arguments_` needed) with a measurement, not an opinion.
+2. Cover whatever the measurement exposes with a test.
+3. Record the outcome on the plan and republish the dashboard.
 
-## Status: implemented, pushed, awaiting review
+**Done**
+- Measured the suggestion: it rebuilds `Attribute`/`Index`/`Call` chains onto a
+  symbolic root, but `FlatVariable` raises `TypeError: 'Attribute' object is not
+  iterable` because `CanBehaveLikeAVariable.__iter__` is `None` on purpose.
+- Added `test_query_rooted_condition_through_a_flattened_attribute_filters`
+  (commit `c1206318`, pushed) — the only one of the seven that fails under the
+  suggested reuse, and one of six that fail before the fix itself.
+- Full `test/krrood_test/test_eql` suite green locally (1186 passed, 3 skipped).
+- Replied on the review thread and left it open: the answer differs from what it
+  asked, so the call is the developer's. PR description's Tests section updated.
+- Plan manifest + roadmap section 9 updated and saved; dashboard republished.
 
-Commit `871be277`. Full krrood suite green locally (2100 passed, 5 skipped).
-
-## What landed
-
-- `Query._correlate_conditions_` / `_correlate_condition_` /
-  `_is_attribute_of_self_` / `_rerooted_on_selection_`, called from
-  `Query.where` and `Query.having`.
-- `MappedVariable._reroot_on_` plus `_mapping_arguments_` on `Attribute`,
-  `Index`, `Call`, `FlatVariable` (abstract on the base, so a new mapping type
-  cannot silently be skipped).
-- `AmbiguousQueryAttribute(UsageError)` for a query selecting several variables.
-- `test/krrood_test/test_eql/test_core/test_query_rooted_conditions.py`: 6 tests,
-  5 of which fail on the unfixed source (verified by stashing the fix); the sixth
-  is the regression guard that a chain rooted at *another* query keeps its
-  subquery meaning, and passes both before and after by design.
-
-## Recorded
-
-- Issue #181 and issue #137: the cross-check the item notes asked for — #137's
-  binding-order work does **not** subsume this fix.
-- `plan.yaml` notes carry the outcome; roadmap §8 written; dashboard republished.
-
-## Next / outstanding
-
-- Nothing outstanding on the PR itself. CI has not reported yet at the time of
-  writing.
-- Downstream consumers (coraplex, semantic_digital_twin, probabilistic_model)
-  could not be exercised locally — their deps are unavailable in this container.
-  CI covers them.
-- Item 2 (`match-underscore-rename-and-forwarding`) stays blocked until this
-  lands; once it does, its blocker condition (`q.where(q.battery >= 50)` through
-  the forwarding) is satisfied.
-
-## Notes / hazards
-
-- Self-reference is detected by `_id_`, never `is`: attaching a mapped variable
-  copies the query node (same `_id_`), and `Query._compile_` replays conditions
-  onto a product that also shares the `_id_`.
-- The selection path is deliberately untouched:
-  `set_of(match.expression.parent, ...)` relies on the chain staying rooted at
-  the lowered query so the match's conditions come with it (roadmap §3/§4).
-- Environment: krrood is not installed in this container. Tests were run with a
-  hand-built python3.12 venv under the scratchpad and
-  `PYTHONPATH=krrood/src:probabilistic_model/src:.`, with
-  `--confcutdir=test/krrood_test` to skip the workspace-wide root conftest.
-  Four modules could not be collected there for unrelated missing deps
-  (`test_ripple_down_rules/test_object_diagram.py`, `test_rdr.py`,
-  `test_rdr_alchemy.py`, `test_rustworkx_utils/test_mesh_three_graph_visualizer.py`).
+**Next / outstanding**
+- The review thread is open, waiting on the developer: keep `_reroot_on_` +
+  `_mapping_arguments_`, or teach `_apply_mapping_` about symbolic values (or
+  re-enable `__iter__`) and drop them, or make a flattened query-rooted condition
+  raise instead of working.
+- CI: `test_each_lib (experiments)` fails on a 300s ROS
+  `/semantic_digital_twin/fetch_world` timeout in
+  `test_real_stretch_demo_process_boundary.py`. `main` was green at the same base,
+  but nothing in this diff leaves `krrood/entity_query_language`; the `c1206318`
+  push re-runs it. Not monitored — per notes, prompt if it needs handling.
