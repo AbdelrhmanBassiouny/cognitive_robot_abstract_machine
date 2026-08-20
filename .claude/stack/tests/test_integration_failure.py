@@ -27,7 +27,7 @@ from test_maintenance import (
     UPSTREAM_BASE,
     UPSTREAM_REMOTE,
     a_stack,
-    fork_checkout,
+    fork_checkout,  # noqa: F401  (pytest collects it as a fixture)
     make_configuration,
 )
 
@@ -40,13 +40,7 @@ from integration_fixtures import (
     REMOVES_THE_MODULE,
     branch_names_in,
     create_integration_test_failure,
-    create_pull_request_object,
 )
-
-# `fork_checkout` is imported for pytest to collect as a fixture; naming it
-# here keeps a linter from reading the import as unused.
-__all__ = ["fork_checkout"]
-
 
 # %% localising an integration test failure
 
@@ -101,9 +95,9 @@ def two_tips_that_break_only_together(checkout: ForkCheckout) -> list[PullReques
     checkout.git.fetch("origin")
     checkout.git.switch_to(UPSTREAM_BASE)
     return [
-        create_pull_request_object(1, INNOCENT_TIP, UPSTREAM_BASE),
-        create_pull_request_object(2, NEEDS_THE_MODULE, UPSTREAM_BASE),
-        create_pull_request_object(3, REMOVES_THE_MODULE, UPSTREAM_BASE),
+        PullRequest(number=1, head=INNOCENT_TIP, base=UPSTREAM_BASE, draft=False),
+        PullRequest(number=2, head=NEEDS_THE_MODULE, base=UPSTREAM_BASE, draft=False),
+        PullRequest(number=3, head=REMOVES_THE_MODULE, base=UPSTREAM_BASE, draft=False),
     ]
 
 
@@ -173,7 +167,7 @@ def test_searching_a_build_that_works_localises_nothing(fork_checkout: ForkCheck
 
     report = locate_break(
         fork_checkout,
-        [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)],
+        [PullRequest(number=1, head=ONLY_TIP, base=UPSTREAM_BASE, draft=False)],
         f"{sys.executable} -c pass",
     )
 

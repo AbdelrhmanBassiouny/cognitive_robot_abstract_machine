@@ -28,19 +28,17 @@ from test_maintenance import (
     ForkCheckout,
     UPSTREAM_BASE,
     a_stack,
-    fork_checkout,
+    fork_checkout,  # noqa: F401  (pytest collects it as a fixture)
     make_configuration,
 )
 
-# `fork_checkout` is imported for pytest to collect as a fixture; naming it
-# here keeps a linter from reading the import as unused.
-__all__ = ["fork_checkout"]
-
-
-INTEGRATION_SCRIPT = Path(__file__).parent.parent / "integration.py"
+INTEGRATION_SCRIPT = Path(integration.__file__)
 """
 The builder under test, invoked as a subprocess wherever an exit status is the
 assertion.
+
+Read off the imported module rather than rebuilt from this file's location, so the
+subprocess runs the same file the rest of the suite imports.
 """
 
 A_BUILD_BRANCH = "integration-20260810-120000"
@@ -99,36 +97,19 @@ A_PULL_REQUEST_NUMBER = 111
 The fork pull request publishing the branch a block-branch test acts on.
 """
 
-# `fork_checkout` is imported for pytest to collect as a fixture; naming it here keeps
-# linters from reading the import as unused.
-__all__ = ["fork_checkout"]
+CONFLICT_MARKER = "<" * 7
+"""
+The marker git opens a conflicted hunk with, at its default
+``merge.conflictMarkerSize``.
+
+Whether a path is *unmerged* is asked of git directly, through
+:meth:`GitCommandRunner.unmerged_paths`; whether the file on disk still carries the
+markers a developer edits between is only answerable by reading it, so the marker is
+named here rather than spelled at the assertion.
+"""
 
 
 # %% the objects a build is described with
-
-
-def create_pull_request_object(
-    number: int,
-    head: str,
-    base: str,
-    labels: list[str] | None = None,
-    draft: bool = False,
-) -> PullRequest:
-    """
-    :param number: The fork pull request number.
-    :param head: The branch it publishes.
-    :param base: The branch it targets, which is its parent in the stack.
-    :param labels: The labels it carries.
-    :param draft: Whether its author has yet to review it, which keeps it out of a build.
-    :return: The board entry.
-    """
-    return PullRequest(
-        number=number,
-        head=head,
-        base=base,
-        draft=draft,
-        labels=list(labels or []),
-    )
 
 
 def create_branch_object(
@@ -198,7 +179,9 @@ def build(
 def branch_names_in(checkout: ForkCheckout) -> set[str]:
     """
     :param checkout: The checkout to read.
-    :return: Every branch it holds, whichever one is checked out.
+    :return: Every branch it holds, whichever one is checked out. A set because callers
+        subtract one reading from another to name the branches a run added, not because
+        branch names could repeat - git already guarantees they cannot.
     """
     return set(checkout.git.branch_names())
 
@@ -321,9 +304,9 @@ def two_colliding_tips(checkout: ForkCheckout) -> list[PullRequest]:
     checkout.commit_on(FIRST_TIP, "contested", "what the first tip wrote\n")
     checkout.git.checkout(SECOND_TIP, UPSTREAM_BASE)
     checkout.commit("contested", "what the second tip wrote\n")
-    checkout.git.push_refspec("origin", "second-tip:second-tip")
+    checkout.git.push_refspec("origin", f"{SECOND_TIP}:{SECOND_TIP}")
     checkout.git.fetch("origin")
     return [
-        create_pull_request_object(1, FIRST_TIP, UPSTREAM_BASE),
-        create_pull_request_object(2, SECOND_TIP, UPSTREAM_BASE),
+        PullRequest(number=1, head=FIRST_TIP, base=UPSTREAM_BASE, draft=False),
+        PullRequest(number=2, head=SECOND_TIP, base=UPSTREAM_BASE, draft=False),
     ]

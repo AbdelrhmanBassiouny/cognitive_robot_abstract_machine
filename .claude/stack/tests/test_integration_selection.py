@@ -34,30 +34,36 @@ def test_only_the_tip_of_a_stack_is_merged():
     A tip contains its own stack, so merging its parent as well would merge the same
     commits twice and say nothing new.
     """
+    bottom = "bottom"
+    top = "top"
+
     tips = tips_of(
         create_stack_object(
             [
-                create_branch_object("bottom", 1),
-                create_branch_object("top", 2, parent="bottom"),
+                create_branch_object(bottom, 1),
+                create_branch_object(top, 2, parent=bottom),
             ]
         )
     )
 
-    assert [tip.name for tip in tips] == ["top"]
+    assert [tip.name for tip in tips] == [top]
 
 
 def test_a_branch_already_landed_upstream_is_left_out():
     """
     Its commits are in the base the build starts from, so merging it adds nothing.
     """
+    landed = "landed"
+    in_flight = "in-flight"
+
     tips = tips_of(
         create_stack_object(
-            [create_branch_object("landed", 1), create_branch_object("in-flight", 2)],
-            landed=frozenset({"landed"}),
+            [create_branch_object(landed, 1), create_branch_object(in_flight, 2)],
+            landed=frozenset({landed}),
         )
     )
 
-    assert [tip.name for tip in tips] == ["in-flight"]
+    assert [tip.name for tip in tips] == [in_flight]
 
 
 def test_tips_are_merged_in_ascending_pull_request_order():
@@ -65,17 +71,21 @@ def test_tips_are_merged_in_ascending_pull_request_order():
     Once a conflict can skip a tip, merge order decides *which* tip is skipped - so it
     is stated rather than left to whatever order the board happened to arrive in.
     """
+    earlier = "earlier"
+    middle = "middle"
+    later = "later"
+
     tips = tips_of(
         create_stack_object(
             [
-                create_branch_object("later", 9),
-                create_branch_object("earlier", 2),
-                create_branch_object("middle", 5),
+                create_branch_object(later, 9),
+                create_branch_object(earlier, 2),
+                create_branch_object(middle, 5),
             ]
         )
     )
 
-    assert [tip.name for tip in tips] == ["earlier", "middle", "later"]
+    assert [tip.name for tip in tips] == [earlier, middle, later]
 
 
 def test_a_draft_branch_is_left_out():
@@ -85,16 +95,19 @@ def test_a_draft_branch_is_left_out():
 
     A build carries only what has had it.
     """
+    reviewed = "reviewed"
+    unreviewed = "unreviewed"
+
     tips = tips_of(
         create_stack_object(
             [
-                create_branch_object("reviewed", 1),
-                create_branch_object("unreviewed", 2, status=BranchStatus.DRAFT),
+                create_branch_object(reviewed, 1),
+                create_branch_object(unreviewed, 2, status=BranchStatus.DRAFT),
             ]
         )
     )
 
-    assert [tip.name for tip in tips] == ["reviewed"]
+    assert [tip.name for tip in tips] == [reviewed]
 
 
 def test_a_branch_promoted_upstream_is_still_carried():
@@ -103,13 +116,15 @@ def test_a_branch_promoted_upstream_is_still_carried():
     test written against ``ready`` alone would drop every branch already promoted - the
     most reviewed work there is, and still not in the base.
     """
+    promoted = "promoted"
+
     tips = tips_of(
         create_stack_object(
-            [create_branch_object("promoted", 1, status=BranchStatus.IN_REVIEW)]
+            [create_branch_object(promoted, 1, status=BranchStatus.IN_REVIEW)]
         )
     )
 
-    assert [tip.name for tip in tips] == ["promoted"]
+    assert [tip.name for tip in tips] == [promoted]
 
 
 def test_a_ready_branch_standing_on_a_draft_is_left_out_with_it():
@@ -118,11 +133,14 @@ def test_a_ready_branch_standing_on_a_draft_is_left_out_with_it():
     draft's commits in the build under a ready branch's name - which is the reading of
     "only ready pull requests" that quietly does the opposite.
     """
+    unreviewed = "unreviewed"
+    reviewed = "reviewed"
+
     tips = tips_of(
         create_stack_object(
             [
-                create_branch_object("unreviewed", 1, status=BranchStatus.DRAFT),
-                create_branch_object("reviewed", 2, parent="unreviewed"),
+                create_branch_object(unreviewed, 1, status=BranchStatus.DRAFT),
+                create_branch_object(reviewed, 2, parent=unreviewed),
             ]
         )
     )
@@ -136,19 +154,21 @@ def test_the_last_reviewed_branch_below_a_draft_is_the_one_merged():
     that work is carried: the merge point is the last branch reached before the first
     draft, not the stack's own tip.
     """
+    bottom = "bottom"
+    middle = "middle"
+    top = "top"
+
     tips = tips_of(
         create_stack_object(
             [
-                create_branch_object("bottom", 1),
-                create_branch_object("middle", 2, parent="bottom"),
-                create_branch_object(
-                    "top", 3, parent="middle", status=BranchStatus.DRAFT
-                ),
+                create_branch_object(bottom, 1),
+                create_branch_object(middle, 2, parent=bottom),
+                create_branch_object(top, 3, parent=middle, status=BranchStatus.DRAFT),
             ]
         )
     )
 
-    assert [tip.name for tip in tips] == ["middle"]
+    assert [tip.name for tip in tips] == [middle]
 
 
 def test_an_unreviewed_branch_is_named_rather_than_silently_dropped():
@@ -158,15 +178,18 @@ def test_an_unreviewed_branch_is_named_rather_than_silently_dropped():
 
     Each one left out names itself and why.
     """
+    unreviewed_branch = "unreviewed"
+    number = 7
+
     unreviewed = select_for_build(
         create_stack_object(
-            [create_branch_object("unreviewed", 7, status=BranchStatus.DRAFT)]
+            [create_branch_object(unreviewed_branch, number, status=BranchStatus.DRAFT)]
         )
     ).unreviewed
 
     assert [
         (left_out.branch, left_out.pull_request_number) for left_out in unreviewed
-    ] == [("unreviewed", 7)]
+    ] == [(unreviewed_branch, number)]
     assert unreviewed[0].attributed_to is None
 
 
@@ -191,18 +214,21 @@ def test_a_branch_left_out_for_its_ancestor_names_that_ancestor():
     "Your branch was left out" is not actionable when the branch is out of draft and its
     author can see nothing wrong with it - the draft beneath it is the thing to act on.
     """
+    beneath = "beneath"
+    above = "above"
+
     unreviewed = select_for_build(
         create_stack_object(
             [
-                create_branch_object("beneath", 1, status=BranchStatus.DRAFT),
-                create_branch_object("above", 2, parent="beneath"),
+                create_branch_object(beneath, 1, status=BranchStatus.DRAFT),
+                create_branch_object(above, 2, parent=beneath),
             ]
         )
     ).unreviewed
 
     assert {left_out.branch: left_out.attributed_to for left_out in unreviewed} == {
-        "beneath": None,
-        "above": "beneath",
+        beneath: None,
+        above: beneath,
     }
 
 
@@ -226,15 +252,18 @@ def test_a_reviewed_branch_whose_only_child_is_a_draft_becomes_the_merge_point()
     The same rule with nothing else to carry the parent: it is the deepest reviewed
     branch, so it is merged itself rather than vanishing behind a child no build takes.
     """
+    reviewed = "reviewed"
+    unreviewed = "unreviewed"
+
     tips = tips_of(
         create_stack_object(
             [
-                create_branch_object("reviewed", 1),
+                create_branch_object(reviewed, 1),
                 create_branch_object(
-                    "unreviewed", 2, parent="reviewed", status=BranchStatus.DRAFT
+                    unreviewed, 2, parent=reviewed, status=BranchStatus.DRAFT
                 ),
             ]
         )
     )
 
-    assert [tip.name for tip in tips] == ["reviewed"]
+    assert [tip.name for tip in tips] == [reviewed]

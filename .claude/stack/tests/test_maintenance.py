@@ -229,6 +229,15 @@ class ForkCheckout:
         self.run_git("commit", "--quiet", "-m", f"write {name}")
         return self.run_git("rev-parse", "HEAD")
 
+    def file_added_by(self, branch: str) -> Path:
+        """
+        :param branch: The branch to ask about.
+        :return: The file :meth:`branch_from` writes to give that branch a commit of
+            its own, so a test checking whether the branch reached a build reads the
+            name rather than spelling it a second time.
+        """
+        return self.project_root / f"{branch}-file"
+
     def branch_from(self, name: str, start_point: str) -> str:
         """
         Create a branch with a commit of its own, and publish it to the fork.
@@ -242,7 +251,7 @@ class ForkCheckout:
         :return: The branch's published commit hash.
         """
         self.run_git("checkout", "--quiet", "-B", name, start_point)
-        commit = self.commit(f"{name}-file", f"the work on {name}\n")
+        commit = self.commit(self.file_added_by(name).name, f"the work on {name}\n")
         self.run_git("push", "--quiet", "origin", f"{name}:{name}")
         self.run_git("fetch", "--quiet", "origin")
         return commit

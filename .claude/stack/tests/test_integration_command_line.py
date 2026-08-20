@@ -17,17 +17,12 @@ from maintenance_constants import CREDENTIAL_VARIABLES
 from test_maintenance import (
     ForkCheckout,
     UPSTREAM_REMOTE,
-    fork_checkout,
+    fork_checkout,  # noqa: F401  (pytest collects it as a fixture)
 )
 
 from integration_fixtures import (
     INTEGRATION_SCRIPT,
 )
-
-# `fork_checkout` is imported for pytest to collect as a fixture; naming it
-# here keeps a linter from reading the import as unused.
-__all__ = ["fork_checkout"]
-
 
 # %% the command line
 

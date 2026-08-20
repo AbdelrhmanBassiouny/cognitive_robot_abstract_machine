@@ -9,6 +9,8 @@ import sys
 
 import pytest
 
+from stack import PullRequest
+
 import integration
 from integration import (
     IntegrationExitCode,
@@ -20,7 +22,7 @@ from integration import (
 from test_maintenance import (
     ForkCheckout,
     UPSTREAM_BASE,
-    fork_checkout,
+    fork_checkout,  # noqa: F401  (pytest collects it as a fixture)
     make_configuration,
 )
 
@@ -29,14 +31,8 @@ from integration_fixtures import (
     SECOND_TIP,
     a_recorded_resolution,
     build,
-    create_pull_request_object,
     two_colliding_tips,
 )
-
-# `fork_checkout` is imported for pytest to collect as a fixture; naming it
-# here keeps a linter from reading the import as unused.
-__all__ = ["fork_checkout"]
-
 
 # %% running the suite on the finished branch
 
@@ -49,7 +45,7 @@ def test_a_passing_suite_leaves_the_build_a_success(fork_checkout: ForkCheckout)
 
     report = build(
         fork_checkout,
-        [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)],
+        [PullRequest(number=1, head=ONLY_TIP, base=UPSTREAM_BASE, draft=False)],
         test_command=f"{sys.executable} -c pass",
     )
 
@@ -69,7 +65,7 @@ def test_a_failing_suite_is_never_reported_as_a_clean_build(
 
     report = build(
         fork_checkout,
-        [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)],
+        [PullRequest(number=1, head=ONLY_TIP, base=UPSTREAM_BASE, draft=False)],
         test_command=f"{sys.executable} -c 'raise SystemExit(1)'",
     )
 
@@ -87,7 +83,8 @@ def test_a_suite_that_was_not_run_is_neither_a_pass_nor_a_failure(
     fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
 
     report = build(
-        fork_checkout, [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)]
+        fork_checkout,
+        [PullRequest(number=1, head=ONLY_TIP, base=UPSTREAM_BASE, draft=False)],
     )
 
     assert report.tests_passed is None

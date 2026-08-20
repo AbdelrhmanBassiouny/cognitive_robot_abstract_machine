@@ -15,11 +15,12 @@ from integration import (
 
 from test_maintenance import (
     ForkCheckout,
-    fork_checkout,
+    fork_checkout,  # noqa: F401  (pytest collects it as a fixture)
     make_configuration,
 )
 
 from integration_fixtures import (
+    CONFLICT_MARKER,
     FIRST_TIP,
     SECOND_TIP,
     a_recorded_resolution,
@@ -27,11 +28,6 @@ from integration_fixtures import (
     outcome_for,
     two_colliding_tips,
 )
-
-# `fork_checkout` is imported for pytest to collect as a fixture; naming it
-# here keeps a linter from reading the import as unused.
-__all__ = ["fork_checkout"]
-
 
 # %% replayed resolutions
 
@@ -134,7 +130,7 @@ def test_a_staged_conflict_is_left_live_for_a_resolution_to_be_written_into(
     staged = a_run(fork_checkout).stage_conflict(FIRST_TIP, SECOND_TIP)
 
     assert staged["conflicting_paths"] == ["contested"]
-    assert "<<<<<<<" in (Path(staged["worktree"]) / "contested").read_text()
+    assert CONFLICT_MARKER in (Path(staged["worktree"]) / "contested").read_text()
 
 
 def test_a_recorded_resolution_is_replayed_by_the_next_build(

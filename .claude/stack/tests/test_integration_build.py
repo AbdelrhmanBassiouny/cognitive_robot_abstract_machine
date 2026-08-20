@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+from stack import PullRequest
+
 import integration
 from integration import (
     TipStatus,
@@ -16,7 +18,7 @@ from test_maintenance import (
     ForkCheckout,
     UPSTREAM_BASE,
     UPSTREAM_REMOTE,
-    fork_checkout,
+    fork_checkout,  # noqa: F401  (pytest collects it as a fixture)
 )
 
 from integration_fixtures import (
@@ -28,14 +30,8 @@ from integration_fixtures import (
     THIRD_TIP,
     UNRELATED_TIP,
     build,
-    create_pull_request_object,
     outcome_for,
 )
-
-# `fork_checkout` is imported for pytest to collect as a fixture; naming it
-# here keeps a linter from reading the import as unused.
-__all__ = ["fork_checkout"]
-
 
 # %% the build branch's own name
 
@@ -59,7 +55,10 @@ def test_the_pointer_moves_to_the_build_that_finished(fork_checkout: ForkCheckou
     """
     fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
 
-    build(fork_checkout, [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)])
+    build(
+        fork_checkout,
+        [PullRequest(number=1, head=ONLY_TIP, base=UPSTREAM_BASE, draft=False)],
+    )
 
     assert fork_checkout.git.commit_at(
         integration.POINTER_BRANCH
@@ -75,22 +74,19 @@ def test_a_build_contains_every_cleanly_merging_tip(fork_checkout: ForkCheckout)
     """
     fork_checkout.branch_from(FIRST_TIP, UPSTREAM_BASE)
     fork_checkout.branch_from(SECOND_TIP, UPSTREAM_BASE)
-
-    report = build(
-        fork_checkout,
-        [
-            create_pull_request_object(1, FIRST_TIP, UPSTREAM_BASE),
-            create_pull_request_object(2, SECOND_TIP, UPSTREAM_BASE),
-        ],
-    )
-
-    assert [entry.status for entry in report.tips] == [
-        TipStatus.MERGED,
-        TipStatus.MERGED,
+    pull_requests = [
+        PullRequest(number=1, head=FIRST_TIP, base=UPSTREAM_BASE, draft=False),
+        PullRequest(number=2, head=SECOND_TIP, base=UPSTREAM_BASE, draft=False),
     ]
+
+    report = build(fork_checkout, pull_requests)
+
+    assert [entry.status for entry in report.tips] == [TipStatus.MERGED] * len(
+        pull_requests
+    )
     fork_checkout.git.switch_to(A_BUILD_BRANCH)
-    assert (fork_checkout.project_root / "first-tip-file").exists()
-    assert (fork_checkout.project_root / "second-tip-file").exists()
+    assert fork_checkout.file_added_by(FIRST_TIP).exists()
+    assert fork_checkout.file_added_by(SECOND_TIP).exists()
 
 
 def test_a_build_leaves_an_unreviewed_branch_out_and_says_so(
@@ -101,21 +97,23 @@ def test_a_build_leaves_an_unreviewed_branch_out_and_says_so(
     fewer branches than the board holds, and reported only what it did carry, would read
     as having covered everything.
     """
-    fork_checkout.branch_from("reviewed", UPSTREAM_BASE)
-    fork_checkout.branch_from("unreviewed", UPSTREAM_BASE)
+    reviewed = "reviewed"
+    unreviewed = "unreviewed"
+    fork_checkout.branch_from(reviewed, UPSTREAM_BASE)
+    fork_checkout.branch_from(unreviewed, UPSTREAM_BASE)
 
     report = build(
         fork_checkout,
         [
-            create_pull_request_object(1, "reviewed", UPSTREAM_BASE),
-            create_pull_request_object(2, "unreviewed", UPSTREAM_BASE, draft=True),
+            PullRequest(number=1, head=reviewed, base=UPSTREAM_BASE, draft=False),
+            PullRequest(number=2, head=unreviewed, base=UPSTREAM_BASE, draft=True),
         ],
     )
 
-    assert [entry.branch for entry in report.tips] == ["reviewed"]
-    assert [entry.branch for entry in report.unreviewed] == ["unreviewed"]
+    assert [entry.branch for entry in report.tips] == [reviewed]
+    assert [entry.branch for entry in report.unreviewed] == [unreviewed]
     fork_checkout.git.switch_to(A_BUILD_BRANCH)
-    assert not (fork_checkout.project_root / "unreviewed-file").exists()
+    assert not fork_checkout.file_added_by(unreviewed).exists()
 
 
 def test_a_conflicting_tip_is_skipped_and_the_build_continues(
@@ -129,22 +127,22 @@ def test_a_conflicting_tip_is_skipped_and_the_build_continues(
     fork_checkout.commit_on(FIRST_TIP, "contested", "what the first tip wrote\n")
     fork_checkout.git.checkout(SECOND_TIP, UPSTREAM_BASE)
     fork_checkout.commit("contested", "what the second tip wrote\n")
-    fork_checkout.git.push_refspec("origin", "second-tip:second-tip")
+    fork_checkout.git.push_refspec("origin", f"{SECOND_TIP}:{SECOND_TIP}")
     fork_checkout.branch_from(THIRD_TIP, UPSTREAM_BASE)
 
     report = build(
         fork_checkout,
         [
-            create_pull_request_object(1, FIRST_TIP, UPSTREAM_BASE),
-            create_pull_request_object(2, SECOND_TIP, UPSTREAM_BASE),
-            create_pull_request_object(3, THIRD_TIP, UPSTREAM_BASE),
+            PullRequest(number=1, head=FIRST_TIP, base=UPSTREAM_BASE, draft=False),
+            PullRequest(number=2, head=SECOND_TIP, base=UPSTREAM_BASE, draft=False),
+            PullRequest(number=3, head=THIRD_TIP, base=UPSTREAM_BASE, draft=False),
         ],
     )
 
     assert outcome_for(report, SECOND_TIP).status is TipStatus.SKIPPED
     assert outcome_for(report, THIRD_TIP).status is TipStatus.MERGED
     fork_checkout.git.switch_to(A_BUILD_BRANCH)
-    assert (fork_checkout.project_root / "third-tip-file").exists()
+    assert fork_checkout.file_added_by(THIRD_TIP).exists()
 
 
 def test_a_skipped_tip_names_the_tip_it_collided_with(fork_checkout: ForkCheckout):
@@ -156,13 +154,13 @@ def test_a_skipped_tip_names_the_tip_it_collided_with(fork_checkout: ForkCheckou
     fork_checkout.commit_on(FIRST_TIP, "contested", "what the first tip wrote\n")
     fork_checkout.git.checkout(SECOND_TIP, UPSTREAM_BASE)
     fork_checkout.commit("contested", "what the second tip wrote\n")
-    fork_checkout.git.push_refspec("origin", "second-tip:second-tip")
+    fork_checkout.git.push_refspec("origin", f"{SECOND_TIP}:{SECOND_TIP}")
 
     report = build(
         fork_checkout,
         [
-            create_pull_request_object(1, FIRST_TIP, UPSTREAM_BASE),
-            create_pull_request_object(2, SECOND_TIP, UPSTREAM_BASE),
+            PullRequest(number=1, head=FIRST_TIP, base=UPSTREAM_BASE, draft=False),
+            PullRequest(number=2, head=SECOND_TIP, base=UPSTREAM_BASE, draft=False),
         ],
     )
 
@@ -188,7 +186,8 @@ def test_a_tip_conflicting_with_the_base_itself_names_the_base(
     fork_checkout.git.fetch(UPSTREAM_REMOTE)
 
     report = build(
-        fork_checkout, [create_pull_request_object(1, STALE_TIP, UPSTREAM_BASE)]
+        fork_checkout,
+        [PullRequest(number=1, head=STALE_TIP, base=UPSTREAM_BASE, draft=False)],
     )
 
     skipped = outcome_for(report, STALE_TIP)
@@ -212,7 +211,8 @@ def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
     fork_checkout.git.fetch("origin")
 
     report = build(
-        fork_checkout, [create_pull_request_object(1, UNRELATED_TIP, UPSTREAM_BASE)]
+        fork_checkout,
+        [PullRequest(number=1, head=UNRELATED_TIP, base=UPSTREAM_BASE, draft=False)],
     )
 
     stopped = outcome_for(report, UNRELATED_TIP)
@@ -233,7 +233,10 @@ def test_a_build_publishes_nothing(fork_checkout: ForkCheckout):
     fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
     published_before = fork_checkout.commit_on_the_fork(ONLY_TIP)
 
-    build(fork_checkout, [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)])
+    build(
+        fork_checkout,
+        [PullRequest(number=1, head=ONLY_TIP, base=UPSTREAM_BASE, draft=False)],
+    )
 
     assert fork_checkout.commit_on_the_fork(ONLY_TIP) == published_before
     assert (
@@ -252,7 +255,10 @@ def test_a_build_leaves_the_invoking_checkout_on_its_own_branch(
     fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
     fork_checkout.git.switch_to(ONLY_TIP)
 
-    build(fork_checkout, [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)])
+    build(
+        fork_checkout,
+        [PullRequest(number=1, head=ONLY_TIP, base=UPSTREAM_BASE, draft=False)],
+    )
 
     assert fork_checkout.git.checked_out_branch() == ONLY_TIP
 
@@ -264,7 +270,10 @@ def test_a_build_leaves_no_worktree_of_its_own_behind(fork_checkout: ForkCheckou
     """
     fork_checkout.branch_from(ONLY_TIP, UPSTREAM_BASE)
 
-    build(fork_checkout, [create_pull_request_object(1, ONLY_TIP, UPSTREAM_BASE)])
+    build(
+        fork_checkout,
+        [PullRequest(number=1, head=ONLY_TIP, base=UPSTREAM_BASE, draft=False)],
+    )
 
     assert not any(
         "stack-restack-" in path for path in fork_checkout.git.worktree_paths()
