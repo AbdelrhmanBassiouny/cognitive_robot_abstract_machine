@@ -1,53 +1,54 @@
-## claude/fix-ci-failing-tests-202965 - krrood import-scope tolerance
+## claude/fix-ci-failing-tests-202965 -> PR #183 (draft, `bug`)
 
-**Root cause (found by reading CI, not guessing).** Fork `main` CI is fully
-green; the only red thing in the repo was PR #169
-(`montessori_fast_inline_monitor`). Its four failing lib jobs
-(semantic_digital_twin, giskardpy, coraplex, experiments) are exactly the four
-that run the `Build ORM` step, and all four die the same way:
+**Shipped.** krrood's import-scope builder aborted the whole scope when one
+from-import named an unimportable module, while already tolerating a missing
+*name*. Two commits:
+- `a4990cfe` fix + unit test (`test_get_scope_from_imports.py`)
+- `a2385ec0` full-recovery regression test
+  (`test_type_resolution_with_unimportable_import.py`)
 
-    NameError: name 'InferenceExplanation' is not defined
-      -> krrood resolve_name_in_hierarchy -> get_scope_from_imports
-      -> ModuleNotFoundError: No module named
-         'semantic_digital_twin.orm.ormatic_interface'
+**Full chain (verified by code, not guessed).** Every mapped datastructure
+descends from `Symbol`, whose `_inference_explanation_` is annotated with a
+TYPE_CHECKING-only `InferenceExplanation` -> resolving any of them raises
+NameError -> hierarchy search builds each module's scope -> SDT's
+`world_synchronizer.py` / `procthor_parser.py` hold *function-local*
+`from semantic_digital_twin.orm.ormatic_interface import WorldMappingDAO`,
+which `ast.walk` visits like any other import -> module absent during
+generation -> search died before reaching `Symbol`. All 10 red jobs on #169
+share this one cause.
 
-krrood's `_handle_import_from_node` already tolerated *a name missing from an
-imported module* (logs once, skips) but let *the module missing altogether*
-raise straight out of the AST walk, losing the whole scope.
+**Verified.** Whole collectible krrood suite: zero newly broken, 9 newly
+passing. Local-only failures are env: robotics deps, and
+`make_dataclass(module=...)` needing 3.12 (container has 3.11).
 
-`main` only escapes this because `scripts/regenerate_all_orm.py` empties the
-interface file rather than deleting it ("so that a stale version cannot be
-imported while the new one is being generated"). #169 replaces that script with
-`cognitive_robot_abstract_machine/orm_interfaces.py`, whose `remove()` calls
-`path.unlink()` - a deliberate design change (interfaces ignored, not tracked
-empty). Under that design the module is genuinely absent and krrood's
-intolerance becomes a hard blocker.
+## ORM interface design: evidence gathered (awaiting user's decision)
 
-**Done.** Fix committed and pushed as `a4990cfe`:
-- failing test first: `test_get_scope_from_imports.py::
-  test_scope_holds_the_other_imports_when_one_targets_a_missing_module`, with
-  mimic `dataset/type_checking_import_of_missing_module.py` (snippet in its own
-  .py file, per AGENTS.md - no inline string)
-- `_handle_import_from_node` now skips a from-import whose module cannot be
-  imported, logging once, same as the missing-name case
-- renamed `_warn_about_unresolvable_type_checking_import_once` ->
-  `_log_unresolvable_import_once` (it is no longer TYPE_CHECKING-specific)
-- a plain `import x` of a missing module still raises, so the existing
-  `test_get_scope_from_imports_invalid` keeps its meaning, unmodified
+Ran real-git experiments in scratchpad (`orm_experiment/`). Findings:
 
-**Verified.** Whole collectible krrood suite before/after in this container:
-zero newly broken, 9 newly passing (`test_wrapped_field.py` x8 and
-`test_cyclic_imports.py::test_unfinished_type_field_info` - they were failing
-here through this exact bug, on the very same `InferenceExplanation` NameError).
-Remaining failures in this container are environment-only: missing robotics
-deps, and `make_dataclass(module=...)` which needs Python 3.12 (container has
-3.11, CI has 3.12).
+- **Design A (tracked-empty, main) fails every branch switch that moves the
+  interface path**: to a branch that ignores it, to one with different content,
+  to one adding a mapped package. **skip-worktree does not help** - it only
+  hides the file from `git status`/`git add`, so the checkout still fails but
+  now nothing explains why. Worst failure mode of the lot.
+- Design A without skip-worktree: dirty tree, `git add -A` stages generated
+  content, and `git stash` *loses* it.
+- **Design B (ignored, #169) passes all of them**, keeps generated content.
+- Import diagnostics are poor under both: A gives `ImportError: cannot import
+  name ...` (reads like a typo), B gives `ModuleNotFoundError`. Neither names
+  the generator.
+- Tested a package `__getattr__` shim to make B self-explaining: **only
+  intercepts `from pkg.orm import ormatic_interface`**, not the dotted form the
+  codebase actually uses. So prettifying the failure does not work; bootstrap
+  before running is the real answer.
+- Both designs silently keep a **stale** interface across a branch switch;
+  `are_generated` checks existence only. Shared hole, unsolved by either.
+- #169 deletes 113 lines of guard machinery (empty_generated 41 +
+  protect_generated 60 + pre-commit 12) and a whole AGENTS.md rule paragraph.
 
-**Next / open.**
-- No PR opened - not asked for. Branch is pushed and ready if wanted (draft +
-  `bug` label + session link, per notes).
-- This fix does *not* by itself make #169 green: it removes the hard abort, but
-  #169's `InferenceExplanation` forward reference is still unresolvable at
-  runtime, and that is #169's own code on #169's branch. Worth telling whoever
-  owns #169.
-- Not subscribed to any PR and no check-ins armed, per notes.
+**Recommendation given to user:** adopt B, plus (1) #183 (done), (2) wire
+`ensure_generated()` into `test/conftest.py` - #169 wires it into
+`run_montessori_demo.sh` and docs but *not* pytest, (3) add a freshness check
+so a stale interface is rebuilt rather than silently used.
+
+**Next.** Waiting on the user's choice before implementing (2) and (3). Not
+subscribed to any PR; no check-ins armed.
