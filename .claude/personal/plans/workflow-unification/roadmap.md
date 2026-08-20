@@ -6986,3 +6986,115 @@ framing is the only shape that reaches a verdict at all, rather than one option 
 was being written - 145,000 deletions, none of them reachable from a `.claude/` diff. Merged and the
 whole suite re-run rather than trusting the merge, per the standing rule that ancestry answers
 "did I lose anything" and only running the tests answers "does it still work".
+
+## Update 2026-08-20 (resolved): #154's 18-thread round, and an ask that does not compile
+
+`/plan-item-resolve workflow-unification integration-branch`, session
+https://claude.ai/code/session_01RXr6gpbCyaa9K3V8F5kwRk. Eighteen threads, drafted 08-14 and 08-19
+and submitted as one review on 08-19; all answered, 12 resolved, 6 open on purpose. Plus the base
+merge the branch had been `dirty` on since 08-18. 620 tests across the three directories CI runs,
+was 599.
+
+### Two asks in one round that cannot both be satisfied, and the measurement that settled it
+
+The round asked for `TipStatusSpecification.spelling` to become `name`, and — two comments later —
+for `TipStatus` to inherit that specification *in addition to* `StrEnum`. Probed rather than
+reasoned about, on 3.11 and on CI's 3.12, with identical results:
+
+- `class TipStatus(TipStatusSpecification, StrEnum)` raises `TypeError: too many data types`.
+  Python permits exactly one data-type mixin and `StrEnum` has already spent it on `str`. The
+  literal ask is not a shape that exists.
+- A dataclass field called `name` on **any** enum mixin fails at class creation:
+  `AttributeError: <enum 'Enum'> cannot set attribute 'name'`. So the rename and the inheritance
+  are mutually exclusive, whichever mixin shape is chosen.
+- `class TipStatus(TipStatusSpecification, Enum)` — inheriting, dropping `StrEnum` — does build,
+  and costs more than the 08-13 reply knew. That reply named `json.dumps` refusing the report. The
+  larger cost is that `dataclasses.asdict` **recurses into a member that is itself a dataclass**,
+  so a status silently serializes as `{"name": "skipped", "integrated": false}` rather than
+  `"skipped"` — a wire-format change in a document `/integration-conflict-triage` and
+  `stacked-pr-maintenance` both parse. `dict_factory` does not save it: it runs bottom-up, after
+  the member is already a dict.
+
+The user chose `name` once the measurement was in front of them. That is now the third round of this
+plan settled by measuring the cost of a name rather than arguing about it — and the first where the
+measurement showed two of the user's own asks were in conflict, which is a more useful thing to
+report than either one taken alone.
+
+What did land is the part the neighbouring comment was really about: the member carries its
+specification instead of copying each field onto itself, so `name` and `integrated` are declared
+exactly once, and `carried` became `integrated` throughout the selection vocabulary. `AGENTS.md`
+already carried the rule behind all of this — *"`Enum` reserves `name`"* — which nobody had
+connected to this class until the two asks arrived together.
+
+### A mechanical rename reaches inside names it was never meant to touch
+
+Asked to verify that `escalate` had really become `block-branch`, the answer was no: production
+code, `SKILL.md` and `README.md` were renamed last round, and two test names plus their docstrings
+were not. Checking that turned up two *further* names, casualties of an earlier `a_*` → `create_*`
+sweep, that had stopped describing anything at all:
+
+- `test_a_build_leaves_create_unreviewed_branch_out_and_says_so`
+- `test_a_break_only_the_combination_causes_says_so_rather_than_naming_create_branch_object`
+
+Both had been green and meaningless for two rounds. The generalizable half is narrower than "renames
+are risky": a sweep matching an identifier reaches occurrences of that identifier *inside* names
+whose subject is something else, and no test fails when it does. Reading the names back is the only
+check.
+
+### Single-sourcing the wire format, and the guard that has to grow with it
+
+The mirror-schema proposal was taken as asked: `from_json` per report level, so the key access
+happens inside the class owning that level and a reader uses dot notation. Ten keys had no
+`ReportKey` member and were being reached by field name through `asdict`.
+
+The cost is the one this plan has now recorded three times in different clothes. With the writer
+rendering through the enum and the reader parsing through it, a rename changes both sides
+identically and nothing fails — so `test_the_report_keys_are_the_ones_a_caller_parses` becomes the
+*only* guard, and it had to grow from 8 keys to 22 in the same commit. The rule that is worth
+carrying: **single-sourcing a contract is not free, and the commit that single-sources it is the
+commit that must widen the one test standing outside it.**
+
+`block-branch`'s document was the case where that had already gone wrong quietly: built from a dict
+literal inside the command, no dataclass behind it, and no test at all. It is a `BlockedBranchReport`
+now.
+
+### Splitting a test file, checked rather than trusted
+
+`test_integration.py` at 1564 lines became seven modules along the `# %%` sections already in it,
+none over 305, with the shared constants and factories in `integration_fixtures.py`. The check that
+matters is not that the suite still passes — a dropped module would still pass — but a name-by-name
+diff of every `def test_` before and after, which comes back as exactly the intended renames plus
+the round's three new tests.
+
+### Four failing tests that were the container, not the code
+
+Worth recording because the first reading was wrong. After the base merge, four hook tests failed.
+They fail identically at the pre-merge head, and CI is green on it: `check-setup.sh` probes
+whichever `python3` is first on `PATH`, and that interpreter is not the one holding the test
+dependencies unless the run puts it there. CI arranges exactly that and this container did not.
+
+The rule: **a test that asserts on a script's own subprocess is asserting about `PATH` as much as
+about the code**, so a local failure in one is evidence about the environment until the same commit
+is shown failing somewhere else.
+
+### Six threads left open, in three kinds
+
+- **Impossible as asked**: the inheritance, with the three measurements above.
+- **Questions put back to the user**: where the six new `GitCommandRunner` methods belong, given
+  four have no production caller and `AGENTS.md` says to ask before keeping such methods; and
+  whether the 400-line rule the user stated extends to `integration.py` itself, at 1500 lines.
+- **Answered differently, or owned elsewhere**: `blocking_labels` returns *configured* labels a
+  fork may rename, so they are not `DefaultLabel` members and the set does not belong on that enum
+  — what did move onto it is `configuration_key`, which let `ConfigurationKey` stop naming the same
+  four labels a second time; and the automatic clearing of `integration-conflict`, which is the
+  pytest-marker half of `integration-branch-ci-verdict` and needs an Actions client this tree does
+  not have.
+
+### State
+
+`mergeable_state` was `dirty` and is not; the conflict was additive on both sides of
+`scratch_repository.py` — `main` replaced the scratch identity's two literals with #547's
+`SCRATCH_IDENTITY`, this branch had added the `commit.gpgsign` line beside them, and both are kept.
+`needs-resolution` is left for the next maintenance pass to clear itself, as with every other item
+here. The base stays `main`: `git merge-base --is-ancestor` re-confirms #154 already contains #151's
+head and is 195 commits ahead of it, so the recorded deferral of the reparent is still correct.

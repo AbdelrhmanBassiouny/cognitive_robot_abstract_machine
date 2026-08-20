@@ -2711,7 +2711,7 @@ items:
       - manifest-currency-first
     status: in_progress
     pull_request_number: 154
-    session: https://claude.ai/code/session_01Ue4PvfV5LDxHGRRS5BZB4g
+    session: https://claude.ai/code/session_01RXr6gpbCyaa9K3V8F5kwRk
     notes: >
       Designed 2026-08-10; no code exists. Three implementation attempts were blocked in the
       designing session, so this enters the plan as a design with nothing behind it.
@@ -3051,6 +3051,74 @@ items:
       changed (#143 found the MCP tool works) and the target moved (#139 landed, so `main` overtook
       #151). It had been carried forward verbatim through two entries. Attempting a
       recorded-as-blocked step, when it is cheap and reversible, is worth more than restating it.
+
+      Resolved 2026-08-20 (session https://claude.ai/code/session_01RXr6gpbCyaa9K3V8F5kwRk). A
+      review round of 18 threads, drafted 08-14 and 08-19 and submitted as one review on 08-19, all
+      answered; 12 resolved and 6 left open. The branch also took a base merge - it had been `dirty`
+      since 08-18 against one file. 620 tests pass across the three directories CI runs, from 599,
+      and `test_claude_dev_tooling` is green on the new head.
+
+      The round's centre is one ask that cannot be built, established by probing rather than by
+      argument. `TipStatus` was to inherit `TipStatusSpecification` *in addition to* `StrEnum`:
+      Python allows exactly one data-type mixin and `StrEnum` already spends it on `str`, so that
+      raises `TypeError: too many data types` on 3.11 and on CI's 3.12 alike. Dropping `StrEnum` to
+      inherit does build, and costs more than the previous round's reply knew - beyond `json.dumps`
+      refusing the report, `asdict` recurses into a member that is itself a dataclass, so a status
+      would silently serialize as a nested object instead of one word, changing a wire format two
+      other programs parse. `dict_factory` cannot fix it, since it runs after the member is already
+      a dict.
+
+      The same round asked to rename `spelling` to `name`, and the two asks are mutually exclusive:
+      a dataclass field called `name` fails at class creation on any enum mixin
+      (`AttributeError: <enum 'Enum'> cannot set attribute 'name'`). The user chose `name` when the
+      measurement was put in front of them, which is the second time this item has been settled that
+      way. What did land: `carried` became `integrated` and swept through the selection vocabulary,
+      and the member now carries its specification rather than copying each field off it, so both
+      fields are declared exactly once - which is what the neighbouring thread had actually asked
+      for.
+
+      A defect the sweep found rather than confirmed: `tips_of`'s docstring cited
+      `:func:`carried_by_a_build``, a function that has never existed.
+
+      The report gains a mirror schema, as proposed on the thread: `from_json` per level, so the key
+      access happens inside the class that owns that level and a test reads `report.tips[0].branch`.
+      Ten keys had no `ReportKey` member and were reached by field name through `asdict`. This has a
+      cost worth carrying: with writer and reader both reading the enum, a rename changes both
+      identically, so `test_the_report_keys_are_the_ones_a_caller_parses` is now the only guard on
+      the wire format - it grew from 8 keys to 22 in the same commit. That is the trap this branch
+      already met once, when a reply claimed a contract test nobody had written.
+
+      `block-branch`'s document was built from a dict literal inside the command and nothing tested
+      it at all. It is a `BlockedBranchReport` now, and the gap is closed.
+
+      `test_integration.py` was 1564 lines and is seven modules, none over 305, with what they share
+      in `integration_fixtures.py`. Nothing was lost, checked by diffing every `def test_` name
+      before and after rather than by trusting the split. Two names in it were casualties of an
+      earlier mechanical `a_*` to `create_*` sweep and had stopped describing anything -
+      `..._leaves_create_unreviewed_branch_out_...` and
+      `..._rather_than_naming_create_branch_object` - and two more still called the command
+      `escalate` after last round renamed it. The generalizable half: a mechanical rename across a
+      file reaches identifiers *inside* names it was never meant to touch, and only reading the
+      names back catches it.
+
+      Six threads stay open deliberately: the inheritance (impossible, with the measurements), where
+      the six new `GitCommandRunner` methods should live given four have no production caller,
+      whether the 400-line rule extends to `integration.py` itself at 1500 lines, the automatic
+      clearing of `integration-conflict` (which is the pytest-marker half of
+      `integration-branch-ci-verdict`), and the two `blocking_labels` asks - it returns *configured*
+      labels a fork may rename, so they are not `DefaultLabel` members and the set does not belong
+      on that enum. What did move onto the enum is `configuration_key`, which let `ConfigurationKey`
+      stop naming the same four labels a second time.
+
+      The base merge was additive on both sides of `scratch_repository.py`: `main` replaced the
+      scratch identity's literals with #547's `SCRATCH_IDENTITY`, this branch had added the
+      `commit.gpgsign` line beside them, and both are kept.
+
+      One process note, since it cost a wrong conclusion before it was checked: four hook tests fail
+      in this container for an environment reason rather than a code one - `check-setup.sh` probes
+      whichever `python3` is on `PATH`, which is not the interpreter holding the dependencies unless
+      the run arranges it. They pass at the pre-merge head too, and CI is green. Running the suite
+      with the right interpreter first on `PATH` is the fix, not a change to anything.
   - id: setup-runs-without-asking
     title: "Run the personal-notes setup from the planning skills instead of asking first"
     branch: claude/auto-run-setup-notes-02nhxv
