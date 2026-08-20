@@ -7432,3 +7432,84 @@ rename fails wherever the field is read. What is pinned by nothing else is `stat
 
 Left open, per the rule that a thread answered differently from what it asked is the
 user's to close.
+
+## Update 2026-08-20 (fourth round): a contract test that was checking the wrong object
+
+One comment, on the report-keys thread the round before had answered with a worked
+example: *"can you make a test that reproduces the situation that this test fails in? do
+you think this situation can ever happen again?"*
+
+### The first question could not be answered as asked, and asking it found the defect
+
+The situation `test_the_report_keys_are_the_ones_a_caller_parses` exists for is a rename
+that no test catches, so *reproducing* it is a mutation rather than an assertion — there
+is no test to write that fails when the guard is present.
+
+But looking for one exposed what the test was actually checking, which was the wrong
+object. It compared `{key.name: str(key) for key in ReportKey}` against a written-out
+copy of the same enum, and **never rendered a document**. So it caught a rename by
+noticing that a table beside the enum disagreed with it, rather than by noticing that
+what a caller parses had changed. The tell was available for three rounds and nobody used
+it: the test imported nothing that produces a document.
+
+That also explains why the reviewer kept circling this test across three rounds — first
+proposing deletion, then asking for the enum in the tests, then asking for an example,
+then asking for a reproduction. The objection was right each time and aimed at the
+symptom; the shape was a test asserting the enum against a copy of itself.
+
+### What it reads now, and the half that was missing entirely
+
+`every_document_this_module_writes` builds one fully populated instance of each of the
+four documents this module hands to another program — the build report, the localised
+failure, the blocked branch, the staged conflict — and collects every key at every depth.
+The literals are compared against that, so the failure is the caller-visible one.
+
+Which made the second half free, and it had no coverage at all before:
+
+```python
+def test_every_report_key_names_something_a_document_carries():
+    assert every_document_this_module_writes() == {str(key) for key in ReportKey}
+```
+
+A member added and never emitted is a name that looks like part of the wire format and is
+not; a key emitted without going through the enum is a key in the format that nothing
+names. Both were silent, and the first is exactly the shape a future member arrives in —
+this branch added `WORKTREE` a round earlier and nothing would have noticed if it had
+gone unused.
+
+### The reproduction, measured across the whole directory
+
+| mutation | result |
+|---|---|
+| rename `EXIT_CODE`'s value to `exitCode` | **226 passed, 1 failed** out of 227 — the literals test alone |
+| add a `ReportKey` member nothing emits | only the second test fails |
+| emit a key without going through the enum | both fail, correctly: a wire-format change *and* an unnamed key |
+
+The first row is the whole argument. With the format broken, every other test in the
+directory is green.
+
+### The second question, answered honestly
+
+It can recur, and nothing in this repository can stop it. The mirror schema is what makes
+it silent — writer and reader go through the same member, so a rename moves both sides
+together — and the other two consumers of this format,
+`/integration-conflict-triage` and `stacked-pr-maintenance`, are prose documents that
+nothing executes. Only a reader *outside* this code, exercised in CI, closes it, and then
+only for the keys that reader touches.
+
+It is not hypothetical either: the 2026-08-13 entry records a review reply describing this
+contract test in detail when it did not exist, found by renaming a wire key and noticing
+nothing failed.
+
+What changed is the failure's shape rather than its existence — from "a table disagrees
+with the enum" to "the document a caller parses carries a different key".
+
+### Worth carrying
+
+**A test that pins a contract must read the artifact the contract is about.** This one
+named the right hazard, was defended across three rounds, and checked the wrong object
+throughout. The general check is cheap: look at what the test *imports*. A wire-format
+test that imports no serializer is asserting something other than the wire format.
+
+622 tests pass across the three directories CI runs, from 621. The thread stays open: its
+original ask was to delete the test, and it was answered differently.
