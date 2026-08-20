@@ -7642,3 +7642,121 @@ no reader executes the contract" be put properly — and that is a judgement the
 not a measurement. The defence had been resting on reasoning nobody had tested; a reviewer
 returning to the same line five times was the signal, and it was read as repetition rather
 than as evidence for four of them.
+
+## Update 2026-08-20 (kickoff): `bastler-package` opens as #185, and two scope calls settled
+
+`/plan-item-kickoff workflow-unification bastler-package`, session
+https://claude.ai/code/session_01JN9p5Kf2DKtzryspPX2KqZ, as draft pull request **#185** on
+`claude/plan-item-kickoff-workflow-cuare2`, based on fork `main` (`90c24116`). Bootstrapped in
+the order `plan-item-bootstrap` prescribes — branch, draft pull request, manifest, roadmap,
+progress note, dashboard — before a line of the migration.
+
+Both dependencies re-checked with `check_dependency_readiness.py` rather than inherited from
+decision 13's prose: `setup-personal-notes-pr101` and `stack-tooling-on-main` both `merged`,
+both `is_ready`. No branch existed yet, so there is no partial work to build on.
+
+### The scale, and why the diff has to render as renames
+
+Measured rather than estimated: **18,408 lines across 46 Python modules** under `.claude/`,
+of which the three largest are `stack.py` (1,641), `plan_item_bootstrap.py` (1,612) and
+`build_dashboard.py` (1,504). Moving them with `git mv` and nothing else in the same commit is
+what lets GitHub render the change as renames; any content edit in the same file in the same
+commit costs that, and with it the only thing making a pull request this size reviewable.
+
+The premise is visible rather than argued. `.claude/stack/tests/conftest.py:14-16` inserts
+`.claude/stack/`, `.claude/hooks/` **and** `.claude/hooks/tests/` onto `sys.path`, which is
+decision 8's "path hackery" in the literal. There are three such conftests, one per suite, and
+they are deleted as their directories empty.
+
+### Two scope calls, settled with the user at kickoff
+
+**The oversized modules are not split here.** Two review rounds deferred splitting `stack.py`
+*to this item* by name — 2026-08-02, twice, on the reasoning that "`dev-tooling-python-package`
+already moves every `.claude/` Python file into a package, so splitting now means the same
+surgery twice, with #110 and #111 rebasing across it in between." Decision 13's re-scope does
+not mention it, so it was put to the user rather than assumed either way. Their call is to move
+first and split as its own item.
+
+The deferral's own argument is partly conceded by that, and it is worth stating rather than
+glossing: this is the second surgery it was written to avoid. What changed is the cost on each
+side. Once the package exists a split is an ordinary refactor inside one importable tree —
+#139 has already produced the eleven-module pattern for exactly this — whereas splitting during
+the move destroys rename detection on the three biggest files, so a reviewer sees ~5,000 lines
+of apparently-new code instead of a move. The thing the deferral was protecting (one surgery)
+is worth less than the thing it would cost (a reviewable diff), and the second surgery is now
+cheap in a way it was not when the deferral was written.
+
+**Only the unifications that are a straight deletion.** The item's `notes` say the duplication
+carriers are "unified in the move rather than after it", naming `run_git`, the command-class
+base plus `classproperty`, `ItemStatus`, and the personal-notes precedence copy. Checked
+against `main` rather than taken as given, and two of the four are not reachable from this
+item's base: #135's `check_scope_overlap.py` and #151's `Subcommand` are both unlanded, so the
+move cannot see either half-pair. Decision 12 separately assigns the `git_interface.py` seam to
+`bastler-notes-core-python`, which owns it by name.
+
+So this pull request unifies `ItemStatus` — whose duplicate's own docstring already promises
+*"the one definition both share arrives with the package migration that gives them a home"* —
+and `stack.py`'s second Python copy of the notes-branch precedence, whose docstrings already
+concede they restate `resolve-personal-notes-config.sh`. The designed seams stay with their
+named items, and #135 and #151 fold their copies in when they cross the move.
+
+This is the plan's own recorded rule applied a third time: **an item's notes can name a
+dependency the item's own base cannot reach, and when the two disagree the base wins.** #115
+recorded it first, #143 second. What is new here is that the unreachable half is not an
+external dependency but a *sibling branch of this same plan* — the notes were written on
+2026-08-20 describing the state of the queue, and the queue is exactly what has not landed yet.
+
+### What the package looks like, and where that was already decided
+
+Flat, not subpackaged. Two independent sources fix it rather than one preference: #111's
+`development_tooling/` is flat, and decision 12 already names the modules the seven conversion
+items will add — `errors.py`, `personal_notes_configuration.py`, `git_interface.py`,
+`notes_branch.py`, `marker_sections.py`, `plan_manifest.py`, `setup_checks.py`,
+`session_start.py`, `dashboard_refresh.py`, `github_backend.py` — all at package top level. A
+subpackage layout would have to renumber all of them.
+
+`bastler/pyproject.toml` mirrors #111's verbatim, including the
+`[tool.setuptools.package-dir] bastler = "."` mapping that makes the package *be* its directory
+rather than live under one. Optional installation only; zero-install import from the repository
+root is the contract, because cloud sessions run on fresh clones with no pip step.
+
+Two consequences that follow from reading the code rather than from the plan:
+
+- **`templates/` moves with `render_common.py`**, which resolves it as
+  `Path(__file__).parent / "templates"` (line 22). The template directory is not an asset of the
+  skill; it is an asset of the module that loads it.
+- **`example/` stays in the skill directory.** `example-walkthrough.md` embeds its screenshots,
+  so it is documentation rather than a fixture, and only the tests' path to it changes.
+
+### The CI job, and a consequence of renaming it
+
+`test_claude_dev_tooling` becomes `test_bastler`, running one invocation over
+`test/bastler_test/` with `--confcutdir` — the precedent #111 established, because the shared
+`test/conftest.py` imports `semantic_digital_twin`, `coraplex`, `giskardpy` and `krrood`, none
+of which this lightweight job installs.
+
+Renaming a job renames the check GitHub reports. If `test_claude_dev_tooling` is a required
+status check on branch protection, that requirement stops ever being satisfied until it is
+updated. Flagged to the user at kickoff rather than discovered on the first blocked merge.
+
+### The crossing cost, and the two branches that need telling
+
+Decision 13 already measured it: every open tooling pull request except #155 touches Python
+this moves. Two interactions are specific enough to name rather than leave to the general
+doctrine:
+
+- **#158** (`pinned-stack-tooling`) — `stack.py pin-tooling` copies "every module and
+  `stack.toml`" out of `.claude/stack/`, which this migration empties. Its whole premise is that
+  the tool a pass runs must be a file no branch carries, so the directory it copies *from* is
+  load-bearing rather than incidental.
+- **#111** (`shared-pr-state-chips`) — decision 13 already inverts the dependency: it rebases
+  onto this branch and folds its `development_tooling` modules in under the `bastler` name,
+  keeping its feature half. Its `--confcutdir` CI step is reused here rather than reinvented.
+
+### One thing this session could not do
+
+Subscribing to tracking issue #102, which `plan-item-kickoff` step 1 asks for, was **refused by
+the permission classifier**. Recorded because the skill's own reasoning for subscribing at
+kickoff is that a kickoff which turns into an uninterrupted implementation session is otherwise
+never subscribed by anything — which is exactly this session's shape. Concurrent structural
+changes to this plan will therefore reach it only through the delta recheck, not through events.
