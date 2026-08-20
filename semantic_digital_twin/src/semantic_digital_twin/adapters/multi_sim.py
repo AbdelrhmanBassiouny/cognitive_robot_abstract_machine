@@ -2859,7 +2859,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
             return None
         return mj_model.jnt_qposadr[joint_id]
 
-    def _resolve_ctrl_adr(self, connection: Connection) -> Optional[int]:
+    def _resolve_ctrl_address(self, connection: Connection) -> Optional[int]:
         """
         Resolve the ``ctrl`` address of the MuJoCo actuator driving
         ``connection``, or ``None`` if it has none.
@@ -3030,8 +3030,8 @@ class MujocoSynchronizer(MultiSimSynchronizer):
     def _write_1dof_to_qpos(
         self,
         connection: ActiveConnection1DOF,
-        qpos_adr: int,
-        ctrl_adr: Optional[int],
+        qpos_adrdress: int,
+        ctrl_address: Optional[int],
         positions: numpy.ndarray,
         previous_positions: numpy.ndarray,
         state_index: Dict[Any, int],
@@ -3039,7 +3039,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         """
         Push the 1DoF world state for ``connection`` into the MuJoCo qpos slot
         at ``qpos_adr``, and into its actuator's ``ctrl`` setpoint at
-        ``ctrl_adr`` if it has one. No-op if the DoF value is unchanged.
+        ``ctrl_address`` if it has one. No-op if the DoF value is unchanged.
 
         Without the ``ctrl`` write, a position-servo actuator keeps pulling
         its joint back toward the stale setpoint left over from the last time
@@ -3049,9 +3049,9 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         idx = state_index[connection.raw_dof.id]
         if positions[idx] == previous_positions[idx]:
             return
-        self.simulator._mj_data.qpos[qpos_adr] = positions[idx]
-        if ctrl_adr is not None:
-            self.simulator._mj_data.ctrl[ctrl_adr] = positions[idx]
+        self.simulator._mj_data.qpos[qpos_adrdress] = positions[idx]
+        if ctrl_address is not None:
+            self.simulator._mj_data.ctrl[ctrl_address] = positions[idx]
 
     def _on_state_change(self) -> None:
         """
@@ -3090,7 +3090,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
                 self._write_1dof_to_qpos(
                     connection,
                     qpos_adr,
-                    self._resolve_ctrl_adr(connection),
+                    self._resolve_ctrl_address(connection),
                     positions,
                     previous_positions,
                     state_index,
