@@ -4,7 +4,7 @@
 Pull requests are produced faster than the upstream merges them, so a feature that is
 finished but unmerged is unusable in daily work, and two in-flight features that
 conflict discover it only at the far end of the review queue. This assembles a branch
-that carries all of them at once::
+that holds all of them at once::
 
     python .claude/stack/integration.py build            # build, then run the suite on it
     python .claude/stack/integration.py build --restack  # bring stale tips forward first
@@ -14,10 +14,11 @@ The branch exists to be built *from*, not to be history. It is regenerated from 
 on every run, nothing is ever merged out of it, and a conflict found on it is fixed in
 the feature branch it belongs to - never here.
 
-Only work its author has reviewed is carried, which this repository records by the pull
-request leaving draft. Read down the whole chain rather than per branch: a tip contains
-its stack, so a reviewed branch standing on a draft would carry that draft's commits
-under its own name. Everything left out says so, naming the draft that keeps it out.
+Only work its author has reviewed is integrated, which this repository records by the
+pull request leaving draft. Read down the whole chain rather than per branch: a tip
+contains its stack, so a reviewed branch standing on a draft would bring that draft's
+commits in under its own name. Everything left out says so, naming the draft that keeps
+it out.
 
 It gates nothing. Promotion asks whether one branch is ready for review against the
 upstream; integration asks whether the branches coexist. Gating promotion on a clean
@@ -122,9 +123,8 @@ PROVENANCE_FILENAME = "resolution-authors.json"
 class ReportKey(StrEnum):
     """The field names a report's machine-readable document is read by.
 
-    The documents are ``asdict`` of the report dataclasses, so these mirror those field
-    names; naming them here gives a reader one definition to import rather than a string
-    retyped at each access, which nothing keeps in step with a rename.
+    Most mirror a field of the report dataclasses, which are written out with ``asdict``;
+    the rest name what a single command emits beside them.
     """
 
     STATUS = "status"
@@ -134,7 +134,7 @@ class ReportKey(StrEnum):
     """The same conclusion as the number the process exits with."""
 
     TIPS = "tips"
-    """What became of each tip the build tried to carry."""
+    """What became of each tip the build tried to integrate."""
 
     UNREVIEWED = "unreviewed"
     """The branches left out because their author has not reviewed them."""
@@ -151,6 +151,18 @@ class ReportKey(StrEnum):
     BREAKS_AGAINST = "breaks_against"
     """The earlier tip the culprit fails against alone."""
 
+    BLOCKED = "blocked"
+    """The branch a block-branch run labelled."""
+
+    PULL_REQUEST_NUMBER = "pull_request_number"
+    """The fork pull request that publishes the blocked branch."""
+
+    LABEL = "label"
+    """The label applied to hold it out of promotion."""
+
+    COMMENT = "comment"
+    """What was said on its pull request."""
+
 
 # %% what became of one tip
 
@@ -159,54 +171,52 @@ class ReportKey(StrEnum):
 class TipStatusSpecification:
     """What one status is called, and whether the tip it describes is in the build."""
 
-    spelling: str
+    name: str
     """How the status is written in the report a caller reads."""
 
-    carried: bool
+    integrated: bool
     """Whether the tip's commits reached the finished branch.
 
-    Carried by the status itself rather than by a set of the statuses that count: a
-    status added later is answered by having to give this a value, where a set is
-    answered by nothing and silently reports the new status as not carried.
+    Answered per status rather than by a set of the statuses that count, so a status
+    added later has to say which it is.
     """
 
 
 class TipStatus(StrEnum):
     """What a build did with one branch it considered.
 
-    Each member carries a :class:`TipStatusSpecification` rather than inheriting from
-    one, which was the shape asked for: :class:`~enum.StrEnum` builds its members with
-    its own ``__new__``, so a specification base takes that over and the member stops
-    being a ``str`` - which is what the report's ``json.dumps`` and every
-    ``document[key] == TipStatus.X`` comparison rely on.
+    Each member's value is its specification, unpacked by ``__new__`` into the
+    :class:`str` the report is written with: :class:`~enum.StrEnum` owns member
+    creation, so a specification *base* would take that over and stop the member being
+    a ``str`` - and a field called ``name`` cannot exist on an enum member at all.
     """
 
     def __new__(cls, specification: TipStatusSpecification) -> TipStatus:
-        """:param specification: What this status is called and whether it is carried.
-        :return: The member, still a ``str`` of its own spelling."""
-        member = str.__new__(cls, specification.spelling)
-        member._value_ = specification.spelling
-        member.carried = specification.carried
+        """:param specification: What this status is called and whether it is integrated.
+        :return: The member, still a ``str`` of its own name."""
+        member = str.__new__(cls, specification.name)
+        member._value_ = specification.name
+        member.specification = specification
         return member
 
-    carried: bool
-    """Whether a tip with this status has its commits in the finished branch."""
+    specification: TipStatusSpecification
+    """What this status is called and whether its tip reached the finished branch."""
 
-    MERGED = TipStatusSpecification("merged", carried=True)
+    MERGED = TipStatusSpecification("merged", integrated=True)
     """It merged cleanly and is in the build."""
 
-    REPLAYED = TipStatusSpecification("replayed", carried=True)
+    REPLAYED = TipStatusSpecification("replayed", integrated=True)
     """It is in the build, but only because a recorded resolution was replayed - so the
     collision it hides is still there for whoever lands second."""
 
-    SKIPPED = TipStatusSpecification("skipped", carried=False)
+    SKIPPED = TipStatusSpecification("skipped", integrated=False)
     """It conflicted and was left out, so the rest of the build could go on."""
 
-    INTEGRATION_FAILED = TipStatusSpecification("integration-failed", carried=False)
+    INTEGRATION_FAILED = TipStatusSpecification("integration-failed", integrated=False)
     """The merge refused before it began - unrelated histories, a reference that does
     not resolve, something in the way. The build's own environment, not the tip's."""
 
-    UNREVIEWED = TipStatusSpecification("unreviewed", carried=False)
+    UNREVIEWED = TipStatusSpecification("unreviewed", integrated=False)
     """Its author has not reviewed it, or has not reviewed something beneath it, so the
     build never tried to merge it. Left out by the rule working rather than by a build
     going wrong, which is why it is reported apart from the tips a build attempted."""
@@ -333,9 +343,9 @@ class PullRequestStackTipOutcome:
     """What git said, for a refusal that is the build's own to fix."""
 
     @property
-    def reached_the_build(self) -> bool:
+    def is_integrated(self) -> bool:
         """:return: Whether the tip's commits are in the finished branch."""
-        return self.status.carried
+        return self.status.specification.integrated
 
 
 # %% selecting what to build from
@@ -343,45 +353,45 @@ class PullRequestStackTipOutcome:
 
 @dataclass(frozen=True)
 class BuildSelection:
-    """What a build may carry, and what it leaves behind as unreviewed."""
+    """What a build may integrate, and what it leaves behind as unreviewed."""
 
-    carried: tuple[Branch, ...]
+    integrated: tuple[Branch, ...]
     """Every branch reviewed all the way down to the base, parents before children."""
 
     unreviewed: tuple[PullRequestStackTipOutcome, ...]
     """Every branch left out, each naming the draft that keeps it out.
 
-    Named rather than merely absent: a build that carries nine branches out of nineteen
-    and says so only by omission reads as having covered everything.
+    Named rather than merely absent: a build that integrates nine branches out of
+    nineteen and says so only by omission reads as having covered everything.
     """
 
 
 def select_for_build(stack: Stack) -> BuildSelection:
-    """Split the stack into the work a build may carry and the work it may not.
+    """Split the stack into the work a build may integrate and the work it may not.
 
-    A build carries only what its author has reviewed, which this repository records by
+    A build integrates only what its author has reviewed, which this repository records by
     the pull request leaving draft. That cannot be decided per branch, because a tip
     contains its whole stack: merging a reviewed branch that stands on a draft would put
     the draft's commits into the build under the reviewed branch's name. So readiness is
     read down the whole chain, and a stack that is draft at its root is left out entire.
 
     :param stack: The derived stack.
-    :return: The carried branches and the ones left out.
+    :return: The integrated branches and the ones left out.
     """
     in_the_stack = {branch.name for branch in stack.branches}
-    carried: list[Branch] = []
-    carried_names: set[str] = set()
+    integrated: list[Branch] = []
+    integrated_names: set[str] = set()
     unreviewed: list[PullRequestStackTipOutcome] = []
     unreviewed_ancestors: dict[str, str] = {}
     for branch in order(stack):
-        stands_on_carried_work = (
-            branch.parent in carried_names
+        stands_on_integrated_work = (
+            branch.parent in integrated_names
             or branch.parent not in in_the_stack
             or stack.has_landed_upstream(branch.parent)
         )
-        if branch.status.is_out_of_draft and stands_on_carried_work:
-            carried.append(branch)
-            carried_names.add(branch.name)
+        if branch.status.is_out_of_draft and stands_on_integrated_work:
+            integrated.append(branch)
+            integrated_names.add(branch.name)
             continue
         ancestor = (
             None
@@ -397,35 +407,28 @@ def select_for_build(stack: Stack) -> BuildSelection:
                 attributed_to=ancestor,
             )
         )
-    return BuildSelection(carried=tuple(carried), unreviewed=tuple(unreviewed))
+    return BuildSelection(integrated=tuple(integrated), unreviewed=tuple(unreviewed))
 
 
 def tips_of(stack: Stack) -> list[Branch]:
     """The branches to merge, in the order they are merged.
 
-    Only a tip is taken: a tip already contains its own stack, so merging its parent as
-    well would merge the same commits twice and say nothing new. Anything already in the
-    upstream base is left out for the same reason, and so is anything
-    :func:`carried_by_a_build` rules out.
+    A tip is the deepest branch a build integrates, not the stack's own tip. One already
+    contains its own stack, so its parent is left out, as is anything already in the
+    upstream base or ruled out by :func:`select_for_build`.
 
-    A tip here is the deepest branch a build carries, not the stack's own tip. A parent
-    is left out because a child already contains it, so the child has to be one the
-    build takes - asking that of every branch instead would drop a reviewed parent
-    behind a draft child that is never merged and therefore contains nothing.
-
-    Order is load-bearing rather than incidental. Once a conflict can skip a tip, the
-    order decides *which* tip is skipped, so it is stated: ascending pull request
-    number, which is stable across runs and independent of how the board arrived.
+    Order is part of the contract rather than incidental, since it decides *which* tip a
+    conflict skips: ascending pull request number.
 
     :param stack: The derived stack.
     :return: The tips, in merge order.
     """
-    carried = select_for_build(stack).carried
-    claimed_as_parent = {branch.parent for branch in carried}
+    integrated = select_for_build(stack).integrated
+    claimed_as_parent = {branch.parent for branch in integrated}
     return sorted(
         (
             branch
-            for branch in carried
+            for branch in integrated
             if branch.name not in claimed_as_parent
             and not stack.has_landed_upstream(branch.name)
         ),
@@ -596,7 +599,7 @@ def build_integration(
         for tip in tips:
             outcome = build.merge(tip, included)
             outcomes.append(outcome)
-            if outcome.reached_the_build:
+            if outcome.is_integrated:
                 included.append(tip.name)
         git.run("branch", "--force", POINTER_BRANCH, build_branch)
         tests_passed = _run_tests(test_command, build.git.working_directory)
@@ -783,7 +786,7 @@ class FailureLocation:
             build.start(self.build_branch)
             included: list[str] = []
             for tip in tips:
-                if not build.merge(tip, included).reached_the_build:
+                if not build.merge(tip, included).is_integrated:
                     continue
                 if self._suite_passes(build):
                     included.append(tip.name)
@@ -835,9 +838,9 @@ class FailureLocation:
         """
         for candidate in reversed(already_included):
             build.start_unnamed()
-            if not build.merge(by_name[candidate], []).reached_the_build:
+            if not build.merge(by_name[candidate], []).is_integrated:
                 continue
-            if not build.merge(culprit, [candidate]).reached_the_build:
+            if not build.merge(culprit, [candidate]).is_integrated:
                 continue
             if not self._suite_passes(build):
                 return candidate
@@ -908,7 +911,7 @@ class IntegrationReport:
     @property
     def tips_left_out(self) -> tuple[PullRequestStackTipOutcome, ...]:
         """:return: Every tip whose commits are not in the finished branch."""
-        return tuple(outcome for outcome in self.tips if not outcome.reached_the_build)
+        return tuple(outcome for outcome in self.tips if not outcome.is_integrated)
 
     @property
     def replayed_by_a_skill(self) -> tuple[PullRequestStackTipOutcome, ...]:
@@ -1350,11 +1353,13 @@ class BlockBranchCommand(IntegrationCommand):
             print(
                 json.dumps(
                     {
-                        "blocked": localised.culprit,
-                        "pull_request_number": localised.culprit_pull_request_number,
-                        "breaks_against": localised.breaks_against,
-                        "label": run.configuration.integration_conflict_label,
-                        "comment": comment,
+                        ReportKey.BLOCKED: localised.culprit,
+                        ReportKey.PULL_REQUEST_NUMBER: (
+                            localised.culprit_pull_request_number
+                        ),
+                        ReportKey.BREAKS_AGAINST: localised.breaks_against,
+                        ReportKey.LABEL: run.configuration.integration_conflict_label,
+                        ReportKey.COMMENT: comment,
                     },
                     indent=2,
                 )

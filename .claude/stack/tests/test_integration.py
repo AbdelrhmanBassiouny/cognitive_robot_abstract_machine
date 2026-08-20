@@ -385,7 +385,7 @@ def test_a_branch_nobody_reviewed_carries_the_status_that_says_so():
     ).unreviewed
 
     assert unreviewed[0].status is TipStatus.UNREVIEWED
-    assert not unreviewed[0].reached_the_build
+    assert not unreviewed[0].is_integrated
 
 
 def test_a_branch_left_out_for_its_ancestor_names_that_ancestor():
@@ -1363,10 +1363,26 @@ def test_every_status_says_whether_its_tip_is_in_the_build():
     set of the statuses that count, so a status added later cannot default to being
     reported as left out without anybody deciding that.
     """
-    assert {status for status in TipStatus if status.carried} == {
+    assert {status for status in TipStatus if status.specification.integrated} == {
         TipStatus.MERGED,
         TipStatus.REPLAYED,
     }
+
+
+def test_a_status_is_written_to_the_report_as_its_bare_name():
+    """
+    A status carries a whole specification, so it could serialize as the object rather
+    than as the one word two other programs match on. It is the enum's ``str`` value
+    that keeps the document flat, not anything the report does.
+    """
+    document = json.loads(
+        create_report(tips=(create_tip(FIRST_TIP, TipStatus.SKIPPED),)).as_json()
+    )
+
+    assert (
+        document[ReportKey.TIPS][0][ReportKey.STATUS]
+        == TipStatus.SKIPPED.specification.name
+    )
 
 
 def test_every_status_names_itself_for_a_caller():
@@ -1385,7 +1401,8 @@ def test_the_report_keys_are_the_ones_a_caller_parses():
     Most keys are a dataclass field name that ``asdict`` produces, so a rename of those
     fails wherever they are read. ``status`` and ``exit_code`` are not - ``as_json``
     injects them through this enum - so they are pinned by nothing else, and they are the
-    two ``/integration-conflict-triage`` matches on first.
+    two ``/integration-conflict-triage`` matches on first. The same is true of everything
+    ``block-branch`` emits, which no dataclass backs at all.
     """
     assert {key.name: str(key) for key in ReportKey} == {
         "STATUS": "status",
@@ -1396,6 +1413,10 @@ def test_the_report_keys_are_the_ones_a_caller_parses():
         "BRANCH": "branch",
         "CULPRIT": "culprit",
         "BREAKS_AGAINST": "breaks_against",
+        "BLOCKED": "blocked",
+        "PULL_REQUEST_NUMBER": "pull_request_number",
+        "LABEL": "label",
+        "COMMENT": "comment",
     }
 
 

@@ -158,13 +158,13 @@ the branches coexist, and a collision between two of yours is not a reason to ho
 A tip that collides is skipped so the rest still builds, and the report names the **pair** - which
 of the two should change is a judgement, and `/integration-conflict-triage` is where it is made.
 
-**Only branches you have reviewed are carried.** A pull request stays a draft here until its
+**Only branches you have reviewed are integrated.** A pull request stays a draft here until its
 author has read it back, so leaving draft is that review, and a build is made of work that has
 had it. Because a tip contains its whole stack, this is read down the entire chain: a reviewed
 branch standing on a draft is left out with it, and the branch merged for a stack is the last one
 reached before its first draft. Everything left out is named in the report - as `unreviewed`,
-distinct from a tip the build tried to carry and could not - so a build that carried nine branches
-out of nineteen says which nine and why, rather than saying so only by omission. Leaving a draft
+distinct from a tip the build tried to integrate and could not - so a build that integrated nine
+branches out of nineteen says which nine and why, rather than saying so only by omission. Leaving a draft
 out is the rule working, so it is not a failing build and does not change the exit status.
 
 Two branches can also merge perfectly and still not work together - one removing what another's

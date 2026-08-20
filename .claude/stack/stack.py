@@ -310,10 +310,10 @@ class Configuration:
     integration_conflict_label: str
     """Fork-PR label marking a branch that breaks a sibling it merges cleanly with.
 
-    Separate from :attr:`needs_resolution_label` because a break between two branches
-    never makes either pull request conflicted, so the state that clears that label says
-    nothing here - and clearing it on the same evidence would drop it on the very next
-    pass. Nothing removes this one automatically."""
+    A separate label from :attr:`needs_resolution_label` rather than a reuse of it: such
+    a break never makes either pull request conflicted, so the state that clears that one
+    would clear this on evidence that says nothing here. Nothing removes it
+    automatically."""
 
     fork_repository: Repository
     """The fork that holds the full stack, as GitHub names it."""
@@ -355,10 +355,19 @@ class DefaultLabel(StrEnum):
     """Every label this workflow writes, as a fork spells it before configuring anything.
 
     A checkout may rename any of them in its own configuration; these are what it gets
-    when it does not. Spelled once because the same word is a default here, an expected
-    value in a test and a label a fork's owner has to create by hand - and three
-    spellings of one label have nothing keeping them in step.
+    when it does not.
     """
+
+    @property
+    def configuration_key(self) -> str:
+        """The configuration key this label is overridden by.
+
+        Derived rather than listed a second time, which also makes it the name of
+        :class:`Configuration`'s own field for the label.
+
+        :return: The key, as both files spell it.
+        """
+        return f"{self.name.lower()}_label"
 
     IN_REVIEW = "in-review"
     """Marks a branch as promoted to the upstream and under review."""
@@ -374,24 +383,11 @@ class DefaultLabel(StrEnum):
 
 
 class ConfigurationKey(StrEnum):
-    """Every key the configuration files are read by.
+    """Every key the configuration files are read by, apart from the labels.
 
-    Spelled once here rather than at each ``values.get`` and at each caller that names
-    one back to a reader - two spellings of the same key have nothing to keep them in
-    step, and a mismatch reads as a setting nobody configured.
+    A label's key is :attr:`DefaultLabel.configuration_key`, derived from the label
+    itself rather than named again here.
     """
-
-    IN_REVIEW_LABEL = "in_review_label"
-    """Marks a branch as promoted to the upstream and under review."""
-
-    REBASE_LABEL = "rebase_label"
-    """Opts a branch into the rebase strategy instead of the default merge."""
-
-    NEEDS_RESOLUTION_LABEL = "needs_resolution_label"
-    """Marks a branch withheld pending resolution of a conflict with its own base."""
-
-    INTEGRATION_CONFLICT_LABEL = "integration_conflict_label"
-    """Marks a branch that breaks a sibling it merges cleanly with."""
 
     UPSTREAM_REPOSITORY = "upstream_repository"
     """The repository every fork is forked from."""
@@ -427,17 +423,10 @@ def load_configuration(
     )
     resolution = resolved_remotes(path, fork_repository, upstream_repository)
     return Configuration(
-        in_review_label=values.get(
-            ConfigurationKey.IN_REVIEW_LABEL, DefaultLabel.IN_REVIEW
-        ),
-        rebase_label=values.get(ConfigurationKey.REBASE_LABEL, DefaultLabel.REBASE),
-        needs_resolution_label=values.get(
-            ConfigurationKey.NEEDS_RESOLUTION_LABEL, DefaultLabel.NEEDS_RESOLUTION
-        ),
-        integration_conflict_label=values.get(
-            ConfigurationKey.INTEGRATION_CONFLICT_LABEL,
-            DefaultLabel.INTEGRATION_CONFLICT,
-        ),
+        **{
+            label.configuration_key: values.get(label.configuration_key, label)
+            for label in DefaultLabel
+        },
         fork_repository=resolution.fork.repository,
         fork_remote=resolution.fork.name,
         upstream_repository=upstream_repository,
