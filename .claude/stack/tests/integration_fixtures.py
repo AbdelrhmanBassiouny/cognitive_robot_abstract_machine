@@ -28,7 +28,7 @@ from test_maintenance import (
     ForkCheckout,
     UPSTREAM_BASE,
     a_stack,
-    fork_checkout,  # noqa: F401  (pytest collects it as a fixture)
+    fork_checkout,  # noqa: F401  (imported so pytest finds the fixture by name)
     make_configuration,
 )
 
@@ -174,16 +174,6 @@ def build(
         provenance=provenance or ResolutionProvenance({}),
         test_command=test_command,
     )
-
-
-def branch_names_in(checkout: ForkCheckout) -> set[str]:
-    """
-    :param checkout: The checkout to read.
-    :return: Every branch it holds, whichever one is checked out. A set because callers
-        subtract one reading from another to name the branches a run added, not because
-        branch names could repeat - git already guarantees they cannot.
-    """
-    return set(checkout.git.branch_names())
 
 
 def outcome_for(report: IntegrationReport, branch: str) -> PullRequestStackTipOutcome:

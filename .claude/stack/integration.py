@@ -193,6 +193,9 @@ class ReportKey(StrEnum):
     COMMENT = "comment"
     """What was said on its pull request."""
 
+    WORKTREE = "worktree"
+    """Where a staged collision is live, for a resolution to be written into."""
+
 
 # %% what became of one tip
 
@@ -814,6 +817,39 @@ class BlockedBranchReport:
 
 
 @dataclass(frozen=True)
+class StagedConflict:
+    """Where one pair's collision was reproduced, and which paths it is on.
+
+    Named in the same words a build's own report names a skipped tip and what it collided
+    with, since that is the pair a staged collision reproduces.
+    """
+
+    worktree: Path
+    """The checkout the collision is live in, which a resolution is written into."""
+
+    branch: str
+    """The tip that was skipped."""
+
+    attributed_to: str
+    """The branch it was reported colliding with."""
+
+    conflicting_paths: tuple[str, ...]
+    """The paths left unmerged, which are the files to resolve."""
+
+    def as_json(self) -> str:
+        """:return: The staged collision as one machine-readable document."""
+        return json.dumps(
+            {
+                ReportKey.WORKTREE: str(self.worktree),
+                ReportKey.BRANCH: self.branch,
+                ReportKey.ATTRIBUTED_TO: self.attributed_to,
+                ReportKey.CONFLICTING_PATHS: list(self.conflicting_paths),
+            },
+            indent=2,
+        )
+
+
+@dataclass(frozen=True)
 class FailureLocationReport:
     """What one search for the tip that turned the suite found."""
 
@@ -1256,7 +1292,7 @@ class IntegrationRun:
             configuration_overrides=RERERE_SETTINGS,
         )
 
-    def stage_conflict(self, already_included: str, tip: str) -> dict[str, Any]:
+    def stage_conflict(self, already_included: str, tip: str) -> StagedConflict:
         """Reproduce one pair's collision in a worktree of its own.
 
         The merge is left conflicted rather than abandoned: recording a resolution means
@@ -1278,12 +1314,12 @@ class IntegrationRun:
         )
         resolving = self.replaying(worktree)
         resolving.merge(resolve_ref(self.configuration, tip))
-        return {
-            "worktree": str(worktree),
-            "tip": tip,
-            "against": already_included,
-            "conflicting_paths": list(resolving.unmerged_paths()),
-        }
+        return StagedConflict(
+            worktree=worktree,
+            branch=tip,
+            attributed_to=already_included,
+            conflicting_paths=tuple(resolving.unmerged_paths()),
+        )
 
     def record_resolution(
         self, worktree: Path, tip: str, author: ResolutionAuthor
@@ -1540,8 +1576,7 @@ class StageConflictCommand(IntegrationCommand):
         :return: The process exit code.
         """
         run.refresh_remotes()
-        staged = run.stage_conflict(arguments.against, arguments.tip)
-        print(json.dumps(staged, indent=2))
+        print(run.stage_conflict(arguments.against, arguments.tip).as_json())
         return IntegrationExitCode.SUCCESS
 
 

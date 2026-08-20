@@ -18,7 +18,7 @@ from test_maintenance import (
     ForkCheckout,
     UPSTREAM_BASE,
     UPSTREAM_REMOTE,
-    fork_checkout,  # noqa: F401  (pytest collects it as a fixture)
+    fork_checkout,  # noqa: F401  (imported so pytest finds the fixture by name)
 )
 
 from integration_fixtures import (
@@ -97,23 +97,19 @@ def test_a_build_leaves_an_unreviewed_branch_out_and_says_so(
     fewer branches than the board holds, and reported only what it did carry, would read
     as having covered everything.
     """
-    reviewed = "reviewed"
-    unreviewed = "unreviewed"
-    fork_checkout.branch_from(reviewed, UPSTREAM_BASE)
-    fork_checkout.branch_from(unreviewed, UPSTREAM_BASE)
-
-    report = build(
-        fork_checkout,
-        [
-            PullRequest(number=1, head=reviewed, base=UPSTREAM_BASE, draft=False),
-            PullRequest(number=2, head=unreviewed, base=UPSTREAM_BASE, draft=True),
-        ],
+    reviewed = PullRequest(number=1, head="reviewed", base=UPSTREAM_BASE, draft=False)
+    unreviewed = PullRequest(
+        number=2, head="unreviewed", base=UPSTREAM_BASE, draft=True
     )
+    fork_checkout.branch_from(reviewed.head, UPSTREAM_BASE)
+    fork_checkout.branch_from(unreviewed.head, UPSTREAM_BASE)
 
-    assert [entry.branch for entry in report.tips] == [reviewed]
-    assert [entry.branch for entry in report.unreviewed] == [unreviewed]
+    report = build(fork_checkout, [reviewed, unreviewed])
+
+    assert [entry.branch for entry in report.tips] == [reviewed.head]
+    assert [entry.branch for entry in report.unreviewed] == [unreviewed.head]
     fork_checkout.git.switch_to(A_BUILD_BRANCH)
-    assert not fork_checkout.file_added_by(unreviewed).exists()
+    assert not fork_checkout.file_added_by(unreviewed.head).exists()
 
 
 def test_a_conflicting_tip_is_skipped_and_the_build_continues(
@@ -179,7 +175,7 @@ def test_a_tip_conflicting_with_the_base_itself_names_the_base(
     """
     fork_checkout.git.checkout(STALE_TIP, UPSTREAM_BASE)
     fork_checkout.commit("a-file", "what the stale tip wrote\n")
-    fork_checkout.git.push_refspec("origin", "stale-tip:stale-tip")
+    fork_checkout.git.push_refspec("origin", f"{STALE_TIP}:{STALE_TIP}")
     fork_checkout.git.switch_to(UPSTREAM_BASE)
     fork_checkout.commit("a-file", "what the upstream moved on to\n")
     fork_checkout.git.push_refspec(UPSTREAM_REMOTE, UPSTREAM_BASE)
@@ -207,7 +203,7 @@ def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
     fork_checkout.git.checkout_orphan(UNRELATED_TIP)
     fork_checkout.git.remove("-rf", ".")
     fork_checkout.commit("its-own-file", "a history sharing no commit\n")
-    fork_checkout.git.push_refspec("origin", "unrelated-tip:unrelated-tip")
+    fork_checkout.git.push_refspec("origin", f"{UNRELATED_TIP}:{UNRELATED_TIP}")
     fork_checkout.git.fetch("origin")
 
     report = build(

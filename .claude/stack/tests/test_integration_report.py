@@ -139,11 +139,17 @@ def test_the_report_keys_are_the_ones_a_caller_parses():
     The one place this document's wire format is pinned, because everything else reads
     the enum on both sides and a rename there changes writer and reader identically.
 
+    Concretely: rename ``EXIT_CODE``'s value to ``exitCode`` and every other test still
+    passes, because ``as_json`` writes ``document[ReportKey.EXIT_CODE]`` and every reader
+    - this suite, ``/integration-conflict-triage``, ``stacked-pr-maintenance`` - reads it
+    back through the same member. The document a shell caller pipes into ``jq
+    .exit_code`` is the only thing that broke, and nothing in the repository is looking
+    at it. This test is what fails instead.
+
     Most keys are a dataclass field name that ``asdict`` produces, so a rename of those
-    fails wherever they are read. ``status`` and ``exit_code`` are not - ``as_json``
-    injects them through this enum - so they are pinned by nothing else, and they are the
-    two ``/integration-conflict-triage`` matches on first. The same is true of everything
-    ``block-branch`` emits, which no dataclass backs at all.
+    does fail elsewhere as well. ``status`` and ``exit_code`` are not - ``as_json``
+    injects them - and neither is anything ``block-branch`` or ``stage-conflict`` emits,
+    which no ``asdict`` backs at all.
     """
     assert {key.name: str(key) for key in ReportKey} == {
         "STATUS": "status",
@@ -168,6 +174,7 @@ def test_the_report_keys_are_the_ones_a_caller_parses():
         "BLOCKED": "blocked",
         "LABEL": "label",
         "COMMENT": "comment",
+        "WORKTREE": "worktree",
     }
 
 

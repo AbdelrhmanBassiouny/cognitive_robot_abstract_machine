@@ -4,10 +4,12 @@ Recorded conflict resolutions, and the replays a later build makes of them.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import integration
 from integration import (
+    ReportKey,
     ResolutionAuthor,
     ResolutionProvenance,
     TipStatus,
@@ -15,7 +17,7 @@ from integration import (
 
 from test_maintenance import (
     ForkCheckout,
-    fork_checkout,  # noqa: F401  (pytest collects it as a fixture)
+    fork_checkout,  # noqa: F401  (imported so pytest finds the fixture by name)
     make_configuration,
 )
 
@@ -129,8 +131,27 @@ def test_a_staged_conflict_is_left_live_for_a_resolution_to_be_written_into(
 
     staged = a_run(fork_checkout).stage_conflict(FIRST_TIP, SECOND_TIP)
 
-    assert staged["conflicting_paths"] == ["contested"]
-    assert CONFLICT_MARKER in (Path(staged["worktree"]) / "contested").read_text()
+    assert staged.conflicting_paths == ("contested",)
+    assert CONFLICT_MARKER in (staged.worktree / "contested").read_text()
+
+
+def test_a_staged_conflict_is_written_as_the_document_a_caller_parses(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The triage skill reads this to know which files to resolve and where, so it is a
+    document keyed the same way every other report this module writes is - rather than
+    field names only the code that built it knows.
+    """
+    two_colliding_tips(fork_checkout)
+
+    staged = a_run(fork_checkout).stage_conflict(FIRST_TIP, SECOND_TIP)
+
+    document = json.loads(staged.as_json())
+    assert document[ReportKey.BRANCH] == SECOND_TIP
+    assert document[ReportKey.ATTRIBUTED_TO] == FIRST_TIP
+    assert document[ReportKey.CONFLICTING_PATHS] == ["contested"]
+    assert document[ReportKey.WORKTREE] == str(staged.worktree)
 
 
 def test_a_recorded_resolution_is_replayed_by_the_next_build(
@@ -143,9 +164,9 @@ def test_a_recorded_resolution_is_replayed_by_the_next_build(
     pull_requests = two_colliding_tips(fork_checkout)
     run = a_run(fork_checkout)
     staged = run.stage_conflict(FIRST_TIP, SECOND_TIP)
-    (Path(staged["worktree"]) / "contested").write_text("what a resolution chose\n")
+    (staged.worktree / "contested").write_text("what a resolution chose\n")
     run.record_resolution(
-        worktree=Path(staged["worktree"]),
+        worktree=staged.worktree,
         tip=SECOND_TIP,
         author=ResolutionAuthor.SKILL,
     )
@@ -169,10 +190,10 @@ def test_recording_a_resolution_leaves_no_worktree_behind(fork_checkout: ForkChe
     two_colliding_tips(fork_checkout)
     run = a_run(fork_checkout)
     staged = run.stage_conflict(FIRST_TIP, SECOND_TIP)
-    (Path(staged["worktree"]) / "contested").write_text("what a resolution chose\n")
+    (staged.worktree / "contested").write_text("what a resolution chose\n")
 
     run.record_resolution(
-        worktree=Path(staged["worktree"]),
+        worktree=staged.worktree,
         tip=SECOND_TIP,
         author=ResolutionAuthor.HUMAN,
     )
@@ -195,10 +216,10 @@ def test_recording_a_resolution_keeps_the_claims_already_made(
         run.provenance_path()
     )
     staged = run.stage_conflict(FIRST_TIP, SECOND_TIP)
-    (Path(staged["worktree"]) / "contested").write_text("what a resolution chose\n")
+    (staged.worktree / "contested").write_text("what a resolution chose\n")
 
     run.record_resolution(
-        worktree=Path(staged["worktree"]),
+        worktree=staged.worktree,
         tip=SECOND_TIP,
         author=ResolutionAuthor.HUMAN,
     )

@@ -17,7 +17,7 @@ from maintenance_constants import CREDENTIAL_VARIABLES
 from test_maintenance import (
     ForkCheckout,
     UPSTREAM_REMOTE,
-    fork_checkout,  # noqa: F401  (pytest collects it as a fixture)
+    fork_checkout,  # noqa: F401  (imported so pytest finds the fixture by name)
 )
 
 from integration_fixtures import (

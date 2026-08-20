@@ -27,7 +27,7 @@ from test_maintenance import (
     UPSTREAM_BASE,
     UPSTREAM_REMOTE,
     a_stack,
-    fork_checkout,  # noqa: F401  (pytest collects it as a fixture)
+    fork_checkout,  # noqa: F401  (imported so pytest finds the fixture by name)
     make_configuration,
 )
 
@@ -38,7 +38,6 @@ from integration_fixtures import (
     NEEDS_THE_MODULE,
     ONLY_TIP,
     REMOVES_THE_MODULE,
-    branch_names_in,
     create_integration_test_failure,
 )
 
@@ -196,11 +195,12 @@ def test_the_search_leaves_no_branch_of_its_own_behind(fork_checkout: ForkChecko
     thing anybody meant to keep.
     """
     pull_requests = two_tips_that_break_only_together(fork_checkout)
-    before = branch_names_in(fork_checkout)
+    before = set(fork_checkout.git.branch_names())
 
     report = locate_break(fork_checkout, pull_requests, A_SUITE_OVER_THE_BUILD)
 
-    assert branch_names_in(fork_checkout) - before == {report.build_branch}
+    added = set(fork_checkout.git.branch_names()) - before
+    assert added == {report.build_branch}
 
 
 def test_the_search_report_serialises_what_it_localised(fork_checkout: ForkCheckout):

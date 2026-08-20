@@ -22,7 +22,7 @@ from integration import (
 from test_maintenance import (
     ForkCheckout,
     UPSTREAM_BASE,
-    fork_checkout,  # noqa: F401  (pytest collects it as a fixture)
+    fork_checkout,  # noqa: F401  (imported so pytest finds the fixture by name)
     make_configuration,
 )
 
