@@ -279,60 +279,77 @@ plan_roadmap_path() {
 # full plan-dashboard schema this feeds).
 PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 
-# PLAN_DASHBOARD_DIRECTORY / *_SCRIPT / *_FILE / *_DOC: the canonical
-# location of every script, hook, requirements file, and reference doc the
-# plan-dashboard/plan-item-*/CI tooling invokes or reads - defined once,
-# here, so refresh_dashboard.sh, every plan-*/SKILL.md, and
-# .github/workflows/ci.yml source this file and use these variables instead
-# of each carrying its own separately-typed literal path (exactly the drift
-# risk a reviewer flagged after those paths had already been duplicated
-# across all of them). Relative to the project root, which sourcing this
-# file already `cd`s into (see PROJECT_ROOT above) - so every caller can
-# use these directly, with no further path arithmetic of its own.
-PLAN_DASHBOARD_DIRECTORY=".claude/skills/plan-dashboard"
-# build_dashboard.py: renders one plan's dashboard HTML from its manifest
-# and live GitHub data - see the script's own module docstring.
-BUILD_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/build_dashboard.py"
-# build_index.py: renders the master index page listing every plan.
-BUILD_INDEX_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/build_index.py"
-# sync_manifest_status.py: auto-corrects a plan.yaml's item statuses to
+# BASTLER_PACKAGE_DIRECTORY / *_MODULE / *_FILE: every Python entry point in
+# this system, and the package holding them - defined once, here, so
+# refresh_dashboard.sh, every plan-*/SKILL.md, and .github/workflows/ci.yml
+# source this file and use these variables instead of each carrying its own
+# separately-typed literal (exactly the drift risk a reviewer flagged after
+# those paths had already been duplicated across all of them). Relative to
+# the project root, which sourcing this file already `cd`s into (see
+# PROJECT_ROOT above) - so every caller can use these directly, with no
+# further path arithmetic of its own.
+#
+# A *_MODULE is an import path rather than a file path, and is run as
+# `python3 -m "${SOME_MODULE}"`. Running one by its file path instead would
+# put the package's own directory on sys.path in place of the project root,
+# so its absolute imports of its siblings would not resolve.
+BASTLER_PACKAGE_DIRECTORY="bastler"
+# build_dashboard: renders one plan's dashboard HTML from its manifest
+# and live GitHub data - see the module's own docstring.
+BUILD_DASHBOARD_MODULE="bastler.build_dashboard"
+# build_index: renders the master index page listing every plan.
+BUILD_INDEX_MODULE="bastler.build_index"
+# sync_manifest_status: auto-corrects a plan.yaml's item statuses to
 # "done" wherever GitHub confirms the item's pull request is merged.
-SYNC_MANIFEST_STATUS_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/sync_manifest_status.py"
-# check_dependency_readiness.py: classifies one item's dependencies as
+SYNC_MANIFEST_STATUS_MODULE="bastler.sync_manifest_status"
+# check_dependency_readiness: classifies one item's dependencies as
 # ready or not-ready to build on - see dependency-readiness.md below.
-CHECK_DEPENDENCY_READINESS_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/check_dependency_readiness.py"
-# refresh_dashboard.sh: orchestrates sync_manifest_status.py, the
-# conditional push of its correction, then build_dashboard.py - the whole
-# refresh sequence /plan-dashboard runs for one plan.
-REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
-# refresh_dashboard_support.py: the JSON-plumbing helpers
-# refresh_dashboard.sh calls between its two script calls.
-REFRESH_DASHBOARD_SUPPORT_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard_support.py"
-# requirements.txt: the PyYAML/Jinja2/markdown dependencies every script
-# above needs - installed by both CI and a session running them directly.
-PLAN_DASHBOARD_REQUIREMENTS_FILE="${PLAN_DASHBOARD_DIRECTORY}/requirements.txt"
-# tests/: the pytest suite covering every script above - the exact
-# directory CI and a session both run against.
-PLAN_DASHBOARD_TESTS_DIRECTORY="${PLAN_DASHBOARD_DIRECTORY}/tests"
-# hooks/tests/: the pytest suite covering plan_manifest_tools.py (the one
-# hook-directory script with non-trivial logic worth testing the same way).
-HOOKS_TESTS_DIRECTORY=".claude/hooks/tests"
-
-# STACK_DIRECTORY / *_SCRIPT / *_CONFIG_FILE / *_TESTS_DIRECTORY: the
-# stacked-PR fork-staging/cram2-review tooling's canonical location, same
-# defined-once reasoning as the PLAN_DASHBOARD_* block above - so the
-# setup-stacked-prs skill and the shared pr_state module reference these
-# instead of retyping the literal paths.
-STACK_DIRECTORY=".claude/stack"
-# stack.py: read-only stacked-PR status tool (status/check/next/restack-plan)
+CHECK_DEPENDENCY_READINESS_MODULE="bastler.check_dependency_readiness"
+# refresh_dashboard_support: the JSON-plumbing helpers
+# refresh_dashboard.sh calls between its two module calls.
+REFRESH_DASHBOARD_SUPPORT_MODULE="bastler.refresh_dashboard_support"
+# plan_item_bootstrap: opens an item's branch and draft pull request and
+# records its manifest entry - invoked from plan-item-kickoff/SKILL.md and
+# add-plan-item/SKILL.md.
+PLAN_ITEM_BOOTSTRAP_MODULE="bastler.plan_item_bootstrap"
+# plan_manifest_tools: reads a plan id out of a manifest and regenerates
+# the branch index - the manifest plumbing save-plan.sh calls.
+PLAN_MANIFEST_TOOLS_MODULE="bastler.plan_manifest_tools"
+# plan_updates_since_support: renders the plan-state delta
+# plan-updates-since.sh reports.
+PLAN_UPDATES_SINCE_SUPPORT_MODULE="bastler.plan_updates_since_support"
+# stack: read-only stacked-PR status tool (status/check/next/restack-plan)
 # - see its own module docstring and STACK_DIRECTORY/README.md.
-STACK_SCRIPT="${STACK_DIRECTORY}/stack.py"
+STACK_MODULE="bastler.stack"
+# maintenance: the deterministic maintenance executor a stacked-PR pass
+# runs - board export, fast-forward, restack, promote, run-report.
+MAINTENANCE_MODULE="bastler.maintenance"
+# requirements.txt: the PyYAML/Jinja2/markdown dependencies the rendering
+# modules need - installed by both CI and a session running them directly.
+BASTLER_REQUIREMENTS_FILE="${BASTLER_PACKAGE_DIRECTORY}/requirements.txt"
 # stack.toml: the committed defaults stack.py's load_configuration layers a
 # personal-notes .claude/personal/stack.toml override on top of.
-STACK_CONFIG_FILE="${STACK_DIRECTORY}/stack.toml"
-# tests/: the pytest suite covering stack.py, including its personal-notes
-# config-layering behaviour (via the hooks tests' ScratchRepository).
-STACK_TESTS_DIRECTORY="${STACK_DIRECTORY}/tests"
+STACK_CONFIG_FILE="${BASTLER_PACKAGE_DIRECTORY}/stack.toml"
+# test/bastler_test/: the one pytest suite covering every module above -
+# the exact directory CI and a session both run against. One directory
+# rather than the three this suite was merged from, since one package has
+# one test tree.
+BASTLER_TESTS_DIRECTORY="test/bastler_test"
+
+# PLAN_DASHBOARD_DIRECTORY / REFRESH_DASHBOARD_SCRIPT: what the
+# plan-dashboard skill still keeps outside the package - Claude Code
+# discovers a skill and its reference documents by path, and the shell
+# entry point sits with the skill it belongs to.
+PLAN_DASHBOARD_DIRECTORY=".claude/skills/plan-dashboard"
+# refresh_dashboard.sh: orchestrates sync_manifest_status, the
+# conditional push of its correction, then build_dashboard - the whole
+# refresh sequence /plan-dashboard runs for one plan.
+REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
+
+# STACK_DIRECTORY: where the stacked-PR workflow's own README lives. Its
+# Python moved into the package above; the document stays, because it is
+# read rather than run.
+STACK_DIRECTORY=".claude/stack"
 
 # plan-schema.md: the full plan.yaml field reference every plan-* skill
 # reads before drafting or interpreting a manifest. On main, next to the
@@ -382,12 +399,6 @@ STARTER_NOTES_FILE="${SETUP_PERSONAL_NOTES_DIRECTORY}/starter-notes.md"
 # bootstrap step, i.e. a real caller this codebase controls - the same
 # duplication risk, just for a hook script instead of a plan-dashboard one.
 SAVE_PLAN_SCRIPT=".claude/hooks/save-plan.sh"
-
-# PLAN_ITEM_BOOTSTRAP_SCRIPT: same reasoning again, for the script that opens
-# an item's branch and draft pull request and records its manifest entry -
-# invoked from plan-item-kickoff/SKILL.md and add-plan-item/SKILL.md, so it is
-# a path this codebase controls rather than one a human types once.
-PLAN_ITEM_BOOTSTRAP_SCRIPT=".claude/hooks/plan_item_bootstrap.py"
 
 # GITHUB_LIST_PULL_REQUESTS_TOOL / GITHUB_PULL_REQUEST_READ_TOOL: the two
 # MCP tools every pr_data.json-gathering procedure in this system calls

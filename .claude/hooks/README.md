@@ -175,7 +175,8 @@ the narrative that doesn't belong in structured data.
 - Start or unblock one item → `/plan-item-kickoff <plan-id> <item-id>`,
   `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
   marks it `in_progress` as soon as its plan is approved — via
-  [`plan_item_bootstrap.py`](./plan_item_bootstrap.py), which you can also run by hand — so the
+  [`bastler/plan_item_bootstrap.py`](../../bastler/plan_item_bootstrap.py), which you can also
+  run by hand as `python3 -m bastler.plan_item_bootstrap` — so the
   manifest never says `not_started` while the work is underway.
 - Recheck one for updates, without rereading it →
   [`plan-updates-since.sh`](./plan-updates-since.sh) `<plan-id> [--since <sha>]`. Every

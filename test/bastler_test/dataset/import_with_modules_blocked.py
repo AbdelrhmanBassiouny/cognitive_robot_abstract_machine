@@ -25,7 +25,19 @@ import sys
 from dataclasses import dataclass
 from importlib.abc import MetaPathFinder
 from importlib.machinery import ModuleSpec
+from pathlib import Path
 from typing import Sequence
+
+REPOSITORY_ROOT = Path(__file__).parent.parent.parent.parent
+"""
+The repository root, which :mod:`bastler` is a plain top-level directory of.
+
+Inserted below rather than inherited: an interpreter running a script by its path puts
+that script's own directory on ``sys.path``, not the working directory, so the package
+would be unimportable here however the caller was invoked.
+"""
+
+sys.path.insert(0, str(REPOSITORY_ROOT))
 
 
 @dataclass(frozen=True)

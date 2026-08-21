@@ -14,16 +14,16 @@ version = "0.1.0"
 description = "Workflow tooling (stacked-PR maintenance, plan dashboards, personal-notes hooks) for cognitive_robot_abstract_machine. Not published; repository tooling only."
 requires-python = ">=3.11"
 
-# Nothing is required to import the stdlib-only tier, which is what a hook reaches.
-# The two tiers above it are extras, so installing the package never implies the
-# render layer's dependencies - see this package's own __init__ docstring.
+# Nothing is required to import the stdlib-only tier, which is what a hook reaches - see
+# this package's own __init__ docstring for what the tiers are and why the boundary is
+# load-bearing. What the tiers above it need is the `rendering` extra below.
 dependencies = []
+dynamic = ["optional-dependencies"]
 
-[project.optional-dependencies]
-# Reading and writing a plan manifest.
-manifest = ["pyyaml>=6"]
-# Rendering a dashboard page.
-dashboard = ["pyyaml>=6", "jinja2>=3", "markdown>=3", "nh3>=0.2"]
+[tool.setuptools.dynamic.optional-dependencies]
+# Read from requirements.txt rather than restated here, so the list a `pip install -r`
+# installs and the list this package declares cannot drift apart.
+rendering = { file = ["requirements.txt"] }
 
 [tool.setuptools]
 packages = ["bastler"]

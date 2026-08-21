@@ -192,7 +192,7 @@ if [ ! -s "${MANIFEST_FILE}" ]; then
   exit 1
 fi
 
-MANIFEST_PLAN_ID="$(python3 "${SCRIPT_DIR}/plan_manifest_tools.py" read-id "${MANIFEST_FILE}")"
+MANIFEST_PLAN_ID="$(python3 -m "${PLAN_MANIFEST_TOOLS_MODULE}" read-id "${MANIFEST_FILE}")"
 if [ "${MANIFEST_PLAN_ID}" != "${PLAN_ID}" ]; then
   echo "The plan manifest's 'id: ${MANIFEST_PLAN_ID}' does not match the plan" >&2
   echo "being saved ('${PLAN_ID}') - refusing to save under a mismatched key." >&2
@@ -210,7 +210,7 @@ cp "${MANIFEST_FILE}" "${SCRATCH_DIR}/${MANIFEST_PATH}"
 cp "${ROADMAP_FILE}" "${SCRATCH_DIR}/${ROADMAP_PATH}"
 
 mkdir -p "$(dirname "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}")"
-python3 "${SCRIPT_DIR}/plan_manifest_tools.py" regenerate-branch-index \
+python3 -m "${PLAN_MANIFEST_TOOLS_MODULE}" regenerate-branch-index \
   --scratch-dir "${SCRATCH_DIR}" \
   --plans-dir "${PLANS_DIR}" \
   --manifest-filename "${PLAN_MANIFEST_FILENAME}" \
