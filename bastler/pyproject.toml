@@ -28,5 +28,13 @@ rendering = { file = ["requirements.txt"] }
 [tool.setuptools]
 packages = ["bastler"]
 
+# The files the modules resolve beside themselves rather than by an argument:
+# render_common.py finds the page templates as `Path(__file__).parent / "templates"`, and
+# stack.py finds its committed defaults with `Path(__file__).with_name`. An install that
+# left them out would import and then fail at the first render or the first configuration
+# read. requirements.txt is here because the extra below is read from it.
+[tool.setuptools.package-data]
+bastler = ["templates/*.html", "stack.toml", "requirements.txt"]
+
 [tool.setuptools.package-dir]
 bastler = "."
