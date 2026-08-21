@@ -43,30 +43,77 @@ from semantic_digital_twin.world_description.world_entity import Actuator
 @dataclass(frozen=True)
 class ServoGains:
     """
-    How hard a position servo pulls its joint towards the angle it was given.
+    How hard a position servo pulls its joint towards the angle it was given, and how
+    much passive resistance its joint itself has.
     """
 
     stiffness: float
     """Restoring torque per radian away from the set point, in newton metres."""
 
-    damping: float
-    """Opposing torque per radian per second, in newton metre seconds."""
+    actuator_damping: float
+    """Opposing torque per radian per second the servo itself applies, in newton metre
+    seconds."""
 
     torque_limit: float
     """The largest torque the servo may exert, in newton metres."""
 
+    joint_damping: float
+    """Passive viscous damping of the joint itself, independent of the servo -- always
+    resists motion, whether or not the servo is actively driving."""
 
-ARM_SERVO = ServoGains(stiffness=300_000.0, damping=6_000.0, torque_limit=500.0)
-"""
-Gains for an arm's own joints, taken as-is from ``t-task-force``'s own
-``experiments/push_t/tracy_scene.py::ARM_SERVO``.
+    armature: float
+    """Rotor inertia added to the joint, damping high-frequency numerical response
+    without changing its real, low-frequency behaviour."""
 
-A servo holds its pose only as far off it as the load it carries divided by its
-stiffness, so an arm this heavy needs a large one to settle within a centimetre of where
-it was sent. Past roughly ten times this the servos ring at the simulation's millisecond
-step. The torque limit is around the UR10e's own, which is enough to hold the arm up and
-push against real loads without the arm itself being what gives way first.
+
+_STIFFNESS = 5_000.0
+_ACTUATOR_DAMPING = 500.0
+_ARMATURE = 0.1
 """
+Shared across every joint class below, matching MuJoCo Menagerie's own
+``universal_robots_ur10e/ur10e.xml``: its ``<general gainprm="5000" biasprm="0 -5000
+-500">`` and ``<joint armature="0.1">`` sit on the base ``ur10e`` default class, applying
+identically to every joint regardless of size; only torque limit and the joint's own
+passive damping are given separately per size class there.
+"""
+
+ARM_JOINT_SERVO: dict[str, ServoGains] = {
+    # "size4" in ur10e.xml: the two shoulder joints, which carry the whole rest of the
+    # arm's weight and so need the most torque and the most passive damping to settle
+    # without ringing.
+    "shoulder_pan_joint": ServoGains(_STIFFNESS, _ACTUATOR_DAMPING, 330.0, 10.0, _ARMATURE),
+    "shoulder_lift_joint": ServoGains(_STIFFNESS, _ACTUATOR_DAMPING, 330.0, 10.0, _ARMATURE),
+    # "size3" in ur10e.xml: the elbow.
+    "elbow_joint": ServoGains(_STIFFNESS, _ACTUATOR_DAMPING, 150.0, 5.0, _ARMATURE),
+    # "size2" in ur10e.xml: the three wrist joints, which carry only the gripper and so
+    # need much less of either.
+    "wrist_1_joint": ServoGains(_STIFFNESS, _ACTUATOR_DAMPING, 56.0, 2.0, _ARMATURE),
+    "wrist_2_joint": ServoGains(_STIFFNESS, _ACTUATOR_DAMPING, 56.0, 2.0, _ARMATURE),
+    "wrist_3_joint": ServoGains(_STIFFNESS, _ACTUATOR_DAMPING, 56.0, 2.0, _ARMATURE),
+}
+"""
+Real, per-joint-size UR10e gains and torque limits, taken as-is from MuJoCo Menagerie's
+own ``universal_robots_ur10e/ur10e.xml``, keyed by joint name with Tracy's own
+``left_``/``right_`` prefix stripped.
+
+Tracy's own UR10 (not UR10e) arms are close enough to reuse this directly. An earlier,
+much stronger, flat (same number for every joint) tuning was used instead while Giskard
+was still driving the joints; now that the joints are driven directly (see this module's
+own docstring) that workaround is no longer needed, and these are the robot's own real
+numbers.
+"""
+
+
+def _servo_tuning_for(joint_name: str) -> ServoGains:
+    """
+    The tuning a joint's servo is built with, by its (possibly ``left_``/``right_``-
+    prefixed) name.
+
+    :param joint_name: Name of the joint, e.g. ``"left_shoulder_pan_joint"``.
+    :return: Its own tuning from :data:`ARM_JOINT_SERVO`.
+    """
+    unprefixed = joint_name.removeprefix("left_").removeprefix("right_")
+    return ARM_JOINT_SERVO[unprefixed]
 
 
 def _joint_state_of_type(robot_part: AbstractRobotPart, state_type) -> JointState:
@@ -130,8 +177,8 @@ def strip_collision_geometry(world: World, robot: Tracy) -> None:
     such overlaps (confirmed directly: with collision geometry left in, every other
     joint reached its park target to within a few thousandths of a radian while the
     shoulder alone sat pinned at its starting angle the entire run, the signature of a
-    real contact force its own servo -- even at :data:`ARM_SERVO`'s own torque limit --
-    could not push through).
+    real contact force its own servo -- even at 500N.m, well above any of
+    :data:`ARM_JOINT_SERVO`'s own real torque limits -- could not push through).
 
     Removing the geometry outright is safe for this scene specifically because nothing
     else in it has collision geometry to check against either (no floor, no loose
@@ -160,7 +207,7 @@ def _servo_actuator(gains: ServoGains, dof: DegreeOfFreedom) -> MujocoActuator:
         gain_type=mujoco.mjtGain.mjGAIN_FIXED,
         gain_parameters=[gains.stiffness] + [0.0] * 9,
         bias_type=mujoco.mjtBias.mjBIAS_AFFINE,
-        bias_parameters=[0.0, -gains.stiffness, -gains.damping] + [0.0] * 7,
+        bias_parameters=[0.0, -gains.stiffness, -gains.actuator_damping] + [0.0] * 7,
         control_range=[limits.lower.position, limits.upper.position],
         force_range=[-gains.torque_limit, gains.torque_limit],
     )
@@ -168,7 +215,8 @@ def _servo_actuator(gains: ServoGains, dof: DegreeOfFreedom) -> MujocoActuator:
 
 def equip_arms_with_servos(world: World, robot: Tracy) -> Dict[str, Actuator]:
     """
-    Give every joint of both arms a position-servo actuator, driven directly via
+    Give every joint of both arms a position-servo actuator, its own passive damping,
+    and armature, driven directly via
     :meth:`~real_time_simulation.RealTimeSimulation.command` rather than through
     Giskard.
 
@@ -183,10 +231,13 @@ def equip_arms_with_servos(world: World, robot: Tracy) -> Dict[str, Actuator]:
                 if not isinstance(connection, ActiveConnection1DOF):
                     continue
                 dof = connection.raw_dof
+                gains = _servo_tuning_for(dof.name.name)
+                connection.dynamics.armature = gains.armature
+                connection.dynamics.damping = gains.joint_damping
                 actuator = Actuator()
                 actuator.add_dof(dof=dof)
                 actuator.simulator_additional_properties.append(
-                    _servo_actuator(ARM_SERVO, dof)
+                    _servo_actuator(gains, dof)
                 )
                 world.add_actuator(actuator=actuator)
                 actuators_by_joint_name[dof.name.name] = actuator
