@@ -1,0 +1,32 @@
+# Optional installation only. The package is designed to be imported straight from the
+# repository root with no install (cloud sessions run on fresh clones with no pip step);
+# this file exists for the workflows that run it outside such a checkout. Built with an
+# explicit package-dir mapping because the package *is* this directory rather than
+# living under it.
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bastler"
+version = "0.1.0"
+description = "Workflow tooling (stacked-PR maintenance, plan dashboards, personal-notes hooks) for cognitive_robot_abstract_machine. Not published; repository tooling only."
+requires-python = ">=3.11"
+
+# Nothing is required to import the stdlib-only tier, which is what a hook reaches.
+# The two tiers above it are extras, so installing the package never implies the
+# render layer's dependencies - see this package's own __init__ docstring.
+dependencies = []
+
+[project.optional-dependencies]
+# Reading and writing a plan manifest.
+manifest = ["pyyaml>=6"]
+# Rendering a dashboard page.
+dashboard = ["pyyaml>=6", "jinja2>=3", "markdown>=3", "nh3>=0.2"]
+
+[tool.setuptools]
+packages = ["bastler"]
+
+[tool.setuptools.package-dir]
+bastler = "."
