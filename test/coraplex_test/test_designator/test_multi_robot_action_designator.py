@@ -250,7 +250,7 @@ def test_move_torso_multi(immutable_multiple_robot_apartment):
 
 def test_navigate_multi(immutable_multiple_robot_apartment, rclpy_node):
     world, view, context = immutable_multiple_robot_apartment
-    target_position = [2, -2, 0]
+    target_position = [5, 2, 0]
 
     plan = execute_single(
         NavigateAction(

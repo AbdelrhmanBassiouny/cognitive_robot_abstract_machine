@@ -67,7 +67,8 @@ def test_motion_state_chart_is_created_once(reach_action_executable):
 
 def test_parsing_populates_the_chart_with_the_motions(reach_action_executable):
     """
-    Every task is in the chart before execution begins, below the executable's root goal.
+    Every task is in the chart before execution begins, below the executable's root
+    goal.
     """
     tasks = list(reach_action_executable.motion_mappings.values())
     chart = reach_action_executable.motion_state_chart
@@ -81,8 +82,8 @@ def test_parsing_populates_the_chart_with_the_motions(reach_action_executable):
 
 def test_parsing_mirrors_the_plan_tree_as_nested_goals(reach_action_executable):
     """
-    The action's motions live in a goal below the executable's root goal rather than flat
-    in the chart.
+    The action's motions live in a goal below the executable's root goal rather than
+    flat in the chart.
     """
     tasks = list(reach_action_executable.motion_mappings.values())
     root_goal = reach_action_executable.root_node
@@ -116,14 +117,18 @@ def test_prepare_for_execution_adds_a_single_end_motion(reach_action_executable)
     assert len(chart.get_nodes_by_type(EndMotion)) == 1
 
 
-def test_real_execution_does_not_add_condition_monitors(reach_action_executable):
+@pytest.mark.parametrize("execution_environment", [real_robot, simulated_robot])
+def test_execution_does_not_add_condition_monitors(
+    reach_action_executable, execution_environment
+):
     """
-    Conditions are only evaluated inside the chart in simulation.
+    Conditions are carried on the executable but stay out of the chart, whichever
+    execution type the chart is prepared for.
     """
     assert reach_action_executable.pre_condition_node
     assert reach_action_executable.post_condition_node
 
-    with real_robot:
+    with execution_environment:
         reach_action_executable.prepare_for_execution()
 
     chart = reach_action_executable.motion_state_chart
@@ -131,12 +136,19 @@ def test_real_execution_does_not_add_condition_monitors(reach_action_executable)
     assert chart.get_nodes_by_type(CancelMotion) == []
 
 
-def test_simulated_execution_adds_condition_monitors(reach_action_executable):
+# %% wiring conditions into a chart
+
+# Nothing calls _add_condition_monitors while conditions are kept out of the chart. These
+# tests keep its wiring covered for whenever it is switched back on.
+
+
+def test_condition_monitors_bring_their_own_abort_paths(reach_action_executable):
     assert reach_action_executable.pre_condition_node
     assert reach_action_executable.post_condition_node
 
-    with simulated_robot:
-        reach_action_executable.prepare_for_execution()
+    reach_action_executable._add_condition_monitors(
+        reach_action_executable.root_node.observation_variable
+    )
 
     chart = reach_action_executable.motion_state_chart
     # pre- and post-condition monitors
@@ -145,13 +157,14 @@ def test_simulated_execution_adds_condition_monitors(reach_action_executable):
     assert len(chart.get_nodes_by_type(CancelMotion)) == 2
 
 
-def test_pre_condition_gates_the_root_goal(reach_action_executable):
+def test_pre_condition_monitor_gates_the_root_goal(reach_action_executable):
     """
     The pre-condition monitor gates the whole motion, so it starts the root goal rather
     than an individual task.
     """
-    with simulated_robot:
-        reach_action_executable.prepare_for_execution()
+    reach_action_executable._add_condition_monitors(
+        reach_action_executable.root_node.observation_variable
+    )
 
     chart = reach_action_executable.motion_state_chart
     [pre_monitor, _] = chart.get_nodes_by_type(ThreadedPredicateMonitor)

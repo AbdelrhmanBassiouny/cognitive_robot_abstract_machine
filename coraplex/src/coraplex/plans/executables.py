@@ -112,16 +112,16 @@ class GiskardExecutable(Executable):
     """
     Optional pre-condition of the action this executable belongs to.
 
-    If set, the motion only starts once the condition is observed to hold and the motion
-    is aborted (with :class:`ConditionNotSatisfied`) if it does not.
+    Carried on the executable but not evaluated during execution at present, see
+    :meth:`_add_condition_monitors`.
     """
 
     post_condition_node: Optional[ConditionNode] = field(default=None, kw_only=True)
     """
     Optional post-condition of the action this executable belongs to.
 
-    If set, it is evaluated after the motion finished; the motion only ends successfully
-    if the condition is observed to hold, otherwise it is aborted.
+    Carried on the executable but not evaluated during execution at present, see
+    :meth:`_add_condition_monitors`.
     """
 
     execution_type: ClassVar[Optional[ExecutionType]] = None
@@ -150,19 +150,9 @@ class GiskardExecutable(Executable):
 
         This runs just before compilation rather than during parsing, because the
         execution type is only known once an
-        :py:class:`~coraplex.execution_environment.ExecutionEnvironment` is entered. If a
-        pre- and/or post-condition is set, it is added as a
-        :class:`~giskardpy.motion_statechart.monitors.payload_monitors.ThreadedPredicateMonitor`
-        and wired into the chart:
-
-        - the pre-condition gates the start of the motions,
-        - the post-condition gates the successful end of the motion,
-        - a :class:`~giskardpy.motion_statechart.graph_node.CancelMotion` aborts the
-          motion if either condition is observed to be false.
+        :py:class:`~coraplex.execution_environment.ExecutionEnvironment` is entered.
         """
         end_trigger = self.root_node.observation_variable
-        if self.execution_type == ExecutionType.SIMULATED:
-            end_trigger = self._add_condition_monitors(end_trigger)
         if GiskardExecutable.collision_avoidance:
             self.motion_state_chart.add_node(ExternalCollisionAvoidance())
 
@@ -174,6 +164,14 @@ class GiskardExecutable(Executable):
         """
         Add the pre- and post-condition nodes to the motion state chart and wire them to
         the root node and the end trigger of the motion state chart.
+
+        The pre-condition gates the start of the motions, the post-condition gates the
+        successful end of the motion, and a
+        :class:`~giskardpy.motion_statechart.graph_node.CancelMotion` aborts the motion if
+        either is observed to be false.
+
+        .. note:: Currently unused. Conditions are kept out of the chart while evaluating
+            them inside it is being reworked; this stays so they can be wired back in.
 
         :param end_trigger: The trigger which ends the motion state chart.
         :return: The end trigger, gated by the post-condition when there is one.

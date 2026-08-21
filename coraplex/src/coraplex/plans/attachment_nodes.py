@@ -36,10 +36,14 @@ class ModelChangeNode(ExecutionBoundaryNode):
     def notify(self):
         pass
 
-    def parse(self) -> ModelChangeExecutable:
-        return ModelChangeExecutable(
+    def parse(self) -> MoveBranchExecutable:
+        return MoveBranchExecutable(
             context=self.plan.context, body=self.body, new_parent=self.new_parent
         )
+        #
+        # return ModelChangeExecutable(
+        #     context=self.plan.context, body=self.body, new_parent=self.new_parent
+        # )
 
 
 @dataclass
