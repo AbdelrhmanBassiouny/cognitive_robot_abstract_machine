@@ -19,4 +19,6 @@ one interpreter instead, so each import is paid for once.
 the real regeneration could not be run. CI's giskardpy/coraplex/sdt/experiments jobs run
 `regenerate_all_orm.py` and then exercise the generated interfaces, which is the check.
 
-**Next**: nothing outstanding; no PR opened (not requested).
+**PR**: #187 (draft) - https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/187
+
+**Next**: nothing outstanding. Not subscribed to PR activity (per notes).
