@@ -38,8 +38,39 @@ tracks:
   - id: match-api
     name: "Match API refactor and migration"
     wave: ergonomics
+  - id: mapping-semantics
+    name: "Mapping value and identity semantics"
+    wave: semantics
 
 items:
+  - id: chain-outside-evaluation-truncates-silently
+    title: "Bug: following a chain outside query evaluation drops all but the first value"
+    branch: claude/match-query-ergonomics-idk9w2
+    pull_request_number: 186
+    track: mapping-semantics
+    depends_on: []
+    status: in_progress
+    session: https://claude.ai/code/session_0138pFr29XH5xpEzvpmcpzV7
+    notes: >
+      Found while answering the review on item 1 (roadmap section 10):
+      apply_mapping_on_external_root took next() of each step, so a step
+      reaching several values contributed only its first - measured on main,
+      a flattened chain returned one drawer's handle and dropped the other.
+      Its five callers in parametrization/feature_extraction all read the
+      result as one value. Fixed by classifying the mappings rather than
+      counting per value: Projection (Attribute, Call, IndexByValue) reaches
+      exactly one, and the walk rejects any step that is not one. Index was
+      split because instrumenting it showed all three of its behaviours live
+      (14 literal-key, 5 row-lookup, 4 expression-key), so one class reached
+      one value or many depending on its key; Index stays the abstract base
+      so existing isinstance and match sites are untouched. A flattening is
+      also separated on identity - each one written is its own iteration
+      variable, which flat_variable already relied on and explanation.py
+      depends on. Off main, independent of item 1; whichever lands second
+      adjusts item 1's isinstance(step, Index) to name both index kinds.
+      Full krrood suite green (2155 passed; the two test_object_diagram
+      failures are a container missing the Graphviz dot binary, and fail
+      identically on main).
   - id: where-query-rooted-attribute-no-filter
     title: "Bug: where-condition from a query-rooted attribute silently does not filter"
     branch: claude/match-query-ergonomics-where-rooted-b876wm

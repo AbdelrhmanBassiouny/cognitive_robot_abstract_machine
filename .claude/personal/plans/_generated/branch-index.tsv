@@ -11,6 +11,7 @@ claude/eql-verbalization-p1-surface-verification-eqltzc	eql-verbalization
 claude/eql-verbalization-operand-naming-n0gb95	eql-verbalization
 claude/eql-verbalization-p3-albw76	eql-verbalization
 eql-symbolic-function-sdt	eql-verbalization
+claude/match-query-ergonomics-idk9w2	match-query-ergonomics
 claude/match-query-ergonomics-where-rooted-b876wm	match-query-ergonomics
 claude/ide-type-inference-instances-dc6l6e	match-query-ergonomics
 montessori_fast_inline_monitor	montessori-eql-stack

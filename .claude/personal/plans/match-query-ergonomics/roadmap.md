@@ -399,3 +399,72 @@ instead of answering whether they are the same.
 
 Full krrood suite green (2160 passed; the two `test_object_diagram` failures are
 this container missing the Graphviz `dot` binary).
+
+## 13. 2026-08-21: the truncation flagged in section 10 is fixed, and it needed a hierarchy
+
+Section 10 left two things for the developer: the `next(...)` truncation in
+`apply_mapping_on_external_root`, and whether to make the projection/iteration
+split explicit. The developer took both, so they landed together as PR #186 on
+`claude/match-query-ergonomics-idk9w2`, off `main`.
+
+**The truncation was real.** Measured on `main`, over a cabinet with two
+drawers, `flat_variable(cabinet_variable.drawers).handle.name` followed from
+that cabinet returned `'Handle1'` and dropped `'Handle3'`, while the method's
+docstring promised every mapped value. All five callers in
+`parametrization/feature_extraction` read the result as one value, so the
+contract is one value and the method should say so.
+
+**The first fix counted values per step; the split made it a property of the
+chain.** That matters twice: a per-value check runs for every step of every
+feature for every instance, and it answers a question about the chain at the
+wrong altitude.
+
+**Instrumenting the live code corrected the premise.** Section 12 had recorded
+that `Index` straddles the single-value line. Logging which branch of
+`Index._apply_mapping_` runs, across the EQL and feature-extraction suites, all
+three are live: 14 literal-key, 5 row-lookup, 4 expression-key. So none could
+be dropped, and the split had to accommodate the row lookup rather than assume
+it away.
+
+**The hierarchy that resulted:**
+
+```
+MappedVariable
+├── Projection (abstract)     reaches exactly one value
+│   ├── Attribute, Call
+│   └── IndexByValue          also an Index
+├── Index (abstract)          holds the key, its naming and instance-set
+│   ├── IndexByValue
+│   └── IndexByExpression     one value per value the key expression takes
+└── FlatVariable              an iteration of its own, naming no element
+```
+
+Keeping `Index` abstract is what kept the change cheap: `query_graph`'s
+`case Index()`, `navigation_path`, and #182's `isinstance(step, Index)` all
+still match both kinds unchanged.
+
+`IndexByExpression` covers the row-lookup case conservatively - a row is keyed
+by the expressions it binds, so indexing it by one reaches a single value - and
+that costs nothing, since a feature chain never contains one.
+
+**Identity is the other axis, and it is the one that has type-level structure.**
+A projection is determined by its child and its arguments, so two occurrences
+share one node; indexing twice by one key variable therefore follows that key
+together, and independence is written with a second key variable. A flattening
+names no element, so the node itself is the iteration variable. `flat_variable`
+already constructed directly rather than through the cache for this reason;
+that is now stated, and a test guards it - making it cached broke nothing in the
+suite beforehand, which is exactly the silent-tidy-up hazard.
+
+**Deliberate consequences:** `dao.py` moved from constructing `Index` to
+`IndexByValue`, since the base is now abstract; and a flattening over a
+single-element collection used to return that element and now raises, because
+single-valuedness is decided by the mappings a chain is built from, not by what
+one instance happens to hold.
+
+**A note on measurement discipline.** Two full-suite runs on this branch
+reported a third failure, `test_ormatic/test_generation.py::test_generation_process`.
+It was not a regression: both runs were ones where source files were rewritten
+while pytest was collecting and executing against them. Clean runs pass from
+both a populated and an empty generated file, and `main`'s baseline shows the
+same two Graphviz failures. Do not edit the tree while a suite is running.
