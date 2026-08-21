@@ -28,16 +28,25 @@ from dataclasses import dataclass
 import mujoco
 from typing_extensions import Dict
 
-from semantic_digital_twin.adapters.multi_sim import MujocoActuator, MujocoBody
+from semantic_digital_twin.adapters.multi_sim import MujocoActuator, MujocoBody, MujocoGeom
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.datastructures.joint_state import JointState
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.robots.robot_parts import AbstractRobotPart
 from semantic_digital_twin.robots.tracy import Tracy
+from semantic_digital_twin.spatial_types.spatial_types import (
+    HomogeneousTransformationMatrix,
+    Point3,
+)
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
+from semantic_digital_twin.world_description.connections import (
+    ActiveConnection1DOF,
+    Connection6DoF,
+)
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
+from semantic_digital_twin.world_description.geometry import Box, Color, Scale, Shape
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import Actuator
+from semantic_digital_twin.world_description.world_entity import Actuator, Body
 
 
 @dataclass(frozen=True)
@@ -116,7 +125,7 @@ def _servo_tuning_for(joint_name: str) -> ServoGains:
     return ARM_JOINT_SERVO[unprefixed]
 
 
-def _joint_state_of_type(robot_part: AbstractRobotPart, state_type) -> JointState:
+def joint_state_of_type(robot_part: AbstractRobotPart, state_type) -> JointState:
     """
     The one of ``robot_part``'s own joint states with the given ``state_type``.
 
@@ -136,15 +145,15 @@ def close_grippers(world: World, robot: Tracy) -> None:
 
     Both arms are driven from the URDF's own zero pose to their own park target (see
     :mod:`demo`), so unlike an idle arm left in a fixed pose, there is no "stand it out
-    of the way first" step needed here -- collision geometry is stripped globally (see
-    :func:`strip_collision_geometry`), so the two arms sweeping through each other's
-    space on the way to their own targets is not a concern.
+    of the way first" step needed here -- self-collision is excluded globally (see
+    :func:`exclude_self_collision`), so the two arms sweeping through each other's space
+    on the way to their own targets is not a concern.
 
     :param world: The world to configure, modified in place.
     :param robot: The robot to configure.
     """
     for arm in robot.get_arms():
-        _joint_state_of_type(arm.end_effector, GripperState.CLOSE).apply_to(world)
+        joint_state_of_type(arm.end_effector, GripperState.CLOSE).apply_to(world)
     world.notify_state_change()
 
 
@@ -168,29 +177,124 @@ def apply_gravity_compensation(world: World, robot: Tracy) -> None:
                 )
 
 
-def strip_collision_geometry(world: World, robot: Tracy) -> None:
+ROBOT_COLLISION_BIT = 1
+"""
+MuJoCo ``contype``/``conaffinity`` bit given to every one of Tracy's own collision
+geoms by :func:`exclude_self_collision`.
+"""
+
+EXTERNAL_COLLISION_BIT = 2
+"""
+MuJoCo ``contype``/``conaffinity`` bit given to things Tracy is meant to actually touch
+-- loose objects, a table, anything that is not the robot's own body.
+"""
+
+
+def _mujoco_geom_for(shape: Shape) -> MujocoGeom:
     """
-    Remove every one of the robot's own collision shapes.
+    ``shape``'s own :class:`MujocoGeom` additional property, creating one if it has
+    none yet.
+
+    :class:`~semantic_digital_twin.adapters.multi_sim.MujocoGeomConverter` reads only
+    the first ``MujocoGeom`` it finds on a shape, so a second, appended one would be
+    silently ignored: callers must modify the returned instance in place rather than
+    replacing it.
+
+    :param shape: The shape to find or create a ``MujocoGeom`` on, modified in place if
+        none exists yet.
+    """
+    existing = [
+        additional_property
+        for additional_property in shape.simulator_additional_properties
+        if isinstance(additional_property, MujocoGeom)
+    ]
+    if existing:
+        return existing[0]
+    mujoco_geom = MujocoGeom()
+    shape.simulator_additional_properties.append(mujoco_geom)
+    return mujoco_geom
+
+
+def exclude_self_collision(world: World, robot: Tracy) -> None:
+    """
+    Let the robot's own links pass through each other, without also excusing them from
+    colliding with anything else.
 
     A description's links overlap wherever they meet; sweeping the left arm's shoulder
     through the roughly 150 degrees its own park pose needs swings it through several
-    such overlaps (confirmed directly: with collision geometry left in, every other
+    such overlaps (confirmed directly: with collision left unaddressed, every other
     joint reached its park target to within a few thousandths of a radian while the
     shoulder alone sat pinned at its starting angle the entire run, the signature of a
     real contact force its own servo -- even at 500N.m, well above any of
     :data:`ARM_JOINT_SERVO`'s own real torque limits -- could not push through).
 
-    Removing the geometry outright is safe for this scene specifically because nothing
-    else in it has collision geometry to check against either (no floor, no loose
-    object): once something is added for the robot to actually interact with, this needs
-    to become a real per-pair exclusion instead of a blanket one.
+    Gives every one of the robot's own collision geoms :data:`ROBOT_COLLISION_BIT` as
+    both ``contype`` and ``conaffinity``: two robot geoms then never generate a contact
+    (``ROBOT_COLLISION_BIT`` shares no bit with itself once excluded from
+    ``conaffinity`` -- see the bit layout below), while a robot geom still collides
+    normally with anything carrying :data:`EXTERNAL_COLLISION_BIT` (see
+    :func:`add_cube`), since MuJoCo generates a contact whenever either geom's
+    ``contype`` intersects the other's ``conaffinity``. An earlier version of this
+    function stripped the robot's collision geometry entirely instead, which also
+    stopped the gripper from ever touching anything it was meant to actually grasp.
 
     :param world: The world to relax, modified in place.
-    :param robot: The robot to strip collision geometry from.
+    :param robot: The robot to exclude self-collision on.
     """
     with world.modify_world():
         for body in robot.bodies_with_collision:
-            body.collision = ShapeCollection()
+            for shape in body.collision:
+                mujoco_geom = _mujoco_geom_for(shape)
+                mujoco_geom.contype = ROBOT_COLLISION_BIT
+                mujoco_geom.conaffinity = EXTERNAL_COLLISION_BIT
+
+
+def add_cube(
+    world: World, name: str, position: Point3, size: float, color: Color
+) -> Body:
+    """
+    Add a free-standing cube with real collision geometry to the world, so it can be
+    pushed, grasped, and stacked by real contact rather than teleported into place or
+    kinematically attached to whatever is holding it.
+
+    Its collision geom gets :data:`EXTERNAL_COLLISION_BIT`, and is allowed to touch
+    both the robot (:data:`ROBOT_COLLISION_BIT`) and other external things, including
+    another cube -- see :func:`exclude_self_collision`.
+
+    :param world: The world to add the cube to, modified in place.
+    :param name: Name of the cube.
+    :param position: Where the cube starts, in the world root frame.
+    :param size: Edge length of the cube, in metres.
+    :param color: Colour of the cube.
+    :return: The newly added cube.
+    """
+    cube = Body(name=PrefixedName(name))
+    shape = Box(
+        origin=HomogeneousTransformationMatrix.from_xyz_rpy(reference_frame=cube),
+        scale=Scale(size, size, size),
+        color=color,
+    )
+    mujoco_geom = _mujoco_geom_for(shape)
+    mujoco_geom.contype = EXTERNAL_COLLISION_BIT
+    mujoco_geom.conaffinity = ROBOT_COLLISION_BIT | EXTERNAL_COLLISION_BIT
+    geometry = ShapeCollection([shape], reference_frame=cube)
+    cube.collision, cube.visual = geometry, geometry
+
+    with world.modify_world():
+        world.add_connection(
+            Connection6DoF.create_with_dofs(
+                world=world,
+                parent=world.root,
+                child=cube,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    x=position.x,
+                    y=position.y,
+                    z=position.z,
+                    reference_frame=world.root,
+                ),
+            )
+        )
+    return cube
 
 
 def _servo_actuator(gains: ServoGains, dof: DegreeOfFreedom) -> MujocoActuator:

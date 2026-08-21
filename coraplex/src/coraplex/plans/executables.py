@@ -139,6 +139,21 @@ class GiskardExecutable(Executable):
     within it) - raising it for everyone regressed other robots' plans in testing.
     """
 
+    max_ticks_per_motion_mapping: ClassVar[int] = 2000
+    """
+    Per-motion-mapping tick budget :meth:`_execute_simulation`'s tick loop gives a
+    motion to reach :meth:`~giskardpy.motion_statechart.motion_statechart.MotionStatecha
+    rt.is_end_motion` before raising :exc:`~coraplex.exceptions.MotionDidNotFinish`,
+    managed by :py:class:`pycram.motion_executor.ExecutionEnvironment`.
+
+    2000 (the default) is enough for every kinematically-driven motion this repository
+    currently runs. A DOF driven by real, torque-limited actuator dynamics instead of
+    being kinematically teleported (see :attr:`~semantic_digital_twin.adapters.multi_sim
+    .MujocoSynchronizer.physically_simulated_dofs`) can need a much larger budget for
+    the same Cartesian distance, since it moves at its own physical rate rather than
+    snapping to each commanded setpoint.
+    """
+
     _current_motion_state_chart: MotionStatechart = field(init=False, default=None)
     """
     Currently build motion state chart, internal only for managing the building the msc.
@@ -355,7 +370,8 @@ class GiskardExecutable(Executable):
         )
 
         counter = 0
-        while counter < len(self.motion_mappings) * 2000:
+        max_ticks = len(self.motion_mappings) * GiskardExecutable.max_ticks_per_motion_mapping
+        while counter < max_ticks:
             # Interrupting and pausing are handled inside the motion state chart by
             # per-task monitors (see motion_state_chart): an interrupt ends the
             # motion via EndMotion, a pause holds the active task via its

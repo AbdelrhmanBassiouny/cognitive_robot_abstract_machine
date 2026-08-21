@@ -38,7 +38,7 @@ from tracy_equipment import (
     apply_gravity_compensation,
     close_grippers,
     equip_arms_with_servos,
-    strip_collision_geometry,
+    exclude_self_collision,
 )
 
 logger = logging.getLogger(__name__)
@@ -93,7 +93,7 @@ def main(headless: bool = False) -> None:
 
     close_grippers(world, robot)
     apply_gravity_compensation(world, robot)
-    strip_collision_geometry(world, robot)
+    exclude_self_collision(world, robot)
     actuators = equip_arms_with_servos(world, robot)
     targets = _park_targets(robot)
 

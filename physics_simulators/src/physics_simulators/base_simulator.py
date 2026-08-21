@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import atexit
+import contextlib
 import logging
 import time
 from dataclasses import dataclass, field
@@ -69,6 +70,19 @@ class SimulatorRenderer:
         Update the renderer.
         """
         pass
+
+    def lock(self):
+        """
+        Context manager synchronizing model/data access with the renderer's own
+        rendering thread, if it has one.
+
+        A no-op here (headless has no rendering thread to race with);
+        subclasses backed by a real, actively-rendering viewer (e.g.
+        MujocoRenderer) must override this with their viewer's own lock, since
+        that thread reads the live model/data independently of anything
+        :class:`BaseSimulator` itself does.
+        """
+        return contextlib.nullcontext()
 
     def close(self):
         """
