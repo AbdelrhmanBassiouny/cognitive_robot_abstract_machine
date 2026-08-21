@@ -1,5 +1,5 @@
-import time
 from copy import deepcopy
+from dataclasses import dataclass, field
 
 import numpy as np
 import pytest
@@ -27,7 +27,11 @@ from coraplex.robot_plans.actions.composite.facing import FaceAtAction
 from coraplex.robot_plans.actions.composite.transporting import TransportAction
 from coraplex.robot_plans.actions.core.container import OpenAction, CloseAction
 from coraplex.robot_plans.actions.core.misc import DetectAction, MoveToReach
-from coraplex.robot_plans.actions.core.navigation import NavigateAction, LookAtAction
+from coraplex.robot_plans.actions.core.navigation import (
+    NavigateAction,
+    LookAtAction,
+    ElevatorNavigation,
+)
 from coraplex.robot_plans.actions.core.pick_up import (
     ReachAction,
     GraspingAction,
@@ -53,6 +57,7 @@ from semantic_digital_twin.datastructures.definitions import (
     GripperState,
     StaticJointState,
 )
+from semantic_digital_twin.callbacks.callback import ModelChangeCallback
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import AbstractRobot, EndEffector
 from typing_extensions import Tuple, Generator
@@ -65,7 +70,13 @@ from semantic_digital_twin.robots.hsrb import HSRB
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.robots.stretch import Stretch
 from semantic_digital_twin.robots.tiago import Tiago
-from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk, Door
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Milk,
+    Door,
+    Elevator,
+    FirstFloor,
+    Level,
+)
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
@@ -110,8 +121,13 @@ def setup_multi_robot_apartment(
     _tiago_world_setup,
     _pr2_world_setup,
     _apartment_world_setup,
+    multi_story_building,
 ):
     apartment_copy = deepcopy(_apartment_world_setup)
+    apartment_copy.merge_world_at_pose(
+        deepcopy(multi_story_building),
+        HomogeneousTransformationMatrix.from_xyz_rpy(0, -5, 0),
+    )
 
     if request.param == "hsrb":
         hsr_copy = deepcopy(_hsr_world_setup)
@@ -746,7 +762,83 @@ def test_transport_open_container(mutable_multiple_robot_apartment, rclpy_node):
 
     plan.plan.validate()
 
-def test_elevator_navigation(multi_story_building, rclpy_node):
-    VizMarkerPublisher(_world=multi_story_building, node=rclpy_node).with_tf_publisher()
 
-    time.sleep(100)
+# %% riding an elevator
+
+
+@dataclass(eq=False)
+class ElevatorOperator(ModelChangeCallback):
+    """
+    Drives an elevator to a floor as soon as a robot boards it, standing in for whatever
+    operates the elevator in the real world.
+
+    Reacting to the model change that boards the robot rather than polling for it matters
+    here: the plan runs on simulated time that advances as fast as the machine allows, so
+    every control cycle spent waiting is taken from the same budget the motions afterwards
+    need.
+    """
+
+    elevator: Elevator = field(kw_only=True)
+    """
+    The elevator this operator drives.
+    """
+
+    floor: Level = field(kw_only=True)
+    """
+    The floor the elevator is sent to once the robot is aboard.
+    """
+
+    robot: AbstractRobot = field(kw_only=True)
+    """
+    The robot whose boarding sets the elevator off.
+    """
+
+    robot_boarded: bool = field(default=False, init=False)
+    """
+    Whether the robot was ever observed aboard the elevator.
+    """
+
+    def on_model_change(self, **kwargs):
+        if self.robot.root.parent_kinematic_structure_entity is not self.elevator.root:
+            return
+        self.robot_boarded = True
+        self.elevator.close()
+        self.elevator.drive_to_floor(self.floor)
+        self.elevator.open()
+
+
+def test_elevator_navigation(mutable_multiple_robot_apartment, rclpy_node):
+    world, robot, context = mutable_multiple_robot_apartment
+    VizMarkerPublisher(_world=world, node=rclpy_node).with_tf_publisher()
+
+    elevator = world.get_semantic_annotations_by_type(Elevator)[0]
+    elevator.open()
+
+    first_floor = world.get_semantic_annotations_by_type(FirstFloor)[0]
+    starting_height = float(robot.root.global_pose.to_position().z)
+    elevator_travel = float(elevator.drive_position_for_floor(first_floor)) - float(
+        elevator.mechanical_joint.position
+    )
+    cabin_position = elevator.root.global_transform.to_position().to_np().flatten()
+
+    operator = ElevatorOperator(
+        _world=world, elevator=elevator, floor=first_floor, robot=robot
+    )
+    action = ElevatorNavigation(elevator, first_floor)
+    plan = execute_single(action, context=context)
+
+    with simulated_robot:
+        plan.perform()
+
+    # The robot ends up in front of the elevator's opening, a floor higher.
+    distance_from_cabin_center = float(elevator.scale.x) / 2 + action.exit_clearance
+    expected_position = (
+        cabin_position[:3]
+        + elevator.hole_direction.to_np().flatten()[:3] * distance_from_cabin_center
+    )
+    expected_position[2] = starting_height + elevator_travel
+
+    assert operator.robot_boarded
+    assert robot.root.global_transform.to_position().to_np().flatten()[
+        :3
+    ] == pytest.approx(expected_position, abs=0.01)

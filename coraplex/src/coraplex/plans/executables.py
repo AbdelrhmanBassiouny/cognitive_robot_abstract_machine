@@ -229,7 +229,8 @@ class GiskardExecutable(Executable):
 
     def execute(self) -> None:
         """
-        Completes the motion state chart and executes it according to the execution type.
+        Completes the motion state chart and executes it according to the execution
+        type.
         """
         if len(self.motion_mappings) == 0:
             return
@@ -367,6 +368,27 @@ class ModelChangeExecutable(Executable):
             # connection.origin = obj_transform
         if GiskardExecutable.execution_type == ExecutionType.REAL:
             time.sleep(self.giskard_idle_settle_delta.total_seconds())
+
+
+@dataclass
+class MoveBranchExecutable(Executable):
+    """
+    Executable that moves a body under a new parent, keeping the body's own connection
+    so an actively driven body stays drivable afterwards.
+    """
+
+    body: Body = field(kw_only=True)
+    """
+    The body that is moved.
+    """
+
+    new_parent: Body = field(kw_only=True)
+    """
+    The body the moved body hangs off afterwards.
+    """
+
+    def execute(self) -> None:
+        self.context.world.move_branch(self.body, self.new_parent)
 
 
 @dataclass

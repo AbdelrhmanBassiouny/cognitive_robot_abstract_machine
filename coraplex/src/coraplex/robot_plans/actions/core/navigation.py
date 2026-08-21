@@ -1,22 +1,31 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 
-from typing_extensions import Optional, Any, Dict
+from typing_extensions import Optional, Any, Dict, List
 
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.factories import variable_from, and_, ConditionType
 from coraplex.config.action_conf import ActionConfig
 from coraplex.datastructures.dataclasses import Context
-from coraplex.plans.factories import execute_single, sequential
+from coraplex.plans.attachment_nodes import BoardNode, LeaveNode
+from coraplex.plans.factories import execute_single, pause_until, sequential
 from coraplex.plans.plan_node import PlanNode
+from giskardpy.motion_statechart.goals.templates import Parallel
+from giskardpy.motion_statechart.monitors.joint_monitors import (
+    JointPositionReached,
+)
 from coraplex.robot_plans.actions.base import ActionDescription
 from coraplex.robot_plans.motions.navigation import MoveMotion
 from coraplex.robot_plans.motions.robot_body import LookingMotion
 from semantic_digital_twin.reasoning.predicates import allclose
 from semantic_digital_twin.reasoning.robot_predicates import is_pose_free_for_robot
 from semantic_digital_twin.robots.robot_parts import Camera
+from semantic_digital_twin.semantic_annotations.semantic_annotations import (
+    Level,
+    Elevator,
+)
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 
@@ -92,8 +101,118 @@ class LookAtAction(ActionDescription):
 
 @dataclass
 class ElevatorNavigation(ActionDescription):
-    pass
+    """
+    Navigates a robot to another level of a building using an elevator, the robot drives
+    in the elevator and waits there until the doors open again and the elevator is at
+    the right level.
+    """
+
+    elevator: Elevator
+    """
+    Elevator the robot rides.
+    """
+
+    target_floor: Level
+    """
+    Level of the building the robot should end up on.
+    """
+
+    exit_clearance: float = field(default=0.5, kw_only=True)
+    """
+    Distance the robot keeps from the elevator's opening after driving out, on top of
+    half the cabin's depth.
+    """
+
+    arrival_threshold: float = field(default=0.01, kw_only=True)
+    """
+    Position error within which the elevator's drive and doors count as having arrived.
+    """
 
     @property
     def _action_plan(self) -> PlanNode:
-        return sequential([NavigateAction()])
+        return sequential(
+            [
+                NavigateAction(self._cabin_pose),
+                BoardNode(body=self.robot.root, new_parent=self.elevator.root),
+                pause_until(
+                    [NavigateAction(self._exit_pose)],
+                    monitor=self._elevator_open_at_target_floor,
+                ),
+                LeaveNode(body=self.robot.root, new_parent=self.world.root),
+            ]
+        )
+
+    @property
+    def _height_in_cabin(self) -> float:
+        """
+        The robot's height in the cabin's frame.
+
+        Taken from where the robot stands now, because it is the same throughout the
+        ride and the robot's drive cannot change it anyway.
+        """
+        return float(
+            self.world.transform(self.robot.root.global_transform, self.elevator.root)
+            .to_position()
+            .z
+        )
+
+    @property
+    def _cabin_pose(self) -> Pose:
+        """
+        Where the robot stands while riding, in the cabin's frame.
+        """
+        return Pose.from_xyz_rpy(
+            z=self._height_in_cabin, reference_frame=self.elevator.root
+        )
+
+    @property
+    def _exit_pose(self) -> Pose:
+        """
+        Where the robot stands after driving out, in the cabin's frame.
+        """
+        opening_direction = float(self.elevator.hole_direction.to_np()[0])
+        return Pose.from_xyz_rpy(
+            x=opening_direction * (self.elevator.scale.x / 2 + self.exit_clearance),
+            z=self._height_in_cabin,
+            reference_frame=self.elevator.root,
+        )
+
+    @property
+    def _elevator_open_at_target_floor(self) -> Parallel:
+        """
+        Observes True once the cabin serves :attr:`target_floor` with its doors open.
+        """
+        return Parallel(
+            [self._elevator_at_target_floor] + self._doors_open,
+            name="ElevatorOpenAtTargetFloor",
+        )
+
+    @property
+    def _elevator_at_target_floor(self) -> JointPositionReached:
+        """
+        Observes True once the cabin's drive serves :attr:`target_floor`.
+        """
+        return JointPositionReached(
+            connection=self.elevator.mechanical_joint.root.parent_connection,
+            position=self.elevator.drive_position_for_floor(self.target_floor),
+            threshold=self.arrival_threshold,
+            name="ElevatorAtTargetFloor",
+        )
+
+    @property
+    def _doors_open(self) -> List[JointPositionReached]:
+        """
+        One node per elevator door, observing True once that door stands fully open.
+        """
+        nodes = []
+        for door in self.elevator.doors:
+            connection = door.mechanical_joint.root.parent_connection
+            nodes.append(
+                JointPositionReached(
+                    connection=connection,
+                    position=connection.dof.limits.upper.position,
+                    threshold=self.arrival_threshold,
+                    name=f"{door.name}Open",
+                )
+            )
+        return nodes

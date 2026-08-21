@@ -97,9 +97,7 @@ class StretchMoveSim(MoveMotion, AlternativeMotion[Stretch]):
 
     @property
     def _motion_chart(self):
-        world_T_target = self.world.transform(self.target, self.world.root)
-        world_T_target.z = 0
-        return DifferentialDriveBaseGoal(goal_pose=world_T_target, threshold=0.01)
+        return DifferentialDriveBaseGoal(goal_pose=self.target, threshold=0.01)
 
 
 class StretchMoveReal(MoveMotion, AlternativeMotion[Stretch]):
@@ -115,9 +113,7 @@ class StretchMoveReal(MoveMotion, AlternativeMotion[Stretch]):
 
     @property
     def _motion_chart(self) -> DifferentialDriveBaseGoal:
-        world_T_target = self.world.transform(self.target, self.world.root)
-        world_T_target.z = 0
-        return DifferentialDriveBaseGoal(goal_pose=world_T_target, threshold=0.1)
+        return DifferentialDriveBaseGoal(goal_pose=self.target, threshold=0.1)
         # Commented out for now since we use the giskard goal which also works for smaller distances
         # return NavigateActionServerTask(
         #     target_pose=self.target,
@@ -161,9 +157,8 @@ class StretchClose(ClosingMotion, AlternativeMotion[Stretch]):
 
 class StretchMoveGripperMotion(MoveGripperMotion, AlternativeMotion[Stretch]):
     """
-    Gripper motion tuned for Stretch: forces convergence checks to hold for at
-    least one second so the local minimum isn't reported before the gripper
-    has actually moved.
+    Gripper motion tuned for Stretch: forces convergence checks to hold for at least one
+    second so the local minimum isn't reported before the gripper has actually moved.
     """
 
     execution_type = ExecutionType.SIMULATED, ExecutionType.REAL

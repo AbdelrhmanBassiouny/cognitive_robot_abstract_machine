@@ -27,6 +27,7 @@ from giskardpy.motion_statechart.graph_node import (
 from giskardpy.motion_statechart.monitors.payload_monitors import CountNodeResets
 from coraplex.language_giskard_templates import (
     MonitoredGoal,
+    PausedUntilTrue,
     PausedWhileTrue,
     StoppedWhenTrue,
     TryAll,
@@ -343,6 +344,21 @@ class PauseMonitor(MonitorNode):
 
     def create_monitored_goal(self) -> MonitoredGoal:
         return PausedWhileTrue(monitor=self.monitor, name=type(self).__name__)
+
+
+@dataclass(eq=False)
+class PauseUntilMonitor(MonitorNode):
+    """
+    Holds its children until the monitor observes True.
+
+    .. warning:: A monitor that never turns True holds the children forever, so the
+        motion runs out of control cycles and fails with
+        :class:`~coraplex.exceptions.MotionDidNotFinish`. Use :class:`CancelMonitor` to end
+        a subtree for good.
+    """
+
+    def create_monitored_goal(self) -> MonitoredGoal:
+        return PausedUntilTrue(monitor=self.monitor, name=type(self).__name__)
 
 
 @dataclass

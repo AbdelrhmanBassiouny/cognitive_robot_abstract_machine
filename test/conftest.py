@@ -87,6 +87,8 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Door,
     Hinge,
     GroundFloor,
+    FirstFloor,
+    Level,
 )
 from semantic_digital_twin.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -652,7 +654,11 @@ def _elevator_world_setup():
             f"{name.name}_drive",
             Slider.get_default_root_kinematic_structure_entity_specification(),
             parent_connection_specification=Slider.parent_connection_specification(
-                axis=Vector3.Z()
+                axis=Vector3.Z(),
+                dof_limits=DegreeOfFreedomLimits(
+                    lower=DerivativeMap(velocity=-1.0),
+                    upper=DerivativeMap(velocity=1.0),
+                ),
             ),
         ).spawn(world)
         elevator.add(vertical_drive)
@@ -881,14 +887,32 @@ def multi_story_building(_elevator_world_setup):
         ),
     )
 
-    with world.modify_world():
-        ground_floor_region = Region(name=PrefixedName("Ground Floor"), area=ShapeCollection(shapes=[Box(scale=Scale(8, 8, 3))]))
-        world.add_connection(FixedConnection(parent=world.root, child=ground_floor_region, parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 1.5)))
-        world.add_semantic_annotation(GroundFloor(root=ground_floor_region))
+    def add_level(level_type: Type[Level], name: str, center_height: float) -> None:
+        """
+        Add a region spanning one storey and annotate it as that level.
 
-        first_floor_region = Region(name=PrefixedName("First Floor"), area=ShapeCollection(shapes=[Box(scale=Scale(8, 8, 3))]))
-        world.add_connection(FixedConnection(parent=world.root, child=first_floor_region, parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 4.5)))
-        world.add_semantic_annotation(GroundFloor(root=first_floor_region))
+        :param level_type: The annotation the region is given.
+        :param name: The region's name.
+        :param center_height: Height of the region's center above the world root.
+        """
+        region = Region(
+            name=PrefixedName(name),
+            area=ShapeCollection(shapes=[Box(scale=Scale(8, 8, 3))]),
+        )
+        world.add_connection(
+            FixedConnection(
+                parent=world.root,
+                child=region,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    0, 0, center_height
+                ),
+            )
+        )
+        world.add_semantic_annotation(level_type(root=region))
+
+    with world.modify_world():
+        add_level(GroundFloor, "Ground Floor", 1.5)
+        add_level(FirstFloor, "First Floor", 4.5)
     return world
 
 

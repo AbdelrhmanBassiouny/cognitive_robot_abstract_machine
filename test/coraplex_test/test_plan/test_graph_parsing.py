@@ -20,6 +20,7 @@ from coraplex.plans.executables import (
 from coraplex.plans.factories import (
     cancel_when,
     execute_single,
+    pause_until,
     pause_while,
     repeat,
     sequential,
@@ -39,6 +40,7 @@ from coraplex.language import (
     TryInOrderNode,
 )
 from coraplex.language_giskard_templates import (
+    PausedUntilTrue,
     PausedWhileTrue,
     StoppedWhenTrue,
     TryAll,
@@ -170,6 +172,29 @@ def test_pause_monitor_pauses_the_children_goal(immutable_model_world, rclpy_nod
 
     monitored_goal = _monitored_goal_of(executable)
     assert type(monitored_goal) is PausedWhileTrue
+    assert monitored_goal.nodes == [monitor, monitored_goal.monitored_node]
+    assert monitored_goal.monitored_node.pause_condition.free_variables() == [
+        monitor.observation_variable
+    ]
+
+
+def test_pause_until_monitor_pauses_the_children_goal(
+    immutable_model_world, rclpy_node
+):
+    """
+    The children's goal is paused on the negated monitor observation, so it is held
+    until the monitor turns True rather than while it is True.
+    """
+    world, view, context = immutable_model_world
+    monitor = ConstFalseNode(name="never")
+
+    plan = pause_until(
+        [MoveTorsoAction(TorsoState.HIGH)], monitor=monitor, context=context
+    )
+    executable = _parse_and_compile(plan, world, context)
+
+    monitored_goal = _monitored_goal_of(executable)
+    assert type(monitored_goal) is PausedUntilTrue
     assert monitored_goal.nodes == [monitor, monitored_goal.monitored_node]
     assert monitored_goal.monitored_node.pause_condition.free_variables() == [
         monitor.observation_variable

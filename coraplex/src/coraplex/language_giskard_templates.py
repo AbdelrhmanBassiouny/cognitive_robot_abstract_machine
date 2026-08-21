@@ -103,10 +103,10 @@ class MonitoredGoal(Goal, ABC):
     """
     Runs a monitored node next to the monitor observing it.
 
-    The two are siblings, which is what lets the monitor's observation drive the monitored
-    node's life cycle: a transition condition may only reference the owning node or a
-    sibling of it. Neither node is chained to the other, so the monitor observes from the
-    moment this goal starts.
+    The two are siblings, which is what lets the monitor's observation drive the
+    monitored node's life cycle: a transition condition may only reference the owning
+    node or a sibling of it. Neither node is chained to the other, so the monitor
+    observes from the moment this goal starts.
     """
 
     monitor: MotionStatechartNode = field(kw_only=True)
@@ -137,12 +137,25 @@ class MonitoredGoal(Goal, ABC):
 @dataclass(repr=False, eq=False)
 class PausedWhileTrue(MonitoredGoal):
     """
-    Holds the monitored node for as long as the monitor observes True, and lets it continue
-    once the monitor turns False again.
+    Holds the monitored node for as long as the monitor observes True, and lets it
+    continue once the monitor turns False again.
     """
 
     def wire_monitor(self) -> None:
         self.monitored_node.pause_condition = self.monitor.observation_variable
+
+
+@dataclass(repr=False, eq=False)
+class PausedUntilTrue(MonitoredGoal):
+    """
+    Holds the monitored node until the monitor observes True, and lets it continue from
+    then on.
+    """
+
+    def wire_monitor(self) -> None:
+        self.monitored_node.pause_condition = trinary_logic_not(
+            self.monitor.observation_variable
+        )
 
 
 @dataclass(repr=False, eq=False)

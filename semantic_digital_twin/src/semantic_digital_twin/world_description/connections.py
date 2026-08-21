@@ -1008,6 +1008,26 @@ class OmniDrive(WheeledDrive):
             y_velocity=y_vel,
         )
 
+    def copy_with_new_parent(
+        self,
+        new_parent: KinematicStructureEntity,
+        parent_T_connection_expression: HomogeneousTransformationMatrix,
+    ) -> Self:
+        # Reuse the same degrees of freedom so the odometry and the world state layout are kept.
+        return self.__class__(
+            parent=new_parent,
+            child=self.child,
+            parent_T_connection_expression=parent_T_connection_expression,
+            connection_T_child_expression=self.connection_T_child_expression,
+            x=self.x,
+            y=self.y,
+            roll=self.roll,
+            pitch=self.pitch,
+            yaw=self.yaw,
+            x_velocity=self.x_velocity,
+            y_velocity=self.y_velocity,
+        )
+
     @property
     def active_dofs(self) -> list[DegreeOfFreedom]:
         return [self.x_velocity, self.y_velocity, self.yaw]
@@ -1040,13 +1060,24 @@ class OmniDrive(WheeledDrive):
         """
         Overwrites the origin of the connection.
 
-        .. warning:: Ignores z position, pitch, and yaw values.
-        :param parent_T_child:
+        The origin is ``parent_T_connection_expression @ _kinematics @
+        connection_T_child_expression``, of which only ``_kinematics`` is degree of
+        freedom backed, so ``transformation`` is un-composed with the other two to find
+        the drive's state that produces it.
+
+        .. warning:: Ignores z position, pitch, and roll values, because a drive cannot
+            reach them.
+        :param transformation: The desired parent-to-child origin.
         """
         if isinstance(transformation, np.ndarray):
             transformation = HomogeneousTransformationMatrix(data=transformation)
-        position = transformation.to_position()
-        roll, pitch, yaw = transformation.to_rotation_matrix().to_rpy()
+        local_kinematics = (
+            self.parent_T_connection_expression.inverse()
+            @ transformation
+            @ self.connection_T_child_expression.inverse()
+        )
+        position = local_kinematics.to_position()
+        roll, pitch, yaw = local_kinematics.to_rotation_matrix().to_rpy()
         self._world.state[self.x.id].position = position.x
         self._world.state[self.y.id].position = position.y
         self._world.state[self.yaw.id].position = yaw
@@ -1272,6 +1303,25 @@ class DifferentialDrive(WheeledDrive):
             x_velocity=x_vel,
         )
 
+    def copy_with_new_parent(
+        self,
+        new_parent: KinematicStructureEntity,
+        parent_T_connection_expression: HomogeneousTransformationMatrix,
+    ) -> Self:
+        # Reuse the same degrees of freedom so the odometry and the world state layout are kept.
+        return self.__class__(
+            parent=new_parent,
+            child=self.child,
+            parent_T_connection_expression=parent_T_connection_expression,
+            connection_T_child_expression=self.connection_T_child_expression,
+            x=self.x,
+            y=self.y,
+            roll=self.roll,
+            pitch=self.pitch,
+            yaw=self.yaw,
+            x_velocity=self.x_velocity,
+        )
+
     @property
     def active_dofs(self) -> list[DegreeOfFreedom]:
         return [self.x_velocity, self.yaw]
@@ -1302,13 +1352,24 @@ class DifferentialDrive(WheeledDrive):
         """
         Overwrites the origin of the connection.
 
-        .. warning:: Ignores z position, pitch, and yaw values.
-        :param parent_T_child:
+        The origin is ``parent_T_connection_expression @ _kinematics @
+        connection_T_child_expression``, of which only ``_kinematics`` is degree of
+        freedom backed, so ``transformation`` is un-composed with the other two to find
+        the drive's state that produces it.
+
+        .. warning:: Ignores z position, pitch, and roll values, because a drive cannot
+            reach them.
+        :param transformation: The desired parent-to-child origin.
         """
         if isinstance(transformation, np.ndarray):
             transformation = HomogeneousTransformationMatrix(data=transformation)
-        position = transformation.to_position()
-        roll, pitch, yaw = transformation.to_rotation_matrix().to_rpy()
+        local_kinematics = (
+            self.parent_T_connection_expression.inverse()
+            @ transformation
+            @ self.connection_T_child_expression.inverse()
+        )
+        position = local_kinematics.to_position()
+        roll, pitch, yaw = local_kinematics.to_rotation_matrix().to_rpy()
         self._world.state[self.x.id].position = position.x
         self._world.state[self.y.id].position = position.y
         self._world.state[self.yaw.id].position = yaw

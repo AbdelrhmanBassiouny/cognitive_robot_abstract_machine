@@ -29,6 +29,7 @@ from giskardpy.motion_statechart.monitors.payload_monitors import (
 
 from coraplex.language import TryAllNode, TryInOrderNode
 from coraplex.language_giskard_templates import (
+    PausedUntilTrue,
     PausedWhileTrue,
     StoppedWhenTrue,
     TryAll,
@@ -58,7 +59,10 @@ def _compile_and_tick(
 
 
 MAX_TICKS = 20
-"""Upper bound for the tick loops below, so a never-settling chart fails instead of hanging."""
+"""
+Upper bound for the tick loops below, so a never-settling chart fails instead of
+hanging.
+"""
 
 
 def _ticks_until_observed_true(
@@ -168,8 +172,8 @@ def test_try_in_order_single_child():
 
 def test_paused_while_true_holds_the_monitored_node_while_the_monitor_is_true():
     """
-    The monitored node is held in PAUSED for exactly as long as the monitor observes True,
-    and runs again once it turns False.
+    The monitored node is held in PAUSED for exactly as long as the monitor observes
+    True, and runs again once it turns False.
     """
     pulse_length = 2
     goal = PausedWhileTrue(
@@ -209,6 +213,30 @@ def test_paused_while_true_costs_the_monitored_node_the_paused_ticks():
     ticks_with_pause = _ticks_until_observed_true(paused, paused.monitored_node)
 
     assert ticks_with_pause == ticks_without_pause + pulse_length
+
+
+def test_paused_until_true_holds_the_monitored_node_until_the_monitor_turns_true():
+    """
+    The monitored node is held in PAUSED for as long as the monitor observes False, and
+    runs from the tick the monitor turns True.
+    """
+    ticks_until_monitor_fires = 2
+    goal = PausedUntilTrue(
+        monitor=CountControlCycles(
+            control_cycles=ticks_until_monitor_fires, name="arrival"
+        ),
+        monitored_node=CountControlCycles(control_cycles=2, name="work"),
+    )
+    executor = _compile_and_tick(goal, ticks=0)
+
+    for _ in range(ticks_until_monitor_fires - 1):
+        executor.tick()
+        assert goal.monitor.observation_state == ObservationStateValues.FALSE
+        assert goal.monitored_node.life_cycle_state == LifeCycleValues.PAUSED
+
+    executor.tick()
+    assert goal.monitor.observation_state == ObservationStateValues.TRUE
+    assert goal.monitored_node.life_cycle_state == LifeCycleValues.RUNNING
 
 
 def test_stopped_when_true_ends_the_monitored_node():

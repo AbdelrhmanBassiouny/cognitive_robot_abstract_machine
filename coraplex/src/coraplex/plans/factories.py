@@ -88,6 +88,23 @@ def pause_while(
     )
 
 
+def pause_until(
+    children: List[ActionLike],
+    monitor: MotionStatechartNode,
+    context: Optional[Context] = None,
+) -> PauseUntilMonitor:
+    """
+    Hold `children` until `monitor` observes True.
+
+    :param monitor: The motion state chart node observed while the children run.
+    """
+    from coraplex.language import PauseUntilMonitor
+
+    return _make_plan_from_type_and_children(
+        PauseUntilMonitor(monitor=monitor), children, context
+    )
+
+
 def cancel_when(
     children: List[ActionLike],
     monitor: MotionStatechartNode,
