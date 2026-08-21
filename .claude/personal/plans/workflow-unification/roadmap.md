@@ -7760,3 +7760,135 @@ the permission classifier**. Recorded because the skill's own reasoning for subs
 kickoff is that a kickoff which turns into an uninterrupted implementation session is otherwise
 never subscribed by anything — which is exactly this session's shape. Concurrent structural
 changes to this plan will therefore reach it only through the delta recheck, not through events.
+
+## Update 2026-08-21 (implemented): the bastler package exists, and the duplication it was blocking is deletable
+
+`bastler-package` implemented in its kickoff session
+(https://claude.ai/code/session_01JN9p5Kf2DKtzryspPX2KqZ) as `a4405fbd5` on #185. 46 modules and
+their three test suites moved; 536 tests pass across the one new invocation, against 479 on `main`
+plus 58 new contract tests and one deletion.
+
+### The move is one commit, and that is what keeps it reviewable
+
+The plan called for one commit per source directory. They are one commit instead, and the reason is
+mechanical rather than a shortcut: `scratch_repository.py` is shared by the hooks suite and the stack
+suite, so moving either alone needs a temporary `sys.path` bridge between two directories - which is
+precisely the hackery this pull request exists to delete. Splitting the move would have meant writing
+the thing back in, twice, to remove it again in the third commit.
+
+68 of the moved files render as renames, including all three of the big modules the scope decision
+deliberately left unsplit. That was the whole argument for not splitting them here: a split in the
+same commit destroys rename detection on `stack.py` (1,641 lines), `plan_item_bootstrap.py` (1,612)
+and `build_dashboard.py` (1,504), so a reviewer would see ~4,800 lines of apparently-new code where
+they can now see a move.
+
+### A guard the code claimed to have, and did not
+
+`plan_item_bootstrap.py`'s `ItemStatus` docstring, on `main`, says: *"Mirrors `build_dashboard.py`'s
+own enum ... A test holds the two equal; the one definition both share arrives with the package
+migration."* The plan's step 5 followed that and said to delete the test.
+
+**There is no such test.** Checked rather than assumed - on `main`, no test module imports both
+`build_dashboard` and `plan_item_bootstrap`, in any of the three suites. So the five members were
+duplicated in two files that could not import each other, and *nothing* held them equal; the two
+could have drifted silently at any point.
+
+This is the same shape the 2026-08-13 entry on #154 recorded - a review reply describing a contract
+test that had never been written - met from a different direction: here it is a *docstring* claiming
+a guard. Worth stating as the general form, since both instances were found by going to look rather
+than by anything failing: **a sentence asserting that something is tested is not a test, and the
+cheapest check is to grep for the import the test would have to make.**
+
+### The second unification was a repair, not only a deduplication
+
+`stack.py`'s `_resolve_personal_notes_remote` / `_resolve_personal_notes_branch` conceded in their
+own docstrings that they restated `resolve-personal-notes-config.sh` in Python. Reading the two
+side by side showed they had *already drifted*: the shell falls back to the current branch's
+upstream remote when the configured one does not carry the notes branch, and the Python copy had
+no equivalent - so a checkout the hooks could read notes from was one `stack.py` could not.
+
+Both functions are deleted; `_fetch_personal_notes_branch` sources the shell file and calls its own
+`fetch_personal_notes_branch`, which is what `plan_item_bootstrap.py` already did and the reason it
+never grew a third copy. Verified live rather than only in the harness: `python3 -m bastler.stack
+configuration` resolves `fork_repository` off the real personal-notes branch, which is a value that
+exists only in the override the delegation now fetches.
+
+The two seams the item's own notes also listed - `run_git` and the command-class base - are
+deliberately untouched. Half of each pair (#135's `check_scope_overlap.py`, #151's `Subcommand`) is
+on an unlanded branch, so the move cannot see it. That is this plan's own recorded rule applied a
+third time, after #115 and #143: **an item's notes can name a dependency the item's own base cannot
+reach, and when the two disagree the base wins.** What is new is that the unreachable half is a
+sibling branch of this same plan rather than an external dependency.
+
+### What the contract tests pin, and the one that nearly did nothing
+
+Five properties, 58 cases: the package imports from the repository root with no install; every
+module imports in a subprocess of its own; every entry point answers `python -m bastler.<x> --help`;
+each dependency tier imports with the tiers above it blocked; and no `.py` file remains under
+`.claude/`.
+
+`PACKAGE_MODULES` is *listed* rather than discovered, which inverts the rule #139 settled for
+`COMMANDS`. It is the right way round here for the same reason it was right there: discovery is
+correct when a list carries no meaning of its own, and this list *is* the migration's specification -
+a module that failed to move would simply be absent from a discovered set, which is the one thing
+these tests exist to catch.
+
+The tier test filters `PACKAGE_MODULES` to the modules that have anything blocked, so a tier table
+that accidentally allowed everything to everyone would make every case vanish and the suite would
+still pass green. `test_some_module_is_actually_checked_against_a_blocked_import` closes that; it is
+the same vacuity guard #110 needed when its own check silently had zero candidates.
+
+It also deleted a test rather than moving it: `test_every_module_of_the_executor_imports_on_its_own`
+covered the fourteen stack modules, and the contract suite covers all twenty-four the same way.
+
+### Two things the move surfaced that no test could have
+
+**A helper run by path cannot see the package.** `run_from_repository_root` strips `PYTHONPATH` so a
+pass proves the zero-install import really comes from the repository root - but an interpreter given
+a *script path* puts that script's directory on `sys.path`, not the working directory. The
+blocked-import helper inserts the root itself and says why.
+
+**An installed copy needs its data files.** `pip install ./bastler` succeeded and produced a package
+that could not render or configure anything: `render_common.py` resolves `templates/` as
+`Path(__file__).parent / "templates"` and `stack.py` resolves `stack.toml` with
+`Path(__file__).with_name`, and neither is a `.py` file, so setuptools left both out. Found by
+running the install rather than by reading the manifest. `[tool.setuptools.package-data]` names them.
+
+`requirements.txt` moved into the package and is the single dependency list: `pyproject.toml` reads
+its `rendering` extra *from that file* via `[tool.setuptools.dynamic]` rather than restating the four
+packages, so `pip install -r bastler/requirements.txt` and `pip install ./bastler[rendering]` cannot
+disagree. Verified with a dry-run resolve: Jinja2, Markdown, PyYAML and nh3.
+
+### The shell's Python entry points are modules now, not paths
+
+Every `*_SCRIPT` constant naming a `.py` file became a `*_MODULE` naming an import path, run as
+`python3 -m "${SOME_MODULE}"`. Not cosmetic: a module run by its file path puts the package's own
+directory on `sys.path` in place of the project root, so its absolute imports of its siblings stop
+resolving - which is exactly what the flat layout is for. The three test-directory constants collapse
+into one `BASTLER_TESTS_DIRECTORY`, since one package has one test tree.
+
+`check-setup.sh`'s `tooling_files` check now looks for the package rather than for
+`build_dashboard.py` at its old path, which is what had that row reading `needs-setup` for the whole
+session. It exits 0 in this clone.
+
+### Verified live, and from a clean clone
+
+`check-setup.sh` exits 0 with every row `ok`. `stack.py configuration` answers with the fork resolved
+through the new delegation. `refresh_dashboard.sh` runs the whole sequence and renders *this plan's
+own* 50-item dashboard - 942 KB, zero drift, and every status label rendered through the new
+`status_label` filter rather than the enum property that used to carry it. `plan_manifest_tools`
+answers both subcommands.
+
+Then the same from a fresh `git clone` of the pushed branch, per #121's staged-diff lesson that a
+suite passing locally proves nothing about files the index does not have: the zero-install import
+resolves to the clone's own copy, all ten entry points answer `--help`, `check-setup.sh`'s two
+package rows read `ok`, and `example-walkthrough.md`'s documented command runs verbatim.
+
+### Carried, not done
+
+`pin-tooling` on #158 copies `.claude/stack/`, which this empties, and #111 folds its
+`development_tooling` modules in under the `bastler` name - both need telling on their own pull
+requests. The CI job rename changes the reported check name, so branch protection needs updating if
+`test_claude_dev_tooling` is a required status check. And this session could not subscribe to
+tracking issue #102 (the call was refused by the permission classifier), so concurrent structural
+changes reach it only through the delta recheck.
