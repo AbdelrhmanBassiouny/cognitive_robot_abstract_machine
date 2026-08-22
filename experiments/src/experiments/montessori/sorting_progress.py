@@ -539,6 +539,15 @@ class SortingProgress:
         with self._lock:
             return list(self._events)
 
+    @property
+    def tracked_shapes(self) -> List[MontessoriShape]:
+        """
+        The live shapes the demo has started on, for a question that is about the shape
+        itself rather than about how it is doing.
+        """
+        with self._lock:
+            return list(self._tracked_shapes.values())
+
     def begin_shape(
         self, shape: MontessoriShape, board: ShapeSortingBoard, world: World
     ) -> None:

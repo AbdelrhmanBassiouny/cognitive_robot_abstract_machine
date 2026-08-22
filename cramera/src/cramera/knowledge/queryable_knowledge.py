@@ -1,9 +1,10 @@
 """
 The bodies of knowledge a demo offers to be questioned about.
 
-A running demo knows two different things: what is true of it right now, and what its
-finished runs left behind. Both are asked in the same language, but one is answered from
-objects in the process and the other from a database, so each declares how it answers.
+A running demo knows several different things: what is true of it right now, what its
+finished runs left behind, and what it could still do. All are asked in the same
+language, but one is answered from objects in the process, another from a database and
+another by building the answer, so each declares how it answers.
 """
 
 from __future__ import annotations
@@ -32,6 +33,12 @@ class QueryScope(StrEnum):
     EPISODIC_MEMORY = "episodic_memory"
     """
     What the runs that already finished recorded of themselves.
+    """
+
+    UNDERSPECIFIED = "underspecified"
+    """
+    What the demo could do, worked out rather than looked up: a question that writes
+    ``...`` for a field is answered once per value that field could take.
     """
 
     @property
@@ -84,6 +91,15 @@ class QueryEvaluation(ABC):
 
         :param expression: The query to answer.
         """
+
+    def names(self) -> Dict[str, Any]:
+        """
+        Names a query may use because of how it is answered here.
+
+        Empty unless answering a question puts something of its own within reach of the
+        next one.
+        """
+        return {}
 
 
 @dataclass(frozen=True)
