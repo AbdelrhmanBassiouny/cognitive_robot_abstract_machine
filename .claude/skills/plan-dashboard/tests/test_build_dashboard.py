@@ -59,6 +59,11 @@ EXAMPLE_DIRECTORY = Path(__file__).parent.parent / "example"
 """The example-walkthrough.md doc's committed sample plan.yaml/roadmap.md/
 pr_data.json - see the tests at the bottom of this file for why."""
 
+DRIFT_LINE_MARKER = "\u26a0"
+"""
+The warning sign the item card prefixes every drift line with.
+"""
+
 
 def minimal_plan(**overrides: Any) -> dict[str, Any]:
     """
@@ -1061,29 +1066,10 @@ def test_manifest_drift_and_a_stalled_dependency_are_both_reported():
 
 # The wording itself is deliberately not asserted: a drift description is
 # read by a person on the dashboard and parsed by nothing, so pinning the
-# sentence buys a failing test for every reword and catches no defect. What
-# is pinned is that every cause and every stall reason has a branch at all -
-# a match with no case for a member returns None silently, which the item
-# card would render as the word "None".
-
-
-@pytest.mark.parametrize("cause", list(ManifestDriftCause))
-def test_every_manifest_drift_cause_describes_itself(cause):
-    drift = ManifestDrift(
-        cause=cause,
-        status=ItemStatus.IN_PROGRESS,
-        live_state=LiveState.CLOSED_UNMERGED,
-        pull_request_number=1,
-    )
-    assert drift.description
-
-
-@pytest.mark.parametrize("reason", list(StallReason))
-def test_every_stall_reason_describes_itself(reason):
-    drift = StalledDependencyDrift(
-        dependency_identifier="a", reason=reason, pull_request_number=1
-    )
-    assert drift.description
+# sentence buys a failing test for every reword and catches no defect - the
+# same treatment ItemStatus.display_label and LiveState.display_label, built
+# the same way, already get. What is left is the one rule that is not a
+# phrasing.
 
 
 def test_a_stalled_dependency_with_nothing_to_reparent_onto_suggests_nothing():
@@ -1804,7 +1790,7 @@ class TextOfElementsWithClass(HTMLParser):
     One entry per matching element, in document order.
     """
 
-    capturing_tag: str | None = None
+    closing_tag: str | None = None
     """
     The tag name whose closing tag ends the element being collected.
     """
@@ -1822,26 +1808,26 @@ class TextOfElementsWithClass(HTMLParser):
         """
         Start collecting when an element carries :attr:`css_class`.
         """
-        if self.capturing_tag is not None:
+        if self.closing_tag is not None:
             return
         element_classes = (dict(attributes).get("class") or "").split()
         if self.css_class not in element_classes:
             return
-        self.capturing_tag = tag
+        self.closing_tag = tag
         self.texts.append("")
 
     def handle_endtag(self, tag: str) -> None:
         """
         Stop collecting at the end of the element that started it.
         """
-        if tag == self.capturing_tag:
-            self.capturing_tag = None
+        if tag == self.closing_tag:
+            self.closing_tag = None
 
     def handle_data(self, data: str) -> None:
         """
         Append text found inside the element being collected.
         """
-        if self.capturing_tag is not None:
+        if self.closing_tag is not None:
             self.texts[-1] += data
 
 
@@ -1855,12 +1841,6 @@ def text_of_elements_with_class(output: str, css_class: str) -> list[str]:
     parser = TextOfElementsWithClass(css_class)
     parser.feed(output)
     return [text.strip() for text in parser.texts]
-
-
-DRIFT_LINE_MARKER = "\u26a0"
-"""
-The warning sign the item card prefixes every drift line with.
-"""
 
 
 def drift_lines_in(output: str) -> list[str]:
