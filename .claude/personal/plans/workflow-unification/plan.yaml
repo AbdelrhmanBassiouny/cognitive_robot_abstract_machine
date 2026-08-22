@@ -2843,6 +2843,40 @@ items:
       leaving subscription "to an interactive session babysitting that one PR", and
       stacked-pr-maintenance's needs-resolution comment claiming it may arrive as a live event
       in the owning session. That skill's own NEVER-subscribe hard rule was already right.
+  - id: fresh-base-at-session-start
+    title: "Fast-forward the fork's default branch at session start"
+    branch: claude/fork-main-upstream-sync-mtrzpr
+    track: personal-data
+    depends_on: []
+    status: in_progress
+    pull_request_number: 188
+    session: https://claude.ai/code/session_01DmexEkCHmVuQjanQpsHX4F
+    notes: >
+      Raised 2026-08-22 by the user. Sessions are cut from the fork's default branch, so a
+      fork that has drifted behind cram2 makes every session in that clone plan and implement
+      against a stale base - invisibly, because the clone is consistent with itself. Live at
+      the time it was raised: origin/main was 86 commits behind cram2/main and this session's
+      branch was cut from exactly that commit.
+      session-start.sh now runs .claude/hooks/fast-forward-default-branch.sh before printing
+      its report: it resolves the upstream through stack.py configuration (so no repository is
+      named in the hook and it works on a fork of anything), fetches that base branch,
+      fast-forwards this clone's copy, and pushes the result to the fork - the copy the next
+      session gets cloned from. Its outcome becomes the report's new "default branch" line,
+      with indented rows for the fork push and for how far behind the checked-out branch now
+      is. Fast-forward only in every step, that one branch only, never fatal. Verified live
+      here: 86 commits in 3.9 seconds.
+      Deliberately not done: merging or rebasing the checked-out branch. Whether to take a
+      moved base into work already in progress is a judgement call that can conflict, so it is
+      reported rather than performed.
+      Carries a second fix with the same root cause: catching the base up leaves the upstream
+      tip in FETCH_HEAD, and the summary's plan state SHA was re-reading FETCH_HEAD rather than
+      the baseline it had already recorded, so a session rechecking from it would have diffed
+      plan state from an unrelated commit. It now prints what was recorded.
+      Overlaps routine-cutover's scheduled Action, which also lists a fork-main fast-forward
+      among its deterministic duties - complementary rather than duplicate: that one is a timer
+      keeping the fork fresh between sessions and is gated on the upstream wave landing, this
+      one guarantees the base of the session about to run and is live now.
+
   - id: integration-branch
     title: "Regenerated personal integration branch: build, check, resolve, report"
     branch: claude/plan-item-kickoff-workflow-ixbvxl

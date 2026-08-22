@@ -8153,3 +8153,38 @@ files, `docformatter --diff` 0 hunks on each (was 48 and 0), `black --check` cle
   instead, and the delta recheck caught what mattered: the notes branch moved twice mid-session
   (`report-document-naming` was added by another session), and these edits were applied onto the
   re-fetched manifest rather than the copy loaded at the start.
+
+## 2026-08-22 - the base a session starts from was never checked
+
+The user raised that every session is started from their fork's `main`, and that a fork behind
+cram2 therefore makes the whole session plan and implement against a stale base. The measurement
+at the time: `origin/main` 86 commits behind `cram2/main`, and the session's own branch cut from
+exactly that commit - so the problem was not hypothetical, it was the state that session was in.
+
+What makes it worth a deterministic step rather than a habit is that nothing about it looks wrong
+from inside the clone. The clone is perfectly consistent with itself; the drift only surfaces at
+the rebase, by which time the work is written. That is the same shape as the setup-check and
+plan-item guards already in this track: the failure mode is a step that gets skipped, so the fix
+is to stop it being a step.
+
+Two decisions worth recording. First, the hook pushes the caught-up branch to the fork, not just
+to the local ref - the local update fixes the session that is running, but the fork's default
+branch is what the *next* clone is cut from, and fixing only the former leaves the bug in place
+for everyone after. Second, it stops at the default branch: merging the moved base into the
+checked-out branch can conflict and is a judgement call about work in progress, so it is reported
+with a commit count instead. Everything is fast-forward only and nothing is force-pushed, which
+holds because the fork's default branch is only ever written to by this catching-up.
+
+The upstream is resolved through `stack.py configuration` rather than named in the hook, so there
+is still exactly one place that says which repository the fork tracks, and the hook runs unchanged
+on a fork of anything.
+
+Wiring it in exposed a latent coupling: the summary's `plan state SHA` was re-reading `FETCH_HEAD`
+instead of the baseline it had already recorded, so any later step that fetches - this one fetches
+the upstream - silently changed the SHA a session was told to recheck from. Fixed in the same PR
+by printing the recorded stamp.
+
+`routine-cutover` lists a fork-main fast-forward among the scheduled Action's deterministic duties.
+The two are complementary: that one is a timer keeping the fork fresh between sessions and is gated
+on the upstream wave landing; this one guarantees the base of the session about to run, and is live
+now.
