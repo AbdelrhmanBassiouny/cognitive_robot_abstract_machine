@@ -2157,3 +2157,59 @@ Worth keeping as a habit: a dependency or configuration fix on a fork needs the 
 before it is opened, not after. The strongest evidence here was empirical and already on the
 record — the marked test failed CI on a pull request that could not have affected it — but
 nothing had confirmed the *fix* was not already sitting upstream.
+
+## 26. Addendum (2026-08-22) — the "flaky" MCRDR test is not flaky; the bug was fixed five days after the skip
+
+§23 recorded 18 passes and left the question open; §24 carried it to #189. Asked to stress
+test it properly, the answer is unambiguous, and the useful part is not the sweep.
+
+### The sweep, targeted rather than blind
+
+The skip blames a nondeterministic expert-interaction count, so the sweep targeted the one
+plausible mechanism: `MultiClassRDR.add_conclusion` builds a set and `make_list()`s it, so
+`self.conclusions` order follows set iteration order, and `Enum` members hash by their string
+name — randomised per process by `PYTHONHASHSEED`. Confirmed seed does reorder an enum set,
+then swept it **systematically** instead of sampling it as repetition does.
+
+| arm | runs | result |
+|---|---|---|
+| alchemy test alone, seeds 0–399 | 400 | pass |
+| `test_rdr.py` sibling, skip removed, seeds 0–399 | 400 | pass |
+| whole class, seeds 0–99 | 100 | pass |
+| **total** | **900** | **900 pass** |
+
+Five logged failures at seeds **130–134** were **self-inflicted** — five consecutive seeds
+coinciding exactly with a fixture-swap experiment running against the same working tree; all
+five pass on clean re-run. Worth recording as a method error: a long parallel sweep and an
+interactive experiment must not share a checkout. The contiguity is what gave it away.
+
+### The actual root cause, found in the history
+
+Instrumenting answer consumption was what paid off. Every run: `loaded=18, consumed=18,
+remaining=0` — the fixture holds exactly 18 answers and the test uses all of them, so it runs
+with **zero margin**. Dropping one reproduces the CI symptom exactly:
+`NonInteractiveTerminalError: stdin is not an interactive terminal`, because
+`Human._get_conditions` catches the `IndexError` and falls through to a live prompt.
+
+Then the dates line up:
+
+| | |
+|---|---|
+| 2026-07-10 | `57a1babac` skips the test as flaky |
+| 2026-07-15 | `b25353559` fixes every `.py` fixture's answer delimiter — they used `"===New Answer==="`, `experts.py` has always split on `'===New Answer==='` |
+
+Reproduced: restoring the pre-fix fixture makes the loader return **1** answer instead of 18
+and the test fails with exactly that error. So the failure was **deterministic, not flaky**,
+and it was fixed five days after the skip went in. Both skips have been obsolete since
+2026-07-15.
+
+### The lesson, which is the same one this plan keeps relearning
+
+"Flaky" was a diagnosis nobody could confirm, so it became a skip that outlived its cause by
+six weeks — and then propagated, because §23 dutifully carried it to a sibling. §22 rescued a
+live code path from being deleted as dead; this is the mirror image: a live test suppressed as
+broken. Both times the run, not the reading, settled it. A skip whose cause was never
+reproduced should carry an expiry, or at least a pointer to the run that justified it.
+
+Recorded but not actioned: #189 should be closed and `main`'s `test_rdr.py` skip removed. The
+developer marked #189 ready, so it is theirs.
