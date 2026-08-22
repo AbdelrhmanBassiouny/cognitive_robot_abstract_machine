@@ -112,11 +112,39 @@ stacked on a dependency that will never land was never flagged.
   answering: nothing named them anywhere — `drift`/`drift-banner` are literals in
   `dashboard.html` twice each, and `has-drift` is a bare literal in
   `status_and_drift_css_class` whose *other* half derives from `ItemStatus`.
-- The enum is in the test module, not production: the template is where a class is
-  defined, so Python could only be a third copy of the name. The rendered-page tests
-  hold the two equal, mutation-checked. **The module's other ~100 markup literals stay
-  untouched** — there the literal is the assertion; these two were arguments to a
-  lookup. Do not sweep them without being asked.
+- The enum went in the test module — **reversed by the fifth round**, and the reason
+  given was wrong. **The module's other ~100 markup literals stay untouched** — there
+  the literal is the assertion; these two were arguments to a lookup. Do not sweep them
+  without being asked.
+
+**Fifth round the same day — one thread, resolved (`4279271f1`)**
+- *"Why is this only in tests?"* No good reason. `status_and_drift_css_class` was
+  already spelling `has-drift` itself while deriving its other half from `ItemStatus`,
+  so production does name CSS classes and the round-four argument ("Python would be a
+  third copy") was an objection to something the file already did. `DashboardCssClass`
+  moved into `build_dashboard.py` and gained `HAS_DRIFT`.
+- It removes **no** copy — `dashboard.html` still names every class twice — and that was
+  overstated before. What it buys: Python names each once instead of spelling it in two
+  files, and each value is pinned by exactly one test, mutation-checked one at a time
+  (`DRIFT` → drift-line render test, `DRIFT_BANNER` → banner count test, `HAS_DRIFT` →
+  `test_status_and_drift_css_class_with_drift`).
+- **Placement is load-bearing.** The first attempt put it immediately before the
+  decorated `ValidationProblem` and re-created the exact `format_docstrings.py`
+  non-convergence this file was in until round one — `docformatter --diff` went 0 hunks
+  to 1. It sits among the other `StrEnum`s now, followed by an undecorated `class`.
+  **Run `docformatter --config pyproject.toml --diff <file> | wc -l` after any insertion
+  near a decorated definition**; the repo's own formatter reports no change when it hits
+  this.
+- Left alone deliberately: the `status-` prefix in that f-string (a prefix composed with
+  an enum value, not a class name) and `build_index.py`'s `plan-card`/`complete`.
+
+**State**
+- 267 plan-dashboard tests, 107 hooks, 154 stack, all green on the merged head.
+  `format_docstrings.py` a no-op, `docformatter --diff` 0 hunks on both touched files,
+  `black --check` clean. Live check unchanged.
+- PR data went stale twice while publishing the dashboard (#188's draft flag, then #191
+  not existing). **Refetch `list_pull_requests` at publish time; never reuse an earlier
+  turn's copy.**
 
 **State**
 - `main` was merged in by a maintenance pass at `7e1c51e4d`; all three suites re-run on
