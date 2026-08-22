@@ -1610,15 +1610,42 @@ items:
       answering: nothing named them anywhere - drift and drift-banner are literals in
       dashboard.html twice each (the style rule and the class attribute), and has-drift is a
       bare literal in status_and_drift_css_class, whose other half derives structurally from
-      ItemStatus. The enum is in the test module rather than production because the template
-      is where a class is defined, so Python could only be a third copy of the name; the
-      enum and the template are held equal by the rendered-page tests, verified by mutation.
-      The module's other ~100 markup literals are deliberately untouched - there the literal
-      is the assertion, where these two were arguments to a lookup.
+      ItemStatus. It was first put in the test module, on the reading that the template is
+      where a class is defined so Python could only be a third copy of the name; the fifth
+      round reversed that. The module's other ~100 markup literals are deliberately
+      untouched - there the literal is the assertion, where these two were arguments to a
+      lookup.
 
-      242 tests in .claude/skills/plan-dashboard/tests, was 241 (the split), 107 hooks, 154
-      stack. Live check unchanged: rdr-refactor flags D-ui-rendering and only it,
-      workflow-unification flags none.
+      Fifth round the same day, one thread, resolved (4279271f1): "why is this only in
+      tests?". No good reason - status_and_drift_css_class was already spelling has-drift
+      itself while deriving its other half from ItemStatus, so production does name CSS
+      classes and the reason given for keeping the enum out of it was wrong.
+      DashboardCssClass moved into build_dashboard.py and gained HAS_DRIFT; the tests import
+      it the way they already import ItemStatus.
+
+      What it buys was overstated the round before and is stated plainly now: it removes no
+      copy, since dashboard.html still names every class it styles twice, and making Python
+      the single source means rendering the stylesheet through Jinja - worth doing for all
+      ~60 classes or none. What it does buy is Python naming each once instead of spelling it
+      in two files, and each value pinned by exactly one test, mutation-checked one at a
+      time: DRIFT by the drift-line render test, DRIFT_BANNER by the banner count test,
+      HAS_DRIFT by the property's own.
+
+      Placement turned out to be load-bearing. The first attempt put the enum immediately
+      before the decorated ValidationProblem, which re-created the exact non-convergence this
+      file was in until the first round: an attribute docstring directly before a decorated
+      definition makes docformatter drop a blank line, black restore it, and
+      format_docstrings.py discard the lot. docformatter --diff went 0 hunks to 1 the moment
+      it was inserted. It sits among the other StrEnums now, followed by an undecorated
+      class, and both files are back to 0 hunks.
+
+      Left alone deliberately: the status- prefix in that same f-string, which is a prefix
+      composed with an enum value rather than a class name, and build_index.py's
+      plan-card/complete, a different page.
+
+      267 tests in .claude/skills/plan-dashboard/tests (242 before the maintenance pass
+      merged main), 107 hooks, 154 stack. Live check unchanged: rdr-refactor flags
+      D-ui-rendering and only it, workflow-unification flags none.
   - id: landed-parent-detection
     branch: claude/stack-landed-parent-detection
     title: "Decide a parent has landed from git ancestry, not board membership"

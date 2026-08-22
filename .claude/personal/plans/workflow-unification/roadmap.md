@@ -8584,12 +8584,10 @@ template are held equal by the rendered-page tests rather than by convention.
 
 Two deliberate limits, both reported:
 
-- **The enum is in the test module, not production.** The template is where a CSS class is
-  defined — its style rule *and* its `class=` attribute — so Python cannot be the single
-  source without rendering the stylesheet through Jinja too, and an enum in
-  `build_dashboard.py` would be a third copy of the name rather than the first. Naming
-  `has-drift` there only moves that literal, since `.item.has-drift` in the template stays a
-  second copy with no test holding them equal.
+- **The enum is in the test module, not production** — *reversed by the fifth round below,
+  and the reasoning given here did not survive contact with the file.* The argument was that
+  the template is where a CSS class is defined, so Python could only be a third copy; what it
+  overlooked is that `status_and_drift_css_class` was already spelling `has-drift` itself.
 - **The module's other ~100 markup literals are untouched** — `next-bug-chip`,
   `next-count-all`, `review-button`, `id="wave-wave-1"`, all `main`'s. The distinction that
   makes naming two of them defensible without implying the rest: those are
@@ -8701,3 +8699,77 @@ The marked job runs with the tooling dependencies only, so a reproduction test t
 a robotics package and needs the docker matrix would not be collectible there. The matrix stays
 the slow path for those. If it turns out to matter in practice it is a follow-up item, not a gap
 this kickoff pretended was closed.
+
+## Update 2026-08-22 (fifth round): "why is this only in tests?"
+
+One thread on #184, filed two hours after the fourth round was pushed. Applied and resolved
+in `4279271f1`; 267 plan-dashboard tests, unchanged.
+
+### The reason given the round before was wrong, and the file said so
+
+The fourth round put `DashboardCssClass` in the test module and argued that the template is
+where a CSS class is defined, so a Python enum could only ever be a third copy of the name.
+That reasoning ignores what was two lines away from the thing being discussed:
+
+```python
+drift_suffix = " has-drift" if self.drift_flags else ""
+return f"status-{self.status.value}{drift_suffix}"
+```
+
+One line, two conventions — the status half derived from `ItemStatus`, the drift half a bare
+literal. Production *does* name CSS classes, so "Python would be a third copy" was an
+objection to something the file already did. The enum moves into `build_dashboard.py`, gains
+`HAS_DRIFT`, and the tests import it exactly as they already import `ItemStatus` and
+`LiveState`.
+
+### What it buys, stated without the overstatement
+
+It removes no copy. `dashboard.html` still names every class it styles, once in the `<style>`
+rule and once in the `class=` attribute, and making Python the single source means rendering
+the stylesheet through Jinja — worth doing for all ~60 classes or for none, not for three.
+
+What it does buy is that **Python** names each one once instead of spelling it in two files,
+and that each value is pinned by exactly one test, mutation-checked one at a time:
+
+| member | fails if its value changes |
+|---|---|
+| `DRIFT` | `test_render_shows_one_drift_line_per_description_on_the_item_card` |
+| `DRIFT_BANNER` | `test_render_banner_counts_drift_flags_rather_than_drifted_items` |
+| `HAS_DRIFT` | `test_status_and_drift_css_class_with_drift` |
+
+Each fails alone, and each is the test named for that behaviour.
+
+### Placement is load-bearing, and it caught this session out
+
+The first attempt put the enum immediately before `@dataclass class ValidationProblem` — and
+re-created, exactly, the non-convergence this file was in until the first round of this
+review. An attribute docstring directly before a *decorated* definition makes `docformatter`
+drop a blank line, `black` put it back, and `scripts/format_docstrings.py` discard everything
+docformatter did. `docformatter --diff` went from 0 hunks to 1 the moment the class was
+inserted:
+
+```
+     """
+     An item card carrying at least one drift flag.
+     """
+-
+ 
+ @dataclass
+ class ValidationProblem(ABC):
+```
+
+It sits among the other `StrEnum`s now, followed by an undecorated `class`, and both touched
+files are back to 0 hunks with `black --check` clean.
+
+**Worth carrying: this hazard is a property of a file's shape, not a fact about the file**, so
+it is re-creatable by an ordinary insertion months after the original was fixed — and it is
+silent, because the repo's own formatter reports no change when it hits it. The check is one
+command (`docformatter --config pyproject.toml --diff <file> | wc -l`) and it belongs after
+any insertion near a decorated definition, not only when something looks wrong.
+
+### Left alone deliberately
+
+The `status-` prefix in that same f-string stays a literal: it is a prefix composed with an
+enum value rather than a class name, and making it a member would make the enum's own
+contract untrue. `build_index.py`'s `plan-card`/`complete` are untouched — a different page,
+and not what this pull request is about.
