@@ -1457,26 +1457,82 @@ items:
     notes: >
       Found 2026-08-12 while investigating rdr-refactor's D-ui stack: D-ui-splice-fix (#78)
       was closed as superseded (the fix landed elsewhere, via dag-facade-hardening's
-      insert-at-ownership-parentage, #118), but D-ui-rendering (#79) and D-ui (#76) still
-      carry depends_on: [D-ui-splice-fix] and are still in_progress, with no automated
-      signal anywhere that their base is dead - only a previous session's freeform note,
-      which nothing re-reads or re-verifies. Root cause: build_dashboard.py's
-      _drift_description_of only compares an item's own status against its own live PR
-      state; it never checks a dependency's status against the dependent's. Item.
-      is_ready_to_unblock_dependents() has the right predicate already (correctly False
-      for a deferred/closed_unmerged dependency) but is only invoked on demand, per named
-      item, by plan-item-kickoff/plan-item-resolve - never proactively across the whole
-      graph on a dashboard refresh. And _compute_next_steps only evaluates
-      not_started/blocked items, so an in_progress item stacked on a dead dependency is
-      skipped by every existing check. Same defect shape as landed-parent-detection (#117,
-      stack-tooling track): that fix taught restack_plan to decide a parent has landed from
-      git ancestry rather than board membership; this item is the analogous fix for
-      plan-dashboard's own depends_on graph. Proposed fix: a drift check for any item whose
-      status is not deferred/done but whose depends_on includes an item that is itself
-      deferred or closed_unmerged, surfaced the same way other drift is (not a note),
-      ideally naming that dependency's own depends_on as the suggested reparent target.
-      Not implemented here - left for another session.
+      insert-at-ownership-parentage, #118), but D-ui-rendering (#79) still carries
+      depends_on: [D-ui-splice-fix] and is still in_progress, with no automated signal
+      anywhere that its base is dead - only a previous session's freeform note, which
+      nothing re-reads or re-verifies. Root cause: build_dashboard.py's
+      _drift_description_of only compared an item's own status against its own live PR
+      state; nothing anywhere compared a dependency's state against its dependent's, and
+      _compute_next_steps only evaluates not_started/blocked items, so an in_progress item
+      stacked on a dead dependency slipped past every existing check. Same defect shape as
+      landed-parent-detection (#117), which taught restack_plan to decide a parent has
+      landed from git ancestry rather than board membership; never ported to
+      plan-dashboard's own depends_on graph.
 
+      This entry's original "is_ready_to_unblock_dependents() has the right predicate
+      already" reading is wrong and is not preserved: that predicate is is_effectively_done()
+      or OPEN_READY, so it is also false for a not_started dependency and for an open draft -
+      and stacking on an open draft is this repo's normal workflow, so a check built on it
+      would flag most of every plan. The note's own "Proposed fix" sentence (deferred, or
+      closed unmerged) was the correct condition and is what shipped, as Item.stall_reason.
+
+      Implemented 2026-08-20 as draft PR #184 off main with the bug label (40d9d6dd), tests
+      first: 22 failing, then the implementation. Item.stall_reason answers why an item has
+      stopped (a StallReason: DEFERRED or PULL_REQUEST_CLOSED_UNMERGED) with is_stalled()
+      derived from it; Item.drift_description becomes drift_flags, because an item can carry
+      manifest drift and a stalled dependency at once and reporting one would hide the other;
+      DashboardSummary gains drift_flag_count, since the banner counts flags rather than
+      items. Only direct depends_on is checked - an item further up is stacked on a base that
+      is itself alive and becomes correct the moment its own dependency reparents - and each
+      flag names the stalled dependency's own depends_on as the reparent target, omitted when
+      it has none. Incidental: _resolved_dependencies_of absorbs the identical depends_on
+      resolution _compute_next_steps, _compute_ready_to_review and _dependencies_are_ready
+      each wrote out separately; it shares the resolution, not any threshold.
+
+      Review round 2026-08-22 (eight threads) applied in 453795a6. Seven were one finding:
+      the tests retyped the drift sentences build_dashboard.py builds, so the two copies could
+      drift apart with nothing to catch it - while this module's pre-existing drift tests never
+      assert a sentence at all, only summary.drift_items and live_state. drift_descriptions
+      becomes drift_flags: a ManifestDrift carrying the ManifestDriftCause its existing match
+      already decides, or a StalledDependencyDrift carrying the dependency, its StallReason and
+      the reparent targets, with the wording on DriftFlag.description. _drift_description_of
+      (a staticmethod on the renderer reading only the item) split into ManifestDrift._cause_of
+      and ManifestDrift.description, the match unchanged and its case ordering preserved -
+      MERGED + BLOCKED still matches the merged case first, which an existing test pins. Swept
+      the whole module rather than the five lines commented on: the pre-existing
+      test_status_and_drift_css_class_with_drift was retyping a message too. One parametrised
+      test_drift_flag_describes_itself renders every cause and every stall reason, which is what
+      replaces the guard the retyped copies were accidentally providing.
+
+      The two markup threads are answered by reading the page rather than matching strings
+      against it: a small html.parser subclass returns the text of elements carrying a class,
+      so the tags leave the tests and the hand-modelled markupsafe.escape() goes with them -
+      that call existed only to reproduce Jinja's autoescaping in the expectation.
+
+      The doc-formatter thread is the one worth carrying. On the previous head
+      scripts/format_docstrings.py left build_dashboard.py byte-identical while docformatter
+      disagreed with 48 hunks of main's own copy - the non-convergent case the script documents,
+      the whole disagreement being one blank line at the AVAILABLE_MODELS attribute docstring
+      immediately before the decorated class Item. This round's new classes sit at exactly that
+      adjacency, so the file converges and the pre-commit hook now formats it; the ~500-line
+      docstring reflow across main's code in 453795a6 is that first run rather than a choice.
+      The alternative - placing the new classes so the disagreement survived, i.e. arranging code
+      to preserve a formatter bug - was put to the user rather than decided, and they chose to
+      let the sweep land. It answers the roadmap's open "do main's unformatted files get a sweep"
+      question for this file only; stack.py is in the identical state and is untouched.
+
+      Verified: 248 tests in .claude/skills/plan-dashboard/tests (was 239), 107 hooks, 154 stack;
+      format_docstrings.py a no-op on both touched files afterwards, docformatter --diff 0 hunks
+      on each, black --check clean. Live against the real manifests, the check flags exactly one
+      item and the right one - D-ui-rendering, "depends on 'D-ui-splice-fix', which is deferred -
+      consider reparenting onto d-core-backend" - with D-ui correctly unflagged and
+      workflow-unification itself unflagged, which is expected since it has no deferred item.
+      All eight threads replied to and resolved. Still a draft.
+
+      Landing hazard, no action now: decision 13 names this pull request as touching 2 files the
+      bastler migration moves, and #185 is open but unmerged, so per that doctrine it is not
+      pre-resolved against - #184 merges main and re-applies its delta inside the package once
+      #185 lands.
   - id: landed-parent-detection
     branch: claude/stack-landed-parent-detection
     title: "Decide a parent has landed from git ancestry, not board membership"

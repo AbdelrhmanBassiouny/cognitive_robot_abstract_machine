@@ -8016,3 +8016,140 @@ all under `.claude/`; not this branch's, and not chased into it. #149 is left un
 than returned to draft: un-drafting a fork pull request is this workflow's own promotion gate
 (`stack.py`'s *"self-review a fork PR, then un-draft it"*), so re-drafting it would withdraw
 #537 from the review it is answering.
+
+## Update 2026-08-22 (resolved): #184's review round, and the formatter that stopped declining
+
+`/plan-item-resolve workflow-unification deferred-dependency-drift-check`. Eight threads,
+all answered and resolved, in `453795a6`. 248 tests in `.claude/skills/plan-dashboard/tests` (was 239), 107 hooks, 154 stack.
+
+### Nothing about the feature was blocked, which is worth stating first
+
+CI was green on all 22 checks, `mergeable_state` was `clean`, and the branch's merge base was
+`origin/main`'s current tip - so no conflict, no base merge, no dependency regression. The
+entire stall was a review round filed the same morning. That is the shape the 2026-08-20 entry
+on #154 already named twice: **a resolve session reads the pull request first and the manifest
+entry only to learn what has already been decided.** Here the manifest's `notes` still ended
+*"Not implemented here - left for another session"* - written on 2026-08-12 when the item was
+filed, five days before it was implemented - so the entry was not merely stale about the round,
+it was stale about the item having been built at all.
+
+### Seven threads, one finding
+
+The tests retyped every drift sentence `build_dashboard.py` builds. By this plan's own rule
+(2026-08-20: *a repeated literal is a defect when the two copies can drift apart, and not one
+when the second copy is the assertion*) that is squarely the first case - the wording is
+production's, and the test's copy of it can drift silently.
+
+What made it clear-cut is that **this module's pre-existing drift tests never assert a sentence
+at all** - they assert `summary.drift_items` and `live_state`. The new tests had introduced the
+only string comparisons in the section, so single-sourcing was not a new convention but a return
+to the file's own.
+
+`Item.drift_descriptions` becomes `drift_flags`: a `ManifestDrift` carrying the
+`ManifestDriftCause` its `match` already decides, or a `StalledDependencyDrift` carrying the
+dependency, its `StallReason` and the reparent targets, with the wording on
+`DriftFlag.description`. `_drift_description_of` - a `@staticmethod` on the renderer that read
+only the item, and both decided *whether* an item drifts and wrote the sentence for it - split
+into `ManifestDrift._cause_of` and `ManifestDrift.description`. The `match` itself is untouched,
+case ordering included: `MERGED` + `BLOCKED` still matches the merged case before the closed
+one, which an existing test pins.
+
+Two knock-ons worth keeping:
+
+- **`Item.stall_reason` replaced a condition written twice.** `is_stalled()` tested deferred-or-
+  closed-unmerged, and the sentence builder then re-tested *which* of the two it was in an
+  `if/else`. One property answers both now, and `is_stalled()` is derived from it - so the third
+  sibling predicate the kickoff decision called for survives, answering only *whether*, where
+  `stall_reason` answers *why*.
+- **`StalledDependencyDrift.of` refuses a dependency that has not stalled**
+  (`NotStalledDependencyError`) rather than inventing a reason for it - the
+  `MissingMergeTimestampError` precedent, and the thing that keeps `reason: StallReason` an
+  honest type rather than a narrowed `| None`.
+
+The English is still pinned, in exactly one place: `test_drift_flag_describes_itself` renders
+every cause and every stall reason. That is the counterpart the 2026-08-11 mirror-schema round
+demanded - **single-sourcing a contract deletes the guard the duplicate literals were providing,
+and the commit that single-sources it owes the replacement.** Swept the whole module rather than
+the five commented lines, per 2026-08-20: the pre-existing `test_status_and_drift_css_class_with_drift`
+was retyping a message too.
+
+### The two markup threads: read the page, don't match strings against it
+
+`drift_lines_in` and `drift_banner_flag_count` run a small `html.parser.HTMLParser` subclass
+returning the text of elements carrying a class, so the tags and the class name leave the tests.
+
+The part that made this more than tidying: the old assertion wrapped each description in
+`markupsafe.escape()`, **because the test was reproducing Jinja's autoescaping in order to match
+its own output**. A parser resolves entities the way a browser does, so there is nothing left to
+model. Worth generalising - *a test that has to imitate the renderer to state its expectation is
+matching the wrong artifact.*
+
+Deliberately narrow: this module has ~50 other markup assertions and they are untouched. This
+round converted what its own review named.
+
+### The formatter stopped declining the file, and that decided the diff
+
+The measurement first, because the obvious action does nothing. On the previous head
+`scripts/format_docstrings.py` left `build_dashboard.py` **byte-identical**, while
+`docformatter --config pyproject.toml --diff` disagreed with **48 hunks of `main`'s own copy**.
+That is the non-convergent case the script documents, and the whole disagreement was one blank
+line:
+
+```
+ plan-specific, so declared once at module level rather than threaded through
+ :class:`Plan`."""
++
+ 
+ @dataclass
+ class Item:
+```
+
+`AVAILABLE_MODELS`' attribute docstring immediately before a *decorated* top-level definition -
+the exact shape the 2026-08-12 entry recorded for `maintenance_board.py`.
+
+**This round's new classes are inserted at precisely that adjacency**, so it no longer exists,
+the file converges, and `format_docstrings.py` - a pre-commit hook on every `.py` - formats all
+48 remaining hunks. The ~500-line docstring reflow across `main`'s code in `453795a6` is that
+first run, not a decision to sweep.
+
+The alternative was to place the new classes so the disagreement survived, which is arranging
+code to preserve a formatter bug. That was put to the user rather than decided, and the sweep
+was chosen: a file that has become convergent is a landmine for whoever next commits it with the
+hook installed, and doing it deliberately in this pull request is better than having it happen to
+someone. It answers the roadmap's open "do `main`'s unformatted files get a sweep" question for
+this one file; `stack.py` remains in the identical state and is untouched.
+
+**Generalizable, extending the 2026-08-12 finding.** That entry recorded *a formatter that
+reports no change is not evidence a file is formatted.* The other half is now on record too:
+**that state is a property of the file's shape, not a fixed fact about it** - an ordinary edit
+elsewhere in the file can restore convergence and hand the next commit a whole-file reformat
+nobody asked for. Both halves are invisible at the command line.
+
+One process note: an early attempt applied docformatter's output hunk-by-hunk, filtered to lines
+this pull request authored. It over-reached - docformatter groups neighbouring docstrings into
+one hunk with context, so `PullRequestLabel`, `has_open_pull_request` and several other `main`
+docstrings came along. Caught by reading the working diff rather than by any test, and fixed by
+resetting the file and replaying the code edits from scratch, then filtering at *opcode*
+granularity via `difflib` instead. The lesson is small and reusable: **a unified-diff hunk is not
+a unit of intent** - filtering by hunk silently widens whatever it touches.
+
+### Verified beyond the harness
+
+Live against both real manifests: `rdr-refactor` (45 items) flags exactly one item, and the same
+sentence as before this round -
+`D-ui-rendering (in_progress): depends on 'D-ui-splice-fix', which is deferred - consider reparenting onto d-core-backend` -
+with `D-ui` unflagged; `workflow-unification` (51 items) flags none, expected since it has no
+deferred item. Formatting re-checked afterwards: `format_docstrings.py` a no-op on both touched
+files, `docformatter --diff` 0 hunks on each (was 48 and 0), `black --check` clean.
+
+### Carried, not done
+
+- **The bastler landing hazard, deliberately not pre-resolved.** Decision 13 names #184 among the
+  pull requests touching files the migration moves. #185 is open, draft and **unmerged**, and
+  that decision's own doctrine is explicit - *"don't pre-resolve against it before it exists"* -
+  so #184 merges `main` and re-applies its delta inside the package once #185 lands.
+- **`subscribe_pr_activity` on tracking issue #102 was refused** by this session's permission
+  classifier, so this session was not on that channel. The issue's comments were read directly
+  instead, and the delta recheck caught what mattered: the notes branch moved twice mid-session
+  (`report-document-naming` was added by another session), and these edits were applied onto the
+  re-fetched manifest rather than the copy loaded at the start.
