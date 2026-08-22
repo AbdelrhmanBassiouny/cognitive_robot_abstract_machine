@@ -611,6 +611,15 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_01LeZ4Mkr4tfdKjvEcJrz32C
   notes: 'Off main. 57a1babac skipped test_rdr.py::TestRDR::test_fit_mcrdr_stop_only for a nondeterministic MultiClassRDR.fit interaction count and missed the identically-named sibling in test_rdr_alchemy.py, which had been riding the bottom of this stack on #63 since 2026-07-12; extracted here so main''s CI stops carrying it before the stack lands. Open question recorded on the PR rather than guessed: the test passed 18/18 across four configurations (alone, its class, the suite serially, the suite under -n auto), so whether either sibling skip is still needed is the developer''s call - they commented on #63 that it is ''not flaky anymore'' and marked this PR ready. Related: main''s newer @pytest.mark.flaky idiom appears once, is unregistered in pytest.ini, has no rerun plugin declared, and CI runs bare pytest with no --reruns - so that marker looks inert, which matters if it is meant to replace skips. Was untracked in any plan until 2026-08-22.'
+- id: flaky-marker-rerun-plugin
+  title: Install the plugin that makes @pytest.mark.flaky do something
+  branch: claude/flaky-marker-needs-rerun-plugin
+  pull_request_number: 190
+  track: S0-steward
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01LeZ4Mkr4tfdKjvEcJrz32C
+  notes: 'Off main, like #89 and #189. a7c21ffe6 marked test_world_sim_state_sync @pytest.mark.flaky, but pytest-rerunfailures is in no requirements file and not in the dev extra CI installs, so pytest treated it as an unknown mark and ran the test exactly once - failing the run the mark was added to survive, which is how #63 went red on a 49-line krrood diff. One line in pyproject.toml''s dev extra. Measured on the pinned pytest 7.4.4: plugin installed + bare mark -> 1 passed / 1 rerun; plugin absent -> 1 failed + unknown-mark warning. So a bare mark needs no rerun count, no --reruns and no pytest.ini registration - which corrects this session''s own earlier reading that it did. The guard test asserts only that the plugin is loaded, the invariant this repo owns: an earlier draft asserting the rerun behaviour passed on plugin 16.1 and failed on 10.3 with the rerun happening in both, because older versions tear the session fixture down between attempts, so it was really testing the plugin''s fixture semantics. Bears on #189, which uses @unittest.skip where the marker would keep coverage - that PR''s call, not this one''s.'
 - id: D-ui-splice-fix
   title: 'RDR engine: fix rule-tree splice for attributes reused across sibling branches'
   branch: D-ui-splice-fix

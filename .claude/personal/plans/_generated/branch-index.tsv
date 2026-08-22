@@ -45,6 +45,7 @@ D-core-backend	rdr-refactor
 rdr-engine	rdr-refactor
 claude/rdr-refactor-steward-pass-uxewqh	rdr-refactor
 claude/mcrdr-stop-only-flaky-skip	rdr-refactor
+claude/flaky-marker-needs-rerun-plugin	rdr-refactor
 D-ui-splice-fix	rdr-refactor
 D-ui-rendering	rdr-refactor
 D-ui	rdr-refactor

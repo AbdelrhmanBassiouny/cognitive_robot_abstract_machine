@@ -2105,3 +2105,42 @@ not only the one named in its invocation.
   Reverted, not committed. The habit §23 recorded — stage by explicit path, never `git add -u`
   — now has a third instance behind it, and a corollary: **a dirty working tree after a test
   sweep is the normal state here, not a signal to commit.**
+
+## 25. Addendum (2026-08-22) — the flaky marker was inert, and fixing it corrected my own diagnosis twice
+
+§24 flagged `@pytest.mark.flaky` as probably doing nothing. Asked to fix it, the probe
+confirmed the defect and **corrected the stated reasoning twice** — worth recording, because
+both corrections came from running the thing rather than reading it.
+
+**The defect is real and smaller than described.** `pytest-rerunfailures` is in no requirements
+file and not in the `dev` extra CI installs via `uv sync --extra dev`, so pytest treats the mark
+as unknown and runs the test exactly once. That is how #63 went red on a 49-line `krrood` diff.
+One line in `pyproject.toml` fixes it; PR **#190** (`bug`, draft).
+
+**First correction: §24 said a bare mark also needs `--reruns` configured.** It does not. On the
+pinned pytest 7.4.4:
+
+| configuration | result |
+|---|---|
+| plugin installed, bare `@pytest.mark.flaky` | 1 passed, **1 rerun** |
+| plugin absent, identical mark | 1 failed + unknown-mark warning |
+
+A bare mark reruns once on its own, and the plugin registers the mark itself — so neither a
+rerun count, nor `--reruns`, nor a `pytest.ini` `markers` entry was ever missing. Only the
+dependency.
+
+**Second correction, inside the fix.** The first guard test asserted the *rerun behaviour*, by
+failing on the first attempt and passing on the second through a session-scoped counter. It
+passed on plugin 16.1 and **failed on 10.3 — with the rerun happening in both.** Older versions
+tear the session fixture down between attempts, so the test was really asserting the plugin's
+fixture-teardown semantics, not this repository's property. Trimmed to assert only that the
+plugin is loaded, which is the invariant this repo owns and exactly what regressed; what the
+mark does once loaded is the plugin's own contract. The trimmed test passes with the plugin and
+fails without it on both versions.
+
+The general lesson, and it is the same one §22 recorded for the retry loop: a test whose
+mechanism depends on a third party's internals looks like coverage and is really a version
+probe. Ask what property *this* repository owns before asserting.
+
+Also: this item was added to `plan.yaml` in the same turn as opening #190 — the habit §24
+recorded after the developer caught #161 and #189 existing in no plan at all.
