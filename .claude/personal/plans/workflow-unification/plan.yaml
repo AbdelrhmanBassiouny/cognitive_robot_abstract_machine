@@ -1585,6 +1585,40 @@ items:
       ended it was reading how the module already treats the identical pattern rather than
       reasoning about what the test was worth. Check the neighbours before defending a
       guard.
+
+      Fourth round the same day, two threads, both applied and resolved (d224c1126).
+      Neither was about the feature; both were about how the tests say what they mean.
+
+      The reparent test asked "how does this test that it suggests nothing?" and the honest
+      answer was that it did not - it compared lengths and substrings, which states the rule
+      by implication. It now says the suggestion is a suffix, so a flag with nothing to
+      suggest is described by exactly what comes before it, and a sibling test pins the other
+      half that nothing had ever asserted: a suggestion names every target it has. startswith
+      replaced in, which had allowed the shorter description to sit anywhere inside the other.
+      Both derive their expectation from the targets the flag was built with, so neither
+      returns on a reword.
+
+      Stated on the thread rather than left to be found: these cannot tell "omitted" from
+      "rendered empty". Deleting the guard leaves a dangling clause that is still a prefix of
+      the two-target description, and what catches it is the render test, only because the
+      rendered line is stripped and the description is not - accidental coverage. Telling the
+      two apart deliberately means naming the lead-in phrase, which is the wording the two
+      previous rounds cut, so it was offered rather than taken.
+
+      DashboardCssClass names the two classes the page-reading helpers look elements up by,
+      and text_of_elements_with_class takes it rather than any string. Checked before
+      answering: nothing named them anywhere - drift and drift-banner are literals in
+      dashboard.html twice each (the style rule and the class attribute), and has-drift is a
+      bare literal in status_and_drift_css_class, whose other half derives structurally from
+      ItemStatus. The enum is in the test module rather than production because the template
+      is where a class is defined, so Python could only be a third copy of the name; the
+      enum and the template are held equal by the rendered-page tests, verified by mutation.
+      The module's other ~100 markup literals are deliberately untouched - there the literal
+      is the assertion, where these two were arguments to a lookup.
+
+      242 tests in .claude/skills/plan-dashboard/tests, was 241 (the split), 107 hooks, 154
+      stack. Live check unchanged: rdr-refactor flags D-ui-rendering and only it,
+      workflow-unification flags none.
   - id: landed-parent-detection
     branch: claude/stack-landed-parent-detection
     title: "Decide a parent has landed from git ancestry, not board membership"

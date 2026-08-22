@@ -8530,3 +8530,76 @@ enumerated three shapes and stopped, and the shape that dissolved the tension �
 so the directory is a `Path` and the files are text — was not among them. The general check, cheap
 and skipped here: before reporting that two requirements are incompatible, ask what would have to be
 true for both to hold, and whether the collection can be split so each half gets the type it wants.
+
+## Update 2026-08-22 (fourth round): a test that stated its rule by implication, and a class name nothing owned
+
+Two threads on #184, filed nine hours after the third round was pushed. Both applied and
+resolved in `d224c1126`; 242 plan-dashboard tests, was 241.
+
+### "How does this test that it suggests nothing?"
+
+It did not, and that is the useful finding rather than a misreading. The test compared a
+length and a substring:
+
+```python
+assert without_targets.description in with_targets.description
+assert len(with_targets.description) > len(without_targets.description)
+```
+
+which states the rule by implication — a reader has to work out that "shorter, and contained
+in the other" means the suggestion is absent. Worse, `in` allowed the no-targets description
+to sit *anywhere* inside the other, so it never actually said the suggestion is appended.
+
+It now says the rule directly: the suggestion is a **suffix**, so a flag with nothing to
+suggest is described by exactly the part that comes before it. `startswith` replaced `in`,
+and a sibling test pins the half nothing had ever asserted — a suggestion names every target
+it has. Both derive their expectation from the `reparent_targets` the flag was built with,
+which is the fixture the code consumed, so neither comes back on a reword.
+
+**The limit was stated on the thread rather than left to be discovered.** These say the clause
+is absent; they cannot tell *omitted* from *rendered empty*. Deleting the
+`if not self.reparent_targets: return described` guard leaves a dangling
+`- consider reparenting onto `, which is still a prefix of the two-target description, so the
+test passes. It *is* caught — by `test_render_shows_one_drift_line_per_description_on_the_item_card`,
+and only because the rendered line gets stripped while the description does not. That is
+accidental coverage, not a test aimed at the defect, and telling the two apart deliberately
+means naming the lead-in phrase, which is precisely the wording the two previous rounds cut.
+Offered rather than taken.
+
+### The CSS class nothing owned
+
+*"Does `drift` not have a StrEnum or a dataclass or something that structurally refers to it
+or names it instead of this string?"* — checked rather than answered from memory, and the
+answer was no, in three places at once: `drift` and `drift-banner` are literals in
+`dashboard.html` **twice each** (the `.drift` rule in the `<style>` block and the `class=`
+attribute), and `has-drift` is a bare literal in `build_dashboard.py`'s
+`status_and_drift_css_class` — whose *other* half, `f"status-{self.status.value}"`, derives
+structurally from `ItemStatus`. One line, two conventions.
+
+`DashboardCssClass` now names the two classes the page-reading helpers look elements up by,
+and `text_of_elements_with_class` takes it rather than any `str`, so the helper cannot be
+called with a class the page never carries. Mutation-checked: changing `DRIFT`'s value fails
+the drift-line test and nothing else — the parser finds no elements — so the enum and the
+template are held equal by the rendered-page tests rather than by convention.
+
+Two deliberate limits, both reported:
+
+- **The enum is in the test module, not production.** The template is where a CSS class is
+  defined — its style rule *and* its `class=` attribute — so Python cannot be the single
+  source without rendering the stylesheet through Jinja too, and an enum in
+  `build_dashboard.py` would be a third copy of the name rather than the first. Naming
+  `has-drift` there only moves that literal, since `.item.has-drift` in the template stays a
+  second copy with no test holding them equal.
+- **The module's other ~100 markup literals are untouched** — `next-bug-chip`,
+  `next-count-all`, `review-button`, `id="wave-wave-1"`, all `main`'s. The distinction that
+  makes naming two of them defensible without implying the rest: those are
+  `assert '<span class="next-bug-chip">bug</span>' in output`, where the literal **is** the
+  assertion, and these two were *arguments to a lookup*.
+
+### Worth carrying
+
+The round-3 lesson — check the neighbours before defending a guard — applied in the opposite
+direction here, and it cuts both ways. Adding structure the neighbours lack is the same
+mistake as defending a guard the neighbours do not have, unless the thing being changed is
+doing a different job. Both threads turned on that: a literal that *is* the assertion needs no
+name, and a literal that is an argument does.
