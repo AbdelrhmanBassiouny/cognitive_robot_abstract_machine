@@ -59,6 +59,32 @@ Re-verified: 19 tests here, 280 across hooks+stack, and the mutation check still
 bites (disabling the fork push fails the same 4). All three threads replied to and
 resolved; PR description updated; still a draft.
 
+## Review round 2026-08-22 (3be1f191)
+
+Two threads, one rule: reaching for the runner's raw `run` means it is missing a
+command method. Applied to all seven calls - `grep "git\.run("` over the harness
+returns nothing now.
+
+`GitCommandRunner` gains `checkout_orphan`, `move_branch`, `add_remote`,
+`remove_remote`, `configure` and `remove_setting`. Four of those names
+(`checkout_orphan`, `remove_remote`, `configure`, and the `GitSetting` it takes)
+are taken verbatim from #154's copy of the class so the two converge rather than
+collide when it lands.
+
+- `checkout_orphan` removed a special case rather than dressing one up: the
+  two-line comment about creating a branch on an unborn HEAD is gone, because a
+  branch with no history behind it is exactly what `--orphan` means.
+- The runner stays generic - what a config key means is not its business - so the
+  stand-in names its own `url_rewriting` as a `GitSetting` and the harness passes
+  that, building the key once instead of at both call sites.
+- Flagged rather than pre-empted: four of the six new methods have no production
+  caller, which is the same question left open on #154 about its six additions.
+- No unit tests for them - each is a one-line wrapper exercised against real git by
+  all 19 tests here. Mutation-checked: pointing `move_branch` at `rev-parse` fails 3.
+
+280 pass across hooks+stack; hook verified live again. Both threads replied to and
+resolved; still a draft.
+
 ## Next
 
 Nothing outstanding. Dashboard republished (same URL), structural change recorded on
