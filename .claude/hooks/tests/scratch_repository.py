@@ -93,6 +93,73 @@ class SetupPrerequisiteFile(StrEnum):
     """
 
 
+GITHUB_URL_PREFIX = "https://github.com/"
+"""
+The prefix of the URL a hook builds for a repository it knows only as ``owner/name``.
+"""
+
+STACK_SOURCE_DIRECTORY = HOOKS_SOURCE_DIRECTORY.parent / "stack"
+"""
+The real stacked-PR tooling directory, which the hooks resolve the upstream repository
+through.
+"""
+
+
+@dataclass(frozen=True)
+class GitHubRepositoryStandIn:
+    """
+    A bare repository standing in for a GitHub repository, named the way GitHub names
+    it.
+
+    Lets a test exercise a hook that fetches and pushes for real, with no network access
+    and no test-only seam in the script. The bare repository is laid out under
+    ``<owner>/<name>.git``, so tooling that reads which repository a remote points at
+    resolves it to :attr:`repository` from the local URL alone; a hook that instead
+    builds the repository's GitHub URL reaches it through
+    :meth:`ScratchRepository.reach_by_github_url`.
+    """
+
+    repository: str
+    """
+    The ``owner/name`` this stand-in answers for.
+    """
+
+    path: Path
+    """
+    The bare repository itself.
+    """
+
+    @property
+    def url(self) -> str:
+        """
+        :return: The URL a remote in the scratch clone points at.
+        """
+        return f"file://{self.path}"
+
+    @property
+    def github_url(self) -> str:
+        """
+        :return: The URL a hook builds for a repository it knows only as ``owner/name``.
+        """
+        return f"{GITHUB_URL_PREFIX}{self.repository}.git"
+
+    def branch_tip(self, branch: str) -> str:
+        """
+        Read a branch's commit out of the stand-in, for asserting on what a hook
+        actually pushed rather than on what it reported.
+
+        :param branch: The branch to read.
+        :return: The commit it points at.
+        """
+        result = subprocess.run(
+            ["git", "--git-dir", str(self.path), "rev-parse", branch],
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
+        return result.stdout.strip()
+
+
 @dataclass(frozen=True)
 class GitIdentity:
     """
@@ -441,6 +508,65 @@ class ScratchRepository:
         )
         self.run_git("remote", "add", "origin", str(self.work_remote_path))
         return self.work_remote_path
+
+    def stand_in_for_github_repository(
+        self, repository: str
+    ) -> GitHubRepositoryStandIn:
+        """
+        Create a bare repository answering for a GitHub repository, laid out so its
+        local URL names the same ``owner/name``.
+
+        :param repository: The ``owner/name`` to stand in for.
+        :return: The stand-in.
+        """
+        path = self.project_root.parent / "repositories" / f"{repository}.git"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        return GitHubRepositoryStandIn(repository, initialize_bare_repository(path))
+
+    def reach_by_github_url(self, stand_in: GitHubRepositoryStandIn) -> None:
+        """
+        Make this clone resolve a stand-in's GitHub URL to the stand-in, through git's
+        own URL rewriting.
+
+        For a hook that builds a repository's GitHub URL from configuration rather than
+        reading it off a remote - the case of a clone that never added the remote.
+
+        :param stand_in: The stand-in to reach.
+        """
+        self.run_git("config", f"url.{stand_in.url}.insteadOf", stand_in.github_url)
+
+    def stop_reaching_by_github_url(self, stand_in: GitHubRepositoryStandIn) -> None:
+        """
+        Withdraw the URL rewriting :meth:`reach_by_github_url` registered, leaving a
+        repository that is named but cannot be reached.
+
+        :param stand_in: The stand-in to cut off.
+        """
+        self.run_git("config", "--unset", f"url.{stand_in.url}.insteadOf")
+
+    def add_remote(self, name: str, stand_in: GitHubRepositoryStandIn) -> None:
+        """
+        Register a remote pointing at a stand-in.
+
+        Unlike :meth:`add_work_remote`, the remote's URL names an ``owner/name``, so
+        tooling that decides which repository a remote points at sees a real one.
+
+        :param name: What this clone calls the remote.
+        :param stand_in: The repository it points at.
+        """
+        self.run_git("remote", "add", name, stand_in.url)
+
+    def install_stack_tooling(self, configuration: str) -> None:
+        """
+        Copy the real stack.py into the scratch layout and write the committed
+        stack.toml the hooks resolve the upstream repository from.
+
+        :param configuration: The stack.toml contents.
+        """
+        destination = self.project_root / ".claude" / "stack"
+        destination.mkdir(parents=True, exist_ok=True)
+        shutil.copy(STACK_SOURCE_DIRECTORY / "stack.py", destination / "stack.py")
+        (destination / "stack.toml").write_text(configuration)
 
     def resolve_notes_remote_to(self, remote: Path | None = None) -> None:
         """

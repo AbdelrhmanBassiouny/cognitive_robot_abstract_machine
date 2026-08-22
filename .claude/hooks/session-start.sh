@@ -119,6 +119,14 @@ set -euo pipefail
 # keeps it, and global config is never touched. See ./save-git-identity.sh to
 # record one, and ./README.md for the two cases a hook cannot reach.
 #
+# Default branch: sessions are cut from the fork's default branch, so a fork
+# that has drifted behind the upstream it tracks makes every session in that
+# clone plan and implement against a stale base - invisibly, because the clone
+# is perfectly consistent with itself. Every run therefore brings that branch
+# level first, via ./fast-forward-default-branch.sh: fast-forward only, that one
+# branch only, and never fatal. See that script and ./README.md's "Starting from
+# a fresh base".
+#
 # Setup: the summary also carries ./check-setup.sh's verdict, naming any
 # check that still needs setup. It is reported rather than left to be run on
 # purpose because remembering to run it is the step that gets skipped - after
@@ -431,6 +439,24 @@ if [ -f "${PROJECT_ROOT}/${CHECK_SETUP_SCRIPT}" ]; then
   fi
 fi
 
+# Default branch, from ./fast-forward-default-branch.sh - so a session starts
+# from a base level with the upstream this fork tracks rather than from whatever
+# the fork's default branch had drifted to. Runs here, at session start, because
+# the drift is invisible from inside the clone: nothing about a stale base looks
+# wrong until the work written against it is rebased.
+#
+# Run as a subprocess and captured with `|| true`, for the same two reasons as
+# check-setup.sh below: it sources resolve-personal-notes-config.sh, which
+# reassigns every variable in use here, and a base that cannot be synced must
+# still leave the session able to start.
+SUMMARY_DEFAULT_BRANCH="$(default_branch_line_not_synced "${FAST_FORWARD_DEFAULT_BRANCH_SCRIPT}")"
+if [ -f "${PROJECT_ROOT}/${FAST_FORWARD_DEFAULT_BRANCH_SCRIPT}" ]; then
+  # Prints its outcome first and its follow-up rows, already indented, after -
+  # the same heading-plus-rows shape as the setup line below.
+  SUMMARY_DEFAULT_BRANCH="$(bash "${PROJECT_ROOT}/${FAST_FORWARD_DEFAULT_BRANCH_SCRIPT}" \
+    2>/dev/null || true)"
+fi
+
 # Deterministic session-start report: what this run found and wrote, printed
 # once by the script itself rather than left for a session to notice and
 # describe secondhand from CLAUDE.local.md's content. SessionStart hook
@@ -443,6 +469,7 @@ session-start.sh summary:
   local settings:  ${SUMMARY_SETTINGS}
   PR progress:     ${SUMMARY_PROGRESS}
   plan:            ${SUMMARY_PLAN}
+  default branch:  ${SUMMARY_DEFAULT_BRANCH}
   git identity:    ${SUMMARY_GIT_IDENTITY}
   setup:           ${SUMMARY_SETUP}
   plan state SHA:  $(git rev-parse FETCH_HEAD) (run plan-updates-since.sh <plan-id> to recheck from here later)
