@@ -1895,3 +1895,141 @@ question is which of its assertions a sibling PR has since made redundant.
   **sixth** recorded instance. Reverted there; kept in the files this PR writes whole, the same call
   §14/§18/§19 made. No `...`-as-sentence-end regression this round.
 - CI queued on the push, as §21's finding predicts now that the base has moved.
+
+## 23. Addendum (2026-08-22) — `D-core-aid` (#63): the review round applied, and a rename that was counted twice and still undercounted
+
+A `/plan-item-resolve` session picked up `D-core-aid`. Nothing mechanical was wrong with
+it — CI 22/22 green on `208ca491`, `mergeable_state: clean` against current `main`,
+`check_dependency_readiness.py` reporting `rdr-backward-inference` as `merged` /
+`is_ready: true`, and no recorded `blockers`. What stalled it was **a review round opened
+2026-08-21T15:36–15:37Z, four threads, none answered**, which the item's `notes` — ending
+at §21's cascade — never recorded. Fifth instance of that staleness class on this plan
+(§5, §14, §18, §19).
+
+### #161 said "five readers". The real number was fourteen, across four renames
+
+§21 recorded `main`'s two unfinished renames and #161 fixed them. Three of the four new
+threads say #161 stopped too early, and checking rather than trusting its count showed
+they are right: #41's cascade landed **four** renames on `main`, not two, and #161's table
+covers only the first pair.
+
+| rename | stale readers left on `main` | in #161's original scope |
+|---|---|---|
+| `ConclusionKnowledge` → `ConclusionSufficientConditionSets` | 3 | yes |
+| `what_do_we_know_about` → `get_conclusion_sufficient_conditions_from_a_rule_tree` | 2 | yes |
+| `TargetKnowledgeResolver` → `TargetSufficientConditionsBasedResolver` | 6 | **no** |
+| `_materialize` → `GuardCondition.as_expression` | 3 | **no** |
+
+**Two of the missed readers are in production source** — `condition_resolver.py:11`
+(the module docstring's list of built-in strategies) and `:230`
+(`backward_inference_default`'s docstring) — and that is the generalisable part. #63's diff
+does not contain `condition_resolver.py` at all, so no amount of care reviewing #63 could
+have surfaced them, and #161 was written from a diff rather than from a grep of `main`.
+The lesson is narrow and cheap: **finish a rename by grepping the whole tree for the old
+identifier, not by re-reading the diff that renamed it.** §21 already stated the rule
+(`AGENTS.md`: every reader, docstrings included) and still undercounted, twice.
+
+### Where the fix went, and why not where it was asked for
+
+The threads asked for it on #63. It went on #161, by the mechanical test the standing
+convention requires: `git ls-tree main --` on both paths is non-empty, so this is not a
+change to what an unlanded PR introduces — the same test #161's own body had already run
+and used to reject folding into #63. Three further reasons, in descending weight:
+
+1. #63 could only ever have fixed **half** of it, since the source-side readers are in a
+   file it does not touch.
+2. Both PRs editing `test_condition_resolver.py` breaks #161's measured
+   conflict-free-against-the-stack property and makes the developer review one rename twice.
+3. `main` is the branch that is *behind* here. `D-core-expert` already carries these exact
+   `# %%` headers with the corrected names, applied during §21's cascade — so this is
+   `main` catching up to the stack, which is a `main`-based PR's job.
+
+The three threads are replied to and **left open**, per the standing rule that a thread
+answered differently from its ask is the developer's to close.
+
+### What each PR now is
+
+| PR | before | after |
+|---|---|---|
+| #63 `D-core-aid` | 4 files: `aid.py`, `test_aid.py`, `test_condition_resolver.py`, `test_rdr_alchemy.py` | **`aid.py` alone**, 49 lines |
+| #161 | 3 files, 2 renames, "five readers" | 4 files, **4 renames**, retitled |
+| #189 (new, `bug`, draft) | — | the `test_rdr_alchemy.py` flaky skip, off `main` |
+
+`test_aid.py` was deleted, doing the fourth thread exactly as asked. All three tests
+restated a declaration or the language — `present`/`suggest` returning `None` *is* the class
+body; the other two exercise Python's method overriding. Checked before deleting that
+nothing is lost: #159's `test_ask_for_rule.py` already drives `suggest()` through the live
+engine with three `ConclusionAid` subclasses including the domain-validation path. Sixth
+instance of this plan's standing review lens (§18 ×3, §19 ×2, §22's ported-test shrink).
+The `AGENTS.md` tension is real and was stated on the thread rather than glossed: an aid's
+only behaviour is *being consulted*, so its tests belong with its consumer.
+
+### The flaky skip: moved, and then not reproducible
+
+`cdb19274` had been carrying an `@unittest.skip` for `test_fit_mcrdr_stop_only` at the
+bottom of a seven-PR stack since 2026-07-12. It is not a fresh quarantine — `main` already
+skips the identically-named sibling in `test_rdr.py` with a byte-identical reason
+(`57a1babac`) — but it is a `main`-level fix, so it moved to #189.
+
+Then it would not reproduce: **18 passes out of 18**, across the test alone (6), its class
+(5), the whole `test_ripple_down_rules` suite serially (3), and that suite under `-n auto`
+as CI runs it (4). The only failures anywhere were `test_object_diagram.py`'s two from a
+missing `dot` binary, §9's known local gap.
+
+Eighteen passes is weak evidence of absence for something described as occasional, so the
+skip is carried forward on #189 as *the decision already made on `main`* rather than as
+something re-established — and the PR body puts the real question (is either sibling skip
+still needed?) to the developer with three named options instead of guessing. This is the
+counterpart to §22's "probably dead code was alive": there a probe rescued a live path,
+here a probe found a suppression that may no longer be earning its keep. Both times the run,
+not the reading, was the evidence.
+
+### A generated file `AGENTS.md` protects nearly rode into a commit
+
+`git add -u` after a verification sweep staged **4,329 lines** of regenerated
+`test/krrood_test/dataset/ormatic_interface.py`, plus an unrelated
+`verbalization_results.py` diff. Caught before pushing and reverted; the commit was
+rebuilt from an explicit path list.
+
+Worth recording because the existing protection does not cover this path: `AGENTS.md` says
+`scripts/regenerate_all_orm.py` sets git's skip-worktree bit so a locally regenerated copy
+is never proposed for staging — but here it is `conftest.py` regenerating the file at *test*
+time, which that bit was never applied to. Same mechanism as §17/§19's `query_graph.pdf` and
+`drawer_explanation.pdf` (tracked *and* gitignored, dirtied by any sweep), third recorded
+instance, on the one file `AGENTS.md` names explicitly. **Standing habit for this plan:
+after any verification sweep, stage by explicit path, never `git add -u`.**
+
+### Conflicts, measured before and after
+
+`git merge-tree --write-tree` from #161 against the four stack branches:
+
+| branch | before this round | after |
+|---|---|---|
+| `D-core-aid` | clean | **clean** |
+| `D-core-support` | `ormatic_interface.py` | + `test_condition_resolver.py`, 2 hunks |
+| `D-core-expert` | `ormatic_interface.py` | + `test_condition_resolver.py`, 1 hunk |
+| `D-core-single-class` | `ormatic_interface.py` | + `test_condition_resolver.py`, 1 hunk |
+
+`condition_resolver.py` is clean **by construction**: its two docstrings are wrapped to
+match the spelling `D-core-expert` already carries, so the stack does not resolve the same
+fix twice. Wrapping them the way the change first read conflicted on all three upper
+branches — measured, then fixed, not assumed. The remaining hunks are add/add against #98's
+`_context(…)` helper, resolved by keeping #98's side; nothing this round changes sits
+opposite them. `D-core-aid` is clean precisely because #63 now stops touching the file.
+
+### Also
+
+- **`scripts/format_docstrings.py` deviated a seventh time.** On a change of six docstring
+  lines and three test names it reindented every function signature in
+  `condition_resolver.py`, split its import block and rewrapped unrelated docstrings.
+  Reverted whole; same call as §12/§14/§16/§18/§19/§22.
+- **#161 has one red check**, `test_each_lib (semantic_digital_twin)` on run `32138139279`,
+  in a package it does not touch, while #63's run the same day was 22/22 green including
+  that job. Flagged, not chased.
+- **Subscribing to #94 was refused by the permission classifier again** — fourth recorded
+  instance (§11, §16, §20). The mechanism the plan skills rely on for concurrent-change
+  awareness still does not work in these containers.
+- **#63 was not re-drafted** after pushing, per §21's rule for a pull request the developer
+  marked ready.
+- `backward_inference.py` on `main` carries bare `# %%` headers with no description, which
+  `AGENTS.md`'s rule asks for. Noted, not fixed — `main`'s, and outside this round.
