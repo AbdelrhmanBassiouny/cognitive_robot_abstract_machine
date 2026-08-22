@@ -2144,3 +2144,16 @@ probe. Ask what property *this* repository owns before asserting.
 
 Also: this item was added to `plan.yaml` in the same turn as opening #190 — the habit §24
 recorded after the developer caught #161 and #189 existing in no plan at all.
+
+**Verified against upstream, after the developer asked whether it had been.** It had not — a
+real gap, since a fix already present upstream would make #190 a duplicate that conflicts on
+the next sync. Checked: upstream `cram2`'s `main` is at **the same commit** as this fork's
+(`3f643cffb`), its `dev` extra is byte-identical with no `pytest-rerunfailures`, no rerun
+plugin appears in any of its requirements/`pyproject.toml`/`.cfg`/`.ini`/workflow files, and
+the mark at `test_multi_sim.py:759`, `pytest.ini` and the CI invocation are all identical
+there. So the defect is upstream's own and #190 belongs promoted upstream.
+
+Worth keeping as a habit: a dependency or configuration fix on a fork needs the upstream check
+before it is opened, not after. The strongest evidence here was empirical and already on the
+record — the marked test failed CI on a pull request that could not have affected it — but
+nothing had confirmed the *fix* was not already sitting upstream.
