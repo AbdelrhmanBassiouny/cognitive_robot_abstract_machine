@@ -23,7 +23,7 @@ stacked on a dependency that will never land was never flagged.
   needed), the `example/` fixture and screenshots (no new flag there),
   `check_dependency_readiness.py`.
 
-**Review round 2026-08-22 — eight threads, all replied to and resolved (`453795a6`)**
+**Review, 2026-08-22 — first round, eight threads, all resolved (`453795a6`)**
 - Seven were one finding: the tests retyped the drift sentences production builds.
   `drift_descriptions` became `drift_flags` — a `ManifestDrift` carrying the
   `ManifestDriftCause` its `match` decides, or a `StalledDependencyDrift` carrying
@@ -41,6 +41,23 @@ stacked on a dependency that will never land was never flagged.
 - The two markup tests read the page through an `html.parser` helper instead of
   matching strings, which also removed a `markupsafe.escape()` call that existed
   only to reproduce Jinja's autoescaping in the expectation.
+
+**Second round the same day — three threads (`97ee004d3`), one left open**
+- The wording assertions are **cut**, on the user's argument that nobody parses a
+  drift description. Their own precedent: #121's second round did exactly this to
+  `test_every_summary_message_reads_as_written`. Do not re-add sentence pinning here.
+- What replaced it is the half that was never wording: `description` is a `match`
+  with no `case _`, so a member added later without a branch returns `None` silently
+  and the card renders the word "None". Two parametrised tests over
+  `list(ManifestDriftCause)` and `list(StallReason)` assert each renders something —
+  parametrised off the enum, so a future member needs no test edit.
+- That thread (`PRRT_kwDOQhJw3c6bYJwp`) is **left open**: a replacement is not the
+  deletion it asked for, so it is the user's to close.
+- `drift_lines_in` strips the `⚠` (named at `DRIFT_LINE_MARKER`); the marker's
+  presence is deliberately no longer asserted anywhere.
+- `TextOfElementsWithClass` is a dataclass. Its `__post_init__` is load-bearing:
+  `@dataclass` generates `__init__` rather than extending the base's, so
+  `HTMLParser.reset()` would never run and `feed()` would fail.
 
 **The docformatter finding, which is the one to carry**
 - On the previous head `scripts/format_docstrings.py` left `build_dashboard.py`
@@ -65,7 +82,11 @@ stacked on a dependency that will never land was never flagged.
   marks it ready.
 
 **Outstanding**
-- CI not yet observed on `453795a6` (it was green on all 22 checks at `40d9d6dd`).
+- CI on `97ee004d3` not yet observed. At `453795a6`, `test_claude_dev_tooling` passed
+  and one robotics job was red — `test_each_lib (robokudo)` →
+  `test_run_semdt_raytracer_ae_successfully`, `assert 3 == 2` object hypotheses from
+  point-cloud clustering, 1 of 830 tests. Unreachable from a diff confined to
+  `.claude/skills/plan-dashboard/`, and green at `40d9d6dd`.
 - **Landing hazard, deliberately not pre-resolved**: decision 13 names #184 among the
   pull requests touching files the `bastler` migration moves. #185 is open, draft and
   unmerged, and that decision's doctrine is *"don't pre-resolve against it before it
