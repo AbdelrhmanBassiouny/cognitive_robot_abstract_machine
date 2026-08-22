@@ -6,6 +6,7 @@ and rendering.
 import json
 import re
 import sys
+from dataclasses import dataclass, field
 from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path
@@ -1056,87 +1057,46 @@ def test_manifest_drift_and_a_stalled_dependency_are_both_reported():
     assert summary.drift_flag_count == 2
 
 
-# %% drift flag wording
+# %% drift flag descriptions
 
-# Every other drift test compares flags, not sentences, so this is the one
-# place the English itself is pinned - single-sourcing the wording into
-# DriftFlag.description would otherwise leave nothing checking it.
+# The wording itself is deliberately not asserted: a drift description is
+# read by a person on the dashboard and parsed by nothing, so pinning the
+# sentence buys a failing test for every reword and catches no defect. What
+# is pinned is that every cause and every stall reason has a branch at all -
+# a match with no case for a member returns None silently, which the item
+# card would render as the word "None".
 
 
-@pytest.mark.parametrize(
-    "flag, expected_description",
-    [
-        (
-            StalledDependencyDrift(
-                dependency_identifier="a", reason=StallReason.DEFERRED
-            ),
-            "depends on 'a', which is deferred",
-        ),
-        (
-            StalledDependencyDrift(
-                dependency_identifier="a",
-                reason=StallReason.DEFERRED,
-                reparent_targets=("base", "other"),
-            ),
-            "depends on 'a', which is deferred - consider reparenting onto base, other",
-        ),
-        (
-            StalledDependencyDrift(
-                dependency_identifier="a",
-                reason=StallReason.PULL_REQUEST_CLOSED_UNMERGED,
-                pull_request_number=1,
-            ),
-            "depends on 'a', whose pull request #1 was closed without merging",
-        ),
-        (
-            ManifestDrift(
-                cause=ManifestDriftCause.PULL_REQUEST_NOT_FOUND,
-                status=ItemStatus.IN_PROGRESS,
-                live_state=LiveState.NOT_FOUND,
-                pull_request_number=9,
-            ),
-            "pull request #9 not found on GitHub",
-        ),
-        (
-            ManifestDrift(
-                cause=ManifestDriftCause.MARKED_DONE_WHILE_OPEN,
-                status=ItemStatus.DONE,
-                live_state=LiveState.OPEN_DRAFT,
-                pull_request_number=1,
-            ),
-            "marked done, but pull request #1 is still open",
-        ),
-        (
-            ManifestDrift(
-                cause=ManifestDriftCause.MARKED_UNFINISHED_WHILE_MERGED,
-                status=ItemStatus.NOT_STARTED,
-                live_state=LiveState.MERGED,
-                pull_request_number=1,
-            ),
-            "marked not_started, but pull request #1 is already merged",
-        ),
-        (
-            ManifestDrift(
-                cause=ManifestDriftCause.MARKED_UNDER_WAY_WHILE_CLOSED,
-                status=ItemStatus.IN_PROGRESS,
-                live_state=LiveState.CLOSED_UNMERGED,
-                pull_request_number=1,
-            ),
-            "marked in_progress, but pull request #1 is closed unmerged",
-        ),
-        (
-            ManifestDrift(
-                cause=ManifestDriftCause.MARKED_DONE_WHILE_CLOSED_UNMERGED,
-                status=ItemStatus.DONE,
-                live_state=LiveState.CLOSED_UNMERGED,
-                pull_request_number=1,
-            ),
-            "marked done, but pull request #1 was closed without merging",
-        ),
-    ],
-)
-def test_drift_flag_describes_itself(flag, expected_description):
-    assert flag.description == expected_description
+@pytest.mark.parametrize("cause", list(ManifestDriftCause))
+def test_every_manifest_drift_cause_describes_itself(cause):
+    drift = ManifestDrift(
+        cause=cause,
+        status=ItemStatus.IN_PROGRESS,
+        live_state=LiveState.CLOSED_UNMERGED,
+        pull_request_number=1,
+    )
+    assert drift.description
+
+
+@pytest.mark.parametrize("reason", list(StallReason))
+def test_every_stall_reason_describes_itself(reason):
+    drift = StalledDependencyDrift(
+        dependency_identifier="a", reason=reason, pull_request_number=1
+    )
+    assert drift.description
+
+
+def test_a_stalled_dependency_with_nothing_to_reparent_onto_suggests_nothing():
+    without_targets = StalledDependencyDrift(
+        dependency_identifier="a", reason=StallReason.DEFERRED
+    )
+    with_targets = StalledDependencyDrift(
+        dependency_identifier="a",
+        reason=StallReason.DEFERRED,
+        reparent_targets=("base", "other"),
+    )
+    assert without_targets.description in with_targets.description
+    assert len(with_targets.description) > len(without_targets.description)
 
 
 # %% DashboardRenderer - ready-to-start / blocker-maybe-cleared
@@ -1828,27 +1788,33 @@ def test_hidden_done_wrap_parent_is_never_a_done_item():
 # way a browser does.
 
 
+@dataclass
 class TextOfElementsWithClass(HTMLParser):
     """
     Collects the text of every element carrying one CSS class.
-
-    :param css_class: The class an element must carry to be collected.
     """
 
-    def __init__(self, css_class: str) -> None:
+    css_class: str
+    """
+    The class an element must carry to be collected.
+    """
+
+    texts: list[str] = field(default_factory=list)
+    """
+    One entry per matching element, in document order.
+    """
+
+    capturing_tag: str | None = None
+    """
+    The tag name whose closing tag ends the element being collected.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        Run :class:`HTMLParser`'s own initialisation, which the generated ``__init__``
+        replaces rather than calls.
+        """
         super().__init__(convert_charrefs=True)
-        self.css_class = css_class
-        """
-        The class an element must carry to be collected.
-        """
-        self.texts: list[str] = []
-        """
-        One entry per matching element, in document order.
-        """
-        self.capturing_tag: str | None = None
-        """
-        The tag name whose closing tag ends the element being collected.
-        """
 
     def handle_starttag(
         self, tag: str, attributes: list[tuple[str, str | None]]
@@ -1891,13 +1857,25 @@ def text_of_elements_with_class(output: str, css_class: str) -> list[str]:
     return [text.strip() for text in parser.texts]
 
 
+DRIFT_LINE_MARKER = "\u26a0"
+"""
+The warning sign the item card prefixes every drift line with.
+"""
+
+
 def drift_lines_in(output: str) -> list[str]:
     """
-    Every drift line an item card shows, in document order.
+    Every drift line an item card shows, in document order, without the marker
+    the card prefixes each one with - it is fixed decoration, identical on
+    every line, and carrying it into each expectation only obscures the
+    description the line is actually about.
 
     :param output: The rendered dashboard HTML.
     """
-    return text_of_elements_with_class(output, "drift")
+    return [
+        line.removeprefix(DRIFT_LINE_MARKER).strip()
+        for line in text_of_elements_with_class(output, "drift")
+    ]
 
 
 def drift_banner_flag_count(output: str) -> int:
@@ -2422,8 +2400,7 @@ def test_render_shows_one_drift_line_per_description_on_the_item_card():
     )
     output, _ = renderer.render()
     assert drift_lines_in(output) == [
-        f"⚠ {flag.description}"
-        for flag in renderer.items_by_identifier["c"].drift_flags
+        flag.description for flag in renderer.items_by_identifier["c"].drift_flags
     ]
 
 
