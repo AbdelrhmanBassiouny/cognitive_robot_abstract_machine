@@ -52,6 +52,7 @@ from cramera.live.bridge import BRIDGE
 from cramera.live.runner import start as start_live_bridge
 
 from experiments.montessori.event_monitoring import (
+    ReceivesDetectedEvents,
     WatchesForEvents,
     WatchesNothing,
     build_shape_monitor,
@@ -63,6 +64,7 @@ from experiments.montessori.franka_panda_equipment import (
     equip_panda_for_physical_simulation,
     parse_panda,
 )
+from experiments.montessori.live_event_source import MontessoriLiveEventSource
 from experiments.montessori.live_query_source import MontessoriLiveQuerySource
 from experiments.montessori.results_database import (
     ConfiguredDatabase,
@@ -540,6 +542,7 @@ def _insert_all_shapes(
     max_shapes: Optional[int] = None,
     only_shape: Optional[str] = None,
     watch_events: bool = True,
+    listener: Optional[ReceivesDetectedEvents] = None,
 ) -> list[ShapeInsertionResult]:
     """
     Have the Panda pick up and insert every loose shape that has a matching hole into
@@ -574,6 +577,8 @@ def _insert_all_shapes(
         the run a stutter, because a detector tick blocks the thread running the motion
         for several control cycles; see
         :class:`~experiments.montessori.event_monitoring.WatchesNothing`.
+    :param listener: Told what each monitor tick detected, so the viewer can plot an
+        event before the attempt it fell within has finished.
     :return: One :class:`~experiments.montessori.sorting_results.ShapeInsertionResult` per actually attempted shape, in
         attempt order; a skipped shape has no entry.
     """
@@ -608,7 +613,9 @@ def _insert_all_shapes(
         attempted += 1
 
         event_monitor = (
-            build_shape_monitor(montessori, shape) if watch_events else WatchesNothing()
+            build_shape_monitor(montessori, shape, listener=listener)
+            if watch_events
+            else WatchesNothing()
         )
         event_monitor.start()
         progress.begin_shape(shape, montessori.board, montessori.world)
@@ -971,8 +978,11 @@ def _build_world_and_sort(
     multi_sim.start_simulation()
     control.begin_iteration(iteration=iteration, simulation=multi_sim)
     progress = SortingProgress()
-    if arguments.cramera:
+    detections = (
         _attach_cramera(montessori, progress, control, results_database)
+        if arguments.cramera
+        else None
+    )
     results = _insert_all_shapes(
         montessori,
         context,
@@ -981,6 +991,7 @@ def _build_world_and_sort(
         max_shapes=arguments.max_shapes,
         only_shape=arguments.only_shape,
         watch_events=arguments.event_monitor,
+        listener=detections,
     )
     return results, multi_sim, tf_publisher, viz_marker_publisher
 
@@ -990,7 +1001,7 @@ def _attach_cramera(
     progress: SortingProgress,
     control: SortingRunControl,
     results_database: ResultsDatabase,
-) -> None:
+) -> MontessoriLiveEventSource:
     """
     Serve this world and this sort to the cramera viewer, in this process.
 
@@ -1001,8 +1012,12 @@ def _attach_cramera(
 
     :param montessori: The Montessori scene the viewer visualizes.
     :param progress: The record questions about this sort are answered from.
-    :param control: What the viewer pauses, restarts and loops this run with.
+    :param control: What the viewer pauses, restarts and loops this run with, and whose
+        clock the timeline plots the detections along so it stands still whenever the
+        run does.
     :param results_database: Where questions about finished runs are answered from.
+    :return: The record the viewer's timeline is drawn from, for the sort to report its
+        detections to as it makes them.
     """
     start_live_bridge(world=montessori.world)
     BRIDGE.register_query_source(
@@ -1013,6 +1028,9 @@ def _attach_cramera(
         )
     )
     BRIDGE.register_run_control(control)
+    detections = MontessoriLiveEventSource(clock=control.clock)
+    BRIDGE.register_event_source(detections)
+    return detections
 
 
 def _reclaim_native_heap_fragmentation() -> None:

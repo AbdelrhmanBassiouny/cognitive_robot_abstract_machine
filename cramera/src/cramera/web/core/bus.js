@@ -14,6 +14,8 @@
  *   live:changed         {on, url}                      robot-scene → graph
  *   entity:highlight     {ids, focus?}                  eql → robot-scene, graph
  *   entity:select        {id, detail, relations}        graph → eql
+ *   panel:shown          {id}                           panel_tabs → the tab's panel
+ *   panel:resized        {}                             split-resize → graph panels
  *   knowledge:ready             {payload}                      eql → anyone
  *
  * A new panel is free to define further events; document them in its header.
