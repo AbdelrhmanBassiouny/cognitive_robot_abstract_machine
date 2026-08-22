@@ -2540,6 +2540,21 @@ items:
       handed to the user. The krrood half of the serialization thread was declined, so that
       thread stays open on purpose; the naming half became report-document-naming.
 
+      Third round the same day, one comment on the `# %% locations` block asking whether the
+      paths belong in a StrEnum. Done as asked, in 1b2f79672: HOOKS_DIRECTORY stays a plain
+      Path constant and the four file paths become Location(StrEnum) composed from it, each
+      member the path as text with a .path property for the callers that do path arithmetic.
+      Every call site loses a str() or gains one .path, and the CLI output is byte-identical.
+      The Path mixin was measured rather than argued: class Location(Path, Enum) raises
+      AttributeError: _flavour on 3.11, which is decision 12's floor, and even on 3.12 it
+      builds while f-string interpolation renders the member repr rather than the path, and
+      .parent, json.dumps and by-value lookup all raise. Two claims this session had made on
+      that thread before measuring were wrong and were corrected on it: .name returns the
+      member name under StrEnum but not under the Path mixin, where Path.name shadows it, and
+      the mixin's cost is not only the version floor. The recorded recommendation - keep plain
+      constants - was superseded by the user's own shape, which is better than either option
+      that had been costed.
+
   - id: report-document-naming
     branch: null
     title: "One name for the report-to-document method across the .claude tooling"

@@ -8461,3 +8461,72 @@ write and interop half, and "no lookup table" was loose even for that.
 **A claim about why a design was chosen is worth the same scrutiny as the design.** This one was
 written into a roadmap entry, a pull request description and a review reply before anyone asked
 whether it was true.
+
+## Update 2026-08-22 (third round, same day): the shape the user proposed beat both I had costed
+
+One comment on #149, on the `# %% locations` block: *"Wouldn't it be better to put all these
+directories in a StrEnum?"* Answered first with a measurement and no change, on the user's call;
+then, when they proposed a concrete shape, implemented in `1b2f79672`.
+
+### The measurement that made the first answer look right, and the part of it that was wrong
+
+Three shapes were probed on 3.11 and 3.12 rather than reasoned about, and the probe is what the
+reply carried:
+
+- **`StrEnum`** — a member is a `str`, not a `Path`, so `HOOKS_DIRECTORY / "plan-item-modes.toml"`
+  raises and `.name` returns the member name rather than the filename.
+- **`Enum` with `Path` values** — the member is not a `Path` either, so every site goes back to
+  `.value`, which the same round's *this-should-be-a-`Path`* comment had just removed.
+- **`class Location(Path, Enum)`** — raises `AttributeError: _flavour` on 3.11, and decision 12
+  puts the floor at 3.11.
+
+On that, the reply recommended keeping the five plain constants, citing `HookScript`,
+`PlanDocument` and `SetupPrerequisiteFile` as path `StrEnum`s that exist because something
+iterates or selects among their members, where nothing selects among these.
+
+**Two of those statements were wrong, and both were corrected on the thread rather than left
+standing.** `.name` returns the member name under `StrEnum` and *not* under the `Path` mixin, where
+`Path.name` shadows `Enum.name` and answers the filename — so the sharpest objection raised against
+the mixin was an objection to the other shape. And the mixin's cost is not only the version floor:
+on 3.12 it builds, and then `f"{member}"` renders `Location.COMMITTED_DEFAULTS`, `.parent` raises
+`ValueError`, `json.dumps` raises, and by-value lookup raises. The recommendation happened to land in
+the right place on reasoning that did not hold at two of its steps.
+
+### The user's shape, which neither option costed
+
+`HOOKS_DIRECTORY` stays a plain `Path` constant *above* the enum, and the four file paths become
+`Location(StrEnum)` members composed from it, each with a `path` property for the callers that do
+path arithmetic:
+
+```python
+HOOKS_DIRECTORY = Path(".claude/hooks")
+
+class Location(StrEnum):
+    CONFIGURATION_SCRIPT = f"{HOOKS_DIRECTORY}/resolve-personal-notes-config.sh"
+    ...
+    @property
+    def path(self) -> Path:
+        return Path(self.value)
+```
+
+It answers the objection to `StrEnum` — the directory the three share is still named once, and
+composing them is `f"{HOOKS_DIRECTORY}/..."` rather than `/` on a `str` — while keeping the members
+usable as text at the boundaries that want text: a `git` reference, a `bash -c` line, a subprocess
+argument, the JSON report. `SettingsFile.origin` is a `Location` now, so a refusal names *which*
+settings file rather than carrying a second path. Every call site either loses a `str()` or gains one
+`.path`, and the `resolve` document is byte-identical before and after. Mutation-checked on
+`COMMITTED_DEFAULTS`; 18 module tests, 522 across the three directories CI runs.
+
+### Worth carrying
+
+**Two of the user's own review comments in one round were in tension** — *make the paths `Path`s*
+and *put the paths in a `StrEnum`* cannot both be taken literally, since a `StrEnum` member is a
+`str`. That is the third time on this plan (after #154's `spelling` → `name` against inheriting a
+specification, and #149's own earlier pair), and the useful output each time was the measurement
+showing the conflict rather than a choice made quietly on their behalf.
+
+**But a measurement showing two asks conflict is not proof no third shape exists.** The reply had
+enumerated three shapes and stopped, and the shape that dissolved the tension — split the collection
+so the directory is a `Path` and the files are text — was not among them. The general check, cheap
+and skipped here: before reporting that two requirements are incompatible, ask what would have to be
+true for both to hold, and whether the collection can be split so each half gets the type it wants.
