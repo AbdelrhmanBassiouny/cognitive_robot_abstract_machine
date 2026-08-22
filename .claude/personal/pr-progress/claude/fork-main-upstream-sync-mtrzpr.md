@@ -36,6 +36,6 @@ Design decisions (all implemented):
 
 ## Next
 
-1. Republish the workflow-unification dashboard.
-2. Nothing else - PR #188 is open as a draft; per my notes, opening it ends this
-   session's obligation to it.
+Nothing outstanding. Dashboard republished (same URL), structural change recorded on
+tracking issue #102. PR #188 is open as a draft with the `bug` label; per my notes,
+opening it ends this session's obligation to it.
