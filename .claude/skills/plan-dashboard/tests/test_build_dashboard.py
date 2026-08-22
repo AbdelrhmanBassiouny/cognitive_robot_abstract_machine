@@ -8,6 +8,7 @@ import re
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import StrEnum
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
@@ -63,6 +64,23 @@ DRIFT_LINE_MARKER = "\u26a0"
 """
 The warning sign the item card prefixes every drift line with.
 """
+
+
+class DashboardCssClass(StrEnum):
+    """
+    A class dashboard.html gives an element these tests read back out of the rendered
+    page.
+    """
+
+    DRIFT = "drift"
+    """
+    One drift line on an item card.
+    """
+
+    DRIFT_BANNER = "drift-banner"
+    """
+    The sidebar banner reporting how many drift flags the plan carries.
+    """
 
 
 def minimal_plan(**overrides: Any) -> dict[str, Any]:
@@ -1068,21 +1086,37 @@ def test_manifest_drift_and_a_stalled_dependency_are_both_reported():
 # read by a person on the dashboard and parsed by nothing, so pinning the
 # sentence buys a failing test for every reword and catches no defect - the
 # same treatment ItemStatus.display_label and LiveState.display_label, built
-# the same way, already get. What is left is the one rule that is not a
-# phrasing.
+# the same way, already get. What is left are the rules that are not a
+# phrasing: which targets a suggestion names, and that it is a suffix which
+# goes entirely when there is nothing to suggest.
+
+
+def test_a_stalled_dependency_names_every_reparent_target_it_has():
+    reparent_targets = ("base", "other")
+    described = StalledDependencyDrift(
+        dependency_identifier="a",
+        reason=StallReason.DEFERRED,
+        reparent_targets=reparent_targets,
+    ).description
+    assert all(target in described for target in reparent_targets)
 
 
 def test_a_stalled_dependency_with_nothing_to_reparent_onto_suggests_nothing():
-    without_targets = StalledDependencyDrift(
-        dependency_identifier="a", reason=StallReason.DEFERRED
-    )
+    """
+    The suggestion is a suffix, so an item with nothing to reparent onto is
+    described by exactly the part that comes before it: everything the flag says
+    about the dependency, and nothing after.
+    """
     with_targets = StalledDependencyDrift(
         dependency_identifier="a",
         reason=StallReason.DEFERRED,
         reparent_targets=("base", "other"),
     )
-    assert without_targets.description in with_targets.description
-    assert len(with_targets.description) > len(without_targets.description)
+    without_targets = StalledDependencyDrift(
+        dependency_identifier="a", reason=StallReason.DEFERRED
+    )
+    assert with_targets.description.startswith(without_targets.description)
+    assert with_targets.description != without_targets.description
 
 
 # %% DashboardRenderer - ready-to-start / blocker-maybe-cleared
@@ -1780,7 +1814,7 @@ class TextOfElementsWithClass(HTMLParser):
     Collects the text of every element carrying one CSS class.
     """
 
-    css_class: str
+    css_class: DashboardCssClass
     """
     The class an element must carry to be collected.
     """
@@ -1831,7 +1865,7 @@ class TextOfElementsWithClass(HTMLParser):
             self.texts[-1] += data
 
 
-def text_of_elements_with_class(output: str, css_class: str) -> list[str]:
+def text_of_elements_with_class(output: str, css_class: DashboardCssClass) -> list[str]:
     """
     The text of every element in a rendered page carrying one CSS class.
 
@@ -1854,7 +1888,7 @@ def drift_lines_in(output: str) -> list[str]:
     """
     return [
         line.removeprefix(DRIFT_LINE_MARKER).strip()
-        for line in text_of_elements_with_class(output, "drift")
+        for line in text_of_elements_with_class(output, DashboardCssClass.DRIFT)
     ]
 
 
@@ -1864,7 +1898,7 @@ def drift_banner_flag_count(output: str) -> int:
 
     :param output: The rendered dashboard HTML.
     """
-    (banner,) = text_of_elements_with_class(output, "drift-banner")
+    (banner,) = text_of_elements_with_class(output, DashboardCssClass.DRIFT_BANNER)
     return int(re.findall(r"\d+", banner)[0])
 
 
