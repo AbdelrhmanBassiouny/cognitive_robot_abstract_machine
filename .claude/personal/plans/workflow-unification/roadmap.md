@@ -7949,8 +7949,23 @@ to, not to delete it and make five call sites compose the error.
 ### "str enums?" was a question whose answer exposed a missing guard
 
 The values *are* the wire form - the TOML setting a user edits by hand, the JSON report other
-programs parse, the `argparse` choice - so `ExecutionMode(value)` reads and `str(mode)` writes
-with no table between them. Nothing pinned that, which is the failure this plan has now
+programs parse, the `argparse` choice - and `StrEnum` makes the member itself that string.
+
+*Corrected 2026-08-22, from the user's follow-up question "StrEnum is just a structure, the
+members are still str mapable, right?"* - the first version of this paragraph said
+`ExecutionMode(value)` reads and `str(mode)` writes "with no table between them", which is wrong
+about reading. By-value lookup is `Enum.__call__`, and a plain `Enum` does it identically;
+measured on 3.11 and 3.12. What `StrEnum` actually buys is the other direction - the member *is*
+a `str`, so it needs no `.value` at any boundary that wants one - and with a plain `Enum` those
+boundaries are not cosmetic: `json.dumps` raises on both the `ReportKey` keys and the
+`ReportStatus` value, `', '.join(ExecutionMode)` in `suggest_correction` raises,
+`add_argument(CommandLineOption.SKILL, ...)` raises before argparse inspects the string,
+`subcommands.choices[Subcommand.RESOLVE]` misses because the member no longer hashes equal to
+`"resolve"`, the tests cannot build a subprocess argv from a member, and
+`report["mode"] == ExecutionMode.AUTO` goes false against JSON-parsed text. "No lookup table"
+was loose even for writing: the alternative is `.value`, an attribute access, not a table.
+
+Nothing pinned that, which is the failure this plan has now
 recorded three times (#151's report keys, #158's promised-but-unwritten test, #154's labels).
 `test_the_enum_values_are_the_words_the_settings_file_and_the_report_use` spells every value
 out deliberately, against this test module's own stated rule of reading expected values from
@@ -8405,3 +8420,44 @@ reads its upstream threads with `/upstream-reviews` instead.
 Checked and clear: #156's removal of the offer-to-run-setup gate has *not* landed on `main`
 (`prerequisite-check.md` still says "offer"), so this branch's `plan-item-gathering.md` carrying
 that wording is consistent today. The hazard stays #156's, as already recorded.
+
+### A third comment the same day, and two of the user's own asks in conflict
+
+*"Wouldn't it be better to put all these directories in a StrEnum?"*, on the `# %% locations`
+block - filed after the round above, and colliding head-on with that round's own
+string-should-be-a-`Path` comment. Probed on 3.11 and 3.12 rather than reasoned about:
+
+- **`StrEnum`** makes each member a `str`, not a `Path`. `HOOKS_DIRECTORY / "plan-item-modes.toml"`
+  raises `TypeError`, and - the dangerous one - `COMMITTED_DEFAULTS_PATH.name` silently returns
+  `"COMMITTED_DEFAULTS"` rather than the filename, because `Enum` reserves `.name`, which
+  `test_plan_item_mode.py` uses twice to install that file into the scratch layout. A wrong
+  filename, no error.
+- **`Enum` with `Path` values** leaves the member a non-`Path`, so every site goes back to
+  `.value` - the unwrapping the previous comment had just removed.
+- **`class Location(Path, Enum)`** builds on 3.12 and 3.13 and raises `AttributeError: _flavour`
+  on 3.11. `Path` became subclassable in 3.12; decision 12 puts the floor at 3.11.
+
+The precedent is real and cuts both ways, which is the part worth carrying. `HookScript` and
+`PlanDocument` (`plan_item_bootstrap.py`) and `SetupPrerequisiteFile` (`scratch_repository.py`)
+*are* path `StrEnum`s - but each exists because something chooses among or iterates its members,
+and each returns `str`. That same file keeps `HOOKS_DIRECTORY` and `PLANS_DIRECTORY` as plain
+module constants beside them. Nothing selects among these five, and four of them are files
+rather than directories, so they stay constants. Answered with the measurement and the thread
+left open, on the user's call.
+
+Worth carrying: **this is the second time on this plan that two of the user's own asks were
+mutually exclusive** - #154's round had `spelling` → `name` and inheriting a specification, which
+Python refuses together. Both times the useful output was the measurement showing the conflict,
+not a choice made quietly on their behalf.
+
+### A correction the same day, from a question rather than a review
+
+Asked *"StrEnum is just a structure, the members are still str mapable, right?"* - and yes, which
+made the previous entry's own justification wrong. The correction is applied in place above
+rather than only recorded here, since that paragraph is the durable record of why this module
+uses `StrEnum` at all. Short version: reading is `Enum.__call__` either way; `StrEnum` buys the
+write and interop half, and "no lookup table" was loose even for that.
+
+**A claim about why a design was chosen is worth the same scrutiny as the design.** This one was
+written into a roadmap entry, a pull request description and a review reply before anyone asked
+whether it was true.
