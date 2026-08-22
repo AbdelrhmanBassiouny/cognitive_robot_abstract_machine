@@ -7892,3 +7892,127 @@ requests. The CI job rename changes the reported check name, so branch protectio
 `test_claude_dev_tooling` is a required status check. And this session could not subscribe to
 tracking issue #102 (the call was refused by the permission classifier), so concurrent structural
 changes reach it only through the delta recheck.
+
+## Update 2026-08-22 (resolved): #149's upstream review round, read through a rendered web page
+
+`/plan-item-resolve workflow-unification plan-item-execution-modes`, session
+https://claude.ai/code/session_015hBqi8PeGtQQsBqpKQdW2y. LucaKro requested changes on the
+upstream promotion, cram2 #537, on 2026-08-19: six threads, all on `plan_item_mode.py`, no
+summary body. Answered and pushed as `735988448`; 498 tests across the three directories CI
+runs, was 384 before the merges from `main`.
+
+### The item's own record said none of it
+
+The manifest still read `in_progress` with `pull_request_number: 149` and nothing else. The
+review is on #537, which `plan.yaml` has no field for and no dashboard column shows, so an
+item under changes-requested upstream is indistinguishable here from one quietly in progress.
+Recorded in `notes` rather than invented as a schema field, but worth naming as a gap: **the
+manifest tracks the fork pull request and the review happens on the promoted one.** Every item
+that reaches the upstream wave will have this.
+
+### Reading it at all took a rendered web page
+
+This session could not reach cram2's API in any form: `add_repo` refuses a cross-owner attach
+("cross-tier adds are not supported"), and `api.github.com` answers 403 with "GitHub access to
+this repository is not enabled for this session". Anonymous git reads of the public repo are
+served, so the *code* is reachable and the *conversation* is not. The six comments came out of
+`WebFetch` on the rendered pull request page, which returns their text but not reliably the
+line each is anchored to - the anchor ids had to be ordered against the file to place them.
+
+That is `upstream-review-reader` (#146)'s entire premise, now with a measurement behind it. It
+also settles how a fork session works an upstream round in the meantime: pushing the branch
+updates both pull requests, so the *fix* lands normally and only the *replies* are blocked.
+`AGENTS.md` forbids writing to cram2 anyway, so the reply text is handed to the user.
+
+### The three threads that were one thread
+
+*"why is setting key sth thats only used when an error is thrown? this is information
+irrelevant to this method imo"*, *"same here with reported path"*, and *"why object?"* are the
+same observation twice plus a question. `parse_mode(value, setting_key)` and
+`read_settings_file(path, reported_path)` each took a second argument no line of their body
+used, purely so a refusal could name where a value came from.
+
+The reviewer is right that it does not belong to the *reading*. It does belong to the *thing
+read*: what failed is not "a value" but "the setting `kickoff_mode`, holding `atuo`". So both
+became types - `ModeSetting(key, value)` with `parse()`, `SettingsFile(path, origin)` with
+`read()` - and the two refusals carry those objects instead of a second copy of their labels.
+The argument stops being irrelevant by stopping being an argument.
+
+`object` stays `object`, and that is the answer rather than a concession: the value comes from
+TOML, where `kickoff_mode = 3` parses fine and must be *refused*. `str` would be a lie about
+what the file can hold, and the refusal is the whole point of the function.
+
+Worth carrying: **a parameter a function's body never reads is a fact about its argument, not
+about the call.** The fix for "this doesn't belong here" is usually to find what it does belong
+to, not to delete it and make five call sites compose the error.
+
+### "str enums?" was a question whose answer exposed a missing guard
+
+The values *are* the wire form - the TOML setting a user edits by hand, the JSON report other
+programs parse, the `argparse` choice - so `ExecutionMode(value)` reads and `str(mode)` writes
+with no table between them. Nothing pinned that, which is the failure this plan has now
+recorded three times (#151's report keys, #158's promised-but-unwritten test, #154's labels).
+`test_the_enum_values_are_the_words_the_settings_file_and_the_report_use` spells every value
+out deliberately, against this test module's own stated rule of reading expected values from
+the module that owns them.
+
+Mutation-checked rather than asserted: renaming `ExecutionMode.AUTO`'s value fails 10 tests,
+renaming `ReportKey.SOURCE`'s fails 7, and **changing `ExitCode.UNKNOWN_MODE` from 3 to 9 fails
+exactly one - the new test**. The exit codes were the half with no guard at all, and only the
+mutation showed it; the mode and key values already had incidental cover from assertions that
+were going to contain those literals anyway, exactly as #151 found.
+
+### "so thats why 1 and 2 are not used here?"
+
+Asked because the class said half of it - *"``argparse`` supplies 2 for a usage error"* - and
+left 1 unexplained. `stack.ExitCode` already names `USAGE = 2` as a member rather than in
+prose, so this now does too, and the class says why 1 is left free: it is what Python exits
+with on an uncaught exception, so a crash cannot read as a refusal the tool chose to make. A
+test drives a real usage error and asserts the status the enum reserves.
+
+`plan_item_bootstrap.py` carries the identical half-explanation and is on `main`, so it keeps
+it for now.
+
+### The serialization thread, split in two
+
+*"i feel like you have as_document, as_dict, as_json, as_json_dict etc scattered across your
+diffferent PRs krood dependency when"* - measurably true, and the measurement is what decided
+what to do about it. `as_document` returns a dict in `plan_item_bootstrap.py` and here;
+`to_json_dict` returns a dict in `build_dashboard.py` and `sync_manifest_status.py`; `as_json`
+returns a str in `maintenance_report.py` and `maintenance_board.py`. One operation under two
+names, plus a genuinely different one under a third. `as_document` survives: it names the
+thing produced where `to_json_dict` names the Python type it happens to be.
+
+`git ls-tree origin/main` returns all four divergent files, so renaming them is standalone work
+rather than an edit to an unlanded pull request - the prefer-the-change test comes out on the
+side of a separate item, `report-document-naming`, and the user agreed. What #149 owed instead
+is the other half of the same rule: `main()` called `as_document()` on either report and
+nothing declared they shared it. A `Report` base declares the `as_document`/`exit_code` pair,
+and `ReportKey`/`ReportStatus` give the document's spelling one home. The printed document is
+byte-identical, verified by running the CLI before and after.
+
+**On krrood: declined, on a measurement rather than a preference, and the thread left open.**
+`test_claude_dev_tooling` runs on a bare `ubuntu-latest` with `pip install pytest` and the two
+dashboard requirements and nothing else - so a krrood import breaks the job outright, and every
+hook that runs under a plain `python3` with it. `SubclassJSONSerializer` also solves
+round-tripping, resolving a concrete subclass from a stored type name, and nothing ever reads
+one of these reports back into a Python object. The place to revisit it is `bastler-package`
+(#185), which puts all six files in one home.
+
+### Found while in there
+
+The module docstring still named `ask` as the default, three days after the reversal this
+roadmap records under 2026-08-09 put `auto` in `plan-item-modes.toml` and in
+`execution-modes.md`. Nothing tested it, because it is prose. **A decision reversed in a
+committed default and in a shared document is not reversed in the docstring that explains
+them** - and the docstring is what the next reader believes.
+
+### Carried, not done
+
+The six threads on #537 are unanswered: this session pushed the fix and handed the reply text
+over, per `AGENTS.md`. #149's one red check remains `test_each_lib (semantic_digital_twin)` ->
+`test_world_sim_state_sync`, a physics settle assertion on a pull request whose ten files are
+all under `.claude/`; not this branch's, and not chased into it. #149 is left un-drafted rather
+than returned to draft: un-drafting a fork pull request is this workflow's own promotion gate
+(`stack.py`'s *"self-review a fork PR, then un-draft it"*), so re-drafting it would withdraw
+#537 from the review it is answering.

@@ -2414,6 +2414,36 @@ items:
     status: in_progress
     pull_request_number: 149
     session: https://claude.ai/code/session_015v3RfcEvtzNj47uEMac9p9
+    notes: >
+      Promoted upstream as cram2 #537, which the manifest has no field for - the number is
+      recorded here and the review history in roadmap.md. LucaKro requested changes there on
+      2026-08-19, six threads all on plan_item_mode.py; answered and pushed 2026-08-22 in
+      735988448 (ModeSetting/SettingsFile replacing the two label arguments, ExitCode.USAGE
+      and why 1 is left free, ReportKey/ReportStatus behind a Report base, and one contract
+      test pinning every wire value). The threads themselves are unanswered on #537: this
+      fork's sessions cannot write to cram2 (AGENTS.md forbids it, and the API is unreachable
+      from here - the gap upstream-review-reader exists to close), so the reply text was
+      handed to the user. The krrood half of the serialization thread was declined, so that
+      thread stays open on purpose; the naming half became report-document-naming.
+
+  - id: report-document-naming
+    title: "One name for the report-to-document method across the .claude tooling"
+    track: personal-data
+    depends_on: []
+    status: not_started
+    notes: >
+      From LucaKro's 2026-08-19 review of cram2 #537: "i feel like you have as_document,
+      as_dict, as_json, as_json_dict etc scattered across your diffferent PRs". Measured:
+      as_document returns a dict in plan_item_bootstrap.py and plan_item_mode.py,
+      to_json_dict returns a dict in build_dashboard.py and sync_manifest_status.py, and
+      as_json returns a str in maintenance_report.py and maintenance_board.py - one
+      operation under two names, plus a genuinely different one under a third. as_document
+      is the name that survives, since it names the thing produced where to_json_dict names
+      the Python type it happens to be. Split out rather than folded into
+      plan-item-execution-modes because every divergent file is already on main, so the
+      rename stands on its own; plan-item-execution-modes carries only the Report base for
+      its own two reports. Best done inside or after bastler-package, which moves all six
+      files into one home and is where a shared Report base would live.
 
   - id: manifest-currency-first
     title: "Write the manifest and republish the dashboard before anything else, at every transition"
