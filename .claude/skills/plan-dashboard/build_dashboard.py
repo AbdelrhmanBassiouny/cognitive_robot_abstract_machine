@@ -146,6 +146,33 @@ class StallReason(StrEnum):
     """
 
 
+class DashboardCssClass(StrEnum):
+    """
+    A class ``dashboard.html`` gives an element that something outside the template
+    also has to name - this module when it composes an item card's class attribute,
+    and the tests when they read an element back out of a rendered page.
+
+    Only those classes are members. The template names every class it styles, so a
+    member here is a second spelling of one rather than its definition; what keeps
+    the two agreeing is that the tests find their elements by these values.
+    """
+
+    DRIFT = "drift"
+    """
+    One drift line on an item card.
+    """
+
+    DRIFT_BANNER = "drift-banner"
+    """
+    The sidebar banner reporting how many drift flags the plan carries.
+    """
+
+    HAS_DRIFT = "has-drift"
+    """
+    An item card carrying at least one drift flag.
+    """
+
+
 class PullRequestState(StrEnum):
     """
     GitHub's own coarse-grained pull request state, as returned by its API.
@@ -1215,10 +1242,10 @@ class Item:
     @property
     def status_and_drift_css_class(self) -> str:
         """
-        The item card's dynamic CSS class suffix: ``status-<value>``, plus ``has-drift``
-        once :attr:`drift_flags` is non-empty.
+        The item card's dynamic CSS class suffix: ``status-<value>``, plus
+        :attr:`DashboardCssClass.HAS_DRIFT` once :attr:`drift_flags` is non-empty.
         """
-        drift_suffix = " has-drift" if self.drift_flags else ""
+        drift_suffix = f" {DashboardCssClass.HAS_DRIFT}" if self.drift_flags else ""
         return f"status-{self.status.value}{drift_suffix}"
 
     @classmethod

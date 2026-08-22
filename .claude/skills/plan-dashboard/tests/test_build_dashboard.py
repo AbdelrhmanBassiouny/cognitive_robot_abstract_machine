@@ -8,7 +8,6 @@ import re
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import StrEnum
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
@@ -18,6 +17,7 @@ import yaml
 
 from build_dashboard import (
     AVAILABLE_MODELS,
+    DashboardCssClass,
     DashboardRenderer,
     DependencyCycle,
     DriftFlag,
@@ -64,23 +64,6 @@ DRIFT_LINE_MARKER = "\u26a0"
 """
 The warning sign the item card prefixes every drift line with.
 """
-
-
-class DashboardCssClass(StrEnum):
-    """
-    A class dashboard.html gives an element these tests read back out of the rendered
-    page.
-    """
-
-    DRIFT = "drift"
-    """
-    One drift line on an item card.
-    """
-
-    DRIFT_BANNER = "drift-banner"
-    """
-    The sidebar banner reporting how many drift flags the plan carries.
-    """
 
 
 def minimal_plan(**overrides: Any) -> dict[str, Any]:
