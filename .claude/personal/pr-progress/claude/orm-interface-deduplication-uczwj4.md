@@ -15,9 +15,16 @@ one interpreter instead, so each import is paid for once.
 - [x] Declare each package's ORM dependencies as data on `OrmPackage`.
 - [x] Tests in `test/orm_generation_test` (new `lib: orm_generation` CI matrix entry).
 
+**Measured**: CI's "Build ORM" step (four jobs, each running the whole script) went from
+a mean of 104.5 s on main (run 32138086038: 108/107/99/104 s) to 74.3 s on the PR
+(run 32500231779: 67/65/73/92 s) - about 30 s, ~29 %, per invocation. One CI run per
+side, four samples of the same workload each; the new spread is wide (65-92 s), and the
+runs are three days apart on the same image tag.
+
 **Not verified here**: the container has none of the workspace dependencies installed, so
-the real regeneration could not be run. CI's giskardpy/coraplex/sdt/experiments jobs run
-`regenerate_all_orm.py` and then exercise the generated interfaces, which is the check.
+the regeneration could not be run locally and its output could not be diffed. CI's
+giskardpy/coraplex/sdt/experiments jobs regenerate and then exercise the interfaces, and
+all pass on this branch.
 
 **PR**: #187 (draft) - https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/187
 
