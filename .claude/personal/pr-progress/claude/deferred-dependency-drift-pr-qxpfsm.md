@@ -95,6 +95,39 @@ stacked on a dependency that will never land was never flagged.
 - PR description rewritten to match. Still a draft, and stays one until the user
   marks it ready.
 
+**Fourth round the same day — two threads, both resolved (`d224c1126`)**
+- The reparent test stated its rule by implication (`in` plus a length), so it read as
+  proving nothing. It says the rule directly now: the suggestion is a **suffix**, so a
+  flag with nothing to suggest is described by exactly what comes before it
+  (`startswith`), with a sibling test pinning the half nothing had asserted — a
+  suggestion names every target it has. Both derive their expectation from the
+  `reparent_targets` the flag was built with, not from wording.
+- Stated on the thread and worth carrying: these cannot tell *omitted* from *rendered
+  empty*. Deleting the guard leaves a dangling clause that is still a prefix, and what
+  catches it is the render test, only because the rendered line is stripped and the
+  description is not — accidental coverage. Distinguishing them deliberately means
+  naming the lead-in phrase, which rounds two and three cut.
+- `DashboardCssClass` names the two classes the page-reading helpers look elements up
+  by, and `text_of_elements_with_class` takes it rather than any `str`. Checked before
+  answering: nothing named them anywhere — `drift`/`drift-banner` are literals in
+  `dashboard.html` twice each, and `has-drift` is a bare literal in
+  `status_and_drift_css_class` whose *other* half derives from `ItemStatus`.
+- The enum is in the test module, not production: the template is where a class is
+  defined, so Python could only be a third copy of the name. The rendered-page tests
+  hold the two equal, mutation-checked. **The module's other ~100 markup literals stay
+  untouched** — there the literal is the assertion; these two were arguments to a
+  lookup. Do not sweep them without being asked.
+
+**State**
+- `main` was merged in by a maintenance pass at `7e1c51e4d`; all three suites re-run on
+  the merged head rather than assumed green. 267 plan-dashboard (242 before the merge),
+  107 hooks, 154 stack. `format_docstrings.py` a no-op, `docformatter --diff` 0 hunks,
+  `black --check` clean.
+- Live check unchanged: `rdr-refactor` flags `D-ui-rendering` and only it;
+  `workflow-unification` flags none.
+- PR description rewritten with the fourth round and the post-merge counts. Still a
+  draft.
+
 **Outstanding**
 - CI on `815d3f2cb` not yet observed. At `453795a6`, `test_claude_dev_tooling` passed
   and one robotics job was red — `test_each_lib (robokudo)` →
