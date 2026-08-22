@@ -1533,6 +1533,33 @@ items:
       bastler migration moves, and #185 is open but unmerged, so per that doctrine it is not
       pre-resolved against - #184 merges main and re-applies its delta inside the package once
       #185 lands.
+
+      Second round the same day, three threads, applied in 97ee004d3. The wording
+      assertions are cut on the user's argument that nobody parses a drift description -
+      it is rendered into the item card and read by a person - so pinning the sentence
+      bought a failing test per reword and caught no defect. Same call they had already
+      made on #121, where test_every_summary_message_reads_as_written became
+      test_every_summary_message_renders_something, so the precedent was followed rather
+      than re-argued. What replaces it is the half that was never about wording: description
+      is a match with no case _, so a member added later without a branch returns None
+      silently and the card renders the word "None". Two parametrised tests over
+      list(ManifestDriftCause) and list(StallReason) assert each renders something,
+      covering a future member without anyone editing the test - which is the difference
+      from the eight hand-written sentences. Mutation-checked: deleting one branch fails
+      exactly its own case. The reparent rule keeps a test, comparing the two descriptions
+      to each other rather than to a sentence. That thread is left open, since a
+      replacement is not the deletion it asked for.
+
+      Two smaller ones. drift_lines_in strips the warning sign the card prefixes every
+      drift line with, named once at DRIFT_LINE_MARKER, so an expectation is a list of
+      descriptions rather than descriptions each carrying a symbol the test is not about;
+      the marker's presence is no longer asserted anywhere, which is stated on the thread
+      rather than glossed. And TextOfElementsWithClass is a dataclass, whose one
+      requirement is a __post_init__ running HTMLParser's own initialisation - @dataclass
+      generates __init__ rather than extending the base's, so reset() would never run and
+      feed() would fail; mutation-checked by deleting it, which fails both page-reading
+      tests and nothing else. 248 plan-dashboard tests, 107 hooks, formatter and
+      docformatter clean.
   - id: landed-parent-detection
     branch: claude/stack-landed-parent-detection
     title: "Decide a parent has landed from git ancestry, not board membership"

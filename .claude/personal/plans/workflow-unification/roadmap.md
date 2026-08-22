@@ -8188,3 +8188,64 @@ by printing the recorded stamp.
 The two are complementary: that one is a timer keeping the fork fresh between sessions and is gated
 on the upstream wave landing; this one guarantees the base of the session about to run, and is live
 now.
+
+## Update 2026-08-22 (second round the same day): the wording test is cut, on the reviewer's argument
+
+Three threads on #184, filed twenty minutes after the previous round was pushed — the fourth
+time in three days that an entry recording a round as answered has been overtaken by the next
+one. Applied in `97ee004d3`; two resolved, one left open. 248 plan-dashboard tests, 107 hooks.
+
+### The reviewer was right, and the precedent was already theirs
+
+*"Since we maintain the code, we look at the description strings ourselves, so this test is not
+really needed. You can argue with me if I am wrong."*
+
+`test_drift_flag_describes_itself` was added in the previous round for a stated reason —
+single-sourcing the wording deletes the guard the retyped copies were accidentally providing —
+and that reason does not survive the question **who reads the contract**. A drift description is
+rendered into the item card and the sidebar banner and read by a person. Nothing parses it. So
+the guard was protecting prose against being reworded, which is not a defect, and its cost was a
+failing test every time the prose improved.
+
+That is the same call recorded on **#121's second round** (2026-08-07), where
+`test_every_summary_message_reads_as_written` — added hours earlier for exactly this reason —
+was cut on the user's instruction and replaced by `test_every_summary_message_renders_something`.
+The precedent was followed rather than re-argued.
+
+**The rule this sharpens, against the 2026-08-11 mirror-schema entry.** That entry says
+*single-sourcing a contract deletes a guard, and the commit that single-sources it owes the
+replacement*. True, and it is not a licence to replace it with the same assertion in one place —
+the replacement has to be aimed at a defect. Here the sentence was never the defect; the missing
+branch was.
+
+### What was kept, because it was never about wording
+
+`description` is a `match` with no `case _`, and a Python `match` that falls through returns
+**`None` silently** — so a `ManifestDriftCause` or `StallReason` member added later without a
+branch renders the literal word `None` on the dashboard with nothing failing. Two parametrised
+tests over `list(ManifestDriftCause)` and `list(StallReason)` assert each member renders
+something non-empty. Parametrised off the enum, so a future member is covered without anyone
+editing the test — which is precisely what the eight hand-written sentences were not.
+Mutation-checked: deleting the `MARKED_DONE_WHILE_CLOSED_UNMERGED` branch fails exactly its own
+case out of 172.
+
+The reparent rule kept a test, since *"omitted entirely when there is nothing to suggest"* is a
+rule rather than a phrasing — but it compares the two descriptions **to each other**
+(`without_targets.description in with_targets.description`) rather than to a sentence.
+
+Left open rather than resolved: the ask was a deletion and this is a replacement.
+
+### Two smaller ones
+
+*"What is the weird symbol at the string start?"* — `⚠`, which `dashboard.html` prefixes every
+drift line with. It was in the expectation only because `drift_lines_in` returned the element's
+whole text. It strips it now, named once at `DRIFT_LINE_MARKER`, so an expectation is a list of
+descriptions. Stated on the thread rather than glossed: the marker's presence is no longer
+asserted anywhere — it was only ever pinned incidentally, and carrying a symbol the test is not
+about into every expectation costs more than that incidental guard is worth.
+
+*"Can this be a dataclass?"* — yes, with one requirement worth recording because it is silent
+otherwise: `@dataclass` **generates** `__init__` rather than extending the base's, so
+`HTMLParser.__init__` — which calls `reset()` to build the tokenizer state — never runs and
+`feed()` fails on a missing attribute. `__post_init__` calls it. Mutation-checked by deleting
+that method: both page-reading tests fail and nothing else does.
