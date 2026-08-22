@@ -2,30 +2,40 @@
 
 Make every session start from a fresh base: a deterministic SessionStart step that
 fast-forwards the fork's default branch from the upstream repository, locally and on
-the fork, and reports how stale the current branch is.
+the fork, and reports how stale the checked-out branch is.
 
-Live evidence at session start: `origin/main` was 86 commits behind
-`cram2/main`, and this branch is exactly `origin/main`.
+Tracked as `workflow-unification` item `fresh-base-at-session-start` (personal-data
+track). PR #188, draft, `bug` label.
 
-Design decisions:
-- New `.claude/hooks/fast-forward-default-branch.sh`, run as a subprocess by
-  session-start.sh (same shape as check-setup.sh), printing one summary line.
-- Upstream repository/base resolved from `stack.py configuration`, the existing
-  single source of truth, so no second place names the upstream.
-- Fast-forward only, never a force push; a diverged default branch is reported and
-  left alone.
-- Only the default branch is touched. The current working branch is never merged or
-  rebased automatically; its staleness is reported as an indented follow-up row.
-- Never fatal: every failure path reports and exits 0.
+Design decisions (all implemented):
+- `.claude/hooks/fast-forward-default-branch.sh`, run as a subprocess by
+  session-start.sh, printing its outcome plus indented follow-up rows.
+- Upstream resolved from `stack.py configuration`, so no repository is named in the
+  hook and there is one place to correct if the upstream moves.
+- Fast-forward only, never a force push; a diverged base is reported and left alone.
+- Only the default branch is touched; the checked-out branch's staleness is reported,
+  never merged or rebased automatically.
+- Never fatal: every refusal reports and exits 0.
 
 ## Done
 
-- Explored the hook/test conventions and the stack configuration resolution.
-- Confirmed the bug is live (86 commits behind).
+- Hook, wording in session-start-messages.sh, `default branch` line in the report.
+- 19 tests in `.claude/hooks/tests/test_default_branch_fast_forward.py`, no network:
+  fork and upstream are local bare repos laid out under `<owner>/<name>.git` so their
+  URLs name a repository the way GitHub does; the GitHub-URL route is reached through
+  git's own URL rewriting. No test-only seam in the script.
+- Mutation-checked: disabling the push fails 4 tests; dropping the divergence guard
+  fails the diverged test.
+- Second fix, same root cause: the summary's `plan state SHA` was re-reading
+  FETCH_HEAD, which the upstream fetch clobbers. Now prints the recorded stamp.
+  Reproduced with a failing test first.
+- Verified live: origin/main was 86 commits behind cram2/main, fast-forwarded in 3.9s.
+- Merged the fresh main into this branch. Full suites green (280 hooks+stack, 497
+  including plan-dashboard).
+- Plan item and roadmap entry saved to the notes branch.
 
 ## Next
 
-1. Failing tests in `.claude/hooks/tests/test_default_branch_fast_forward.py`.
-2. Implement the script + wording in session-start-messages.sh + the report line.
-3. README, plan item on workflow-unification's personal-data track, dashboard.
-4. Commit, push, draft PR with the `bug` label.
+1. Republish the workflow-unification dashboard.
+2. Nothing else - PR #188 is open as a draft; per my notes, opening it ends this
+   session's obligation to it.
