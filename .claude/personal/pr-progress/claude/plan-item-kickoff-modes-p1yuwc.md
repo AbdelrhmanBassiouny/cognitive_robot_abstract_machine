@@ -1,46 +1,43 @@
-## `/plan-item-resolve workflow-unification plan-item-execution-modes`
+## `plan-item-execution-modes` — #149 / cram2 #537
 
-Resolve session for `plan-item-execution-modes` (fork PR #149, promoted upstream
-as cram2 #537). The work landed on the item's own branch,
-`claude/plan-item-kickoff-modes-p1yuwc`; this branch opened no PR of its own.
+Two review rounds handled on 2026-08-22. Branch
+`claude/plan-item-kickoff-modes-p1yuwc`; pushing it updates both pull requests.
 
 ### Done
-- Read #537's six review comments (LucaKro, changes requested 2026-08-19) via
-  `WebFetch`: this session cannot reach cram2's API at all - `add_repo` refuses a
-  cross-owner attach, `api.github.com` returns 403 - which is the gap item
-  `upstream-review-reader` (#146) exists to close.
-- Implemented and pushed `735988448` to `claude/plan-item-kickoff-modes-p1yuwc`,
-  updating both #149 and #537:
-  - `ModeSetting(key, value)` and `SettingsFile(path, origin)` replace
-    `parse_mode`/`read_settings_file` and their label arguments; both refusals
-    carry those objects instead of a second copy of the labels.
-  - `ExitCode.USAGE = 2` as a member, mirroring `stack.ExitCode`, and the class
-    now says why 1 is left free.
-  - `ReportKey`/`ReportStatus` plus a `Report` base declaring the
-    `as_document`/`exit_code` pair. The printed document is byte-identical.
-  - Fixed the module docstring, which still named `ask` as the default.
-  - One contract test pinning every wire value; mutation-checked (an exit-code
-    change fails only that test).
-- 498 tests pass across the three directories `test_claude_dev_tooling` runs;
-  `check-setup.sh` exits 0; the CLI's JSON output is unchanged.
-- #149's description updated with the review round. Left un-drafted on purpose:
-  un-drafting a fork PR is this workflow's promotion gate, so re-drafting would
-  withdraw #537 from the review it answers.
-- Plan recorded: `roadmap.md` round section, `notes` on the item, new item
-  `report-document-naming`, `save-plan.sh` (`d50d35a2f`), dashboard republished
-  (51 items, 0 drift), issue #102 comment 5379695801.
+- **Round 1 (cram2 #537, LucaKro, changes requested 2026-08-19)** — `735988448`.
+  Read via `WebFetch`, since this session cannot reach cram2's API.
+  `ModeSetting`/`SettingsFile` replaced the two label arguments; `ExitCode.USAGE`;
+  `ReportKey`/`ReportStatus` behind a `Report` base; the stale `ask`-is-the-default
+  docstring. Reply text handed to the user - this session must not write to cram2.
+- **Round 2 (fork #149, six threads, 2026-08-22)** — `7cf38aab9`. Reversed two of
+  round 1's calls: the wire-value contract test is deleted, and `as_document`
+  becomes `as_json`. Plus `CommandLineOption` (so `--skill` is named), `Any` for
+  every `object` hint, `SETTING_KEYS` deleted as derivable and unread, all path
+  constants and `SettingsFile.origin` as `Path`, and `from None` explained in
+  `ModeError`'s docstring.
+- **Base merge** (`2132efa76`): `main` gained #135's `scope-decision.md` reference
+  and **#146's `/upstream-reviews`** step, both in the sections this branch had
+  moved into `plan-item-gathering.md`. Carried across by hand, not merged wholesale.
+- All six replies posted on #149; four threads resolved, two left open.
+- 522 tests across the three directories CI runs; `check-setup.sh` exits 0; the
+  `resolve` document is byte-identical.
+- Plan recorded: roadmap round, both item `notes`, `save-plan.sh` (`718147c45`),
+  dashboard republished (52 items, 0 drift), issue #102 comment 5379695801.
 
 ### Next
-- Nothing on this branch. The six reply texts for #537 were handed over in the
-  session chat for the user to post; this session must not write to cram2.
+- Nothing outstanding on this branch.
 
 ### Outstanding / flagged
-- The six threads on #537 are unanswered there.
-- The krrood half of the serialization thread was declined, so that thread must
-  stay open rather than be resolved.
-- `plan.yaml` has no field for a promoted upstream PR, so an item under
-  changes-requested review upstream looks identical to one quietly in progress.
-- #149's CI on `735988448`: 18 green including `test_claude_dev_tooling`, 4 of
-  the docker matrix jobs still running at hand-off, among them the
-  `semantic_digital_twin` one that was red before on `test_world_sim_state_sync`
-  - a physics settle assertion, not this branch's.
+- **Two threads open on purpose**: `from None` (answered, code unchanged in
+  behaviour) and the `SETTING_KEYS` removal (a deletion, not the rename asked for).
+- The six threads on cram2 #537 are still unanswered there. `/upstream-reviews` is
+  on `main` now, so a future resolve can read them without `WebFetch`.
+- `report-document-naming` carries a decision it cannot dodge: `as_json` already
+  names the `str`-returning method in `maintenance_report.py`/`maintenance_board.py`,
+  so applying the rule repo-wide makes one name cover a dict and its serialized
+  text. Recommendation recorded: dict keeps `as_json`, the `str` ones become
+  `as_json_text`.
+- `plan.yaml` still has no field for a promoted upstream PR.
+- CI on `7cf38aab9`: `test_claude_dev_tooling` green, 16 docker-matrix jobs still
+  running at hand-off. `mergeable_state` back to `unstable` from `dirty`.
+- #149 left un-drafted: un-drafting a fork PR is this workflow's promotion gate.
