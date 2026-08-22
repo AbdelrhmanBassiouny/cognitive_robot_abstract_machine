@@ -43,6 +43,8 @@ D-core-expert	rdr-refactor
 D-core-single-class	rdr-refactor
 D-core-backend	rdr-refactor
 rdr-engine	rdr-refactor
+claude/rdr-refactor-steward-pass-uxewqh	rdr-refactor
+claude/mcrdr-stop-only-flaky-skip	rdr-refactor
 D-ui-splice-fix	rdr-refactor
 D-ui-rendering	rdr-refactor
 D-ui	rdr-refactor

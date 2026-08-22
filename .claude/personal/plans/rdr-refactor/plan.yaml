@@ -278,7 +278,7 @@ items:
   depends_on:
   - rdr-backward-inference
   status: in_progress
-  notes: '2026-08-22 resolve: narrowed to aid.py alone (df20e7d9, 1 file / 49 lines). The 2026-08-21 review round opened 4 threads, none answered, and the item notes had not recorded it - same staleness class as sections 5/14/18/19. The 3 rename threads asked to fix stale `_materialize` / `TargetKnowledgeResolver` names in test_condition_resolver.py; grepping main found 9 stale readers of those two renames, 2 of them in production source (condition_resolver.py:11 and :230) that this PR does not touch, so the whole rename moved to #161 and this PR reverted its own divider conversion. Those 3 threads are replied to and left open, per the answered-differently rule. test_aid.py deleted as asked - its 3 tests restated a declaration or the language, and the behavioural coverage already exists on #159''s test_ask_for_rule.py - and that thread is resolved. The test_rdr_alchemy.py flaky skip moved to new bug PR #189 off main; it could not be reproduced there (18/18 passes across 4 configurations), so whether either sibling skip is still needed is an open question for the developer. test_eql_rdr 48 -> 45 passed / 0 failed, collected-id diff exactly the 3 removed tests, and 45 is now main''s own count since this branch touches no test file. Full account in roadmap.md section 23. Earlier, 2026-08-12 steward cascade: restacked onto its cascaded base carrying main be377fdf (#41 merged 2026-08-10), section 21.'
+  notes: '2026-08-22 resolve: narrowed to aid.py, then took test_condition_resolver.py back at the developer''s direction (c21e1fe3). The 2026-08-21 review round opened 4 threads none of which the item notes had recorded - same staleness class as sections 5/14/18/19. Chasing the stale `_materialize` / `TargetKnowledgeResolver` names found 9 readers on main, 2 of them in production source (condition_resolver.py:11 and :230), so the fix first moved wholesale to #161; the developer then asked for the test-file half here, so this PR now owns test_condition_resolver.py entire (dividers, header names, the 3 test_target_knowledge_resolver_* names, the module docstring and the materialized_guard wording) and #161 keeps only the readers this PR does not touch. No file is touched by both, verified with git merge-tree. test_aid.py deleted as asked - its 3 tests restated a declaration or the language, coverage already on #159''s test_ask_for_rule.py. The test_rdr_alchemy.py flaky skip moved to bug PR #189 off main. Also merged current main (8c041a10) after CI went red on test_world_sim_state_sync: this branch was 10 commits behind and predated a7c21ffe6''s flaky marking. test_eql_rdr 45 passed / 0 failed, collected-id diff exactly the 3 renames; test_eql 1179 passed / 3 skipped / 0 failed. Full account in roadmap.md section 23.'
 - id: D-core-underspecified
   title: 'RDR engine: underspecified-match adapter'
   branch: D-core-underspecified
@@ -592,6 +592,25 @@ items:
     merge conflict once merged; verify the restacking bot cascades the fix through #58/#39/#53/#41 afterward.
 
     '
+- id: backward-inference-rename-completion
+  title: Finish the four backward-inference renames left unfinished on main
+  branch: claude/rdr-refactor-steward-pass-uxewqh
+  pull_request_number: 161
+  track: S0-steward
+  depends_on:
+  - rdr-backward-inference
+  status: in_progress
+  session: https://claude.ai/code/session_01LeZ4Mkr4tfdKjvEcJrz32C
+  notes: 'Off main, like #89: #41''s cascade renamed four things and left readers of the old names behind, which AGENTS.md counts as an unfinished rename. Opened 2026-08-13 covering two of them (ConclusionKnowledge, what_do_we_know_about, 5 readers); widened 2026-08-22 after the #63 review surfaced the other two (TargetKnowledgeResolver -> TargetSufficientConditionsBasedResolver, renamed on main in ed7b3766, and _materialize -> GuardCondition.as_expression). The undercount is the lesson: the missed readers were found by grepping main, not by reading the diff, and two sit in production source where no review of a test-only diff could see them. Scope settled 2026-08-22: keeps backward_inference.py''s and condition_resolver.py''s docstrings plus test_backward_inference.py''s test name; test_condition_resolver.py went to #63 at the developer''s direction, so no file is touched by both. Was untracked in any plan until 2026-08-22 - the developer caught that on #63.'
+- id: mcrdr-stop-only-flaky-skip
+  title: Extend the flaky-test skip to test_rdr_alchemy's test_fit_mcrdr_stop_only
+  branch: claude/mcrdr-stop-only-flaky-skip
+  pull_request_number: 189
+  track: S0-steward
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01LeZ4Mkr4tfdKjvEcJrz32C
+  notes: 'Off main. 57a1babac skipped test_rdr.py::TestRDR::test_fit_mcrdr_stop_only for a nondeterministic MultiClassRDR.fit interaction count and missed the identically-named sibling in test_rdr_alchemy.py, which had been riding the bottom of this stack on #63 since 2026-07-12; extracted here so main''s CI stops carrying it before the stack lands. Open question recorded on the PR rather than guessed: the test passed 18/18 across four configurations (alone, its class, the suite serially, the suite under -n auto), so whether either sibling skip is still needed is the developer''s call - they commented on #63 that it is ''not flaky anymore'' and marked this PR ready. Related: main''s newer @pytest.mark.flaky idiom appears once, is unregistered in pytest.ini, has no rerun plugin declared, and CI runs bare pytest with no --reruns - so that marker looks inert, which matters if it is meant to replace skips. Was untracked in any plan until 2026-08-22.'
 - id: D-ui-splice-fix
   title: 'RDR engine: fix rule-tree splice for attributes reused across sibling branches'
   branch: D-ui-splice-fix

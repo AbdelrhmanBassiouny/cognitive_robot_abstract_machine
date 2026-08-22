@@ -2033,3 +2033,75 @@ opposite them. `D-core-aid` is clean precisely because #63 now stops touching th
   marked ready.
 - `backward_inference.py` on `main` carries bare `# %%` headers with no description, which
   `AGENTS.md`'s rule asks for. Noted, not fixed — `main`'s, and outside this round.
+
+## 24. Addendum (2026-08-22) — the follow-up review reversed §23's split, and caught that two pull requests existed in no plan at all
+
+§23 moved `test_condition_resolver.py`'s cleanup off #63 and onto #161, by the mechanical
+`git ls-tree main` test. The developer reviewed that and reversed it — *"do it here, and I
+am wondering why isn't #161 existing in any plan? fix that."* Both halves are worth
+recording, because only one of them is a matter of taste.
+
+### The split was defensible and still wrong for this file
+
+The reasoning in §23 holds on its own terms: the file exists on `main`, two of the stale
+readers are in production source `#63` does not touch, and `D-core-expert` already carried
+the corrected headers. What it undervalued is that **a reviewer reads a diff, not a
+rationale.** `df20e7d9` showed `# %%` → `# ---` on a file the reviewer had just asked to fix,
+and no amount of correctness in the commit message changes what that looks like. The
+mechanical test answers "may this ride here?"; it does not answer "will the person reviewing
+it understand why it did not."
+
+Settled: **`test_condition_resolver.py` is #63's, whole** — dividers, corrected header names,
+the three `test_target_knowledge_resolver_*` names, the module docstring and the
+`materialized_guard` wording. #161 keeps only what #63 does not touch: `backward_inference.py`'s
+and `condition_resolver.py`'s docstrings, and `test_backward_inference.py`'s test name.
+
+The property worth keeping from §23 survives the reversal, because it was about files rather
+than about which PR: **no file is touched by both**, so neither can conflict with the other.
+Verified with `git merge-tree`, not assumed — #161 merges into `D-core-aid` clean.
+
+### The real finding: neither #161 nor #189 was in any plan
+
+The developer's second question is the one with teeth. #161 was opened 2026-08-13 by §21's
+own steward pass and #189 this morning by §23, and **neither was ever added to `plan.yaml`** —
+so neither appeared on any dashboard, in any readiness check, or in any kickoff/resolve
+session's view of this programme. Both are now items on the `S0-steward` track, with #89
+(`conditions-root-drop-dead-parent-recovery`) as the precedent: a main-based side-quest fix
+tracked alongside the stack it serves.
+
+The gap has a specific shape worth naming, because it will recur. Every plan-* skill records
+state for *the item it was invoked on*. A session that spins off a **new** pull request while
+resolving an existing item has no step that says "and track the thing you just created" —
+§23 wrote a roadmap section and a tracking-issue comment describing #189, updated `D-core-aid`'s
+notes, republished the dashboard, and still left #189 itself invisible to every one of those
+mechanisms. Writing *about* a pull request in the roadmap is not the same as it having an
+`items[]` entry, and only the second is what the tooling reads.
+
+Two habits follow: a session that opens a pull request adds its item in the same turn, and
+`/plan-item-resolve`'s state-recording step covers every pull request the round touched,
+not only the one named in its invocation.
+
+### Also
+
+- **CI was red on `test_each_lib (semantic_digital_twin)`** for `test_multi_sim.py::
+  test_world_sim_state_sync` — a physics-settling assertion #63's 49 lines of `krrood` cannot
+  reach. Cause: the branch was **10 commits behind `main`** and predated `a7c21ffe6`
+  ("[FlakySync] add flaky to test_world_sim_state_sync"). Merged current `main` into both #63
+  and #161.
+- **That flaky marker looks inert, and it is worth checking before relying on it.**
+  `@pytest.mark.flaky` appears exactly once in the repository, is not registered in
+  `pytest.ini`'s `markers`, no rerun plugin is declared in any requirements file, and
+  `ci_reusable.yml` runs a bare `python -m pytest -n auto` with no `--reruns`. Under either
+  `pytest-rerunfailures` or `flaky`, a bare marker with no reruns configured does nothing but
+  emit an unknown-mark warning. So the merge brings #63 up to date — which it needed anyway —
+  but it cannot be claimed to *fix* that failure. This also bears on #189, which uses
+  `@unittest.skip`: the newer marker would keep coverage instead of disabling it, but only
+  once it actually reruns.
+- **A third generated file dirtied a commit's staging area.** After §23's `ormatic_interface.py`
+  (4,329 lines) and §17/§19's `query_graph.pdf` / `drawer_explanation.pdf`, this round's suite
+  runs regenerated `test_eql/test_verbalization/verbalization_results.py` — an auto-generated
+  snapshot module whose own header says not to hand-edit it. A stop-hook prompt to "commit
+  uncommitted changes" would have put it into #63, re-widening the very PR this round narrowed.
+  Reverted, not committed. The habit §23 recorded — stage by explicit path, never `git add -u`
+  — now has a third instance behind it, and a corollary: **a dirty working tree after a test
+  sweep is the normal state here, not a signal to commit.**
