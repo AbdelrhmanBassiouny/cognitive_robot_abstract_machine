@@ -566,3 +566,53 @@ the symptom was reported.
   `current_value = current_value[step._key_]` under `isinstance(step, Index)`,
   carrying the same expression-key assumption. Pre-existing, not worsened by
   the split, but now expressible - left for the developer to route.
+
+## 16. 2026-08-22: naming, the write-back's error, and a caveat that was wrong
+
+Five more comments on #186, all acted on, plus one correction I owed the reviewer.
+
+**`Projection` became `SingleValueMapping`.** The developer took the proposal from §15
+and later asked whether `OneToOneMapping` would fit better. It would fit worse, for the
+same reason `Projection` did: the phrase is already ORM relationship vocabulary in this
+repo — `create_one_to_one_relationship` and `is_many_to_one_relationship` in
+`ormatic/wrapped_table.py`, `is_many_to_one_relationship` in
+`class_diagrams/wrapped_field.py` — and the collision would sit next door, since
+`feature_extraction/feature_extractor.py` has `_process_many_to_one` and feature
+extraction is what calls the guarded method. It also overclaims: one-to-one normally
+means injective, and `cabinet.container.name` is many-to-one. `SingleValueMapping`
+claims only the direction relied on. Kept.
+
+The rename went in as `1ce18ca3c` and had to be finished in `4a9eec6e5`: it renamed the
+identifier but left the class docstring saying "a **projection** may still map a value to
+several — indexing by a symbolic key…", which is the pre-split behaviour and the opposite
+of the guarantee the class now makes. I had told the reviewer the docstring carried the
+at-most-one caveat before checking that it did; posting the correction is what found it.
+
+**`NotImplementedError` said a feature was missing without saying which.** It is now
+`ReadOnlyMapping`, naming the step: *"Flatten(Cabinet.drawers).handle.name does not name
+where its value is kept, so a value cannot be written through it."* Asked which mappings
+those are, the base docstring now lists all five rather than leaving it to be worked out —
+`Attribute` and `IndexByValue` name a place, `Call`, `IndexByExpression` and
+`FlatVariable` do not.
+
+**`Call` is what keeps the two questions apart.** Asked whether the refusal was about
+read-only-ness or about one-to-many, the answer is read-only: a call reaches exactly one
+value and still cannot be written through, because it computes that value rather than
+reading it from somewhere. That is why the two errors stay distinct —
+`MultipleValuesAlongAccessPath` is about cardinality along the walk, `ReadOnlyMapping`
+about the final step having no place to write.
+
+**The match-walk caveat was wrong, and the mistake is worth keeping.** Fixing
+`AttributeMatch._update_kwargs_from` to make the same index distinction, I reported it as
+a guard rather than a live fix, on the reasoning that `index_access` is only ever set from
+`enumerate(value)` and so is always an integer. That is true and irrelevant: `index_access`
+is not the only producer of that path. `AttributeMatch.variable` is its own field, typed
+
+```python
+variable: Union[Attribute, FlatVariable] = field(default=None, kw_only=True)
+```
+
+so a flattening there is exactly what the field declares to be valid — and the old code's
+`assert_never(step)` was firing on it, saying *"Expected code to be unreachable, but got:
+Flatten(Cabinet.drawers)"*. The test is `b8b9c1434`. The general shape: reachability was
+argued from one call site rather than from the type, and the type was right there.

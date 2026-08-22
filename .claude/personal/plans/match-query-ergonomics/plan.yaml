@@ -80,10 +80,16 @@ items:
       stored under the key the index holds, which for an expression key is the
       expression object rather than the value it takes; the setter walk carried
       the same first-value truncation as the reader and now has the Projection
-      guard (b5b084522). Open on the PR: whether Projection is the right term
-      (I argue it collides with the SQL select-list sense and propose
-      SingleValueMapping), and whether match.py's own access-path walk should
-      take the same index distinction.
+      guard (b5b084522). Both questions that round left open are now settled
+      (roadmap section 16): the developer took SingleValueMapping, so Projection
+      is renamed throughout (1ce18ca3c, prose finished in 4a9eec6e5), and the
+      match walk takes the same index distinction, raising a new ReadOnlyMapping
+      instead of falling into assert_never. That error also replaced the bare
+      NotImplementedError the three unwritable mappings gave. The match guard is
+      covered by a test (b8b9c1434) after a first reply wrongly called the case
+      unreachable: AttributeMatch.variable is typed Union[Attribute,
+      FlatVariable], so a flattening there is what the field itself sanctions,
+      and assert_never was firing on a value the type declares valid.
   - id: where-query-rooted-attribute-no-filter
     title: "Bug: where-condition from a query-rooted attribute silently does not filter"
     branch: claude/match-query-ergonomics-where-rooted-b876wm
