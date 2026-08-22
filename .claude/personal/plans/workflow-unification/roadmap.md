@@ -8249,3 +8249,66 @@ otherwise: `@dataclass` **generates** `__init__` rather than extending the base'
 `HTMLParser.__init__` — which calls `reset()` to build the tokenizer state — never runs and
 `feed()` fails on a missing attribute. `__post_init__` calls it. Mutation-checked by deleting
 that method: both page-reading tests fail and nothing else does.
+
+## Update 2026-08-22 (third round the same day): the neighbours settled the argument
+
+Three threads on #184, filed twenty minutes after the second round was pushed. All three
+applied and resolved in `815d3f2cb`. 241 plan-dashboard tests, was 248; 107 hooks.
+
+### Two naming fixes
+
+`capturing_tag` → `closing_tag`, which is what the field's own docstring already called it
+— *"the tag name whose closing tag ends the element being collected"*. It reads better at the
+guard too, where the field doubles as "am I collecting?": `if self.closing_tag is not None`
+is *already waiting for a closing tag*, where the old name said the same thing one step
+further from the mechanism.
+
+`DRIFT_LINE_MARKER` moved to the top of the file, beside `EXAMPLE_DIRECTORY`, rather than
+sitting next to the one helper that happened to introduce it.
+
+### The third round on one test, and what actually ended it
+
+*"if description is an abstract method, then it is guaranteed to be implemented anyway, so
+these tests are also not needed in that case right?"* — then, in a follow-up, *"or is this to
+handle the not handled case `_:` that prints None?"*
+
+The second guess is right and it answers the first. `@abstractmethod` guarantees each
+**subclass defines** `description`; it says nothing about whether the `match` *inside* it
+covers every enum member, and a Python `match` that falls through every case returns `None`.
+So a member added later without a branch is a fully-implemented abstract method returning
+`None`, which the item card renders as the word `None`.
+
+**Answering that is what produced the evidence that settled it, against the previous round's
+own reply.** `ItemStatus.display_label` and `LiveState.display_label` are built exactly the
+same way — `match self:` over the enum, no `case _` — carry the identical exposure, and have
+since this module was written. What covers them is two spot checks that do not even name
+every member:
+
+```python
+def test_item_status_display_labels():
+    assert ItemStatus.NOT_STARTED.display_label == "Not started"
+    assert ItemStatus.DONE.display_label == "Done"
+```
+
+So the file's own convention for this exact shape is weaker than what the previous round had
+written, and *"single-sourcing deletes a guard, so the commit owes a replacement"* was
+applying a standard nothing else in the module meets. Both parametrised tests are deleted.
+What survives is the reparent rule, which pins a rule rather than a phrasing.
+
+Given up deliberately, and stated on the thread rather than left to be discovered: a
+`ManifestDriftCause` or `StallReason` added later without a branch shows as `None` on the
+dashboard rather than as a failing test. Every existing cause is still *executed* by the
+drift test that renders it, so nothing silently stops working today.
+
+### Worth carrying
+
+**Three rounds argued about one test, and what ended it was reading how the module already
+treats the identical pattern** — not another round of reasoning about what the test was
+worth. The 2026-08-11 rule (*single-sourcing a contract deletes a guard, and the commit that
+single-sources it owes the replacement*) is sound and was applied here without its own
+qualifier: the replacement is owed only where the codebase actually holds that line. Check the
+neighbours before defending a guard.
+
+This is also the second consecutive round on this branch where the reviewer's instinct was
+right and the defence was the thing that needed correcting — the previous one being the
+wording assertions themselves.

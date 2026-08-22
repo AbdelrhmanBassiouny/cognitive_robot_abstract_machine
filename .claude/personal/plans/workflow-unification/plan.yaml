@@ -1560,6 +1560,31 @@ items:
       feed() would fail; mutation-checked by deleting it, which fails both page-reading
       tests and nothing else. 248 plan-dashboard tests, 107 hooks, formatter and
       docformatter clean.
+
+      Third round the same day, three threads, all resolved (815d3f2cb). Two were
+      naming: capturing_tag became closing_tag, which is what its own docstring already
+      called it, and DRIFT_LINE_MARKER moved to the top of the file beside the module's
+      other constant. The third asked whether an abstract description makes the
+      per-member tests unnecessary, then answered itself - "or is this to handle the not
+      handled case _: that prints None?" - which is exactly right: @abstractmethod
+      guarantees the subclass defines the method, not that the match inside it covers
+      every member, and a match that falls through returns None silently.
+
+      Answering it turned up the evidence that settled it, against the previous round's
+      reply: ItemStatus.display_label and LiveState.display_label are built the same way -
+      match over the enum, no case _ - carry the identical exposure, and are covered by
+      two spot checks that do not even name every member. So the file's own convention for
+      this shape is weaker than what had been written, and the argument that the guard had
+      to be replaced was applying a standard nothing else in the module meets. Both
+      parametrised tests are deleted; what survives is the reparent rule, which pins a rule
+      rather than a phrasing. Given up deliberately and stated on the thread: a cause or
+      stall reason added later without a branch shows as "None" on the dashboard rather
+      than as a failing test. 241 plan-dashboard tests, was 248; 107 hooks.
+
+      Worth carrying past this item: three rounds argued about one test, and the thing that
+      ended it was reading how the module already treats the identical pattern rather than
+      reasoning about what the test was worth. Check the neighbours before defending a
+      guard.
   - id: landed-parent-detection
     branch: claude/stack-landed-parent-detection
     title: "Decide a parent has landed from git ancestry, not board membership"
