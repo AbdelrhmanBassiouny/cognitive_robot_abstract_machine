@@ -8312,3 +8312,96 @@ neighbours before defending a guard.
 This is also the second consecutive round on this branch where the reviewer's instinct was
 right and the defence was the thing that needed correcting — the previous one being the
 wording assertions themselves.
+
+## Update 2026-08-22 (second round, same day): the fork round that reversed the upstream one
+
+Six threads on #149, filed hours after the #537 round above was answered and pushed. All six
+answered in `7cf38aab9`; four resolved, two left open. 522 tests across the three directories
+CI runs, was 523 before the deletion and 498 before the base merge.
+
+### Two calls from the morning were reversed by the afternoon
+
+**The wire-value contract test is gone**, one round after being added — *"this test will never
+fail, remove it, it is useless. Also if someone changes the actual string value yes this will
+fail, but the fix then is fixing the test assertion, so what's the point?"*
+
+That is the whole of #154's six-round arc compressed into a single comment, and it is right for
+the same reason: a test you are *expected* to edit whenever the contract changes gets edited
+reflexively, which buys maintenance and no guard. What made it defensible on #154 was a real
+consumer; there is none here. `execution-modes.md` and `plan-item-mode/SKILL.md` are prose a
+person reads.
+
+Recorded rather than dropped quietly, since that is the half that goes missing: **the format is
+now deliberately unguarded**, measured rather than asserted - renaming `ReportKey.EXIT_CODE`'s
+value leaves all 18 tests in the module passing.
+
+**`as_document` became `as_json`.** The morning's reply had argued `as_document` survives because
+it names the thing produced where `to_json_dict` names the Python type. The user's rule is
+`as_json`, so `as_json` it is, and `report-document-naming` carries the new target rather than
+the old one - which is the point of writing the target into the item instead of leaving it in a
+review reply.
+
+Worth carrying: **an item's recorded conclusion is a decision, not a fact, and the next round can
+overturn it.** Both reversals landed within six hours of the entry that recorded them, and both
+would have been invisible to anyone reading only the roadmap.
+
+### The one collision the rule cannot resolve by itself
+
+`as_json` already names the `str`-returning method in `maintenance_report.py` and
+`maintenance_board.py`, while the rule assigns it to dict-returners. Applying it across the rest
+makes one name cover both a document and the text it serializes to, so `report-document-naming`
+gains a decision it did not have: which keeps the name. Recommended on the thread and recorded on
+the item - the dict-returner keeps `as_json`, being the one that composes the document, and the
+two `str` ones become `as_json_text`.
+
+### A near-identical pair, and the field that turned out to be redundant
+
+*"SETTING_KEYS is very similar in name with SETTING_KEY only an extra `S` which is confusing."*
+Looking for a better name found there was nothing to name: it rendered
+`[skill.setting_key for skill in self.skills]` into the `set` report, derivable from the `skills`
+that same document already carries, and `grep -rn 'setting_keys' .claude/` returns nothing outside
+the module. Deleted rather than renamed - a better outcome than a third spelling, and the thread
+is left open because a removal is not the rename that was asked for.
+
+### `--skill` was the string with no enum
+
+*"the string arguments do they have enums for them?"* Two of the three did and nothing was using
+them: `Subcommand.RESOLVE`/`SET`. The third did not - `ModeOption` named only the two options
+carrying a *mode*, which is too narrow a subject for an option-name enum, so it is
+`CommandLineOption` with `SKILL`, `REQUESTED` and `MODE`. Swept the whole test module rather than
+the two lines commented on. `"bogus"` stays a literal, being the deliberately invalid value the
+test exists to feed.
+
+### Paths that name paths
+
+*"why is this a string and not a Path?"* No good reason: `SettingsFile.origin` was a string
+because the constant behind it was. All five path constants are `Path` now, and the conversion
+moves to the boundary, which is the argument for the change rather than a side effect - three
+`str()` calls, at the two `subprocess` arguments and at the JSON document, which `json.dumps`
+cannot serialize a `Path` into.
+
+### `from None`, answered in the code rather than only in the thread
+
+The suppressed `ValueError`/`TOMLDecodeError` is already folded into the refusal's own fields, so
+chaining it prints the same fact twice, once in the library's words. `main` catches `ModeError`
+and prints only the message, so it only shows for a caller outside `main` - which is where a
+two-exception traceback would be most confusing. Said in `ModeError`'s docstring, once, where the
+pattern lives; left open in case the chain is wanted after all.
+
+### The base merge, and the hazard this plan had already predicted
+
+`main` had moved: #135 landed, giving both plan-item skills a `${SCOPE_DECISION_DOCUMENT}`
+reference, and **#146 landed too**, so `/upstream-reviews` now exists on `main` and
+`plan-item-resolve` gained a step that invokes it. Both edits land in exactly the sections this
+branch had moved into `plan-item-gathering.md` and `execution-modes.md`, so they conflicted and
+were carried across by hand rather than merged wholesale - the resolution the 2026-08-12 entry
+already prescribed for this pair.
+
+The irony is worth recording: the round above had to read #537 through `WebFetch` because no
+session-side call can see upstream review threads, and cited `upstream-review-reader` (#146) as
+the item that would close that gap. It closed the same day. A resolve run on this item from now on
+reads its upstream threads with `/upstream-reviews` instead.
+
+Checked and clear: #156's removal of the offer-to-run-setup gate has *not* landed on `main`
+(`prerequisite-check.md` still says "offer"), so this branch's `plan-item-gathering.md` carrying
+that wording is consistent today. The hazard stays #156's, as already recorded.

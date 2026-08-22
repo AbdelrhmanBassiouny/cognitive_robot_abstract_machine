@@ -2528,7 +2528,13 @@ items:
       2026-08-19, six threads all on plan_item_mode.py; answered and pushed 2026-08-22 in
       735988448 (ModeSetting/SettingsFile replacing the two label arguments, ExitCode.USAGE
       and why 1 is left free, ReportKey/ReportStatus behind a Report base, and one contract
-      test pinning every wire value). The threads themselves are unanswered on #537: this
+      test pinning every wire value). A second round on the fork pull request the same day
+      (six threads, applied in 7cf38aab9) then reversed two of those calls: the wire-value
+      contract test is deleted, and as_document becomes as_json. Four of its threads were
+      resolved; the from-None question and the SETTING_KEYS removal are answered differently
+      from what they asked and stay open. That round also merged main, carrying #135's
+      scope-decision reference and #146's /upstream-reviews step into this branch's
+      restructured plan-item skills. The upstream threads are unanswered on #537: this
       fork's sessions cannot write to cram2 (AGENTS.md forbids it, and the API is unreachable
       from here - the gap upstream-review-reader exists to close), so the reply text was
       handed to the user. The krrood half of the serialization thread was declined, so that
@@ -2546,13 +2552,21 @@ items:
       as_document returns a dict in plan_item_bootstrap.py and plan_item_mode.py,
       to_json_dict returns a dict in build_dashboard.py and sync_manifest_status.py, and
       as_json returns a str in maintenance_report.py and maintenance_board.py - one
-      operation under two names, plus a genuinely different one under a third. as_document
-      is the name that survives, since it names the thing produced where to_json_dict names
-      the Python type it happens to be. Split out rather than folded into
-      plan-item-execution-modes because every divergent file is already on main, so the
-      rename stands on its own; plan-item-execution-modes carries only the Report base for
-      its own two reports. Best done inside or after bastler-package, which moves all six
-      files into one home and is where a shared Report base would live.
+      operation under two names, plus a genuinely different one under a third. Split out
+      rather than folded into plan-item-execution-modes because every divergent file is
+      already on main, so the rename stands on its own; plan-item-execution-modes carries
+      only the Report base for its own two reports. Best done inside or after
+      bastler-package, which moves all six files into one home and is where a shared Report
+      base would live.
+      The surviving name is as_json, settled by the user on 2026-08-22 ("always use as_json
+      everywhere we return a dict like this") and applied to plan_item_mode.py in 7cf38aab9.
+      That reverses the earlier reading recorded here, which had as_document surviving
+      because it names the thing produced rather than the Python type. It also leaves this
+      item one decision it cannot dodge: as_json already names the str-returning method in
+      maintenance_report.py and maintenance_board.py, so applying the rule repo-wide makes
+      one name cover both a dict and the text it serializes to. The recommendation on the
+      thread is that the dict-returner keeps as_json, being the one that composes the
+      document, and the two str-returning ones become as_json_text.
 
   - id: manifest-currency-first
     title: "Write the manifest and republish the dashboard before anything else, at every transition"
