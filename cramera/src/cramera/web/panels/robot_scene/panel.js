@@ -1035,15 +1035,15 @@ Panels.define('robot-scene', function (root, bus) {
   // a ?replay= page attaches to the bridge for its geometry like any live page, but
   // plays a recorded clip on loop instead of the live stream — this is the popup a
   // replay button in the EQL answer opens, leaving the opener's live view running
-  const replayWindow = Replay.fromSearch(window.location.search);
-  if (replayWindow && liveDot) {
+  const replayedMoment = Replay.fromSearch(window.location.search);
+  if (replayedMoment && liveDot) {
     liveDot.classList.add('replay');
-    liveDot.textContent = '▶ REPLAY · ' + Replay.label(replayWindow);
+    liveDot.textContent = '▶ REPLAY · ' + Replay.timeSpan(replayedMoment);
   }
 
   // viewer -> world: throttled while dragging, final=true on release
   function postLiveMove(key, x, y, z, final) {
-    if (replayWindow) return;   // a replay shows the past; it must not move the live world
+    if (replayedMoment) return;   // a replay shows the past; it must not move the live world
     const now = performance.now();
     if (!final && now - lastMovePost < 100) return;
     lastMovePost = now;
@@ -1071,8 +1071,8 @@ Panels.define('robot-scene', function (root, bus) {
     fetch(liveUrl() + '/info').then(function (r) { return r.json(); })
       .then(function (info) {
         if (info) adoptLivePartAnnotations(info.partAnnotations);
-        if (liveBtn && !liveOn) liveBtn.style.display = info && !replayWindow ? '' : 'none';
-        showRunControls(replayWindow ? null : info && info.control);
+        if (liveBtn && !liveOn) liveBtn.style.display = info && !replayedMoment ? '' : 'none';
+        showRunControls(replayedMoment ? null : info && info.control);
         // re-decided on every probe, so a demo that restarted is picked up again
         if (LiveAttach.shouldAttach({
           reachable: !!info,
@@ -1143,13 +1143,15 @@ Panels.define('robot-scene', function (root, bus) {
     }
     if (unknown) syncLiveObjects();            // fetch the catalog & spawn the newcomers
     if (follow && robotCenter(_target)) controls.target.lerp(_target, 0.08);
+    // the annotation follows the objects, so it is re-placed exactly when they move
+    if (annotatedReplay) placeEventAnnotation();
     needsRender = true;
   }
   // %% replay mode: loop a recorded clip of the demo instead of its live stream
   let replayFrames = null;      // the fetched clip's frames, or null while loading
   let replayStartedAt = 0;      // performance.now() when the looping playback began
   function startReplayPlayback() {
-    fetch(liveUrl() + '/replay?start=' + replayWindow.start + '&end=' + replayWindow.end)
+    fetch(liveUrl() + '/replay?start=' + replayedMoment.start + '&end=' + replayedMoment.end)
       .then(function (r) { return r.json(); })
       .then(function (payload) {
         replayFrames = (payload.ok && payload.frames) || [];
@@ -1170,6 +1172,121 @@ Panels.define('robot-scene', function (root, bus) {
   function stepReplay() {
     const frame = Replay.frameAt(replayFrames, (performance.now() - replayStartedAt) / 1000);
     if (frame) applyLive(frame);
+  }
+
+  // %% naming the replayed event in the video, with arrows onto the objects it involved
+  // The popup knows which event it is replaying, so it says so: a caption naming the
+  // event floats over the objects the event happened to, an arrow reaching from it down
+  // to each of them. Caption and arrows are placed afresh every frame out of the
+  // objects' current poses, which is what keeps the tips on them while the clip plays
+  // (core/event_annotation.js holds the geometry). They live in worldRoot rather than on
+  // the objects so a tumbling object cannot tip them over.
+
+  //: how much bigger the event's caption is drawn than an object's own name tag
+  const CAPTION_MAGNIFICATION = 1.6;
+  const ARROW_AXIS = new THREE.Vector3(0, 1, 0);   // the axis a built arrow points along
+
+  const annotatedReplay = !!(replayedMoment && replayedMoment.label && window.EventAnnotation);
+  let eventCaption = null;        // the sprite naming the replayed event
+  const eventArrows = {};         // mesh key -> the arrow reaching that object
+
+  // the mesh an object is shown as, named by its mesh key, by its own id, or by the
+  // prefixed body name the demo knows it as
+  function meshKeyFor(name) {
+    const named = String(name);
+    if (objectMeshes[named]) return named;
+    return objectKeyById[named] || objectKeyById[named.split('/').pop()] || null;
+  }
+
+  // where an arrow meets an object: over its centre, at the top an arrow clears
+  function objectTop(key) {
+    const mesh = objectMeshes[key];
+    return {
+      x: mesh.position.x,
+      y: mesh.position.y,
+      z: mesh.position.z + (mesh.userData.topZ || 0.15),
+    };
+  }
+
+  // the objects of the replayed event that are on screen right now: the demo spawns
+  // them as the clip attaches, and an event may name one this scene never shows
+  function annotatedObjectKeys() {
+    const keys = [];
+    (replayedMoment.objects || []).forEach(function (name) {
+      const key = meshKeyFor(name);
+      if (key && objectMeshes[key] && keys.indexOf(key) < 0) keys.push(key);
+    });
+    return keys;
+  }
+
+  // an arrow built to be re-aimed: shaft and head along ARROW_AXIS from its own origin,
+  // so aiming it at an object is a rotation, a scale and nothing rebuilt
+  function makeEventArrow() {
+    const material = new THREE.MeshBasicMaterial({ color: EventAnnotation.COLOR });
+    const shaft = new THREE.CylinderGeometry(
+      EventAnnotation.SHAFT_RADIUS, EventAnnotation.SHAFT_RADIUS, 1, 10);
+    shaft.translate(0, 0.5, 0);
+    const head = new THREE.ConeGeometry(
+      EventAnnotation.HEAD_RADIUS, EventAnnotation.HEAD_LENGTH, 14);
+    const arrow = new THREE.Group();
+    arrow.add(new THREE.Mesh(shaft, material));
+    arrow.add(new THREE.Mesh(head, material));
+    return arrow;
+  }
+
+  function aimEventArrow(arrow, from, aim) {
+    arrow.position.set(from.x, from.y, from.z);
+    arrow.quaternion.setFromUnitVectors(
+      ARROW_AXIS,
+      new THREE.Vector3(aim.direction.x, aim.direction.y, aim.direction.z)
+    );
+    arrow.children[0].scale.y = aim.shaftLength;
+    arrow.children[1].position.y = aim.shaftLength + EventAnnotation.HEAD_LENGTH / 2;
+  }
+
+  function removeEventArrow(key) {
+    const arrow = eventArrows[key];
+    if (!arrow) return;
+    worldRoot.remove(arrow);
+    arrow.children[0].material.dispose();
+    arrow.children.forEach(function (part) { part.geometry.dispose(); });
+    delete eventArrows[key];
+    needsRender = true;
+  }
+
+  function showEventCaption(anchor) {
+    if (!anchor) {
+      if (eventCaption) eventCaption.visible = false;
+      return;
+    }
+    if (!eventCaption) {
+      // the same name tag the objects wear, drawn larger and dotted in the arrows' colour
+      eventCaption = makeLabel(replayedMoment.label, EventAnnotation.COLOR);
+      eventCaption.scale.multiplyScalar(CAPTION_MAGNIFICATION);
+      worldRoot.add(eventCaption);
+    }
+    eventCaption.visible = true;
+    eventCaption.position.set(anchor.x, anchor.y, anchor.z);
+  }
+
+  function placeEventAnnotation() {
+    const keys = annotatedObjectKeys();
+    const anchor = EventAnnotation.captionAnchor(keys.map(objectTop));
+    showEventCaption(anchor);
+    for (const key in eventArrows) {
+      if (!anchor || keys.indexOf(key) < 0) removeEventArrow(key);
+    }
+    if (!anchor) return;
+    keys.forEach(function (key) {
+      const aim = EventAnnotation.arrowTo(anchor, objectTop(key));
+      // an object right under the caption leaves no room for an arrowhead
+      if (!aim) { removeEventArrow(key); return; }
+      if (!eventArrows[key]) {
+        eventArrows[key] = makeEventArrow();
+        worldRoot.add(eventArrows[key]);
+      }
+      aimEventArrow(eventArrows[key], anchor, aim);
+    });
   }
 
   let livePolls = 0;
@@ -1320,7 +1437,7 @@ Panels.define('robot-scene', function (root, bus) {
       livePolls = 0;
       syncLiveObjects();
       attachLiveModels();
-      if (replayWindow) startReplayPlayback();
+      if (replayedMoment) startReplayPlayback();
       else liveTimer = setInterval(livePoll, 66);     // ~15 Hz render updates
     } else if (liveTimer) {
       clearInterval(liveTimer);

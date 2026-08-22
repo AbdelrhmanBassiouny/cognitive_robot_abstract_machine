@@ -31,6 +31,7 @@ from semantic_digital_twin.world_description.world_entity import Body
 from cramera.body_geometry import NumericPose
 
 from experiments.montessori.insertion_diagnosis import InsertionFailureReason
+from experiments.montessori.semantics import SHAPE_NAME_SUFFIX
 from experiments.montessori.sorting_progress import (
     CompletedAttempt,
     SortingProgress,
@@ -317,6 +318,68 @@ class TestRecordingEvents:
 
         assert progress.shapes[0].was_picked_up is True
         assert progress.shapes[0].was_detected_inserted is False
+
+    def test_an_event_names_the_piece_it_was_detected_for(self, progress, scene):
+        """
+        The record is named after what the piece is while the viewer shows its body
+        under the name it was built with, so the objects it names use the viewer's.
+        """
+        _, _, _, shape = scene
+        progress.record_attempt(
+            attempt(
+                shape,
+                fell_through=True,
+                events=[PickUpEvent(tracked_object=shape.root, timestamp=STARTED_AT)],
+            )
+        )
+
+        assert progress.events[0].involved_object_names() == [
+            SHAPE_KEY + SHAPE_NAME_SUFFIX
+        ]
+
+    def test_an_event_relating_the_piece_to_a_body_names_that_body_too(
+        self, progress, scene
+    ):
+        _, board, _, shape = scene
+        progress.record_attempt(
+            attempt(
+                shape,
+                fell_through=True,
+                events=[
+                    PickUpEvent(
+                        tracked_object=shape.root,
+                        with_object=board.root,
+                        timestamp=STARTED_AT,
+                    )
+                ],
+            )
+        )
+
+        assert progress.events[0].involved_object_names() == [
+            SHAPE_KEY + SHAPE_NAME_SUFFIX,
+            str(board.root.name),
+        ]
+
+    def test_an_insertion_names_the_hole_it_was_detected_through(self, progress, scene):
+        _, _, hole, shape = scene
+        progress.record_attempt(
+            attempt(
+                shape,
+                fell_through=True,
+                events=[
+                    InsertionEvent(
+                        tracked_object=shape.root,
+                        through_hole=hole,
+                        timestamp=STARTED_AT,
+                    )
+                ],
+            )
+        )
+
+        assert progress.events[0].involved_object_names() == [
+            SHAPE_KEY + SHAPE_NAME_SUFFIX,
+            str(hole.name),
+        ]
 
     def test_a_detected_insertion_shows_on_the_shape(self, progress, scene):
         _, _, _, shape = scene

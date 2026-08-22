@@ -1,7 +1,7 @@
 // Unit tests for web/core/replay.js (node:test).
-// The replay popup's behaviour hangs on three pure pieces: reading the window out of
-// the URL, building the popup URL, and mapping playback time onto recorded frames.
-// All three are checkable here, without a browser or a bridge.
+// The replay popup's behaviour hangs on three pure pieces: reading the replayed moment
+// out of the URL, building the popup URL, and mapping playback time onto recorded
+// frames. All three are checkable here, without a browser or a bridge.
 'use strict';
 
 const test = require('node:test');
@@ -23,9 +23,17 @@ function frames(...ats) {
   });
 }
 
-// %% reading the window out of the URL
+// %% reading the moment out of the URL
 test('a replay window is read out of the search string', function () {
-  assert.deepStrictEqual(load().fromSearch('?replay=100.5,110.5'), { start: 100.5, end: 110.5 });
+  assert.deepStrictEqual(load().fromSearch('?replay=100.5,110.5'),
+    { start: 100.5, end: 110.5, label: '', objects: [] });
+});
+
+test('the event a replay shows is read out of the search string', function () {
+  const moment = load().fromSearch('?replay=100,110&event=cube%20PickUpEvent&objects=cube_shape,board');
+
+  assert.strictEqual(moment.label, 'cube PickUpEvent');
+  assert.deepStrictEqual(moment.objects, ['cube_shape', 'board']);
 });
 
 test('a page without a replay parameter is not a replay page', function () {
@@ -53,10 +61,30 @@ test('an explicit bridge address travels into the popup', function () {
   assert.strictEqual(url, '/index.html?replay=100,110&live=robot-host:8765');
 });
 
+test('the popup URL carries the event the replay shows', function () {
+  const url = load().popupUrl('/index.html', '', {
+    start: 100, end: 110, label: 'cube PickUpEvent', objects: ['cube_shape', 'board'],
+  });
+
+  assert.strictEqual(url,
+    '/index.html?replay=100,110&event=cube%20PickUpEvent&objects=cube_shape%2Cboard');
+});
+
+test('a replay of a moment naming nothing carries no event', function () {
+  const url = load().popupUrl('/index.html', '', { start: 100, end: 110, label: '', objects: [] });
+
+  assert.strictEqual(url, '/index.html?replay=100,110');
+});
+
 test('the popup URL round-trips through fromSearch', function () {
   const Replay = load();
-  const url = Replay.popupUrl('/index.html', '', { start: 100.25, end: 110.75 });
-  assert.deepStrictEqual(Replay.fromSearch(url.slice(url.indexOf('?'))), { start: 100.25, end: 110.75 });
+  const moment = {
+    start: 100.25, end: 110.75, label: 'cube InsertionEvent', objects: ['cube_shape'],
+  };
+
+  const url = Replay.popupUrl('/index.html', '', moment);
+
+  assert.deepStrictEqual(Replay.fromSearch(url.slice(url.indexOf('?'))), moment);
 });
 
 // %% mapping playback time onto frames
@@ -94,9 +122,9 @@ test('the clip duration spans first to last frame', function () {
 });
 
 // %% naming the clip
-test('the label reads as a wall-clock time span', function () {
+test('the clip is named by its wall-clock time span', function () {
   // hours and minutes depend on the zone the viewer runs in; the shape and the
   // seconds digits do not
-  const label = load().label({ start: 1755086425, end: 1755086435 });
-  assert.match(label, /^\d{2}:\d{2}:25 – \d{2}:\d{2}:35$/);
+  const span = load().timeSpan({ start: 1755086425, end: 1755086435 });
+  assert.match(span, /^\d{2}:\d{2}:25 – \d{2}:\d{2}:35$/);
 });

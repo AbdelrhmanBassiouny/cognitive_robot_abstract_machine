@@ -11,7 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from typing_extensions import Optional
+from typing_extensions import List, Optional
 
 from semantic_digital_twin.spatial_types import Point3, Pose
 
@@ -113,3 +113,32 @@ class UnnamedRecord:
     """
     This record's identity, deliberately not called ``name``.
     """
+
+
+@dataclass
+class MomentRecordNamingItsObjects:
+    """
+    A record of a moment that also names the objects it happened to, as a detected event
+    names the piece it was detected for and whatever that piece touched.
+    """
+
+    name: str
+    """
+    What the rendered row is titled with.
+    """
+
+    timestamp: datetime
+    """
+    When the recorded thing happened.
+    """
+
+    objects: List[str]
+    """
+    Names of the objects the moment happened to.
+    """
+
+    def involved_object_names(self) -> List[str]:
+        """
+        The objects a replay of this moment points at.
+        """
+        return self.objects

@@ -430,7 +430,7 @@ class TestReplayingADetectedEvent:
     def test_an_event_row_carries_the_window_around_its_detection(self, source):
         result = ask_about_events(source, "an(entity(event))")
 
-        assert result.replay == [ReplayWindow.around(STARTED_AT)]
+        assert result.replay[0].window == ReplayWindow.around(STARTED_AT)
 
     def test_the_what_was_detected_preset_offers_a_replay_per_detection(self, source):
         [preset] = [
@@ -441,7 +441,21 @@ class TestReplayingADetectedEvent:
 
         result = ask_about_events(source, preset.code)
 
-        assert result.replay == [ReplayWindow.around(STARTED_AT)]
+        assert result.replay[0].window == ReplayWindow.around(STARTED_AT)
+
+    def test_the_replay_is_labelled_with_the_detection_it_shows(self, source):
+        result = ask_about_events(source, "an(entity(event))")
+
+        assert result.replay[0].label == source.progress.events[0].name
+
+    def test_the_replay_names_the_piece_the_detection_was_about(self, source):
+        """
+        What the replay points at is what the viewer has on screen, so the piece is
+        named by its published body rather than by what the piece is.
+        """
+        result = ask_about_events(source, "an(entity(event))")
+
+        assert result.replay[0].objects == [SHAPE_KEY + SHAPE_NAME_SUFFIX]
 
 
 # %% the recorded bundle offers the same questions

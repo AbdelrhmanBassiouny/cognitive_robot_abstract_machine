@@ -1,13 +1,13 @@
 """
-When to replay a recorded demo around one answered moment.
+What to replay of a recorded demo around one answered moment, and what it shows.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
-from typing_extensions import Any, ClassVar, Dict
+from typing_extensions import Any, ClassVar, Dict, List
 
 
 @dataclass(frozen=True)
@@ -54,3 +54,39 @@ class ReplayWindow:
         The JSON shape the viewer opens a replay from.
         """
         return {"start": self.start, "end": self.end}
+
+
+@dataclass(frozen=True)
+class ReplayedMoment:
+    """
+    One moment an answer row offers to replay, and what watching it shows.
+
+    The span alone says only when to play; a viewer that is to name what it is showing
+    and point at what it happened to needs the moment's own title and objects too.
+    """
+
+    window: ReplayWindow
+    """
+    The span of the recording the replay plays.
+    """
+
+    label: str = ""
+    """
+    What happened at the moment, as the row offering it is titled, or empty when the row
+    names nothing.
+    """
+
+    objects: List[str] = field(default_factory=list)
+    """
+    Names of the objects the moment happened to, which a replay points out.
+    """
+
+    def to_payload(self) -> Dict[str, Any]:
+        """
+        The JSON shape the viewer opens an annotated replay from.
+        """
+        return {
+            **self.window.to_payload(),
+            "label": self.label,
+            "objects": list(self.objects),
+        }

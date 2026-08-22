@@ -33,7 +33,7 @@ from semantic_digital_twin.spatial_types import Point3, Pose
 from cramera.body_geometry import NumericPose, pose_label, position_label
 from cramera.knowledge.entity import NamedEntity
 from cramera.knowledge.query_domain import QueryDomain
-from cramera.knowledge.replay import ReplayWindow
+from cramera.knowledge.replay import ReplayedMoment, ReplayWindow
 from cramera.knowledge.query_verbalization import QueryVerbalization
 from cramera.knowledge.query_vocabulary import QueryVocabulary
 from cramera.knowledge.queryable_knowledge import InMemoryEvaluation, QueryEvaluation
@@ -56,6 +56,18 @@ class CarriesATimestamp(Protocol):
     """
 
     timestamp: datetime
+
+
+@runtime_checkable
+class InvolvesObjects(Protocol):
+    """
+    An entity naming the objects whatever it records happened to.
+    """
+
+    def involved_object_names(self) -> List[str]:
+        """
+        Names of the objects this entity happened to.
+        """
 
 
 @runtime_checkable
@@ -104,14 +116,14 @@ class RenderResult(CrameraPayload):
     Ids of the graph nodes this result should highlight, sorted and deduplicated.
     """
 
-    replay: List[Optional[ReplayWindow]] = field(default_factory=list)
+    replay: List[Optional[ReplayedMoment]] = field(default_factory=list)
     """
-    The window worth replaying around each row's moment, one entry per row and None for
-    a row naming no moment.
+    The moment worth replaying around each row, one entry per row and None for a row
+    naming no moment.
 
     Beside the rows rather than in them: a row holds what its query asked for, so a
     viewer that knows nothing of replay shows the answer unchanged instead of rendering
-    the window as a column.
+    the moment as a column.
     """
 
     verbalization: Optional[QueryVerbalization] = None
@@ -153,10 +165,10 @@ class AnswerRow:
     The row's own columns, keyed as the panel shows them.
     """
 
-    replay: Optional[ReplayWindow] = None
+    replay: Optional[ReplayedMoment] = None
     """
-    The window of the demo recording worth replaying around this row's moment, or None
-    when the row names no moment.
+    The moment of the demo recording worth replaying around this row, or None when the
+    row names no moment.
     """
 
 
@@ -256,15 +268,15 @@ class RowRenderer:
         if isinstance(item, Mapping):  # a unification row from set_of()
             columns = self._column_names([str(key) for key in item])
             values = {}
-            window: Optional[ReplayWindow] = None
+            replay: Optional[ReplayedMoment] = None
             for column, value in zip(columns, item.values()):
                 name = self._row_title(value)
                 if name:
                     self.highlight.append(name)
-                if window is None and isinstance(value, datetime):
-                    window = ReplayWindow.around(value)
+                if replay is None and isinstance(value, datetime):
+                    replay = ReplayedMoment(window=ReplayWindow.around(value))
                 values[column] = self._jsonable(value)
-            return AnswerRow(values, window)
+            return AnswerRow(values, replay)
         return AnswerRow({"value": self._jsonable(item)})
 
     @staticmethod
@@ -308,13 +320,30 @@ class RowRenderer:
                 )
             elif entity_field.default is not MISSING:
                 values[entity_field.name] = self._jsonable(entity_field.default)
-        window = (
-            ReplayWindow.around(item.timestamp)
-            if isinstance(item, CarriesATimestamp)
-            and isinstance(item.timestamp, datetime)
-            else None
+        return AnswerRow(values, self._replayed_moment(item, name))
+
+    @staticmethod
+    def _replayed_moment(item: Any, name: Optional[str]) -> Optional[ReplayedMoment]:
+        """
+        What a replay around one entity plays and shows, or None when the entity records
+        no moment to replay.
+
+        :param item: The entity the row was rendered from.
+        :param name: What the row is titled with, which names the moment.
+        """
+        if not isinstance(item, CarriesATimestamp) or not isinstance(
+            item.timestamp, datetime
+        ):
+            return None
+        return ReplayedMoment(
+            window=ReplayWindow.around(item.timestamp),
+            label=name or "",
+            objects=(
+                item.involved_object_names()
+                if isinstance(item, InvolvesObjects)
+                else []
+            ),
         )
-        return AnswerRow(values, window)
 
     def _jsonable(self, value: Any) -> Any:
         """
