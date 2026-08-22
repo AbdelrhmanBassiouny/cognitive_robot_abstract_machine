@@ -34,6 +34,31 @@ Design decisions (all implemented):
   including plan-dashboard).
 - Plan item and roadmap entry saved to the notes branch.
 
+## Review round 2026-08-22 (b0e28437)
+
+Three threads, all one finding: the tests hand-rolled git where GitCommandRunner
+already exists on main, and the harness holding them together was a plain class.
+
+- The fork layout moved out of `scratch_repository.py` into a new
+  `forked_scratch_repository.py`. That leaves the shared harness every other hook
+  test builds on byte-identical to main, and gives the fork-specific setup a home
+  that can use the runner. Using it for my new methods alone would have left two
+  conventions in one class; converting `ScratchRepository` wholesale is 66 call
+  sites across seven modules and belongs to the bastler migration.
+- `ForkedScratchRepository` and `GitHubRepositoryStandIn` are frozen dataclasses
+  built by a `laid_out_in` classmethod - the `ToolingCheckout` shape from #158.
+- Every git call goes through `GitCommandRunner`; the push is a `ProposedPush`;
+  `branch_tip` no longer shells out. One call stays spelled out with a comment:
+  creating the default branch on an unborn HEAD, where `checkout -B main HEAD`
+  fails because there is no commit for a starting point to name.
+- Reached by adding `.claude/stack` to the hooks conftest path. No new coupling:
+  the hook under test already resolves its upstream through that directory, and
+  `.claude/stack/tests/conftest.py` already adds the hooks directory the other way.
+
+Re-verified: 19 tests here, 280 across hooks+stack, and the mutation check still
+bites (disabling the fork push fails the same 4). All three threads replied to and
+resolved; PR description updated; still a draft.
+
 ## Next
 
 Nothing outstanding. Dashboard republished (same URL), structural change recorded on
