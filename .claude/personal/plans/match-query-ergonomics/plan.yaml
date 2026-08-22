@@ -72,9 +72,18 @@ items:
       constructs Index directly, which this item makes abstract, so whichever
       lands second moves that onto IndexByValue/IndexByExpression, the same
       change this item already makes for dao.py.
-      Full krrood suite green (2155 passed; the two test_object_diagram
+      Full krrood suite green (2158 passed; the two test_object_diagram
       failures are a container missing the Graphviz dot binary, and fail
-      identically on main).
+      identically on main). Review rounds 2026-08-21/22 (roadmap section 14):
+      the operators that build a mapping now name it in their return type
+      (436514635), and the write-back moved to IndexByValue because the base
+      stored under the key the index holds, which for an expression key is the
+      expression object rather than the value it takes; the setter walk carried
+      the same first-value truncation as the reader and now has the Projection
+      guard (b5b084522). Open on the PR: whether Projection is the right term
+      (I argue it collides with the SQL select-list sense and propose
+      SingleValueMapping), and whether match.py's own access-path walk should
+      take the same index distinction.
   - id: where-query-rooted-attribute-no-filter
     title: "Bug: where-condition from a query-rooted attribute silently does not filter"
     branch: claude/match-query-ergonomics-where-rooted-b876wm

@@ -525,3 +525,44 @@ installed at all, and Debian's patched setuptools cannot build
 fixes both — 3.11 is too old, since `class_diagram.py` calls `make_dataclass(module=...)`,
 which is 3.12+. Three krrood test modules need `casadi` / `semantic_digital_twin` and
 were skipped; neither can reach `_reroot_on_`.
+
+## 14. 2026-08-21/22: review rounds on #186
+
+**Return types name what they build.** The operators that trace a mapping said
+only `CanBehaveLikeAVariable[T]`, so a reader had to open the body to learn
+which mapping came back. They now say `Attribute[T]`, `Index[T]`, `Call[T]`;
+the arithmetic dunders say `ArithmeticOperation`; `apply_mapping_on_external_root`
+says `T`; `_chain_root_` says `CanBehaveLikeAVariable`; and every
+`_apply_mapping_` says `Iterable[T]`. That last one required `Index`,
+`IndexByValue`, `IndexByExpression` and `Call` to become generic in `T` - they
+were plain `MappedVariable` subclasses, so the value type had nowhere to come
+from (`436514635`).
+
+**The write-back was wrong for an expression key, and silently so.**
+`_set_child_instance_value_` on the `Index` base did `instance[self._key_] = value`,
+which stores under whatever the key holds. For `IndexByExpression` that is the
+expression object rather than the value it takes: a `TypeError` on a list, and
+on a `UnificationDict` a write that lands where the read will not find it, since
+`__setitem__` is not overridden while `__getitem__` resolves through a cached
+`_id_` map. The write moved to `IndexByValue`, the only kind whose key names
+where the element is stored; `IndexByExpression` now inherits the base's
+`NotImplementedError`, the same refusal `Call` and `FlatVariable` give.
+
+**Chasing that found the other half of section 13's truncation.**
+`_set_external_root_instance_value_` still walked its intermediate steps with
+`next(...)`, so writing through a flattened chain set the first element
+silently. It now carries the same `Projection` guard as the reader
+(`b5b084522`). Section 13 fixed the reading walk and left its sibling
+untouched - a reminder to look for the same shape nearby rather than only where
+the symptom was reported.
+
+**Two questions left open on the PR, deliberately:**
+
+- Is `Projection` the right term? I argue not, in this codebase: it already
+  speaks SQL, where the projection *is* the select list, and we have that
+  concept as `Query._selected_variables_`. Proposed `SingleValueMapping`, with
+  the caveat that the honest guarantee is *at most* one value.
+- `query/match.py:661` walks an access path with
+  `current_value = current_value[step._key_]` under `isinstance(step, Index)`,
+  carrying the same expression-key assumption. Pre-existing, not worsened by
+  the split, but now expressible - left for the developer to route.
