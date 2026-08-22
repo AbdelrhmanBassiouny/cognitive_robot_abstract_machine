@@ -322,9 +322,17 @@ class KinematicStructureEntityConverter(EntityConverter, ABC):
         kinematic_structure_entity_props = EntityConverter._convert(self, entity)
         # The simulator joint supplies the variable part, so the static frame must
         # exclude it (see Connection.reference_origin_expression).
-        [px, py, pz, qx, qy, qz, qw] = (
-            entity.parent_connection.reference_origin_as_position_quaternion().evaluate()[0]
-        )
+        [
+            px,
+            py,
+            pz,
+            qx,
+            qy,
+            qz,
+            qw,
+        ] = entity.parent_connection.reference_origin_as_position_quaternion().evaluate()[
+            0
+        ]
         kinematic_structure_entity_pos = [px, py, pz]
         kinematic_structure_entity_quat = [qw, qx, qy, qz]
         kinematic_structure_entity_props.update(
@@ -590,7 +598,18 @@ class Connection1DOFConverter(ConnectionConverter, ABC):
         px, py, pz, qw, qx, qy, qz = cas_pose_to_list(child_T_connection_transform)
         joint_pos = [px, py, pz]
         joint_quat = [qw, qx, qy, qz]
-        joint_range = [dof.limits.lower.position, dof.limits.upper.position]
+        # entity.dof (not the raw dof) applies this connection's own multiplier/offset,
+        # including swapping lower/upper for a negative multiplier: a mimic connection's
+        # own compiled joint range must be expressed in its own displayed value, not the
+        # shared raw dof's, or a negative-multiplier mimic (e.g. a gripper's own second
+        # finger, or any other -1-multiplier joint) gets a range that can never
+        # simultaneously satisfy both its own limit and the equality constraint tying it
+        # to the raw dof except at the single point where both ranges touch (0 here) --
+        # confirmed directly: every one of a Robotiq gripper's mimic joints compiled to
+        # the same [0, 0.8] range regardless of sign, making the whole linkage unable to
+        # move away from 0 no matter how hard its actuator pushed.
+        adjusted_limits = entity.dof.limits
+        joint_range = [adjusted_limits.lower.position, adjusted_limits.upper.position]
         if any([r is None for r in joint_range]):
             joint_range = [0, 0]
         joint_props.update(
@@ -1796,7 +1815,7 @@ class MujocoBuilder(MultiSimBuilder):
     def _end_build(self, file_path: str):
         self._build_equalities()
         self._build_tendons()
-        self.spec.compile()
+        mj_model = self.spec.compile()
         self.spec.to_file(file_path)
         import xml.etree.ElementTree as ET
 
@@ -1850,6 +1869,23 @@ class MujocoBuilder(MultiSimBuilder):
                     + parent_connection.passive_dofs
                 ]
         key_element.set("qpos", " ".join(map(str, qpos)))
+        # Every actuated DOF needs a matching `ctrl=` setpoint in the keyframe:
+        # MuJoCo defaults an unset `ctrl` to 0, so a position-servo actuator
+        # would immediately start pulling its joint toward 0 rad the instant
+        # physics steps, regardless of the pose baked into `qpos` above.
+        ctrl = [0.0] * mj_model.nu
+        for actuator in self.world.actuators:
+            actuator_id = mujoco.mj_name2id(
+                mj_model, mujoco.mjtObj.mjOBJ_ACTUATOR, actuator.name.name
+            )
+            if actuator_id == -1:
+                continue
+            position = self.world.state[actuator.dofs[0].id].position
+            ctrl[actuator_id] = MujocoSynchronizer._ctrl_for_position(
+                actuator, position
+            )
+        if ctrl:
+            key_element.set("ctrl", " ".join(map(str, ctrl)))
         tree.write(file_path, encoding="utf-8", xml_declaration=True)
 
     def _build_body(self, body: Body):
@@ -3073,6 +3109,15 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         ``sync_rate_hz`` wall-clock Hz. The sibling state-change callback is
         paused across the write so our own ``notify_state_change`` does not
         echo back into :meth:`_on_state_change`.
+
+        Guarded by the same ``_model_lock``/``renderer.lock()`` pair
+        :meth:`_on_state_change` takes: without it, this read of
+        ``_mj_data.qpos`` on the physics thread can race that method's write
+        of the same array from whatever thread ``world.state`` changes on
+        (e.g. Giskard's control loop), tearing the readback -- some DoFs
+        reflecting the just-written command, others still the previous tick's
+        value -- which then gets pushed into ``world.state`` as if it were a
+        real measurement.
         """
         if self.sync_rate_hz <= 0:
             return
@@ -3084,26 +3129,27 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         changed = False
         self._state_callback.pause()
 
-        for connection in self._world.connections:
-            if isinstance(connection, FixedConnection):
-                continue
-            qpos_adr = self._resolve_qpos_adr(connection)
-            if qpos_adr is None:
-                continue
+        with self.simulator._model_lock, self.simulator.renderer.lock():
+            for connection in self._world.connections:
+                if isinstance(connection, FixedConnection):
+                    continue
+                qpos_adr = self._resolve_qpos_adr(connection)
+                if qpos_adr is None:
+                    continue
 
-            if isinstance(connection, Connection6DoF):
-                self._read_6dof_from_qpos(connection, qpos_adr)
-                changed = True
-            elif isinstance(connection, ActiveConnection1DOF):
-                self._read_1dof_from_qpos(connection, qpos_adr)
-                changed = True
-            else:
-                logger.warning(
-                    "sim→world sync: unsupported connection type %s for "
-                    "joint %s; skipping",
-                    type(connection).__name__,
-                    connection.name.name,
-                )
+                if isinstance(connection, Connection6DoF):
+                    self._read_6dof_from_qpos(connection, qpos_adr)
+                    changed = True
+                elif isinstance(connection, ActiveConnection1DOF):
+                    self._read_1dof_from_qpos(connection, qpos_adr)
+                    changed = True
+                else:
+                    logger.warning(
+                        "sim→world sync: unsupported connection type %s for "
+                        "joint %s; skipping",
+                        type(connection).__name__,
+                        connection.name.name,
+                    )
 
         if changed:
             self._world.notify_state_change()
