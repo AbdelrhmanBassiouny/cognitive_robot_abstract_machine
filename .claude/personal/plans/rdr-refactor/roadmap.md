@@ -2222,3 +2222,14 @@ flag as drift against a closed-unmerged pull request.
 `main`'s own skip on `test_rdr.py`'s sibling (`57a1babac`) is obsolete for exactly the same
 reason and **is still there**, suppressing that test. Removing it needs its own change and is
 not covered by closing #189.
+
+**Follow-through 2026-08-22:** `main`'s sibling skip is removed too, on **#63** (`b39fb248`) —
+the developer's call to do it there rather than as a third main-based PR, the same call they
+made for `test_condition_resolver.py`. Swept again on that branch before pushing (150/150 over
+`PYTHONHASHSEED`), and `test_ripple_down_rules` goes to 76 passed / 2 skipped: one more passing,
+one fewer skipped. #63 is now three files.
+
+That closes the loop this session opened by *propagating* the skip: §23 dutifully carried it to
+a sibling, §26 found its cause had been fixed six weeks earlier, and both skips are now gone. The
+propagation is the part worth remembering — an unreproduced "flaky" label is not inert, it
+spreads, because the next session treats it as a landed decision rather than an open question.
