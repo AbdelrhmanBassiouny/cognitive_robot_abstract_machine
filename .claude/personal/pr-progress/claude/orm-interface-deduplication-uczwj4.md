@@ -34,22 +34,29 @@ vs PR run 32567072596), about 34 s / 33 %. Spread narrowed from 80-120 s to 64-7
 GitHub kept a stale merge base after the fast-forward (showed 88 commits) until the
 PR's base was re-set to main via the API, which forced it to recompute.
 
-**Review round 1** (3 threads, all from the user, commit 783a62ab):
-- [x] import at top of dataset generate_orm - shared_dependency is now copied next to
-      the generator instead of the checkout root, so one location works both when the
-      dataset module is imported by tests and when the copy runs. RESOLVED.
-- [x] return docstrings on the test_generation_order helpers. RESOLVED.
-- [ ] "can't this be done by importing?" for alternative-mapping detection - LEFT OPEN
-      deliberately (answered differently). Replied: importing needs all five packages
-      plus a ~70 s interface build in that job, since experiments modules import
-      coraplex.orm.ormatic_interface at module level. Improved the AST reading instead
-      (resolve base names via Name/Attribute/Subscript; close over classes reaching
-      AlternativeMapping through another class of the same package). Offered to switch
-      to recursive_subclasses if the user prefers.
+**Review round 1** (commit 783a62ab): import-at-top RESOLVED; return docstrings
+RESOLVED; "can't this be done by importing?" for alternative-mapping detection LEFT
+OPEN (answered differently - replied with the cost of importing all five packages plus
+a ~70 s build, improved the AST reading instead, offered to switch).
+
+**Review round 2** (commit ed9f4984):
+- [x] clearer names in alternative_mapping_class_names (was alternative_mappings):
+      base_class_name, base_class_names_by_class_name, known_mapping_names,
+      newly_found_mapping_names. RESOLVED.
+- [x] split the compound if into named subconditions (is_known_mapping /
+      inherits_a_mapping) and seeded the search with ALTERNATIVE_MAPPING itself.
+      RESOLVED.
+- [ ] "discuss with me the cleanest option" for the shared_dependency import in the
+      dataset generator - DISCUSSION, no code pushed. Posted four options; recommended
+      dropping the shared module and recording os.getpid() instead (one process implies
+      one sys.modules, so it is sufficient evidence and removes the sys.path line, the
+      extra dataset file and the per-package copy). Runner-up: revert to the deferred
+      import with one copy at the checkout root. Waiting on the user's pick.
 
 **Note**: test_generation_order's ast.parse needs 3.12 - coraplex/robot_plans/actions/
 base.py uses PEP 695 `type X[T] = ...`. Local container is 3.11, so a local run only
 passes because `and` short-circuits before coraplex is scanned. CI is 3.12.
 
-**Next**: CI running on 783a62ab. One review thread left open for the user to decide.
+**Next**: two threads waiting on the user - the AST-vs-importing question (round 1)
+and the shared_dependency import discussion (round 2, recommendation posted).
 Not subscribed to PR activity (per notes).
