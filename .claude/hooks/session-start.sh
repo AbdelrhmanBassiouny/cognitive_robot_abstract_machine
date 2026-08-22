@@ -180,6 +180,10 @@ fetch_personal_notes_branch || exit 0
 # session on a branch that isn't itself a tracked item) as for one on a
 # tracked item's own branch. See ./plan-updates-since.sh, the recheck tool
 # this stamp exists for.
+# Reported at the bottom of this script from the stamp itself rather than from
+# FETCH_HEAD a second time: later steps fetch too (the default branch catch-up
+# below fetches the upstream), so whatever fetched last owns FETCH_HEAD, and the
+# baseline a session is told to recheck from has to be the one actually recorded.
 record_plan_state_sync_stamp
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
@@ -472,5 +476,5 @@ session-start.sh summary:
   default branch:  ${SUMMARY_DEFAULT_BRANCH}
   git identity:    ${SUMMARY_GIT_IDENTITY}
   setup:           ${SUMMARY_SETUP}
-  plan state SHA:  $(git rev-parse FETCH_HEAD) (run plan-updates-since.sh <plan-id> to recheck from here later)
+  plan state SHA:  $(last_recorded_plan_state_sha) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY

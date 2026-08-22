@@ -19,6 +19,7 @@ import subprocess
 import pytest
 
 from scratch_repository import (
+    NOTES_BRANCH,
     PERSONAL_GIT_IDENTITY_PATH,
     SCRATCH_IDENTITY,
     ScratchRepository,
@@ -578,3 +579,21 @@ def test_fetches_from_the_upstream_remote_when_the_clone_already_has_one(
 
     assert result.returncode == 0, result.stderr
     assert forked_repository.local_default_branch_tip() == upstream_tip
+
+
+def test_session_start_stamps_the_notes_branch_it_read_not_the_upstream_it_fetched(
+    forked_repository: ForkedScratchRepository,
+):
+    """
+    Catching the default branch up leaves the upstream's tip in ``FETCH_HEAD``, so the
+    recheck baseline has to be read from what was recorded rather than from whichever
+    fetch happened to run last.
+    """
+    forked_repository.advance_upstream(COMMITS_THE_UPSTREAM_IS_AHEAD)
+
+    result = forked_repository.run_session_start()
+
+    notes_branch_tip = forked_repository.repository.run_git(
+        "rev-parse", f"refs/heads/{NOTES_BRANCH}"
+    ).stdout.strip()
+    assert summary_value(result.stdout, "plan state SHA").startswith(notes_branch_tip)
