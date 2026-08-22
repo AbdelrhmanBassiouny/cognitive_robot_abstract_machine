@@ -1,32 +1,39 @@
 PR #186 (draft, `bug`) — item `chain-outside-evaluation-truncates-silently`, track
 `mapping-semantics` of the `match-query-ergonomics` plan. Off `main`, independent of #182.
 
-**What it does**
+**Commits**
 1. `9587ca1c4` — `apply_mapping_on_external_root` took `next(...)` of each step, so a step
-   reaching several values contributed only its first (measured on `main`: a flattened
-   chain returned one drawer's handle and dropped the other). Now reports instead.
+   reaching several values contributed only its first. Now reports instead.
 2. `21bbc73c9` — `Projection` separates mappings determined by their child and arguments
-   from anonymous iteration; `flat_variable`'s cache bypass is stated and guarded.
+   from anonymous iteration; `flat_variable`'s cache bypass stated and guarded.
 3. `bd3aab87a` — `Index` split into `IndexByValue` (a `Projection`) and
-   `IndexByExpression`, so `Projection` means exactly one value and the walk checks the
-   chain's mappings instead of counting values per step.
+   `IndexByExpression`, so the walk checks the chain's mappings instead of counting values.
+4. `436514635` — review: the operators that build a mapping name it in their return type;
+   `Index`/`IndexByValue`/`IndexByExpression`/`Call` became generic so `Iterable[T]` is
+   expressible.
+5. `b5b084522` — review: write-back moved to `IndexByValue`; the base stored under the key
+   the index holds, which for an expression key is the expression object. Chasing it found
+   `_set_external_root_instance_value_` still had the first-value truncation its reading
+   sibling was fixed for.
 
-**Verified**
-- Instrumented `Index._apply_mapping_`: all three behaviours live (14 literal-key,
-  5 row-lookup, 4 expression-key), so none could be dropped.
-- Full krrood suite 2155 passed; the 2 `test_object_diagram` failures are this container
-  missing the Graphviz `dot` binary and fail identically on `main` (baseline: 2148 passed).
-- Making `flat_variable` cached broke nothing in the suite beforehand — the identity
-  invariant was unguarded, and now has a test.
+**State**: full krrood suite 2158 passed; the 2 `test_object_diagram` failures are this
+container missing the Graphviz `dot` binary and fail identically on `main`.
 
-**Lesson recorded in roadmap §13**: two earlier runs reported a third failure
-(`test_generation_process`) purely because I rewrote source files while pytest was running.
-Never edit the tree during a suite run.
+**Open on #186 (both awaiting the developer)**
+- Is `Projection` the right term? I argue it collides with the SQL select-list sense, since
+  we already have `_selected_variables_`; proposed `SingleValueMapping`, caveat that the
+  honest guarantee is *at most* one value. Thread left unresolved.
+- `query/match.py:661` walks an access path with `current_value[step._key_]` under
+  `isinstance(step, Index)`, carrying the same expression-key assumption. Pre-existing;
+  offered to fix here or separately.
 
-**Next / outstanding**
-- #186 awaits review. Whichever of #186 / #182 lands second adjusts #182's
-  `isinstance(step, Index)` to name both index kinds.
-- Still open for the developer, raised but not acted on:
-  (a) `having` without `grouped_by` crashes on a `None` deref (`query.py:628`) on any query
-  type; one-line fix verified, offered as its own focused PR;
-  (b) name-based selection (`query["Body"]`) as a language feature, if wanted.
+**Two process notes worth keeping**
+- Never edit the tree while a suite runs — two phantom `test_generation_process` failures
+  came from exactly that, not from a regression.
+- Another session appended its own roadmap §14 concurrently; mine collided and is now §15.
+  Re-fetch and check section numbering before appending to a shared roadmap.
+
+**Also still open for the developer, from #182's rounds**
+(a) `having` without `grouped_by` crashes on a `None` deref (`query.py:628`) on any query
+type; one-line fix verified, offered as its own focused PR.
+(b) name-based selection (`query["Body"]`) as a language feature, if wanted.
