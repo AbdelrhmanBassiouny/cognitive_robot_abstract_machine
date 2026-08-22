@@ -46,17 +46,20 @@ a ~70 s build, improved the AST reading instead, offered to switch).
 - [x] split the compound if into named subconditions (is_known_mapping /
       inherits_a_mapping) and seeded the search with ALTERNATIVE_MAPPING itself.
       RESOLVED.
-- [ ] "discuss with me the cleanest option" for the shared_dependency import in the
-      dataset generator - DISCUSSION, no code pushed. Posted four options; recommended
-      dropping the shared module and recording os.getpid() instead (one process implies
-      one sys.modules, so it is sufficient evidence and removes the sys.path line, the
-      extra dataset file and the per-package copy). Runner-up: revert to the deferred
-      import with one copy at the checkout root. Waiting on the user's pick.
+- [x] "discuss with me the cleanest option" for the shared_dependency import - the
+      user picked the recommendation, done in 831d8187: shared_dependency.py deleted,
+      GenerationRecord carries process_id, tests assert one process id and that it is
+      not the caller's. RESOLVED.
+
+**Round 1 follow-up** (831d8187): the user asked for the reason to be stated in the
+docstrings, so alternative_mapping_class_names now carries a ..note:: saying it reads
+the source rather than recursive_subclasses because that would need every package
+imported and every interface built first. Thread left open for the user to close, since
+the answer is still the AST reading.
 
 **Note**: test_generation_order's ast.parse needs 3.12 - coraplex/robot_plans/actions/
 base.py uses PEP 695 `type X[T] = ...`. Local container is 3.11, so a local run only
 passes because `and` short-circuits before coraplex is scanned. CI is 3.12.
 
-**Next**: two threads waiting on the user - the AST-vs-importing question (round 1)
-and the shared_dependency import discussion (round 2, recommendation posted).
-Not subscribed to PR activity (per notes).
+**Next**: CI running on 831d8187. Only the AST-vs-importing thread is left open, for
+the user to close. Not subscribed to PR activity (per notes).
