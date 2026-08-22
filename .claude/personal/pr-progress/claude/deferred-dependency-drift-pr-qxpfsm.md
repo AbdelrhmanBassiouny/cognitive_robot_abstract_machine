@@ -42,7 +42,7 @@ stacked on a dependency that will never land was never flagged.
   matching strings, which also removed a `markupsafe.escape()` call that existed
   only to reproduce Jinja's autoescaping in the expectation.
 
-**Second round the same day — three threads (`97ee004d3`), one left open**
+**Second round the same day — three threads (`97ee004d3`)**
 - The wording assertions are **cut**, on the user's argument that nobody parses a
   drift description. Their own precedent: #121's second round did exactly this to
   `test_every_summary_message_reads_as_written`. Do not re-add sentence pinning here.
@@ -51,13 +51,26 @@ stacked on a dependency that will never land was never flagged.
   and the card renders the word "None". Two parametrised tests over
   `list(ManifestDriftCause)` and `list(StallReason)` assert each renders something —
   parametrised off the enum, so a future member needs no test edit.
-- That thread (`PRRT_kwDOQhJw3c6bYJwp`) is **left open**: a replacement is not the
-  deletion it asked for, so it is the user's to close.
 - `drift_lines_in` strips the `⚠` (named at `DRIFT_LINE_MARKER`); the marker's
   presence is deliberately no longer asserted anywhere.
 - `TextOfElementsWithClass` is a dataclass. Its `__post_init__` is load-bearing:
   `@dataclass` generates `__init__` rather than extending the base's, so
   `HTMLParser.reset()` would never run and `feed()` would fail.
+
+**Third round the same day — three threads, all resolved (`815d3f2cb`)**
+- `capturing_tag` → `closing_tag`; `DRIFT_LINE_MARKER` hoisted to the top of the
+  file. Both mechanical, both as asked.
+- **The two per-member `description` tests are deleted too.** The reviewer asked
+  whether an abstract `description` already guarantees them; it does not — it
+  guarantees the subclass *defines* the method, not that the `match` inside covers
+  every member, and a fall-through `match` returns `None` silently.
+- What settled it is the evidence, not the argument: `ItemStatus.display_label` and
+  `LiveState.display_label` are built identically (`match`, no `case _`), carry the
+  same exposure, and get two spot checks. The module's own convention is weaker than
+  what round two had written. **Do not re-add per-member coverage here without
+  raising the neighbours to the same bar.**
+- Given up knowingly: a cause or stall reason added later without a branch renders
+  the word "None" on the dashboard rather than failing a test.
 
 **The docformatter finding, which is the one to carry**
 - On the previous head `scripts/format_docstrings.py` left `build_dashboard.py`
@@ -73,7 +86,8 @@ stacked on a dependency that will never land was never flagged.
   identical non-convergent state and is untouched.
 
 **State**
-- 248 tests in `.claude/skills/plan-dashboard/tests` (was 239), 107 hooks, 154 stack.
+- 241 tests in `.claude/skills/plan-dashboard/tests` (was 239 at `40d9d6dd`, 248 at
+  `97ee004d3`), 107 hooks, 154 stack.
   `format_docstrings.py` a no-op on both touched files afterwards, `docformatter
   --diff` 0 hunks on each, `black --check` clean.
 - Live check unchanged by the round: `rdr-refactor` flags `D-ui-rendering` and only
@@ -82,7 +96,7 @@ stacked on a dependency that will never land was never flagged.
   marks it ready.
 
 **Outstanding**
-- CI on `97ee004d3` not yet observed. At `453795a6`, `test_claude_dev_tooling` passed
+- CI on `815d3f2cb` not yet observed. At `453795a6`, `test_claude_dev_tooling` passed
   and one robotics job was red — `test_each_lib (robokudo)` →
   `test_run_semdt_raytracer_ae_successfully`, `assert 3 == 2` object hypotheses from
   point-cloud clustering, 1 of 830 tests. Unreachable from a diff confined to
