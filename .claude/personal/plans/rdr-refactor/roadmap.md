@@ -2213,3 +2213,12 @@ reproduced should carry an expiry, or at least a pointer to the run that justifi
 
 Recorded but not actioned: #189 should be closed and `main`'s `test_rdr.py` skip removed. The
 developer marked #189 ready, so it is theirs.
+
+**Closed 2026-08-22.** The developer's call once §26's stress test settled it: #189 proposed a
+skip for a bug fixed six weeks earlier, so it is closed unmerged, branch kept. Item status set
+to `deferred` — following `D-ui-splice-fix`, the one terminal status the dashboard does not
+flag as drift against a closed-unmerged pull request.
+
+`main`'s own skip on `test_rdr.py`'s sibling (`57a1babac`) is obsolete for exactly the same
+reason and **is still there**, suppressing that test. Removing it needs its own change and is
+not covered by closing #189.
