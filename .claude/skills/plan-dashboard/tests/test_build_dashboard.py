@@ -4,19 +4,21 @@ and rendering.
 """
 
 import json
+import re
 import sys
 from datetime import datetime
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any
 
 import pytest
 import yaml
-from markupsafe import escape
 
 from build_dashboard import (
     AVAILABLE_MODELS,
     DashboardRenderer,
     DependencyCycle,
+    DriftFlag,
     DuplicateItemId,
     InvalidBlockers,
     InvalidDependsOn,
@@ -26,8 +28,11 @@ from build_dashboard import (
     ItemStatus,
     LiveState,
     MalformedPullRequestDataError,
+    ManifestDrift,
+    ManifestDriftCause,
     MAXIMUM_DEPENDENCY_STACK_LEVEL,
     MissingMergeTimestampError,
+    NotStalledDependencyError,
     Plan,
     PlanValidationError,
     PullRequestLabel,
@@ -35,6 +40,8 @@ from build_dashboard import (
     PullRequestsByRepository,
     PullRequestState,
     StackedItem,
+    StalledDependencyDrift,
+    StallReason,
     Track,
     UnknownDependency,
     UnknownStatus,
@@ -418,7 +425,14 @@ def test_status_and_drift_css_class_without_drift():
 
 def test_status_and_drift_css_class_with_drift():
     drifted_item = Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE)
-    drifted_item.drift_descriptions = ["marked done, but pull request #1 is still open"]
+    drifted_item.drift_flags = [
+        ManifestDrift(
+            cause=ManifestDriftCause.MARKED_DONE_WHILE_OPEN,
+            status=ItemStatus.DONE,
+            live_state=LiveState.OPEN_DRAFT,
+            pull_request_number=1,
+        )
+    ]
     assert drifted_item.status_and_drift_css_class == "status-done has-drift"
 
 
@@ -478,24 +492,27 @@ def test_is_ready_for_dependent_review_false_when_there_is_no_pull_request():
     assert not fresh_item.is_ready_for_dependent_review()
 
 
-def test_is_stalled_true_when_deferred():
+def test_stall_reason_is_deferred_when_deferred():
     deferred_item = Item(
         title="A", branch="a", track="track-1", status=ItemStatus.DEFERRED
     )
+    assert deferred_item.stall_reason is StallReason.DEFERRED
     assert deferred_item.is_stalled()
 
 
-def test_is_stalled_true_when_the_pull_request_was_closed_without_merging():
+def test_stall_reason_names_the_pull_request_when_it_was_closed_without_merging():
     closed_item = Item(
         title="A", branch="a", track="track-1", status=ItemStatus.IN_PROGRESS
     )
     closed_item.live_state = LiveState.CLOSED_UNMERGED
+    assert closed_item.stall_reason is StallReason.PULL_REQUEST_CLOSED_UNMERGED
     assert closed_item.is_stalled()
 
 
 def test_is_stalled_false_when_done():
     done_item = Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE)
     done_item.live_state = LiveState.MERGED
+    assert done_item.stall_reason is None
     assert not done_item.is_stalled()
 
 
@@ -511,6 +528,7 @@ def test_is_stalled_false_while_the_work_can_still_land(live_state):
         title="A", branch="a", track="track-1", status=ItemStatus.IN_PROGRESS
     )
     live_item.live_state = live_state
+    assert live_item.stall_reason is None
     assert not live_item.is_stalled()
 
 
@@ -518,7 +536,16 @@ def test_is_stalled_false_when_not_started():
     fresh_item = Item(
         title="A", branch="a", track="track-1", status=ItemStatus.NOT_STARTED
     )
+    assert fresh_item.stall_reason is None
     assert not fresh_item.is_stalled()
+
+
+def test_a_dependency_that_has_not_stalled_cannot_be_flagged_as_one():
+    live_item = Item(
+        title="A", branch="a", track="track-1", status=ItemStatus.IN_PROGRESS
+    )
+    with pytest.raises(NotStalledDependencyError):
+        StalledDependencyDrift.of(live_item)
 
 
 def test_stacked_item_indent_style_exposes_both_indent_levels_as_css_variables():
@@ -839,14 +866,14 @@ def test_matching_status_and_live_state_is_not_drifted():
 # check.
 
 
-def drift_descriptions_of(renderer: DashboardRenderer, identifier: str) -> list[str]:
+def drift_flags_of(renderer: DashboardRenderer, identifier: str) -> list[DriftFlag]:
     """
-    One item's drift descriptions, after rendering has classified the whole plan.
+    One item's drift flags, after rendering has classified the whole plan.
 
     :param renderer: The renderer, already rendered.
     :param identifier: The item to look up.
     """
-    return renderer.items_by_identifier[identifier].drift_descriptions
+    return renderer.items_by_identifier[identifier].drift_flags
 
 
 def test_deferred_dependency_flags_its_in_progress_dependent():
@@ -856,7 +883,9 @@ def test_deferred_dependency_flags_its_in_progress_dependent():
     ]
     renderer = make_renderer(items)
     _, summary = renderer.render()
-    assert drift_descriptions_of(renderer, "b") == ["depends on 'a', which is deferred"]
+    assert drift_flags_of(renderer, "b") == [
+        StalledDependencyDrift(dependency_identifier="a", reason=StallReason.DEFERRED)
+    ]
     assert summary.drift_items == ["b"]
 
 
@@ -872,8 +901,12 @@ def test_dependency_whose_pull_request_was_closed_unmerged_flags_its_dependent()
         items, pull_requests_by_repository=pull_requests_by_repository
     )
     renderer.render()
-    assert drift_descriptions_of(renderer, "b") == [
-        "depends on 'a', whose pull request #1 was closed without merging"
+    assert drift_flags_of(renderer, "b") == [
+        StalledDependencyDrift(
+            dependency_identifier="a",
+            reason=StallReason.PULL_REQUEST_CLOSED_UNMERGED,
+            pull_request_number=1,
+        )
     ]
 
 
@@ -892,7 +925,7 @@ def test_open_draft_dependency_does_not_flag_its_dependent():
         items, pull_requests_by_repository=pull_requests_by_repository
     )
     renderer.render()
-    assert drift_descriptions_of(renderer, "b") == []
+    assert drift_flags_of(renderer, "b") == []
 
 
 def test_merged_dependency_does_not_flag_its_dependent():
@@ -902,7 +935,7 @@ def test_merged_dependency_does_not_flag_its_dependent():
     ]
     renderer = make_renderer(items)
     renderer.render()
-    assert drift_descriptions_of(renderer, "b") == []
+    assert drift_flags_of(renderer, "b") == []
 
 
 def test_not_started_dependency_does_not_flag_its_dependent():
@@ -912,7 +945,7 @@ def test_not_started_dependency_does_not_flag_its_dependent():
     ]
     renderer = make_renderer(items)
     renderer.render()
-    assert drift_descriptions_of(renderer, "b") == []
+    assert drift_flags_of(renderer, "b") == []
 
 
 def test_done_dependent_of_a_stalled_dependency_is_not_flagged():
@@ -922,7 +955,7 @@ def test_done_dependent_of_a_stalled_dependency_is_not_flagged():
     ]
     renderer = make_renderer(items)
     renderer.render()
-    assert drift_descriptions_of(renderer, "b") == []
+    assert drift_flags_of(renderer, "b") == []
 
 
 def test_deferred_dependent_of_a_stalled_dependency_is_not_flagged():
@@ -932,7 +965,7 @@ def test_deferred_dependent_of_a_stalled_dependency_is_not_flagged():
     ]
     renderer = make_renderer(items)
     renderer.render()
-    assert drift_descriptions_of(renderer, "b") == []
+    assert drift_flags_of(renderer, "b") == []
 
 
 def test_stalled_dependency_flag_names_what_to_reparent_onto():
@@ -943,8 +976,12 @@ def test_stalled_dependency_flag_names_what_to_reparent_onto():
     ]
     renderer = make_renderer(items)
     renderer.render()
-    assert drift_descriptions_of(renderer, "b") == [
-        "depends on 'a', which is deferred - consider reparenting onto base"
+    assert drift_flags_of(renderer, "b") == [
+        StalledDependencyDrift(
+            dependency_identifier="a",
+            reason=StallReason.DEFERRED,
+            reparent_targets=("base",),
+        )
     ]
 
 
@@ -955,7 +992,7 @@ def test_stalled_dependency_flag_omits_the_suggestion_when_it_has_no_dependency(
     ]
     renderer = make_renderer(items)
     renderer.render()
-    assert "reparenting" not in drift_descriptions_of(renderer, "b")[0]
+    assert drift_flags_of(renderer, "b")[0].reparent_targets == ()
 
 
 def test_only_the_direct_dependent_of_a_stalled_item_is_flagged():
@@ -968,7 +1005,7 @@ def test_only_the_direct_dependent_of_a_stalled_item_is_flagged():
     ]
     renderer = make_renderer(items)
     _, summary = renderer.render()
-    assert drift_descriptions_of(renderer, "c") == []
+    assert drift_flags_of(renderer, "c") == []
     assert summary.drift_items == ["b"]
 
 
@@ -980,9 +1017,9 @@ def test_every_stalled_dependency_of_one_item_is_flagged_separately():
     ]
     renderer = make_renderer(items)
     _, summary = renderer.render()
-    assert drift_descriptions_of(renderer, "c") == [
-        "depends on 'a', which is deferred",
-        "depends on 'b', which is deferred",
+    assert drift_flags_of(renderer, "c") == [
+        StalledDependencyDrift(dependency_identifier="a", reason=StallReason.DEFERRED),
+        StalledDependencyDrift(dependency_identifier="b", reason=StallReason.DEFERRED),
     ]
     assert summary.drift_items == ["c"]
     assert summary.drift_flag_count == 2
@@ -1006,12 +1043,100 @@ def test_manifest_drift_and_a_stalled_dependency_are_both_reported():
         items, pull_requests_by_repository=pull_requests_by_repository
     )
     _, summary = renderer.render()
-    assert drift_descriptions_of(renderer, "b") == [
-        "marked in_progress, but pull request #1 is merged",
-        "depends on 'a', which is deferred",
+    assert drift_flags_of(renderer, "b") == [
+        ManifestDrift(
+            cause=ManifestDriftCause.MARKED_UNDER_WAY_WHILE_CLOSED,
+            status=ItemStatus.IN_PROGRESS,
+            live_state=LiveState.MERGED,
+            pull_request_number=1,
+        ),
+        StalledDependencyDrift(dependency_identifier="a", reason=StallReason.DEFERRED),
     ]
     assert summary.drift_items == ["b"]
     assert summary.drift_flag_count == 2
+
+
+# %% drift flag wording
+
+# Every other drift test compares flags, not sentences, so this is the one
+# place the English itself is pinned - single-sourcing the wording into
+# DriftFlag.description would otherwise leave nothing checking it.
+
+
+@pytest.mark.parametrize(
+    "flag, expected_description",
+    [
+        (
+            StalledDependencyDrift(
+                dependency_identifier="a", reason=StallReason.DEFERRED
+            ),
+            "depends on 'a', which is deferred",
+        ),
+        (
+            StalledDependencyDrift(
+                dependency_identifier="a",
+                reason=StallReason.DEFERRED,
+                reparent_targets=("base", "other"),
+            ),
+            "depends on 'a', which is deferred - consider reparenting onto base, other",
+        ),
+        (
+            StalledDependencyDrift(
+                dependency_identifier="a",
+                reason=StallReason.PULL_REQUEST_CLOSED_UNMERGED,
+                pull_request_number=1,
+            ),
+            "depends on 'a', whose pull request #1 was closed without merging",
+        ),
+        (
+            ManifestDrift(
+                cause=ManifestDriftCause.PULL_REQUEST_NOT_FOUND,
+                status=ItemStatus.IN_PROGRESS,
+                live_state=LiveState.NOT_FOUND,
+                pull_request_number=9,
+            ),
+            "pull request #9 not found on GitHub",
+        ),
+        (
+            ManifestDrift(
+                cause=ManifestDriftCause.MARKED_DONE_WHILE_OPEN,
+                status=ItemStatus.DONE,
+                live_state=LiveState.OPEN_DRAFT,
+                pull_request_number=1,
+            ),
+            "marked done, but pull request #1 is still open",
+        ),
+        (
+            ManifestDrift(
+                cause=ManifestDriftCause.MARKED_UNFINISHED_WHILE_MERGED,
+                status=ItemStatus.NOT_STARTED,
+                live_state=LiveState.MERGED,
+                pull_request_number=1,
+            ),
+            "marked not_started, but pull request #1 is already merged",
+        ),
+        (
+            ManifestDrift(
+                cause=ManifestDriftCause.MARKED_UNDER_WAY_WHILE_CLOSED,
+                status=ItemStatus.IN_PROGRESS,
+                live_state=LiveState.CLOSED_UNMERGED,
+                pull_request_number=1,
+            ),
+            "marked in_progress, but pull request #1 is closed unmerged",
+        ),
+        (
+            ManifestDrift(
+                cause=ManifestDriftCause.MARKED_DONE_WHILE_CLOSED_UNMERGED,
+                status=ItemStatus.DONE,
+                live_state=LiveState.CLOSED_UNMERGED,
+                pull_request_number=1,
+            ),
+            "marked done, but pull request #1 was closed without merging",
+        ),
+    ],
+)
+def test_drift_flag_describes_itself(flag, expected_description):
+    assert flag.description == expected_description
 
 
 # %% DashboardRenderer - ready-to-start / blocker-maybe-cleared
@@ -1693,6 +1818,98 @@ def test_hidden_done_wrap_parent_is_never_a_done_item():
     assert stacked_h.wrap_parent_with_done_hidden.identifier == "g"
 
 
+# %% reading the rendered page
+
+# Reading the page back through a parser rather than matching markup
+# substrings: what these tests are about is the text the dashboard shows and
+# how many lines it shows it on, and a retyped tag is a second copy of the
+# template that nothing keeps in step with it. It also removes any need to
+# model the template's autoescaping - the parser resolves entities the same
+# way a browser does.
+
+
+class TextOfElementsWithClass(HTMLParser):
+    """
+    Collects the text of every element carrying one CSS class.
+
+    :param css_class: The class an element must carry to be collected.
+    """
+
+    def __init__(self, css_class: str) -> None:
+        super().__init__(convert_charrefs=True)
+        self.css_class = css_class
+        """
+        The class an element must carry to be collected.
+        """
+        self.texts: list[str] = []
+        """
+        One entry per matching element, in document order.
+        """
+        self.capturing_tag: str | None = None
+        """
+        The tag name whose closing tag ends the element being collected.
+        """
+
+    def handle_starttag(
+        self, tag: str, attributes: list[tuple[str, str | None]]
+    ) -> None:
+        """
+        Start collecting when an element carries :attr:`css_class`.
+        """
+        if self.capturing_tag is not None:
+            return
+        element_classes = (dict(attributes).get("class") or "").split()
+        if self.css_class not in element_classes:
+            return
+        self.capturing_tag = tag
+        self.texts.append("")
+
+    def handle_endtag(self, tag: str) -> None:
+        """
+        Stop collecting at the end of the element that started it.
+        """
+        if tag == self.capturing_tag:
+            self.capturing_tag = None
+
+    def handle_data(self, data: str) -> None:
+        """
+        Append text found inside the element being collected.
+        """
+        if self.capturing_tag is not None:
+            self.texts[-1] += data
+
+
+def text_of_elements_with_class(output: str, css_class: str) -> list[str]:
+    """
+    The text of every element in a rendered page carrying one CSS class.
+
+    :param output: The rendered dashboard HTML.
+    :param css_class: The class an element must carry to be read.
+    """
+    parser = TextOfElementsWithClass(css_class)
+    parser.feed(output)
+    return [text.strip() for text in parser.texts]
+
+
+def drift_lines_in(output: str) -> list[str]:
+    """
+    Every drift line an item card shows, in document order.
+
+    :param output: The rendered dashboard HTML.
+    """
+    return text_of_elements_with_class(output, "drift")
+
+
+def drift_banner_flag_count(output: str) -> int:
+    """
+    How many drift flags the sidebar banner reports.
+
+    :param output: The rendered dashboard HTML.
+    """
+    (banner,) = text_of_elements_with_class(output, "drift-banner")
+    return int(re.findall(r"\d+", banner)[0])
+
+
 # %% end-to-end wave/track/item wiring
 
 
@@ -2204,10 +2421,10 @@ def test_render_shows_one_drift_line_per_description_on_the_item_card():
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
     output, _ = renderer.render()
-    for description in renderer.items_by_identifier["c"].drift_descriptions:
-        # escape() rather than a hand-written copy: the template autoescapes,
-        # so the quotes around a dependency's identifier arrive as entities.
-        assert f'<div class="drift">⚠ {escape(description)}</div>' in output
+    assert drift_lines_in(output) == [
+        f"⚠ {flag.description}"
+        for flag in renderer.items_by_identifier["c"].drift_flags
+    ]
 
 
 def test_render_banner_counts_drift_flags_rather_than_drifted_items():
@@ -2229,7 +2446,7 @@ def test_render_banner_counts_drift_flags_rather_than_drifted_items():
     )
     output, summary = renderer.render()
     assert summary.drift_items == ["c"]
-    assert f"<strong>{summary.drift_flag_count} drift flag(s)</strong>" in output
+    assert drift_banner_flag_count(output) == summary.drift_flag_count == 2
 
 
 # %% status counts
