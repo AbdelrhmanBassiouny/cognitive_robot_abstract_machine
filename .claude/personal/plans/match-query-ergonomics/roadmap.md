@@ -468,3 +468,60 @@ It was not a regression: both runs were ones where source files were rewritten
 while pytest was collecting and executing against them. Clean runs pass from
 both a populated and an empty generated file, and `main`'s baseline shows the
 same two Graphviz failures. Do not edit the tree while a suite is running.
+
+## 14. 2026-08-22: the memo key needed only the root, and the reason is structural
+
+The one review comment left open on #182 asked whether `_rerooted_chains_`, being an
+instance field, needs `replaced_id` in its key at all — and said to verify it rather
+than reason about it.
+
+**Measured.** Instrumented `_reroot_on_` to record `(node, replaced, root)` per call and
+ran the whole krrood suite: 27 calls over 25 distinct nodes, and **no node ever saw two
+different `replaced` expressions**. (No node saw two different roots either.) So no
+lookup in the suite can change by dropping `replaced_id`.
+
+**Why it is not a coincidence of these tests.** Counting alone only says "it did not
+happen here", so the probe also recorded *what* `replaced` was. In all 27 calls it was
+one of exactly two things — the node's own `_chain_root_` (25) or the first step of its
+`_access_path_` (2) — which are the two call sites in `_rerooted_on_selection_`. Both
+are fixed properties of the node: `_get_mapped_variable_` keys its cache on the child,
+so a node's ancestry, its chain root and its first step are all settled the moment the
+node exists, and `_selection_indexed_by_(first_step)` then picks the same branch every
+time. `replaced` therefore *cannot* vary per node.
+
+**Done in `b9825b9e`**: `Rerooting` is gone and `_rerooted_chains_` is
+`Dict[uuid.UUID, MappedVariable]`, keyed by the root's identifier, with the invariant
+recorded as a note on `_reroot_on_`. The root stays the key even though it did not vary
+either — it is the parameter a caller chooses, whereas `replaced` is derived from the
+node. §10's two tests (`..._keeps_one_flattening_shared`,
+`..._keeps_two_flattenings_independent`) are what pin the memo's behaviour and both
+still pass, so no new test was warranted for a behaviour-preserving key change.
+
+Thread replied to and resolved — this is what it asked for, unlike §9's and §10's
+rounds.
+
+**A landing-order correction to §13.** That section says #186's keeping `Index` abstract
+leaves #182's `isinstance(step, Index)` matching unchanged, which is true. But #182 also
+*constructs* `Index`, in `Index._rebuild_on_`
+(`child._get_mapped_variable_(Index, _key_=self._key_)`), and an abstract `Index` cannot
+be instantiated. So the adjustment the second-lander carries is a little wider than
+either PR's description says: move `_rebuild_on_` onto `IndexByValue` /
+`IndexByExpression`, exactly as #186 already does for `dao.py`. Recorded on #182's
+description.
+
+**CI position on #182.** The `experiments` ROS-service timeout recorded in §9 has
+cleared. The run on `62ec184aa` was red on one job only —
+`semantic_digital_twin`'s `test_multi_sim.py::test_world_sim_state_sync`, a MuJoCo
+wall-clock test that sets a box's origin, sleeps 2.5s and asserts where it landed. It
+reported `final_pos=[~0, ~0, 0.1499]`: the box settled at exactly the right *height* but
+at x=y=0, i.e. the origin update never reached the simulator before it settled — a
+state-sync race under load. `main` at this PR's exact base `90c24116` was fully green
+(run 32138086038), and the diff touches no simulator, world-sync or spatial-types code,
+so it is not this PR's failure and the diff was not widened for it.
+
+**Environment note.** This session's container started with *no* project dependencies
+installed at all, and Debian's patched setuptools cannot build
+`antlr4-python3-runtime` (an `omegaconf` dependency). A scratch venv on Python 3.12
+fixes both — 3.11 is too old, since `class_diagram.py` calls `make_dataclass(module=...)`,
+which is 3.12+. Three krrood test modules need `casadi` / `semantic_digital_twin` and
+were skipped; neither can reach `_reroot_on_`.
