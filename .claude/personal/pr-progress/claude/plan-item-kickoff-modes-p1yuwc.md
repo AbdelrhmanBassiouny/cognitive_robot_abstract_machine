@@ -45,14 +45,34 @@ Two review rounds handled on 2026-08-22. Branch
 ### Addendum, later on 2026-08-22
 
 - **A third review comment** (`# %% locations`, "put all these directories in a StrEnum?")
-  answered with a measurement and **no code change**, on the user's call. It collides with
-  the same round's own string-should-be-a-`Path` comment: a `StrEnum` member is a `str`, so
-  `HOOKS_DIRECTORY / "..."` raises and `COMMITTED_DEFAULTS_PATH.name` *silently* returns
-  `"COMMITTED_DEFAULTS"` (Enum reserves `.name`) where two tests use it; `class L(Path, Enum)`
-  needs 3.12 and our floor is 3.11. Thread left open. Third open thread on #149.
+  was first answered with a measurement and no code change, on my call; the user then
+  proposed a concrete shape and it was **implemented** in `1b2f79672`. `HOOKS_DIRECTORY`
+  stays a plain `Path` constant *above* the enum, and the four file paths are
+  `Location(StrEnum)` members composed from it, each with a `.path` property for the
+  callers that do path arithmetic. `SettingsFile.origin` is a `Location`. Every call site
+  loses a `str()` or gains one `.path`; the `resolve` document is byte-identical.
+  Mutation-checked on `COMMITTED_DEFAULTS`; 18 module tests, 522 across the three
+  directories. Thread replied to and **resolved**.
+- **Two claims I made on that thread were wrong and were corrected on it** (reply
+  `3836855129`): `.name` returns the member name under `StrEnum` but **not** under the
+  `Path` mixin, where `Path.name` shadows `Enum.name` and answers the filename - so the
+  sharpest objection I raised against the mixin was an objection to the other shape. And
+  the mixin's cost is not only the 3.11 floor: on 3.12 it builds, then `f"{member}"`
+  renders `Location.COMMITTED_DEFAULTS`, `.parent` and `json.dumps` raise, and by-value
+  lookup raises.
+- **The recommendation I recorded was superseded by the user's own shape**, which beats
+  both options I had costed. Carried into `roadmap.md`: a measurement showing two asks
+  conflict is not proof no third shape exists - before reporting two requirements
+  incompatible, ask whether the collection can be split so each half gets the type it
+  wants.
 - **A claim corrected in two durable places.** The first round's justification for `StrEnum`
   said `ExecutionMode(value)` reads and `str(mode)` writes "with no lookup table between
   them", which is wrong about reading - by-value lookup is `Enum.__call__` and a plain `Enum`
   does it identically. Fixed in `roadmap.md` (in place, with the correction noted) and in
   #149's description. `StrEnum` buys the write/interop half only.
-- Plan saved (`940099c8a`), dashboard republished (52 items, 0 drift).
+- Plan saved (`940099c8a`, then `b0577481c` for the `Location` round), dashboard
+  republished twice (52 items, 0 drift both times). #149's description updated for the
+  `Location` change.
+- **Open threads on #149 are back to two**, not three: `from None` and the `SETTING_KEYS`
+  removal. The six on cram2 #537 remain unanswered there.
+
