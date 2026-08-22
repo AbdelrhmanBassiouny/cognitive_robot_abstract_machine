@@ -3841,11 +3841,13 @@ items:
 
   - id: integration-branch-ci-verdict
     title: "Move the integration branch's verdict to CI, with a stable branch and a targeted job"
-    branch: null
+    branch: claude/plan-item-kickoff-workflow-wjfsn8
     track: stack-tooling
     depends_on:
     - integration-branch
-    status: not_started
+    status: in_progress
+    pull_request_number: 191
+    session: https://claude.ai/code/session_01Aw5p5xzSFUKNCueN8oG6Tg
     notes: >
       Split out of `integration-branch` (#154) on 2026-08-13, on the user's decision, rather than
       folded into it. Part D of that item's own review round: the verdict moves from a local
