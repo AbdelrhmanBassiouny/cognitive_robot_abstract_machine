@@ -30,10 +30,26 @@ test/cognitive_robot_abstract_machine_test --confcutdir=test/cognitive_robot_abs
 examples-and-demos "Build ORM" step went 102.0 s -> 68.3 s mean (main run 32567616992
 vs PR run 32567072596), about 34 s / 33 %. Spread narrowed from 80-120 s to 64-79 s.
 
-**PR**: #187 (draft), CI green (23/23). Base main is now fast-forwarded to cram2/main
-(3f643cff) - the user did it - so the branch is one commit, 7 files, on top of it.
-GitHub's PR page may briefly still show the 86 upstream commits until it recomputes
-the merge base.
+**PR**: #187 (draft), base main = cram2/main (3f643cff), 2 commits / 7 files.
+GitHub kept a stale merge base after the fast-forward (showed 88 commits) until the
+PR's base was re-set to main via the API, which forced it to recompute.
 
-**Next**: waiting on the user's OK to fast-forward the fork's main to cram2/main
-(0 ahead, 86 behind - a pure fast-forward). Not subscribed to PR activity (per notes).
+**Review round 1** (3 threads, all from the user, commit 783a62ab):
+- [x] import at top of dataset generate_orm - shared_dependency is now copied next to
+      the generator instead of the checkout root, so one location works both when the
+      dataset module is imported by tests and when the copy runs. RESOLVED.
+- [x] return docstrings on the test_generation_order helpers. RESOLVED.
+- [ ] "can't this be done by importing?" for alternative-mapping detection - LEFT OPEN
+      deliberately (answered differently). Replied: importing needs all five packages
+      plus a ~70 s interface build in that job, since experiments modules import
+      coraplex.orm.ormatic_interface at module level. Improved the AST reading instead
+      (resolve base names via Name/Attribute/Subscript; close over classes reaching
+      AlternativeMapping through another class of the same package). Offered to switch
+      to recursive_subclasses if the user prefers.
+
+**Note**: test_generation_order's ast.parse needs 3.12 - coraplex/robot_plans/actions/
+base.py uses PEP 695 `type X[T] = ...`. Local container is 3.11, so a local run only
+passes because `and` short-circuits before coraplex is scanned. CI is 3.12.
+
+**Next**: CI running on 783a62ab. One review thread left open for the user to decide.
+Not subscribed to PR activity (per notes).
