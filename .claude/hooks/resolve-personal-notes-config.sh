@@ -279,6 +279,13 @@ plan_roadmap_path() {
 # full plan-dashboard schema this feeds).
 PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 
+# DASHBOARD_URL_CACHE_PATH: the generated cache mapping each plan id (plus
+# "_index" for the master index) to the Artifact URL its dashboard is
+# published at, so /plan-dashboard updates that page instead of minting a
+# second one. Named here rather than typed into plan-dashboard/SKILL.md,
+# same defined-once reasoning as PLAN_BRANCH_INDEX_PATH above.
+DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
+
 # PLAN_DASHBOARD_DIRECTORY / *_SCRIPT / *_FILE / *_DOC: the canonical
 # location of every script, hook, requirements file, and reference doc the
 # plan-dashboard/plan-item-*/CI tooling invokes or reads - defined once,
@@ -308,6 +315,10 @@ REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
 # refresh_dashboard_support.py: the JSON-plumbing helpers
 # refresh_dashboard.sh calls between its two script calls.
 REFRESH_DASHBOARD_SUPPORT_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard_support.py"
+# record_dashboard_url.py: writes one key's published Artifact URL into
+# DASHBOARD_URL_CACHE_PATH, resolving that URL from the account's live
+# Artifact listing so a URL nobody published cannot be recorded.
+RECORD_DASHBOARD_URL_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/record_dashboard_url.py"
 # requirements.txt: the PyYAML/Jinja2/markdown dependencies every script
 # above needs - installed by both CI and a session running them directly.
 PLAN_DASHBOARD_REQUIREMENTS_FILE="${PLAN_DASHBOARD_DIRECTORY}/requirements.txt"
@@ -374,6 +385,26 @@ SETUP_PREREQUISITE_DOCUMENT="${SETUP_PERSONAL_NOTES_DIRECTORY}/prerequisite-chec
 # brand-new notes file with, so a first session starts from working
 # conventions instead of an empty file.
 STARTER_NOTES_FILE="${SETUP_PERSONAL_NOTES_DIRECTORY}/starter-notes.md"
+
+# ADD_PLAN_ITEM_DIRECTORY / SCOPE_DECISION_DOCUMENT /
+# CHECK_SCOPE_OVERLAP_SCRIPT / ADD_PLAN_ITEM_TESTS_DIRECTORY: the
+# where-does-this-work-belong half of the system - the skill someone runs when
+# describing new work (/add-plan-item), the shared scope rule all four plan
+# skills defer to instead of each restating it, the script that gathers that
+# rule's evidence, and its pytest suite. Same defined-once reasoning as every
+# path above.
+ADD_PLAN_ITEM_DIRECTORY=".claude/skills/add-plan-item"
+# scope-decision.md: the shared "is this new work, or a change to work already
+# in flight?" rule that plan-create, plan-item-kickoff, plan-item-resolve and
+# add-plan-item each reference in a line rather than each spelling it out.
+SCOPE_DECISION_DOCUMENT="${ADD_PLAN_ITEM_DIRECTORY}/scope-decision.md"
+# check_scope_overlap.py: reports which of the work's paths the base branch
+# lacks, and which unlanded branches already touch them - see the script's own
+# module docstring.
+CHECK_SCOPE_OVERLAP_SCRIPT="${ADD_PLAN_ITEM_DIRECTORY}/check_scope_overlap.py"
+# tests/: the pytest suite covering check_scope_overlap.py - the exact
+# directory CI and a session both run against.
+ADD_PLAN_ITEM_TESTS_DIRECTORY="${ADD_PLAN_ITEM_DIRECTORY}/tests"
 
 # SAVE_PLAN_SCRIPT: same reasoning as the block above, extended to
 # save-plan.sh - unlike the other hook scripts in this directory (which are
