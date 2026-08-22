@@ -1,3 +1,13 @@
+# %% ORM interfaces
+
+# Built before the imports below, which read a mapped datastructure: pytest imports every
+# conftest of a run before calling any hook, so a hook would fire too late. The build runs
+# once per process and never on an xdist worker.
+from ..orm_interface_build import regenerate_orm_interfaces
+
+regenerate_orm_interfaces()
+
+
 import os
 
 import pytest
@@ -17,8 +27,6 @@ from krrood.utils import recursive_subclasses
 from semantic_digital_twin.adapters.urdf import URDFParser
 
 from semantic_digital_twin.world import World
-import runpy
-from pathlib import Path
 
 # Generate verbalization_results.py on every run, so an intentional wording change shows
 # up as an ordinary diff to review instead of a failing test.
@@ -29,17 +37,6 @@ regenerate_verbalization_results(
 
 
 def pytest_configure(config):
-
-    worker = os.environ.get("PYTEST_XDIST_WORKER")
-
-    if not worker:
-        # Ensure ORM classes are generated before tests run
-        repo_root = Path(__file__).resolve().parents[2]
-        generate_orm_path = (
-            repo_root / "semantic_digital_twin" / "scripts" / "generate_orm.py"
-        )
-        # Execute the ORM generation script as a standalone module
-        runpy.run_path(str(generate_orm_path), run_name="__main__")
     # Build the symbol graph
     SymbolGraph.clear()
     class_diagram = ClassDiagram(
