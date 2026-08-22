@@ -8603,3 +8603,101 @@ direction here, and it cuts both ways. Adding structure the neighbours lack is t
 mistake as defending a guard the neighbours do not have, unless the thing being changed is
 doing a different job. Both threads turned on that: a literal that *is* the assertion needs no
 name, and a literal that is an argument does.
+
+## Update 2026-08-22 (kickoff): the CI verdict opens as #191, and three design questions are settled
+
+`/plan-item-kickoff workflow-unification integration-branch-ci-verdict`, session
+https://claude.ai/code/session_01Aw5p5xzSFUKNCueN8oG6Tg. Branched off #154's head
+(`claude/plan-item-kickoff-workflow-ixbvxl`), bootstrapped before any implementation.
+
+### The load-bearing fact re-checked, as the item's own notes asked
+
+`ci.yml` triggers on `push` to `main`, on `pull_request` with no branch filter, and on
+`workflow_run` for `update_docker` on `main`. The premise holds: **a pushed integration branch
+gets no CI unless a pull request exists for it**. The unfiltered `pull_request` trigger is what
+makes the candidate shape work at all — a pull request whose base is `integration` gets the
+ordinary run without any change to `ci.yml`.
+
+### One premise has changed since the item was recorded
+
+The notes say the Actions client is missing "because #146 measured the reachability but is
+unlanded". #146 has since landed: `.github/workflows/upstream-reviews.yml` and
+`.claude/upstream_reviews/` are on `main`, and `/upstream-reviews` is now the worked precedent
+for dispatch-a-workflow-then-read-its-result. What is still missing is a *REST* Actions reader
+usable from a script, which is what this item builds — on `GitHubRepository._call` in
+`maintenance_github.py`, not as a second client. Decision 13's whole complaint is duplicated
+GitHub backends, so adding one here would be answering it in the wrong direction.
+
+### The three questions the item left open, answered
+
+**The stable branch is a pointer, not a merge target.** The candidate pull request opens into
+`integration` to get CI at all; on green, `integration` is force-updated to the candidate commit
+and the pull request is closed rather than merged. The alternative was operationally simpler —
+green, click merge, no force-push — but a build is regenerated from scratch, so every merge
+would join two independent build histories and `integration` would accumulate exactly the
+history the design has refused since the item was recorded: *it exists to be built from, not to
+be history*. The diff a candidate's pull request shows is the same either way, so the merge
+target bought nothing the pointer does not.
+
+**The verdict is the marked job's conclusion, not the whole run's.** That is the point of the
+marker: a verdict in a fraction of the matrix's time, with no second dispatch, and the rest of
+the run still reporting normally for anyone reading the candidate.
+
+**The marker is not excluded by default.** Adding it to `pytest.ini`'s `addopts` exclusion the
+way `slow` is would have kept the breaking branch's own CI green — and that is precisely the
+wrong outcome. The triage skill pushes the reproduction test onto the breaking branch because it
+is "the only artifact that makes the failure visible from inside the branch that causes it", and
+a test excluded from that branch's own run is invisible there. The dedicated job is a fast
+subset, not the only place the test runs.
+
+### Where the code goes, and why not in `integration.py`
+
+`integration.py` is 1,697 lines with an open review thread asking whether the 400-line rule
+extends to it, so nothing new lands there beyond subcommand wiring. The Actions and check-run
+reads, pull-request creation and reference force-update extend `maintenance_github.py`'s
+existing client; the candidate/verdict half is a new `integration_verdict.py`; the targeted job
+is a new `.github/workflows/integration-checks.yml`, kept out of `ci.yml` because it needs both
+a `pull_request` trigger (the candidate's verdict) and a `workflow_dispatch` one (the
+localisation probes), and because staying out of `ci.yml` keeps it clear of #185's rename of
+`test_claude_dev_tooling`.
+
+`locate-failure` moves too rather than keeping `_run_tests` — each per-tip probe becomes a
+dispatched run of the same workflow. That is what stops the verdict being split across two
+mechanisms, which is the half-migration the item's notes warn about. It is slower again, and the
+class already documents itself as slow by construction.
+
+The clearing condition needs the marker to name its branch
+(`@pytest.mark.integration_conflict("<branch>")`), so a marked test that passes identifies the
+pull request whose `integration-conflict` label to clear. Without that the passing test says
+something is fixed but not whose.
+
+`integration_verdict.py`'s tests are also the `ReportKey` wire-format guard the 08-20 sixth
+round deliberately deferred here: the consumer parses a real `IntegrationReport` and
+`FailureLocationReport` through `ReportKey`, so a rename that breaks a reader fails a test that
+exists for its own reason rather than one written to restate the enum.
+
+### State the branch inherits, recorded rather than discovered later
+
+`check_dependency_readiness.py` reports `integration-branch` as `open_ready`, so the dependency
+is ready by the plan's own rule. It is nonetheless `mergeable_state: dirty` against `main` and
+carries `needs-resolution`; #154's conflict is #154's to resolve, and this branch carries it
+until then.
+
+`check_scope_overlap.py` against `origin/main` was run rather than eyeballed:
+`.claude/stack/integration.py` is absent from the base and shared with #154, along with
+`maintenance_github.py` and `stack.toml`. Strip those edits and an Actions client, a workflow
+file, a marker, a stable branch and two subcommands remain — the same answer the 2026-08-13
+entry argued, re-confirmed against live state.
+
+**This branch crosses the bastler move.** #185 empties `.claude/stack/` into `bastler/` and
+everything this item adds is in that path; whichever is still open when the other lands merges
+`main` across and re-applies its delta inside the package, per the doctrine decision 13 already
+recorded. #158 is affected the same way. `pytest.ini` and the new workflow file are outside the
+move.
+
+### One limit stated rather than assumed
+
+The marked job runs with the tooling dependencies only, so a reproduction test that lives inside
+a robotics package and needs the docker matrix would not be collectible there. The matrix stays
+the slow path for those. If it turns out to matter in practice it is a follow-up item, not a gap
+this kickoff pretended was closed.
