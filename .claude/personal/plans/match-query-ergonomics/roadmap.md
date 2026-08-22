@@ -526,7 +526,7 @@ fixes both — 3.11 is too old, since `class_diagram.py` calls `make_dataclass(m
 which is 3.12+. Three krrood test modules need `casadi` / `semantic_digital_twin` and
 were skipped; neither can reach `_reroot_on_`.
 
-## 14. 2026-08-21/22: review rounds on #186
+## 15. 2026-08-21/22: review rounds on #186
 
 **Return types name what they build.** The operators that trace a mapping said
 only `CanBehaveLikeAVariable[T]`, so a reader had to open the body to learn

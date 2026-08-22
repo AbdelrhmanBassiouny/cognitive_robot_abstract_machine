@@ -74,7 +74,7 @@ items:
       change this item already makes for dao.py.
       Full krrood suite green (2158 passed; the two test_object_diagram
       failures are a container missing the Graphviz dot binary, and fail
-      identically on main). Review rounds 2026-08-21/22 (roadmap section 14):
+      identically on main). Review rounds 2026-08-21/22 (roadmap section 15):
       the operators that build a mapping now name it in their return type
       (436514635), and the write-back moved to IndexByValue because the base
       stored under the key the index holds, which for an expression key is the
