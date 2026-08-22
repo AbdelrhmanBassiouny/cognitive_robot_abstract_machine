@@ -32,8 +32,8 @@ Every run prints a summary of what it found and wrote, so a session never has to
 3. Done. Every session from now on writes `CLAUDE.local.md` automatically.
 
 It is safe to re-run: on a clone that's already set up it reports what it found and asks nothing.
-You don't have to run it first either — `/plan-create`, `/plan-dashboard`, `/plan-item-kickoff` and
-`/plan-item-resolve` each offer it if something is missing.
+You don't have to run it first either — `/plan-create`, `/plan-dashboard`, `/plan-item-kickoff`,
+`/plan-item-resolve` and `/add-plan-item` each offer it if something is missing.
 
 To do the same by hand:
 
@@ -177,6 +177,9 @@ the narrative that doesn't belong in structured data.
   marks it `in_progress` as soon as its plan is approved — via
   [`plan_item_bootstrap.py`](./plan_item_bootstrap.py), which you can also run by hand — so the
   manifest never says `not_started` while the work is underway.
+- Decide where a new piece of work goes → `/add-plan-item <description>`. It runs the shared scope
+  check in [`scope-decision.md`](../skills/add-plan-item/scope-decision.md) — the rule all four plan
+  skills defer to for "is this new work, or a change to work already in flight?"
 - Recheck one for updates, without rereading it →
   [`plan-updates-since.sh`](./plan-updates-since.sh) `<plan-id> [--since <sha>]`. Every
   `session-start.sh` run stamps the notes-branch commit it just fetched (gitignored, at
