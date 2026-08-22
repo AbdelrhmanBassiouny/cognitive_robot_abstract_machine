@@ -19,7 +19,7 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from maintenance_git_commands import GitCommandRunner, ProposedPush
+from maintenance_git_commands import GitCommandRunner, GitSetting, ProposedPush
 from scratch_repository import (
     HOOKS_SOURCE_DIRECTORY,
     NOTES_BRANCH,
@@ -152,6 +152,14 @@ class GitHubRepositoryStandIn:
         """
         return f"{GITHUB_URL_PREFIX}{self.repository}.git"
 
+    @property
+    def url_rewriting(self) -> GitSetting:
+        """
+        :return: The setting that makes git resolve this stand-in's GitHub URL to the
+            stand-in itself.
+        """
+        return GitSetting(key=f"url.{self.url}.insteadOf", value=self.github_url)
+
     def branch_tip(self, branch: str) -> str:
         """
         Read a branch's commit out of the stand-in, for asserting on what a hook actually
@@ -208,9 +216,7 @@ class ForkedScratchRepository:
         repository.write(SHARED_FILE, "the shared base\n")
 
         git = GitCommandRunner(repository.project_root)
-        # Not the runner's own checkout helper: that one moves the branch to a starting
-        # point, and this repository has no commit yet for one to name.
-        git.run("checkout", "--quiet", "-b", DEFAULT_BRANCH)
+        git.checkout_orphan(DEFAULT_BRANCH)
         repository.commit_everything("the shared base")
         repository.resolve_notes_remote_to()
 
@@ -224,7 +230,7 @@ class ForkedScratchRepository:
             ),
             git,
         )
-        git.run("remote", "add", FORK_REMOTE, forked.fork.url)
+        git.add_remote(FORK_REMOTE, forked.fork.url)
         forked.reach_by_github_url(forked.upstream)
         forked.publish_default_branch_to(FORK_REMOTE)
         forked.publish_default_branch_to(forked.upstream.url)
@@ -277,7 +283,7 @@ class ForkedScratchRepository:
 
         :param commit: The commit to move it to.
         """
-        self.git.run("update-ref", f"refs/heads/{DEFAULT_BRANCH}", commit)
+        self.git.move_branch(DEFAULT_BRANCH, commit)
 
     def check_out_default_branch(self) -> None:
         """
@@ -306,21 +312,21 @@ class ForkedScratchRepository:
 
         :param stand_in: The stand-in to reach.
         """
-        self.git.run("config", f"url.{stand_in.url}.insteadOf", stand_in.github_url)
+        self.git.configure(stand_in.url_rewriting)
 
     def make_the_upstream_unreachable(self) -> None:
         """
         Cut off the upstream's GitHub URL, leaving a named upstream that cannot be
         fetched.
         """
-        self.git.run("config", "--unset", f"url.{self.upstream.url}.insteadOf")
+        self.git.remove_setting(self.upstream.url_rewriting.key)
 
     def reach_the_upstream_only_through_its_remote(self) -> None:
         """
         Register the upstream as a remote and cut off its GitHub URL, so the only route
         left to it is the remote - the clone of a contributor who added it.
         """
-        self.git.run("remote", "add", UPSTREAM_REMOTE, self.upstream.url)
+        self.git.add_remote(UPSTREAM_REMOTE, self.upstream.url)
         self.make_the_upstream_unreachable()
 
     def forget_the_fork_remote(self) -> None:
@@ -328,7 +334,7 @@ class ForkedScratchRepository:
         Remove the fork's remote, leaving a clone whose remotes resolve to no fork at
         all.
         """
-        self.git.run("remote", "remove", FORK_REMOTE)
+        self.git.remove_remote(FORK_REMOTE)
 
     def forget_the_stack_configuration(self) -> None:
         """
