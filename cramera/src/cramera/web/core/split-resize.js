@@ -11,6 +11,9 @@
  *
  * Include after the DOM and after Panels.boot(): the row divider is placed
  * between panels the registry has already mounted.
+ *
+ * Bus events:
+ *   emits  panel:resized {}   the panes were given a different share of the frame
  * ==========================================================================*/
 (function () {
   'use strict';
@@ -54,8 +57,10 @@
     window.dispatchEvent(new Event('resize'));
   }
 
+  /* A graph measures its container as it draws, so every panel drawing one re-fits
+     when a drag changes how much room it has. */
   function refit() {
-    if (window.Graph && Graph.resize) Graph.resize();
+    if (window.Bus) window.Bus.emit('panel:resized', {});
   }
 
   // %% one divider
@@ -128,9 +133,10 @@
 
   // %% the panels a slot stacks
   /* A three-track grid holds one divider, so a slot is only made resizable when
-     it stacks exactly two panels. */
+     it stacks exactly two entries. An entry is a panel or a group of tabbed ones
+     (core/panel_tabs.js) — the divider resizes either the same way. */
   const stacked = Array.prototype.filter.call(right.children, function (child) {
-    return child.dataset.panel;
+    return child.dataset.panel || child.dataset.tabs;
   });
   if (stacked.length === 2) installDivider(right, stacked[1], ROWS, 'splitBottom:' + page);
 

@@ -20,6 +20,16 @@ from cramera.paths import WEB_ROOT
 
 JS_DIR = Path(__file__).parent / "js"
 
+TAB_LABEL_PATTERN = re.compile(r"label:\s*'[^']*'")
+"""
+How ``config.js`` writes a tab's display text, as opposed to the panel id beside it.
+"""
+
+RUN_NODE_PATTERN = re.compile(r'run_node\("([^"]+)"\)')
+"""
+How :class:`TestJsUnits` names each node test file it runs.
+"""
+
 SCRIPT_PATTERN = re.compile(r'<script src="([^"]+)"')
 """
 How the shell references the assets that must ship with it.
@@ -43,6 +53,17 @@ def read(relative_path: str) -> str:
     The text of one packaged frontend file.
     """
     return (WEB_ROOT / relative_path).read_text(encoding="utf-8")
+
+
+def configured_panel_ids() -> set[str]:
+    """
+    Every panel id ``config.js`` mounts, a tab group's own entries included.
+
+    Labels are display text rather than ids, so they are dropped before the quoted names
+    are read out.
+    """
+    layout = read("config.js").split("layout", 1)[1]
+    return set(re.findall(r"'([\w-]+)'", TAB_LABEL_PATTERN.sub("", layout)))
 
 
 def panel_scripts() -> List[Path]:
@@ -89,14 +110,20 @@ class TestAssetConsistency:
         assert used <= declared, used - declared
 
     def test_configured_panels_are_defined(self):
-        config = read("config.js")
-        configured = set(re.findall(r"'([\w-]+)'", config.split("layout", 1)[1]))
         defined = set()
         for panel_js in WEB_ROOT.glob("panels/*/panel.js"):
             defined |= set(
                 re.findall(r"Panels\.define\('([\w-]+)'", panel_js.read_text())
             )
+        configured = configured_panel_ids()
         assert configured <= defined, configured - defined
+
+    def test_a_tab_groups_panels_are_read_out_of_the_layout_too(self):
+        """
+        A tabbed panel's id sits behind a ``panel:`` key rather than in the slot's own
+        list, so a reader of bare entries alone would stop checking it and say nothing.
+        """
+        assert {"event-timeline", "plan-graph"} <= configured_panel_ids()
 
     def test_panels_only_query_their_own_root(self):
         """
@@ -112,6 +139,18 @@ class TestAssetConsistency:
         # the old repo served under /static/; the packaged app is rooted at /
         for panel_js in panel_scripts():
             assert "'static/" not in panel_js.read_text(), panel_js.name
+
+
+class TestJsSuiteRegistration:
+    """
+    A node test file only runs if :class:`TestJsUnits` names it, and nothing else would
+    report one that is missing — it would simply never execute.
+    """
+
+    def test_every_node_test_file_is_run(self):
+        registered = set(RUN_NODE_PATTERN.findall(Path(__file__).read_text()))
+
+        assert {path.name for path in JS_DIR.glob("test_*.js")} == registered
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
@@ -131,11 +170,26 @@ class TestJsUnits:
     def test_bus_and_registry(self):
         self.run_node("test_bus_registry.js")
 
+    def test_panel_tabs(self):
+        self.run_node("test_panel_tabs.js")
+
+    def test_timeline_layout(self):
+        self.run_node("test_timeline_layout.js")
+
+    def test_event_summary(self):
+        self.run_node("test_event_summary.js")
+
+    def test_event_timeline_panel(self):
+        self.run_node("test_event_timeline_panel.js")
+
     def test_graph_status_rendering(self):
         self.run_node("test_graph_status.js")
 
     def test_graph_panel(self):
         self.run_node("test_graph_panel.js")
+
+    def test_plan_graph_panel(self):
+        self.run_node("test_plan_graph_panel.js")
 
     def test_response_util(self):
         self.run_node("test_response_util.js")

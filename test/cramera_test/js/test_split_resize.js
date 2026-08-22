@@ -116,7 +116,11 @@ function install(stored, rightPanelIds) {
     createElement: function () { return makeElement(); },
     addEventListener: function () {},
   };
-  const window = { dispatchEvent: function () {} };
+  const emitted = [];
+  const window = {
+    dispatchEvent: function () {},
+    Bus: { emit: function (event, payload) { emitted.push({ event: event, payload: payload }); } },
+  };
   const localStorage = {
     getItem: function (key) { return key in store ? store[key] : null; },
     setItem: function (key, value) { store[key] = value; },
@@ -126,6 +130,7 @@ function install(stored, rightPanelIds) {
 
   return {
     split: split, left: left, right: right, store: store,
+    emitted: emitted,
     columnDivider: split.children.filter(function (e) { return matches(e, '.split-divider'); })[0],
     rowDivider: right.children.filter(function (e) { return matches(e, '.slot-divider'); })[0],
   };
@@ -173,6 +178,16 @@ test('double-clicking the row divider restores the default split', function () {
   shell.rowDivider.dispatch('dblclick');
   assert.strictEqual(shell.right.style.gridTemplateRows, 'minmax(0,40fr) auto minmax(0,60fr)');
   assert.strictEqual(shell.store['splitBottom:index.html'], '0.600');
+});
+
+// %% telling the panels their frame changed
+// a graph measures its container as it draws, so a pane that was resized under it has
+// to be announced — the divider knows nothing about which panels draw graphs
+test('resizing the panes tells the panels to re-fit', function () {
+  const shell = install();
+  drag(shell.rowDivider, { clientY: 200 });
+
+  assert.deepStrictEqual(shell.emitted, [{ event: 'panel:resized', payload: {} }]);
 });
 
 // %% the column divider between the scene and the knowledge column

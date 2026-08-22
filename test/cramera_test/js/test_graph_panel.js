@@ -1,6 +1,7 @@
-// Unit tests for panels/graph/panel.js (node:test): the live-plan colour-group mapping.
+// Unit tests for panels/graph/panel.js (node:test): the live-statechart colour-group
+// mapping. The plan tree is panels/plan_graph's, and tested there.
 //
-// panel.js is loaded with its free variables (Panels, Graph, fetch, ResponseUtil)
+// panel.js is loaded with its free variables (Panels, GraphView, fetch, ResponseUtil)
 // bound as explicit function parameters rather than through global/window stubs, since
 // the file itself never touches `window` or `document` directly (it only reaches DOM
 // elements handed to it via its own `root` parameter). ResponseUtil is the real
@@ -68,7 +69,7 @@ function makeRoot() {
     '#graph-zoom-out': makeButton(),
     '#graph-zoom-fit': makeButton(),
   };
-  const buttons = ['knowledge', 'kinematics', 'plan', 'chart'].map(makeButton);
+  const buttons = ['knowledge', 'kinematics', 'chart'].map(makeButton);
   byId['#graph-tabs'] = { querySelectorAll() { return buttons; } };
   return {
     innerHTML: '',
@@ -113,63 +114,29 @@ function loadPanel(responses, search) {
   const requested = [];
   const Panels = { define(id, f) { factory = f; } };
   const zooms = [];
-  const Graph = {
-    attach() {}, build(payload) { lastBuild = payload; },
-    onSelect() {}, onDoubleSelect() {}, highlight() {}, reset() {},
-    setStatuses() { return false; },
-    zoomBy(factor) { zooms.push(factor); }, fit() { zooms.push('fit'); },
+  const resizes = [];
+  const GraphView = {
+    create() {
+      return {
+        build(payload) { lastBuild = payload; },
+        onSelect() {}, onDoubleSelect() {}, highlight() {}, reset() {},
+        setStatuses() { return false; },
+        zoomBy(factor) { zooms.push(factor); }, fit() { zooms.push('fit'); },
+        resize() { resizes.push('resize'); },
+      };
+    },
   };
-  new Function('Panels', 'Graph', 'fetch', 'ResponseUtil', 'SceneContext', SOURCE)(
-    Panels, Graph, makeFetch(responses, requested), loadResponseUtil(), loadSceneContext(search)
+  new Function('Panels', 'GraphView', 'fetch', 'ResponseUtil', 'SceneContext', SOURCE)(
+    Panels, GraphView, makeFetch(responses, requested), loadResponseUtil(), loadSceneContext(search)
   );
   return {
     factory: factory,
     lastBuild: function () { return lastBuild; },
     requested: requested,
     zooms: zooms,
+    resizes: resizes,
   };
 }
-
-// %% live plan colour groups
-// the bridge classifies plan nodes now (knowledge/enums.py's PlanNodeGroup); the panel
-// only has to pass the group through, legend included
-test('a live plan is drawn with the groups and legend the bridge sent', async function () {
-  const panel = loadPanel({
-    '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} },
-    '/api/knowledge/view?name=plan': { ok: true, nodes: [], edges: [], details: {}, live: 'plan' },
-    'http://bridge/plan': {
-      signature: 's1',
-      nodes: [
-        { id: 'a1', kind: 'AttachNode', label: 'AttachNode', status: 'CREATED', group: 'attachment' },
-        { id: 'm1', kind: 'MotionNode', label: 'MotionNode', status: 'CREATED', group: 'motion' },
-      ],
-      legend: [{ group: 'attachment', label: 'Attach / detach' }],
-    },
-  });
-  const root = makeRoot();
-  const bus = makeBus();
-  const instance = panel.factory(root, bus);
-  try {
-    await flush();
-
-    root.buttons.find(function (b) { return b.dataset.view === 'plan'; }).click();
-    await flush();
-
-    bus.emit('live:changed', { on: true, url: 'http://bridge' });
-    await flush();
-
-    const byId = {};
-    panel.lastBuild().nodes.forEach(function (n) { byId[n.id] = n; });
-    assert.strictEqual(byId.a1.group, 'attachment');
-    assert.strictEqual(byId.m1.group, 'motion');
-    assert.deepStrictEqual(panel.lastBuild().legend, [
-      { group: 'attachment', label: 'Attach / detach' },
-    ]);
-  } finally {
-    instance.destroy();       // clears the live-poll setInterval even if an assertion above throws
-  }
-});
-
 
 // %% live statechart colour groups
 test('statechart nodes are grouped by the kind of node giskardpy compiled', async function () {
@@ -276,6 +243,55 @@ test('the zoom controls step the graph in, out and back to a full fit', async fu
     // stepping out undoes stepping in
     assert.ok(Math.abs(panel.zooms[0] * panel.zooms[1] - 1) < 1e-12);
     assert.strictEqual(panel.zooms[2], 'fit');
+  } finally {
+    instance.destroy();
+  }
+});
+
+
+// %% coming back into view inside a tab group
+// vis-network measures its container as it draws, and a hidden tab body has no size, so
+// a graph that was drawn while its tab was closed stays the wrong size until it redraws.
+test('the graph re-fits when its own tab becomes the visible one', async function () {
+  const panel = loadPanel({ '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} } });
+  const bus = makeBus();
+  const instance = panel.factory(makeRoot(), bus, 'graph');
+  try {
+    await flush();
+
+    bus.emit('panel:shown', { id: 'graph' });
+
+    assert.deepStrictEqual(panel.resizes, ['resize']);
+  } finally {
+    instance.destroy();
+  }
+});
+
+test('the graph re-fits when the panes are resized around it', async function () {
+  const panel = loadPanel({ '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} } });
+  const bus = makeBus();
+  const instance = panel.factory(makeRoot(), bus, 'graph');
+  try {
+    await flush();
+
+    bus.emit('panel:resized', {});
+
+    assert.deepStrictEqual(panel.resizes, ['resize']);
+  } finally {
+    instance.destroy();
+  }
+});
+
+test('another tab becoming visible leaves the graph alone', async function () {
+  const panel = loadPanel({ '/api/knowledge': { ok: true, nodes: [], edges: [], details: {} } });
+  const bus = makeBus();
+  const instance = panel.factory(makeRoot(), bus, 'graph');
+  try {
+    await flush();
+
+    bus.emit('panel:shown', { id: 'event-timeline' });
+
+    assert.deepStrictEqual(panel.resizes, []);
   } finally {
     instance.destroy();
   }

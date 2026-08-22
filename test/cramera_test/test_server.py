@@ -95,7 +95,7 @@ class TestApi:
         pytest.importorskip("krrood")
         for name, expect_live in (
             ("kinematics", None),
-            ("plan", "plan"),
+            ("plan", None),  # the plan panel knows its own live source
             ("chart", "chart"),
         ):
             payload = get_json(server + "/api/knowledge/view?name=" + name)
