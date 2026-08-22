@@ -26,12 +26,14 @@ the user pointed this out. Lesson: check the upstream remote before starting, no
 test/cognitive_robot_abstract_machine_test --confcutdir=test/cognitive_robot_abstract_machine_test`
 (the root test/conftest.py needs the full workspace, which the container lacks).
 
-**Measurement**: 104.5 s -> 74.3 s mean over CI's four "Build ORM" steps, but that was
-on the OLD base (fork main), where ci.yml still had that step. Not re-measured on
-cram2/main, where the build happens inside the test run.
+**Measurement** (clean, same base commit both sides, n=7, 13 min apart): the
+examples-and-demos "Build ORM" step went 102.0 s -> 68.3 s mean (main run 32567616992
+vs PR run 32567072596), about 34 s / 33 %. Spread narrowed from 80-120 s to 64-79 s.
 
-**PR**: #187 (draft) - shows 87 commits until the fork's main is fast-forwarded to
-cram2/main. The real change is one commit, 02b6e671.
+**PR**: #187 (draft), CI green (23/23). Base main is now fast-forwarded to cram2/main
+(3f643cff) - the user did it - so the branch is one commit, 7 files, on top of it.
+GitHub's PR page may briefly still show the 86 upstream commits until it recomputes
+the merge base.
 
 **Next**: waiting on the user's OK to fast-forward the fork's main to cram2/main
 (0 ahead, 86 behind - a pure fast-forward). Not subscribed to PR activity (per notes).
