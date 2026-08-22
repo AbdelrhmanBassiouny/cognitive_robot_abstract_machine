@@ -1,6 +1,6 @@
 ---
 name: plan-item-resolve
-description: Gather everything available about one already-underway tracked plan item (its plan.yaml entry, roadmap.md history, the real state of its branch/PR - conflicts, CI, review comments - and any relevant discussion on its plan's tracking issue) and propose a concrete plan to resolve whatever is stalling it, via plan mode, without writing any code. Invoke as "/plan-item-resolve <plan-id> <item-id>". Use when resolving a blocked, in-progress, or deferred item from a plan-dashboard's "Resolve"/"Resume"/"Reconsider" link, or when the user asks to "resolve", "unblock", "resume", or "reconsider" a specific tracked item.
+description: Gather everything available about one already-underway tracked plan item (its plan.yaml entry, roadmap.md history, the real state of its branch/PR - conflicts, CI, review comments, and any unresolved review threads on its upstream pull request - and any relevant discussion on its plan's tracking issue) and propose a concrete plan to resolve whatever is stalling it, via plan mode, without writing any code. Invoke as "/plan-item-resolve <plan-id> <item-id>". Use when resolving a blocked, in-progress, or deferred item from a plan-dashboard's "Resolve"/"Resume"/"Reconsider" link, or when the user asks to "resolve", "unblock", "resume", or "reconsider" a specific tracked item.
 allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
@@ -73,6 +73,17 @@ precondition for resolving this item.
   exists to surface. A failing check or a requested-changes review is
   usually the actual blocker; state exactly which one and why, don't just
   say "CI is failing."
+- If the fork PR carries the `in_review_label` from `.claude/stack/stack.toml`
+  (`in-review` by default, the recorded signal for "promoted upstream, under
+  review"), the branch also has a pull request on the upstream, whose review
+  threads none of the calls above can see — a fork PR can look entirely clean
+  while the item is in fact stalled on an upstream request for changes. Invoke
+  `/upstream-reviews` for the item's `branch` and read every unresolved thread
+  it reports. Invoke it even without the label when `notes`/`status` say the
+  item is under upstream review; skip it otherwise, since a branch never
+  promoted has no upstream PR to read. If the dispatch or the run fails, don't
+  let that fail the skill: mention it when presenting the plan (step 5) and
+  continue — upstream state is valuable context, not a precondition.
 - If the item has no PR yet (e.g. blocked before ever starting): there is
   no PR-side state to check — rely on `blockers`/`notes` and the tracking
   issue instead.
@@ -118,6 +129,14 @@ Read `roadmap.md`'s standing-conventions section (however it's titled in
 this plan) and this repository's own `AGENTS.md`. Whatever the resolution
 turns out to be, it must honor both.
 
+Also ask whether the item should still exist separately: follow
+`${SCOPE_DECISION_DOCUMENT}`. If nothing substantial would remain once the
+overlapping edits are removed, folding it into that item is often the
+resolution — an item stuck behind its own parent is sometimes stuck because it
+was never really a separate item. The same goes when two items turn out to have
+built the same thing, which that document's purpose comparison is there to
+catch.
+
 ## 5. Propose the plan — plan mode, no code
 
 Before drafting the plan or raising any open question with the user, check
@@ -133,16 +152,21 @@ quickly with a pointer if you missed it.
 
 Enter plan mode and present, via `ExitPlanMode`, a concrete plan to
 resolve the item: what's actually wrong (cite the specific failing check,
-review comment, blocker text, or regressed dependency that's the real
-cause — never a vague "something's blocking this"), what changes it
-requires, in which files, in what order, and how each part will be
-verified. Cite where each part of the plan came from so the user can
-sanity-check it against the source. Flag explicitly, never silently paper
-over:
+review comment, unresolved upstream review thread, blocker text, or
+regressed dependency that's the real cause — never a vague "something's
+blocking this"), what changes it requires, in which files, in what order,
+and how each part will be verified. Cite where each part of the plan came
+from so the user can sanity-check it against the source. Flag explicitly,
+never silently paper over:
 
 - Any dependency that regressed or still isn't safe to build on.
 - Any conflict between what `blockers`/`notes` says and what the PR's own
   review threads or the tracking issue actually say.
+- Any conflict between the fork PR's state and the upstream review: a fork
+  PR that is green and out of draft while its upstream pull request has
+  unresolved threads is exactly the stall this skill exists to surface.
+- Whether upstream review state was read at all, when the item looked
+  promoted but `/upstream-reviews` could not be run.
 - Anything genuinely unresolved after the check above — say so rather
   than filling the gap with an assumption.
 
