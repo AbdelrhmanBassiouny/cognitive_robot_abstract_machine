@@ -41,3 +41,18 @@ Two review rounds handled on 2026-08-22. Branch
 - CI on `7cf38aab9`: `test_claude_dev_tooling` green, 16 docker-matrix jobs still
   running at hand-off. `mergeable_state` back to `unstable` from `dirty`.
 - #149 left un-drafted: un-drafting a fork PR is this workflow's promotion gate.
+
+### Addendum, later on 2026-08-22
+
+- **A third review comment** (`# %% locations`, "put all these directories in a StrEnum?")
+  answered with a measurement and **no code change**, on the user's call. It collides with
+  the same round's own string-should-be-a-`Path` comment: a `StrEnum` member is a `str`, so
+  `HOOKS_DIRECTORY / "..."` raises and `COMMITTED_DEFAULTS_PATH.name` *silently* returns
+  `"COMMITTED_DEFAULTS"` (Enum reserves `.name`) where two tests use it; `class L(Path, Enum)`
+  needs 3.12 and our floor is 3.11. Thread left open. Third open thread on #149.
+- **A claim corrected in two durable places.** The first round's justification for `StrEnum`
+  said `ExecutionMode(value)` reads and `str(mode)` writes "with no lookup table between
+  them", which is wrong about reading - by-value lookup is `Enum.__call__` and a plain `Enum`
+  does it identically. Fixed in `roadmap.md` (in place, with the correction noted) and in
+  #149's description. `StrEnum` buys the write/interop half only.
+- Plan saved (`940099c8a`), dashboard republished (52 items, 0 drift).
