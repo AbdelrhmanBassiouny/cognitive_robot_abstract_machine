@@ -40,10 +40,11 @@ Roadmap section 17 has the full record and the reasoning.
 ## Outstanding
 
 - The PR is a draft, as always; the developer marks it ready.
-- Reported on #181, not fixed here: `verbalization/grammar/query/assembler.py:285` reads
-  `expression._chain_expression_` on an `Aggregator`, which has no such attribute, so
-  every `Sum` gets the same structural signature and `_is_order_key` treats any two
-  aggregates of one kind as the same column. Pre-existing; the developer routes it.
+- Everything this PR refuses is now a plan item, not a note (roadmap section 20):
+  `aggregate-signature-reads-a-missing-attribute` (this plan, ready to start) for the
+  assembler bug, `argument-position-correlation` (#137, behind `binding-order-planner`)
+  for a query evaluated uncorrelated in an argument position, and the already-existing
+  `factories-unwrap-match-and-migrate` for selecting a match. None of them blocks #192.
 - CI on #192 has not been read since the second push.
 - Still refused by design, reported on the PR: a match given to a predicate (a query
   argument there is evaluated uncorrelated even with no match involved - wave 1's
