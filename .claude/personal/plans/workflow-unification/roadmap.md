@@ -8845,3 +8845,145 @@ Per the 08-22 entry: un-drafting a fork pull request is this workflow's own prom
 re-drafting #149 would withdraw #537 from the review it is answering. The user's standing
 convention to re-draft after every push does not reach a promoted branch, and the exception is
 recorded here rather than re-derived each round.
+
+## Update 2026-08-23 (resolved): #185's merge was three modules, and its review round was one complaint
+
+`/plan-item-resolve workflow-unification bastler-package`, session
+https://claude.ai/code/session_01Hgt7hWYnT9ZMK6AgusPwkk. Two things were wrong: a merge
+conflict that had the pull request `needs-resolution` and skipped by every maintenance
+pass since 2026-08-22, and a 34-thread review round the manifest recorded none of - the
+fifth item on this plan where the pull request was the more accurate source.
+
+### The merge was not three conflicts, it was three modules
+
+`git merge-tree` reported three content conflicts and three file-location ones. Taking
+that as the size of the job would have produced a branch that merged and then failed its
+own contract, because `main` gained Python under `.claude/` after this branch was cut:
+`check_scope_overlap.py` with #135, `record_dashboard_url.py` with #150 and
+`upstream_reviews.py` with #146. Left where they landed, `no .py file remains under
+.claude/` fails - which is the test that exists to catch exactly this.
+
+All three move into the package, and three consequences follow rather than being separate
+decisions:
+
+- **`upstream_reviews.py` was a fourth carrier of the hackery this migration deletes.** It
+  inserted `.claude/stack/` onto `sys.path` to import `stack.py`'s `Repository` - the same
+  three-`sys.path`-roots problem, in production rather than in a conftest. It imports
+  `bastler.stack` now, and its `queries/` documents move with it as package data.
+- **The two `gh` stubs become one.** They recognized disjoint invocations - `api graphql
+  --input` for the review reader, `api --paginate .../comments?` for `plan-updates-since.sh`
+  - so one stub serves both, and a second copy is what drifts when the contract moves.
+- **`.claude/upstream_reviews/tests/` was in no CI job at all on `main`.** `ci.yml` named
+  four test directories and not that one. Folded into `test/bastler_test/` it runs in
+  `test_bastler` for the first time. A gap the merge closed for free, and one nobody would
+  have found by reading the conflict.
+
+Worth carrying: **a conflict report names files, and the files it does not name are the
+ones a moved directory makes dangerous.** git's own "added in origin/main inside a
+directory that was renamed in HEAD" was the tell for three of the six, and for the other
+three - the ones on `main` at the merge base of an earlier fetch - there was no tell at
+all. The check that found them is one command: `git ls-tree origin/main` for the pattern
+the branch claims to have emptied.
+
+### The review round was 34 threads and about four things
+
+Every thread is the user's. Grouped by what they actually ask for, they are: the package
+should carry its own metadata and be publishable; what the package declares about itself
+should not live in a test; constants should have one home; and the test helpers should
+stop being written per suite.
+
+**Metadata and publishing.** `__init__.py` is empty and its content is `bastler/README.md`,
+which `pyproject`'s `readme` points at. The name's explanation is corrected - it shares its
+first letters with the surname of whoever wrote it, not with the repository's owner.
+`pyproject` gains author, maintainer, license, urls, keywords and classifiers matching the
+repository's other packages, and its version now comes from the root `VERSION` file through
+`scripts/sync_version.py` and `bastler/_version.py`, like every other package here rather
+than a literal of its own. `sync_version.py` grew a `FLAT_LAYOUT_PACKAGES` set rather than
+a second name-equality special case, since `bastler` is the second package that *is* its
+own directory. The "never published, repository tooling only" claim is deleted from both
+files. Publishing it, and the plugins for agent providers the user wants as the end state,
+is its own item - this pull request should simply stop asserting it will never happen.
+
+**What the package declares about itself.** `bastler/package_layout.py` holds the module
+list, the dependency tiers and what each module reaches;
+`test_package_contract.py` only checks it. That answers the four "why is this defined in
+the tests" comments at once. The list stays written out rather than discovered, because
+each entry says something a directory listing cannot - but one test now holds the declared
+set equal to what the directory actually contains, so a module added without an entry fails
+rather than going quietly uncovered. That was the property writing the list out was buying,
+and it is now bought explicitly.
+
+**The tier's justification was wrong, and measuring it is what fixed it.** It said a hook
+may import only the standard library because a hook runs where nothing is installed. The
+user asked the obvious question - can the hook not just install what it needs? Measured
+rather than argued: `session-start.sh` invokes **no** module of this package. It is bash,
+plus one stdlib-only heredoc inside `check-setup.sh`. So the framing was protecting a
+caller that does not exist. What a tier does answer is whether an entry point runs on a
+checkout where nothing has been installed or needs
+`pip install -r bastler/requirements.txt` first, and that is what it says now. Nothing is
+forbidden to install anything - `check-setup.sh` already reports a missing requirement and
+`/setup-personal-notes` already installs it, which is auto-detection and auto-installation
+one layer up from the hook, at the moment the dependency is actually needed. Putting a
+`pip install` inside the SessionStart hook was *not* done, and the reason is stated rather
+than assumed: it would write to a contributor's Python environment unasked on every fresh
+container, it can fail where a report cannot (no network, an externally-managed
+environment), and a hook that fails is worse than one that reports. Available if wanted;
+not taken unilaterally.
+
+**Constants: derive what an import knows, share the rest.** The user's own question
+settled this - is it better to read a module's name and path off the import than to keep
+them in a table? Yes, and the split follows from it. Anything that *is* a Python module is
+not written down at all; anything that is not has no import to derive it from, and that is
+what a shared module is for. `test/bastler_test/constants.py` holds the second half, with
+`ToolingDirectory` for the homes that stayed under `.claude/` and `PersonalNotesPath` for
+what the notes branch holds - literals in both cases, because those paths *are* the
+interface between the shell hooks and Claude Code, so nothing imports them.
+`REPOSITORY_ROOT` and `PACKAGE_DIRECTORY` are not literals even there: they come from
+`bastler.package_layout`, so the tests locate the package the way the package locates
+itself. Six copies of `DATASET_DIRECTORY`, three of `REPOSITORY_ROOT`, three of the notes
+file path and two each of several others are gone.
+
+One thing asked for cannot be done, and the measurement is the answer:
+`monkeypatch.setattr` takes the attribute name as a string by its own signature, so
+`"RESTACK_STEPS"` cannot be derived from importing `RESTACK_STEPS` - importing gives the
+tuple, and a tuple does not know what it is bound to. It is already guarded, which is the
+part worth knowing: `setattr` raises when the attribute does not exist, so renaming
+`RESTACK_STEPS` fails that test loudly today.
+
+**The test helpers.** `test/bastler_test/script_runner.py` is the hierarchy the review
+asked for by name. Every suite had the same shape to express - run a module or a bash
+script from a project root, capture both streams, read the exit status - written out per
+suite with its own environment handling. `ScriptRunner` holds the shape,
+`PythonModuleRunner` and `BashScriptRunner` hold what to run, and the environment variation
+collapses into one field: `removed_variable_prefixes`, where a whole name is its own
+prefix, so it covers a family (`CLAUDE_PERSONAL_NOTES_`) and a single variable
+(`PYTHONPATH`) alike. Removing rather than overriding is the point - a test asserting what
+happens when a credential is absent cannot say that by setting it to something. Six call
+sites use it; two hand-written environment cleaners went with them, and the maintenance
+runner takes its credential list from `bastler.maintenance_constants` rather than a copy.
+`install_package_into()` and `install_hook_scripts_into()` are one statement each of what
+`ScratchRepository` and `test_maintenance`'s `ForkCheckout` had byte-identical, and
+`install_stack_configuration()` moves onto `ScratchRepository` what `test_stack.py` was
+doing in a module-level helper over three of its methods.
+
+**A status labels itself.** Asked why the label map is not on the enum, the answer is that
+it can be - it is strings, so it costs `plan_model.py` nothing, and the layering argument
+against it was a preference. `ItemStatus.display_label` derives the label from the value
+(`not_started` becomes "Not started"), so there is no table at all, `status_label` is a
+one-line filter, and a status added later labels itself. That also emptied the test the
+user called theatrical: with no wording written down, there was nothing left for it to
+restate. One assertion beside the filter pins the derivation instead.
+
+### State
+
+616 tests pass, against 536 before this session and 479 on `main` at the time of the move.
+`check-setup.sh` exits 0 with every row `ok`; all thirteen entry points answer `--help`.
+The pull request is `mergeable` again and stays a draft. Four commits: the merge, the
+metadata and declaration, the constants and runner, and the fixture moves.
+
+Two things are recorded rather than done. The `run_git` seam is now *reachable* for the
+first time - `check_scope_overlap.py` landed on `main` with #135, so both halves of that
+pair are finally in one importable tree - but unifying it stays
+`bastler-notes-core-python`'s by name, which is decision 12's own assignment. And #151's
+`Subcommand` is still unlanded, so the command-class pair is still half-visible, exactly as
+the 2026-08-20 kickoff recorded.
