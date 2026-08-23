@@ -29,6 +29,14 @@ Roadmap section 17 has the full record and the reasoning.
        type rather than its `__call__`. `krrood/doc/eql/user/match.md` documents the rule.
        Suite: 2087 passed, 6 skipped.
 
+7. [x] Naming round 2026-08-23 (roadmap section 19), `da8b5fca`: `CanBehaveLikeAValue`
+       renamed `HasSymbolicOperations` (what can be written) against
+       `CanBehaveLikeAVariable` (what it is written on, holding the cache). The cache
+       cannot move up - it builds mappings whose child must be a `SymbolicExpression`.
+       Same round: a match used as someone else's operand was read as a `Literal`, so
+       `variable == match` passed every row; `SymbolicExpression._as_operand_` states the
+       rule once. Suite: 2088 passed, 6 skipped.
+
 ## Outstanding
 
 - The PR is a draft, as always; the developer marks it ready.
@@ -36,7 +44,10 @@ Roadmap section 17 has the full record and the reasoning.
   `expression._chain_expression_` on an `Aggregator`, which has no such attribute, so
   every `Sum` gets the same structural signature and `_is_order_key` treats any two
   aggregates of one kind as the same column. Pre-existing; the developer routes it.
-- CI on #192 has not been read yet.
+- CI on #192 has not been read since the second push.
+- Still refused by design, reported on the PR: a match given to a predicate (a query
+  argument there is evaluated uncorrelated even with no match involved - wave 1's
+  territory), and selecting a match (`entity(match)`, `the(match)`), which is item 3's.
 
 ## Environment
 
