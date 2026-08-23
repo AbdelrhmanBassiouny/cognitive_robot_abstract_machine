@@ -3,10 +3,13 @@ What this package contains, discovered rather than listed.
 
 Which modules exist, which of them answer as a command line, and which third-party modules
 the package may reach are all read from the package itself - the directory, each module's
-own source, and ``requirements.txt``. Two things cannot be derived and are declared: which
-modules are allowed to need those requirements, and which callers run a module without
-installing them. :mod:`test.bastler_test.test_package_contract` holds both to what the
-modules and the callers actually do.
+own source, and ``requirements.txt``. So is which modules must import on the standard
+library alone: that is the import closure of what the callers below reach, computed rather
+than listed.
+
+The one thing no file states about itself is which callers run a module *without*
+installing the requirements first, so that is declared, and
+:mod:`test.bastler_test.test_package_contract` holds each entry to its caller's own file.
 """
 
 from __future__ import annotations
@@ -109,55 +112,6 @@ def third_party_import_names() -> frozenset[str]:
     )
 
 
-MODULES_THAT_MAY_NEED_THE_REQUIREMENTS = frozenset(
-    {
-        "plan_item_bootstrap",
-        "plan_manifest_tools",
-        "render_common",
-        "build_dashboard",
-        "build_index",
-        "check_dependency_readiness",
-        "sync_manifest_status",
-    }
-)
-"""
-The modules allowed to import something from ``requirements.txt``.
-
-The default runs the other way - a module imports on the standard library alone - so this
-names the exceptions rather than classifying every module, and a module added later is
-held to the default without anyone writing anything down. Each of these reads a plan
-manifest or renders a page, which is what ``check-setup.sh``'s dependency row exists to
-report as a gap a caller closes first.
-
-Held in both directions: a module that starts needing a requirement fails until it is
-named here, and one named here that no longer needs one fails until it is removed. So the
-failure lands where the decision is made, rather than in whichever caller next runs it on
-a checkout that installed nothing.
-"""
-
-
-def modules_held_to_the_standard_library() -> tuple[PackageModule, ...]:
-    """
-    :return: Every module expected to import with the requirements unavailable.
-    """
-    return tuple(
-        module
-        for module in package_modules()
-        if module.name not in MODULES_THAT_MAY_NEED_THE_REQUIREMENTS
-    )
-
-
-def modules_allowed_the_requirements() -> tuple[PackageModule, ...]:
-    """
-    :return: The declared exceptions, as modules.
-    """
-    return tuple(
-        module
-        for module in package_modules()
-        if module.name in MODULES_THAT_MAY_NEED_THE_REQUIREMENTS
-    )
-
-
 @dataclass(frozen=True)
 class UninstalledInvocation:
     """
@@ -205,6 +159,29 @@ UNINSTALLED_INVOCATIONS: tuple[UninstalledInvocation, ...] = (
             "step, because it needs none and gh supplies the credential."
         ),
     ),
+    UninstalledInvocation(
+        caller=".claude/skills/stacked-pr-maintenance/SKILL.md",
+        module_name="maintenance",
+        reason=(
+            "A scheduled pass runs in a fresh container, where check-setup.sh reports the "
+            "requirements as missing - the pass has to work before anyone closes that gap."
+        ),
+    ),
+    UninstalledInvocation(
+        caller=".claude/skills/upstream-reviews/SKILL.md",
+        module_name="stack",
+        reason="Resolves the upstream before anything else, so it runs first of all.",
+    ),
+    UninstalledInvocation(
+        caller=".claude/skills/add-plan-item/SKILL.md",
+        module_name="check_scope_overlap",
+        reason="Answers a scope question from git alone, in whatever session asks it.",
+    ),
+    UninstalledInvocation(
+        caller=".claude/hooks/plan-updates-since.sh",
+        module_name="plan_updates_since_support",
+        reason="A hook script, so it runs wherever the session does and installs nothing.",
+    ),
 )
 """
 Every caller that runs a module of this package on a checkout where nothing is installed.
@@ -217,3 +194,47 @@ or stops invoking the module - fails rather than lingering.
 Importing a module imports everything it imports, so an entry reaches the module's whole
 import graph rather than only its own file.
 """
+
+
+def _sibling_imports_of(module: PackageModule) -> frozenset[str]:
+    """
+    :param module: The module to read.
+    :return: The names of this package's other modules it imports directly.
+    """
+    source = ast.parse((PACKAGE_DIRECTORY / f"{module.name}.py").read_text())
+    imported: set[str] = set()
+    for node in ast.walk(source):
+        if isinstance(node, ast.ImportFrom):
+            if node.module == "bastler":
+                # ``from bastler import stack`` names the module in the alias, not the
+                # module path, so both forms have to be read or the closure misses it.
+                imported.update(alias.name for alias in node.names)
+            elif (node.module or "").startswith("bastler."):
+                imported.add(node.module.removeprefix("bastler.").split(".", 1)[0])
+        elif isinstance(node, ast.Import):
+            imported.update(
+                alias.name.removeprefix("bastler.").split(".", 1)[0]
+                for alias in node.names
+                if alias.name.startswith("bastler.")
+            )
+    return frozenset(imported & {other.name for other in package_modules()})
+
+
+def modules_that_must_not_import_third_party() -> tuple[PackageModule, ...]:
+    """
+    :return: Every module that has to import on the standard library alone.
+
+    Derived rather than declared: importing a module imports everything it imports, so
+    this is the closure of what :data:`UNINSTALLED_INVOCATIONS`' callers reach. A module
+    outside it is under no such constraint, because nothing runs it before an install.
+    """
+    by_name = {module.name: module for module in package_modules()}
+    reached: set[str] = set()
+    pending = [invocation.module_name for invocation in UNINSTALLED_INVOCATIONS]
+    while pending:
+        name = pending.pop()
+        if name in reached:
+            continue
+        reached.add(name)
+        pending.extend(_sibling_imports_of(by_name[name]) - reached)
+    return tuple(module for module in package_modules() if module.name in reached)

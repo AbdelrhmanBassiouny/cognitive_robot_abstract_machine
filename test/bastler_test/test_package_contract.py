@@ -29,8 +29,7 @@ from bastler.package_layout import (
     PackageModule,
     UninstalledInvocation,
     command_line_entry_points,
-    modules_allowed_the_requirements,
-    modules_held_to_the_standard_library,
+    modules_that_must_not_import_third_party,
     package_modules,
     third_party_import_names,
 )
@@ -177,19 +176,21 @@ def test_every_entry_point_answers_help_through_the_module_runner(
 
 
 @pytest.mark.parametrize(
-    "module", modules_held_to_the_standard_library(), ids=lambda module: module.name
+    "module",
+    modules_that_must_not_import_third_party(),
+    ids=lambda module: module.name,
 )
-def test_every_module_outside_the_exceptions_imports_on_the_standard_library(
+def test_every_module_a_caller_reaches_uninstalled_imports_on_the_standard_library(
     module: PackageModule,
 ):
     """
-    A module imports with this package's requirements made unimportable, unless it is
-    named as an exception.
+    A module some caller reaches before installing anything imports with this package's
+    requirements made unimportable.
 
-    Parametrized over what the package holds rather than over a classification of it, so a
-    module added later is checked without anyone declaring anything. The requirements stay
-    installed - what is under test is what the module reaches, not what the machine
-    running the suite happens to hold.
+    Which modules those are is computed from the callers rather than named, so a module
+    that becomes reachable from one is checked without anyone declaring it. The
+    requirements stay installed - what is under test is what the module reaches, not what
+    the machine running the suite happens to hold.
     """
     result = run_from_repository_root(
         str(IMPORT_WITH_MODULES_UNAVAILABLE_SCRIPT),
@@ -204,41 +205,16 @@ def test_every_module_outside_the_exceptions_imports_on_the_standard_library(
 @pytest.mark.parametrize(
     "invocation", UNINSTALLED_INVOCATIONS, ids=lambda invocation: invocation.module_name
 )
-def test_every_module_a_caller_runs_uninstalled_is_held_to_the_standard_library(
+def test_every_module_a_caller_runs_uninstalled_is_reached_by_the_closure(
     invocation: UninstalledInvocation,
 ):
     """
-    A caller that installs nothing invokes a module the check above covers.
+    Every declared caller's own module is inside the set derived from those callers.
 
-    The two are separate on purpose: the exception set says what the package's own default
-    is, and this says a real caller depends on that default rather than it being a rule
-    kept for its own sake.
+    Cheap, and it catches the closure being computed from something other than the
+    declarations - which would leave entries here silently unchecked.
     """
-    assert invocation.module in modules_held_to_the_standard_library()
-
-
-@pytest.mark.parametrize(
-    "module", modules_allowed_the_requirements(), ids=lambda module: module.name
-)
-def test_every_declared_exception_actually_needs_a_requirement(module: PackageModule):
-    """
-    An exception that no longer needs one is an exception nothing removes.
-
-    Without this the set only ever grows: naming a module here silently exempts it from
-    the check above, and a module that has since dropped its last third-party import keeps
-    an exemption it does not need, so the next reader cannot tell which entries are real.
-    """
-    result = run_from_repository_root(
-        str(IMPORT_WITH_MODULES_UNAVAILABLE_SCRIPT),
-        "--unavailable",
-        ",".join(sorted(third_party_import_names())),
-        module.import_path,
-    )
-
-    assert result.returncode != 0, (
-        f"{module.import_path} imports without the requirements, "
-        "so it no longer belongs in MODULES_THAT_MAY_NEED_THE_REQUIREMENTS"
-    )
+    assert invocation.module in modules_that_must_not_import_third_party()
 
 
 @pytest.mark.parametrize(
@@ -248,11 +224,12 @@ def test_every_uninstalled_caller_still_invokes_its_module_and_still_installs_no
     invocation: UninstalledInvocation,
 ):
     """
-    The declaration is held to the caller's own file, from both sides.
+    Each declaration is held to its caller's own file, from both sides.
 
-    Without this, an entry outlives what it describes: a caller that gains an install step
+    Without this an entry outlives what it describes: a caller that gains an install step
     keeps a constraint it no longer needs, and one that stops invoking the module keeps a
-    constraint about nothing - neither of which the import check above can see.
+    constraint about nothing - and since the closure is computed from these entries, a
+    stale one quietly widens or narrows what gets checked at all.
     """
     caller_source = invocation.caller_path.read_text()
 
