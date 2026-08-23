@@ -937,9 +937,10 @@ class FailureLocation:
         """:return: What the search localised."""
         tips = tips_of(self.stack)
         by_name = {tip.name: tip for tip in tips}
-        with DetachedCheckout.of(self.git), RestackWorktree.added_to(
-            self.git
-        ) as assembling:
+        with (
+            DetachedCheckout.of(self.git),
+            RestackWorktree.added_to(self.git) as assembling,
+        ):
             build = IntegrationBuild(
                 git=dataclasses.replace(
                     assembling, configuration_overrides=RERERE_SETTINGS
@@ -1281,16 +1282,8 @@ class IntegrationRun:
 
     def provenance_path(self) -> Path:
         """:return: Where this repository records who wrote each cached resolution -
-        beside the cache itself, which is shared by every worktree.
-
-        ..note:: git answers relatively from inside a main working tree, so the answer
-            is resolved against the checkout being built rather than the directory the
-            process happens to have been started in.
-        """
-        common_directory = Path(self.git.run("rev-parse", "--git-common-dir"))
-        return (
-            self.git.working_directory / common_directory
-        ).resolve() / PROVENANCE_FILENAME
+        beside the cache itself, which is shared by every worktree."""
+        return self.git.common_directory() / PROVENANCE_FILENAME
 
     def replaying(self, working_directory: Path) -> MaintenanceGitCommandRunner:
         """:param working_directory: The checkout to run in.

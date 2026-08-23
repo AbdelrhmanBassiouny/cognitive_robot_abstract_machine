@@ -232,11 +232,14 @@ def test_a_tip_whose_replay_leaves_another_conflict_is_skipped_not_fatal(
     fork_checkout: ForkCheckout,
 ):
     """
+    A tip whose replay leaves a second conflict behind is left out like any other
+    collision, naming the paths nothing resolved so whoever owns them can act.
+
     rerere replays per conflict rather than per merge, so one tip can carry both a
-    conflict a recorded resolution covers and a second one nothing has ever resolved.
-    Git says it used a previous resolution either way, so concluding the merge on the
-    strength of that marker alone commits with files still unmerged - which fails, and
-    takes the whole build down over one tip that should simply be left out.
+    conflict a recorded resolution covers and another nothing has ever seen. Git reports
+    having used a previous resolution either way, so that marker alone cannot stand for
+    "the merge is finished" - taking it that way concludes a merge with files still
+    unmerged, which fails and ends the whole build over one skippable tip.
     """
     pull_requests = two_colliding_tips(fork_checkout)
     a_recorded_resolution(fork_checkout)
@@ -255,11 +258,15 @@ def test_the_provenance_manifest_belongs_to_the_checkout_being_built(
     fork_checkout: ForkCheckout,
 ):
     """
-    `git rev-parse --git-common-dir` answers relatively inside a main working tree, so
-    resolving it against the process's own directory rather than the checkout the runner
-    was given points at whichever repository happens to have been invoked from. The suite
-    then writes its fixtures' authors over a developer's real ones, destroying the record
-    of which resolutions a skill wrote - the one thing that makes a bad replay findable.
+    The manifest recording who wrote each cached resolution belongs to the checkout
+    being built, whatever directory the process was started in.
+
+    `git rev-parse --git-common-dir` answers relatively inside a main working tree, so the
+    answer only means anything against the runner's own working directory. Read against
+    the process's instead, it names whichever repository the command happened to be run
+    from - and the suite then writes its fixtures' authors over a developer's real ones,
+    destroying the record of which resolutions a skill wrote, which is the one thing that
+    makes a bad replay findable later.
     """
     two_colliding_tips(fork_checkout)
 

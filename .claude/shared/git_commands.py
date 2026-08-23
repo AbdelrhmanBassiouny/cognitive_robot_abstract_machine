@@ -207,6 +207,21 @@ class GitCommandRunner:
             line.split()[0] for line in self.run("worktree", "list").splitlines()
         )
 
+    def common_directory(self) -> Path:
+        """
+        Locate the directory the repository's shared state lives in - the one every
+        worktree attached to it reads, rather than a worktree's own.
+
+        Git answers relatively from inside a main working tree, so the answer is only
+        meaningful against this runner's working directory. Resolving it here rather
+        than at the call site is what stops it being read against the directory the
+        process happens to have been started in.
+
+        :return: An absolute path to the shared git directory.
+        """
+        answered = Path(self.run("rev-parse", "--git-common-dir"))
+        return (self.working_directory / answered).resolve()
+
     def remote_reference(self, remote: str, reference: str) -> str:
         """
         Ask a remote what it holds a reference at, without fetching from it.
