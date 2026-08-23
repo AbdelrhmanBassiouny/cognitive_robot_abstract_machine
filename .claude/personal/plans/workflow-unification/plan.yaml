@@ -1056,6 +1056,46 @@ items:
       itself and pyproject reads the file through setuptools' dynamic table; MODULES_BY_NAME
       and PackageModule.path had none either. 616 tests still pass.
 
+      Re-scoped again the same day, on the user's three objections: the hand-added module
+      list, having to be careful with tiers, and the fact that bastler is meant to import
+      krrood eventually anyway. The first two are answered by deriving rather than declaring
+      (a62a79525). The modules come from the directory, the entry points from each module's
+      own __main__ block read by ast, and the requirements' import names from requirements.txt
+      through importlib.metadata.packages_distributions - which is what maps PyYAML to yaml,
+      the one part of it no file states. So 29 hand-written entries, the DependencyTier enum
+      and the tier table are all gone, and a module added later is discovered, checked and
+      held to the default with nothing written down.
+
+      What stays declared is one flat set, MODULES_THAT_MAY_NEED_THE_REQUIREMENTS, plus one
+      UninstalledInvocation naming the caller that runs a module with nothing installed. The
+      default inverts: a module imports on the standard library unless named, rather than
+      every module being classified into a tier. Both are held in both directions - a module
+      that starts needing a requirement fails until it is named, one named that no longer
+      needs one fails until it is removed, and a caller that gains an install step or stops
+      invoking its module fails too.
+
+      That reverse check found a wrong declaration on its first run: record_dashboard_url was
+      PLAN_MANIFEST and imports only the standard library, because it parses the cache with a
+      regex. The old tier test could not see it by construction - it only ever checked that a
+      module stayed within its tier, never that it needed it. So the shape that is cheaper to
+      maintain also caught something the more elaborate one could not.
+
+      Coverage was checked rather than assumed, and the first attempt lost some: parametrizing
+      only over the declared caller took the suite from 616 to 592, because 21 modules stopped
+      being checked at all. The exception set restored it - the standard-library check
+      parametrizes over every discovered module outside the set. 621 tests pass, five
+      mutations checked, each caught by exactly the test that names it.
+
+      The user's third point is a decision this item does not act on and the plan now records:
+      bastler is to depend on krrood, to cut duplication rather than mirror its idioms. That
+      makes decision 12's version-1 independence a stage rather than a permanent state - it
+      stays right for this pull request, and the krrood adoption is wanted rather than
+      hypothetical. It also decides the endgame for what is left declared here: once bastler
+      imports krrood the standard-library default is no longer reachable, so the exception set
+      inverts into a short list of what still has to run light, and the UninstalledInvocation
+      entries are what say which those are. Nothing about the derivation changes, which is why
+      it was worth doing first.
+
   - id: bastler-notes-core-python
     branch: null
     title: "Bash→Python 1: notes-core modules (config, git seam, writer, markers)"

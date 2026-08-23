@@ -9180,3 +9180,89 @@ measurement asked "does a hook import this?", got no, and generalized to "nothin
 on the tier". The caller was a YAML file two directories away, running the module by the
 same `python3 -m` line the hooks would have used. The check that would have found it is
 the one that finds any caller: grep for the *module*, not for the callers you expect.
+
+## Update 2026-08-23 (decision 14): the package layout is derived, and krrood is the direction
+
+The user's objection, in their own words: *"what I do not like is the amount of manual
+adding of modules in the package layout, the fact that we have to be careful with tiers,
+and that at some point I want bastler to anyway import krrood and use it and depend on it,
+this is to lower duplication and increase maintenance."*
+
+Three complaints, and the third is what decides the shape of an answer to the first two.
+
+### Derived rather than declared
+
+`package_layout.py` held 29 hand-written entries, a three-member `DependencyTier` enum and
+a tier-to-imports table, so adding a module meant three decisions to get right and a test
+that only told you afterwards. All three are read from the package now, in `a62a79525`:
+
+- **the modules** from `PACKAGE_DIRECTORY.glob("*.py")`;
+- **the entry points** from each module's own source - an `ast` walk for a top-level `if
+  __name__ == "__main__"` block, which is exactly what makes `python3 -m bastler.<name>
+  --help` answer rather than do nothing;
+- **the requirements' import names** from `requirements.txt` through
+  `importlib.metadata.packages_distributions()`, which is the one part of it no file states
+  about itself: a distribution is not always imported by its own name, and PyYAML is `yaml`.
+
+The set-equality test went with the list, because it existed only to hold a hand-written
+list to the directory - a question that stops being askable once the directory *is* the
+list.
+
+### Two declarations left, both held in both directions
+
+`MODULES_THAT_MAY_NEED_THE_REQUIREMENTS` is one flat set of seven names, and the default
+inverts with it: **a module imports on the standard library unless it is named**, rather
+than every module being classified into a tier. A module added later is held to the
+default with nothing written down.
+
+`UNINSTALLED_INVOCATIONS` is the evidence behind that default rather than a second copy of
+it - one entry today, naming `.github/workflows/upstream-reviews.yml`, the module it runs
+and why it installs nothing. A test reads the caller's own file back, so an entry that
+stops being true fails rather than lingering.
+
+Five mutations, each caught by exactly the test that names it: a standard-library module
+growing an `import yaml` (12 failures - the count is how many modules import `stack`); an
+over-broad exception; the caller gaining a `pip install` step; the caller ceasing to invoke
+its module; and a **newly added module**, discovered and checked with no edit to any list.
+
+### The reverse check found a wrong declaration on its first run
+
+`record_dashboard_url` was declared `PLAN_MANIFEST` and imports only the standard library -
+it parses the URL cache with a regular expression rather than PyYAML. Nothing had ever
+caught it, and could not have: the tier test asserted a module stayed *within* its tier,
+never that it *needed* it, so an over-broad declaration was invisible by construction.
+
+Worth carrying, because it is the opposite of what the effort suggests: **the cheaper shape
+caught something the more elaborate one could not.** The 29-entry table had more places to
+be wrong and fewer ways to find out.
+
+### Coverage was measured, and the first attempt lost some
+
+Parametrizing only over the declared caller took the suite from 616 to 592 - 21 modules
+silently stopped being checked at all, because nothing named them any more. That is the
+failure mode of replacing a classification with a short list, and it is invisible in a
+green run: fewer tests passing still reads as passing. The exception set is what restores
+it, since the standard-library check parametrizes over every *discovered* module outside
+the set. 621 pass now.
+
+### Decision 14: bastler depends on krrood
+
+Recorded rather than acted on here. Decision 12 made version 1 deliberately independent of
+krrood, mirroring its `DataclassException` idiom in a stdlib-only base rather than
+importing it, and named a future `dev-tooling-krrood-adoption` plan as deliberately *not*
+created. The user's statement makes that adoption **wanted rather than hypothetical**, and
+turns version-1 independence from a permanent property into a stage.
+
+It does not change this pull request, and it does decide the endgame for what is left
+declared: once bastler imports krrood, the standard-library *default* is no longer
+reachable, so `MODULES_THAT_MAY_NEED_THE_REQUIREMENTS` inverts into a short list of what
+still has to run light - and the `UNINSTALLED_INVOCATIONS` entries are already what say
+which those are. Nothing about the derivation changes, which is the argument for having
+done it first: the part that had to be maintained by hand is gone before the dependency
+that would have made the hand-maintained part wrong.
+
+Still gated on what decision 12 already measured: `test_bastler` installs `pytest` and the
+two dashboard requirements on a bare `ubuntu-latest`, so a krrood import breaks that job
+until the job installs it, and `.github/workflows/upstream-reviews.yml` installs nothing at
+all. Neither is an argument against the direction; both are the concrete work the adoption
+item owes.
