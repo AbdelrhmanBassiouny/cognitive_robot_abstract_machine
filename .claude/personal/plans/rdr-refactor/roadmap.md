@@ -2312,3 +2312,51 @@ meant to return.
 - The item's `session` field was unset; it is now recorded, like every other worked item's.
 - No commit was needed on the branch, so nothing was pushed and the pull request was not
   re-drafted (§21's rule for one the developer marked ready).
+
+### Correction, same day: it was promoted all along, and the label rule hid it
+
+The developer asked whether the `upstream-reviews` Action had been run. It had not — the
+resolve skill says to run it when the fork pull request carries the `in_review_label`, and #63
+carried `cram2-link-sent` instead. Running it overturns the section above.
+
+**`D-core-aid` is already promoted: cram2 #557, under review with changes requested.** So the
+missing `## Promote` section was not what was stalling it, and the link restored above pointed
+at a compare view that would have opened a *second* upstream pull request. Removed, the label
+corrected to `in-review`, and `cram2-link-sent` cleared.
+
+What the run reports:
+
+| reviewer | state | |
+|---|---|---|
+| LucaKro | changes requested | "this code is not used anywhere but the tests, so to me this is dead code" |
+| tomsch420 | changes requested | no body |
+| AbdelrhmanBassiouny | commented | 2026-08-23T10:28Z, the thread below |
+
+One unresolved thread, on `aid.py:27`, about the name: LucaKro "idk i dont like the name
+'Aid'", tomsch420 "perhaps suggestion?", and the developer's answer that `suggestion` covers
+only `suggest` and not `present`, which can supply real aids — a visual highlight singling out
+the bodies in question when labelling semantic annotations. The design they settled on, and
+this item's outstanding work: **a `ConclusionHelper` abstract base plus one mixin per method —
+`ConclusionSuggestor` and a presenting counterpart — each mixin itself a `ConclusionHelper`, so
+a helper can implement either or both.** Not started.
+
+### The generalisable failure, which is a rule with a single point of failure
+
+Three separate mechanisms read `in_review_label` to decide whether a branch is under upstream
+review — the resolve skill's "should I read upstream state?" test, the maintenance pass's
+promotion skip, and `clear_spent_promotion_labels`. All three were wrong here for one reason:
+**the label is applied by hand at promote time, and it wasn't.** Nothing cross-checks it, so a
+single missed click makes a promoted branch invisible to everything downstream, including the
+check whose whole purpose is to notice.
+
+That also explains the missing `## Promote` section without any description rewrite having
+dropped it: `promote()` writes the link, the developer promotes, and the section is spent. The
+rewrite theory was a guess that fit the evidence available on the fork side alone — and the
+fork side alone is exactly what was insufficient. **Read upstream state before concluding
+anything about why a stack branch is not moving**, whatever the label says; the label is the
+thing most likely to be wrong, since it is the only part of this workflow a human has to
+remember.
+
+The `stack-tooling` findings above still stand — `promotion_summary()` returning a bare heading
+is real, and a session cannot write a prefilled create-link — but neither was this item's
+blocker.
