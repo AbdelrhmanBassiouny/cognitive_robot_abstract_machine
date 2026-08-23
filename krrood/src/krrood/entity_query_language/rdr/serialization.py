@@ -13,8 +13,9 @@ import ast
 import enum
 import operator
 import os
+import tempfile
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from textwrap import indent as _indent
 from typing import TYPE_CHECKING
 from uuid import UUID
@@ -585,6 +586,31 @@ class FileModelSaver(ModelSaver):
     """Destination ``.py`` file path, overwritten on every save."""
 
     def save(self, rdr: EQLSingleClassRDR) -> None:
+        save_rdr_with_case(rdr, self.path)
+
+
+@dataclass
+class TemporaryModelSaver(ModelSaver):
+    """
+    Persists a fitted RDR to a file in the platform's temporary directory.
+
+    The destination is chosen on the first save and reused afterwards, so a caller who
+    never named a path can still recover the rules an interrupted fit had authored by the
+    time it stopped. :attr:`path` is where to look.
+    """
+
+    prefix: str = "eql_rdr_"
+    """Leading text of the generated filename, so a stray file says what wrote it."""
+
+    path: Optional[str] = field(default=None, init=False)
+    """Where the model was written, or ``None`` until the first save."""
+
+    def save(self, rdr: EQLSingleClassRDR) -> None:
+        if self.path is None:
+            handle, self.path = tempfile.mkstemp(
+                prefix=f"{self.prefix}{rdr.case_type.__name__}_", suffix=".py"
+            )
+            os.close(handle)
         save_rdr_with_case(rdr, self.path)
 
 

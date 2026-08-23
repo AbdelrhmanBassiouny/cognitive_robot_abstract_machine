@@ -8,7 +8,6 @@ conclusion can be seeded with ``...``, distinct from a deliberate ``None``).
 
 from __future__ import annotations
 
-import unittest
 from dataclasses import dataclass
 
 from krrood.entity_query_language.factories import variable
@@ -39,95 +38,94 @@ class _AlwaysValid(AnswerValidator):
         return None
 
 
-class TestConclusionValidatorEnumerable(unittest.TestCase):
-    def setUp(self):
-        self.domain = resolve_conclusion_domain(Animal, "species")  # Optional[Species]
+#: The conclusion domain of an ``Optional[Species]`` attribute.
+SPECIES_DOMAIN = resolve_conclusion_domain(Animal, "species")
 
+#: The conclusion domain of a non-``Optional`` enum attribute.
+REQUIRED_COLOUR_DOMAIN = resolve_conclusion_domain(RequiredColour, "colour")
+
+#: The conclusion domain of a ``bool`` attribute.
+LIGHT_ON_DOMAIN = resolve_conclusion_domain(Light, "on")
+
+
+class TestConclusionValidatorEnumerable:
     def test_member_accepted(self):
-        validate = self.domain.validator(allow_unset=False)
-        self.assertIsNone(validate(Species.mammal))
+        validate = SPECIES_DOMAIN.validator(allow_unset=False)
+        assert validate(Species.mammal) is None
 
     def test_non_member_rejected_with_member_list(self):
-        validate = self.domain.validator(allow_unset=False)
+        validate = SPECIES_DOMAIN.validator(allow_unset=False)
         error = validate("mammal")
-        self.assertIsNotNone(error)
-        self.assertIn("must be one of", str(error))
-        self.assertIn("Species.mammal", str(error))
+        assert error is not None
+        assert "must be one of" in str(error)
+        assert "Species.mammal" in str(error)
 
     def test_none_accepted_when_optional(self):
-        validate = self.domain.validator(allow_unset=False)
-        self.assertIsNone(validate(None))
+        validate = SPECIES_DOMAIN.validator(allow_unset=False)
+        assert validate(None) is None
 
     def test_unset_rejected_when_not_allowed(self):
-        validate = self.domain.validator(allow_unset=False)
+        validate = SPECIES_DOMAIN.validator(allow_unset=False)
         error = validate(...)
-        self.assertIsNotNone(error)
-        self.assertIn("No rule fired", str(error))
+        assert error is not None
+        assert "No rule fired" in str(error)
 
     def test_unset_accepted_when_allowed(self):
-        validate = self.domain.validator(allow_unset=True)
-        self.assertIsNone(validate(...))
+        validate = SPECIES_DOMAIN.validator(allow_unset=True)
+        assert validate(...) is None
 
 
-class TestConclusionValidatorRequiredEnum(unittest.TestCase):
-    def setUp(self):
-        self.domain = resolve_conclusion_domain(
-            RequiredColour, "colour"
-        )  # non-Optional
-
+class TestConclusionValidatorRequiredEnum:
     def test_none_rejected_when_not_optional(self):
-        validate = self.domain.validator(allow_unset=False)
+        validate = REQUIRED_COLOUR_DOMAIN.validator(allow_unset=False)
         error = validate(None)
-        self.assertIsNotNone(error)
-        self.assertIn("may not be None", str(error))
+        assert error is not None
+        assert "may not be None" in str(error)
 
     def test_member_accepted(self):
-        validate = self.domain.validator(allow_unset=False)
-        self.assertIsNone(validate(Colour.red))
+        validate = REQUIRED_COLOUR_DOMAIN.validator(allow_unset=False)
+        assert validate(Colour.red) is None
 
 
-class TestConclusionValidatorOpenType(unittest.TestCase):
+class TestConclusionValidatorOpenType:
     def test_optional_str_accepts_str_and_none_rejects_other(self):
         domain = resolve_conclusion_domain(Doc, "label")  # Optional[str]
         validate = domain.validator(allow_unset=False)
-        self.assertIsNone(validate("hello"))
-        self.assertIsNone(validate(None))
+        assert validate("hello") is None
+        assert validate(None) is None
         error = validate(5)
-        self.assertIsNotNone(error)
-        self.assertIn("must be a str", str(error))
+        assert error is not None
+        assert "must be a str" in str(error)
 
     def test_required_str_rejects_none(self):
         domain = resolve_conclusion_domain(Tag, "name")  # str, non-Optional
         validate = domain.validator(allow_unset=False)
-        self.assertIsNone(validate("x"))
-        self.assertIsNotNone(validate(None))
+        assert validate("x") is None
+        assert validate(None) is not None
 
 
-class TestConclusionValidatorBool(unittest.TestCase):
-    def setUp(self):
-        self.domain = resolve_conclusion_domain(Light, "on")
-
+class TestConclusionValidatorBool:
     def test_bool_accepted(self):
-        validate = self.domain.validator(allow_unset=False)
-        self.assertIsNone(validate(True))
-        self.assertIsNone(validate(False))
+        validate = LIGHT_ON_DOMAIN.validator(allow_unset=False)
+        assert validate(True) is None
+        assert validate(False) is None
 
     def test_non_bool_rejected(self):
-        validate = self.domain.validator(allow_unset=False)
-        self.assertIsNotNone(validate("yes"))
+        validate = LIGHT_ON_DOMAIN.validator(allow_unset=False)
+        assert validate("yes") is not None
 
     def test_int_rejected_by_bool_domain(self):
         # Regression: 1 == True in Python, so a naive membership check would accept int 1.
-        validate = self.domain.validator(allow_unset=False)
-        self.assertIsNotNone(validate(1))
+        validate = LIGHT_ON_DOMAIN.validator(allow_unset=False)
+        assert validate(1) is not None
 
 
-class TestAnswerDefaultPlumbing(unittest.TestCase):
+class TestAnswerDefaultPlumbing:
     def test_answer_request_default_is_none_by_default(self):
         request = AnswerRequest(
             name=AnswerName.CONDITIONS, validate=_AlwaysValid(), example="x = 1"
         )
-        self.assertIsNone(request.default)
+        assert request.default is None
 
     def test_build_namespace_seeds_request_default(self):
         context = CaseContext(
@@ -141,16 +139,12 @@ class TestAnswerDefaultPlumbing(unittest.TestCase):
             default=...,
         )
         namespace = interface._build_namespace(context, [request])
-        self.assertIs(namespace[AnswerName.CONCLUSION], ...)
-        self.assertIn(NamespaceName.CASE_INSTANCE, namespace)
+        assert namespace[AnswerName.CONCLUSION] is ...
+        assert NamespaceName.CASE_INSTANCE in namespace
 
     def test_case_context_defaults(self):
         context = CaseContext(
             case_instance=object(), case_variable=variable(Animal, domain=[])
         )
-        self.assertIsNone(context.conclusion_domain)
-        self.assertEqual(context.helpers, [])
-
-
-if __name__ == "__main__":
-    unittest.main()
+        assert context.conclusion_domain is None
+        assert context.helpers == []

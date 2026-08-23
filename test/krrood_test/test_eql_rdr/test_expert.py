@@ -9,7 +9,8 @@ own test suite).
 
 from __future__ import annotations
 
-import unittest
+import pytest
+
 
 from krrood.entity_query_language.factories import variable
 from krrood.entity_query_language.rdr.conclusion_domain import resolve_conclusion_domain
@@ -54,7 +55,14 @@ def _context(case, case_variable=None, **overrides) -> CaseContext:
     )
 
 
-class TestAskForConditions(unittest.TestCase):
+#: The conclusion domain the expert validates answers against.
+SPECIES_DOMAIN = resolve_conclusion_domain(Animal, "species")
+
+#: A validator over that domain, for the paths where no conclusion yet stands.
+SPECIES_VALIDATOR = SPECIES_DOMAIN.validator(allow_unset=False)
+
+
+class TestAskForConditions:
     def test_returns_the_interfaces_conditions_answer(self):
         case = make_animal("stingray", hair=False)
         case_variable = variable(Animal, domain=[])
@@ -68,22 +76,19 @@ class TestAskForConditions(unittest.TestCase):
 
         result = expert.ask_for_conditions(_context(case, case_variable))
 
-        self.assertIs(result, expression)
+        assert result is expression
 
     def test_raises_no_conditions_provided_for_conditions_on_abort(self):
         case = make_animal("stingray")
         expert = Expert(interface=AbortingInterface())
 
-        with self.assertRaises(NoConditionsProvided) as raised:
+        with pytest.raises(NoConditionsProvided) as raised:
             expert.ask_for_conditions(_context(case))
-        self.assertIs(raised.exception.case, case)
-        self.assertEqual(raised.exception.answer_name, AnswerName.CONDITIONS)
+        assert raised.value.case is case
+        assert raised.value.answer_name == AnswerName.CONDITIONS
 
 
-class TestAskForRule(unittest.TestCase):
-    def setUp(self):
-        self.domain = resolve_conclusion_domain(Animal, "species")
-
+class TestAskForRule:
     def test_asks_conditions_when_conclusion_differs_from_current(self):
         case = make_animal("orca", aquatic=True)
         case_variable = variable(Animal, domain=[])
@@ -97,14 +102,15 @@ class TestAskForRule(unittest.TestCase):
 
         expert = Expert(interface=FunctionInterface(answer_function=answer))
         context = _context(
-            case, case_variable, current_conclusion=..., conclusion_domain=self.domain
+            case,
+            case_variable,
+            current_conclusion=...,
+            conclusion_domain=SPECIES_DOMAIN,
         )
 
         result = expert.ask_for_rule(context)
 
-        self.assertEqual(
-            result, RuleAnswer(conclusion=Species.mammal, conditions=expression)
-        )
+        assert result == RuleAnswer(conclusion=Species.mammal, conditions=expression)
 
     def test_keeps_current_conclusion_and_skips_conditions_when_unchanged(self):
         case = make_animal("orca", aquatic=True)
@@ -116,15 +122,13 @@ class TestAskForRule(unittest.TestCase):
 
         expert = Expert(interface=FunctionInterface(answer_function=answer))
         context = _context(
-            case, current_conclusion=Species.mammal, conclusion_domain=self.domain
+            case, current_conclusion=Species.mammal, conclusion_domain=SPECIES_DOMAIN
         )
 
         result = expert.ask_for_rule(context)
 
-        self.assertEqual(result, RuleAnswer(conclusion=Species.mammal, conditions=None))
-        self.assertEqual(
-            len(calls), 1, "conditions must not be asked for an unchanged conclusion"
-        )
+        assert result == RuleAnswer(conclusion=Species.mammal, conditions=None)
+        assert len(calls) == 1
 
     def test_keeps_current_conclusion_and_skips_conditions_when_left_unset(self):
         case = make_animal("orca", aquatic=True)
@@ -136,34 +140,28 @@ class TestAskForRule(unittest.TestCase):
 
         expert = Expert(interface=FunctionInterface(answer_function=answer))
         context = _context(
-            case, current_conclusion=Species.mammal, conclusion_domain=self.domain
+            case, current_conclusion=Species.mammal, conclusion_domain=SPECIES_DOMAIN
         )
 
         result = expert.ask_for_rule(context)
 
-        self.assertEqual(result, RuleAnswer(conclusion=Species.mammal, conditions=None))
-        self.assertEqual(
-            len(calls),
-            1,
-            "conditions must not be asked when the conclusion is left unset",
-        )
+        assert result == RuleAnswer(conclusion=Species.mammal, conditions=None)
+        assert len(calls) == 1
 
     def test_raises_no_conclusion_provided_for_conclusion_on_abort(self):
         case = make_animal("orca")
         expert = Expert(interface=AbortingInterface())
-        context = _context(case, current_conclusion=..., conclusion_domain=self.domain)
+        context = _context(
+            case, current_conclusion=..., conclusion_domain=SPECIES_DOMAIN
+        )
 
-        with self.assertRaises(NoConclusionProvided) as raised:
+        with pytest.raises(NoConclusionProvided) as raised:
             expert.ask_for_rule(context)
-        self.assertIs(raised.exception.case, case)
-        self.assertEqual(raised.exception.answer_name, AnswerName.CONCLUSION)
+        assert raised.value.case is case
+        assert raised.value.answer_name == AnswerName.CONCLUSION
 
 
-class TestSuggestedConclusion(unittest.TestCase):
-    def setUp(self):
-        self.domain = resolve_conclusion_domain(Animal, "species")
-        self.validator = self.domain.validator(allow_unset=False)
-
+class TestSuggestedConclusion:
     def test_returns_first_validating_suggestion(self):
         class Suggests(ConclusionSuggester):
             def suggest(self, context):
@@ -173,11 +171,9 @@ class TestSuggestedConclusion(unittest.TestCase):
             interface=FunctionInterface(answer_function=lambda c, r: {}),
             helpers=[Suggests()],
         )
-        context = _context(make_animal("eagle"), conclusion_domain=self.domain)
+        context = _context(make_animal("eagle"), conclusion_domain=SPECIES_DOMAIN)
 
-        self.assertEqual(
-            expert._suggested_conclusion(context, self.validator), Species.bird
-        )
+        assert expert._suggested_conclusion(context, SPECIES_VALIDATOR) == Species.bird
 
     def test_skips_non_validating_suggestions(self):
         class SuggestsInvalid(ConclusionSuggester):
@@ -192,17 +188,15 @@ class TestSuggestedConclusion(unittest.TestCase):
             interface=FunctionInterface(answer_function=lambda c, r: {}),
             helpers=[SuggestsInvalid(), SuggestsValid()],
         )
-        context = _context(make_animal("tuna"), conclusion_domain=self.domain)
+        context = _context(make_animal("tuna"), conclusion_domain=SPECIES_DOMAIN)
 
-        self.assertEqual(
-            expert._suggested_conclusion(context, self.validator), Species.fish
-        )
+        assert expert._suggested_conclusion(context, SPECIES_VALIDATOR) == Species.fish
 
     def test_returns_ellipsis_when_no_helper_suggests(self):
         expert = Expert(interface=FunctionInterface(answer_function=lambda c, r: {}))
-        context = _context(make_animal("gecko"), conclusion_domain=self.domain)
+        context = _context(make_animal("gecko"), conclusion_domain=SPECIES_DOMAIN)
 
-        self.assertIs(expert._suggested_conclusion(context, self.validator), ...)
+        assert expert._suggested_conclusion(context, SPECIES_VALIDATOR) is ...
 
     def test_a_helper_that_only_presents_is_passed_over(self):
         class Presents(ConclusionSupportPresenter):
@@ -217,20 +211,20 @@ class TestSuggestedConclusion(unittest.TestCase):
             interface=FunctionInterface(answer_function=lambda c, r: {}),
             helpers=[Presents(), Suggests()],
         )
-        context = _context(make_animal("gecko"), conclusion_domain=self.domain)
+        context = _context(make_animal("gecko"), conclusion_domain=SPECIES_DOMAIN)
 
-        self.assertEqual(
-            expert._suggested_conclusion(context, self.validator), Species.reptile
+        assert (
+            expert._suggested_conclusion(context, SPECIES_VALIDATOR) == Species.reptile
         )
 
 
-class TestAnswerName(unittest.TestCase):
+class TestAnswerName:
     def test_members_are_plain_strings(self):
-        self.assertEqual(AnswerName.CONDITIONS, "conditions")
-        self.assertEqual(AnswerName.CONCLUSION, "conclusion")
+        assert AnswerName.CONDITIONS == "conditions"
+        assert AnswerName.CONCLUSION == "conclusion"
 
     def test_example_assignment_is_built_over_case_variable(self):
-        self.assertEqual(
-            AnswerName.CONDITIONS.example_assignment,
-            "conditions = case_variable.some_attr == True",
+        assert (
+            AnswerName.CONDITIONS.example_assignment
+            == "conditions = case_variable.some_attr == True"
         )

@@ -8,8 +8,10 @@ module -- and the condition-resolution slice it covers -- stays testable indepen
 of the rest of the RDR engine.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
+
+from typing_extensions import Any, Dict, NoReturn
 
 from krrood.entity_query_language.factories import not_, variable
 from krrood.entity_query_language.operators.core_logical_operators import Not
@@ -52,6 +54,35 @@ def _empty_knowledge(value):
     return ConclusionSufficientConditionSets(
         conclusion_value=value, sufficient_condition_sets=()
     )
+
+
+@dataclass
+class PreparedSufficientConditions:
+    """
+    Answers a resolver's backward-inference lookup from prepared condition sets.
+
+    A resolver now reads what it needs off the RDR rather than being handed it, so a
+    unit test supplies the answers instead of a fitted rule tree. Any conclusion not
+    prepared has no known paths, which is what an unfitted tree reports too.
+    """
+
+    conditions_by_conclusion: Dict[Any, ConclusionSufficientConditionSets] = field(
+        default_factory=dict
+    )
+    """
+    The condition sets to return, keyed by the conclusion asked about.
+    """
+
+    def sufficient_conditions_for(
+        self, conclusion: Any
+    ) -> ConclusionSufficientConditionSets:
+        """
+        :param conclusion: The conclusion to look up.
+        :return: Its prepared condition sets, or empty ones when none were prepared.
+        """
+        return self.conditions_by_conclusion.get(
+            conclusion, _empty_knowledge(conclusion)
+        )
 
 
 def _context(
@@ -147,9 +178,12 @@ def test_target_knowledge_resolver_finds_a_discriminating_guard():
     corner_case = Animal("cat", can_fly=False)
 
     resolved = TargetSufficientConditionsBasedResolver().resolve(
+        PreparedSufficientConditions(
+            {
+                target_knowledge.conclusion_value: target_knowledge,
+            }
+        ),
         context=_context(case, animal, Species.BIRD, Species.MAMMAL, corner_case),
-        target_knowledge=target_knowledge,
-        current_knowledge=_empty_knowledge(Species.MAMMAL),
     )
 
     assert resolved is not None
@@ -173,9 +207,12 @@ def test_target_knowledge_resolver_returns_none_when_no_guard_discriminates():
     corner_case = Animal("eagle", can_fly=True)
 
     resolved = TargetSufficientConditionsBasedResolver().resolve(
+        PreparedSufficientConditions(
+            {
+                target_knowledge.conclusion_value: target_knowledge,
+            }
+        ),
         context=_context(case, animal, Species.BIRD, Species.MAMMAL, corner_case),
-        target_knowledge=target_knowledge,
-        current_knowledge=_empty_knowledge(Species.MAMMAL),
     )
 
     assert resolved is None
@@ -185,11 +222,10 @@ def test_target_knowledge_resolver_returns_none_with_no_known_paths():
     animal = variable(Animal, domain=[])
 
     resolved = TargetSufficientConditionsBasedResolver().resolve(
+        PreparedSufficientConditions(),
         context=_context(
             Animal("bat"), animal, Species.BIRD, Species.MAMMAL, Animal("cat")
         ),
-        target_knowledge=_empty_knowledge(Species.BIRD),
-        current_knowledge=_empty_knowledge(Species.MAMMAL),
     )
 
     assert resolved is None
@@ -233,6 +269,11 @@ def test_corner_case_resolver_skips_the_active_path_via_firing_anchor():
     corner_case = Animal("plain", can_fly=False, lays_eggs=False)
 
     resolved = CornerCaseKnowledgeResolver().resolve(
+        PreparedSufficientConditions(
+            {
+                current_knowledge.conclusion_value: current_knowledge,
+            }
+        ),
         context=_context(
             case,
             animal,
@@ -241,8 +282,6 @@ def test_corner_case_resolver_skips_the_active_path_via_firing_anchor():
             corner_case,
             firing_anchor=active_guard,
         ),
-        target_knowledge=_empty_knowledge(Species.BIRD),
-        current_knowledge=current_knowledge,
     )
 
     assert resolved is None
@@ -258,6 +297,11 @@ def test_corner_case_resolver_finds_a_discriminating_guard_on_a_non_active_path(
     corner_case = Animal("plain", can_fly=False, lays_eggs=False)
 
     resolved = CornerCaseKnowledgeResolver().resolve(
+        PreparedSufficientConditions(
+            {
+                current_knowledge.conclusion_value: current_knowledge,
+            }
+        ),
         context=_context(
             case,
             animal,
@@ -266,8 +310,6 @@ def test_corner_case_resolver_finds_a_discriminating_guard_on_a_non_active_path(
             corner_case,
             firing_anchor=active_guard,
         ),
-        target_knowledge=_empty_knowledge(Species.BIRD),
-        current_knowledge=current_knowledge,
     )
 
     assert resolved is not None
@@ -287,11 +329,14 @@ def test_corner_case_resolver_searches_every_path_when_firing_anchor_is_none():
     corner_case = Animal("plain", can_fly=False, lays_eggs=False)
 
     resolved = CornerCaseKnowledgeResolver().resolve(
+        PreparedSufficientConditions(
+            {
+                current_knowledge.conclusion_value: current_knowledge,
+            }
+        ),
         context=_context(
             case, animal, Species.BIRD, Species.MAMMAL, corner_case, firing_anchor=None
         ),
-        target_knowledge=_empty_knowledge(Species.BIRD),
-        current_knowledge=current_knowledge,
     )
 
     assert resolved is not None
@@ -312,9 +357,12 @@ def test_corner_case_resolver_searches_every_path_when_the_context_has_no_trace(
     context.trace = None
 
     resolved = CornerCaseKnowledgeResolver().resolve(
+        PreparedSufficientConditions(
+            {
+                current_knowledge.conclusion_value: current_knowledge,
+            }
+        ),
         context=context,
-        target_knowledge=_empty_knowledge(Species.BIRD),
-        current_knowledge=current_knowledge,
     )
 
     assert resolved is not None
@@ -331,11 +379,83 @@ def test_corner_case_resolver_returns_none_when_no_path_discriminates():
     corner_case = Animal("plain", can_fly=False, lays_eggs=False)
 
     resolved = CornerCaseKnowledgeResolver().resolve(
+        PreparedSufficientConditions(
+            {
+                current_knowledge.conclusion_value: current_knowledge,
+            }
+        ),
         context=_context(
             case, animal, Species.BIRD, Species.MAMMAL, corner_case, firing_anchor=None
         ),
-        target_knowledge=_empty_knowledge(Species.BIRD),
-        current_knowledge=current_knowledge,
+    )
+
+    assert resolved is None
+
+
+# %% the branch every strategy is gated on
+
+
+@dataclass
+class RefusesEveryLookup:
+    """
+    Fails the test if a resolver asks it anything.
+
+    The gate exists so a strategy is never consulted about a case there is nothing to
+    discriminate against; a resolver that looked the conclusion up anyway would have
+    walked the rule tree for an answer it cannot use.
+    """
+
+    def sufficient_conditions_for(self, conclusion: Any) -> NoReturn:
+        raise AssertionError(
+            f"the rule tree was consulted about {conclusion!r} outside the "
+            "refinement branch"
+        )
+
+
+def test_no_corner_case_resolves_to_nothing_without_consulting_the_rule_tree():
+    animal = variable(Animal, domain=[])
+
+    resolved = TargetSufficientConditionsBasedResolver().resolve(
+        RefusesEveryLookup(),
+        _context(
+            Animal("bat", can_fly=True),
+            animal,
+            Species.BIRD,
+            Species.MAMMAL,
+            corner_case=None,
+        ),
+    )
+
+    assert resolved is None
+
+
+def test_no_current_conclusion_resolves_to_nothing_without_consulting_the_rule_tree():
+    animal = variable(Animal, domain=[])
+
+    resolved = TargetSufficientConditionsBasedResolver().resolve(
+        RefusesEveryLookup(),
+        _context(
+            Animal("bat", can_fly=True),
+            animal,
+            Species.BIRD,
+            current_conclusion=...,
+            corner_case=Animal("cat", can_fly=False),
+        ),
+    )
+
+    assert resolved is None
+
+
+def test_the_gate_covers_the_whole_family_including_a_chain():
+    resolved = ChainConditionResolver.backward_inference_default().resolve(
+        RefusesEveryLookup(),
+        _context(
+            Animal("bat", can_fly=True),
+            variable(Animal, domain=[]),
+            Species.BIRD,
+            Species.MAMMAL,
+            corner_case=None,
+        ),
     )
 
     assert resolved is None
@@ -345,7 +465,7 @@ def test_corner_case_resolver_returns_none_when_no_path_discriminates():
 
 
 class _AlwaysFailsResolver(ConditionResolver):
-    def resolve(self, *args, **kwargs):
+    def _resolve_against_corner_case(self, rdr, context):
         return None
 
 
@@ -353,7 +473,7 @@ class _AlwaysResolvesResolver(ConditionResolver):
     def __init__(self, expression):
         self.expression = expression
 
-    def resolve(self, *args, **kwargs):
+    def _resolve_against_corner_case(self, rdr, context):
         return ResolvedCondition(self.expression, type(self))
 
 
@@ -368,11 +488,10 @@ def test_chain_resolver_returns_the_first_non_none_result():
     )
 
     resolved = chain.resolve(
+        PreparedSufficientConditions(),
         context=_context(
             Animal("cat"), animal, Species.MAMMAL, Species.REPTILE, Animal("snake")
         ),
-        target_knowledge=_empty_knowledge(Species.MAMMAL),
-        current_knowledge=_empty_knowledge(Species.REPTILE),
     )
 
     assert resolved is not None
@@ -387,11 +506,10 @@ def test_chain_resolver_returns_none_when_every_resolver_fails():
     )
 
     resolved = chain.resolve(
+        PreparedSufficientConditions(),
         context=_context(
             Animal("cat"), animal, Species.MAMMAL, Species.REPTILE, Animal("snake")
         ),
-        target_knowledge=_empty_knowledge(Species.MAMMAL),
-        current_knowledge=_empty_knowledge(Species.REPTILE),
     )
 
     assert resolved is None
@@ -424,6 +542,12 @@ def test_chain_resolver_default_prefers_target_knowledge_over_corner_case():
     corner_case = Animal("cat", can_fly=False, lays_eggs=False)
 
     resolved = ChainConditionResolver.backward_inference_default().resolve(
+        PreparedSufficientConditions(
+            {
+                target_knowledge.conclusion_value: target_knowledge,
+                current_knowledge.conclusion_value: current_knowledge,
+            }
+        ),
         context=_context(
             case,
             animal,
@@ -432,8 +556,6 @@ def test_chain_resolver_default_prefers_target_knowledge_over_corner_case():
             corner_case,
             firing_anchor=active_guard,
         ),
-        target_knowledge=target_knowledge,
-        current_knowledge=current_knowledge,
     )
 
     assert resolved is not None
