@@ -2615,6 +2615,18 @@ items:
       the mixin's cost is not only the version floor. The recorded recommendation - keep plain
       constants - was superseded by the user's own shape, which is better than either option
       that had been costed.
+      Third upstream round, 2026-08-23: tomsch420 requested changes on #537 with one thread,
+      on plan_item_mode.py's Report.as_json - "we call it to_json everywhere else. Make
+      yourself ready for SubclassJSONSerializer". Applied in 236247da: the abstract method
+      and both implementations are to_json, the name and signature
+      krrood.adapters.json_serializer.SubclassJSONSerializer gives the same operation, and
+      the Report docstring says so. Measured rather than taken on trust - to_json is defined
+      93 times outside .claude/ against 3 for as_json, as_document and to_json_dict together.
+      This is the third name for one method in five days (as_document, as_json, to_json) and
+      the first backed by the repository's own count. Adopting the base class itself stays
+      declined on the CI measurement recorded on the still-open krrood thread; the rename is
+      what "make yourself ready" costs, and it is free. The printed document is unchanged and
+      522 tests pass. That reply cannot be posted from here, so it was handed to the user.
 
   - id: report-document-naming
     branch: null
@@ -2643,6 +2655,19 @@ items:
       one name cover both a dict and the text it serializes to. The recommendation on the
       thread is that the dict-returner keeps as_json, being the one that composes the
       document, and the two str-returning ones become as_json_text.
+      Corrected 2026-08-23: the surviving name is to_json, not as_json. tomsch420 asked for
+      it on cram2 #537 - "we call it to_json everywhere else. Make yourself ready for
+      SubclassJSONSerializer" - and the count settles it, where the two previous answers were
+      arguments: to_json is defined 93 times outside .claude/, as_json, as_document and
+      to_json_dict 3 times between them, and to_json is what
+      krrood.adapters.json_serializer.SubclassJSONSerializer declares for a dict-returning
+      serializer. plan_item_mode.py is already on the new target as of 236247da; this item
+      carries the other five - as_document in plan_item_bootstrap.py, to_json_dict in
+      build_dashboard.py, sync_manifest_status.py and record_dashboard_url.py, and as_json in
+      check_scope_overlap.py. The collision this item could not dodge dissolves rather than
+      needing a ruling: to_json goes to the dict-returners, so as_json is left free for the
+      str-returning maintenance_report.py and maintenance_board.py and neither has to be
+      renamed to something like as_json_text.
 
   - id: manifest-currency-first
     title: "Write the manifest and republish the dashboard before anything else, at every transition"

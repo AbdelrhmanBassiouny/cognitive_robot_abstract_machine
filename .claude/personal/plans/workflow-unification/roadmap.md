@@ -8773,3 +8773,75 @@ The `status-` prefix in that same f-string stays a literal: it is a prefix compo
 enum value rather than a class name, and making it a member would make the enum's own
 contract untrue. `build_index.py`'s `plan-card`/`complete` are untouched — a different page,
 and not what this pull request is about.
+
+## Update 2026-08-23 (resolved): #149's third upstream round, and the first naming answer with a count behind it
+
+`/plan-item-resolve workflow-unification plan-item-execution-modes`. One thread, from a second
+upstream reviewer, filed fifteen minutes before this session started. Applied in `236247da`; 522
+tests across the three directories CI runs, unchanged.
+
+### Nothing on the fork said the item was stalled
+
+Everything a fork-side read can see was clean: 23 of 23 checks green (the `greenlet` and robokudo
+failures the 08-10 comments recorded have both cleared), `mergeable_state: clean`, `origin/main` an
+ancestor of the head, no conflict, and the two fork threads left open on purpose still the only
+open ones. The stall was entirely on cram2 #537, where **tomsch420 requested changes at 09:58Z** —
+a second upstream reviewer, four days after LucaKro's round.
+
+This is the gap the 08-22 entry named as *"the manifest tracks the fork pull request and the review
+happens on the promoted one"*, now with the sharper version: **a fork pull request can be green,
+un-drafted, conflict-free and up to date with its base and still be blocked**, and no field on this
+plan shows it. What closed it here is that `/upstream-reviews` (#146) has landed, so the round was
+read in twelve seconds by a dispatched Action rather than through `WebFetch` on a rendered page.
+The 08-22 entry predicted exactly that and it held on its first real use.
+
+### The third name for one method in five days, and the first one that was measured
+
+*"we call it to_json everywhere else. Make yourself ready for SubclassJSONSerializer"*, on
+`Report.as_json`.
+
+| round | name | what decided it |
+| --- | --- | --- |
+| upstream, 08-19 | `as_document` | it names the thing produced, not the Python type |
+| fork, 08-22 | `as_json` | the user's standing rule |
+| upstream, 08-23 | `to_json` | 93 definitions outside `.claude/` against 3 |
+
+The first two are arguments and the third is a count, which is the whole finding. `grep -rn "def
+to_json"` outside `.claude/` returns 93; `as_json`, `as_document` and `to_json_dict` together
+return 3. `SubclassJSONSerializer.to_json(self) -> Dict[str, Any]` is a dict-returner, so the name
+the reviewer asked for is the one `AGENTS.md` already points every round-tripping class at. Three
+rounds argued about a name while the repository had been answering it 93 times.
+
+**Worth carrying: when a naming round reverses itself twice, stop reasoning and count.** The
+measurement was one `grep` and it was available at every one of the three rounds.
+
+### "Make yourself ready for" is the name, not the dependency
+
+Read as the rename only, and that is deliberate rather than a convenience. Adopting
+`SubclassJSONSerializer` itself stays declined on the measurement the still-open krrood thread
+carries — `test_claude_dev_tooling` installs `pytest` and the two dashboard requirements on a bare
+`ubuntu-latest`, so the import breaks the job and every hook running under a plain `python3` — and
+`bastler-package` is still where that is revisited. What readiness costs is that the method's name
+and signature already match, which they now do, stated in `Report`'s own docstring rather than only
+in a reply. Nothing reads one of these reports back into a Python object, so no `type` key was
+added: that would change the printed document, which this round did not.
+
+### It also dissolves the one decision `report-document-naming` could not make
+
+That item had inherited a genuine collision from the fork round: `as_json` had been ruled the name
+for dict-returners while it already named the `str`-returning method in `maintenance_report.py` and
+`maintenance_board.py`, so the recommendation on the thread was to rename those to `as_json_text`.
+With `to_json` as the target the collision is not resolved but absent — the dict-returners take
+`to_json`, `as_json` stays free, and the two `str` ones are untouched. The item's recorded target
+was corrected in the same turn.
+
+**Worth carrying: a naming conflict is sometimes an artifact of the wrong name having been picked**,
+not a decision anyone owes. This one had a ruling drafted for it before anyone checked whether the
+premise that created it was right.
+
+### Deliberately not re-drafted, again
+
+Per the 08-22 entry: un-drafting a fork pull request is this workflow's own promotion gate, so
+re-drafting #149 would withdraw #537 from the review it is answering. The user's standing
+convention to re-draft after every push does not reach a promoted branch, and the exception is
+recorded here rather than re-derived each round.
