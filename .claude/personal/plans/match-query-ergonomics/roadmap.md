@@ -616,3 +616,78 @@ so a flattening there is exactly what the field declares to be valid — and the
 `assert_never(step)` was firing on it, saying *"Expected code to be unreachable, but got:
 Flatten(Cabinet.drawers)"*. The test is `b8b9c1434`. The general shape: reachability was
 argued from one call site rather than from the type, and the type was right there.
+
+## 17. 2026-08-23: item 2 reparented onto #182, and the two interfaces it was missing
+
+`/plan-item-resolve match-query-ergonomics match-underscore-rename-and-forwarding`, in
+auto mode. The item had been sitting `in_progress` with its work done on
+`claude/ide-type-inference-instances-dc6l6e` (one commit, `147d098d2`, off `main` at
+`90c24116`) and no pull request, held back by the recorded blocker "must not land before
+`where-query-rooted-attribute-no-filter`".
+
+**The blocker was a landing-order constraint, not an unsolved problem, so stacking
+discharges it.** #182 is open, out of draft and ready
+(`check_dependency_readiness.py`: `open_ready`, `is_ready: true`), which in this repo's
+workflow is what a branch stacks on. The work moved onto this session's designated branch
+`claude/match-query-interface-refactor-l55jym`, which starts from #182's head with
+`147d098d2` cherry-picked on top, and its pull request #192 is based on #182's branch.
+One conflict, in `core/mapped_variable.py`'s `__dir__`: #182 had reflowed the same lines
+the item replaces with a call to its extracted `attribute_names_for_completion`; resolved
+in favour of the extraction. `test/krrood_test/test_eql` is green on the result (1197
+passed, 3 skipped), which is the reparenting verified rather than assumed.
+
+**Why the branch changed.** The item's own branch was an IDE-typing session's branch that
+happened to carry this item's work (§7); it was never this session's to push to, and its
+name says nothing about the item. The manifest now records the designated branch.
+
+**The developer's two additions to the item's scope**, taken as direction rather than as a
+question:
+
+1. Reparent onto the pull requests the work needs, done as above.
+2. *"See if we can make a common parent between Match and Query that segregates the
+   interface that they both have, like `where()`, `limit()`, ... and also with
+   `CanBehaveLikeAVariable`."*
+
+**The second one is not cosmetic — the forwarding this item introduces has a hole the
+common parent closes.** `Match.__getattr__` forwards with `getattr(self.expression, name)`,
+so the *whole public namespace of `Query`* stands between a match and its matched class:
+`match.limit` returns `Query.limit` bound to the lowered query, and a matched class with a
+field named `limit`, `distinct`, `having`, `evaluate`, `build` or `tolist` gets that method
+instead of a symbolic attribute. That is the same shadowing §2 diagnoses as the item's root
+cause, moved one level down and made silent. Forwarding to the lowered query's *attribute
+construction* rather than to its namespace removes it, and that hook is exactly the
+interface `Match` and `CanBehaveLikeAVariable` share.
+
+The plan, settled before implementing:
+
+- **`HasSymbolicAttributes`** (`core/mapped_variable.py`) — what a thing that stands for a
+  value of type `T` and offers that type's attributes symbolically must provide: `_type_`,
+  and `_get_symbolic_attribute_(name)`. It owns the `__getattr__` guards (dunders raise
+  `SymbolicDunderAccessError`, other underscore names are genuine `AttributeError`s) and
+  `__dir__`, both of which `CanBehaveLikeAVariable` and `Match` currently duplicate.
+  `CanBehaveLikeAVariable` builds an `Attribute` on itself; `Match` asks its lowered query
+  for the same thing, so no `Query` member can be reached by attribute access on a match.
+- **`HasQueryModifiers`** (`query/query_modifiers.py`) — the fluent verbs both types offer:
+  `where`, `having`, `ordered_by`, `distinct`, `grouped_by`, `limit`. `Query` already
+  implements all six; `Match` implemented only `where` and lost the rest to the accidental
+  delegation above, so it gains the other five as forwarders that return the match, keeping
+  a chain on the match rather than silently switching to the lowered query. Kept separate
+  from `Evaluable` rather than folded into it: a thing can be evaluable without being
+  narrowable, and both classes already inherit `Evaluable` directly.
+- **The §7 deviation is reconciled the way §4 decided**, not the way the branch did:
+  `variable` and `matches_with_variables` come back as public read-only compatibility
+  properties (like `expression`, which the branch did keep), so the in-flight D-core stack's
+  `test_underspecified_match.py` — live on four open pull requests, #67/#68/#98/#159 — keeps
+  working. Item 3 removes them with the rest of the detours.
+- **The §6 guard test is added**: after forwarding exists, a missed rename fails silently
+  (the miss becomes a symbolic attribute named e.g. `"conditions"` — truthy, chainable,
+  wrong), so the old public names are pinned as forwarding to the matched class rather than
+  returning match internals.
+- **The blocker's own repro becomes a test**: `match.where(match.<attribute> >= x)` filters,
+  which is what §7 measured as broken on the item's branch and is only true stacked on #182.
+
+Not taken into this item: #186 (`chain-outside-evaluation-truncates-silently`) is not a
+parent. It is independent of this item, and the one file both touch,
+`core/mapped_variable.py`, they touch for unrelated reasons — this item extracts one
+completion helper, #186 splits the mapping hierarchy. The landing-order adjustment §14
+records stays between #182 and #186.
