@@ -16,9 +16,9 @@ from __future__ import annotations
 import subprocess
 from enum import StrEnum
 
-from .scratch_repository import HOOKS_SOURCE_DIRECTORY
+from .constants import ToolingDirectory
 
-MESSAGES_SCRIPT = HOOKS_SOURCE_DIRECTORY / "session-start-messages.sh"
+MESSAGES_SCRIPT = ToolingDirectory.HOOKS.path / "session-start-messages.sh"
 """
 The shell file defining the wording of every summary line.
 """

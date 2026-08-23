@@ -43,9 +43,10 @@ from bastler.plan_item_bootstrap import (
     open_work,
     record_item,
 )
-from .scratch_repository import WORK_BRANCH, ScratchRepository
+from .scratch_repository import ScratchRepository
+from .constants import DATASET_DIRECTORY, WORK_BRANCH
 
-DATASET_DIRECTORY = Path(__file__).parent / "dataset"
+from .script_runner import PythonModuleRunner
 
 BOOTSTRAP_MODULE = bastler.plan_item_bootstrap.__name__
 """
@@ -690,12 +691,9 @@ def run_bootstrap(
     :param arguments: CLI arguments to pass.
     :return: The finished subprocess.
     """
-    return subprocess.run(
-        ["python3", "-m", BOOTSTRAP_MODULE, *arguments],
-        cwd=repository.project_root,
-        capture_output=True,
-        text=True,
-    )
+    return PythonModuleRunner(
+        project_root=repository.project_root, module_name=BOOTSTRAP_MODULE
+    ).run(*arguments)
 
 
 def record_arguments(section: Path, plan: str = PLAN_IDENTIFIER) -> list[str]:

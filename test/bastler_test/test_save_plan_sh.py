@@ -6,13 +6,11 @@ real remote - no network access or real personal-notes branch involved.
 """
 
 import subprocess
-from pathlib import Path
 
 import pytest
 
-from .scratch_repository import NOTES_BRANCH, ScratchRepository
-
-DATASET_DIRECTORY = Path(__file__).parent / "dataset"
+from .scratch_repository import ScratchRepository
+from .constants import DATASET_DIRECTORY
 
 PLAN_MANIFEST = (DATASET_DIRECTORY / "plan.yaml").read_text()
 PLAN_ROADMAP = (DATASET_DIRECTORY / "roadmap.md").read_text()

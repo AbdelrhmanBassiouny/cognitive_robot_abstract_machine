@@ -10,13 +10,14 @@ describes. This file only checks it, which is why the declaration is not repeate
 
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
+from .script_runner import ScriptRunner
 from bastler.package_layout import (
     PACKAGE_DIRECTORY,
     PACKAGE_MODULES,
@@ -39,28 +40,35 @@ The helper that imports one module with a named set of top-level modules unimpor
 """
 
 
+@dataclass(frozen=True, kw_only=True)
+class InterpreterRunner(ScriptRunner):
+    """
+    Runs this interpreter itself, for the checks that are about the import rather than
+    about any one entry point.
+    """
+
+    @property
+    def command(self) -> tuple[str, ...]:
+        """:return: This interpreter, with no module named yet."""
+        return (sys.executable,)
+
+
 def run_from_repository_root(*arguments: str) -> subprocess.CompletedProcess[str]:
     """
     Run this interpreter from the repository root with an environment that cannot help
     it find the package.
 
-    ``PYTHONPATH`` is stripped so a pass proves the zero-install import really comes
-    from the repository root being the working directory, rather than from whatever the
+    ``PYTHONPATH`` is removed so a pass proves the zero-install import really comes from
+    the repository root being the working directory, rather than from whatever the
     caller's shell happened to export.
 
     :param arguments: Arguments to the interpreter, e.g. ``("-c", "import bastler")``.
     :return: The completed process, with output captured as text.
     """
-    environment = dict(os.environ)
-    environment.pop("PYTHONPATH", None)
-    return subprocess.run(
-        [sys.executable, *arguments],
-        cwd=REPOSITORY_ROOT,
-        env=environment,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    return InterpreterRunner(
+        project_root=REPOSITORY_ROOT,
+        removed_variable_prefixes=("PYTHONPATH",),
+    ).run(*arguments)
 
 
 # %% the package exists and is reachable with no install

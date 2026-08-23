@@ -9,13 +9,12 @@ remote - no network access or real personal-notes branch involved.
 
 import os
 import subprocess
-from pathlib import Path
 
 import pytest
 
 from .scratch_repository import ScratchRepository
 
-DATASET_DIRECTORY = Path(__file__).parent / "dataset"
+from .constants import DATASET_DIRECTORY
 
 SETTINGS_PATH_ON_NOTES_BRANCH = ".claude/personal/settings.local.json"
 LOCAL_SETTINGS_PATH = ".claude/settings.local.json"

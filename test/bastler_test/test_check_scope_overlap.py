@@ -21,7 +21,8 @@ from bastler.check_scope_overlap import (
     build_scope_report,
 )
 
-from .scratch_repository import REPOSITORY_ROOT, ScratchRepository
+from .scratch_repository import ScratchRepository
+from .constants import REPOSITORY_ROOT
 
 CHECK_SCOPE_OVERLAP_MODULE = bastler.check_scope_overlap.__name__
 """

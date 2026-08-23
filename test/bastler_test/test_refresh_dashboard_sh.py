@@ -17,26 +17,17 @@ from pathlib import Path
 
 import pytest
 
-REPOSITORY_ROOT = Path(__file__).parent.parent.parent
-"""
-The repository this suite runs against, and the root every path below is relative to.
-"""
+from .constants import (
+    PACKAGE_DIRECTORY,
+    REPOSITORY_ROOT,
+    STUBS_DIRECTORY,
+    ToolingDirectory,
+)
 
-PLAN_DASHBOARD_DIRECTORY = REPOSITORY_ROOT / ".claude" / "skills" / "plan-dashboard"
+PLAN_DASHBOARD_DIRECTORY = ToolingDirectory.PLAN_DASHBOARD_SKILL.path
 """
 Where refresh_dashboard.sh itself lives - the skill directory, not the package. Claude
 Code discovers a skill by path, so its shell entry point stays with it.
-"""
-
-PACKAGE_DIRECTORY = REPOSITORY_ROOT / "bastler"
-"""
-Where the modules refresh_dashboard.sh calls live, and the shape the scratch layout has
-to reproduce for ``python3 -m bastler.<module>`` to resolve there.
-"""
-
-STUBS_DIRECTORY = Path(__file__).parent / "dataset" / "stubs"
-"""
-The stand-ins for the two modules and the one hook refresh_dashboard.sh calls out to.
 """
 
 

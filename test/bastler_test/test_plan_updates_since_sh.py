@@ -18,6 +18,11 @@ from pathlib import Path
 
 import pytest
 
+from .constants import ToolingDirectory
+from .script_runner import BashScriptRunner
+
+from .constants import DATASET_DIRECTORY, STUBS_DIRECTORY
+
 from bastler.plan_updates_since_support import (
     NO_CHANGES_MESSAGE,
     NO_TRACKING_ISSUE_MESSAGE,
@@ -26,9 +31,6 @@ from bastler.plan_updates_since_support import (
     no_default_repository_message,
 )
 from .scratch_repository import ScratchRepository
-
-DATASET_DIRECTORY = Path(__file__).parent / "dataset"
-STUBS_DIRECTORY = DATASET_DIRECTORY / "stubs"
 
 PLAN_MANIFEST_NOT_STARTED = (DATASET_DIRECTORY / "plan.yaml").read_text()
 PLAN_MANIFEST_IN_PROGRESS = (DATASET_DIRECTORY / "plan-in-progress.yaml").read_text()
@@ -53,20 +55,20 @@ TRACKING_ISSUE_NUMBER = "55"
 The tracking_issue plan-with-tracking-issue.yaml sets.
 """
 
-CREDENTIAL_VARIABLE_NAMES = ("GH_TOKEN", "GITHUB_TOKEN", "GH_HOST")
+REMOVED_VARIABLE_PREFIXES = (
+    "GH_TOKEN",
+    "GITHUB_TOKEN",
+    "GH_HOST",
+    "CLAUDE_PERSONAL_NOTES_",
+)
 """
-GitHub credential variables stripped from every test subprocess's environment.
+What every subprocess these tests run must not inherit.
 
-Whoever runs this suite may well have real ones set (a Claude Code session's own git-
-proxy credentials do), and a test that reached GitHub with them would be neither
-reproducible nor safe.
-"""
-
-PERSONAL_NOTES_VARIABLE_PREFIX = "CLAUDE_PERSONAL_NOTES_"
-"""
-Prefix of the settings resolve-personal-notes-config.sh reads from the environment,
-stripped for the same reason: a value set in the environment actually running these
-tests must never change what a test asserts.
+The GitHub credentials because whoever runs this suite may well have real ones set (a
+Claude Code session's own git-proxy credentials do), and a test that reached GitHub with
+them would be neither reproducible nor safe. The personal-notes prefix for the same
+reason one step over: a value set in the environment actually running these tests must
+never change what a test asserts.
 """
 
 
@@ -176,22 +178,6 @@ def path_hiding_executable(executable_name: str, mirror_parent: Path) -> str:
     return os.pathsep.join(entries)
 
 
-def clean_environment() -> dict[str, str]:
-    """
-    Return ``os.environ`` with every GitHub credential and personal-notes override
-    variable stripped, so a test's assertions can't be changed by whatever happens to be
-    set in the environment actually running the suite.
-
-    :return: The filtered environment mapping.
-    """
-    return {
-        name: value
-        for name, value in os.environ.items()
-        if name not in CREDENTIAL_VARIABLE_NAMES
-        and not name.startswith(PERSONAL_NOTES_VARIABLE_PREFIX)
-    }
-
-
 def write_plan_commit(
     repository: ScratchRepository,
     plan_id: str,
@@ -247,24 +233,17 @@ def run_plan_updates_since(
 
     :param repository: A fixture-built scratch repository.
     :param arguments: CLI arguments to pass to plan-updates-since.sh.
-    :param env: Environment overrides applied on top of a cleaned copy of this process's
-        own environment (see clean_environment).
+    :param env: Environment overrides applied on top of this process's own environment
+        minus :data:`REMOVED_VARIABLE_PREFIXES`.
     :return: The finished subprocess.
     """
-    full_environment = {**clean_environment(), **(env or {})}
-    return subprocess.run(
-        [
-            "bash",
-            str(
-                repository.project_root / ".claude" / "hooks" / "plan-updates-since.sh"
-            ),
-            *arguments,
-        ],
-        cwd=repository.project_root,
-        capture_output=True,
-        text=True,
-        env=full_environment,
-    )
+    return BashScriptRunner(
+        project_root=repository.project_root,
+        removed_variable_prefixes=REMOVED_VARIABLE_PREFIXES,
+        script_path=(
+            repository.project_root / ToolingDirectory.HOOKS / "plan-updates-since.sh"
+        ),
+    ).run(*arguments, **(env or {}))
 
 
 # %% argument validation

@@ -14,9 +14,8 @@ from pathlib import Path
 
 import pytest
 
+from .constants import NOTES_BRANCH, PERSONAL_GIT_IDENTITY_PATH
 from .scratch_repository import (
-    NOTES_BRANCH,
-    PERSONAL_GIT_IDENTITY_PATH,
     SCRATCH_IDENTITY,
     ScratchRepository,
     SetupPrerequisiteFile,

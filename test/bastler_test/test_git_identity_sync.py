@@ -16,13 +16,8 @@ import subprocess
 
 import pytest
 
-from .scratch_repository import (
-    NOTES_BRANCH,
-    PERSONAL_GIT_IDENTITY_PATH,
-    SCRATCH_IDENTITY,
-    GitIdentity,
-    ScratchRepository,
-)
+from .constants import NOTES_BRANCH, PERSONAL_GIT_IDENTITY_PATH
+from .scratch_repository import SCRATCH_IDENTITY, GitIdentity, ScratchRepository
 from .session_start_summary import SummaryMessage, summary_message, summary_value
 
 NOTES_PATH = ".claude/personal/cram-notes.md"

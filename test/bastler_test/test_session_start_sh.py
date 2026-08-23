@@ -13,20 +13,17 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Mapping
-from pathlib import Path
 
 import pytest
 
-from .scratch_repository import (
+from .constants import (
+    DATASET_DIRECTORY,
     NOTES_BRANCH,
     PERSONAL_GIT_IDENTITY_PATH,
-    SCRATCH_IDENTITY,
     WORK_BRANCH,
-    ScratchRepository,
 )
+from .scratch_repository import SCRATCH_IDENTITY, ScratchRepository
 from .session_start_summary import SummaryMessage, summary_message, summary_value
-
-DATASET_DIRECTORY = Path(__file__).parent / "dataset"
 
 PLAN_MANIFEST = (DATASET_DIRECTORY / "plan.yaml").read_text()
 

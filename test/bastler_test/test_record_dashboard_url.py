@@ -29,7 +29,8 @@ from bastler.record_dashboard_url import (
     resolve_artifact_url,
 )
 
-DATASET_DIRECTORY = Path(__file__).parent / "dataset"
+from .constants import DATASET_DIRECTORY
+
 CACHE_TEXT = (DATASET_DIRECTORY / "dashboard-urls.yaml").read_text()
 LISTING = load_artifact_listing(
     json.loads((DATASET_DIRECTORY / "artifact-listing.json").read_text())

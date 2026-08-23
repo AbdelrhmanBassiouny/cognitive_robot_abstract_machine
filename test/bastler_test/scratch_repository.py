@@ -9,7 +9,6 @@ notes remote - so no test needs network access or a real personal-notes branch.
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 from collections.abc import Mapping
@@ -17,61 +16,39 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-REPOSITORY_ROOT = Path(__file__).parent.parent.parent
-"""
-The repository this suite runs against, and the root every path below is relative to.
-"""
+from .script_runner import BashScriptRunner
+from .constants import (
+    NOTES_BRANCH,
+    PACKAGE_DIRECTORY,
+    SCRUBBED_ENVIRONMENT_PREFIXES,
+    SET_UP_CLONE_DATASET,
+    WORK_BRANCH,
+    ToolingDirectory,
+)
 
-HOOKS_SOURCE_DIRECTORY = REPOSITORY_ROOT / ".claude" / "hooks"
+HOOKS_SOURCE_DIRECTORY = ToolingDirectory.HOOKS.path
 """
 The real hooks directory the scripts under test are copied from.
-
-Still under ``.claude/`` after the package migration: Claude Code discovers the hook
-entry points by path, so the bash scripts stay where they are and only the Python they
-call moved into :mod:`bastler`.
 """
 
-PACKAGE_SOURCE_DIRECTORY = REPOSITORY_ROOT / "bastler"
-"""
-The real package the hook scripts' ``python3 -m bastler.<module>`` calls resolve to.
-"""
 
-NOTES_BRANCH = "claude/personal-notes"
-"""
-The personal-notes branch name the hooks resolve to by default.
-"""
+def install_package_into(project_root: Path) -> None:
+    """
+    Copy the real :mod:`bastler` package into a checkout, so a command line run there
+    resolves ``python3 -m bastler.<module>`` the way it does in a clone.
 
-WORK_BRANCH = "some-work-branch"
-"""
-The throwaway branch a scratch repository is left checked out on.
-"""
+    The whole package rather than the modules one script happens to call: a scratch
+    clone *is* a clone, so it carries what a clone carries, and a test then never has to
+    track which sibling a module imports.
 
-PERSONAL_GIT_IDENTITY_PATH = ".claude/personal/git-identity"
-"""
-The path the hooks read a recorded git identity from, relative to the project root.
-
-Kept as a literal here for the same reason as :class:`SetupPrerequisiteFile` below.
-"""
-
-SCRUBBED_ENVIRONMENT_PREFIXES = (
-    "CLAUDE_PERSONAL_NOTES_",
-    "GIT_AUTHOR_",
-    "GIT_COMMITTER_",
-)
-"""
-Variable prefixes stripped from a hook's environment before running it.
-
-A value that happens to be set in whoever's shell is running the tests can otherwise
-change what they assert - the personal-notes variables by redirecting where a hook
-looks, and the git identity variables by outranking the repository's own git config in
-every commit and in ``git var GIT_AUTHOR_IDENT``.
-"""
-
-SET_UP_CLONE_FIXTURE = Path(__file__).parent / "dataset" / "set-up-clone"
-"""
-A checked-in clone layout satisfying every check-setup.sh check that reads a file, laid
-out under the same relative paths it will occupy in a scratch project root.
-"""
+    :param project_root: The checkout to copy it into.
+    """
+    shutil.copytree(
+        PACKAGE_DIRECTORY,
+        project_root / PACKAGE_DIRECTORY.name,
+        ignore=shutil.ignore_patterns("__pycache__"),
+        dirs_exist_ok=True,
+    )
 
 
 class SetupPrerequisiteFile(StrEnum):
@@ -299,17 +276,8 @@ class ScratchRepository:
     def install_package(self) -> None:
         """
         Copy the real :mod:`bastler` package into the scratch layout.
-
-        The whole package rather than the modules one script happens to call: a scratch
-        clone *is* a clone, so it carries what a clone carries, and a test then never has
-        to track which sibling a module imports.
         """
-        shutil.copytree(
-            PACKAGE_SOURCE_DIRECTORY,
-            self.project_root / PACKAGE_SOURCE_DIRECTORY.name,
-            ignore=shutil.ignore_patterns("__pycache__"),
-            dirs_exist_ok=True,
-        )
+        install_package_into(self.project_root)
 
     def write_setup_prerequisites(self) -> None:
         """
@@ -320,7 +288,7 @@ class ScratchRepository:
         of that script must not find it already there - which is why this is a named
         step rather than part of building the repository.
         """
-        shutil.copytree(SET_UP_CLONE_FIXTURE, self.project_root, dirs_exist_ok=True)
+        shutil.copytree(SET_UP_CLONE_DATASET, self.project_root, dirs_exist_ok=True)
 
     def run_hook_script(
         self,
@@ -342,23 +310,11 @@ class ScratchRepository:
             exercise resolution from the environment.
         :return: The finished subprocess.
         """
-        environment = {
-            name: value
-            for name, value in os.environ.items()
-            if not name.startswith(SCRUBBED_ENVIRONMENT_PREFIXES)
-        }
-        environment.update(environment_overrides)
-        return subprocess.run(
-            [
-                "bash",
-                str(self.project_root / ".claude" / "hooks" / script_name),
-                *arguments,
-            ],
-            cwd=self.project_root,
-            capture_output=True,
-            text=True,
-            env=environment,
-        )
+        return BashScriptRunner(
+            project_root=self.project_root,
+            removed_variable_prefixes=SCRUBBED_ENVIRONMENT_PREFIXES,
+            script_path=self.project_root / ToolingDirectory.HOOKS / script_name,
+        ).run(*arguments, **environment_overrides)
 
     def write(self, relative_path: str, content: str) -> Path:
         """

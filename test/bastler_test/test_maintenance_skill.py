@@ -16,13 +16,10 @@ from pathlib import Path
 import bastler.stack
 from bastler.stack import CONFIGURATION_PATH, Repository, _configuration_values
 
-REPOSITORY_ROOT = Path(__file__).parent.parent.parent
-"""
-The repository this suite runs against.
-"""
+from .constants import ToolingDirectory
 
 MAINTENANCE_SKILL_DOCUMENT = (
-    REPOSITORY_ROOT / ".claude/skills/stacked-pr-maintenance/SKILL.md"
+    ToolingDirectory.STACKED_PULL_REQUEST_MAINTENANCE_SKILL.path / "SKILL.md"
 )
 """
 The instructions a maintenance pass follows.

@@ -11,7 +11,6 @@ remote, so those tests run against a :class:`ScratchRepository` instead.
 from __future__ import annotations
 
 import subprocess
-import sys
 from collections.abc import Container
 from pathlib import Path
 
@@ -52,6 +51,7 @@ from bastler.stack import (
 )
 
 from .scratch_repository import ScratchRepository
+from .script_runner import PythonModuleRunner
 
 A_LABEL_THIS_TOOL_NEVER_WRITES = "a-label-somebody-else-put-here"
 """
@@ -1118,12 +1118,9 @@ def run_stack(
     :param arguments: The command and its flags.
     :return: The finished subprocess.
     """
-    return subprocess.run(
-        [sys.executable, "-m", STACK_MODULE, *arguments],
-        capture_output=True,
-        text=True,
-        cwd=checkout.project_root,
-    )
+    return PythonModuleRunner(
+        project_root=checkout.project_root, module_name=STACK_MODULE
+    ).run(*arguments)
 
 
 def test_an_unknown_command_is_a_usage_error(offline_checkout: ScratchRepository):

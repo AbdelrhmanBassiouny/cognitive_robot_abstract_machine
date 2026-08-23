@@ -15,10 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
-import shutil
 import subprocess
-import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
@@ -83,7 +80,9 @@ from bastler.maintenance_report import (
 from bastler.maintenance_restack_procedure import restack
 from bastler.maintenance_restack_steps import BranchOutcome, RestackOutcome, RestackStep
 
-from .scratch_repository import PACKAGE_SOURCE_DIRECTORY, initialize_bare_repository
+from .scratch_repository import initialize_bare_repository, install_package_into
+from .constants import REPOSITORY_ROOT
+from .script_runner import PythonModuleRunner
 
 MAINTENANCE_MODULE = bastler.maintenance.__name__
 """
@@ -190,12 +189,7 @@ class ForkCheckout:
         Untracked rather than committed because the branches these tests build stand for
         branches cut before the tooling landed - see :data:`TOOLING_PATH`.
         """
-        shutil.copytree(
-            PACKAGE_SOURCE_DIRECTORY,
-            self.project_root / PACKAGE_SOURCE_DIRECTORY.name,
-            ignore=shutil.ignore_patterns("__pycache__"),
-            dirs_exist_ok=True,
-        )
+        install_package_into(self.project_root)
 
     @staticmethod
     def _bare_repository(path: Path) -> Path:
@@ -760,7 +754,7 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
 
 # %% the checkout the pass was invoked in
 
-TOOLING_PATH = f"{Path(bastler.maintenance.__file__).parent.name}/maintenance.py"
+TOOLING_PATH = str(Path(bastler.maintenance.__file__).relative_to(REPOSITORY_ROOT))
 """
 Where the pass's own tooling sits: tracked content, so a branch cut before it landed
 does not carry it, and checking that branch out deletes it from the working tree.
@@ -1585,6 +1579,18 @@ class AlreadyResolvedPass(MaintenancePass):
         return self.recorded_fork
 
 
+def maintenance_runner(checkout: ForkCheckout) -> PythonModuleRunner:
+    """
+    :param checkout: The fork checkout to run in.
+    :return: A runner for the executor, without the credentials this environment carries.
+    """
+    return PythonModuleRunner(
+        project_root=checkout.project_root,
+        removed_variable_prefixes=CREDENTIAL_VARIABLES,
+        module_name=MAINTENANCE_MODULE,
+    )
+
+
 def run_maintenance(
     checkout: ForkCheckout, command: MaintenanceCommand, *flags: str
 ) -> subprocess.CompletedProcess[str]:
@@ -1602,28 +1608,13 @@ def run_maintenance(
     :return: The finished subprocess.
     """
     checkout.install_package()
-    return subprocess.run(
-        [sys.executable, "-m", MAINTENANCE_MODULE, command.invoked_as, *flags],
-        capture_output=True,
-        text=True,
-        cwd=checkout.project_root,
-        env={
-            name: value
-            for name, value in os.environ.items()
-            if name not in CREDENTIAL_VARIABLES
-        },
-    )
+    return maintenance_runner(checkout).run(command.invoked_as, *flags)
 
 
 def test_an_unknown_command_is_a_usage_error(fork_checkout: ForkCheckout):
     fork_checkout.install_package()
 
-    result = subprocess.run(
-        [sys.executable, "-m", MAINTENANCE_MODULE, "not-a-command"],
-        capture_output=True,
-        text=True,
-        cwd=fork_checkout.project_root,
-    )
+    result = maintenance_runner(fork_checkout).run("not-a-command")
 
     assert result.returncode == MaintenanceExitCode.USAGE
 
