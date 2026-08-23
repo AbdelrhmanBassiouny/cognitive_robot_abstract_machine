@@ -89,3 +89,35 @@ enum, catching a member nothing emits and a key emitted outside it. Measured: re
   with its own interpreter while the dependencies were in `/usr/local/bin/python3`. One
   install, and all 621 pass.
 
+
+## 2026-08-23 — #191 folded in, base merge taken
+
+#191 (`integration-branch-ci-verdict`) is folded into this branch and closed. The fold was a
+fast-forward, so GitHub closed it as merged **into this branch**, not into main — the badge
+does not say so, the same thing #133 into #117 already produced once.
+
+Watch for the consequence, because it fired within the hour: `sync_manifest_status.py` read
+that merged flag and auto-corrected the item to `done`. It is not done — Part D is not
+started. Corrected back to `in_progress`, and both items now name #154, which is open, so the
+correction has nothing to fire on any more. **Any future fold will do this again**; the
+auto-correction cannot tell merged-into-a-feature-branch from merged-into-main.
+
+Part D is this branch's work now, not a separate pull request. `integration_test_command`,
+`--test`, `--no-test`, `TestCommandNotConfiguredError` and `_run_tests` are what it deletes,
+and its pytest marker is what finally gives `integration-conflict` an automatic clearing
+condition — the hole this branch otherwise ships with.
+
+Base merge taken: 86 commits of `main`, one conflict in `plan-item-resolve/SKILL.md`,
+additive both sides and both kept. The merge then failed one test, which is the interesting
+part: #151's currency-rule contract test *discovers* the skills bound by the rule rather than
+listing them, and `add-plan-item` — which landed on main with #135 after this branch was cut
+— was discovered and found not to cite it. Neither side fails alone. It was not merely
+missing the citation either; it restated the rule in its own words, which is a third copy of
+something with one home, so the restatement was replaced by the citation.
+
+648 tests pass across the three directories CI runs, from 620.
+
+Not done, and deliberately: `add-plan-item/SKILL.md` is *also* the offender for #156's guard
+test (the "offer `/setup-personal-notes`" wording). That is #156's rule, so fixing it here
+would be adopting an unlanded branch's rule. #156 stays blocked in the build until its own
+branch merges main and makes that one-word change.
