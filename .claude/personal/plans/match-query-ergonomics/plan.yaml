@@ -160,13 +160,13 @@ items:
       adjustment than the isinstance check section 13 names.
   - id: match-underscore-rename-and-forwarding
     title: "Match behaves like a variable: underscore-sandwich rename + guarded __getattr__ forwarding"
-    branch: claude/ide-type-inference-instances-dc6l6e
-    pull_request_number: null
+    branch: claude/match-query-interface-refactor-l55jym
+    pull_request_number: 192
     track: match-api
     depends_on:
       - where-query-rooted-attribute-no-filter
     status: in_progress
-    session: https://claude.ai/code/session_01PUMacEHWrFMr5wXdFLx7qG
+    session: https://claude.ai/code/session_01VVM3hJmz2nSnyTXmNJCith
     blockers:
       - >-
         Must not land before where-query-rooted-attribute-no-filter: on the
