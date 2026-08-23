@@ -149,7 +149,7 @@ class TestAnswerDefaultPlumbing(unittest.TestCase):
             case_instance=object(), case_variable=variable(Animal, domain=[])
         )
         self.assertIsNone(context.conclusion_domain)
-        self.assertEqual(context.aids, [])
+        self.assertEqual(context.helpers, [])
 
 
 if __name__ == "__main__":

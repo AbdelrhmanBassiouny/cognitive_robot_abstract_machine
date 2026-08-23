@@ -13,6 +13,10 @@ import unittest
 
 from krrood.entity_query_language.factories import variable
 from krrood.entity_query_language.rdr.conclusion_domain import resolve_conclusion_domain
+from krrood.entity_query_language.rdr.conclusion_helper import (
+    ConclusionSuggester,
+    ConclusionSupportPresenter,
+)
 from krrood.entity_query_language.rdr.exceptions import (
     NoConclusionProvided,
     NoConditionsProvided,
@@ -161,13 +165,13 @@ class TestSuggestedConclusion(unittest.TestCase):
         self.validator = self.domain.validator(allow_unset=False)
 
     def test_returns_first_validating_suggestion(self):
-        class Suggests:
+        class Suggests(ConclusionSuggester):
             def suggest(self, context):
                 return Species.bird
 
         expert = Expert(
             interface=FunctionInterface(answer_function=lambda c, r: {}),
-            aids=[Suggests()],
+            helpers=[Suggests()],
         )
         context = _context(make_animal("eagle"), conclusion_domain=self.domain)
 
@@ -176,17 +180,17 @@ class TestSuggestedConclusion(unittest.TestCase):
         )
 
     def test_skips_non_validating_suggestions(self):
-        class SuggestsInvalid:
+        class SuggestsInvalid(ConclusionSuggester):
             def suggest(self, context):
                 return "not-a-species"
 
-        class SuggestsValid:
+        class SuggestsValid(ConclusionSuggester):
             def suggest(self, context):
                 return Species.fish
 
         expert = Expert(
             interface=FunctionInterface(answer_function=lambda c, r: {}),
-            aids=[SuggestsInvalid(), SuggestsValid()],
+            helpers=[SuggestsInvalid(), SuggestsValid()],
         )
         context = _context(make_animal("tuna"), conclusion_domain=self.domain)
 
@@ -194,11 +198,30 @@ class TestSuggestedConclusion(unittest.TestCase):
             expert._suggested_conclusion(context, self.validator), Species.fish
         )
 
-    def test_returns_unset_when_no_aid_suggests(self):
+    def test_returns_unset_when_no_helper_suggests(self):
         expert = Expert(interface=FunctionInterface(answer_function=lambda c, r: {}))
         context = _context(make_animal("gecko"), conclusion_domain=self.domain)
 
         self.assertIs(expert._suggested_conclusion(context, self.validator), ...)
+
+    def test_a_helper_that_only_presents_is_passed_over(self):
+        class Presents(ConclusionSupportPresenter):
+            def present(self, context):
+                return "a picture of the animal"
+
+        class Suggests(ConclusionSuggester):
+            def suggest(self, context):
+                return Species.reptile
+
+        expert = Expert(
+            interface=FunctionInterface(answer_function=lambda c, r: {}),
+            helpers=[Presents(), Suggests()],
+        )
+        context = _context(make_animal("gecko"), conclusion_domain=self.domain)
+
+        self.assertEqual(
+            expert._suggested_conclusion(context, self.validator), Species.reptile
+        )
 
 
 class TestAnswerName(unittest.TestCase):

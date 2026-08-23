@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import unittest
 
-from krrood.entity_query_language.rdr.aid import ConclusionAid
+from krrood.entity_query_language.rdr.conclusion_helper import ConclusionSuggester
 from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
 from krrood.entity_query_language.rdr.exceptions import (
     ExpertAbort,
@@ -223,30 +223,30 @@ class TestAbort(unittest.TestCase):
             )
 
 
-# %% aids pre-seeding the conclusion
+# %% helpers pre-seeding the conclusion
 
 
-class MammalAid(ConclusionAid):
+class MammalSuggester(ConclusionSuggester):
     """
-    An aid that always suggests :attr:`Species.mammal`.
+    A helper that always suggests :attr:`Species.mammal`.
     """
 
     def suggest(self, context):
         return Species.mammal
 
 
-class BirdAid(ConclusionAid):
+class BirdSuggester(ConclusionSuggester):
     """
-    An aid that always suggests :attr:`Species.bird`.
+    A helper that always suggests :attr:`Species.bird`.
     """
 
     def suggest(self, context):
         return Species.bird
 
 
-class OutOfDomainAid(ConclusionAid):
+class OutOfDomainSuggester(ConclusionSuggester):
     """
-    An aid whose suggestion is not a :class:`Species`, so it fails domain validation.
+    A helper whose suggestion is not a :class:`Species`, so it fails domain validation.
     """
 
     def suggest(self, context):
@@ -271,13 +271,13 @@ def _conditions_only_answer(context, requests):
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
-class TestAidSuggestions(unittest.TestCase):
+class TestHelperSuggestions(unittest.TestCase):
     def test_a_valid_suggestion_stands_when_the_expert_supplies_no_conclusion(self):
         rdr = EQLSingleClassRDR(Animal, "species")
         mammal = first(Species.mammal)
         expert = Expert(
             interface=FunctionInterface(answer_function=_conditions_only_answer),
-            aids=[MammalAid()],
+            helpers=[MammalSuggester()],
         )
 
         rdr.fit_case(mammal, expert=expert)
@@ -294,10 +294,10 @@ class TestAidSuggestions(unittest.TestCase):
                 answers[AnswerName.CONCLUSION] = Species.mammal
             return answers
 
-        # The aid suggests bird; the expert answers mammal.
+        # The helper suggests bird; the expert answers mammal.
         expert = Expert(
             interface=FunctionInterface(answer_function=override),
-            aids=[BirdAid()],
+            helpers=[BirdSuggester()],
         )
 
         rdr.fit_case(mammal, expert=expert)
@@ -321,7 +321,7 @@ class TestAidSuggestions(unittest.TestCase):
             first(Species.mammal),
             expert=Expert(
                 interface=FunctionInterface(answer_function=record_default),
-                aids=[OutOfDomainAid()],
+                helpers=[OutOfDomainSuggester()],
             ),
         )
 
