@@ -44,7 +44,7 @@ from krrood.entity_query_language.core.mapped_variable import (
     Attribute,
     FlatVariable,
     CanBehaveLikeAVariable,
-    CanBehaveLikeAValue,
+    HasSymbolicOperations,
     MappedVariable,
     Index,
 )
@@ -205,7 +205,7 @@ class AbstractMatchExpression(Generic[T], ABC):
 class Match(
     Evaluable,
     HasQueryModifiers[T],
-    CanBehaveLikeAValue[T],
+    HasSymbolicOperations[T],
     AbstractMatchExpression[T],
     HasFactoryAndKwargs[T],
 ):
@@ -221,7 +221,7 @@ class Match(
         >>> drawer = a(Drawer)(body=a(Body)(name="drawer_1")).from_(world.views)
 
     A match reads like an instance of the matched class: every symbolic operation of
-    :class:`~krrood.entity_query_language.core.mapped_variable.CanBehaveLikeAValue` -
+    :class:`~krrood.entity_query_language.core.mapped_variable.HasSymbolicOperations` -
     attribute access, indexing, calling, comparison and arithmetic - is built on
     :attr:`expression`, so ``drawer.body`` is the symbolic attribute
     ``drawer.expression.body`` and carries the pattern. Names of the match's own methods
@@ -332,7 +332,7 @@ class Match(
                     if self._resolved_
                     else CalledMatchMultipleTimes(self)
                 )
-            return CanBehaveLikeAValue.__call__(self, *args, **kwargs)
+            return HasSymbolicOperations.__call__(self, *args, **kwargs)
         if args:
             raise PositionalArgumentsInMatchPattern(self, args)
         self._kwargs_ = kwargs

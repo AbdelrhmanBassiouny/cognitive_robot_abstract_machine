@@ -21,7 +21,7 @@ from krrood.entity_query_language.exceptions import (
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.core.mapped_variable import (
     Attribute,
-    CanBehaveLikeAValue,
+    HasSymbolicOperations,
 )
 from krrood.entity_query_language.operators.arithmetic import ArithmeticOperation
 from krrood.entity_query_language.operators.comparator import Comparator
@@ -495,9 +495,9 @@ def test_match_and_query_share_the_query_modifier_interface():
     assert isinstance(entity(variable(KRROODPosition, [])), HasQueryModifiers)
 
 
-def test_match_and_variable_share_the_symbolic_value_interface():
-    assert isinstance(a(KRROODPosition), CanBehaveLikeAValue)
-    assert isinstance(variable(KRROODPosition, []), CanBehaveLikeAValue)
+def test_match_and_variable_share_the_symbolic_operations_interface():
+    assert isinstance(a(KRROODPosition), HasSymbolicOperations)
+    assert isinstance(variable(KRROODPosition, []), HasSymbolicOperations)
 
 
 def test_names_that_became_match_internals_are_symbolic_attributes():
@@ -574,6 +574,19 @@ def test_comparing_a_match_builds_a_condition_rather_than_answering_identity():
     assert [position.x for position in match.where(match == positions[1]).tolist()] == [
         5.0
     ]
+
+
+def test_a_match_on_the_other_side_of_a_comparison_also_filters():
+    """
+    A match is not part of the expression graph, so where an operand is expected it
+    contributes the expression it stands for - otherwise it would be read as a literal
+    value, and the condition would pass every row.
+    """
+    positions = [KRROODPosition(1.0, 0.0, 0.0), KRROODPosition(5.0, 0.0, 0.0)]
+    subject = variable(KRROODPosition, positions)
+    match = a(KRROODPosition)(x=5.0).from_(positions)
+    found = entity(subject).where(subject == match).tolist()
+    assert [position.x for position in found] == [5.0]
 
 
 def test_arithmetic_on_a_match_operates_on_the_lowered_query():

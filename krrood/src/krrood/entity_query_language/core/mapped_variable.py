@@ -69,7 +69,7 @@ def attribute_names_for_completion(type_: Any) -> Set[str]:
     return names
 
 
-class CanBehaveLikeAValue(Generic[T], ABC):
+class HasSymbolicOperations(Generic[T], ABC):
     """
     Something that stands for a value of type ``T``, on which every operation builds a
     symbolic expression instead of computing an answer: reading an attribute, indexing,
@@ -262,10 +262,15 @@ class CanBehaveLikeAValue(Generic[T], ABC):
 
 
 @dataclass(eq=False, repr=False)
-class CanBehaveLikeAVariable(Selectable[T], CanBehaveLikeAValue[T], ABC):
+class CanBehaveLikeAVariable(Selectable[T], HasSymbolicOperations[T], ABC):
     """
-    This class adds the monitoring/tracking behavior on variables that tracks attribute
-    access, calling, and comparison operations.
+    An expression the symbolic operations attach to: it is the value they are built on,
+    and it holds the mappings taken from it, so writing the same one twice gives one
+    node rather than two.
+
+    :class:`HasSymbolicOperations` says what can be written; this says what it is written
+    on. Anything that stands for a value but is no expression - a match - implements the
+    former alone and reports one of these as :attr:`_symbolic_expression_`.
     """
 
     _known_mapped_variables_: Dict[MappedVariableCacheItem, MappedVariable] = field(
