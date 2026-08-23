@@ -4046,3 +4046,10 @@ items:
       `integration` until it is un-drafted. `integration` still points at the Phase 1 build
       (899a04a), which reports `tests_passed: null` and was therefore never verified green; the
       newest build is red and was deliberately not pushed.
+
+  - id: always-read-upstream-reviews
+    title: "Read upstream review threads whether or not the fork pull request is labelled"
+    branch: null
+    track: personal-data
+    depends_on: []
+    status: not_started

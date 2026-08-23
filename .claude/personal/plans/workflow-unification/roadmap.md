@@ -8987,3 +8987,81 @@ pair are finally in one importable tree - but unifying it stays
 `bastler-notes-core-python`'s by name, which is decision 12's own assignment. And #151's
 `Subcommand` is still unlanded, so the command-class pair is still half-visible, exactly as
 the 2026-08-20 kickoff recorded.
+
+## Update 2026-08-23 (recorded): `/plan-item-resolve` reads upstream reviews only when a hand-written label says to
+
+New item `always-read-upstream-reviews`, track `personal-data`, wave `immediate`,
+`depends_on: []`. A bug fix, based off `main`, recorded by `/add-plan-item`; no branch or
+pull request opened by that run.
+
+### The gate, and the premise underneath it that is false
+
+`.claude/skills/plan-item-resolve/SKILL.md` step 2 reads upstream review threads only when
+the fork pull request carries `in_review_label` (`in-review`), or when `notes`/`status`
+happen to say the item is under upstream review — and otherwise *"skip it … since a branch
+never promoted has no upstream PR to read."*
+
+That last clause treats the label as evidence of the upstream pull request's existence.
+The tooling that owns the label says the opposite, in
+`.claude/skills/stacked-pr-maintenance/SKILL.md`'s "What this pass never does":
+
+> **It never adds `in-review`.** That is the developer's, once they have clicked Create.
+
+So the upstream pull request exists from the moment Create is clicked, and the label
+exists only if someone remembers afterwards. The skill reads a hand-maintained flag as
+proof of a fact it does not track, and skips the upstream read for exactly the branches
+most likely to be carrying upstream review comments — a fork pull request can be green,
+un-drafted and clean while the item is stalled on an upstream request for changes, which
+is the case that bullet exists to catch.
+
+### The gap is live, measured rather than argued
+
+Counted over the fork's open pull requests when the item was recorded: ten carry
+`cram2-link-sent` (promotion built the compare link) — #190, #188, #187, #186, #182, #161,
+#160, #158, #157, #156 — while two carry `in-review` (#149, #63). Every one of those ten
+whose Create has been clicked has an upstream pull request that `/plan-item-resolve`
+currently skips in silence.
+
+### Why the answer is "always call it" rather than "check first"
+
+The obvious alternative — resolve branch → upstream pull request before deciding — is not
+available to a session, and this is the repo's own recorded constraint rather than a
+guess. `.claude/stack/stack.toml:14` and `.claude/stack/stack.py:9` both state that cram2
+is not readable from the cloud, which is *why* the label was invented as a stand-in; and a
+session's GitHub scope is the fork alone, so the upstream's pull requests cannot be listed
+to pre-check.
+
+The pre-check is redundant anyway. `/upstream-reviews` already resolves branch → upstream
+pull request on the fork's Actions runner, where the read is permitted, and its step 5
+already handles the empty answer cleanly: *"If the branch has no upstream pull request, the
+script says so explicitly — relay that as a clean answer, not an error."* The gate
+therefore buys nothing and costs the case it was meant to cover. Invoke the action
+whenever the item has a branch; keep the existing behaviour that a failed dispatch is
+reported and does not fail the skill.
+
+### Scope, checked rather than assumed
+
+`check_scope_overlap.py` against `origin/main` returned an empty `paths_absent_from_base`
+for `.claude/skills/plan-item-resolve/SKILL.md` and
+`.claude/skills/upstream-reviews/SKILL.md`: both already exist on `main`, so this is not a
+disguised modification of an unlanded parent. Six unlanded branches touch the resolve
+skill — #149 (execution modes), #151 (manifest currency), #154/#191 (integration branch),
+#156 (setup without asking) and #185 (the bastler move, a one-line `.claude/stack/stack.toml`
+→ `bastler/stack.toml` rename inside this very bullet) — but by purpose none of them is
+this work. The overlap is merge friction on one contiguous paragraph, not ownership;
+whichever lands second resolves in favour of the unconditional wording.
+
+### Carried for whoever kicks it off
+
+The one landed precedent for a test over a skill document is
+`.claude/stack/tests/test_maintenance_skill.py`, which asserts a dangerous phrasing is
+*absent* and the safe one present. The same shape fits here: the gating clause gone, the
+unconditional instruction present. There is no `plan-item-resolve` tests directory yet, and
+`ci.yml`'s `test_claude_dev_tooling` job runs four named directories, so adding one costs a
+constant in `resolve-personal-notes-config.sh` and one path in `ci.yml`.
+
+Two things noticed while checking scope, neither this item's to fix. `#149`'s branch
+carries the upstream bullet **twice** — the copies differing only in "step 5" versus
+"step 3", a merge artifact on that branch; `origin/main` carries it once. And this session's
+designated branch had been left pointing at an integration-branch merge rather than at
+`origin/main`, so the item's branch must be created from `origin/main` at kickoff.
