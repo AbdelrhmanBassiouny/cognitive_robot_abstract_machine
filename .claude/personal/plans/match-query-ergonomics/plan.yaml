@@ -159,7 +159,7 @@ items:
       lands second moves that onto the concrete subclasses - a wider
       adjustment than the isinstance check section 13 names.
   - id: match-underscore-rename-and-forwarding
-    title: "Match behaves like a variable: underscore-sandwich rename + guarded __getattr__ forwarding"
+    title: "Match behaves like a variable and like a query: underscore-sandwich rename, forwarding, and the shared interfaces"
     branch: claude/match-query-interface-refactor-l55jym
     pull_request_number: 192
     track: match-api
@@ -167,34 +167,38 @@ items:
       - where-query-rooted-attribute-no-filter
     status: in_progress
     session: https://claude.ai/code/session_01VVM3hJmz2nSnyTXmNJCith
-    blockers:
-      - >-
-        Must not land before where-query-rooted-attribute-no-filter: on the
-        branch, q.where(q.battery >= 50) via the new forwarding silently
-        returns the whole domain (verified 2026-08-19), so the branch makes
-        the wave-1 bug the natural default inside where.
     notes: >
-      Implemented on the branch (commit 147d098d2, full krrood suite green)
-      by an independent IDE-typing session that converged on this item's
-      design without knowing the plan existed: underscore-sandwich rename
-      across Match/AbstractMatchExpression/AttributeMatch/HasFactoryAndKwargs
-      (_declared_type_, _type_, _variable_, _conditions_, _parent_,
-      _children_, _resolved_, _id_, _name_, _root_, _descendants_,
-      _matches_with_variables_, _has_ellipsis_attributes_, _domain_,
-      _factory_, _kwargs_), dunder- and underscore-guarded __getattr__
-      forwarding to the lowered query, __dir__ completion, a new
-      CalledMatchAfterResolution guard, and all krrood-internal consumers
-      migrated (backends, parameterizer, verbalization planners, coraplex
-      plan_node, probabilistic_model rspn). Beyond the item's scope it also
-      fixes the static half: an()/a()/the() type/factory overloads return
-      Union[T, Match[T]] and Match.__call__ returns Union[T, Self], pinned
-      by the mypy fixture. Deviations from the item notes, still to
-      reconcile before a PR: variable and matches_with_variables were
-      renamed with consumers migrated in-branch instead of kept as public
-      compatibility properties (the D-core stack's
-      test_underspecified_match.py uses both, so its cascade will break
-      loudly on rebase), and the planned old-names-are-really-gone guard
-      test is not yet added.
+      Implemented ahead of order by an independent IDE-typing session on
+      claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which
+      converged on this item's design without knowing the plan existed:
+      underscore-sandwich rename across Match/AbstractMatchExpression/
+      AttributeMatch/HasFactoryAndKwargs, guarded __getattr__ forwarding to the
+      lowered query, __dir__ completion, a CalledMatchAfterResolution guard, all
+      krrood-internal consumers migrated, plus the static half the plan had not
+      scoped (an()/a()/the() return Union[T, Match[T]], Match.__call__ returns
+      Union[T, Self], pinned by the mypy fixture).
+      Resolved 2026-08-23 (roadmap section 17): the recorded blocker was a
+      landing-order constraint, not an unsolved problem, so it is discharged by
+      stacking - the work moved onto claude/match-query-interface-refactor-l55jym,
+      which starts from #182's head with 147d098d2 cherry-picked on top, and PR
+      #192 is based on #182's branch. Not stacked on #186, which is independent.
+      The developer also asked for the common parent between Match and Query, and
+      it turned out to close a hole this item's own forwarding opened: getattr on
+      the lowered query put the whole public namespace of Query between a match
+      and its matched class, so a(Release).build returned Query.build.
+      HasSymbolicAttributes (the dunder guard, __dir__, and a
+      _get_symbolic_attribute_ hook) and HasQueryModifiers (where, having,
+      ordered_by, distinct, grouped_by, limit) now state what the two share; a
+      match forwards all six modifiers and returns itself. The section-7 deviation
+      is reconciled as section 4 decided: variable and matches_with_variables are
+      public compatibility properties again, so the D-core stack keeps working,
+      and item 3 removes them. Section 6's guard test and the blocker's own repro
+      are covered. The name policy stayed per class (_is_own_name_) because
+      unifying it surfaced a pre-existing bug in the verbalization assembler and
+      changed an exception type a backends test pins - both reported on #181, not
+      fixed here. test/krrood_test: 2079 passed, 6 skipped (excluding the
+      Graphviz/flask-dependent modules, which fail identically with the diff
+      stashed).
   - id: factories-unwrap-match-and-migrate
     title: "Factories accept a Match directly; migrate consumers and docs off the detours"
     branch: null
@@ -217,4 +221,11 @@ items:
       sites were already migrated to _variable_ by item 2's branch, and the
       public variable property no longer exists there - so this item's
       variable-side decision collapses into however item 2 resolves its
-      compatibility deviation.
+      compatibility deviation. Resolved 2026-08-23: item 2 restored variable and
+      matches_with_variables as public compatibility properties, so removing them
+      is this item's call, together with expression. Item 2 also gave Match the
+      five query modifiers it lacked, which turns two of the .expression sites
+      into plain modifier calls (coraplex training_environment.py:210,
+      experiments reliability.py:108), and leaves update_fields and
+      create_or_update_variable as the public machinery names still to move
+      behind the underscore convention.

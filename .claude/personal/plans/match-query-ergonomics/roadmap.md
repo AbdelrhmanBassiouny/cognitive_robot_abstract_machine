@@ -691,3 +691,46 @@ parent. It is independent of this item, and the one file both touch,
 `core/mapped_variable.py`, they touch for unrelated reasons — this item extracts one
 completion helper, #186 splits the mapping hierarchy. The landing-order adjustment §14
 records stays between #182 and #186.
+
+**Outcome, same day.** All of the above landed on #192 in two commits: the cherry-picked
+`147d098d2` (as `e6cbfa5d`), then `f9501c70` for the two interfaces, the compatibility
+properties and the tests. Three things the implementation settled that the plan above did
+not:
+
+- **The name policy could not be unified, and the attempt found a bug.** The first
+  version put both guards - dunders and other underscore names - in
+  `HasSymbolicAttributes`, making a variable reject `variable._missing_` the way a match
+  already did. That is a language-wide semantic change, and the suite showed why it is
+  not this item's to make: `verbalization/grammar/query/assembler.py:285` reads
+  `expression._chain_expression_` on an `Aggregator`, which has no such attribute, so
+  under the lax policy it silently becomes a symbolic attribute of the aggregator itself.
+  Measured on this branch: `_expression_signature` returns
+  `('Sum', None, (('_chain_expression_', None),))` for *every* `Sum`, so `_is_order_key`
+  treats any two aggregates of one kind as the same column - seven ranking tests only
+  passed because both sides of the comparison were equally wrong. A second test,
+  `test_backends.py::test_underspecified_parameters_with_full_symbolic_expression`,
+  pins the `TypeError` that unpacking such a bogus attribute raises, so the strict policy
+  changed a pinned exception type too. Both are pre-existing and neither is this item's,
+  so the policy became `_is_own_name_`, stated per class: a match claims every
+  underscore-prefixed name, a variable claims none, since the value type may define any
+  of them. The assembler bug is reported on #181 for the developer to route.
+- **The modifiers return the match, not the instance-mimicking union.** The interface
+  declares `Union[T, Self]`, which is the loosest statement true of both implementations
+  (`Query.distinct` and `Query.grouped_by` already returned it). Match narrows to `Self`,
+  because the mypy fixture pins `scoped.where(...)` as `Match[Robot]` and widening it
+  there would lose the chaining the item's static half exists to give. The fixture now
+  also pins `ordered_by` and `limit`.
+- **`Match.where` no longer builds the lowered query eagerly.** `build` is idempotent and
+  every evaluation path calls it, so the five new modifiers would each have had to repeat
+  it for no gain. Full suite green without it.
+
+Verification: `test/krrood_test` 2079 passed, 6 skipped, excluding `test_rustworkx_utils`
+and `test_ripple_down_rules/test_object_diagram.py` - 24 failures from this container
+missing the Graphviz `dot` binary and `flask`, confirmed identical with the diff stashed.
+
+Left for item 3, and now visible where it was not before: `coraplex`'s
+`training_environment.py:210` and `experiments`' `reliability.py:108` reach through
+`.expression` only to call `limit`, which is now a method on the match itself.
+`update_fields` and `create_or_update_variable` are still public names on `Match` that
+the underscore convention would cover; they are machinery rather than fluent verbs, so
+they are deliberately left to whichever pass removes the detours.
