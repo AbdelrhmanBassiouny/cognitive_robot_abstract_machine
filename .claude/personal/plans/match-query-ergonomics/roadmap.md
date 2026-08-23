@@ -878,3 +878,31 @@ row, since the argument is evaluated as an uncorrelated subquery. That is sectio
 family, wave 1's territory, and making a match reach it quietly would trade a loud error
 for a silent wrong answer. Selecting a match (`entity(match)`, `the(match)`) stays item
 3's, which is the item that teaches the factories to unwrap one.
+
+## 20. 2026-08-23: two findings became items, because a note is not a queue entry
+
+The developer's correction: recording something in an item's `notes` or a pull request
+description does not make it happen - only a plan item or a blocker does. Section 19 left
+two measured findings as prose, so both are now items.
+
+**`aggregate-signature-reads-a-missing-attribute` (this plan, `mapping-semantics`).** The
+assembler bug section 17 found and section 18 re-measured: `assembler.py:285` reads
+`_chain_expression_` on an `Aggregator`, which does not define it, so under the name
+policy a variable keeps (it claims no underscore-prefixed name) the read becomes a
+symbolic attribute of the aggregator, and every `Sum` gets the signature
+`('Sum', None, (('_chain_expression_', None),))`. It is tracked here rather than in
+`eql-verbalization`, whose single track is the framework migration, on the precedent of
+`chain-outside-evaluation-truncates-silently`: a pre-existing bug found while doing this
+plan's work, independent of every item here, kept in the plan whose refactor exposed it.
+
+**`argument-position-correlation` (`eql-existential-semantics`, `binding-order` track,
+depends on `binding-order-planner`).** A query given as an *argument* is evaluated
+uncorrelated with no quantifier involved. It is an item rather than a third repro on
+`binding-order-planner` because it is genuinely unknown whether binding the outer relation
+first also correlates an argument that is itself a query - so the item's first job is to
+re-measure once that lands and close as already-fixed if it is. That is a checkable unit of
+work; a bullet in someone else's test list is not.
+
+Neither blocks #192, which refuses both cases loudly rather than shipping a silent wrong
+answer. `factories-unwrap-match-and-migrate` already owns the third finding (selecting a
+match) and needed no new item, only the measurement section 19 added to it.

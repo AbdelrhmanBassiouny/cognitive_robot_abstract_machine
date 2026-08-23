@@ -227,6 +227,34 @@ items:
       match involved, which is wave 1's territory - and selecting a match stays item 3's.
       test/krrood_test: 2088 passed, 6 skipped (excluding the Graphviz/flask-dependent
       modules, which fail identically with the diff stashed).
+  - id: aggregate-signature-reads-a-missing-attribute
+    title: "Bug: every aggregate of one kind gets the same structural signature"
+    branch: null
+    pull_request_number: null
+    track: mapping-semantics
+    depends_on: []
+    status: not_started
+    notes: >
+      Found on #192 (2026-08-23, roadmap section 17) and measured there:
+      verbalization/grammar/query/assembler.py:285 reads
+      expression._chain_expression_ on an Aggregator, which has no such
+      attribute. A variable claims no underscore-prefixed name, so the read
+      silently becomes a symbolic attribute of the aggregator itself, and
+      QueryAssembler._expression_signature returns
+      ('Sum', None, (('_chain_expression_', None),)) for *every* Sum -
+      reproduced directly on two different aggregates. _is_order_key therefore
+      treats any two aggregates of one kind as the same column, so a set_of
+      selecting two aggregates and ordered by one attaches the ranking
+      superlative to whichever it compares first. Seven test_set_of_ranking
+      tests pass only because both sides of the comparison are equally wrong,
+      which is why nothing caught it. Pre-existing on main, independent of
+      #192 and of every other item here; it is tracked in this plan because the
+      naming convention that hides it is what this plan is refactoring, the
+      same way chain-outside-evaluation-truncates-silently was. Focused bug-fix
+      PR off main with the bug label: failing test first, pinning that two
+      different Sums have different signatures, then read the aggregated
+      expression through the field that actually holds it rather than a name
+      the class does not define.
   - id: factories-unwrap-match-and-migrate
     title: "Factories accept a Match directly; migrate consumers and docs off the detours"
     branch: null
