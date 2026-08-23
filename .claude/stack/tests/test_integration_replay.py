@@ -249,3 +249,20 @@ def test_a_tip_whose_replay_leaves_another_conflict_is_skipped_not_fatal(
     left_out = outcome_for(report, SECOND_TIP)
     assert left_out.status is TipStatus.SKIPPED
     assert left_out.conflicting_paths == ("unresolved",)
+
+
+def test_the_provenance_manifest_belongs_to_the_checkout_being_built(
+    fork_checkout: ForkCheckout,
+):
+    """
+    `git rev-parse --git-common-dir` answers relatively inside a main working tree, so
+    resolving it against the process's own directory rather than the checkout the runner
+    was given points at whichever repository happens to have been invoked from. The suite
+    then writes its fixtures' authors over a developer's real ones, destroying the record
+    of which resolutions a skill wrote - the one thing that makes a bad replay findable.
+    """
+    two_colliding_tips(fork_checkout)
+
+    path = a_run(fork_checkout).provenance_path()
+
+    assert path.is_relative_to(fork_checkout.project_root.resolve())
