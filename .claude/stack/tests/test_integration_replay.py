@@ -226,3 +226,26 @@ def test_recording_a_resolution_keeps_the_claims_already_made(
 
     recorded = ResolutionProvenance.read(run.provenance_path())
     assert recorded.author_for("an-earlier-tip") is ResolutionAuthor.SKILL
+
+
+def test_a_tip_whose_replay_leaves_another_conflict_is_skipped_not_fatal(
+    fork_checkout: ForkCheckout,
+):
+    """
+    rerere replays per conflict rather than per merge, so one tip can carry both a
+    conflict a recorded resolution covers and a second one nothing has ever resolved.
+    Git says it used a previous resolution either way, so concluding the merge on the
+    strength of that marker alone commits with files still unmerged - which fails, and
+    takes the whole build down over one tip that should simply be left out.
+    """
+    pull_requests = two_colliding_tips(fork_checkout)
+    a_recorded_resolution(fork_checkout)
+    for tip in (FIRST_TIP, SECOND_TIP):
+        fork_checkout.commit_on(tip, "unresolved", f"a second collision, from {tip}\n")
+    fork_checkout.git.fetch("origin")
+
+    report = build(fork_checkout, pull_requests)
+
+    left_out = outcome_for(report, SECOND_TIP)
+    assert left_out.status is TipStatus.SKIPPED
+    assert left_out.conflicting_paths == ("unresolved",)

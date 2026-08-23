@@ -553,9 +553,11 @@ class IntegrationBuild:
                 pull_request_number=tip.pull_request_number,
                 status=TipStatus.MERGED,
             )
-        if self._replayed_a_resolution(result.output, result.error_output):
-            return self._conclude_replay(tip, already_included)
         conflicting_paths = self.git.unmerged_paths()
+        if not conflicting_paths and self._replayed_a_resolution(
+            result.output, result.error_output
+        ):
+            return self._conclude_replay(tip, already_included)
         self.git.abandon(tip.strategy)
         if not conflicting_paths:
             return PullRequestStackTipOutcome(
