@@ -23,12 +23,6 @@ REPOSITORY_ROOT = PACKAGE_DIRECTORY.parent
 The repository root, which is the directory ``bastler`` imports from with no install.
 """
 
-REQUIREMENTS_FILE = PACKAGE_DIRECTORY / "requirements.txt"
-"""
-The dependencies the top tier needs, and the single list the ``rendering`` extra is read
-from.
-"""
-
 
 class DependencyTier(StrEnum):
     """
@@ -99,11 +93,6 @@ class PackageModule:
         return f"bastler.{self.name}"
 
     @property
-    def path(self) -> Path:
-        """:return: Where this module's file lives."""
-        return PACKAGE_DIRECTORY / f"{self.name}.py"
-
-    @property
     def unreachable_third_party_modules(self) -> frozenset[str]:
         """
         :return: The third-party modules that must stay unimportable for this module's own
@@ -155,11 +144,4 @@ Written out rather than discovered, because each entry says something a director
 cannot: which tier the module reaches, and whether it answers as a command line. A test
 holds the *set* of names equal to what the directory actually contains, so a module added
 without an entry here fails rather than going quietly uncovered.
-"""
-
-MODULES_BY_NAME: dict[str, PackageModule] = {
-    module.name: module for module in PACKAGE_MODULES
-}
-"""
-Every module above, by its name within the package.
 """
