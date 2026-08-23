@@ -734,3 +734,82 @@ Left for item 3, and now visible where it was not before: `coraplex`'s
 `update_fields` and `create_or_update_variable` are still public names on `Match` that
 the underscore convention would cover; they are machinery rather than fluent verbs, so
 they are deliberately left to whichever pass removes the detours.
+
+## 18. 2026-08-23: the forwarding was one operation wide, and the developer said so
+
+Reviewing section 17's result, the developer raised two things, both right.
+
+**First: `Match.__call__` collides with a callable matched class**, and the collision had
+no stated resolution. **Second: only attribute access was forwarded**, where a
+`CanBehaveLikeAVariable` offers twenty-five operations - indexing, calling, the six
+comparisons, arithmetic, negation.
+
+**Why it happened, since the reason matters more than the gap.** Section 17 extracted the
+shape of *the code that existed* - the inherited commit forwarded `__getattr__` and
+nothing else - rather than asking what the protocol is. Worse, it named the result
+`HasSymbolicAttributes` and wrote its docstring as though attributes were the whole
+story, baking the incompleteness into the abstraction's own name, where the next reader
+would have read it as complete.
+
+**Measured before deciding.** On the branch, `match[0]`, `match + 1`, `match > 1`,
+`-match` and `iter(match)` all raised `TypeError`; `match == robot` returned the plain
+`bool` `False`, from `AbstractMatchExpression`'s identity comparison, which reaches the
+query as a `Literal` and dies in `LiteralConditionError` - a loud error a long way from
+the mistake, and the only one of the set that was silent at the point of writing.
+
+**The operations are now written once.** Every one of them is `<Constructor>(self, ...)`
+or `self._get_mapped_variable_(<Type>, ...)`; the *only* thing that differs between a
+variable and a match is which expression is the operand. So `CanBehaveLikeAValue` holds
+all of them, each built on the one expression an implementation reports as
+`_symbolic_expression_` - a variable reports itself, a match reports its lowered query.
+`CanBehaveLikeAVariable` keeps the mapped-variable cache and loses the operator bodies;
+no behaviour of a variable changes. This is what the developer's "common parent, also
+with `CanBehaveLikeAVariable`" asks for, and it costs one hook instead of twenty-five
+forwarders.
+
+`__iter__ = None` moves up with the rest, and is now load-bearing for the match too:
+`__getitem__` would otherwise hand Python its legacy sequence protocol, iterating a match
+endlessly since every index is a valid expression - the trap section 10 recorded for
+variables.
+
+**The parentheses rule is the developer's, and it is better than what this session
+argued for.** The proposal: the first parentheses after `a(Type)` state the pattern, the
+next call the instance - `a(Adder)(offset=1)(2)`, and `a(Adder)()(2)` where the pattern
+is empty. The objection this session had raised - that the same syntax means different
+things depending on hidden state - is answered by a check: a matched class whose
+instances are *not* callable has nothing a second call could mean, so it keeps raising
+`CalledMatchMultipleTimes` / `CalledMatchAfterResolution` exactly as before. The new
+meaning exists only where the class defines `__call__`, so no existing behaviour changes
+at all, and the guard survives where it has value. Positional arguments where the pattern
+is stated now raise `PositionalArgumentsInMatchPattern` rather than Python's
+argument-count error, since that is where the rule is most likely to be met.
+
+**Two gaps had to close for the new operations to mean anything.** Both were found by
+writing the tests, not by reading:
+
+- *A condition comparing the match itself did not filter.* `where(match == robot)`
+  returned every row - section 3's bug, in the shape #182 had not covered: #182 re-roots
+  attribute *chains* taken from a query, and a bare query operand is not a chain, so the
+  walk treated it as a nested subquery scope. It is the same rule one step more general,
+  so it went in the same place: a query standing as a value in its own condition is
+  replaced by the variable it selects, and one selecting several raises the new
+  `AmbiguousQuerySubject`. Shipping symbolic comparison without this would have replaced
+  a loud error with a silent wrong answer, which is the trade this plan exists to undo.
+- *Calling a callable instance raised `KeyError('return')`.* `Call._update_type_` read
+  the return hint off the called type itself, which for an instance carries none - the
+  hint is on its `__call__`. Pre-existing and not match-specific:
+  `variable(Adder, ...)(10)` failed identically on `main`. It now reads `__call__`'s hints
+  in that case, and leaves the type unknown rather than raising when the callable is
+  unannotated.
+
+**A test caught the very hazard this item is about, on this session.** An assertion
+written as `doubled._operands_[0] is match.expression` failed, and the reason was not the
+code: `ArithmeticOperation` has no `_operands_`, so the lax name policy turned it into a
+symbolic attribute of the operation, and the test was asserting on `Index(Attribute(op,
+'_operands_'), 0)`. The real field is `left`. This is the assembler bug of section 17 in
+miniature, in a test written the same day by the session that had just documented it.
+
+Verification: `test/krrood_test` 2087 passed, 6 skipped, excluding the Graphviz- and
+flask-dependent modules that fail identically with the diff stashed.
+`krrood/doc/eql/user/match.md` gains a short section on the instance-like surface and the
+parentheses rule; the wholesale docs migration stays item 3's.

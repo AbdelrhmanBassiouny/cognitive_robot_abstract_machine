@@ -196,9 +196,26 @@ items:
       are covered. The name policy stayed per class (_is_own_name_) because
       unifying it surfaced a pre-existing bug in the verbalization assembler and
       changed an exception type a backends test pins - both reported on #181, not
-      fixed here. test/krrood_test: 2079 passed, 6 skipped (excluding the
-      Graphviz/flask-dependent modules, which fail identically with the diff
-      stashed).
+      fixed here. Review round 2026-08-23 (roadmap section 18): the developer
+      caught that the forwarding covered attribute access alone, where a
+      CanBehaveLikeAVariable offers twenty-five operations, and that Match.__call__
+      collides with a callable matched class. Both taken: the operations are now
+      written once in CanBehaveLikeAValue, each built on the one expression an
+      implementation reports as _symbolic_expression_ (a variable reports itself, a
+      match its lowered query), so HasSymbolicAttributes is gone and
+      CanBehaveLikeAVariable keeps only the mapped-variable cache. The developer's
+      parentheses rule - first call states the pattern, later calls call the instance -
+      is implemented with a callability check, so a class whose instances are not
+      callable keeps raising CalledMatchMultipleTimes/CalledMatchAfterResolution and no
+      existing behaviour changes. Two gaps closed to make the operations mean
+      anything: a bare query used as a value in its own condition was uncorrelated
+      (where(match == robot) returned every row) and is now replaced by the selected
+      variable, raising the new AmbiguousQuerySubject for a multi-selection query; and
+      Call read the return hint off the called type rather than its __call__, so
+      calling any callable instance raised KeyError('return') - pre-existing, since
+      variable(Adder, ...)(10) failed identically on main.
+      test/krrood_test: 2087 passed, 6 skipped (excluding the Graphviz/flask-dependent
+      modules, which fail identically with the diff stashed).
   - id: factories-unwrap-match-and-migrate
     title: "Factories accept a Match directly; migrate consumers and docs off the detours"
     branch: null
