@@ -2447,3 +2447,123 @@ the fact that answers it, though, since this round established it: **`present()`
 call site anywhere in the stack**, while `suggest()` has one. The reviewer is wrong about half of
 the class and right about the other half, and the split is what makes that visible instead of
 hiding it behind two no-op defaults.
+
+## 29. Addendum (2026-08-23) — `d-core-single-class` (#159): a thirty-thread review, and the three
+assertions that were hiding facts
+
+A `/plan-item-resolve` session picked up `d-core-single-class` hours after §28 pushed to it.
+Nothing was wrong with the branch: dependency `d-core-expert` `open_ready`, base merging clean,
+228 passed / 0 failed. What was stalling it was **a review round the same day, 09:48–18:41Z,
+submitted 18:45Z against the current head — thirty threads, none answered, none resolved, none
+outdated** — which the item's `notes`, ending at §28's rename, never recorded. Sixth instance of
+this plan's staleness class (§5, §14, §18, §19, §23, §27), and the tightest yet: the review
+landed three hours after the notes were written.
+
+Eighteen threads applied and resolved; twelve ask a design question and were answered on their
+threads and left open, per the standing rule that a thread asking a question is the developer's.
+
+### Three weak assertions, and what strengthening them found
+
+The round's value was not the renames. Each of the three assertions the reviewer flagged as weak
+turned out to be concealing something, which is the seventh instance of this plan's standing
+review lens and the first where the concealed thing was a *fact about the data* rather than a
+vacuous test.
+
+- **The branch tests asserted only classifications**, which hold whichever branch the engine
+  took. Now each asserts the node the insertion produced; an `Alternative`/`Refinement` swap
+  fails exactly those four tests.
+- **The out-of-domain suggestion test** asserted the conclusion was not pre-seeded without
+  asserting why, so it passed just as well when the helper was never consulted at all. It now
+  pins the `ConclusionNotInDomain` rejection, asking the same `ConclusionDomain` the engine used.
+- **The 0.95 accuracy threshold was covering two untrue things.** Computing the ambiguous set the
+  reviewer asked for returns **empty** — no zoo row shares a feature vector with a different
+  species — so the fit is 101/101, and the comment claiming "a handful of zoo rows share a feature
+  vector but differ in species" was simply false of this dataset. Worse, the threshold was the
+  wrong *shape*: making a row genuinely ambiguous on purpose (dropping `legs` from
+  `FEATURE_FIELDS`) does not lower the score, it raises `RDRDidNotConvergeError` naming `flea` and
+  `termite`. A percentage could never have measured what it claimed to.
+
+### The two questions the reviewer asked to be settled with TDD
+
+**`conditions_root` is correct, and the reason is the construction path rather than the accessor.**
+`EQLSingleClassRDR` never accepts a query from outside; it builds exactly one, and both insertion
+helpers splice at or below that node. Deliberately *not* tested by asserting on `_parent_` — that
+is the accessor `dag-facade-hardening` (#96) exists to make trustworthy, and §10 records its guard
+test forbidding exactly such reads. The test asserts the property that matters instead: every rule
+inserted through all three growth branches stays reachable from the reported root. Mutation-checked
+by caching the root at seed time, which makes `walk_rules` see 1 rule instead of 4.
+
+**The convergence check kept its semantics and lost its obscurity, and measuring saved the
+semantics.** `len(seen) != len(set(seen))` said "a duplicate appeared" without saying which; it is
+now a membership test whose recurring set is the one reported as `clashing_cases`. The obvious
+"compare against the previous pass" simplification is *wrong*: instrumenting the existing
+oscillation fixture first showed the pending sets run `{red} → {blue} → {red}`, so no two
+consecutive passes ever match. Making that change and running it did not fail the test — the fit
+never terminated and had to be killed. The test that covered this asserted `passes >= 1`, which
+both rules satisfy; it now asserts `passes == 3`, which is the only thing that tells them apart.
+
+This is §12/§15/§16/§22/§26's lesson in a fifth variant, and the first where the run rescued a
+*rule* rather than a code path or a test: reading the code makes the narrower check look like a
+clean simplification, and only running it shows it hangs.
+
+### A real defect found by taking a question seriously
+
+Thread `r3838361318` asked why the labelling path does not also fit until converged, since the
+expert supplies the targets too, just later. Probing it found the current behaviour is not a
+missing optimisation but a **silent wrong answer**: two cases labelled differently but justified
+by a condition they share end with `fit` returning normally and the first case classifying as the
+second's label. The same input *with* targets raises `RDRDidNotConvergeError`. So the labelling
+path does not converge less thoroughly — it does not check at all.
+
+Not fixed, because the fix changes what a labelling fit costs a human (a second pass re-asks about
+cases their own rule broke), and `test_no_target_fit_never_runs_oscillation_detection` currently
+asserts today's behaviour. Three options are on the thread. Worth carrying: this is the second
+time on this plan that a reviewer's "can't we also…" turned out to name a defect rather than an
+enhancement.
+
+### Where a rename goes, settled by a conflict rather than by argument
+
+The `returns_ellipsis` rename was asked for on a `test_expert.py` line **#159's own commit had
+touched**, which makes it look like this PR's. It is not — the file is #98's, and doing it here
+conflicted against #98 on the very next merge. Applied on #98 (`4832ec49`) and merged up, which
+leaves both branches carrying the same name and nothing to resolve.
+
+That is the mechanical answer to a question §23 and §24 argued twice on judgement: **if a change
+to a previous PR's file conflicts when made downstream, the conflict settles where it belongs.**
+The reviewer's own instruction on this round ("if the files are in previous prs, then modify them
+in the previous prs") says the same thing, and here it has a test.
+
+### The CI wedge is back, and §21's remedy did not clear it
+
+§21 established that a base move followed by a push unwedged #98. That was applied deliberately
+this round — #98 pushed first, then #159 — and **neither queued a run**.
+
+| branch | last CI run | since |
+|---|---|---|
+| `D-core-expert` (#98) | `82eb69fb`, 2026-08-12, green | nothing for `af77399b` or `4832ec49` |
+| `D-core-single-class` (#159) | `04dc904c`, 2026-08-13, green | nothing for `34df6172` or `9cf87496` |
+
+It is **not** repo-wide and not the whole stack: `D-core-aid` ran at 11:23Z on 2026-08-23 and
+#64/#65/#66 at 09:38Z. The only property that separates the two silent branches from the five
+noisy ones is the one §18 recorded — both read `mergeable_state: unknown`. So §14's "genuine,
+unsolved" stands, §21's mechanism is now known to be insufficient rather than the answer, and the
+next session should not spend a push testing it again.
+
+### Also
+
+- **`from_underspecified` had no caller anywhere in the repository** and therefore no test. Found
+  while renaming its parameter; it now has one. A public classmethod that nothing calls is the
+  kind of thing a rename request surfaces and a diff review does not.
+- **`scripts/format_docstrings.py` produced no unrelated churn**, for the first time in eight
+  rounds (§12, §14, §16, §18, §19, §22, §23). Every hunk landed on a line this round wrote, so all
+  of its output was kept. Worth recording as evidence for rather than against the package-wide
+  pass: the tool misbehaves on files it has never formatted, not on files being actively rewritten.
+- **The pytest conversion is half done on purpose.** This PR's two `unittest` files are converted;
+  the remaining seven in `test_eql_rdr` belong to #98 (three) and #67 (four), and the reviewer's
+  "modify them in the previous prs" would mean a whole-file rewrite of `test_expert.py` on two
+  branches at once — the file that just conflicted over a single method name. Options put on the
+  thread rather than chosen.
+- **Subscribing to #94 was refused by the permission classifier again** — sixth recorded instance
+  (§11, §16, §20, §23, §27).
+- The test sweep dirtied no generated file this round; staging was by explicit path regardless
+  (§23/§24's standing habit).
