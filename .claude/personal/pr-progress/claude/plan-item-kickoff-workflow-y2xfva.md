@@ -25,15 +25,20 @@ skipped in silence. Fix: invoke it whenever the item has a branch.
 3. Run the four-directory CI set; `format_docstrings.py` on the new test.
 4. Fill in the PR description's Changes/Verification sections, keep it a draft.
 
-## Done
+## Done — all of it
 
-- Branch pushed, draft PR #194 opened and labelled `bug`.
+- Branch pushed, draft PR #194 opened and labelled `bug`; description filled in.
 - Manifest: `branch`, `session`, `pull_request_number`, `status: in_progress` written;
-  roadmap section appended (`plan_item_bootstrap.py open` + `record`).
+  roadmap section appended (`plan_item_bootstrap.py open` + `record`). Dashboard
+  republished to its existing URL.
+- `test_upstream_review_reading.py` written first and confirmed failing on the unedited
+  document, passing after; `plan-item-resolve/SKILL.md` edited at both sites; 515 tests
+  pass over the four CI directories; `format_docstrings.py` run. Commit `258c5334`.
 
 ## Next
 
-Steps 1-4 above. Dashboard republish (`/plan-dashboard workflow-unification`) still owed.
+Nothing outstanding in this session. CI on #194 has not been read yet — it is a
+first run on a new branch. The PR stays a draft.
 
 ## Decisions worth not relitigating
 
