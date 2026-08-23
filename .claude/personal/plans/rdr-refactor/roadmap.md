@@ -2567,3 +2567,110 @@ next session should not spend a push testing it again.
   (§11, §16, §20, §23, §27).
 - The test sweep dirtied no generated file this round; staging was by explicit path regardless
   (§23/§24's standing habit).
+
+## 30. Addendum (2026-08-23) — the developer answered five of §29's twelve threads, and the
+answers landed across three branches
+
+§29 left twelve design threads open. The developer answered four directly and a fifth by
+implication, and this round implements all five. Seven remain genuinely open and are not
+guessed at.
+
+### Where each answer landed, and why not all on #159
+
+The reviewer's own rule from §29 — *"if the files are in previous prs, then modify them in
+the previous prs"* — decided the placement every time, and it is now the second round
+running where that rule was cheaper than the alternative:
+
+| PR | commit | what |
+|---|---|---|
+| #67 `D-core-support` | `54502f99` | `ZooDataset`; its four `unittest` modules to pytest |
+| #98 `D-core-expert` | `9960a3d0` | the resolver contract; `TemporaryModelSaver`; its three modules to pytest |
+| #159 `D-core-single-class` | `e4f0811f6` | save-when-the-fit-ends; the new defaults; the engine's side of the resolver |
+
+`ZooDataset` moving down to #67 also retires §29's own flag that #159 had edited an earlier
+PR's files to deduplicate `first(species)`. It belongs where `zoo_loader.py` lives.
+
+### The resolver takes the RDR, and two of my objections were simply wrong
+
+The developer's answer was *"the resolver knows about and has the rdr since it uses it, and
+the rdr does not have to know how the resolver works."* §29 had argued against handing it the
+engine and offered a callable on `CaseContext` instead. Implementing the developer's version
+showed both objections were unfounded:
+
+- **The coupling I feared already exists and is one-directional.** Typing the RDR under
+  `TYPE_CHECKING` leaves `condition_resolver.py` importing nothing from `single_class` at
+  runtime. The module needs one method, and asking for it does not create a dependency the
+  import graph did not already have.
+- **The 16 unit tests did not become engine tests.** They needed something that answers
+  `sufficient_conditions_for`, which is a four-line dataclass holding a mapping. They still
+  build their condition sets by hand; they hand them over instead of passing them as
+  arguments.
+
+So the `CaseContext`-carries-a-callable alternative was solving a problem that did not exist,
+and would have put a function field on a value object for nothing. Worth recording as a
+pattern: *an objection about coupling should be checked against the import graph before it is
+offered as a design argument.*
+
+The shared gate went onto `ConditionResolver.resolve`, which applies it once and delegates to
+an abstract `_resolve_against_corner_case` — so the engine asks and checks the answer, and a
+future strategy inherits the precondition instead of restating it. The gate's three tests use
+a stand-in that **fails if it is consulted at all**, so they pin that the tree is not walked
+for an answer that cannot be used, not merely that `None` comes back.
+
+### Saving: what running it caught that reading did not
+
+The developer chose option 3 then 2 — stop saving per rule, save at the end, then make the
+default a temp file — and added a requirement §29 had not proposed: *"I want any accidental
+crash of the code to be caught and save a working current version of the rdr before ending."*
+
+That is a `try/finally` around each public fitting call, not a special case on the give-up
+path, and it makes the give-up path's own save redundant.
+
+**The first version was wrong in a way that mattered, and four tests said so.** Saving
+unconditionally meant a fit that failed *before any rule existed* — a missing expert, an
+aborted question — raised `EmptyRuleTreeError` from inside the `finally`, **replacing the
+exception the caller needed to see**. Someone who forgot the expert would have been told
+about serialization. An empty tree is now not saved, and the case is pinned by a test that
+fails if the guard is removed.
+
+This is the fifth entry in this plan's measure-don't-reason ledger (§12, §15, §16, §22, §26)
+and the first where the defect was in *this round's own new code*: the design was right, the
+first implementation of it was actively harmful, and only running the suite separated them.
+
+The residue is stated on the thread rather than hidden: a saver that fails for any *other*
+reason still masks the fit's exception, because a raising `finally` wins. Catching that to
+hide it is what `AGENTS.md` rules out, so it is the developer's call.
+
+### A merge that lost six tests silently, caught by diffing ids rather than counts
+
+Merging #67 into #98 conflicted on three files — #98's inherited `unittest` form against
+#67's converted one. Resolving by taking the converted side is the obvious move and it
+**dropped six tests #98 itself had added** to `test_conclusion_domain.py`: its
+`ConclusionDomain.hint()` / `validate()` coverage. Nothing failed. The count went 169 → 163
+and would have been read as "the conversion merged fine".
+
+Caught only because the round diffs collected ids against a baseline rather than comparing
+counts, and fixed by converting #98's fuller version instead of taking #67's.
+
+Same shape as §21's `rdr/utils.py` deletion: **a conflict resolved in the obvious place, losing
+something in a file nobody was looking at.** The standing habit that catches it is the one
+§22 introduced — compare sorted id lists, never counts — and it has now paid twice.
+
+### Also
+
+- **The progress-bar default is D-ui's**, agreed by the developer. Recorded as outstanding
+  work on the `D-ui` item rather than left in a resolved thread, since §24's lesson is that
+  writing about a decision is not the same as it being in the manifest.
+- **`pytest-conversion-sweep` is a new item**, off `main`, for the `unittest` modules outside
+  `test_eql_rdr`. Added in the same turn as the reply that promised it — the §24/§25 habit.
+- `format_docstrings.py` rewrapped `serialization.py` wholesale for the **eighth** time;
+  reverted there, kept where this round rewrites files. It behaved on all three of #159's
+  files, which continues §29's observation that it misbehaves on files it has not formatted
+  before rather than on files being actively rewritten.
+- The `ormatic_interface.py` regeneration hazard bit twice, once blocking a `git stash pop`
+  mid-verification. §23's habit — stage by explicit path, never `git add -u` — held, and the
+  file is #67's own tracked-generated-file defect, still unfixed.
+- **CI has still queued nothing** on #98 or #159 since 2026-08-12/13. This round pushed all
+  three branches with the base moving under each in turn, which is §21's remedy applied twice
+  more, and neither of the two silent branches produced a run. #67 is the control: it is the
+  same stack and it does run.
