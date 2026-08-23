@@ -35,10 +35,30 @@ skipped in silence. Fix: invoke it whenever the item has a branch.
   document, passing after; `plan-item-resolve/SKILL.md` edited at both sites; 515 tests
   pass over the four CI directories; `format_docstrings.py` run. Commit `258c5334`.
 
+## Review round 2026-08-23 (one thread), applied in `e4bd2b5b`
+
+*"isn't there one place where we define these constants already?"* — right about one of
+the three, and it was the worst. The test named `.claude/stack/stack.toml` itself (a
+third definition, after `stack.py:54`'s `CONFIGURATION_PATH` and the shell config's
+`STACK_CONFIG_FILE`) **and** re-read it with `tomllib` beside `stack.py:358`'s own
+`_configuration_values`. Both are imported now, matching `test_maintenance_skill.py`.
+`.claude/hooks/tests/conftest.py` puts `.claude/stack` on `sys.path` for it — the same
+reach `.claude/stack/tests/conftest.py:15-16` already makes the other way; no module
+name collides. `load_configuration` stays unused (it resolves the fork's remotes, the
+#106 cram2-CI failure) and the docstring says so.
+
+The two `SKILL.md` paths have no such place — grepped: nothing in the repo defines a
+`SKILL.md` path as a shared constant, and `PROJECT_ROOT` is computed three ways in three
+modules. Not created here, on landing order rather than principle: the shell config is
+the only candidate, Python cannot read it without sourcing shell, and #185 rewrites it
+and introduces `test/bastler_test/constants.py`, which *is* that one place. Offered to
+add it anyway.
+
+**Thread left open**: one part done, the rest answered differently from what it asked.
+
 ## Next
 
-Nothing outstanding in this session. CI on #194 has not been read yet — it is a
-first run on a new branch. The PR stays a draft.
+Nothing outstanding. CI on #194 has not been read yet. The PR stays a draft.
 
 ## Decisions worth not relitigating
 
