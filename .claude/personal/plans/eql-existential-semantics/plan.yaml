@@ -129,6 +129,15 @@ items:
       (d) The blast radius on coraplex and semantic_digital_twin: PR #99's history shows
       krrood's own suite cannot see costs that break downstream callers.
 
+      A THIRD REPRO, from the match-query-ergonomics plan (2026-08-23, measured on
+      krrood PR #192's branch): a *query given as an argument* is uncorrelated the same
+      way. HasType(entity(variable), Handle) - a plain query, no quantifier and no match
+      involved - returns every row over a mixed Handle/Container domain, because the
+      argument is evaluated once against an empty context, while HasType(variable,
+      Handle) returns only the Handle. That is why #192 refuses to let a Match reach a
+      predicate at all: coercing it would trade a loud LiteralConditionError for this
+      silent wrong answer. Whoever takes this item should carry the predicate-argument
+      spelling in its test list, not only the exists()/not_(exists()) ones below.
       TDD (all reproduced this session, all currently failing without a hand-placed
       binding condition):
       - not_(exists(apple, apple.color == "green")) over four boxes returns [] today;
