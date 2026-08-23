@@ -12,6 +12,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from functools import cached_property
+from inspect import isclass
 from typing import Self
 
 from typing_extensions import (
@@ -68,43 +69,58 @@ def attribute_names_for_completion(type_: Any) -> Set[str]:
     return names
 
 
-class HasSymbolicAttributes(Generic[T], ABC):
+class CanBehaveLikeAValue(Generic[T], ABC):
     """
-    An expression that stands for a value of type ``T`` and offers that type's
-    attributes symbolically, so ``expression.field`` builds an expression for that field
-    instead of reading a real attribute.
+    Something that stands for a value of type ``T``, on which every operation builds a
+    symbolic expression instead of computing an answer: reading an attribute, indexing,
+    calling, comparing and arithmetic.
 
-    Implementations differ only in where the attribute expression comes from: an
-    expression that is itself a variable maps the attribute onto itself, while one that
-    merely holds a variable asks that variable for it.
+    Implementations differ only in *which* expression the operation is built on, which
+    they report as :attr:`_symbolic_expression_`: an expression that is itself a variable
+    reports itself, while something that merely stands for one - a match, whose lowered
+    query carries its pattern - reports that expression. The operations themselves are
+    written once, here.
     """
 
     _type_: Optional[Type[T]]
     """
-    The type of the value this expression stands for, whose attributes are offered.
+    The type of the value this stands for, whose attributes and operations are offered.
     """
 
+    _id_: uuid.UUID
+    """
+    The identity this is hashed by, since comparing two of these builds a
+    :class:`~krrood.entity_query_language.operators.comparator.Comparator` rather than
+    answering whether they are the same.
+    """
+
+    __iter__ = None
+    """
+    Prevent iteration, which :meth:`__getitem__` would otherwise supply through Python's
+    legacy sequence protocol - endlessly, since every index is a valid expression.
+    """
+
+    @property
     @abstractmethod
-    def _get_symbolic_attribute_(self, name: str) -> CanBehaveLikeAVariable[T]:
+    def _symbolic_expression_(self) -> CanBehaveLikeAVariable[T]:
         """
-        :param name: The name of the attribute to read symbolically.
-        :return: The expression standing for that attribute of this value.
+        :return: The expression every symbolic operation on this is built on.
         """
         ...
 
     def _is_own_name_(self, name: str) -> bool:
         """
-        :param name: A name that this expression does not define.
-        :return: Whether the name belongs to this expression's own machinery rather than
-            to the value type, making a missing one a genuine :class:`AttributeError`.
-            An expression that is itself a variable claims no such names, since the value
+        :param name: A name that this does not define.
+        :return: Whether the name belongs to this object's own machinery rather than to
+            the value type, making a missing one a genuine :class:`AttributeError`. An
+            expression that is itself a variable claims no such names, since the value
             type may define any of them.
         """
         return False
 
     def __getattr__(self, name: str) -> CanBehaveLikeAVariable[T]:
         """
-        Read a name that is not the expression's own as an attribute of the value type.
+        Read a name that is not this object's own as an attribute of the value type.
 
         Dunder names are never symbolic: mapping them would let ``copy``, ``pickle`` and
         anything else probing optional dunder hooks recurse into endless expression
@@ -118,7 +134,7 @@ class HasSymbolicAttributes(Generic[T], ABC):
             raise SymbolicDunderAccessError(name)
         if self._is_own_name_(name):
             raise AttributeError(name)
-        return self._get_symbolic_attribute_(name)
+        return self._symbolic_expression_._get_mapped_variable_(Attribute, name)
 
     def __dir__(self) -> List[str]:
         """
@@ -126,104 +142,41 @@ class HasSymbolicAttributes(Generic[T], ABC):
 
         :meth:`__getattr__` already makes every public name a valid symbolic attribute,
         but completion engines list :meth:`__dir__` only - which would otherwise show
-        just this expression's own members.
+        just this object's own members.
         """
         names = set(super().__dir__())
         names.update(attribute_names_for_completion(self._type_))
         return sorted(names)
 
-
-@dataclass(eq=False, repr=False)
-class CanBehaveLikeAVariable(Selectable[T], HasSymbolicAttributes[T], ABC):
-    """
-    This class adds the monitoring/tracking behavior on variables that tracks attribute
-    access, calling, and comparison operations.
-    """
-
-    _known_mapped_variables_: Dict[MappedVariableCacheItem, MappedVariable] = field(
-        init=False, default_factory=dict
-    )
-    """
-    A storage of created MappedVariable instances to prevent recreating same mapping
-    multiple times.
-    """
-
-    __iter__ = None
-    """
-    Prevent iteration on this class.
-    """
-
-    def _get_mapped_variable_(
-        self, type_: Type[MappedVariable], *args, **kwargs
-    ) -> MappedVariable:
-        """
-        Retrieves or creates a MappedVariable instance based on the provided arguments.
-
-        :param type_: The type of the MappedVariable to retrieve or create.
-        :param args: Positional arguments to pass to the MappedVariable constructor.
-        :param kwargs: Keyword arguments to pass to the MappedVariable constructor.
-        :return: The retrieved or created MappedVariable instance.
-        """
-        cache_item = MappedVariableCacheItem(type_, self, args, kwargs)
-        if cache_item in self._known_mapped_variables_:
-            return self._known_mapped_variables_[cache_item]
-        else:
-            instance = type_(**cache_item.all_kwargs)
-            self._known_mapped_variables_[cache_item] = instance
-            return instance
-
-    def _get_mapped_variable_key_(self, type_: Type[MappedVariable], *args, **kwargs):
-        """
-        Generates a hashable key for the given type and arguments.
-
-        :param type_: The type of the mapped variable to generate a key for, e.g.,
-            Attribute, Index, etc.
-        :param args: Positional arguments to pass to the MappedVariable constructor.
-        :param kwargs: Keyword arguments to pass to the MappedVariable constructor.
-        :return: The generated hashable key.
-        """
-        args = (self,) + args
-        all_kwargs = merge_args_and_kwargs(type_, args, kwargs, ignore_first=True)
-        return convert_args_and_kwargs_into_hashable_key(all_kwargs)
-
-    def _get_symbolic_attribute_(self, name: str) -> CanBehaveLikeAVariable[T]:
-        """
-        Map the attribute onto this variable, which is what it is an attribute of.
-
-        :param name: The name of the attribute to read symbolically.
-        :return: The expression standing for that attribute of this variable.
-        """
-        return self._get_mapped_variable_(Attribute, name)
-
     def __getitem__(self, key) -> CanBehaveLikeAVariable[T]:
-        return self._get_mapped_variable_(Index, key)
+        return self._symbolic_expression_._get_mapped_variable_(Index, key)
 
     def __call__(self, *args, **kwargs) -> CanBehaveLikeAVariable[T]:
-        return self._get_mapped_variable_(Call, args, kwargs)
+        return self._symbolic_expression_._get_mapped_variable_(Call, args, kwargs)
 
     def __eq__(self, other) -> Comparator:
-        return Comparator(self, other, operator.eq)
+        return Comparator(self._symbolic_expression_, other, operator.eq)
 
     def __ne__(self, other) -> Comparator:
-        return Comparator(self, other, operator.ne)
+        return Comparator(self._symbolic_expression_, other, operator.ne)
 
     def __lt__(self, other) -> Comparator:
-        return Comparator(self, other, operator.lt)
+        return Comparator(self._symbolic_expression_, other, operator.lt)
 
     def __le__(self, other) -> Comparator:
-        return Comparator(self, other, operator.le)
+        return Comparator(self._symbolic_expression_, other, operator.le)
 
     def __gt__(self, other) -> Comparator:
-        return Comparator(self, other, operator.gt)
+        return Comparator(self._symbolic_expression_, other, operator.gt)
 
     def __ge__(self, other) -> Comparator:
-        return Comparator(self, other, operator.ge)
+        return Comparator(self._symbolic_expression_, other, operator.ge)
 
     def _arithmetic_(
         self, other: Any, math_operator: MathOperator
     ) -> CanBehaveLikeAVariable[T]:
         """
-        Build a binary arithmetic operation with this variable as the left operand.
+        Build a binary arithmetic operation with this as the left operand.
 
         :param other: The right operand.
         :param math_operator: The operator to apply.
@@ -233,13 +186,13 @@ class CanBehaveLikeAVariable(Selectable[T], HasSymbolicAttributes[T], ABC):
             ArithmeticOperation,
         )
 
-        return ArithmeticOperation(self, other, math_operator)
+        return ArithmeticOperation(self._symbolic_expression_, other, math_operator)
 
     def _reflected_arithmetic_(
         self, other: Any, math_operator: MathOperator
     ) -> CanBehaveLikeAVariable[T]:
         """
-        Build a binary arithmetic operation with this variable as the right operand.
+        Build a binary arithmetic operation with this as the right operand.
 
         This is used for the reflected dunders (``other <op> self``) so that the operand
         order is preserved for non-commutative operators such as subtraction and
@@ -253,7 +206,7 @@ class CanBehaveLikeAVariable(Selectable[T], HasSymbolicAttributes[T], ABC):
             ArithmeticOperation,
         )
 
-        return ArithmeticOperation(other, self, math_operator)
+        return ArithmeticOperation(other, self._symbolic_expression_, math_operator)
 
     def __add__(self, other) -> CanBehaveLikeAVariable[T]:
         return self._arithmetic_(other, MathOperator.ADD)
@@ -302,10 +255,66 @@ class CanBehaveLikeAVariable(Selectable[T], HasSymbolicAttributes[T], ABC):
             UnaryArithmeticOperation,
         )
 
-        return UnaryArithmeticOperation(self, MathOperator.NEGATE)
+        return UnaryArithmeticOperation(self._symbolic_expression_, MathOperator.NEGATE)
 
     def __hash__(self):
-        return super().__hash__()
+        return hash(self._id_)
+
+
+@dataclass(eq=False, repr=False)
+class CanBehaveLikeAVariable(Selectable[T], CanBehaveLikeAValue[T], ABC):
+    """
+    This class adds the monitoring/tracking behavior on variables that tracks attribute
+    access, calling, and comparison operations.
+    """
+
+    _known_mapped_variables_: Dict[MappedVariableCacheItem, MappedVariable] = field(
+        init=False, default_factory=dict
+    )
+    """
+    A storage of created MappedVariable instances to prevent recreating same mapping
+    multiple times.
+    """
+
+    @property
+    def _symbolic_expression_(self) -> CanBehaveLikeAVariable[T]:
+        """
+        :return: This variable, which is what its own operations are built on.
+        """
+        return self
+
+    def _get_mapped_variable_(
+        self, type_: Type[MappedVariable], *args, **kwargs
+    ) -> MappedVariable:
+        """
+        Retrieves or creates a MappedVariable instance based on the provided arguments.
+
+        :param type_: The type of the MappedVariable to retrieve or create.
+        :param args: Positional arguments to pass to the MappedVariable constructor.
+        :param kwargs: Keyword arguments to pass to the MappedVariable constructor.
+        :return: The retrieved or created MappedVariable instance.
+        """
+        cache_item = MappedVariableCacheItem(type_, self, args, kwargs)
+        if cache_item in self._known_mapped_variables_:
+            return self._known_mapped_variables_[cache_item]
+        else:
+            instance = type_(**cache_item.all_kwargs)
+            self._known_mapped_variables_[cache_item] = instance
+            return instance
+
+    def _get_mapped_variable_key_(self, type_: Type[MappedVariable], *args, **kwargs):
+        """
+        Generates a hashable key for the given type and arguments.
+
+        :param type_: The type of the mapped variable to generate a key for, e.g.,
+            Attribute, Index, etc.
+        :param args: Positional arguments to pass to the MappedVariable constructor.
+        :param kwargs: Keyword arguments to pass to the MappedVariable constructor.
+        :return: The generated hashable key.
+        """
+        args = (self,) + args
+        all_kwargs = merge_args_and_kwargs(type_, args, kwargs, ignore_first=True)
+        return convert_args_and_kwargs_into_hashable_key(all_kwargs)
 
 
 @dataclass(eq=False, repr=False)
@@ -610,9 +619,21 @@ class Call(MappedVariable):
         return f"{self._child_._var_._name_}()"
 
     def _update_type_(self) -> None:
-        if self._child_._type_ is None:
+        """
+        Read the called value's return type.
+
+        The child stands either for a callable itself - a function or method, whose own
+        hints carry the return type - or for an instance of a class that defines
+        ``__call__``, where the return type is that method's. An unannotated callable
+        leaves the type unknown.
+        """
+        called = self._child_._type_
+        if called is None:
             return
-        self._type_ = get_type_hints_of_object(self._child_._type_)["return"]
+        type_hints = get_type_hints_of_object(called)
+        if "return" not in type_hints and isclass(called) and "__call__" in dir(called):
+            type_hints = get_type_hints_of_object(called.__call__)
+        self._type_ = type_hints.get("return")
 
 
 @dataclass(eq=False, repr=False)

@@ -44,7 +44,7 @@ from krrood.entity_query_language.core.mapped_variable import (
     Attribute,
     FlatVariable,
     CanBehaveLikeAVariable,
-    HasSymbolicAttributes,
+    CanBehaveLikeAValue,
     MappedVariable,
     Index,
 )
@@ -54,6 +54,7 @@ from krrood.entity_query_language.exceptions import (
     CalledMatchAfterResolution,
     CalledMatchMultipleTimes,
     MatchTypeCannotBeDetermined,
+    PositionalArgumentsInMatchPattern,
 )
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.query.quantifiers import An, ResultQuantifier
@@ -204,7 +205,7 @@ class AbstractMatchExpression(Generic[T], ABC):
 class Match(
     Evaluable,
     HasQueryModifiers[T],
-    HasSymbolicAttributes[T],
+    CanBehaveLikeAValue[T],
     AbstractMatchExpression[T],
     HasFactoryAndKwargs[T],
 ):
@@ -219,12 +220,18 @@ class Match(
         >>>     body: Body
         >>> drawer = a(Drawer)(body=a(Body)(name="drawer_1")).from_(world.views)
 
-    A match reads like an instance of the matched class: attribute access is answered by
+    A match reads like an instance of the matched class: every symbolic operation of
+    :class:`~krrood.entity_query_language.core.mapped_variable.CanBehaveLikeAValue` -
+    attribute access, indexing, calling, comparison and arithmetic - is built on
     :attr:`expression`, so ``drawer.body`` is the symbolic attribute
-    ``drawer.expression.body``. Names of the match's own methods (``where``, ``from_``,
-    ``resolve``, ``expression``, ...) are resolved normally and never delegated; a
-    matched-class field shadowed by one of them stays reachable through
-    :attr:`expression`.
+    ``drawer.expression.body`` and carries the pattern. Names of the match's own methods
+    (``where``, ``from_``, ``resolve``, ``expression``, ...) are resolved normally and
+    never delegated; a matched-class field shadowed by one of them stays reachable
+    through :attr:`expression`.
+
+    The one operation the match keeps for itself is the *first* call, which states the
+    pattern; a matched class that is itself callable is called through a second pair of
+    parentheses - see :meth:`__call__`.
 
     It also reads like a query: the modifiers of
     :class:`~krrood.entity_query_language.query.query_modifiers.HasQueryModifiers` narrow
@@ -292,29 +299,55 @@ class Match(
         else:
             assert_never(self._factory_)
 
-    def __call__(self, **kwargs: Any) -> Union[T, Self]:
+    def __call__(self, *args: Any, **kwargs: Any) -> Union[T, Self]:
         """
-        Update the match with new keyword arguments to constrain the type we are
-        matching with.
+        Set the pattern the match looks for, the first time; call the matched instance
+        symbolically, every time after that.
 
-        Eagerly creates the match's subject variable so it can be referenced in
-        ``where`` conditions immediately (lowering the pattern into conditions stays
-        lazy, tracked by ``_resolved_``). If this match is later nested under a parent,
-        the parent overwrites the subject with its own attribute during resolution.
+        The first parentheses after ``a(Drawer)`` state the pattern, so a matched class
+        that is itself callable is called through a second pair - ``a(Adder)(offset=1)(2)``,
+        or ``a(Adder)()(2)`` where the pattern is empty. The pattern parentheses take
+        keyword arguments only, since a pattern names fields.
 
-        :param kwargs: The keyword arguments to match against.
-        :return: The current match instance after updating it with the new keyword
-            arguments.
+        A matched class whose instances are not callable has nothing a second call could
+        mean, so it still raises: writing the pattern twice is
+        :class:`~krrood.entity_query_language.exceptions.CalledMatchMultipleTimes`, and
+        writing it after the match was lowered is
+        :class:`~krrood.entity_query_language.exceptions.CalledMatchAfterResolution`.
+
+        Setting the pattern eagerly creates the match's subject variable so it can be
+        referenced in ``where`` conditions immediately (lowering the pattern into
+        conditions stays lazy, tracked by ``_resolved_``). If this match is later nested
+        under a parent, the parent overwrites the subject with its own attribute during
+        resolution.
+
+        :param args: The positional arguments of a symbolic call; never part of a pattern.
+        :param kwargs: The pattern's keyword arguments, or a symbolic call's.
+        :return: This match when the pattern was set, otherwise the symbolic call.
         """
-        if self._has_been_called:
-            raise CalledMatchMultipleTimes(self)
-        if self._resolved_:
-            raise CalledMatchAfterResolution(self)
+        if self._has_been_called or self._resolved_:
+            if not self._matched_instances_are_callable_:
+                raise (
+                    CalledMatchAfterResolution(self)
+                    if self._resolved_
+                    else CalledMatchMultipleTimes(self)
+                )
+            return CanBehaveLikeAValue.__call__(self, *args, **kwargs)
+        if args:
+            raise PositionalArgumentsInMatchPattern(self, args)
         self._kwargs_ = kwargs
         self._has_been_called = True
         if self._variable_ is None:
             self.create_or_update_variable()
         return self
+
+    @property
+    def _matched_instances_are_callable_(self) -> bool:
+        """
+        :return: Whether instances of the matched class can be called, which is what a
+            call beyond the pattern's own means.
+        """
+        return "__call__" in dir(self._type_)
 
     @property
     def variable(self) -> Optional[Variable[T]]:
@@ -348,20 +381,19 @@ class Match(
         """
         return name.startswith("_")
 
-    def _get_symbolic_attribute_(self, name: str) -> CanBehaveLikeAVariable[T]:
+    @property
+    def _symbolic_expression_(self) -> Entity[T]:
         """
-        Ask the lowered query for the attribute, so the match reads like an instance of
-        the matched class: ``a(Drawer).body`` is the symbolic attribute
-        ``a(Drawer).expression.body`` and carries the match's conditions.
+        :return: The lowered query, which every symbolic operation on this match is built
+            on, so the match reads like an instance of the matched class:
+            ``a(Drawer).body`` is ``a(Drawer).expression.body`` and carries the match's
+            pattern.
 
-        The attribute is built by the lowered query rather than read off it, so nothing
-        in that query's own namespace - its modifiers, ``build``, ``evaluate`` - can
-        stand in for a matched class's field of the same name.
-
-        :param name: The name of the attribute to read symbolically.
-        :return: The expression standing for that attribute of the matched instance.
+        Operations are built *on* that query rather than read *off* it, so nothing in its
+        own namespace - its modifiers, ``build``, ``evaluate`` - can stand in for a
+        matched class's field of the same name.
         """
-        return self.expression._get_symbolic_attribute_(name)
+        return self.expression
 
     @property
     def expression(self) -> Union[Entity[T], T]:

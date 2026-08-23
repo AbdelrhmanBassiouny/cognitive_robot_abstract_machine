@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 import pytest
+from typing_extensions import Tuple
 
 from krrood.entity_query_language.factories import (
     entity,
@@ -12,14 +13,18 @@ from krrood.entity_query_language.factories import (
 )
 from krrood.entity_query_language.exceptions import (
     CalledMatchAfterResolution,
+    CalledMatchMultipleTimes,
+    PositionalArgumentsInMatchPattern,
     MatchTypeCannotBeDetermined,
     SymbolicDunderAccessError,
 )
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.core.mapped_variable import (
     Attribute,
-    HasSymbolicAttributes,
+    CanBehaveLikeAValue,
 )
+from krrood.entity_query_language.operators.arithmetic import ArithmeticOperation
+from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.query.query_modifiers import HasQueryModifiers
 from krrood.entity_query_language.core.base_expressions import UnificationDict
@@ -490,9 +495,9 @@ def test_match_and_query_share_the_query_modifier_interface():
     assert isinstance(entity(variable(KRROODPosition, [])), HasQueryModifiers)
 
 
-def test_match_and_variable_share_the_symbolic_attribute_interface():
-    assert isinstance(a(KRROODPosition), HasSymbolicAttributes)
-    assert isinstance(variable(KRROODPosition, []), HasSymbolicAttributes)
+def test_match_and_variable_share_the_symbolic_value_interface():
+    assert isinstance(a(KRROODPosition), CanBehaveLikeAValue)
+    assert isinstance(variable(KRROODPosition, []), CanBehaveLikeAValue)
 
 
 def test_names_that_became_match_internals_are_symbolic_attributes():
@@ -524,3 +529,96 @@ def test_variable_and_matches_with_variables_stay_available_for_migrating_caller
     match = a(Handle)(name="Handle1")
     assert match.variable is match._variable_
     assert list(match.matches_with_variables) == list(match._matches_with_variables_)
+
+
+# %% a match reads like an instance in every symbolic operation
+
+
+@dataclass(unsafe_hash=True)
+class SubscriptableRow:
+    """
+    A matched class whose instances support indexing, for ``match[key]``.
+    """
+
+    name: str
+    cells: Tuple[int, ...]
+
+    def __getitem__(self, index: int) -> int:
+        return self.cells[index]
+
+
+@dataclass(unsafe_hash=True)
+class CallableAdder:
+    """
+    A matched class whose instances are callable, for the second parentheses.
+    """
+
+    name: str
+    offset: int
+
+    def __call__(self, value: int) -> int:
+        return self.offset + value
+
+
+def test_indexing_a_match_indexes_the_matched_instance():
+    rows = [SubscriptableRow("first", (7, 8)), SubscriptableRow("second", (9, 10))]
+    match = a(SubscriptableRow)().from_(rows)
+    assert match[0] is match.expression[0]
+    assert [row.name for row in match.where(match[0] == 7).tolist()] == ["first"]
+
+
+def test_comparing_a_match_builds_a_condition_rather_than_answering_identity():
+    positions = [KRROODPosition(1.0, 0.0, 0.0), KRROODPosition(5.0, 0.0, 0.0)]
+    match = a(KRROODPosition)().from_(positions)
+    assert isinstance(match == positions[1], Comparator)
+    assert [position.x for position in match.where(match == positions[1]).tolist()] == [
+        5.0
+    ]
+
+
+def test_arithmetic_on_a_match_operates_on_the_lowered_query():
+    """
+    Attaching an expression to a query copies the query node while preserving its
+    identifier, so the operand is matched by identifier rather than by object identity.
+    """
+    match = a(KRROODPosition)(x=1.0, y=2.0, z=3.0)
+    doubled = match * 2
+    assert isinstance(doubled, ArithmeticOperation)
+    assert doubled.left._id_ == match.expression._id_
+
+
+def test_a_match_cannot_be_iterated():
+    """
+    Indexing a match must not hand Python its legacy sequence protocol, which would
+    iterate a match endlessly, every index being a valid expression.
+    """
+    match = a(SubscriptableRow)()
+    with pytest.raises(TypeError):
+        iter(match)
+
+
+def test_the_second_parentheses_call_the_matched_instance():
+    adders = [CallableAdder("one", 1), CallableAdder("two", 2)]
+    match = a(CallableAdder)().from_(adders)
+    assert [adder.name for adder in match.where(match(10) == 12).tolist()] == ["two"]
+
+
+def test_an_empty_pattern_still_takes_its_own_parentheses():
+    """
+    The first parentheses are the pattern even when it is empty, so a match over every
+    instance of a callable class is called through a second pair.
+    """
+    adders = [CallableAdder("one", 1), CallableAdder("two", 2)]
+    match = a(CallableAdder)().from_(adders)
+    assert [adder.name for adder in match.where(match(10) == 11).tolist()] == ["one"]
+
+
+def test_the_pattern_parentheses_reject_positional_arguments():
+    with pytest.raises(PositionalArgumentsInMatchPattern):
+        a(CallableAdder)("one")
+
+
+def test_a_second_pattern_still_raises_when_the_matched_class_is_not_callable():
+    match = a(KRROODPosition)(x=1.0)
+    with pytest.raises(CalledMatchMultipleTimes):
+        match(y=2.0)

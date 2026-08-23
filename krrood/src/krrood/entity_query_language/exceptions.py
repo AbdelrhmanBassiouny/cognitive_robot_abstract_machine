@@ -866,6 +866,63 @@ class CalledMatchMultipleTimes(DataclassException):
 
 
 @dataclass
+class AmbiguousQuerySubject(UsageError):
+    """
+    Raised when a condition uses a query that selects several variables as a value,
+    leaving it without a single subject to stand for.
+    """
+
+    query: Query
+    """
+    The query that was used as a value in its own condition.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The query {self.query} selects {len(self.query._selected_variables_)} "
+            f"variables, so using it as a value in its own condition has no single "
+            f"subject to stand for."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Use the variable the value belongs to, e.g. `body == other`, or index the "
+            "query by that variable, e.g. `query[body] == other`."
+        )
+
+
+@dataclass
+class PositionalArgumentsInMatchPattern(DataclassException):
+    """
+    Raised when the parentheses that state a match's pattern are given positional
+    arguments, which a pattern of named fields has no place for.
+    """
+
+    match: AbstractMatchExpression
+    """
+    The match whose pattern was given positional arguments.
+    """
+
+    arguments: Tuple[Any, ...]
+    """
+    The positional arguments that were given.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Match expression '{self.match}' was given the positional arguments "
+            f"{self.arguments} where its pattern is stated, and a pattern names fields."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Name the fields to match, as in `a(Drawer)(handle=...)`. To call a matched "
+            "instance that is itself callable, state the pattern first and call the "
+            "result: `a(Adder)(offset=1)(2)`, or `a(Adder)()(2)` for an empty pattern."
+        )
+
+
+@dataclass
 class CalledMatchAfterResolution(DataclassException):
     """
     Raised when a match expression is called with keyword arguments after it was already
