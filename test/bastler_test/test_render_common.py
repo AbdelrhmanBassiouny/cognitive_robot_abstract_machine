@@ -3,11 +3,25 @@ Tests for render_common.py: the Jinja2 environment factory and markdown-to-HTML
 rendering (delegated to the `markdown` library, plus a heading-level shift on top).
 """
 
+from bastler.plan_model import ItemStatus
 from bastler.render_common import (
     create_template_environment,
     render_markdown_to_html,
     sanitize_http_url,
+    status_label,
 )
+
+# %% status labels
+
+
+def test_a_status_labels_itself_from_its_own_value():
+    """
+    One assertion for the derivation rather than a table of every label: the wording is
+    no longer written anywhere, so what could break is the rule that turns a manifest's
+    ``not_started`` into a page's ``Not started``.
+    """
+    assert status_label(ItemStatus.NOT_STARTED) == "Not started"
+
 
 # %% create_template_environment
 

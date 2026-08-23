@@ -43,3 +43,13 @@ class ItemStatus(StrEnum):
     """
     Landed.
     """
+
+    @property
+    def display_label(self) -> str:
+        """
+        Derived from the value rather than kept in a table beside it, so a status added
+        later labels itself and there is no second list to hold in step.
+
+        :return: How this status is written on a rendered page, e.g. ``"Not started"``.
+        """
+        return self.value.replace("_", " ").capitalize()

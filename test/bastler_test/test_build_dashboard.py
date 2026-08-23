@@ -45,7 +45,6 @@ from bastler.build_dashboard import (
     main,
     validate_plan,
 )
-from bastler.render_common import status_label
 
 EXAMPLE_DIRECTORY = (
     Path(__file__).parent.parent.parent / ".claude/skills/plan-dashboard/example"
@@ -275,21 +274,6 @@ def test_validate_plan_rejects_a_same_track_dependency_cycle():
 
 
 # %% item-status and live-state labels
-
-
-def test_every_item_status_has_a_page_label():
-    """
-    The label is presentation, so it lives with the rendering rather than on the shared
-    :class:`bastler.plan_model.ItemStatus` a hook also imports - which means nothing but
-    this holds the two in step, and a status added later would render as a KeyError.
-    """
-    assert {status: status_label(status) for status in ItemStatus} == {
-        ItemStatus.NOT_STARTED: "Not started",
-        ItemStatus.IN_PROGRESS: "In progress",
-        ItemStatus.BLOCKED: "Blocked",
-        ItemStatus.DEFERRED: "Deferred",
-        ItemStatus.DONE: "Done",
-    }
 
 
 def test_live_state_display_labels_including_no_pull_request():

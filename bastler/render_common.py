@@ -44,36 +44,22 @@ _MAXIMUM_HEADING_LEVEL = 6
 """The deepest valid HTML heading level - shifting never produces anything
 past this, even for an already-deep roadmap heading."""
 
-STATUS_DISPLAY_LABELS: dict[ItemStatus, str] = {
-    ItemStatus.NOT_STARTED: "Not started",
-    ItemStatus.IN_PROGRESS: "In progress",
-    ItemStatus.BLOCKED: "Blocked",
-    ItemStatus.DEFERRED: "Deferred",
-    ItemStatus.DONE: "Done",
-}
-"""
-How each plan-item status is labelled on a rendered page.
-
-Keyed by :class:`bastler.plan_model.ItemStatus` rather than by its bare string values,
-so a typo in a status literal here would fail import rather than silently mislabel a
-page. The labels themselves stay presentation-only, in this module rather than on the
-enum: a hook has no interface to label anything, so wording only a page shows belongs
-with the rendering rather than with the model.
-"""
-
 
 def status_label(status: str) -> str:
     """
     Label a plan-item status for display.
 
-    :param status: The status, as an :class:`bastler.plan_model.ItemStatus` or its own
+    A one-line filter rather than a table: the label belongs to the status, so it lives
+    on :class:`bastler.plan_model.ItemStatus` and this only reaches it from a template.
+
+    :param status: The status, as an :class:`~bastler.plan_model.ItemStatus` or its own
         value - a :class:`~enum.StrEnum` compares and hashes equal to its value, so
-        either form looks itself up.
-    :raises KeyError: If the status has no label, so a status added later cannot render
-        blank.
+        either form resolves.
+    :raises ValueError: If the status is not one the manifest accepts, so a typo cannot
+        render blank.
     :return: The label the page shows for it.
     """
-    return STATUS_DISPLAY_LABELS[status]
+    return ItemStatus(status).display_label
 
 
 def create_template_environment() -> jinja2.Environment:

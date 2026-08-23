@@ -1,8 +1,7 @@
-# Optional installation only. The package is designed to be imported straight from the
-# repository root with no install (cloud sessions run on fresh clones with no pip step);
-# this file exists for the workflows that run it outside such a checkout. Built with an
-# explicit package-dir mapping because the package *is* this directory rather than
-# living under it.
+# Installed only where the repository root is not the working directory: the package is
+# designed to be imported straight from that root with no install, since cloud sessions
+# run on fresh clones with no pip step. Built with an explicit package-dir mapping
+# because the package *is* this directory rather than living under one.
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -10,15 +9,42 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bastler"
-version = "0.1.0"
-description = "Workflow tooling (stacked-PR maintenance, plan dashboards, personal-notes hooks) for cognitive_robot_abstract_machine. Not published; repository tooling only."
+description = "Workflow tooling: stacked-pull-request maintenance, plan dashboards, personal-notes hooks and upstream review reading."
+readme = "README.md"
 requires-python = ">=3.11"
+license = "LGPL-3.0-only"
+authors = [
+    {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"}
+]
+maintainers = [
+    {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"}
+]
+keywords = ["stacked-pull-requests", "developer-tooling", "github", "workflow", "agents"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Version Control :: Git",
+    "Topic :: Utilities",
+]
 
-# Nothing is required to import the stdlib-only tier, which is what a hook reaches - see
-# this package's own __init__ docstring for what the tiers are and why the boundary is
-# load-bearing. What the tiers above it need is the `rendering` extra below.
+# Nothing is required to import the standard-library tier - see package_layout.py for
+# which modules that is. What the tiers above it need is the `rendering` extra below.
 dependencies = []
-dynamic = ["optional-dependencies"]
+dynamic = ["version", "optional-dependencies"]
+
+[project.urls]
+"Source" = "https://github.com/cram2/cognitive_robot_abstract_machine"
+"Bug Tracker" = "https://github.com/cram2/cognitive_robot_abstract_machine/issues"
+
+[tool.setuptools.dynamic]
+# The version comes from the repository's own root VERSION file, written into
+# _version.py by scripts/sync_version.py - the same mechanism every other package here
+# uses, so one bump moves all of them together.
+version = {attr = "bastler._version.__version__"}
 
 [tool.setuptools.dynamic.optional-dependencies]
 # Read from requirements.txt rather than restated here, so the list a `pip install -r`
@@ -34,7 +60,7 @@ packages = ["bastler"]
 # upstream_reviews.py finds its GraphQL documents as `Path(__file__).parent / "queries"`.
 # An install that left them out would import and then fail at the first render, the first
 # configuration read, or the first query. requirements.txt is here because the extra
-# below is read from it.
+# above is read from it.
 [tool.setuptools.package-data]
 bastler = [
     "templates/*.html",
