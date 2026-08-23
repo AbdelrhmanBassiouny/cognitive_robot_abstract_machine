@@ -54,3 +54,55 @@ Deletions: `integration_test_command`, `ConfigurationKey.INTEGRATION_TEST_COMMAN
   still open when the other lands merges `main` and re-applies inside the package.
 - The marked job runs with tooling dependencies only — a reproduction test inside a
   robotics package needing the docker matrix would not be collectible there.
+
+## Review round of 2026-08-23, applied in 5da2d55213
+
+Two threads, both answered and resolved. 622 tests pass.
+
+`GitCommandRunner.common_directory` replaces the inline `rev-parse --git-common-dir` in
+`provenance_path`, and resolves the answer itself rather than returning git's relative
+form. Resolving at the call site is what produced the provenance defect fixed the commit
+before, so putting it inside the method makes that mistake unrepresentable rather than
+fixed once. Mutation-checked: `answered.resolve()` fails only the provenance test.
+
+Both replay tests opened by describing the defect instead of the behaviour under test.
+Each now leads with what it pins. Swept both rather than the one commented on - the
+module's pre-existing tests already state why the behaviour is right and only then the
+mechanism, so this is the file's own convention rather than a new one.
+
+Also applied black to `integration.py`. The disagreement is pre-existing on the base at
+`FailureLocation.find` - confirmed by stashing this branch's change and re-checking - but
+committing that file puts it through the format hook anyway, so it was taken deliberately
+rather than left for the hook to do silently. Worth knowing: the locally-installed black
+was 26.5.1 while `.pre-commit-config.yaml` pins 25.11.0, and 26.x wants a *different*
+reformat of the same lines (the parenthesized `with` form). Install the pinned versions
+before trusting a formatter check.
+
+## The #158 collision, recommendation posted
+
+`pin-tooling` copies only `.claude/stack/`, which is right against main and wrong once
+#154's chain is in the tree: #151's `.claude/shared/` extraction means all three entry
+points carry `sys.path.insert(0, Path(__file__).parent.parent / "shared")`, which from a
+pinned copy resolves to a directory that does not exist. Reproduced by copying
+`.claude/stack/*` into an empty directory - `stack.py`, `maintenance.py` and
+`integration.py` all die with `ModuleNotFoundError`, so it is the whole pass rather than
+one command.
+
+#158's own `test_the_pinned_copy_carries_what_the_maintenance_executor_imports` already
+pins the real tooling and runs `maintenance.py --help` from the copy, so it is the
+reproduction and needs no change - it simply cannot fail until the two branches meet.
+
+Recommended: pin `.claude/shared/` alongside, preserving the relative layout, with both
+directories in the digest. Rejected resolving `shared/` back to the checkout (reinstates
+the swap hazard the branch removes) and waiting for #185 (the real cure, but a draft, so
+excluded from every build while #158 and #154 are carried today). Nothing pushed to #158.
+
+## Still open
+
+- **#191 is a draft**, so it is excluded from every build. Until it is un-drafted the
+  workflows it will carry cannot reach `integration`, whatever else is resolved.
+- **`integration` is at 899a04a and was never verified green** - that build reports
+  `tests_passed: null`. Advancing it needs the #158 fix and #154's base merge.
+- Part D itself - the CI verdict, `integration_verdict.py`, the marker, the workflows -
+  is not started. Both commits so far are build-reliability fixes underneath it.
+
