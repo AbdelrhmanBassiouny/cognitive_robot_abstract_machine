@@ -3925,3 +3925,43 @@ items:
       Two review threads on #154 stay open pointing here rather than being resolved: the
       `DataclassException` one, whose subject `TestCommandNotConfiguredError` this item deletes
       rather than converts, and the whole-CI thread this item is the answer to.
+
+      Re-scoped 2026-08-23 by the user's speed decision, and the branch now carries two fixes rather
+      than the recorded design. The goal became development speed on the rdr, eql and montessori
+      plans with every reviewed tooling fix already in daily use, so `integration` is the fork's
+      default branch now (HEAD is `refs/heads/integration`), sessions clone it, and `main` stays a
+      pure cram2 mirror. `upstream_base = "main"` is explicit in `stack.toml` and #188's hook reads
+      it rather than `default_branch_name()`, so the fork-main sync is unaffected by the flip.
+
+      Two corrections to what this item settled at kickoff. The marked job cannot be the build's
+      verdict: with no matching tests `pytest -m integration_conflict` exits 5, so a marked-only job
+      is empty on a healthy build and says nothing. The marker keeps its place, re-aimed at whether
+      a recorded break is fixed and at clearing `integration-conflict`; the gate is the candidate's
+      full `ci.yml` run. And nothing that opens the candidate may use `GITHUB_TOKEN`, since GitHub
+      creates no workflow run from an event it triggered - a fine-grained PAT is a required setup
+      step, not a hardening. Both PAT facts are now measured rather than assumed, on throwaway
+      branches: the token pushed a commit touching `.github/workflows/` (Workflows permission) and a
+      run appeared for the branch it pushed (recursion escaped). One trap found doing it:
+      `actions/checkout` persists `GITHUB_TOKEN` as an `http.extraheader` for github.com, and that
+      header overrides credentials in a push URL - the token has to be handed to `actions/checkout`
+      via `token:`, not to the `git push`.
+
+      Two defects in `integration.py` found and fixed here, both test-first. `Assembly.merge` read
+      the replay marker before asking which paths were unmerged, which is right for a fully replayed
+      merge and wrong for a partially replayed one - rerere replays per conflict rather than per
+      merge, so a tip can carry one conflict a recorded resolution covers and another nothing has
+      seen. Git prints the marker either way, so the partial case committed with files still
+      unmerged and took the whole build down over one tip that should have been skipped. Reachable
+      the moment any resolution is recorded, which is what /integration-conflict-triage does
+      routinely. And `provenance_path` resolved git's `--git-common-dir` answer against the
+      process's directory rather than the runner's working directory; git answers relatively from
+      inside a main working tree, so running the suite from the repository root wrote its fixtures'
+      authors over the real manifest. Observed rather than reasoned about: a resolution recorded
+      `--author skill` came back from the next build reported as `human`. That record is the only
+      thing that makes a machine-written replay findable later.
+
+      State: 622 tests pass, from 620. #191 is still a draft, which is a second gate the collision
+      work does not remove - a draft is excluded from every build, so the workflows cannot reach
+      `integration` until it is un-drafted. `integration` still points at the Phase 1 build
+      (899a04a), which reports `tests_passed: null` and was therefore never verified green; the
+      newest build is red and was deliberately not pushed.
