@@ -10,7 +10,9 @@ from __future__ import annotations
 import os
 import pickle
 
-from typing_extensions import List, Optional, Tuple
+from dataclasses import dataclass
+
+from typing_extensions import List, Optional, Self, Tuple
 
 from krrood.class_diagrams.utils import get_type_hints_of_object
 
@@ -115,3 +117,45 @@ def load_zoo_animals(
         )
         targets.append(Species(int(target_ids[index])))
     return animals, targets
+
+
+@dataclass
+class ZooDataset:
+    """
+    The loaded zoo dataset: the animals and the ground-truth species they carry.
+
+    Names the two parallel lists :func:`load_zoo_animals` returns as a pair, and owns
+    the selection every test doing so was writing out for itself.
+    """
+
+    animals: List[Animal]
+    """
+    The animals, with ``species=None`` so the RDR has something to predict.
+    """
+
+    targets: List[Species]
+    """
+    The ground-truth species, in step with :attr:`animals`.
+    """
+
+    @classmethod
+    def load(cls, cache_file: Optional[str] = DEFAULT_CACHE_FILE) -> Self:
+        """
+        :param cache_file: Where the downloaded dataset is cached.
+        :return: The dataset, empty when it can neither be read nor downloaded.
+        """
+        return cls(*load_zoo_animals(cache_file))
+
+    def __len__(self) -> int:
+        return len(self.animals)
+
+    def first(self, species: Species) -> Animal:
+        """
+        :param species: The ground-truth label to look for.
+        :return: The first animal in the dataset carrying that label.
+        """
+        return next(
+            animal
+            for animal, target in zip(self.animals, self.targets)
+            if target is species
+        )
