@@ -29,9 +29,17 @@ implementation, and the 2026-08-23 resolution.
 - [x] 616 tests pass (479 on `main` before the move). `check-setup.sh` exits 0, every row `ok`;
       all thirteen entry points answer `--help`.
 - [x] Manifest, roadmap section, PR description all current.
+- [x] **Dead members of the declaration deleted** (`d13afaf8b`): `REQUIREMENTS_FILE`,
+      `MODULES_BY_NAME` and `PackageModule.path` had no reader anywhere. 616 tests still pass.
 
 ## Findings worth carrying
 
+- **A grep over the hooks is not a survey of the callers.** The tier's justification was
+  measured against `session-start.sh`, which reaches no module here - and the conclusion
+  "nothing depends on the tier" was wrong. The live caller is
+  `.github/workflows/upstream-reviews.yml`, which runs `python3 -m bastler.upstream_reviews`
+  on a bare runner with **no `pip install` step**, so that module and `bastler.stack` must
+  stay standard-library-only. Grep for the module, not for the callers you expect.
 - **A conflict report names files; the dangerous ones are the files it does not name.** Three
   of the six were flagged by git's "added in `origin/main` inside a directory that was renamed
   in HEAD"; the other three had no tell at all. The check is one command:
