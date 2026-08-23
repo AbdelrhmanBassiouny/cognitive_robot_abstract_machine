@@ -33,7 +33,7 @@ from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-    from krrood.entity_query_language.rdr.aid import ConclusionAid
+    from krrood.entity_query_language.rdr.conclusion_helper import ConclusionHelper
     from krrood.entity_query_language.rdr.conclusion_domain import ConclusionDomain
     from krrood.entity_query_language.rdr.condition_resolver import ResolvedCondition
     from krrood.entity_query_language.rdr.observer import ClassificationTrace
@@ -78,10 +78,10 @@ class CaseContext:
     known).
     """
 
-    aids: List[ConclusionAid] = field(default_factory=list)
+    helpers: List[ConclusionHelper] = field(default_factory=list)
     """
-    Optional task-specific aids consulted while labelling the case (presentation and/or
-    conclusion suggestion).
+    Optional task-specific helpers consulted while labelling the case, each presenting
+    supporting material and/or suggesting a conclusion.
 
     Empty by default.
     """

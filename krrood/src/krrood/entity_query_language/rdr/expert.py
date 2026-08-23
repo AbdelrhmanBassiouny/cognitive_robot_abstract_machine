@@ -33,10 +33,11 @@ from krrood.entity_query_language.rdr.interface import (
     ExpertInterface,
 )
 from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName, NamespaceName
+from krrood.entity_query_language.rdr.conclusion_helper import (
+    ConclusionHelper,
+    ConclusionSuggester,
+)
 from krrood.exceptions import DataclassException
-
-if TYPE_CHECKING:
-    from krrood.entity_query_language.rdr.aid import ConclusionAid
 
 
 @dataclass
@@ -95,10 +96,10 @@ class Expert:
     The interface to use to interact with the expert.
     """
 
-    aids: List[ConclusionAid] = field(default_factory=list)
+    helpers: List[ConclusionHelper] = field(default_factory=list)
     """
-    Optional task-specific aids consulted while labelling a case: each may present an
-    information / visual aid and / or suggest a conclusion (see :class:`ConclusionAid`).
+    Optional task-specific helpers consulted while labelling a case: each may present
+    supporting material and / or suggest a conclusion (see :class:`ConclusionHelper`).
     """
 
     def ask_for_conditions(
@@ -180,13 +181,15 @@ class Expert:
         validator: AnswerValidator,
     ) -> Any:
         """
-        :param context: The case being labelled, carrying the aids to consult.
+        :param context: The case being labelled, carrying the helpers to consult.
         :param validator: The conclusion validator; a suggestion is only offered when it
             validates.
-        :return: The first aid suggestion that validates, else ``...`` (no pre-seed).
+        :return: The first suggestion that validates, else ``...`` (no pre-seed).
         """
-        for aid in self.aids:
-            suggestion = aid.suggest(context)
+        for helper in self.helpers:
+            if not isinstance(helper, ConclusionSuggester):
+                continue
+            suggestion = helper.suggest(context)
             if suggestion is not None and validator(suggestion) is None:
                 return suggestion
         return ...
