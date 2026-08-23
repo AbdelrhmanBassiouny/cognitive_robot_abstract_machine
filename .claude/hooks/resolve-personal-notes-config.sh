@@ -279,6 +279,13 @@ plan_roadmap_path() {
 # full plan-dashboard schema this feeds).
 PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 
+# DASHBOARD_URL_CACHE_PATH: the generated cache mapping each plan id (plus
+# "_index" for the master index) to the Artifact URL its dashboard is
+# published at, so /plan-dashboard updates that page instead of minting a
+# second one. Named here rather than typed into plan-dashboard/SKILL.md,
+# same defined-once reasoning as PLAN_BRANCH_INDEX_PATH above.
+DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
+
 # BASTLER_PACKAGE_DIRECTORY / *_MODULE / *_FILE: every Python entry point in
 # this system, and the package holding them - defined once, here, so
 # refresh_dashboard.sh, every plan-*/SKILL.md, and .github/workflows/ci.yml
@@ -308,6 +315,10 @@ CHECK_DEPENDENCY_READINESS_MODULE="bastler.check_dependency_readiness"
 # refresh_dashboard_support: the JSON-plumbing helpers
 # refresh_dashboard.sh calls between its two module calls.
 REFRESH_DASHBOARD_SUPPORT_MODULE="bastler.refresh_dashboard_support"
+# record_dashboard_url: writes one key's published Artifact URL into
+# DASHBOARD_URL_CACHE_PATH, resolving that URL from the account's live
+# Artifact listing so a URL nobody published cannot be recorded.
+RECORD_DASHBOARD_URL_MODULE="bastler.record_dashboard_url"
 # plan_item_bootstrap: opens an item's branch and draft pull request and
 # records its manifest entry - invoked from plan-item-kickoff/SKILL.md and
 # add-plan-item/SKILL.md.
@@ -324,6 +335,12 @@ STACK_MODULE="bastler.stack"
 # maintenance: the deterministic maintenance executor a stacked-PR pass
 # runs - board export, fast-forward, restack, promote, run-report.
 MAINTENANCE_MODULE="bastler.maintenance"
+# check_scope_overlap: reports which of an item's paths a given branch
+# already touches - the mechanical half of add-plan-item's scope decision.
+CHECK_SCOPE_OVERLAP_MODULE="bastler.check_scope_overlap"
+# upstream_reviews: reports the review threads a fork branch's upstream
+# pull request has collected, run by the upstream-reviews Action.
+UPSTREAM_REVIEWS_MODULE="bastler.upstream_reviews"
 # requirements.txt: the PyYAML/Jinja2/markdown dependencies the rendering
 # modules need - installed by both CI and a session running them directly.
 BASTLER_REQUIREMENTS_FILE="${BASTLER_PACKAGE_DIRECTORY}/requirements.txt"
@@ -391,6 +408,17 @@ SETUP_PREREQUISITE_DOCUMENT="${SETUP_PERSONAL_NOTES_DIRECTORY}/prerequisite-chec
 # brand-new notes file with, so a first session starts from working
 # conventions instead of an empty file.
 STARTER_NOTES_FILE="${SETUP_PERSONAL_NOTES_DIRECTORY}/starter-notes.md"
+
+# ADD_PLAN_ITEM_DIRECTORY / SCOPE_DECISION_DOCUMENT: what the add-plan-item
+# skill keeps outside the package - the skill someone runs when describing new
+# work (/add-plan-item) and the shared scope rule all four plan skills defer to
+# instead of each restating it. Its Python moved into the package above, as
+# CHECK_SCOPE_OVERLAP_MODULE.
+ADD_PLAN_ITEM_DIRECTORY=".claude/skills/add-plan-item"
+# scope-decision.md: the shared "is this new work, or a change to work already
+# in flight?" rule that plan-create, plan-item-kickoff, plan-item-resolve and
+# add-plan-item each reference in a line rather than each spelling it out.
+SCOPE_DECISION_DOCUMENT="${ADD_PLAN_ITEM_DIRECTORY}/scope-decision.md"
 
 # SAVE_PLAN_SCRIPT: same reasoning as the block above, extended to
 # save-plan.sh - unlike the other hook scripts in this directory (which are

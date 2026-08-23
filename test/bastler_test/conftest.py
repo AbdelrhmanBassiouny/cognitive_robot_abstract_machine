@@ -23,6 +23,7 @@ import pytest  # noqa: E402
 from bastler.stack import BOARD_PATH  # noqa: E402
 
 from .scratch_repository import ScratchRepository  # noqa: E402
+from .upstream_reviews_replay import RecordedResponse, ReplayingClient  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -55,3 +56,14 @@ def scratch_repository(tmp_path: Path) -> ScratchRepository:
     :return: The scratch repository.
     """
     return ScratchRepository.create(tmp_path)
+
+
+@pytest.fixture
+def paginated_client() -> ReplayingClient:
+    """:return: A client replaying both pages of the recorded review threads."""
+    return ReplayingClient(
+        [
+            RecordedResponse.PULL_REQUEST_PAGE_ONE.load(),
+            RecordedResponse.PULL_REQUEST_PAGE_TWO.load(),
+        ]
+    )

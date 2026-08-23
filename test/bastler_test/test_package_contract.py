@@ -149,6 +149,11 @@ PACKAGE_MODULES: tuple[PackageModule, ...] = (
     PackageModule("build_index", DependencyTier.PAGE_RENDERING, True),
     PackageModule("check_dependency_readiness", DependencyTier.PAGE_RENDERING, True),
     PackageModule("sync_manifest_status", DependencyTier.PAGE_RENDERING, True),
+    PackageModule("record_dashboard_url", DependencyTier.PLAN_MANIFEST, True),
+    # .claude/skills/add-plan-item/ - the scope decision's mechanical half.
+    PackageModule("check_scope_overlap", DependencyTier.STANDARD_LIBRARY, True),
+    # .claude/upstream_reviews/ - the upstream review reader the Action runs.
+    PackageModule("upstream_reviews", DependencyTier.STANDARD_LIBRARY, True),
 )
 """
 Every module the package is required to hold, listed rather than discovered.
