@@ -164,6 +164,31 @@ items:
       subgoal's non-local variables first. The relational-engine equivalent is that the
       optimizer guarantees the outer relation drives the semi-join.
 
+  - id: argument-position-correlation
+    title: "A query given as an argument is evaluated uncorrelated, quantifier or not"
+    branch: null
+    pull_request_number: null
+    track: binding-order
+    depends_on:
+      - binding-order-planner
+    status: not_started
+    notes: >
+      Raised from match-query-ergonomics (#181) on 2026-08-23 and measured on
+      krrood PR #192's branch: over a domain of one Handle and one Container,
+      entity(body).where(HasType(entity(body), Handle)) returns *both* rows,
+      while entity(body).where(HasType(body, Handle)) returns only the Handle.
+      No quantifier and no match is involved, so this is binding-order-planner's
+      mechanism - the argument is evaluated once against an empty context,
+      answers true, and the selected variable then enumerates freely - in an
+      argument position rather than an exists() body. Separate item rather than
+      a repro on that one because it is not known whether binding the outer
+      relation first also correlates an argument that is itself a query: the
+      first job here is to re-measure once binding-order-planner lands and close
+      this as already-fixed if it is, and only otherwise to correlate the
+      argument. Consequence for #181: EQL match queries deliberately refuse to
+      reach a predicate at all (HasType(match, ...) raises LiteralConditionError)
+      because coercing them would trade that loud error for this silent wrong
+      answer; that refusal can be lifted once this item closes.
   - id: disjunction-range-restriction
     title: "Range-restrict disjunction: characterize OR, then reject unsafe branches"
     branch: null

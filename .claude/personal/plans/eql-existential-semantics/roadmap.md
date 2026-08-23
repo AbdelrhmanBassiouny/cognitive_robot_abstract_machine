@@ -269,3 +269,28 @@ Cited in the items; collected here so no item has to repeat a full reference.
 - OCL iterator forms — <https://sunye.github.io/ocl/>
 - Baader et al., *The Description Logic Handbook* — variable-free `∃R.C`, and `≥n R.C`
   for the counting quantifier noted above.
+
+## Argument-position correlation, raised from match-query-ergonomics (2026-08-23)
+
+`argument-position-correlation` was added to the `binding-order` track from outside this
+plan: krrood PR #192 (plan `match-query-ergonomics`, issue #181) gives an EQL `Match` the
+full symbolic surface, and while measuring what a match may be used *as*, it found that a
+plain query given as a predicate argument shows this plan's own mechanism with no
+quantifier anywhere:
+
+| written | result |
+| --- | --- |
+| `entity(body).where(HasType(entity(body), Handle))` | both rows |
+| `entity(body).where(HasType(body, Handle))` | only the `Handle` |
+
+`binding-order-planner`'s notes already describe that mechanism exactly - evaluated once
+against an empty context, answers true, the selected variable then enumerates freely - but
+its test list is all `exists()` / `not_(exists(...))`, and it is not known whether binding
+the outer relation first also correlates an argument that is itself a query. The new item
+depends on it and starts by re-measuring, closing as already-fixed if the planner covers
+it.
+
+Consequence recorded on both plans: #192 deliberately refuses to let a match reach a
+predicate (`HasType(match, ...)` raises `LiteralConditionError`), because coercing it would
+replace that loud error with the silent every-row answer above. The refusal can be lifted
+once this item closes.
