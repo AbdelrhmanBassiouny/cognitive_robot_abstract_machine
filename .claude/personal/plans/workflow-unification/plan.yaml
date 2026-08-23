@@ -3953,7 +3953,7 @@ items:
     track: stack-tooling
     depends_on:
     - integration-branch
-    status: in_progress
+    status: done
     pull_request_number: 191
     session: https://claude.ai/code/session_01Aw5p5xzSFUKNCueN8oG6Tg
     notes: >
