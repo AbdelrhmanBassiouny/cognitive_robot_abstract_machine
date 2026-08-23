@@ -2233,3 +2233,82 @@ That closes the loop this session opened by *propagating* the skip: §23 dutiful
 a sibling, §26 found its cause had been fixed six weeks earlier, and both skips are now gone. The
 propagation is the part worth remembering — an unreproduced "flaky" label is not inert, it
 spreads, because the next session treats it as a landed decision rather than an open question.
+
+## 27. Addendum (2026-08-23) — `D-core-aid` (#63): the stack bottom had no link to promote it, and the label said it had one
+
+A second `/plan-item-resolve` session picked up `D-core-aid` the day after §23/§26. Nothing
+in the code was wrong: CI **23/23 green** on `b39fb248`, `mergeable_state: clean` against
+current `main` (`3f643cff`), `rdr-backward-inference` merged, no recorded `blockers`, and the
+branch already carrying `main`. What was holding it was in two places neither the diff nor the
+manifest could show.
+
+### The three open threads had already been done
+
+§23 answered the `_materialize`, `TargetKnowledgeResolver` and `# %%` threads with "fixed on
+#161, not here" and left them open on purpose. The developer then reversed that
+(§24), and `c21e1fe3` moved `test_condition_resolver.py` here whole — but only the *last*
+thread got a reply saying so, and none of the three was resolved. So the pull request read as
+carrying three unanswered review comments six weeks old, when in fact every one of them was
+satisfied on the branch.
+
+Checked against the branch head rather than the thread's own snippet, which GitHub still shows
+at the outdated revision: on `b39fb248` the file has all five `# %%` dividers, no `# ---`, and
+no match for `materiali`, `TargetKnowledgeResolver`, `ConclusionKnowledge` or
+`what_do_we_know_about` anywhere in it. All seven threads on #63 are now resolved, each with
+its own reply naming the commit — the convention being that a resolve without an inline reply
+reads as the comment having been dismissed.
+
+Worth naming the failure mode, since it is a variant of this plan's recurring staleness class
+(§5, §14, §18, §19, §23): here the *item* was current and the *threads* were stale. A round
+that answers a thread on a different pull request and then changes its mind has to go back to
+every thread it answered, not just the one it was arguing on.
+
+### The real blocker: a promotion label with no promotion link
+
+#63 carried the **`cram2-link-sent`** label while its description had **no `## Promote`
+section at all**. In this workflow that combination is terminal, not merely untidy:
+
+- `maintenance_promotion.promote()` skips any pull request already carrying the label, so no
+  later pass rebuilds the link.
+- `clear_spent_promotion_labels()` only drops the label once the branch is `in-review` or
+  merged — states it cannot reach without being promoted first.
+
+So the bottom of the seven-PR stack was approved (out of draft), green, conflict-free and
+unpromotable, with nothing in the system that would ever have noticed. Everything above it —
+#64, #65, #66, #67, #98, #159 — waits on it landing upstream.
+
+The cause is a description rewrite. `description_with_promotion_link` replaces any section
+already there, so the pass is safe against itself; what nothing guards is a *session* rewriting
+the description, which §23 and §26 both did. **A session that rewrites a fork pull request's
+description must carry its `## Promote` section across** — the label makes the loss permanent
+rather than merely inconvenient.
+
+### The restored link is deliberately not prefilled
+
+Rebuilding it turned up a second constraint, established by probing rather than reasoning: a
+compare URL carrying an encoded `title=`/`body=` prefill is **neutralised into inline code**
+when written to a pull request description from a session, backticks landing inside the
+markdown when the URL sits in a link. A short `?expand=1` compare link is left alone; the
+prefilled 679-character one is not. This is a guard against a session writing outbound URLs
+that carry payloads, and it is working as intended — so the section now holds a plain compare
+link, with the title and the one-paragraph summary beside it as text to paste.
+
+It also means `promote()`'s whole purpose — writing a prefilled create-link — cannot be
+carried out from a session in these containers. That belongs to `workflow-unification`'s
+`stack-tooling` track, not here.
+
+### A third thing found on the way, also `stack-tooling`'s
+
+`promotion_summary()` takes the first `\n\n`-separated block of the description, which for a
+description beginning with a heading is the heading. On #63 it returns literally `## What`, so
+even a working pass would prefill the upstream pull request's body with a bare heading. The
+section written here uses the first prose paragraph instead — what the function is evidently
+meant to return.
+
+### Also
+
+- **Subscribing to #94 was refused by the permission classifier again** — fifth recorded
+  instance (§11, §16, §20, §23).
+- The item's `session` field was unset; it is now recorded, like every other worked item's.
+- No commit was needed on the branch, so nothing was pushed and the pull request was not
+  re-drafted (§21's rule for one the developer marked ready).
