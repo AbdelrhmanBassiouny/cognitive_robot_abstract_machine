@@ -66,6 +66,7 @@ from krrood.entity_query_language.core.base_expressions import (
     UnificationDict,
 )
 from krrood.entity_query_language.evaluable import Evaluable
+from krrood.entity_query_language.query.query_modifiers import HasQueryModifiers
 from krrood.entity_query_language.cache_data import (
     SeenSet,
 )
@@ -171,6 +172,7 @@ def modifies_query_structure(modifier):
 @dataclass(eq=False, repr=False)
 class Query(
     Evaluable,
+    HasQueryModifiers[T],
     MultiArityExpressionThatPerformsACartesianProduct,
     CanBehaveLikeAVariable[T],
     ABC,

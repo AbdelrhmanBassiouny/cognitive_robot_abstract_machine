@@ -75,6 +75,8 @@ scoped = constrained(name="R2", battery=100)
 assert isinstance(scoped, Match)
 assert_type(scoped.from_([Robot("R2", 100)]), Match[Robot])
 assert_type(scoped.where(scoped.battery == 100), Match[Robot])
+assert_type(scoped.ordered_by(scoped.battery), Match[Robot])
+assert_type(scoped.limit(1), Match[Robot])
 
 
 # %% bare T overload: quantifying an existing symbolic expression preserves its type

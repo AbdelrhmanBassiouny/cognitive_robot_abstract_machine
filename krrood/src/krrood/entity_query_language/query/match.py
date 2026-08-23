@@ -23,6 +23,7 @@ from typing import assert_never, Any
 
 import rustworkx as rx
 from typing_extensions import (
+    Callable,
     Optional,
     Type,
     List,
@@ -43,9 +44,9 @@ from krrood.entity_query_language.core.mapped_variable import (
     Attribute,
     FlatVariable,
     CanBehaveLikeAVariable,
+    HasSymbolicAttributes,
     MappedVariable,
     Index,
-    attribute_names_for_completion,
 )
 from krrood.entity_query_language.core.variable import Literal, DomainType, Variable
 from krrood.entity_query_language.evaluable import Evaluable
@@ -53,10 +54,10 @@ from krrood.entity_query_language.exceptions import (
     CalledMatchAfterResolution,
     CalledMatchMultipleTimes,
     MatchTypeCannotBeDetermined,
-    SymbolicDunderAccessError,
 )
 from krrood.entity_query_language.predicate import HasType
 from krrood.entity_query_language.query.quantifiers import An, ResultQuantifier
+from krrood.entity_query_language.query.query_modifiers import HasQueryModifiers
 from krrood.entity_query_language.utils import T
 from krrood.patterns.factory_and_kwargs import HasFactoryAndKwargs
 from krrood.rustworkx_utils.rxnode import RWXNode
@@ -200,7 +201,13 @@ class AbstractMatchExpression(Generic[T], ABC):
 
 
 @dataclass(eq=False)
-class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
+class Match(
+    Evaluable,
+    HasQueryModifiers[T],
+    HasSymbolicAttributes[T],
+    AbstractMatchExpression[T],
+    HasFactoryAndKwargs[T],
+):
     """
     Construct a query that looks for the pattern provided by the type and the keyword arguments.
     Example usage where we look for an object of type Drawer with body of type Body that has the name"drawer_1":
@@ -212,12 +219,16 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
         >>>     body: Body
         >>> drawer = a(Drawer)(body=a(Body)(name="drawer_1")).from_(world.views)
 
-    A match reads like an instance of the matched class: attribute access is delegated
-    to :attr:`expression`, so ``drawer.body`` is the symbolic attribute
+    A match reads like an instance of the matched class: attribute access is answered by
+    :attr:`expression`, so ``drawer.body`` is the symbolic attribute
     ``drawer.expression.body``. Names of the match's own methods (``where``, ``from_``,
     ``resolve``, ``expression``, ...) are resolved normally and never delegated; a
     matched-class field shadowed by one of them stays reachable through
     :attr:`expression`.
+
+    It also reads like a query: the modifiers of
+    :class:`~krrood.entity_query_language.query.query_modifiers.HasQueryModifiers` narrow
+    the lowered query and return the match, so a chain stays on the match.
 
     .. warning::
         Match can take a factory as a mean to construct `T`. If the keyword argument names of the match are not
@@ -305,32 +316,52 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
             self.create_or_update_variable()
         return self
 
-    def __getattr__(self, name: str) -> CanBehaveLikeAVariable[T]:
+    @property
+    def variable(self) -> Optional[Variable[T]]:
         """
-        Delegate attribute access to :attr:`expression`, so the match reads like an
-        instance of the matched class: ``a(Drawer).body`` is the symbolic attribute
+        :return: The variable the match created for the instance it describes.
+
+        .. note::
+            A compatibility name for callers written before the match's own state moved
+            behind :attr:`_variable_`; it is removed once they have migrated.
+        """
+        return self._variable_
+
+    @property
+    def matches_with_variables(self) -> Iterator[AttributeMatch]:
+        """
+        :return: All attribute matches whose assigned value is a variable.
+
+        .. note::
+            A compatibility name for callers written before the match's own state moved
+            behind :attr:`_matches_with_variables_`; it is removed once they have
+            migrated.
+        """
+        return self._matches_with_variables_
+
+    def _is_own_name_(self, name: str) -> bool:
+        """
+        :param name: A name that this match does not define.
+        :return: Whether the name belongs to the match machinery, which keeps its own
+            state behind underscore-prefixed names, leaving every other name to the
+            matched class.
+        """
+        return name.startswith("_")
+
+    def _get_symbolic_attribute_(self, name: str) -> CanBehaveLikeAVariable[T]:
+        """
+        Ask the lowered query for the attribute, so the match reads like an instance of
+        the matched class: ``a(Drawer).body`` is the symbolic attribute
         ``a(Drawer).expression.body`` and carries the match's conditions.
 
-        Dunder names are never symbolic (see
-        :meth:`~krrood.entity_query_language.core.mapped_variable.CanBehaveLikeAVariable.__getattr__`),
-        and neither are other underscore-prefixed names: those belong to the match
-        machinery, so a missing one is a genuine :class:`AttributeError` rather than a
-        matched-class field.
-        """
-        if name.startswith("__") and name.endswith("__"):
-            raise SymbolicDunderAccessError(name)
-        if name.startswith("_"):
-            raise AttributeError(name)
-        return getattr(self.expression, name)
+        The attribute is built by the lowered query rather than read off it, so nothing
+        in that query's own namespace - its modifiers, ``build``, ``evaluate`` - can
+        stand in for a matched class's field of the same name.
 
-    def __dir__(self) -> List[str]:
+        :param name: The name of the attribute to read symbolically.
+        :return: The expression standing for that attribute of the matched instance.
         """
-        Surface the matched class's attributes for interactive completion, alongside the
-        match's own members.
-        """
-        names = set(super().__dir__())
-        names.update(attribute_names_for_completion(self._type_))
-        return sorted(names)
+        return self.expression._get_symbolic_attribute_(name)
 
     @property
     def expression(self) -> Union[Entity[T], T]:
@@ -519,11 +550,76 @@ class Match(Evaluable, AbstractMatchExpression[T], HasFactoryAndKwargs[T]):
     def __str__(self):
         return self._name_
 
-    def where(self, *conditions: ConditionType) -> Match[T]:
-        _ = self.expression
+    def where(self, *conditions: ConditionType) -> Self:
+        """
+        Constrain the matched instance by conditions, on top of the pattern.
+
+        The conditions are also kept on the match itself, since a generative backend
+        reads them from the pattern rather than from the lowered query.
+
+        :param conditions: The conditions the matched instance must satisfy.
+        :return: This match.
+        """
         self._where_conditions_.extend(conditions)
         self.expression.where(*conditions)
-        self.expression.build()
+        return self
+
+    def having(self, *conditions: ConditionType) -> Self:
+        """
+        Constrain the grouped results of the lowered query.
+
+        :param conditions: The conditions a group must satisfy.
+        :return: This match.
+        """
+        self.expression.having(*conditions)
+        return self
+
+    def ordered_by(
+        self,
+        variable: Union[Selectable[T], Any],
+        descending: bool = False,
+        key: Optional[Callable] = None,
+    ) -> Self:
+        """
+        Order the matched instances by the given expression.
+
+        :param variable: The expression to order by.
+        :param descending: Whether to order the results in descending order.
+        :param key: A function to extract the key from the expression's value.
+        :return: This match.
+        """
+        self.expression.ordered_by(variable, descending=descending, key=key)
+        return self
+
+    def distinct(self, *on: Union[Selectable, Any]) -> Self:
+        """
+        Keep only matched instances that differ in the given expressions.
+
+        :param on: The expressions the results must differ in; the matched instance by
+            default.
+        :return: This match.
+        """
+        self.expression.distinct(*on)
+        return self
+
+    def grouped_by(self, *variables_to_group_by: Union[Selectable, Any]) -> Self:
+        """
+        Group the matched instances by the given expressions.
+
+        :param variables_to_group_by: The expressions to group the results by.
+        :return: This match.
+        """
+        self.expression.grouped_by(*variables_to_group_by)
+        return self
+
+    def limit(self, n: int) -> Self:
+        """
+        Return at most ``n`` matched instances.
+
+        :param n: The maximum number of results to return.
+        :return: This match.
+        """
+        self.expression.limit(n)
         return self
 
     def from_(self, domain: DomainType) -> Self:

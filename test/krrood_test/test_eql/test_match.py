@@ -16,7 +16,12 @@ from krrood.entity_query_language.exceptions import (
     SymbolicDunderAccessError,
 )
 from krrood.entity_query_language.predicate import HasType
+from krrood.entity_query_language.core.mapped_variable import (
+    Attribute,
+    HasSymbolicAttributes,
+)
 from krrood.entity_query_language.query.match import Match
+from krrood.entity_query_language.query.query_modifiers import HasQueryModifiers
 from krrood.entity_query_language.core.base_expressions import UnificationDict
 from krrood.parametrization.random_events_translator import is_literal_comparator
 from ..dataset.example_classes import KRROODPositions, KRROODPosition
@@ -403,3 +408,119 @@ def test_has_ellipsis_attributes_true_for_ellipsis_element_in_plain_set():
         some_strings={"a", ..., "c"},
     )
     assert match._has_ellipsis_attributes_ is True
+
+
+# %% a match reads like a query
+
+
+@dataclass(unsafe_hash=True)
+class FieldNamedLikeAQueryMethod:
+    """
+    A matched class with a field whose name a :class:`Query` member also uses.
+    """
+
+    name: str
+    build: int
+
+
+def test_where_through_a_forwarded_attribute_filters():
+    """
+    The condition the forwarding makes natural must actually filter, which it only does
+    once a condition rooted at the query correlates with that query's own bindings.
+    """
+    positions = [KRROODPosition(1.0, 0.0, 0.0), KRROODPosition(5.0, 0.0, 0.0)]
+    match = a(KRROODPosition)().from_(positions)
+    assert [position.x for position in match.where(match.x >= 5).tolist()] == [5.0]
+
+
+def test_limit_bounds_the_results_and_keeps_the_chain_on_the_match():
+    positions = [KRROODPosition(1.0, 0.0, 0.0), KRROODPosition(5.0, 0.0, 0.0)]
+    match = a(KRROODPosition)().from_(positions)
+    assert match.limit(1) is match
+    assert len(match.tolist()) == 1
+
+
+def test_ordered_by_a_forwarded_attribute_orders_the_results():
+    positions = [
+        KRROODPosition(1.0, 0.0, 0.0),
+        KRROODPosition(5.0, 0.0, 0.0),
+        KRROODPosition(3.0, 0.0, 0.0),
+    ]
+    match = a(KRROODPosition)().from_(positions)
+    ordered = match.ordered_by(match.x, descending=True)
+    assert [position.x for position in ordered.tolist()] == [5.0, 3.0, 1.0]
+
+
+def test_every_query_modifier_returns_the_match():
+    """
+    A chain stays on the match rather than silently continuing on the lowered query.
+
+    Each modifier gets its own match: the modifiers compose only in the combinations the
+    lowered query itself supports, which is not what this test is about.
+    """
+    positions = [KRROODPosition(1.0, 0.0, 0.0)]
+    assert (match := a(KRROODPosition)().from_(positions)).where(match.x >= 0) is match
+    assert (match := a(KRROODPosition)().from_(positions)).having(match.x >= 0) is match
+    assert (match := a(KRROODPosition)().from_(positions)).ordered_by(match.x) is match
+    assert (match := a(KRROODPosition)().from_(positions)).grouped_by(match.y) is match
+    assert (match := a(KRROODPosition)().from_(positions)).distinct() is match
+    assert (match := a(KRROODPosition)().from_(positions)).limit(1) is match
+
+
+def test_a_matched_class_field_is_not_shadowed_by_a_query_method():
+    """
+    Forwarding reaches the lowered query's symbolic attributes rather than its
+    namespace, so a matched class may name a field after any :class:`Query` member.
+    """
+    releases = [
+        FieldNamedLikeAQueryMethod("stable", 7),
+        FieldNamedLikeAQueryMethod("nightly", 9),
+    ]
+    match = a(FieldNamedLikeAQueryMethod)().from_(releases)
+    # Reading the same name off the lowered query gives Query.build, which is what
+    # forwarding by name would have returned.
+    assert isinstance(match.build, Attribute)
+    assert [release.name for release in match.where(match.build > 7).tolist()] == [
+        "nightly"
+    ]
+
+
+def test_match_and_query_share_the_query_modifier_interface():
+    assert isinstance(a(KRROODPosition), HasQueryModifiers)
+    assert isinstance(entity(variable(KRROODPosition, [])), HasQueryModifiers)
+
+
+def test_match_and_variable_share_the_symbolic_attribute_interface():
+    assert isinstance(a(KRROODPosition), HasSymbolicAttributes)
+    assert isinstance(variable(KRROODPosition, []), HasSymbolicAttributes)
+
+
+def test_names_that_became_match_internals_are_symbolic_attributes():
+    """
+    A rename missed by the migration would come back as a symbolic attribute named after
+    the internal - truthy, chainable and wrong - so every renamed public name is pinned
+    as the matched class's attribute instead.
+    """
+    match = a(KRROODPosition)(x=1.0, y=2.0, z=3.0)
+    assert match.parent is match.expression.parent
+    assert match.children is match.expression.children
+    assert match.type is match.expression.type
+    assert match.conditions is match.expression.conditions
+    assert match.resolved is match.expression.resolved
+    assert match.id is match.expression.id
+    assert match.root is match.expression.root
+    assert match.descendants is match.expression.descendants
+    assert match.domain is match.expression.domain
+    assert match.factory is match.expression.factory
+    assert match.kwargs is match.expression.kwargs
+    assert match.has_ellipsis_attributes is match.expression.has_ellipsis_attributes
+
+
+def test_variable_and_matches_with_variables_stay_available_for_migrating_callers():
+    """
+    The two renamed names with consumers outside this repository keep working until the
+    detours are removed wholesale.
+    """
+    match = a(Handle)(name="Handle1")
+    assert match.variable is match._variable_
+    assert list(match.matches_with_variables) == list(match._matches_with_variables_)

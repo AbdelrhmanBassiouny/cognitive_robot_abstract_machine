@@ -15,6 +15,7 @@ from functools import cached_property
 from typing import Self
 
 from typing_extensions import (
+    Generic,
     Iterable,
     Any,
     Type,
@@ -67,8 +68,73 @@ def attribute_names_for_completion(type_: Any) -> Set[str]:
     return names
 
 
+class HasSymbolicAttributes(Generic[T], ABC):
+    """
+    An expression that stands for a value of type ``T`` and offers that type's
+    attributes symbolically, so ``expression.field`` builds an expression for that field
+    instead of reading a real attribute.
+
+    Implementations differ only in where the attribute expression comes from: an
+    expression that is itself a variable maps the attribute onto itself, while one that
+    merely holds a variable asks that variable for it.
+    """
+
+    _type_: Optional[Type[T]]
+    """
+    The type of the value this expression stands for, whose attributes are offered.
+    """
+
+    @abstractmethod
+    def _get_symbolic_attribute_(self, name: str) -> CanBehaveLikeAVariable[T]:
+        """
+        :param name: The name of the attribute to read symbolically.
+        :return: The expression standing for that attribute of this value.
+        """
+        ...
+
+    def _is_own_name_(self, name: str) -> bool:
+        """
+        :param name: A name that this expression does not define.
+        :return: Whether the name belongs to this expression's own machinery rather than
+            to the value type, making a missing one a genuine :class:`AttributeError`.
+            An expression that is itself a variable claims no such names, since the value
+            type may define any of them.
+        """
+        return False
+
+    def __getattr__(self, name: str) -> CanBehaveLikeAVariable[T]:
+        """
+        Read a name that is not the expression's own as an attribute of the value type.
+
+        Dunder names are never symbolic: mapping them would let ``copy``, ``pickle`` and
+        anything else probing optional dunder hooks recurse into endless expression
+        creation, and would blur the language's semantics - access a dunder-named member
+        symbolically through a :func:`symbolic_function` instead.
+        :class:`~krrood.entity_query_language.exceptions.SymbolicDunderAccessError` is an
+        :class:`AttributeError` so that such probing still reads it as a missing
+        attribute.
+        """
+        if name.startswith("__") and name.endswith("__"):
+            raise SymbolicDunderAccessError(name)
+        if self._is_own_name_(name):
+            raise AttributeError(name)
+        return self._get_symbolic_attribute_(name)
+
+    def __dir__(self) -> List[str]:
+        """
+        Surface the value type's attributes for interactive completion.
+
+        :meth:`__getattr__` already makes every public name a valid symbolic attribute,
+        but completion engines list :meth:`__dir__` only - which would otherwise show
+        just this expression's own members.
+        """
+        names = set(super().__dir__())
+        names.update(attribute_names_for_completion(self._type_))
+        return sorted(names)
+
+
 @dataclass(eq=False, repr=False)
-class CanBehaveLikeAVariable(Selectable[T], ABC):
+class CanBehaveLikeAVariable(Selectable[T], HasSymbolicAttributes[T], ABC):
     """
     This class adds the monitoring/tracking behavior on variables that tracks attribute
     access, calling, and comparison operations.
@@ -120,33 +186,14 @@ class CanBehaveLikeAVariable(Selectable[T], ABC):
         all_kwargs = merge_args_and_kwargs(type_, args, kwargs, ignore_first=True)
         return convert_args_and_kwargs_into_hashable_key(all_kwargs)
 
-    def __getattr__(self, name: str) -> CanBehaveLikeAVariable[T]:
-        # Dunder names are never symbolic attribute access. Mapping them would (a) let copy/pickle
-        # and other machinery that probes optional dunder hooks recurse into endless variable
-        # creation, and (b) blur language semantics. Access a dunder-named member symbolically via a
-        # :func:`symbolic_function` instead. SymbolicDunderAccessError is an AttributeError so that
-        # optional-hook probing still treats it as a missing attribute.
-        if name.startswith("__") and name.endswith("__"):
-            raise SymbolicDunderAccessError(name)
+    def _get_symbolic_attribute_(self, name: str) -> CanBehaveLikeAVariable[T]:
+        """
+        Map the attribute onto this variable, which is what it is an attribute of.
+
+        :param name: The name of the attribute to read symbolically.
+        :return: The expression standing for that attribute of this variable.
+        """
         return self._get_mapped_variable_(Attribute, name)
-
-    def __dir__(self) -> List[str]:
-        """
-        Surface the wrapped value type's attributes for interactive completion.
-
-        ``__getattr__`` already makes every non-dunder name a valid (symbolic)
-        attribute, but completion engines list ``__dir__`` only — which would otherwise
-        show just this expression's own members. We union those with the public
-        attributes of the value type so e.g. ``case_variable.<tab>`` offers the case
-        type's fields.
-
-        ``_type_`` is read from ``__dict__`` directly (never ``getattr``, which routes
-        through ``__getattr__`` and would return a :class:`MappedVariable` instead of
-        ``None``). This does not affect attribute resolution in any way.
-        """
-        names = set(super().__dir__())
-        names.update(attribute_names_for_completion(self.__dict__.get("_type_")))
-        return sorted(names)
 
     def __getitem__(self, key) -> CanBehaveLikeAVariable[T]:
         return self._get_mapped_variable_(Index, key)
