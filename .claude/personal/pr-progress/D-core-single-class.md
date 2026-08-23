@@ -1,153 +1,30 @@
-# D-core-single-class — PR progress
+**Session: `/plan-item-resolve rdr-refactor D-core-aid` (PR #63, branch `D-core-aid`).**
+This session's own branch carries no commits; the work went to the item branches, with
+explicit permission.
 
-**Branch cut, draft PR #159 open, bootstrap commit only — no engine code yet.**
-This note replaces the 2026-08-03 plan that sat here unexecuted; that plan is
-re-verified below, with the five premises that had gone stale corrected.
+1. Fork review threads: all seven resolved, each with its own reply. **Done.**
+2. ~~Restore the `## Promote` section~~ - **wrong, reverted.** `/upstream-reviews` (which I
+   had skipped, on the label rule) shows the branch was already promoted as cram2 **#557**.
+   Label corrected to `in-review`, `cram2-link-sent` cleared, `## Promote` removed.
+3. **#557's naming thread implemented** - `ConclusionHelper` base + `ConclusionSupportPresenter`
+   / `ConclusionSuggester` mixins, `aid.py` -> `conclusion_helper.py`. Four branches in one
+   round: #63 `39da5f22`, #67 `04a3fe89`, #98 `af77399b`, #159 `34df6172`. All pushed.
+4. Records: four items' notes, roadmap sections 27 and 28, #94 (three comments, the second
+   correcting the first), dashboard republished. **Done.**
 
-- PR: #159 (draft, base `D-core-expert`)
-- Kickoff session: https://claude.ai/code/session_01QjvFKyqAynJmr18FPZgVZr
-- Full narrative: `plans/rdr-refactor/roadmap.md` §20
+Outstanding, none of it started:
 
-## Done
-
-1. Branch `D-core-single-class` cut from `origin/D-core-expert` (`e52d74b4`),
-   bootstrap commit `d5b94c5a` pushed.
-2. Draft PR #159 opened against `D-core-expert`.
-3. `plan.yaml` updated by hand (`status: in_progress`, `branch`,
-   `pull_request_number: 159`, `session`, rewritten `notes`) and roadmap §20
-   appended. **`plan_item_bootstrap.py open` could not do this** — it writes
-   patched item fields at four-space indent inside a two-space item, producing
-   unparseable YAML, and still reports `{"status": "success"}`. Recorded in §20;
-   not fixed here.
-
-## Next
-
-1. ~~**Local baseline on `D-core-expert` before any code.**~~ **Done — and the
-   expected count in this note was stale.** §18/§19's recipe rebuilt cleanly
-   (`/usr/bin/python3.12` venv, `krrood`'s requirements, editable
-   `random_events`/`probabilistic_model`, `casadi`, `--confcutdir=test/krrood_test`,
-   `PYTHONPATH=<worktree>/krrood/src`). `test_eql_rdr` on `D-core-expert`
-   `82eb69fb` is **164 passed / 0 failed in 2.51s**, not the 150 this note
-   predicted: 150 was `e52d74b4`, before §21's cascade merged `D-core-support`
-   (+14). §21 already records 164; this note was written before it. Collected ids
-   saved to `scratchpad/baseline_expert_ids.txt`, 164 across 15 files —
-   `test_aid` 3, `test_backward_inference` 18, `test_branch_semantics` 12,
-   `test_conclusion_domain` 18, `test_conclusion_validator` 15,
-   `test_condition_resolver` 16, `test_corner_case` 9, `test_exceptions` 12,
-   `test_expert` 11, `test_observer` 12, `test_progress` 2,
-   `test_rule_tree_growth` 10, `test_serialization` 10,
-   `test_underspecified_match` 9, `test_zoo_loader` 7.
-   Note `-o addopts=` is required: the repo-root `pytest.ini` sets `-sv`, which
-   suppresses the `::`-form ids `--collect-only` otherwise prints.
-2. ~~**Tests first.**~~ **Done.** All six ported, plus `expert_doubles.py` and
-   `make_mammal`/`make_bird` hoisted onto `animal.py`. Two of the six shrank a lot
-   rather than being copied, because #98/#67 had already landed the unit coverage
-   they duplicated — recorded so a reviewer does not read the line count as a
-   dropped port:
-   - `test_condition_resolver_integration.py`: dropped `TestResolvedCondition`
-     (frozen/equality = what `@dataclass(frozen=True)` already guarantees),
-     `TestConditionResolverABC` (ABC's own semantics) and the live
-     `TestCornerCaseKnowledgeResolver`/`TestChainConditionResolver` blocks, all
-     covered by the 16 tests in `test_condition_resolver.py`. Kept what only the
-     live engine shows.
-   - `test_backward_inference_integration.py`: `test_backward_inference.py`'s 18
-     tests already cover traversal, `is_satisfiable`, guard flattening and index
-     caching. Kept the RDR-level wrapper and invalidation only.
-3. ~~**`single_class.py`**~~ **Done**, every listed thread applied. Two decisions
-   the plan left to the probe:
-   - The `SelfReferentialInsertionError` retry loop **is reachable** — probe in
-     `scratchpad/probe_self_ref.py` provokes it through `fit_case` with an expert
-     that answers with `context.trace.firing_anchor`. So it is **kept**, not
-     deleted, and pinned by two tests (HINT re-asks, AUTOMATIC surfaces).
-   - That probe found a **live defect**: `ExpertInterface._render_header` reads
-     `error.answer_name` on every entry of `initial_errors`, so passing the raw
-     `SelfReferentialInsertionError` (an EQL-core exception) crashed the re-prompt.
-     Fixed on this side rather than in `interface.py` — `initial_errors` is
-     documented as errors that each name their own request, so passing one that
-     does not was the bug. `_insert_rule` now raises `ConditionsNotInsertable`
-     (carrying `answer_name=AnswerName.CONDITIONS` and the anchor), chained from
-     the original.
-   - `sufficient_conditions_for` is the RDR method name, not the mega-branch's
-     `what_do_we_know_about`: `main` renamed the module-level function to
-     `get_conclusion_sufficient_conditions_from_a_rule_tree` (§21), and this method
-     is new here, so there is no rename — just not reintroducing the retired name.
-4. ~~**`rdr/exceptions.py`**~~ **Done**: a `# %% fitting` section with
-   `ExpertRequired`, `RDRDidNotConvergeError` (clashing cases + pass count) and
-   `ConditionsNotInsertable`.
-5. ~~PR body + handoff.~~ **Done.** Pushed as `04dc904c`, #159's body rewritten,
-   PR left in draft. Mutation checks run, formatter churn reverted, no PDF churn,
-   `plan.yaml` + roadmap §22 saved.
-
-## Result
-
-| | |
-|---|---|
-| baseline (`D-core-expert` `82eb69fb`) | `test_eql_rdr` **164 passed / 0 failed** |
-| this branch (`04dc904c`) | `test_eql_rdr` **230 passed / 0 failed** |
-| ids lost from baseline | **none** (compared as sorted lists) |
-| wider sweep | `test_eql` **1180 passed / 3 skipped / 0 failed** |
-| mutants | 7 run; 6 died at once, **1 survived and exposed a vacuous test of mine** |
-
-The surviving mutant is the interesting one: deleting the pre-raise
-`model_saver.save(self)` changed nothing, because `_splice_rule` already saves on
-every insertion, so `assert rdr in saver.saved` was true regardless. Fourth
-instance on this plan of an assertion that looked specific and was not — and this
-one *was* specific, just already made true by a different code path. Rewritten to
-compare the save count against the rule count; the mutant now dies.
-
-## Nothing is outstanding on this branch
-
-CI queued on the push (the base has moved, so §21's fix holds) — not watched, per
-the standing rule; check it by hand. Two API-shape questions are raised on the PR
-for the developer and deliberately not decided: the AUTOMATIC/HINT gate on the
-retry loop, and `CaseContext.conclusion_domain` now always being populated, which
-makes its field docstring on #98's `interface.py` inaccurate.
-
-## What this slice consumes from #98 (do not rebuild)
-
-`ConditionResolver.resolve(context, target_knowledge, current_knowledge)`, the
-segregated `ExpertInterface`, `NullProgressReporter`/`ProgressDescription.FITTING`,
-and `ModelSaver`/`NullModelSaver`/`FileModelSaver`. All landed in `28a89ff4`.
-
-## Engine changes, restated against current APIs
-
-- `classify()` → `Any` returning `...`; fix the `-> Optional[Any]` signature
-  defect roadmap §19 handed to this item.
-- Delete `RDRConvergenceWarning` and `max_passes`; `_run_convergence` raises
-  `RDRDidNotConvergeError` carrying **clashing cases + pass count only** — there
-  is no save path any more — after calling `model_saver.save(self)`.
-- Replace `ValueError("Expert must be supplied to fit_case")` with a typed
-  `DataclassException`.
-- Split `fit_case` into three named methods; build `CaseContext` once and pass
-  it to the expert *and* the resolver.
-- `save_path: Optional[str]` → `model_saver: ModelSaver = field(default_factory=NullModelSaver)`
-  and `progress_reporter: ProgressReporter = field(default_factory=NullProgressReporter)`
-  (`default_factory` — no mutable defaults). Deletes the
-  `expert.interface.on_save = lambda: …` reach-through and every `is not None` guard.
-- `prior_errors` is now `List[DataclassException]` — pass `[e]`.
-- `_FITTING_DESCRIPTION` → `ProgressDescription.FITTING`.
-- Inline `UnderspecifiedMatch` / `SelfReferentialInsertionError` imports to
-  module top; `from_underspecified(template: Match)`; keep `_observe`/`_trace`;
-  keep `render_tree() -> str` returning `""`; docstring sweep.
-- Probe whether the `SelfReferentialInsertionError` retry loop is reachable
-  (HINT-mode test). **If it cannot be provoked, delete it.**
-
-## Standing review lenses for this plan (apply while writing tests)
-
-- **Never compare symbolic expressions with `==`** — `__eq__` builds a truthy
-  `Comparator`, so nine assertions asserted nothing (§16). Compare `_id_`.
-- **Do not assert what a declaration, a sibling test, or the language already
-  guarantees** — five such tests were removed under review on #98 (§18, §19).
-- **Mutation-check anything load-bearing**: change the production value and
-  confirm exactly the intended test fails.
-- `scripts/format_docstrings.py` has five recorded deviations here and now
-  mis-parses `...` as a sentence end (§19) — check its output, revert churn.
-- A sweep dirties `query_graph.pdf` / `drawer_explanation.pdf` (tracked *and*
-  gitignored) — revert before committing.
-
-## Standing constraints
-
-- Do **not** cascade the stack first; the missing commits are in
-  `code_generation/` while this slice touches only `rdr/` and `test_eql_rdr/`.
-- Do **not** subscribe to PR #159 and arm no timed check-ins (personal notes).
-- Re-draft the PR after every push.
+- **CI on the four pushed branches was still running when this turn ended.** Not watched, per
+  the standing rule; check it when you look.
+- **LucaKro's dead-code review on #557 is unanswered** - yours, as you said. The fact that
+  answers it: `present()` has no production call site anywhere in the stack; `suggest()` does.
+- **#67 tracks `test/krrood_test/dataset/ormatic_interface.py`**, which every other branch
+  untracked, so `D-core-aid` merges into it modify/delete. Pre-existing (reproduced against
+  the pre-round origin versions), probably what its `needs-resolution` label records, and
+  exactly what `AGENTS.md` forbids. Not fixed - it is #67's own item.
+- Two `.claude/stack` defects, `workflow-unification`'s `stack-tooling` track, still with no
+  item: `promotion_summary()` returns the leading markdown heading, and a session cannot write
+  a prefilled create-link.
+- **The `in_review_label` is a single point of failure.** Three mechanisms read it to know a
+  branch is under upstream review; it is set by hand at promote time, and one missed click hid
+  #557 from all of them, including the check meant to notice.
