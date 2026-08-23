@@ -9266,3 +9266,66 @@ two dashboard requirements on a bare `ubuntu-latest`, so a krrood import breaks 
 until the job installs it, and `.github/workflows/upstream-reviews.yml` installs nothing at
 all. Neither is an argument against the direction; both are the concrete work the adoption
 item owes.
+
+## Update 2026-08-23 (same day, inverted): name the callers, derive the modules
+
+The user's objection to the shape decision 14 landed: *"I don't like that we still name
+modules that may import something, I think if we have to, we can do the opposite by naming
+the ones that must not import external libraries."*
+
+Right, and the reason is sharper than the list's length. `MODULES_THAT_MAY_NEED_THE_REQUIREMENTS`
+named a **permission**, and a permission has nothing behind it — an over-broad entry reads
+exactly like a correct one, which is how `record_dashboard_url` sat wrongly classified until
+the reverse check went in. A constraint has evidence behind it by construction.
+
+### The must-not set does not have to be named either
+
+Naming it directly would have been 22 entries, worse than the 7 it replaced. But the
+constraint's real subject is not a module, it is a **caller**: a module has to import on the
+standard library because something runs it before anything is installed. Declare the callers
+and the module set follows, because importing a module imports everything it imports.
+
+`UNINSTALLED_INVOCATIONS` is five entries — the Actions workflow, the maintenance skill, the
+upstream-reviews skill, `/add-plan-item`, and `plan-updates-since.sh` — each carrying the
+module it invokes and the reason it installs nothing, verified against its own file.
+`modules_that_must_not_import_third_party()` walks the intra-package import graph from those
+five and returns 17 modules. **No module is named anywhere**, and a module that becomes
+reachable from one of those callers is checked without anyone declaring it.
+
+### The default inverts, and that is what makes the previous shape wrong
+
+A module reached by an uninstalled caller must import on the standard library; a module
+reached by none may import whatever it likes, **because nothing runs it before an install**.
+
+That retires the 21-module check the exception set had restored, and the retirement is
+correct rather than a loss: `plan_model`, `record_dashboard_url`, `_version` and
+`package_layout` were being held to a constraint no caller was asking for. The 616 → 592 drop
+recorded above was a real loss of coverage under a design that had no callers in it; under
+this one the same modules going unchecked is the semantics working.
+
+### The mutation that found a gap in the derivation
+
+Four mutations, each caught by exactly the test that names it: a module deep in the closure
+growing an import (three failures — `maintenance`, `maintenance_commands`,
+`maintenance_report`), a caller gaining a `pip install` step, a caller ceasing to invoke its
+module, and a constrained module reaching an unconstrained one.
+
+The last of those found `_sibling_imports_of` reading `node.module` for `from bastler.x import
+y` and missing `from bastler import x`, where the module name is in the *alias* rather than
+the module path. The failure was still caught — the importing module itself went red — but the
+closure would have stopped short of what that module reached. Both forms are read now.
+
+### A green suite after a deletion proves nothing
+
+Worth carrying, and the second instance of this shape in two days. Deleting the exception set
+with a slice from one anchor to the next also deleted
+`test_every_uninstalled_caller_still_invokes_its_module_and_still_installs_nothing`, which sat
+between them. The suite stayed green at 66 and nothing flagged it; it surfaced only because a
+mutation that had been caught an hour earlier stopped being caught.
+
+The 616 → 592 entry above is the same lesson from the other side — there a parametrization
+narrowed and 21 cases vanished, here a slice deleted a test outright, and both runs were
+green. **The check after a deletion is the mutation that used to fail, or the case count** —
+never the fact that the suite passes.
+
+617 tests pass.

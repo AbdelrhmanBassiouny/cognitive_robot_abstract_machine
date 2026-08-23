@@ -1096,6 +1096,39 @@ items:
       entries are what say which those are. Nothing about the derivation changes, which is why
       it was worth doing first.
 
+      Inverted again the same day (b45903ffc), on the user's objection to naming the modules
+      that may import something: name the ones that must not, if anything has to be named at
+      all. Taken one step further, because the must-not set is derivable. What is declared is
+      UNINSTALLED_INVOCATIONS, five callers that run a module of this package with nothing
+      installed - the Actions workflow plus four session-side callers, each with the reason
+      its own file is checked against - and modules_that_must_not_import_third_party()
+      computes the rest as the import closure of what those callers reach. Five declarations
+      cover seventeen modules and no module is named anywhere.
+      MODULES_THAT_MAY_NEED_THE_REQUIREMENTS is deleted.
+
+      The default inverts with it, and this is the part that makes the previous shape wrong
+      rather than merely longer: a module reached by an uninstalled caller must import on the
+      standard library, and a module reached by none may import whatever it likes, because
+      nothing runs it before an install. The 21-module check the exception set restored was
+      over-constraining without a caller behind it - plan_model, record_dashboard_url,
+      _version and package_layout are held to nothing now, correctly.
+
+      Four mutations, each caught by exactly the test that names it: a module deep in the
+      closure growing an import (three failures - maintenance, maintenance_commands,
+      maintenance_report), a caller gaining a pip step, a caller ceasing to invoke its module,
+      and a constrained module reaching an unconstrained one. The last found a real gap in the
+      derivation: _sibling_imports_of read node.module for from bastler.x import y and missed
+      from bastler import x, where the module name is in the alias. Both forms are read now.
+
+      One process failure worth carrying, since it is the second instance in two days of the
+      same shape. Deleting the exception set with a slice from one anchor to the next also
+      deleted
+      test_every_uninstalled_caller_still_invokes_its_module_and_still_installs_nothing, which
+      sat between them - and the suite stayed green at 66, so nothing flagged it. It surfaced
+      only because a mutation that had been caught an hour earlier stopped being caught. A
+      green run after a deletion says nothing about what the deletion took with it; the check
+      is the mutation that used to fail, or the test count.
+
   - id: bastler-notes-core-python
     branch: null
     title: "Bash→Python 1: notes-core modules (config, git seam, writer, markers)"
