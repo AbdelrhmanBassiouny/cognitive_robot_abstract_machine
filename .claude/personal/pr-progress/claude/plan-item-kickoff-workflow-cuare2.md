@@ -36,9 +36,19 @@ implementation, and the 2026-08-23 resolution.
       `requirements.txt` through `packages_distributions()`. The 29-entry list, `DependencyTier`
       and the tier table are gone. What is left is one exception set plus one named uninstalled
       caller, both held in both directions. 621 tests pass.
+- [x] **Callers declared, modules derived** (`b45903ffc`): the exception set named a permission,
+      so it is gone. `UNINSTALLED_INVOCATIONS` names five callers that install nothing, and the
+      closure of what they reach is computed - 17 modules, no module named anywhere. A module no
+      such caller reaches may import what it likes. 617 tests pass.
 
 ## Findings worth carrying
 
+- **A green suite after a deletion proves nothing.** Deleting a block by slicing between two
+  anchors also deleted the test sitting between them; 66 still passed. It surfaced only when a
+  mutation caught an hour earlier stopped being caught. Check the mutation, or the case count.
+- **A permission list has nothing behind it.** "Modules that may import X" cannot distinguish a
+  correct entry from an over-broad one. "Callers that cannot install" can, because the caller's
+  own file is the evidence - and the module set then derives from it.
 - **The cheaper shape caught what the elaborate one could not.** Replacing 29 tier
   declarations with a derived layout plus one exception set immediately found
   `record_dashboard_url` declared `PLAN_MANIFEST` while importing only the standard library.
