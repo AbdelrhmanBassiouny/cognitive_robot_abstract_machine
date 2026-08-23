@@ -9,11 +9,15 @@ from __future__ import annotations
 
 import dataclasses
 import enum
+from pathlib import Path
 
 import pytest
 
 from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
-from krrood.entity_query_language.rdr.exceptions import RDRDidNotConvergeError
+from krrood.entity_query_language.rdr.exceptions import (
+    ExpertRequired,
+    RDRDidNotConvergeError,
+)
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interface import (
     AnswerRequest,
@@ -26,7 +30,10 @@ from krrood.entity_query_language.rdr.progress import (
     SpyProgressReporter,
 )
 from krrood.entity_query_language.rdr.rule_tree_view import walk_rules
-from krrood.entity_query_language.rdr.serialization import ModelSaver
+from krrood.entity_query_language.rdr.serialization import (
+    ModelSaver,
+    TemporaryModelSaver,
+)
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from typing_extensions import Any, Dict, List, Optional
 
@@ -228,8 +235,8 @@ def test_oscillating_fit_saves_the_partial_model_before_raising(
     colour_rdr: EQLSingleClassRDR, non_discriminating_expert: Expert
 ):
     """
-    Every insertion saves too, so the save count must be compared against the number of
-    rules inserted: one save more than that is the one the giving-up path adds.
+    A fit saves once on its way out, so a fit that gives up saves exactly once — the
+    rules it did author are on disk, and the count does not grow with them.
     """
     saver = RecordingModelSaver()
     colour_rdr.model_saver = saver
@@ -237,9 +244,95 @@ def test_oscillating_fit_saves_the_partial_model_before_raising(
     with pytest.raises(RDRDidNotConvergeError):
         colour_rdr.fit(BOTH_CASES, BOTH_TARGETS, non_discriminating_expert)
 
-    assert saver.saved == [colour_rdr] * (
-        len(walk_rules(colour_rdr.conditions_root)) + 1
-    )
+    assert saver.saved == [colour_rdr]
+    assert walk_rules(colour_rdr.conditions_root) != []
+
+
+# %% what a fit persists
+
+
+class _ExpertFailure(Exception):
+    """
+    Stands in for anything that can go wrong partway through a fit.
+    """
+
+
+def _expert_that_fails_after(successful_answers: int) -> Expert:
+    """
+    :param successful_answers: How many rules the expert authors before it breaks.
+    :return: An expert that answers that many times, then raises.
+    """
+    answered = 0
+
+    def answer(context: CaseContext, requests: List[AnswerRequest]):
+        nonlocal answered
+        if answered >= successful_answers:
+            raise _ExpertFailure("the expert broke partway through")
+        answered += 1
+        return {AnswerName.CONDITIONS: context.case_variable.distinguishing == True}
+
+    return Expert(interface=FunctionInterface(answer_function=answer))
+
+
+def test_a_fit_that_crashes_still_saves_the_rules_it_had_authored(
+    colour_rdr: EQLSingleClassRDR,
+):
+    saver = RecordingModelSaver()
+    colour_rdr.model_saver = saver
+
+    with pytest.raises(_ExpertFailure):
+        colour_rdr.fit(BOTH_CASES, BOTH_TARGETS, _expert_that_fails_after(1))
+
+    assert saver.saved == [colour_rdr]
+    assert len(walk_rules(colour_rdr.conditions_root)) == 1
+
+
+def test_a_fit_that_fails_before_any_rule_saves_nothing_and_reports_its_own_failure(
+    colour_rdr: EQLSingleClassRDR,
+):
+    """
+    The serializer refuses an empty tree, and raising that from the save would replace
+    the failure the caller actually needs to see.
+    """
+    saver = RecordingModelSaver()
+    colour_rdr.model_saver = saver
+
+    with pytest.raises(ExpertRequired):
+        colour_rdr.fit(BOTH_CASES, BOTH_TARGETS, expert=None)
+
+    assert saver.saved == []
+
+
+def test_a_completed_fit_saves_once_however_many_rules_it_wrote(
+    colour_rdr: EQLSingleClassRDR, discriminating_expert: Expert
+):
+    saver = RecordingModelSaver()
+    colour_rdr.model_saver = saver
+
+    colour_rdr.fit(BOTH_CASES, BOTH_TARGETS, discriminating_expert)
+
+    assert saver.saved == [colour_rdr]
+    assert len(walk_rules(colour_rdr.conditions_root)) == 2
+
+
+def test_fitting_one_case_directly_also_saves_once(colour_rdr: EQLSingleClassRDR):
+    saver = RecordingModelSaver()
+    colour_rdr.model_saver = saver
+
+    colour_rdr.fit_case(RED_CASE, Colour.red, _expert_that_fails_after(1))
+
+    assert saver.saved == [colour_rdr]
+
+
+def test_an_unconfigured_rdr_saves_where_it_can_say(discriminating_expert: Expert):
+    rdr = EQLSingleClassRDR(TwoTraitCase, "colour")
+
+    assert isinstance(rdr.model_saver, TemporaryModelSaver)
+
+    rdr.fit(BOTH_CASES, BOTH_TARGETS, discriminating_expert)
+
+    assert Path(rdr.model_saver.path).exists()
+    Path(rdr.model_saver.path).unlink()
 
 
 # %% converging

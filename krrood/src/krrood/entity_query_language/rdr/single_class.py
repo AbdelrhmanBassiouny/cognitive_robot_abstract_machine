@@ -13,12 +13,14 @@ Single-class means conclusions are mutually exclusive: each case resolves to one
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from dataclasses import dataclass, field, replace
 from functools import cached_property
 
 from typing_extensions import (
     Any,
     FrozenSet,
+    Iterator,
     List,
     Optional,
     Self,
@@ -74,7 +76,10 @@ from krrood.entity_query_language.rdr.rule_tree_view import (
     DEFAULT_TAIL,
     render_rule_tree,
 )
-from krrood.entity_query_language.rdr.serialization import ModelSaver, NullModelSaver
+from krrood.entity_query_language.rdr.serialization import (
+    ModelSaver,
+    TemporaryModelSaver,
+)
 from krrood.entity_query_language.rdr.underspecified import UnderspecifiedMatch
 from krrood.entity_query_language.scope import (
     attach_definition_scope,
@@ -137,11 +142,12 @@ class EQLSingleClassRDR:
     Has no effect while :attr:`condition_resolver` is ``None``.
     """
 
-    model_saver: ModelSaver = field(default_factory=NullModelSaver)
+    model_saver: ModelSaver = field(default_factory=TemporaryModelSaver)
     """
-    Persists the RDR after every rule insertion.
+    Persists the RDR when a fit finishes, including when it ends by raising.
 
-    Saves nothing by default.
+    Writes to a temporary file by default, so an interrupted fit leaves the rules it had
+    authored somewhere recoverable rather than nowhere.
     """
 
     progress_reporter: ProgressReporter = field(default_factory=NullProgressReporter)
@@ -241,6 +247,25 @@ class EQLSingleClassRDR:
 
     # %% fitting one case
 
+    @contextmanager
+    def _saved_when_the_fit_ends(self) -> Iterator[None]:
+        """
+        Persist the RDR once the enclosing fit finishes, whether it returned or raised.
+
+        A fit that dies partway has still authored real rules, and this is what keeps
+        them: the save runs on the way out either way, and an exception carries on
+        unchanged.
+
+        A tree with no rules is not saved. There is nothing in it to recover, and the
+        serializer rejects it — which, raised from here, would replace whatever ended
+        the fit with a complaint about saving it.
+        """
+        try:
+            yield
+        finally:
+            if self.query is not None:
+                self.model_saver.save(self)
+
     def fit_case(
         self, case: Any, target: Any = ..., expert: Optional[Expert] = None
     ) -> Any:
@@ -256,6 +281,26 @@ class EQLSingleClassRDR:
             truth.
         :param expert: Supplies the new rule's conditions, and its conclusion when
             ``target`` is absent. Only needed when a rule has to be inserted.
+        :return: The conclusion now associated with ``case``.
+        :raises ExpertRequired: When a rule must be inserted but no expert was supplied.
+        """
+        with self._saved_when_the_fit_ends():
+            return self._fit_case(case, target, expert)
+
+    def _fit_case(
+        self, case: Any, target: Any = ..., expert: Optional[Expert] = None
+    ) -> Any:
+        """
+        The body of :meth:`fit_case`, without the save.
+
+        :meth:`fit` drives this directly so a dataset costs one save rather than one per
+        case.
+
+        :param case: The case to fit.
+        :param target: The known correct conclusion, or ``...`` when there is no ground
+            truth.
+        :param expert: Supplies the new rule's conditions, and its conclusion when
+            ``target`` is absent.
         :return: The conclusion now associated with ``case``.
         :raises ExpertRequired: When a rule must be inserted but no expert was supplied.
         """
@@ -329,26 +374,18 @@ class EQLSingleClassRDR:
 
     def _resolve_condition(self, context: CaseContext) -> Optional[ResolvedCondition]:
         """
-        Derive a condition separating the case from the corner case of the rule that
-        wrongly fired.
+        Ask the configured resolver for a condition separating the case from the corner
+        case of the rule that wrongly fired.
 
-        Only the refinement branch can resolve: with no resolver, no corner case, or no
-        conclusion to correct there is nothing to discriminate against.
+        Which situations a resolver can handle, and what it reads to decide, are its own
+        business — this only settles whether there is a resolver to ask.
 
         :param context: The case context being fitted.
         :return: The resolved condition, or ``None`` to fall back to the expert.
         """
-        if (
-            self.condition_resolver is None
-            or context.corner_case is None
-            or not context.has_current_conclusion
-        ):
+        if self.condition_resolver is None:
             return None
-        return self.condition_resolver.resolve(
-            context,
-            self.sufficient_conditions_for(context.target_conclusion),
-            self.sufficient_conditions_for(context.current_conclusion),
-        )
+        return self.condition_resolver.resolve(self, context)
 
     def _insert_rule(
         self,
@@ -418,7 +455,6 @@ class EQLSingleClassRDR:
 
         self.corner_cases.record(new_node, context.case_instance)
         self._backward_index.invalidate()
-        self.model_saver.save(self)
 
     # %% fitting a dataset
 
@@ -447,15 +483,16 @@ class EQLSingleClassRDR:
         """
         paired_targets = targets if targets is not None else [...] * len(cases)
         self.progress_reporter.start(len(cases), ProgressDescription.FITTING)
-        try:
-            if targets is None:
-                for case, target in zip(cases, paired_targets):
-                    self.fit_case(case, target, expert)
-                    self.progress_reporter.update()
-            else:
-                self._fit_until_converged(cases, paired_targets, expert)
-        finally:
-            self.progress_reporter.finish()
+        with self._saved_when_the_fit_ends():
+            try:
+                if targets is None:
+                    for case, target in zip(cases, paired_targets):
+                        self._fit_case(case, target, expert)
+                        self.progress_reporter.update()
+                else:
+                    self._fit_until_converged(cases, paired_targets, expert)
+            finally:
+                self.progress_reporter.finish()
         return self
 
     def _fit_until_converged(
@@ -488,7 +525,7 @@ class EQLSingleClassRDR:
 
         while True:
             for index in pending:
-                self.fit_case(cases[index], targets[index], expert)
+                self._fit_case(cases[index], targets[index], expert)
                 self.progress_reporter.update()
 
             pending = [
@@ -503,7 +540,6 @@ class EQLSingleClassRDR:
 
             completed_passes += 1
             if frozenset(pending) in pending_after_earlier_passes:
-                self.model_saver.save(self)
                 raise RDRDidNotConvergeError(
                     clashing_cases=[cases[index] for index in pending],
                     passes=completed_passes,

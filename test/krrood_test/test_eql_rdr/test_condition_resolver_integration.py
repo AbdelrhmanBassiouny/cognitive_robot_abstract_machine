@@ -69,10 +69,10 @@ def _resolve_against_live_tree(
     rdr: EQLSingleClassRDR, case, corner_case, target, current
 ):
     """
-    Run :class:`TargetSufficientConditionsBasedResolver` against the sufficient
-    condition sets the RDR's own rule tree yields.
+    Run :class:`TargetSufficientConditionsBasedResolver` against a real RDR, which is
+    where it now reads its condition sets from.
 
-    :param rdr: The fitted RDR whose rule tree supplies the condition sets.
+    :param rdr: The fitted RDR whose rule tree the resolver walks.
     :param case: The new case needing a condition.
     :param corner_case: The case the firing rule was written for.
     :param target: The correct conclusion.
@@ -80,6 +80,7 @@ def _resolve_against_live_tree(
     :return: The resolved condition, or ``None``.
     """
     return TargetSufficientConditionsBasedResolver().resolve(
+        rdr,
         CaseContext(
             case_instance=case,
             case_variable=rdr.case_variable,
@@ -87,8 +88,6 @@ def _resolve_against_live_tree(
             target_conclusion=target,
             corner_case=corner_case,
         ),
-        rdr.sufficient_conditions_for(target),
-        rdr.sufficient_conditions_for(current),
     )
 
 
