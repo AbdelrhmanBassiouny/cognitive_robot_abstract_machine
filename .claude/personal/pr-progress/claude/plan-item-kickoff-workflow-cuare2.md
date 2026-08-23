@@ -1,66 +1,62 @@
 # bastler-package — PR #185 (draft), branch `claude/plan-item-kickoff-workflow-cuare2`
 
-Plan `workflow-unification`, track `bastler`, wave `upstream`. Based on fork `main`
-(`90c24116`). Kicked off and implemented in session
-https://claude.ai/code/session_01JN9p5Kf2DKtzryspPX2KqZ.
+Plan `workflow-unification`, track `bastler`, wave `upstream`. Kicked off and implemented in
+session https://claude.ai/code/session_01JN9p5Kf2DKtzryspPX2KqZ; merged `main` and worked the
+2026-08-22/23 review round in https://claude.ai/code/session_01Hgt7hWYnT9ZMK6AgusPwkk.
 
 Create the `bastler` package and move every Python module under `.claude/` into it, so the
 three separate `sys.path` roots stop preventing any shared definition from existing. Full
-rationale in the plan's `roadmap.md` under the 2026-08-20 kickoff and 2026-08-21 implementation
-entries.
+rationale in the plan's `roadmap.md` under the 2026-08-20 kickoff, the 2026-08-21
+implementation, and the 2026-08-23 resolution.
 
-## Scope, settled with the user at kickoff
+## Done
 
-- **Pure move.** 46 modules via `git mv`; 68 changed files render as renames. `stack.py`
-  (1,641), `plan_item_bootstrap.py` (1,612) and `build_dashboard.py` (1,504) keep their
-  shape — splitting them becomes its own item once the package exists.
-- **Only straight-deletion unifications**: one `ItemStatus`, and `stack.py`'s second Python
-  copy of the notes-branch precedence. The `git_interface.py` seam and the command-class base
-  stay with their own items, because #135's `check_scope_overlap.py` and #151's `Subcommand`
-  are not on `main`.
-- Flat package layout.
-
-## Done — everything the plan listed
-
-- [x] Skeleton, `pyproject.toml`, and 58 contract tests (`39bc17c27`).
-- [x] The move, the import rewrites, the entry points, CI and the documents — one commit
-      (`a4405fbd5`), because `scratch_repository.py` is shared by two of the three suites, so
-      splitting it per directory would have needed the `sys.path` bridge this deletes.
-- [x] Package data for an installed copy (`a826533b4`), found by running `pip install ./bastler`
-      and watching it import and then fail at the first render.
-- [x] **536 tests pass** = 479 on `main` + 58 new − 1 deleted (the executor's per-module import
-      test, superseded by the contract suite covering all 24 modules).
-- [x] Live: `check-setup.sh` exits 0 every row `ok`; `stack.py configuration` resolves
-      `fork_repository` off the real notes branch; `refresh_dashboard.sh` renders this plan's
-      own 50-item dashboard with zero drift; `plan_manifest_tools` answers both subcommands;
-      `save-plan.sh` round-tripped this item's roadmap section.
-- [x] Zero-install from a **fresh clone of the pushed branch**: import resolves to the clone's
-      own copy, all ten entry points answer `--help`, `example-walkthrough.md`'s command runs
-      verbatim.
-- [x] `scripts/format_docstrings.py` on all 49 touched Python files.
-- [x] Manifest recorded, roadmap section appended, PR description rewritten, #158 and #111 told.
+- [x] Skeleton, `pyproject.toml`, contract tests (`39bc17c27`); the move (`a4405fbd5`);
+      package data for an installed copy (`a826533b4`).
+- [x] **Merged `main`** (`13bda614`). Not three conflicts but three modules: `main` gained
+      `check_scope_overlap.py` (#135), `record_dashboard_url.py` (#150) and
+      `upstream_reviews.py` (#146) under `.claude/` after this branch was cut, so resolving
+      only the reported conflicts would have merged and then failed this branch's own
+      "no `.py` under `.claude/`" contract.
+- [x] **Metadata and self-declaration** (`52b44390`): empty `__init__.py` + `bastler/README.md`,
+      full `pyproject` metadata, repository versioning via `scripts/sync_version.py`,
+      `bastler/package_layout.py`, `ItemStatus.display_label`.
+- [x] **Constants and the runner hierarchy** (`db910e90`): derive module names/paths from the
+      import; `test/bastler_test/constants.py` for what has no import;
+      `script_runner.py`'s `ScriptRunner`/`PythonModuleRunner`/`BashScriptRunner`.
+- [x] **Fixture consolidation** (`4e8ad6fb9`): `PersonalNotesPath`, `install_hook_scripts_into`,
+      `ScratchRepository.install_stack_configuration`.
+- [x] 616 tests pass (479 on `main` before the move). `check-setup.sh` exits 0, every row `ok`;
+      all thirteen entry points answer `--help`.
+- [x] Manifest, roadmap section, PR description all current.
 
 ## Findings worth carrying
 
-- **A docstring claimed a guard that did not exist.** `plan_item_bootstrap.py`'s `ItemStatus`
-  said *"a test holds the two equal"* — no test on `main` imports both modules. Same shape as
-  the #154 review reply that described a contract test nobody had written; the cheap check is
-  to grep for the import the test would have to make.
-- **The precedence copy had already drifted**, so the second unification was a repair: the
-  shell falls back to the current branch's upstream remote and `stack.py`'s Python copy did not.
-- **A helper run by path cannot see the package** — an interpreter given a script path puts that
-  script's directory on `sys.path`, not the working directory. Same reason every entry point is
-  `python3 -m`.
-- **`pip install` is its own verification.** Reading the manifest would not have found that
-  `templates/`, `stack.toml` and `requirements.txt` were being left out.
+- **A conflict report names files; the dangerous ones are the files it does not name.** Three
+  of the six were flagged by git's "added in `origin/main` inside a directory that was renamed
+  in HEAD"; the other three had no tell at all. The check is one command:
+  `git ls-tree origin/main` for the pattern the branch claims to have emptied.
+- **The dependency tier's stated reason was false.** It claimed a hook may import only the
+  standard library because a hook runs where nothing is installed. `session-start.sh` reaches
+  no module of this package at all — bash plus one stdlib-only heredoc in `check-setup.sh`. The
+  tier answers something narrower and real: whether an entry point runs before
+  `pip install -r bastler/requirements.txt`.
+- **A docstring claimed a guard that did not exist** (`ItemStatus`'s "a test holds the two
+  equal"). Cheap check: grep for the import the test would have to make.
+- **`monkeypatch.setattr` takes the attribute name as a string by signature**, so it cannot be
+  derived from importing the value — but it is already guarded, because `setattr` raises when
+  the attribute is absent.
 
 ## Open / carried
 
-- **Not subscribed to tracking issue #102** — refused by the permission classifier. Concurrent
-  structural changes reach a session here only via `plan-updates-since.sh`.
+- **34 review threads answered in code; inline replies still to post.** Two were answered
+  differently from what they asked and must not be resolved: the `monkeypatch.setattr` derivation
+  (impossible, with the measurement) and the SessionStart auto-install (available, deliberately
+  not taken).
+- **Not subscribed to tracking issue #102** — refused by the permission classifier in the kickoff
+  session. Concurrent structural changes reach a session here only via `plan-updates-since.sh`.
 - **CI job rename** `test_claude_dev_tooling` → `test_bastler` changes the reported check name;
-  branch protection needs updating if the old name is required. Flagged to the user, not acted on.
-- **CI on the pushed branch not yet seen** — the robotics matrix takes a long time and is
-  routinely red for reasons a `.claude/`-only diff cannot reach. `test_bastler` is the job that
-  covers this diff.
-- Re-drafted after the push, per the standing rule.
+  branch protection needs updating if the old name is required. Flagged, not acted on.
+- **`run_git` is now reachable** (`check_scope_overlap.py` landed on `main`), but the seam stays
+  `bastler-notes-core-python`'s by name. #151's `Subcommand` is still unlanded.
+- Re-drafted after each push, per the standing rule.
