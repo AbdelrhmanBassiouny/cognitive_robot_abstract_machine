@@ -9065,3 +9065,76 @@ carries the upstream bullet **twice** — the copies differing only in "step 5" 
 "step 3", a merge artifact on that branch; `origin/main` carries it once. And this session's
 designated branch had been left pointing at an integration-branch merge rather than at
 `origin/main`, so the item's branch must be created from `origin/main` at kickoff.
+
+## Update 2026-08-23 (kickoff): `always-read-upstream-reviews` opens as #194, and the recorded test plan is corrected
+
+Branch `claude/plan-item-kickoff-workflow-y2xfva` off `origin/main` (`3f643cf`), draft #194,
+labelled `bug`. `depends_on` is empty and `check_dependency_readiness.py` confirms it, so
+nothing gated the start.
+
+### What the fix is
+
+The gate at `.claude/skills/plan-item-resolve/SKILL.md` step 2 goes: `/upstream-reviews` is
+invoked whenever the item has a `branch`, with no label condition, and a failed dispatch is
+still reported in step 5 rather than failing the skill. The reasoning was settled when the
+item was recorded and is not relitigated here.
+
+**A second site carries the same premise, and the recording did not name it.** Step 5's
+flag list asks the session to say whether upstream state was read *"when the item looked
+promoted but `/upstream-reviews` could not be run"*. "Looked promoted" is the label premise
+in different words; it becomes "has a branch". Found by reading the document through rather
+than by grepping for the label, which the first site's wording would have been enough to
+satisfy.
+
+### The carried test plan was correct when written and is now wrong
+
+The recording carried forward: *"There is no `plan-item-resolve` tests directory yet, and
+`ci.yml`'s `test_claude_dev_tooling` job runs four named directories, so adding one costs a
+constant in `resolve-personal-notes-config.sh` and one path in `ci.yml`."*
+
+Running `check_scope_overlap.py` against the live branches at kickoff shows that route now
+builds something #185 deletes. The bastler move removes `.claude/hooks/tests/` and
+`.claude/stack/tests/` outright, replaces the four-directory `test_claude_dev_tooling` job
+with a single `test_bastler` job over `BASTLER_TESTS_DIRECTORY`, and rewrites both
+`resolve-personal-notes-config.sh` and `ci.yml` — so a fifth constant and a fifth CI path
+would be a conflict in the two files #185 touches most, for a directory it then removes.
+
+The test goes in the existing `.claude/hooks/tests/` instead: already in CI, so no constant
+and no `ci.yml` line, and the #185 collision reduces to one file move that #185 is already
+performing for every other file in that directory. The cost is that a skill-document test
+sits in a nominally hook-script suite; #156 already does exactly that with
+`test_setup_prerequisite_documents.py`.
+
+### What the test asserts, and what it deliberately does not
+
+`test_maintenance_skill.py` states the shape that earns a test over a document: *"an
+absence, computed from this checkout's own remotes rather than from a string written here,
+which is what makes it worth a test where a prose assertion would not be."* The durable
+property here is that the resolve skill's upstream instruction does not depend on the
+promotion label. So: the `in_review_label` value, read from its owner `.claude/stack/stack.toml`,
+is absent from `plan-item-resolve/SKILL.md`; and the skill still invokes the upstream-reviews
+skill, whose name is read from that skill's own frontmatter. Both sides are derived from the
+definition rather than retyped.
+
+No wording is pinned, on purpose. #121's review round cut
+`test_every_summary_message_reads_as_written` for exactly that, and the generalization it
+left behind — *notice the guard you are deleting and say so*, not *always replace it* —
+applies: the step 5 rewording has no durable property to assert, so it is covered by review
+and stated here rather than given a wording assertion that would fail on the next rewrite.
+
+### Checked while scoping, neither this item's to fix
+
+`.claude/upstream_reviews/tests/` runs in no CI job at all — its ~40 tests are in neither
+`ci.yml`'s four-directory list nor `resolve-personal-notes-config.sh`. #185 fixes it
+incidentally by moving them to `test/bastler_test/`. And `plan-item-resolve/SKILL.md` is the
+only invoker of `/upstream-reviews` anywhere, while `in_review_label` keeps its readers in
+`stack.py`, `maintenance_promotion.py`, `.claude/stack/README.md` and
+`stacked-pr-maintenance/SKILL.md` — so removing this one use orphans no configuration key.
+
+### Roadmap read at kickoff
+
+`roadmap.md` is 9,067 lines; a full read was impractical and is recorded as such rather than
+glossed. Read in full: the header through standing risks (1-110), both standing-conventions
+sections (183-194, 664-700), the `upstream-review-reader` entry (4036-4165), and this item's
+own recording. The complete heading index was read to choose those, and the file was grepped
+for the item id, its branch, `labelled` and `in-review`.
