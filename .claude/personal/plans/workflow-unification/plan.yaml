@@ -3713,6 +3713,31 @@ items:
       no reader executes the contract - and the answer to that is the user's to give, not a
       measurement. A defence that survives on reasoning nobody has tested is worth less than the
       objection it is answering.
+
+      #191 folded in on 2026-08-23 (fast-forward, so GitHub closed it as merged into this branch),
+      carrying three commits that were all fixes to this branch's own code, plus the plan item
+      `integration-branch-ci-verdict`, whose Part D is now this branch's work too.
+
+      Two of the three are defects this branch shipped, both found by running a real build rather
+      than by review. `Assembly.merge` read the rerere replay marker before asking which paths were
+      left unmerged, which is right for a fully replayed merge and wrong for a partially replayed
+      one - rerere replays per conflict rather than per merge, so a tip can carry one conflict a
+      recorded resolution covers and another nothing has seen, and the marker is on git's output
+      either way. The partial case concluded the merge with files still unmerged, which fails and
+      ended the whole build over one tip that should have been skipped. Reachable the moment any
+      resolution is recorded, which is what `/integration-conflict-triage` does routinely.
+
+      And `provenance_path` resolved git's `--git-common-dir` answer against the process's working
+      directory rather than the runner's. Git answers relatively from inside a main working tree, so
+      running the suite from the repository root wrote its fixtures' authors over the real
+      provenance manifest - observed, not reasoned about: a resolution recorded `--author skill`
+      came back from the next build reported as `human`. That record is the only thing making a
+      machine-written replay findable later. `GitCommandRunner.common_directory` now resolves it
+      itself, so the mistake is unrepresentable rather than fixed once.
+
+      Base merge taken the same day, 86 commits of `main`. One conflict, in
+      `plan-item-resolve/SKILL.md`, additive on both sides and both kept: `main`'s scope-decision
+      paragraph continues section 4, and #151's `## 4b` manifest-staleness step follows it.
   - id: setup-runs-without-asking
     title: "Run the personal-notes setup from the planning skills instead of asking first"
     branch: claude/auto-run-setup-notes-02nhxv
