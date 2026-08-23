@@ -256,4 +256,10 @@ items:
       into plain modifier calls (coraplex training_environment.py:210,
       experiments reliability.py:108), and leaves update_fields and
       create_or_update_variable as the public machinery names still to move
-      behind the underscore convention.
+      behind the underscore convention. Measured on item 2's branch 2026-08-23,
+      so this item's brief is exact: entity(match) and set_of(match, ...) now
+      *construct* and then raise KeyError(<uuid>) at evaluation - worse than
+      the(match)/an(match), which still raise assert_never at the point of
+      writing - while entity(match.expression) works. So the unwrapping has to
+      happen in the factories rather than at evaluation, and the entity/set_of
+      path needs its own repro alongside the recorded the(match) one.
