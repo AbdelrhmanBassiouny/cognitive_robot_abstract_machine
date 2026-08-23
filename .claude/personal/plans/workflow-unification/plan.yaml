@@ -4049,7 +4049,9 @@ items:
 
   - id: always-read-upstream-reviews
     title: "Read upstream review threads whether or not the fork pull request is labelled"
-    branch: null
+    branch: claude/plan-item-kickoff-workflow-y2xfva
     track: personal-data
     depends_on: []
-    status: not_started
+    status: in_progress
+    pull_request_number: 194
+    session: https://claude.ai/code/session_01Cs9MvTBPS4hsd1HJimooVy
