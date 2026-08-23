@@ -19,6 +19,15 @@ Roadmap section 17 has the full record and the reasoning.
        shadowing case, both `isinstance` relationships, the section-6 guard, the
        compatibility properties, and `ordered_by`/`limit` in the mypy fixture.
 5. [x] Manifest, roadmap, PR description, dashboard.
+6. [x] Review round 2026-08-23 (roadmap section 18), `61b8cb28`: the forwarding covered
+       attribute access alone. Every symbolic operation now lives once in
+       `CanBehaveLikeAValue`, built on the one expression an implementation reports as
+       `_symbolic_expression_`. The developer's parentheses rule (first call is the
+       pattern, later calls call the instance) with a callability check, so nothing
+       existing changes. Closed two gaps it depended on: a bare query used as a value in
+       its own condition was uncorrelated, and `Call` read the return hint off the called
+       type rather than its `__call__`. `krrood/doc/eql/user/match.md` documents the rule.
+       Suite: 2087 passed, 6 skipped.
 
 ## Outstanding
 
