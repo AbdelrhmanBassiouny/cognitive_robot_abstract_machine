@@ -1034,6 +1034,28 @@ items:
       unifying it stays bastler-notes-core-python's by name, per decision 12. #151's Subcommand is
       still unlanded, so the command-class pair remains half-visible.
 
+      Correction to the tier finding above, measured after the user asked whether the tiers
+      are needed at all once a hook can install. The earlier paragraph is true of
+      session-start.sh and draws too broad a conclusion from it: the standard-library tier
+      does have a live caller, and it is a workflow rather than a hook.
+      .github/workflows/upstream-reviews.yml runs python3 -m bastler.upstream_reviews on a
+      bare ubuntu-latest with actions/setup-python and no pip install step at all, and that
+      module imports bastler.stack - so both must stay standard-library-only or #146's whole
+      read breaks. Verified by importing each with yaml, jinja2, markdown and nh3 made
+      unimportable. The session-invoked entry points (stack, maintenance, check_scope_overlap,
+      plan_updates_since_support) are the same case one step weaker: a fresh container has
+      nothing installed, which is why check-setup.sh reports dashboard_dependencies
+      needs-setup on essentially every one.
+
+      So installing during a hook does not dissolve the tier - it would have to be installing
+      everywhere, and adding a pip install step to a runner in order to serve a stdlib-only
+      script is strictly worse than the script staying stdlib-only.
+
+      Three members of package_layout.py were dead, though, and are deleted (d13afaf8b):
+      REQUIREMENTS_FILE had no reader, since the shell resolves BASTLER_REQUIREMENTS_FILE
+      itself and pyproject reads the file through setuptools' dynamic table; MODULES_BY_NAME
+      and PackageModule.path had none either. 616 tests still pass.
+
   - id: bastler-notes-core-python
     branch: null
     title: "Bash→Python 1: notes-core modules (config, git seam, writer, markers)"

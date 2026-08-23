@@ -9138,3 +9138,45 @@ glossed. Read in full: the header through standing risks (1-110), both standing-
 sections (183-194, 664-700), the `upstream-review-reader` entry (4036-4165), and this item's
 own recording. The complete heading index was read to choose those, and the file was grepped
 for the item id, its branch, `labelled` and `in-review`.
+
+## Update 2026-08-23 (correction): the tier's caller is a workflow, not a hook
+
+The user's question after the auto-install answer was the right one to ask: *if a hook can
+install, don't the tiers and `package_layout.py` stop earning their keep?* Measuring it
+found that the previous entry - "the dependency tier's stated justification was wrong" -
+is true of the caller it names and wrong in the conclusion a reader takes from it.
+
+`session-start.sh` does invoke no module of this package; that stands. But the
+standard-library tier has a live caller, and it is a **workflow file**, which is why
+grepping the hooks missed it. `.github/workflows/upstream-reviews.yml` runs
+`python3 -m bastler.upstream_reviews` on a bare `ubuntu-latest` with `actions/setup-python`
+and **no `pip install` step at all**, and that module imports `bastler.stack`. Both must
+stay standard-library-only or #146's entire read - the thing that made this very round's
+upstream review legible - stops working. Verified rather than reasoned about, by importing
+each with `yaml`, `jinja2`, `markdown` and `nh3` made unimportable.
+
+The session-invoked entry points are the same case one step weaker: `stack`, `maintenance`,
+`check_scope_overlap` and `plan_updates_since_support` all run in containers where nothing
+has been installed, which is precisely why `check-setup.sh` reports
+`dashboard_dependencies needs-setup` on essentially every fresh session - the observation
+`setup-runs-without-asking` (#156) was filed from.
+
+So installing during a hook does not dissolve the tier. It would have to be installing
+*everywhere*, and adding a `pip install` step to an Actions runner in order to serve a
+script that needs nothing is strictly worse than the script continuing to need nothing.
+
+**The user was right about the rest of it, though, and three members were dead** - deleted
+in `d13afaf8b`. `REQUIREMENTS_FILE` had no reader anywhere: the shell resolves
+`BASTLER_REQUIREMENTS_FILE` from `resolve-personal-notes-config.sh` and `pyproject` reads
+the file through setuptools' dynamic table, so the constant was a third spelling nothing
+consulted. `MODULES_BY_NAME` and `PackageModule.path` had none either. What survives has a
+reader each: `PACKAGE_MODULES` (three tests, including the one holding the declared set
+equal to the directory's contents), `is_command_line_entry_point` (the `--help` test),
+`tier` with `THIRD_PARTY_MODULES_BY_TIER` (the import-boundary test), `import_path`, and
+the two directories the test constants locate the package by. 616 tests still pass.
+
+**Worth carrying: a grep over the hooks is not a survey of the callers.** The first
+measurement asked "does a hook import this?", got no, and generalized to "nothing depends
+on the tier". The caller was a YAML file two directories away, running the module by the
+same `python3 -m` line the hooks would have used. The check that would have found it is
+the one that finds any caller: grep for the *module*, not for the callers you expect.
