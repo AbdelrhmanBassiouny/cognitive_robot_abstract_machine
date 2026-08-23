@@ -3949,12 +3949,12 @@ items:
 
   - id: integration-branch-ci-verdict
     title: "Move the integration branch's verdict to CI, with a stable branch and a targeted job"
-    branch: claude/plan-item-kickoff-workflow-wjfsn8
+    branch: claude/plan-item-kickoff-workflow-ixbvxl
     track: stack-tooling
     depends_on:
     - integration-branch
-    status: done
-    pull_request_number: 191
+    status: in_progress
+    pull_request_number: 154
     session: https://claude.ai/code/session_01Aw5p5xzSFUKNCueN8oG6Tg
     notes: >
       Split out of `integration-branch` (#154) on 2026-08-13, on the user's decision, rather than
@@ -4046,6 +4046,35 @@ items:
       `integration` until it is un-drafted. `integration` still points at the Phase 1 build
       (899a04a), which reports `tests_passed: null` and was therefore never verified green; the
       newest build is red and was deliberately not pushed.
+
+      Folded into #154 on 2026-08-23, on the user's call, and #191 is closed. The item survives as
+      an item; what it does not have any more is a pull request of its own.
+
+      The scope test was re-run against what the branch actually held rather than against the
+      kickoff's plan, and it inverted the kickoff's answer. All three files #191 touched
+      -`integration.py`, `.claude/shared/git_commands.py` and `test_integration_replay.py` - are
+      absent from `main`, introduced by #154's own chain; the whole diff was 71 insertions across
+      those three; and two of the three commits were bug fixes to #154's own code. Strip the edits
+      and nothing stood alone, which is the `#133` into `#117` case exactly. The fold was a
+      fast-forward, so GitHub closed #191 as merged into its base.
+
+      The kickoff's opposite answer was not wrong when it was made - it was run against planned
+      content (an Actions client, a workflow file, a marker, a new module) none of which had been
+      written. Same expiry as a basing decision, which this plan already records twice.
+
+      Part D itself also moves onto #154 rather than a fresh pull request, for a sharper reason than
+      "#154 is incomplete": #154's own description concedes that `integration-conflict` ships with
+      no automatic clearing condition, which Part D's marker is what closes. A blocking label
+      nothing ever clears is a known defect rather than missing polish. Splitting also means cram2
+      reviewing the local-verdict surface - 11 occurrences in `integration.py` alone - and then
+      reviewing its removal. #154 carries no `cram2-link-sent`, so the fold costs nothing upstream.
+
+      The practical half, which is what decided the timing: #154 is out of draft, so it is already
+      carried by every integration build, where #191 was a draft and excluded from all of them.
+      Folding removes the un-drafting gate entirely rather than deferring it.
+
+      Accepted cost, stated rather than discovered later: #154 was already 52 files, 8121 additions,
+      38 commits and 75 review threads before Part D is written.
 
   - id: always-read-upstream-reviews
     title: "Read upstream review threads whether or not the fork pull request is labelled"
