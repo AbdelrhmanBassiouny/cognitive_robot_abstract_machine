@@ -76,3 +76,45 @@ Two review rounds handled on 2026-08-22. Branch
 - **Open threads on #149 are back to two**, not three: `from None` and the `SETTING_KEYS`
   removal. The six on cram2 #537 remain unanswered there.
 
+
+### Round 3 (cram2 #537, tomsch420, changes requested 2026-08-23 09:58Z)
+
+`/plan-item-resolve workflow-unification plan-item-execution-modes`, in `auto` mode
+(committed default). Applied in `236247da`.
+
+- **Nothing on the fork showed the stall.** 23/23 checks green - the `greenlet` and
+  robokudo failures the 08-10 comments recorded have both cleared - `mergeable_state:
+  clean`, `origin/main` an ancestor of the head, no conflict, the same two threads open
+  on purpose. The block was entirely on cram2 #537, from a **second** upstream reviewer.
+- **`/upstream-reviews` earned its keep on first use.** Read the round in ~12s via the
+  dispatched Action, where the 08-22 round needed `WebFetch` on a rendered page. The
+  prediction recorded that day held.
+- **The ask**: *"we call it to_json everywhere else. Make yourself ready for
+  SubclassJSONSerializer"*, on `Report.as_json`. Renamed the abstract method and both
+  implementations to `to_json`; `Report`'s docstring now names the
+  `SubclassJSONSerializer` contract it matches.
+- **Third name in five days, first one measured.** `def to_json` is defined **93** times
+  outside `.claude/`; `as_json`, `as_document` and `to_json_dict` together, **3**. The two
+  earlier rounds were arguments; this one is a count that was available at every round.
+- **Adopting the base class stays declined** on the CI measurement in the still-open
+  krrood thread. "Make yourself ready for" is read as the name and signature, not the
+  import. No `type` key added - that would change the printed document.
+- **`report-document-naming`'s inherited collision is gone**, not resolved: with `to_json`
+  for dict-returners, `as_json` stays free for the two `str`-returning ones and neither
+  needs `as_json_text`. That item's target was corrected in the same turn.
+- 522 tests pass (unchanged), the `resolve` document is byte-identical, `black --check`
+  clean, `docformatter --diff` at 63 hunks - identical to before the edit, so no
+  formatting drift.
+- Plan saved (`ecfad954`), #149's description updated, dashboard republished.
+
+### Next
+- Nothing outstanding on this branch. Waiting on cram2 #537's reviewers.
+
+### Outstanding / flagged
+- **The reply to tomsch420 cannot be posted from here** (`AGENTS.md` forbids writing to
+  cram2, and its API is unreachable) - handed to the user in the session chat.
+- **Two fork threads still open on purpose**: `from None`, and the `SETTING_KEYS` removal.
+- **The gap this round sharpens**: a fork PR can be green, un-drafted, conflict-free and
+  current with its base and still be blocked upstream, with no field on the plan showing
+  it. `plan.yaml` still has no field for a promoted upstream pull request.
+- #149 left un-drafted again, deliberately: re-drafting would withdraw #537 from review.
