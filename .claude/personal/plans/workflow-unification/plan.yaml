@@ -978,6 +978,62 @@ items:
       repo root, pyproject for optional install); the SessionStart-reachable tier stays
       stdlib-only.
 
+      Resolved 2026-08-23 (session https://claude.ai/code/session_01Hgt7hWYnT9ZMK6AgusPwkk). Two
+      things were wrong and the manifest recorded neither: a merge conflict that had left this
+      pull request needs-resolution and skipped by every maintenance pass since 2026-08-22, and a
+      34-thread review round, all the user's, none of them answered. Fifth item on this plan where
+      the pull request was the more accurate source.
+
+      The merge was three modules rather than three conflicts. main gained Python under .claude/
+      after this branch was cut - check_scope_overlap.py with #135, record_dashboard_url.py with
+      #150, upstream_reviews.py with #146 - so resolving only the reported conflicts would have
+      produced a branch that merges and then fails its own "no .py remains under .claude/"
+      contract. All three moved into the package, with three consequences: upstream_reviews.py was
+      a fourth carrier of the sys.path hackery this migration deletes (it inserted .claude/stack/
+      to import stack.py's Repository, in production rather than a conftest); the two gh stubs
+      recognized disjoint invocations and became one; and .claude/upstream_reviews/tests/ was in
+      no CI job at all on main, so folding it into test/bastler_test/ runs it in test_bastler for
+      the first time.
+
+      The review round grouped into four asks and all four are done. The package carries its own
+      metadata now - author, maintainer, license, urls, keywords, classifiers, an empty
+      __init__.py with the content in bastler/README.md, and the repository's own version
+      mechanism (root VERSION through scripts/sync_version.py and bastler/_version.py) rather than
+      a literal; the "never published" claim is deleted from both files, with publishing and the
+      agent-provider plugins left to their own item. bastler/package_layout.py holds what the
+      package declares about itself and test_package_contract.py only checks it, with one test
+      holding the declared module set equal to the directory's actual contents.
+      test/bastler_test/constants.py holds the paths that have no import to derive them from, as
+      ToolingDirectory and PersonalNotesPath, while every module name and path is read off the
+      import instead. test/bastler_test/script_runner.py is the
+      ScriptRunner/PythonModuleRunner/BashScriptRunner hierarchy, with the environment variation
+      collapsed into one removed_variable_prefixes field, used by six call sites.
+
+      The dependency tier's stated justification was wrong and measuring it is what fixed it. It
+      claimed a hook may import only the standard library because a hook runs where nothing is
+      installed; session-start.sh in fact invokes no module of this package at all - it is bash
+      plus one stdlib-only heredoc inside check-setup.sh - so the framing protected a caller that
+      does not exist. What a tier answers is whether an entry point runs on a checkout where
+      nothing has been installed or needs pip install -r bastler/requirements.txt first.
+      Auto-detection and auto-installation already exist one layer up (check-setup.sh reports,
+      /setup-personal-notes installs); putting a pip install inside the SessionStart hook was
+      deliberately not done, because it writes to a contributor's environment unasked on every
+      fresh container and can fail where a report cannot.
+
+      One ask cannot be done and the measurement is the answer: monkeypatch.setattr takes the
+      attribute name as a string by its own signature, so "RESTACK_STEPS" cannot be derived from
+      importing RESTACK_STEPS. It is already guarded, since setattr raises when the attribute does
+      not exist.
+
+      616 tests pass, against 536 before this session. check-setup.sh exits 0 with every row ok
+      and all thirteen entry points answer --help. Four commits: the merge, the metadata and
+      declaration, the constants and runner, the fixture moves. Still a draft.
+
+      The run_git seam is now reachable for the first time, since check_scope_overlap.py landed on
+      main with #135 and both halves of that pair are finally in one importable tree - but
+      unifying it stays bastler-notes-core-python's by name, per decision 12. #151's Subcommand is
+      still unlanded, so the command-class pair remains half-visible.
+
   - id: bastler-notes-core-python
     branch: null
     title: "Bash→Python 1: notes-core modules (config, git seam, writer, markers)"
