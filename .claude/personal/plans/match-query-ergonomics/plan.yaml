@@ -214,7 +214,18 @@ items:
       Call read the return hint off the called type rather than its __call__, so
       calling any callable instance raised KeyError('return') - pre-existing, since
       variable(Adder, ...)(10) failed identically on main.
-      test/krrood_test: 2087 passed, 6 skipped (excluding the Graphviz/flask-dependent
+      Naming round 2026-08-23 (roadmap section 19): CanBehaveLikeAValue is renamed
+      HasSymbolicOperations, since the pair differed by one word that said nothing
+      about which half holds the mapped-variable cache; the cache stays on
+      CanBehaveLikeAVariable because it constructs mappings whose child must be a
+      SymbolicExpression, and a second cache would split match.x from
+      match.expression.x. The same round found the instance-likeness was
+      one-directional: variable == match passed every row, because a match reached the
+      comparator as a Literal. SymbolicExpression._as_operand_ now states once that a
+      value standing for an expression contributes it. A match given to a predicate is
+      still refused - a query argument there is evaluated uncorrelated even with no
+      match involved, which is wave 1's territory - and selecting a match stays item 3's.
+      test/krrood_test: 2088 passed, 6 skipped (excluding the Graphviz/flask-dependent
       modules, which fail identically with the diff stashed).
   - id: factories-unwrap-match-and-migrate
     title: "Factories accept a Match directly; migrate consumers and docs off the detours"

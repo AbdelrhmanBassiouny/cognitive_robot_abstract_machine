@@ -813,3 +813,68 @@ Verification: `test/krrood_test` 2087 passed, 6 skipped, excluding the Graphviz-
 flask-dependent modules that fail identically with the diff stashed.
 `krrood/doc/eql/user/match.md` gains a short section on the instance-like surface and the
 parentheses rule; the wholesale docs migration stays item 3's.
+
+## 19. 2026-08-23: naming the two halves, and the operand direction nobody had tried
+
+Two questions from the developer, one about structure and one the structure had hidden.
+
+**"Should the cache move up, and should `CanBehaveLikeAVariable` stop inheriting
+`Selectable`?"** No to both, for reasons that are mechanical rather than aesthetic. The
+cache does not memoize an answer - `_get_mapped_variable_` *constructs* mappings whose
+child is the caching object, and `MappedVariable` is a `UnaryExpression` whose `_child_`
+must be a `SymbolicExpression`, which a match is not. A second cache on the match would
+also make `match.x` and `match.expression.x` two different nodes, which is exactly the
+identity #182's sharing tests and `_reroot_on_`'s memo depend on. And dropping
+`Selectable` from the bases would replace a declared dependency with an assumed one: the
+mappings this class builds read `_child_._type_` and `._var_`, both `Selectable`'s, so a
+future subclass that inherited it alone would break at runtime rather than at class
+creation. `Selectable` has one other subclass in the whole repository (`CaseWhen`), so
+the orthogonal mixin it would become has no second customer.
+
+**But the names were wrong, and the developer was right to press.** `CanBehaveLikeAValue`
+and `CanBehaveLikeAVariable` differ by one word whose distinction is not in this
+language's vocabulary - nothing in the pair says which one holds the cache, or why a
+match implements one and not the other, which is the AGENTS rule about a name whose
+meaning has to be looked up elsewhere. They are not two flavours of one thing:
+
+- `HasSymbolicOperations` - *what can be written*: every operation builds an expression
+  instead of computing an answer. Implemented by anything standing for a value, including
+  something outside the expression graph, which is the whole reason it exists.
+- `CanBehaveLikeAVariable` - *what it is written on*: the expression that reports itself,
+  holding the mappings taken from it.
+
+The new class was twelve references old, all from this PR, so the rename was free; the
+established one means the node in all eighty-three of its references and keeps its name.
+`doc/eql/developer/variable_system.md` described the dunder capture under the old name
+and now describes both halves.
+
+**The asymmetry the rename discussion surfaced.** Asked whether a match can be selected,
+compared or given to a predicate, the answer was measured rather than argued, and one
+case was silent:
+
+| written | before |
+| --- | --- |
+| `match == robot`, `match.x >= 5` | correct (section 18) |
+| `variable == match` | **passed every row** - the match reached the comparator as a `Literal` |
+| `entity(match)` / `set_of(match, ...)` | `KeyError(<uuid>)` at evaluation |
+| `the(match)` / `an(match)` | `assert_never` |
+| `HasType(match, ...)` | `LiteralConditionError` |
+
+So the instance-likeness was one-directional: operations *on* a match worked, a match
+*as an operand* did not. Everything downstream accepts a `SymbolicExpression`, and a
+match is not one.
+
+One place reads a value as a child expression - `SymbolicExpression._update_children_`,
+which wrapped every non-expression in a `Literal` - so the rule is stated there as
+`_as_operand_`: a value that stands for an expression contributes it, and only a value
+standing for nothing symbolic is a literal. `variable == match` now filters correctly.
+`InstantiatedVariable`'s kwargs walk was the second copy of the same wrapping and now
+calls the same rule.
+
+**What is deliberately still refused.** A match given to a predicate keeps raising as it
+did, because the fix there is not the coercion: measured on this branch,
+`HasType(entity(variable), Handle)` - a plain query, no match involved - returns *every*
+row, since the argument is evaluated as an uncorrelated subquery. That is section 3's
+family, wave 1's territory, and making a match reach it quietly would trade a loud error
+for a silent wrong answer. Selecting a match (`entity(match)`, `the(match)`) stays item
+3's, which is the item that teaches the factories to unwrap one.
