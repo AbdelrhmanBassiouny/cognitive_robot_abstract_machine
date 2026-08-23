@@ -1,15 +1,18 @@
 """
 The contract :mod:`bastler` has to keep: everything importable from the repository root
 with no install, every module importable on its own, every entry point reachable through
-``python3 -m``, each module reaching no further than the tier it declares, and nothing
-left behind under ``.claude/``.
+``python3 -m``, every module a caller runs without installing anything importing on the
+standard library alone, and nothing left behind under ``.claude/``.
 
-What each module declares is :mod:`bastler.package_layout`, next to the code it
-describes. This file only checks it, which is why the declaration is not repeated here.
+:mod:`bastler.package_layout` discovers the modules, the entry points and the requirements
+from the package itself, so nothing here is a second list of them. The one thing it
+declares - which callers install nothing - is checked here against those callers' own
+files.
 """
 
 from __future__ import annotations
 
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -17,12 +20,19 @@ from pathlib import Path
 
 import pytest
 
+from .constants import ToolingDirectory
 from .script_runner import ScriptRunner
 from bastler.package_layout import (
     PACKAGE_DIRECTORY,
-    PACKAGE_MODULES,
     REPOSITORY_ROOT,
+    UNINSTALLED_INVOCATIONS,
     PackageModule,
+    UninstalledInvocation,
+    command_line_entry_points,
+    modules_allowed_the_requirements,
+    modules_held_to_the_standard_library,
+    package_modules,
+    third_party_import_names,
 )
 
 CLAUDE_DIRECTORY = REPOSITORY_ROOT / ".claude"
@@ -71,6 +81,49 @@ def run_from_repository_root(*arguments: str) -> subprocess.CompletedProcess[str
     ).run(*arguments)
 
 
+SHELL_CONFIGURATION = ToolingDirectory.HOOKS.path / "resolve-personal-notes-config.sh"
+"""
+The file the bash callers source, which is where a module gets a shell name.
+"""
+
+MODULE_VARIABLE = re.compile(r'^([A-Z_]+)="(bastler\.[a-z_]+)"', re.MULTILINE)
+"""
+One ``NAME="bastler.module"`` assignment in the shell configuration.
+"""
+
+REQUIREMENTS_INSTALL = re.compile(
+    r"(pip install|uv pip install|uv sync)[^\n]*"
+    r"(BASTLER_REQUIREMENTS_FILE|bastler/requirements\.txt)"
+)
+"""
+A step that installs this package's requirements, however the caller spells the file.
+"""
+
+
+def names_of(module: PackageModule) -> frozenset[str]:
+    """
+    Every spelling a caller can invoke a module by.
+
+    Bash callers go through a shell variable rather than the dotted path, so the variable
+    names are read from the configuration that assigns them instead of written out here.
+
+    :param module: The module to name.
+    :return: Its import path, plus any shell variable holding that path.
+    """
+    assignments = MODULE_VARIABLE.findall(SHELL_CONFIGURATION.read_text())
+    return frozenset({module.import_path}) | {
+        variable for variable, path in assignments if path == module.import_path
+    }
+
+
+def installs_the_requirements(caller_source: str) -> bool:
+    """
+    :param caller_source: A caller's own file.
+    :return: Whether it installs this package's requirements before running anything.
+    """
+    return REQUIREMENTS_INSTALL.search(caller_source) is not None
+
+
 # %% the package exists and is reachable with no install
 
 
@@ -85,27 +138,10 @@ def test_the_package_imports_from_the_repository_root_with_no_install():
     assert Path(result.stdout.strip()) == PACKAGE_DIRECTORY / "__init__.py"
 
 
-def test_every_declared_module_is_present_and_every_present_module_is_declared():
-    """
-    The declaration and the directory say the same thing.
-
-    One assertion rather than two, because both directions fail the same way in
-    practice: a module named but absent was left behind by the move, and a module
-    present but unnamed has no stated tier and no stated entry-point status, so nothing
-    else in this file would check it at all.
-    """
-    declared_module_names = {module.name for module in PACKAGE_MODULES}
-    present_module_names = {
-        path.stem for path in PACKAGE_DIRECTORY.glob("*.py") if path.stem != "__init__"
-    }
-
-    assert declared_module_names == present_module_names
-
-
 # %% each module stands on its own
 
 
-@pytest.mark.parametrize("module", PACKAGE_MODULES, ids=lambda module: module.name)
+@pytest.mark.parametrize("module", package_modules(), ids=lambda module: module.name)
 def test_every_module_imports_on_its_own(module: PackageModule):
     """
     Each module imports in an interpreter that has imported nothing else.
@@ -120,9 +156,7 @@ def test_every_module_imports_on_its_own(module: PackageModule):
 
 
 @pytest.mark.parametrize(
-    "module",
-    [module for module in PACKAGE_MODULES if module.is_command_line_entry_point],
-    ids=lambda module: module.name,
+    "module", command_line_entry_points(), ids=lambda module: module.name
 )
 def test_every_entry_point_answers_help_through_the_module_runner(
     module: PackageModule,
@@ -139,46 +173,91 @@ def test_every_entry_point_answers_help_through_the_module_runner(
     assert result.returncode == 0, result.stderr
 
 
-# %% the dependency tiers reach no further than they claim
+# %% what a caller runs before anything is installed
 
 
 @pytest.mark.parametrize(
-    "module",
-    [module for module in PACKAGE_MODULES if module.unreachable_third_party_modules],
-    ids=lambda module: module.name,
+    "module", modules_held_to_the_standard_library(), ids=lambda module: module.name
 )
-def test_every_module_imports_within_its_own_dependency_tier(module: PackageModule):
+def test_every_module_outside_the_exceptions_imports_on_the_standard_library(
+    module: PackageModule,
+):
     """
-    A module imports with everything above its tier made unimportable.
+    A module imports with this package's requirements made unimportable, unless it is
+    named as an exception.
 
-    See :class:`bastler.package_layout.DependencyTier` for what the boundary answers. The
-    unavailable modules stay installed - what is under test is what this module reaches,
-    not what the machine running the suite happens to hold.
+    Parametrized over what the package holds rather than over a classification of it, so a
+    module added later is checked without anyone declaring anything. The requirements stay
+    installed - what is under test is what the module reaches, not what the machine
+    running the suite happens to hold.
     """
     result = run_from_repository_root(
         str(IMPORT_WITH_MODULES_UNAVAILABLE_SCRIPT),
         "--unavailable",
-        ",".join(sorted(module.unreachable_third_party_modules)),
+        ",".join(sorted(third_party_import_names())),
         module.import_path,
     )
 
     assert result.returncode == 0, result.stderr
 
 
-def test_some_module_is_actually_checked_against_an_unavailable_import():
+@pytest.mark.parametrize(
+    "invocation", UNINSTALLED_INVOCATIONS, ids=lambda invocation: invocation.module_name
+)
+def test_every_module_a_caller_runs_uninstalled_is_held_to_the_standard_library(
+    invocation: UninstalledInvocation,
+):
     """
-    The parametrization above filters, so this asserts it filtered to something.
+    A caller that installs nothing invokes a module the check above covers.
 
-    Without it, a tier table that accidentally allowed every module everything would
-    make every case above vanish and the suite would still pass.
+    The two are separate on purpose: the exception set says what the package's own default
+    is, and this says a real caller depends on that default rather than it being a rule
+    kept for its own sake.
     """
-    checked_module_names = [
-        module.name
-        for module in PACKAGE_MODULES
-        if module.unreachable_third_party_modules
-    ]
+    assert invocation.module in modules_held_to_the_standard_library()
 
-    assert checked_module_names != []
+
+@pytest.mark.parametrize(
+    "module", modules_allowed_the_requirements(), ids=lambda module: module.name
+)
+def test_every_declared_exception_actually_needs_a_requirement(module: PackageModule):
+    """
+    An exception that no longer needs one is an exception nothing removes.
+
+    Without this the set only ever grows: naming a module here silently exempts it from
+    the check above, and a module that has since dropped its last third-party import keeps
+    an exemption it does not need, so the next reader cannot tell which entries are real.
+    """
+    result = run_from_repository_root(
+        str(IMPORT_WITH_MODULES_UNAVAILABLE_SCRIPT),
+        "--unavailable",
+        ",".join(sorted(third_party_import_names())),
+        module.import_path,
+    )
+
+    assert result.returncode != 0, (
+        f"{module.import_path} imports without the requirements, "
+        "so it no longer belongs in MODULES_THAT_MAY_NEED_THE_REQUIREMENTS"
+    )
+
+
+@pytest.mark.parametrize(
+    "invocation", UNINSTALLED_INVOCATIONS, ids=lambda invocation: invocation.caller
+)
+def test_every_uninstalled_caller_still_invokes_its_module_and_still_installs_nothing(
+    invocation: UninstalledInvocation,
+):
+    """
+    The declaration is held to the caller's own file, from both sides.
+
+    Without this, an entry outlives what it describes: a caller that gains an install step
+    keeps a constraint it no longer needs, and one that stops invoking the module keeps a
+    constraint about nothing - neither of which the import check above can see.
+    """
+    caller_source = invocation.caller_path.read_text()
+
+    assert any(name in caller_source for name in names_of(invocation.module))
+    assert not installs_the_requirements(caller_source)
 
 
 # %% nothing is left behind
