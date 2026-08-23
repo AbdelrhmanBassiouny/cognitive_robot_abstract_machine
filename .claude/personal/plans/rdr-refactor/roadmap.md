@@ -2360,3 +2360,90 @@ remember.
 The `stack-tooling` findings above still stand — `promotion_summary()` returning a bare heading
 is real, and a session cannot write a prefilled create-link — but neither was this item's
 blocker.
+
+## 28. Addendum (2026-08-23) — `D-core-aid` (#63): the rename the upstream review asked for, done across four branches at once
+
+§27's correction found the real blocker: cram2 **#557** has changes requested, and its open thread
+on `aid.py:27` carries the developer's own settled design. This section is that design implemented.
+
+### What landed
+
+`aid.py` → `conclusion_helper.py`, and `ConclusionAid` split into the family the thread settled:
+
+```
+ConclusionHelper              the family, declaring nothing
+ConclusionSupportPresenter    present()
+ConclusionSuggester           suggest()
+```
+
+A helper implements either or both. Two spellings from the thread were corrected with the
+developer's agreement — `Suggestor` → `Suggester` (the agent noun), `Presenstor` → `Presenter`.
+"Support" stays: `present()` renders material about the *case*, so a bare `ConclusionPresenter`
+would name the wrong subject.
+
+**Dropping the no-op defaults is the substance, not the rename.** With them, every helper answered
+both hooks and a consumer could call either on anything; without them, `Expert._suggested_conclusion`
+has to select the helpers that suggest — `isinstance`, since `AGENTS.md` rules out `getattr` and
+try/except. That also made `ConclusionSuggester` a runtime import in `expert.py` rather than a
+`TYPE_CHECKING` one, since the selection happens at run time.
+
+### Four branches in one round, because git cannot flag this one
+
+| branch | commit | what moved |
+|---|---|---|
+| `D-core-aid` (#63) | `39da5f22` | the module and the split |
+| `D-core-support` (#67) | `04a3fe89` | `CaseContext.aids` → `helpers`; its copy of `test_aid.py` deleted |
+| `D-core-expert` (#98) | `af77399b` | the suggestion loop, `Expert.aids` → `helpers`, the new test |
+| `D-core-single-class` (#159) | `34df6172` | the three engine-level mimics |
+
+The reason for one round rather than letting the cascade carry it: **a merge of this rename into a
+branch whose imports still say `aid` produces no conflict at all.** One side renames a file, the
+other never touches it, and git merges both happily into a tree that fails at import. That is §9's
+`template_file_creator.py` failure exactly, and it cost a full CI round then.
+
+`D-core-support` was not in the original three — it turned out to hold `CaseContext.aids`, found by
+grepping every branch in the chain for importers rather than reasoning about which ones "should"
+have one. Two of the six intermediate branches import nothing and needed no commit.
+
+Merge chain re-probed with `git merge-tree` after all four commits: `D-core-aid` merges clean into
+`#64`, `#65` and `#66`, `#67` into `#98`, and `#98` into `#159`.
+
+### The test that carries it, and the one branch that honestly has none
+
+The contract's only observable behaviour is at the consumer, so the test is on #98:
+`test_a_helper_that_only_presents_is_passed_over`. Written first; it fails with
+`AttributeError: 'Presents' object has no attribute 'suggest'` — and that was *verified after the
+fact* by deleting the guard again and watching it fail, because the first red run had failed on the
+field name instead, which is a weaker signal than it looks.
+
+#63 itself gets no test: nothing on that branch consumes the base. This is the same tension that
+made the original `test_aid.py` vacuous and got it deleted in §23, and the honest answer is the same
+one — an aid's only behaviour is being consulted.
+
+Counts, measured rather than asserted: #67 111 passed, #98 162 passed (the recorded 164 baseline
+less `test_aid.py`'s 3, plus this one), #159 228 passed against **230 test functions before the
+change**, counted on a pristine worktree of the branch.
+
+The three duck-typed stubs in #98's `TestSuggestedConclusion` now inherit `ConclusionSuggester`.
+Modifying an existing test is normally out of bounds, and the reason it is right here is specific:
+left structural they would be silently *skipped* by the new selection rather than consulted — the
+tests would still pass while testing nothing, which is the exact failure the new test exists to
+catch.
+
+### A pre-existing defect found on the way, on #67
+
+`D-core-support` still tracks `test/krrood_test/dataset/ormatic_interface.py`, which `main` and
+every other branch in the chain untracked. So merging `D-core-aid` into it conflicts modify/delete
+on that file — reproduced against the *origin* versions from before this round, so it is not this
+round's doing, and it is very likely what the branch's standing `needs-resolution` label already
+records. It is also the exact thing `AGENTS.md` forbids: a generated interface tracked in git, the
+condition that used to make every branch switch fail. Not fixed here — it is #67's own.
+
+### Left alone deliberately
+
+LucaKro's other review on #557 — *"this code is not used anywhere but the tests, so to me this is
+dead code"* — is unanswered, on the developer's instruction that upstream is theirs. Worth recording
+the fact that answers it, though, since this round established it: **`present()` has no production
+call site anywhere in the stack**, while `suggest()` has one. The reviewer is wrong about half of
+the class and right about the other half, and the split is what makes that visible instead of
+hiding it behind two no-op defaults.
