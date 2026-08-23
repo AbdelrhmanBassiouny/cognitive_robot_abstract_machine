@@ -29,16 +29,12 @@ from krrood.entity_query_language.rdr.rule_tree import (
 from krrood.entity_query_language.exceptions import SelfReferentialInsertionError
 
 from .animal import Animal, Species, make_animal
-from .zoo_loader import load_zoo_animals
+from .zoo_loader import ZooDataset
 
-animals, targets = load_zoo_animals()
-
-
-def first(species: Species) -> Animal:
-    return next(animal for animal, target in zip(animals, targets) if target is species)
+zoo = ZooDataset.load()
 
 
-@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
+@unittest.skipIf(len(zoo) == 0, "Failed to load zoo dataset")
 class TestRuleTreeGrowth(unittest.TestCase):
     def test_dynamic_alternative_insertion(self):
         animal = variable(Animal, domain=[])
@@ -50,7 +46,7 @@ class TestRuleTreeGrowth(unittest.TestCase):
         # Bird does not fire yet.
         self.assertIs(
             classify_case(
-                query, animal, animal.species, first(Species.bird)
+                query, animal, animal.species, zoo.first(Species.bird)
             ).conclusion,
             ...,
         )
@@ -64,14 +60,14 @@ class TestRuleTreeGrowth(unittest.TestCase):
 
         self.assertEqual(
             classify_case(
-                query, animal, animal.species, first(Species.bird)
+                query, animal, animal.species, zoo.first(Species.bird)
             ).conclusion,
             Species.bird,
         )
         # Existing rule unaffected.
         self.assertEqual(
             classify_case(
-                query, animal, animal.species, first(Species.mammal)
+                query, animal, animal.species, zoo.first(Species.mammal)
             ).conclusion,
             Species.mammal,
         )
@@ -86,7 +82,7 @@ class TestRuleTreeGrowth(unittest.TestCase):
         # Before refinement, a mammal is misclassified as fish.
         self.assertEqual(
             classify_case(
-                query, animal, animal.species, first(Species.mammal)
+                query, animal, animal.species, zoo.first(Species.mammal)
             ).conclusion,
             Species.fish,
         )
@@ -101,13 +97,13 @@ class TestRuleTreeGrowth(unittest.TestCase):
         # Refinement overrides for mammals; fish still classified as fish.
         self.assertEqual(
             classify_case(
-                query, animal, animal.species, first(Species.mammal)
+                query, animal, animal.species, zoo.first(Species.mammal)
             ).conclusion,
             Species.mammal,
         )
         self.assertEqual(
             classify_case(
-                query, animal, animal.species, first(Species.fish)
+                query, animal, animal.species, zoo.first(Species.fish)
             ).conclusion,
             Species.fish,
         )
@@ -143,7 +139,7 @@ class TestRuleTreeGrowth(unittest.TestCase):
             Species.fish,
         )
 
-        for case, target in zip(animals, targets):
+        for case, target in zip(zoo.animals, zoo.targets):
             static = classify_case(s_query, s_animal, s_animal.species, case).conclusion
             dynamic = classify_case(
                 d_query, d_animal, d_animal.species, case
@@ -173,19 +169,19 @@ class TestRuleTreeGrowth(unittest.TestCase):
 
         self.assertEqual(
             classify_case(
-                query, animal, animal.species, first(Species.mammal)
+                query, animal, animal.species, zoo.first(Species.mammal)
             ).conclusion,
             Species.mammal,
         )
         self.assertEqual(
             classify_case(
-                query, animal, animal.species, first(Species.bird)
+                query, animal, animal.species, zoo.first(Species.bird)
             ).conclusion,
             Species.bird,
         )
         self.assertEqual(
             classify_case(
-                query, animal, animal.species, first(Species.fish)
+                query, animal, animal.species, zoo.first(Species.fish)
             ).conclusion,
             Species.fish,
         )
@@ -390,7 +386,7 @@ class TestRuleTreeGrowth(unittest.TestCase):
         )
 
 
-@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
+@unittest.skipIf(len(zoo) == 0, "Failed to load zoo dataset")
 class TestBareAttributeWhereCondition(unittest.TestCase):
     """Regression: alternative/refinement DSL when WHERE condition is a bare MappedVariable.
 
@@ -431,8 +427,8 @@ class TestBareAttributeWhereCondition(unittest.TestCase):
             "Where._child_ must be Alternative, not the bare backbone MappedVariable",
         )
 
-        vertebrate = first(Species.mammal)
-        invertebrate = first(Species.molusc)
+        vertebrate = zoo.first(Species.mammal)
+        invertebrate = zoo.first(Species.molusc)
         self.assertEqual(
             classify_case(query, animal_var, animal_var.species, vertebrate).conclusion,
             Species.mammal,
@@ -484,7 +480,7 @@ class TestBareAttributeWhereCondition(unittest.TestCase):
         )
 
         # backbone=True + (backbone==False is False) → right not yielded → mammal
-        vertebrate = first(Species.mammal)
+        vertebrate = zoo.first(Species.mammal)
         self.assertEqual(
             classify_case(query, animal_var, animal_var.species, vertebrate).conclusion,
             Species.mammal,

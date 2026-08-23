@@ -1,7 +1,8 @@
 """
 EQL-native Single-Class Ripple Down Rules.
 
-The rule tree is a live EQL query DAG over a shared case variable. Classification is plain
+The rule tree is an EQL query DAG over a shared case variable, grown in place rather than
+regenerated from source. Classification is plain
 EQL evaluation; fitting grows the DAG in place, anchored on the rule that fired:
 
 * a rule fired with the wrong conclusion -> add a **refinement** there, so it overrides
@@ -15,7 +16,16 @@ from __future__ import annotations
 from dataclasses import dataclass, field, replace
 from functools import cached_property
 
-from typing_extensions import Any, List, Optional, Self, TYPE_CHECKING, Type
+from typing_extensions import (
+    Any,
+    FrozenSet,
+    List,
+    Optional,
+    Self,
+    Set,
+    TYPE_CHECKING,
+    Type,
+)
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.core.mapped_variable import CanBehaveLikeAVariable
@@ -78,7 +88,7 @@ if TYPE_CHECKING:
 @dataclass
 class EQLSingleClassRDR:
     """
-    A single-class RDR whose rule tree is a live EQL expression DAG.
+    A single-class RDR whose rule tree is an EQL expression DAG grown in place.
     """
 
     case_type: Type
@@ -160,15 +170,15 @@ class EQLSingleClassRDR:
         attach_definition_scope(self.case_variable, capture_caller_scope())
 
     @classmethod
-    def from_underspecified(cls, template: Match) -> Self:
+    def from_underspecified(cls, underspecified_query: Match) -> Self:
         """
-        Build an RDR from an underspecified ``Match`` template, whose lone ``...``
+        Build an RDR from an underspecified ``Match`` query, whose lone ``...``
         attribute defines what the RDR predicts.
 
-        :param template: For example ``an(Animal)(species=...)``.
-        :return: An RDR predicting the template's single underspecified attribute.
+        :param underspecified_query: For example ``an(Animal)(species=...)``.
+        :return: An RDR predicting the query's single underspecified attribute.
         """
-        statement = UnderspecifiedMatch(template)
+        statement = UnderspecifiedMatch(underspecified_query)
         return cls(statement.case_type, statement.target_attribute_name)
 
     # %% classification
@@ -287,7 +297,7 @@ class EQLSingleClassRDR:
         Fit a case whose correct conclusion is known, resolving the condition
         automatically where possible and asking the expert otherwise.
 
-        :param context: The case being fitted, carrying its target conclusion.
+        :param context: The case context being fitted, carrying its target conclusion.
         :param expert: Supplies the conditions when they cannot be resolved.
         :return: The target conclusion.
         """
@@ -306,7 +316,7 @@ class EQLSingleClassRDR:
         Fit a case with no ground truth, letting the expert label it and justify the
         label.
 
-        :param context: The case being fitted, with no target conclusion.
+        :param context: The case context being fitted, with no target conclusion.
         :param expert: Supplies both the conclusion and its conditions.
         :return: The conclusion the expert chose, which may be the one already standing.
         """
@@ -325,7 +335,7 @@ class EQLSingleClassRDR:
         Only the refinement branch can resolve: with no resolver, no corner case, or no
         conclusion to correct there is nothing to discriminate against.
 
-        :param context: The case being fitted.
+        :param context: The case context being fitted.
         :return: The resolved condition, or ``None`` to fall back to the expert.
         """
         if (
@@ -357,7 +367,7 @@ class EQLSingleClassRDR:
         :attr:`~krrood.entity_query_language.rdr.condition_resolver.ResolutionMode.AUTOMATIC`
         mode nobody is watching to answer differently, so it surfaces.
 
-        :param context: The case the new rule is written for.
+        :param context: The case context the new rule is written for.
         :param condition: The condition the new rule fires on.
         :param conclusion: The conclusion the new rule draws.
         :param expert: Asked for a replacement condition when the splice is rejected.
@@ -381,7 +391,7 @@ class EQLSingleClassRDR:
         Seed the rule tree, extend it with an alternative, or refine the rule that
         fired, then record the case the new rule was written for.
 
-        :param context: The case the new rule is written for.
+        :param context: The case context the new rule is written for.
         :param condition: The condition the new rule fires on.
         :param conclusion: The conclusion the new rule draws.
         """
@@ -458,16 +468,23 @@ class EQLSingleClassRDR:
         Fit every misclassified case, repeatedly, until none is left.
 
         A rule inserted for one case can intercept a case fitted earlier, so each pass
-        recomputes which cases are still wrong. When that set repeats, the tree is
-        oscillating rather than converging and no further pass can help.
+        recomputes which cases are still wrong. Reaching a set of wrong cases that an
+        earlier pass already left means the passes have entered a cycle, and no further
+        pass can leave it.
+
+        The comparison is against *every* earlier pass, not just the one before: a fit
+        that alternates between two sets of wrong cases never repeats itself on
+        consecutive passes, and would loop forever under the narrower test.
 
         :param cases: All cases, including those already classified correctly.
         :param targets: The ground-truth conclusions paired with ``cases``.
         :param expert: Supplies the new rules' conditions.
-        :raises RDRDidNotConvergeError: When the misclassified set repeats.
+        :raises RDRDidNotConvergeError: When a pass leaves a set of wrong cases an
+            earlier pass already left.
         """
         pending = list(range(len(cases)))
-        seen_pending: List[frozenset] = []
+        pending_after_earlier_passes: Set[FrozenSet[int]] = set()
+        completed_passes = 0
 
         while True:
             for index in pending:
@@ -484,13 +501,14 @@ class EQLSingleClassRDR:
             if not pending:
                 return
 
-            seen_pending.append(frozenset(pending))
-            if len(seen_pending) != len(set(seen_pending)):
+            completed_passes += 1
+            if frozenset(pending) in pending_after_earlier_passes:
                 self.model_saver.save(self)
                 raise RDRDidNotConvergeError(
                     clashing_cases=[cases[index] for index in pending],
-                    passes=len(seen_pending),
+                    passes=completed_passes,
                 )
+            pending_after_earlier_passes.add(frozenset(pending))
 
             self.progress_reporter.reset(len(pending))
 

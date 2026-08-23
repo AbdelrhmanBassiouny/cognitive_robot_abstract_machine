@@ -10,11 +10,14 @@ differs from the current one — a conditions-only one.
 
 from __future__ import annotations
 
-import unittest
+from dataclasses import dataclass
+
+import pytest
 
 from krrood.entity_query_language.rdr.conclusion_helper import ConclusionSuggester
 from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
 from krrood.entity_query_language.rdr.exceptions import (
+    ConclusionNotInDomain,
     ExpertAbort,
     NoConclusionProvided,
     NoConditionsProvided,
@@ -31,17 +34,9 @@ from .expert_doubles import (
     labelling_expert,
     recording_expert,
 )
-from .zoo_loader import load_zoo_animals
+from .zoo_loader import ZooDataset
 
-animals, targets = load_zoo_animals()
-
-
-def first(species: Species) -> Animal:
-    """
-    :param species: The ground-truth label to look for.
-    :return: The first animal in the dataset carrying that label.
-    """
-    return next(animal for animal, target in zip(animals, targets) if target is species)
+zoo = ZooDataset.load()
 
 
 def rule_count(rdr: EQLSingleClassRDR) -> int:
@@ -57,49 +52,57 @@ def rule_count(rdr: EQLSingleClassRDR) -> int:
 # %% the two-question protocol
 
 
-@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
-class TestQuestionsAsked(unittest.TestCase):
-    def setUp(self):
-        target_by_name = {
-            animal.name: target for animal, target in zip(animals, targets)
-        }
-        self.expert = recording_expert(labelling_answer(target_by_name))
-        EQLSingleClassRDR(Animal, "species").fit_case(
-            first(Species.mammal), expert=self.expert
-        )
+@pytest.fixture
+def expert_asked_to_label_one_case() -> Expert:
+    """
+    :return: A recording expert, after one target-less ``fit_case`` has driven it.
+    """
+    target_by_name = {
+        animal.name: target for animal, target in zip(zoo.animals, zoo.targets)
+    }
+    expert = recording_expert(labelling_answer(target_by_name))
+    EQLSingleClassRDR(Animal, "species").fit_case(
+        zoo.first(Species.mammal), expert=expert
+    )
+    return expert
 
-    def test_the_expert_is_asked_twice(self):
-        self.assertEqual(len(self.expert.interface.calls), 2)
 
-    def test_the_first_question_asks_only_for_the_conclusion(self):
-        self.assertEqual(
-            self.expert.interface.calls[0].requested, [AnswerName.CONCLUSION]
-        )
+@pytest.mark.skipif(len(zoo) == 0, reason="Failed to load zoo dataset")
+class TestQuestionsAsked:
+    def test_the_expert_is_asked_twice(self, expert_asked_to_label_one_case):
+        assert len(expert_asked_to_label_one_case.interface.calls) == 2
 
-    def test_the_second_question_asks_only_for_the_conditions(self):
-        self.assertEqual(
-            self.expert.interface.calls[1].requested, [AnswerName.CONDITIONS]
-        )
+    def test_the_first_question_asks_only_for_the_conclusion(
+        self, expert_asked_to_label_one_case
+    ):
+        calls = expert_asked_to_label_one_case.interface.calls
+        assert calls[0].answer_names == [AnswerName.CONCLUSION]
+
+    def test_the_second_question_asks_only_for_the_conditions(
+        self, expert_asked_to_label_one_case
+    ):
+        calls = expert_asked_to_label_one_case.interface.calls
+        assert calls[1].answer_names == [AnswerName.CONDITIONS]
 
 
 # %% labelling
 
 
-@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
-class TestLabelling(unittest.TestCase):
+@pytest.mark.skipif(len(zoo) == 0, reason="Failed to load zoo dataset")
+class TestLabelling:
     def test_the_expert_label_becomes_the_classification(self):
         target_by_name = {
-            animal.name: target for animal, target in zip(animals, targets)
+            animal.name: target for animal, target in zip(zoo.animals, zoo.targets)
         }
         rdr = EQLSingleClassRDR(Animal, "species")
-        mammal = first(Species.mammal)
+        mammal = zoo.first(Species.mammal)
 
         rdr.fit_case(mammal, expert=labelling_expert(target_by_name))
 
-        self.assertEqual(rdr.classify(mammal), Species.mammal)
+        assert rdr.classify(mammal) == Species.mammal
 
     def test_bulk_labelling_reproduces_every_ground_truth_label(self):
-        subset, subset_targets = animals[:12], targets[:12]
+        subset, subset_targets = zoo.animals[:12], zoo.targets[:12]
         target_by_name = {
             animal.name: target for animal, target in zip(subset, subset_targets)
         }
@@ -107,13 +110,13 @@ class TestLabelling(unittest.TestCase):
 
         rdr.fit(subset, [...] * len(subset), labelling_expert(target_by_name))
 
-        for animal, expected in zip(subset, subset_targets):
-            with self.subTest(animal=animal.name):
-                self.assertEqual(rdr.classify(animal), expected)
+        assert {animal.name: rdr.classify(animal) for animal in subset} == {
+            animal.name: expected for animal, expected in zip(subset, subset_targets)
+        }
 
     def test_a_label_that_contradicts_a_firing_rule_refines_it(self):
         rdr = EQLSingleClassRDR(Animal, "species")
-        fish, mammal = first(Species.fish), first(Species.mammal)
+        fish, mammal = zoo.first(Species.fish), zoo.first(Species.mammal)
         # Seed an over-general rule: backbone -> fish, which the mammal also satisfies.
         rdr.fit_case(
             fish,
@@ -126,12 +129,12 @@ class TestLabelling(unittest.TestCase):
                 )
             ),
         )
-        self.assertEqual(rdr.classify(mammal), Species.fish)
+        assert rdr.classify(mammal) == Species.fish
 
         rdr.fit_case(mammal, expert=labelling_expert({mammal.name: Species.mammal}))
 
-        self.assertEqual(rdr.classify(mammal), Species.mammal)
-        self.assertEqual(rdr.classify(fish), Species.fish)
+        assert rdr.classify(mammal) == Species.mammal
+        assert rdr.classify(fish) == Species.fish
 
 
 # %% keeping the conclusion that already stands
@@ -151,58 +154,102 @@ def _reaffirming_answer(context, requests):
     return {}
 
 
-@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
-class TestKeepingTheCurrentConclusion(unittest.TestCase):
-    def setUp(self):
-        self.rdr = EQLSingleClassRDR(Animal, "species")
-        self.mammal = first(Species.mammal)
-        self.rdr.fit_case(
-            self.mammal,
-            Species.mammal,
-            Expert(
-                interface=FunctionInterface(
-                    answer_function=lambda context, requests: {
-                        AnswerName.CONDITIONS: context.case_variable.milk == True
-                    }
-                )
-            ),
+@dataclass
+class StandingConclusion:
+    """
+    A fitted RDR whose rule already concludes correctly, and an expert that will be
+    asked to label the same case again and will re-affirm that conclusion.
+    """
+
+    rdr: EQLSingleClassRDR
+    """
+    The RDR holding the single mammal rule.
+    """
+
+    mammal: Animal
+    """
+    The case the rule was written for, and the one to be labelled again.
+    """
+
+    rules_before: int
+    """
+    How many rules the tree held before the second, target-less fit.
+    """
+
+    expert: Expert
+    """
+    The recording expert that answers with the conclusion already standing.
+    """
+
+
+@pytest.fixture
+def standing_conclusion() -> StandingConclusion:
+    """
+    :return: An RDR that already classifies its mammal correctly, ready to be asked
+        about that same case with no target.
+    """
+    rdr = EQLSingleClassRDR(Animal, "species")
+    mammal = zoo.first(Species.mammal)
+    rdr.fit_case(
+        mammal,
+        Species.mammal,
+        Expert(
+            interface=FunctionInterface(
+                answer_function=lambda context, requests: {
+                    AnswerName.CONDITIONS: context.case_variable.milk == True
+                }
+            )
+        ),
+    )
+    return StandingConclusion(
+        rdr=rdr,
+        mammal=mammal,
+        rules_before=rule_count(rdr),
+        expert=recording_expert(_reaffirming_answer),
+    )
+
+
+@pytest.mark.skipif(len(zoo) == 0, reason="Failed to load zoo dataset")
+class TestKeepingTheCurrentConclusion:
+    def test_the_current_conclusion_is_returned(self, standing_conclusion):
+        assert (
+            standing_conclusion.rdr.fit_case(
+                standing_conclusion.mammal, expert=standing_conclusion.expert
+            )
+            == Species.mammal
         )
-        self.rules_before = rule_count(self.rdr)
-        self.expert = recording_expert(_reaffirming_answer)
 
-    def test_the_current_conclusion_is_returned(self):
-        self.assertEqual(
-            self.rdr.fit_case(self.mammal, expert=self.expert), Species.mammal
+    def test_no_rule_is_inserted(self, standing_conclusion):
+        standing_conclusion.rdr.fit_case(
+            standing_conclusion.mammal, expert=standing_conclusion.expert
         )
 
-    def test_no_rule_is_inserted(self):
-        self.rdr.fit_case(self.mammal, expert=self.expert)
+        assert rule_count(standing_conclusion.rdr) == standing_conclusion.rules_before
 
-        self.assertEqual(rule_count(self.rdr), self.rules_before)
-
-    def test_the_conditions_question_is_skipped(self):
-        self.rdr.fit_case(self.mammal, expert=self.expert)
-
-        self.assertEqual(
-            [call.requested for call in self.expert.interface.calls],
-            [[AnswerName.CONCLUSION]],
+    def test_the_conditions_question_is_skipped(self, standing_conclusion):
+        standing_conclusion.rdr.fit_case(
+            standing_conclusion.mammal, expert=standing_conclusion.expert
         )
+
+        assert [
+            call.answer_names for call in standing_conclusion.expert.interface.calls
+        ] == [[AnswerName.CONCLUSION]]
 
 
 # %% abandoning the session
 
 
-@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
-class TestAbort(unittest.TestCase):
+@pytest.mark.skipif(len(zoo) == 0, reason="Failed to load zoo dataset")
+class TestAbort:
     def test_aborting_the_conclusion_question_reports_the_missing_conclusion(self):
         rdr = EQLSingleClassRDR(Animal, "species")
 
         def abort(context, requests):
             raise ExpertAbort([AnswerName.CONCLUSION])
 
-        with self.assertRaises(NoConclusionProvided):
+        with pytest.raises(NoConclusionProvided):
             rdr.fit_case(
-                first(Species.mammal),
+                zoo.first(Species.mammal),
                 expert=Expert(interface=FunctionInterface(answer_function=abort)),
             )
 
@@ -214,9 +261,9 @@ class TestAbort(unittest.TestCase):
                 return {AnswerName.CONCLUSION: Species.mammal}
             raise ExpertAbort([AnswerName.CONDITIONS])
 
-        with self.assertRaises(NoConditionsProvided):
+        with pytest.raises(NoConditionsProvided):
             rdr.fit_case(
-                first(Species.mammal),
+                zoo.first(Species.mammal),
                 expert=Expert(
                     interface=FunctionInterface(answer_function=answer_then_abort)
                 ),
@@ -270,11 +317,11 @@ def _conditions_only_answer(context, requests):
     return {}
 
 
-@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
-class TestHelperSuggestions(unittest.TestCase):
+@pytest.mark.skipif(len(zoo) == 0, reason="Failed to load zoo dataset")
+class TestHelperSuggestions:
     def test_a_valid_suggestion_stands_when_the_expert_supplies_no_conclusion(self):
         rdr = EQLSingleClassRDR(Animal, "species")
-        mammal = first(Species.mammal)
+        mammal = zoo.first(Species.mammal)
         expert = Expert(
             interface=FunctionInterface(answer_function=_conditions_only_answer),
             helpers=[MammalSuggester()],
@@ -282,11 +329,11 @@ class TestHelperSuggestions(unittest.TestCase):
 
         rdr.fit_case(mammal, expert=expert)
 
-        self.assertEqual(rdr.classify(mammal), Species.mammal)
+        assert rdr.classify(mammal) == Species.mammal
 
     def test_the_expert_can_answer_over_a_suggestion(self):
         rdr = EQLSingleClassRDR(Animal, "species")
-        mammal = first(Species.mammal)
+        mammal = zoo.first(Species.mammal)
 
         def override(context, requests):
             answers = _conditions_only_answer(context, requests)
@@ -302,27 +349,37 @@ class TestHelperSuggestions(unittest.TestCase):
 
         rdr.fit_case(mammal, expert=expert)
 
-        self.assertEqual(rdr.classify(mammal), Species.mammal)
+        assert rdr.classify(mammal) == Species.mammal
 
     def test_a_suggestion_outside_the_domain_does_not_pre_seed_the_conclusion(self):
         rdr = EQLSingleClassRDR(Animal, "species")
+        suggester = OutOfDomainSuggester()
         seen_defaults = []
+        rejections = []
 
         def record_default(context, requests):
             for request in requests:
                 if request.name is AnswerName.CONCLUSION:
                     seen_defaults.append(request.default)
+                    rejections.append(
+                        context.conclusion_domain.validate(
+                            suggester.suggest(context), allow_unset=False
+                        )
+                    )
             answers = _conditions_only_answer(context, requests)
             if any(request.name is AnswerName.CONCLUSION for request in requests):
                 answers[AnswerName.CONCLUSION] = Species.mammal
             return answers
 
         rdr.fit_case(
-            first(Species.mammal),
+            zoo.first(Species.mammal),
             expert=Expert(
                 interface=FunctionInterface(answer_function=record_default),
-                helpers=[OutOfDomainSuggester()],
+                helpers=[suggester],
             ),
         )
 
-        self.assertEqual(seen_defaults, [...])
+        # The suggestion is dropped because the domain rejects it, not because the
+        # helper was never consulted.
+        assert isinstance(rejections[0], ConclusionNotInDomain)
+        assert seen_defaults == [...]

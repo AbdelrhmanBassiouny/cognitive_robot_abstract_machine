@@ -1,11 +1,11 @@
 """
-Tests for automatic condition resolution driven through the live engine.
+Tests for automatic condition resolution driven through the engine itself.
 
-``test_condition_resolver.py`` covers each resolver against hand-built knowledge
-fixtures. What only the engine can show is that the expression a resolver picks out of a
-*real* rule tree evaluates the way the resolver claimed, that it is never a conclusion
-selector (inserting one would close a cycle in the DAG), and that inserting it leaves
-the rules sharing its anchor intact.
+``test_condition_resolver.py`` covers each resolver against hand-built sufficient-
+condition fixtures. What only the engine can show is that the expression a resolver
+picks out of a *real* rule tree evaluates the way the resolver claimed, that it is never
+a conclusion selector (inserting one would close a cycle in the DAG), and that inserting
+it leaves the rules sharing its anchor intact.
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ def _holds_for(expression: SymbolicExpression, case_variable, case: Animal) -> b
     :return: Whether the condition holds for ``case``.
     """
     case_variable._update_domain_([case])
-    return any(bool(result) for result in expression.evaluate())
+    return any(expression.evaluate())
 
 
 def _mammal_then_bird_rdr():
@@ -69,10 +69,10 @@ def _resolve_against_live_tree(
     rdr: EQLSingleClassRDR, case, corner_case, target, current
 ):
     """
-    Run the target-knowledge resolver against the RDR's real backward-inference
-    knowledge.
+    Run :class:`TargetSufficientConditionsBasedResolver` against the sufficient
+    condition sets the RDR's own rule tree yields.
 
-    :param rdr: The fitted RDR whose rule tree supplies the knowledge.
+    :param rdr: The fitted RDR whose rule tree supplies the condition sets.
     :param case: The new case needing a condition.
     :param corner_case: The case the firing rule was written for.
     :param target: The correct conclusion.

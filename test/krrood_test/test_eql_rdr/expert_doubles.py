@@ -3,8 +3,8 @@ Programmatic experts the engine tests drive :class:`EQLSingleClassRDR` with.
 
 Every double answers through :class:`FunctionInterface`, so it exercises the same build-
 namespace → validate → re-prompt loop an interactive expert would; only the *collection*
-step is scripted. Conditions are always live EQL expressions built over the RDR's shared
-case variable, never strings.
+step is scripted. Conditions are always EQL expressions built over the RDR's shared case
+variable, never strings.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 import dataclasses
 from dataclasses import dataclass, field
 
-from typing_extensions import Any, Callable, Dict, List
+from typing_extensions import Any, Callable, Dict, List, Tuple
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.factories import and_
@@ -41,28 +41,30 @@ Every :class:`Animal` trait column except the identifier and the predicted attri
 @dataclass
 class ExpertCall:
     """
-    One expert interaction, recorded by :class:`RecordingExpert`.
+    One expert interaction, recorded by :class:`RecordingInterface`.
+
+    Holds the objects the engine passed rather than fields copied out of them, so an
+    assertion reads the same values the expert saw. The engine builds one
+    :class:`CaseContext` per case and never writes to it, so keeping the reference is a
+    faithful record of the interaction.
     """
 
-    case_name: str
+    context: CaseContext
     """
-    The ``name`` of the case the expert was asked about.
-    """
-
-    current_conclusion: Any
-    """
-    What the RDR concluded before the question (``...`` if no rule fired).
+    The case context the expert was asked about.
     """
 
-    target_conclusion: Any
-    """
-    The ground-truth conclusion, or ``...`` when the expert must label the case.
-    """
-
-    requested: List[AnswerName]
+    requests: List[AnswerRequest]
     """
     The answers this interaction asked for, in order.
     """
+
+    @property
+    def answer_names(self) -> List[AnswerName]:
+        """
+        :return: The name of each answer asked for, in the order asked.
+        """
+        return [request.name for request in self.requests]
 
 
 @dataclass
@@ -83,14 +85,7 @@ class RecordingInterface(FunctionInterface):
         requests: List[AnswerRequest],
         initial_errors: Any = None,
     ) -> Dict[AnswerName, Any]:
-        self.calls.append(
-            ExpertCall(
-                case_name=context.case_instance.name,
-                current_conclusion=context.current_conclusion,
-                target_conclusion=context.target_conclusion,
-                requested=[request.name for request in requests],
-            )
-        )
+        self.calls.append(ExpertCall(context=context, requests=requests))
         return super().interact(context, requests, initial_errors=initial_errors)
 
 
@@ -109,6 +104,14 @@ def recording_expert(
 
 
 # %% answer functions
+
+
+def feature_vector(case: Any) -> Tuple[Any, ...]:
+    """
+    :param case: The case to read.
+    :return: The trait values a maximally specific rule matches on, in field order.
+    """
+    return tuple(getattr(case, name) for name in FEATURE_FIELDS)
 
 
 def full_feature_conditions(case_variable: Any, case: Any) -> SymbolicExpression:
@@ -168,11 +171,7 @@ def labelling_answer(
     def answer(
         context: CaseContext, requests: List[AnswerRequest]
     ) -> Dict[AnswerName, Any]:
-        answers: Dict[AnswerName, Any] = {
-            AnswerName.CONDITIONS: full_feature_conditions(
-                context.case_variable, context.case_instance
-            )
-        }
+        answers = maximally_specific_answer(context, requests)
         if any(request.name is AnswerName.CONCLUSION for request in requests):
             answers[AnswerName.CONCLUSION] = target_by_name[context.case_instance.name]
         return answers

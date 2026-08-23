@@ -193,13 +193,20 @@ def test_oscillation_error_names_the_cases_still_misclassified(
         assert case in BOTH_CASES
 
 
-def test_oscillation_error_reports_the_completed_pass_count(
+def test_oscillation_is_detected_when_any_earlier_passes_pending_set_recurs(
     colour_rdr: EQLSingleClassRDR, non_discriminating_expert: Expert
 ):
+    """
+    These two cases alternate: pass one leaves the red case wrong, pass two leaves the
+    blue one wrong, and pass three is back to the red one. No two consecutive passes
+    ever leave the same set, so detection has to compare against every earlier pass —
+    a check against only the preceding pass would loop forever here. Pinning the exact
+    pass count is what tells those two rules apart.
+    """
     with pytest.raises(RDRDidNotConvergeError) as raised:
         colour_rdr.fit(BOTH_CASES, BOTH_TARGETS, non_discriminating_expert)
 
-    assert raised.value.passes >= 1
+    assert raised.value.passes == 3
 
 
 @dataclasses.dataclass
@@ -333,11 +340,13 @@ def test_the_broken_case_is_asked_about_again_with_the_wrong_conclusion():
     rdr.fit(cases, case_targets, expert)
 
     molusc_calls = [
-        call for call in expert.interface.calls if call.case_name == "break_molusc"
+        call
+        for call in expert.interface.calls
+        if call.context.case_instance.name == "break_molusc"
     ]
     assert len(molusc_calls) == 2
-    assert molusc_calls[0].current_conclusion is ...
-    assert molusc_calls[1].current_conclusion is Species.reptile
+    assert molusc_calls[0].context.current_conclusion is ...
+    assert molusc_calls[1].context.current_conclusion is Species.reptile
 
 
 # %% the progress lifecycle the loop drives

@@ -198,7 +198,7 @@ class TestSuggestedConclusion(unittest.TestCase):
             expert._suggested_conclusion(context, self.validator), Species.fish
         )
 
-    def test_returns_unset_when_no_helper_suggests(self):
+    def test_returns_ellipsis_when_no_helper_suggests(self):
         expert = Expert(interface=FunctionInterface(answer_function=lambda c, r: {}))
         context = _context(make_animal("gecko"), conclusion_domain=self.domain)
 
