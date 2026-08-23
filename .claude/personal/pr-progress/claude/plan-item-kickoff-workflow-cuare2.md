@@ -31,9 +31,22 @@ implementation, and the 2026-08-23 resolution.
 - [x] Manifest, roadmap section, PR description all current.
 - [x] **Dead members of the declaration deleted** (`d13afaf8b`): `REQUIREMENTS_FILE`,
       `MODULES_BY_NAME` and `PackageModule.path` had no reader anywhere. 616 tests still pass.
+- [x] **The layout is derived, not declared** (`a62a79525`): modules from the directory, entry
+      points from each module's `__main__` block via `ast`, requirement import names from
+      `requirements.txt` through `packages_distributions()`. The 29-entry list, `DependencyTier`
+      and the tier table are gone. What is left is one exception set plus one named uninstalled
+      caller, both held in both directions. 621 tests pass.
 
 ## Findings worth carrying
 
+- **The cheaper shape caught what the elaborate one could not.** Replacing 29 tier
+  declarations with a derived layout plus one exception set immediately found
+  `record_dashboard_url` declared `PLAN_MANIFEST` while importing only the standard library.
+  The old test could not see it by construction - it checked a module stayed *within* its
+  tier, never that it *needed* it, so an over-broad declaration was invisible.
+- **Fewer tests passing still reads as passing.** The first cut of that change took the suite
+  616 -> 592 because 21 modules silently stopped being checked. Count the parametrized cases
+  when replacing a classification with a short list.
 - **A grep over the hooks is not a survey of the callers.** The tier's justification was
   measured against `session-start.sh`, which reaches no module here - and the conclusion
   "nothing depends on the tier" was wrong. The live caller is
