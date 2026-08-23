@@ -21,13 +21,13 @@ __all__ = [
     "DATASET_DIRECTORY",
     "NOTES_BRANCH",
     "PACKAGE_DIRECTORY",
-    "PERSONAL_GIT_IDENTITY_PATH",
     "REPOSITORY_ROOT",
     "SCRUBBED_ENVIRONMENT_PREFIXES",
     "SET_UP_CLONE_DATASET",
     "STUBS_DIRECTORY",
     "UPSTREAM_REVIEW_RESPONSE_DIRECTORY",
     "WORK_BRANCH",
+    "PersonalNotesPath",
     "ToolingDirectory",
 ]
 
@@ -78,11 +78,6 @@ class ToolingDirectory(StrEnum):
     The maintenance pass's own instructions.
     """
 
-    PERSONAL_PLANS = ".claude/personal/plans"
-    """
-    Where a plan's manifest and roadmap live on the personal-notes branch.
-    """
-
     @property
     def path(self) -> Path:
         """:return: This directory inside the repository under test."""
@@ -99,10 +94,47 @@ WORK_BRANCH = "some-work-branch"
 The throwaway branch a scratch repository is left checked out on.
 """
 
-PERSONAL_GIT_IDENTITY_PATH = ".claude/personal/git-identity"
-"""
-Where the hooks read a recorded git identity from, relative to the project root.
-"""
+
+class PersonalNotesPath(StrEnum):
+    """
+    What the personal-notes branch holds, and where the hooks write its contents into a
+    clone - relative to the project root in both cases.
+
+    Literals for the same reason as :class:`ToolingDirectory`: these paths are the
+    interface between the shell hooks and the branch, so nothing imports them.
+    """
+
+    NOTES_FILE = ".claude/personal/cram-notes.md"
+    """
+    The notes themselves, which session-start.sh writes into CLAUDE.local.md.
+    """
+
+    GIT_IDENTITY = ".claude/personal/git-identity"
+    """
+    The recorded git identity a clone with none of its own is given.
+    """
+
+    SETTINGS_ON_NOTES_BRANCH = ".claude/personal/settings.local.json"
+    """
+    The Claude Code settings the branch carries.
+    """
+
+    LOCAL_SETTINGS = ".claude/settings.local.json"
+    """
+    Where those settings are synced to in the clone - the file Claude Code itself reads,
+    and writes its own permission grants into.
+    """
+
+    PLANS = ".claude/personal/plans"
+    """
+    Where a plan's manifest and roadmap live.
+    """
+
+    BRANCH_INDEX = ".claude/personal/plans/_generated/branch-index.tsv"
+    """
+    The generated reverse index mapping an item's branch to the plan tracking it.
+    """
+
 
 SCRUBBED_ENVIRONMENT_PREFIXES = (
     "CLAUDE_PERSONAL_NOTES_",

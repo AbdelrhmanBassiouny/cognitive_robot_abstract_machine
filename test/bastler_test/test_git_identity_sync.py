@@ -16,11 +16,9 @@ import subprocess
 
 import pytest
 
-from .constants import NOTES_BRANCH, PERSONAL_GIT_IDENTITY_PATH
+from .constants import NOTES_BRANCH, PersonalNotesPath
 from .scratch_repository import SCRATCH_IDENTITY, GitIdentity, ScratchRepository
 from .session_start_summary import SummaryMessage, summary_message, summary_value
-
-NOTES_PATH = ".claude/personal/cram-notes.md"
 
 RECORDED_IDENTITY = GitIdentity("Ada Lovelace", "ada@example.com")
 """
@@ -72,9 +70,9 @@ def publish_notes_branch(
     :param identity_file: The git-identity file's contents, or ``None`` to publish a
         notes branch that records no identity at all.
     """
-    files = {NOTES_PATH: "personal notes\n"}
+    files = {PersonalNotesPath.NOTES_FILE: "personal notes\n"}
     if identity_file is not None:
-        files[PERSONAL_GIT_IDENTITY_PATH] = identity_file
+        files[PersonalNotesPath.GIT_IDENTITY] = identity_file
     repository.publish_notes_branch(files)
 
 
@@ -118,7 +116,7 @@ def test_reports_the_identity_it_set(git_identity_repository: ScratchRepository)
     assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
         SummaryMessage.GIT_IDENTITY_WRITTEN,
         NOTES_BRANCH,
-        PERSONAL_GIT_IDENTITY_PATH,
+        PersonalNotesPath.GIT_IDENTITY,
         f"{RECORDED_IDENTITY.name} <{RECORDED_IDENTITY.email}>",
     )
 
@@ -179,7 +177,7 @@ def test_reports_that_no_identity_is_recorded(
     assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
         SummaryMessage.NO_GIT_IDENTITY_RECORDED,
         NOTES_BRANCH,
-        PERSONAL_GIT_IDENTITY_PATH,
+        PersonalNotesPath.GIT_IDENTITY,
     )
 
 
@@ -207,7 +205,7 @@ def test_names_what_an_incomplete_recording_is_missing(
 
     assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
         SummaryMessage.GIT_IDENTITY_INCOMPLETE,
-        PERSONAL_GIT_IDENTITY_PATH,
+        PersonalNotesPath.GIT_IDENTITY,
         NOTES_BRANCH,
     )
 
@@ -231,7 +229,7 @@ def test_records_the_given_identity_on_the_notes_branch(
     assert result.returncode == 0, result.stderr
     checkout = git_identity_repository.clone_notes_branch(tmp_path / "notes-checkout")
     assert (
-        GitIdentity.from_git_config_file(checkout / PERSONAL_GIT_IDENTITY_PATH)
+        GitIdentity.from_git_config_file(checkout / PersonalNotesPath.GIT_IDENTITY)
         == RECORDED_IDENTITY
     )
 

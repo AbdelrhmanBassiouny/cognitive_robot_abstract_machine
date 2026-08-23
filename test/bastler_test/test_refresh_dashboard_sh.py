@@ -17,12 +17,8 @@ from pathlib import Path
 
 import pytest
 
-from .constants import (
-    PACKAGE_DIRECTORY,
-    REPOSITORY_ROOT,
-    STUBS_DIRECTORY,
-    ToolingDirectory,
-)
+from .constants import PACKAGE_DIRECTORY, STUBS_DIRECTORY, ToolingDirectory
+from .scratch_repository import install_hook_scripts_into
 
 PLAN_DASHBOARD_DIRECTORY = ToolingDirectory.PLAN_DASHBOARD_SKILL.path
 """
@@ -41,21 +37,17 @@ def scratch_project_root(tmp_path: Path) -> Path:
     :param tmp_path: pytest's per-test temporary directory.
     :return: The scratch project root.
     """
-    plan_dashboard_directory = tmp_path / ".claude" / "skills" / "plan-dashboard"
-    hooks_directory = tmp_path / ".claude" / "hooks"
+    plan_dashboard_directory = tmp_path / ToolingDirectory.PLAN_DASHBOARD_SKILL
+    hooks_directory = tmp_path / ToolingDirectory.HOOKS
     package_directory = tmp_path / PACKAGE_DIRECTORY.name
     plan_dashboard_directory.mkdir(parents=True)
-    hooks_directory.mkdir(parents=True)
     package_directory.mkdir()
 
     shutil.copy(
         PLAN_DASHBOARD_DIRECTORY / "refresh_dashboard.sh",
         plan_dashboard_directory / "refresh_dashboard.sh",
     )
-    shutil.copy(
-        REPOSITORY_ROOT / ".claude" / "hooks" / "resolve-personal-notes-config.sh",
-        hooks_directory / "resolve-personal-notes-config.sh",
-    )
+    install_hook_scripts_into(tmp_path, "resolve-personal-notes-config.sh")
 
     # The real support module, whose own dependencies are the standard library only, in a
     # scratch package the script's `python3 -m bastler.<module>` calls resolve against.

@@ -309,13 +309,7 @@ def _committed_configuration_path(scratch_repository: ScratchRepository) -> Path
     :param scratch_repository: The scratch repository to write into.
     :return: The path :func:`load_configuration` should be pointed at.
     """
-    scratch_repository.install_hook_scripts(
-        Path(bastler.stack.PERSONAL_NOTES_CONFIGURATION_SCRIPT).name
-    )
-    path = scratch_repository.write(
-        f"{Path(bastler.stack.__file__).parent.name}/stack.toml", DEFAULT_STACK_TOML
-    )
-    scratch_repository.commit_everything("add stack.toml")
+    path = scratch_repository.install_stack_configuration(DEFAULT_STACK_TOML)
     scratch_repository.run_git(
         "remote",
         "add",

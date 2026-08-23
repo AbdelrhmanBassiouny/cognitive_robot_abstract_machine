@@ -19,8 +19,8 @@ import pytest
 from .constants import (
     DATASET_DIRECTORY,
     NOTES_BRANCH,
-    PERSONAL_GIT_IDENTITY_PATH,
     WORK_BRANCH,
+    PersonalNotesPath,
 )
 from .scratch_repository import SCRATCH_IDENTITY, ScratchRepository
 from .session_start_summary import SummaryMessage, summary_message, summary_value
@@ -35,9 +35,6 @@ TRACKING_ISSUE = "55"
 
 PLAN_IDENTIFIER = "test-plan"
 
-NOTES_PATH = ".claude/personal/cram-notes.md"
-
-BRANCH_INDEX_PATH = ".claude/personal/plans/_generated/branch-index.tsv"
 
 MANIFEST_PATH = f".claude/personal/plans/{PLAN_IDENTIFIER}/plan.yaml"
 
@@ -114,8 +111,8 @@ def publish_and_run(
     """
     repository.publish_notes_branch(
         {
-            NOTES_PATH: "personal notes\n",
-            PERSONAL_GIT_IDENTITY_PATH: SCRATCH_IDENTITY.as_git_config_file(),
+            PersonalNotesPath.NOTES_FILE: "personal notes\n",
+            PersonalNotesPath.GIT_IDENTITY: SCRATCH_IDENTITY.as_git_config_file(),
             **(notes_branch_files or {}),
         }
     )
@@ -157,7 +154,7 @@ def test_names_the_missing_item_when_other_plans_are_tracked(
     result = publish_and_run(
         session_start_repository,
         {
-            BRANCH_INDEX_PATH: branch_index(
+            PersonalNotesPath.BRANCH_INDEX: branch_index(
                 {
                     "some-other-branch": PLAN_IDENTIFIER,
                     "a-third-branch": "another-plan",
@@ -179,7 +176,9 @@ def test_reports_the_plan_that_tracks_this_branch(
     result = publish_and_run(
         session_start_repository,
         {
-            BRANCH_INDEX_PATH: branch_index({WORK_BRANCH: PLAN_IDENTIFIER}),
+            PersonalNotesPath.BRANCH_INDEX: branch_index(
+                {WORK_BRANCH: PLAN_IDENTIFIER}
+            ),
             MANIFEST_PATH: PLAN_MANIFEST_WITH_TRACKING_ISSUE,
         },
     )
@@ -196,7 +195,9 @@ def test_reports_a_tracked_plan_that_has_no_tracking_issue(
     result = publish_and_run(
         session_start_repository,
         {
-            BRANCH_INDEX_PATH: branch_index({WORK_BRANCH: PLAN_IDENTIFIER}),
+            PersonalNotesPath.BRANCH_INDEX: branch_index(
+                {WORK_BRANCH: PLAN_IDENTIFIER}
+            ),
             MANIFEST_PATH: PLAN_MANIFEST,
         },
     )
@@ -212,7 +213,7 @@ def test_reports_a_tracked_branch_whose_manifest_is_missing(
 ):
     result = publish_and_run(
         session_start_repository,
-        {BRANCH_INDEX_PATH: branch_index({WORK_BRANCH: PLAN_IDENTIFIER})},
+        {PersonalNotesPath.BRANCH_INDEX: branch_index({WORK_BRANCH: PLAN_IDENTIFIER})},
     )
 
     assert result.returncode == 0, result.stderr
@@ -232,8 +233,10 @@ def test_reports_plan_as_not_applicable_on_the_default_branch(
 ):
     session_start_repository.publish_notes_branch(
         {
-            NOTES_PATH: "personal notes\n",
-            BRANCH_INDEX_PATH: branch_index({WORK_BRANCH: PLAN_IDENTIFIER}),
+            PersonalNotesPath.NOTES_FILE: "personal notes\n",
+            PersonalNotesPath.BRANCH_INDEX: branch_index(
+                {WORK_BRANCH: PLAN_IDENTIFIER}
+            ),
             MANIFEST_PATH: PLAN_MANIFEST,
         }
     )
@@ -252,8 +255,10 @@ def test_reports_plan_as_not_applicable_on_the_notes_branch(
 ):
     session_start_repository.publish_notes_branch(
         {
-            NOTES_PATH: "personal notes\n",
-            BRANCH_INDEX_PATH: branch_index({WORK_BRANCH: PLAN_IDENTIFIER}),
+            PersonalNotesPath.NOTES_FILE: "personal notes\n",
+            PersonalNotesPath.BRANCH_INDEX: branch_index(
+                {WORK_BRANCH: PLAN_IDENTIFIER}
+            ),
             MANIFEST_PATH: PLAN_MANIFEST,
         }
     )

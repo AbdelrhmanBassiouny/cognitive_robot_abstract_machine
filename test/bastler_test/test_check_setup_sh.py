@@ -14,16 +14,13 @@ from pathlib import Path
 
 import pytest
 
-from .constants import NOTES_BRANCH, PERSONAL_GIT_IDENTITY_PATH
+from .constants import NOTES_BRANCH, PersonalNotesPath
 from .scratch_repository import (
     SCRATCH_IDENTITY,
     ScratchRepository,
     SetupPrerequisiteFile,
     initialize_bare_repository,
 )
-
-NOTES_PATH = ".claude/personal/cram-notes.md"
-
 
 # %% what a report is made of
 
@@ -138,8 +135,8 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
     scratch_repository.commit_everything("initial commit")
     scratch_repository.publish_notes_branch(
         {
-            NOTES_PATH: "my notes\n",
-            PERSONAL_GIT_IDENTITY_PATH: SCRATCH_IDENTITY.as_git_config_file(),
+            PersonalNotesPath.NOTES_FILE: "my notes\n",
+            PersonalNotesPath.GIT_IDENTITY: SCRATCH_IDENTITY.as_git_config_file(),
         }
     )
     scratch_repository.resolve_notes_remote_to()
@@ -246,7 +243,7 @@ def test_reports_a_recorded_identity_that_matches_this_clone(
 def test_reports_a_notes_branch_that_records_no_identity(
     check_setup_repository: ScratchRepository,
 ):
-    check_setup_repository.remove_from_notes_branch(PERSONAL_GIT_IDENTITY_PATH)
+    check_setup_repository.remove_from_notes_branch(PersonalNotesPath.GIT_IDENTITY)
 
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == 1
@@ -315,7 +312,7 @@ def test_reports_which_source_each_resolved_setting_came_from(
         f"{NOTES_BRANCH} (from built-in default)"
     )
     assert report.results[SetupCheck.NOTES_PATH].detail == (
-        f"{NOTES_PATH} (from built-in default)"
+        f"{PersonalNotesPath.NOTES_FILE} (from built-in default)"
     )
 
 

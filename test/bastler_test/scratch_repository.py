@@ -17,6 +17,8 @@ from enum import StrEnum
 from pathlib import Path
 
 from .script_runner import BashScriptRunner
+import bastler.stack
+
 from .constants import (
     NOTES_BRANCH,
     PACKAGE_DIRECTORY,
@@ -30,6 +32,19 @@ HOOKS_SOURCE_DIRECTORY = ToolingDirectory.HOOKS.path
 """
 The real hooks directory the scripts under test are copied from.
 """
+
+
+def install_hook_scripts_into(project_root: Path, *script_names: str) -> None:
+    """
+    Copy the real hook scripts under test into a checkout.
+
+    :param project_root: The checkout to copy them into.
+    :param script_names: File names within the hooks directory.
+    """
+    hooks_directory = project_root / ToolingDirectory.HOOKS
+    hooks_directory.mkdir(parents=True, exist_ok=True)
+    for script_name in script_names:
+        shutil.copy(HOOKS_SOURCE_DIRECTORY / script_name, hooks_directory / script_name)
 
 
 def install_package_into(project_root: Path) -> None:
@@ -267,11 +282,24 @@ class ScratchRepository:
 
         :param script_names: File names within the hooks directory.
         """
-        for script_name in script_names:
-            shutil.copy(
-                HOOKS_SOURCE_DIRECTORY / script_name,
-                self.project_root / ".claude" / "hooks" / script_name,
-            )
+        install_hook_scripts_into(self.project_root, *script_names)
+
+    def install_stack_configuration(self, content: str) -> Path:
+        """
+        Write and commit the package's committed ``stack.toml`` defaults, beside the
+        shell file the personal-notes override is fetched through.
+
+        :param content: The configuration to write.
+        :return: The path :func:`bastler.stack.load_configuration` should be pointed at.
+        """
+        self.install_hook_scripts(
+            Path(bastler.stack.PERSONAL_NOTES_CONFIGURATION_SCRIPT).name
+        )
+        written = self.write(
+            f"{PACKAGE_DIRECTORY.name}/{bastler.stack.CONFIGURATION_PATH.name}", content
+        )
+        self.commit_everything("add stack.toml")
+        return written
 
     def install_package(self) -> None:
         """

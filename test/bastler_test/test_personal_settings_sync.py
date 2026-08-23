@@ -14,10 +14,7 @@ import pytest
 
 from .scratch_repository import ScratchRepository
 
-from .constants import DATASET_DIRECTORY
-
-SETTINGS_PATH_ON_NOTES_BRANCH = ".claude/personal/settings.local.json"
-LOCAL_SETTINGS_PATH = ".claude/settings.local.json"
+from .constants import DATASET_DIRECTORY, PersonalNotesPath
 
 PERSONAL_SETTINGS = (DATASET_DIRECTORY / "personal-settings.json").read_text()
 UPDATED_PERSONAL_SETTINGS = (
@@ -89,7 +86,7 @@ def local_settings_of(repository: ScratchRepository) -> str:
     :param repository: The scratch repository to read from.
     :return: The file's content.
     """
-    return (repository.project_root / LOCAL_SETTINGS_PATH).read_text()
+    return (repository.project_root / PersonalNotesPath.LOCAL_SETTINGS).read_text()
 
 
 def settings_on_notes_branch(repository: ScratchRepository) -> str:
@@ -103,7 +100,7 @@ def settings_on_notes_branch(repository: ScratchRepository) -> str:
     checkout = repository.clone_notes_branch(
         repository.project_root.parent / "settings-verify-checkout"
     )
-    return (checkout / SETTINGS_PATH_ON_NOTES_BRANCH).read_text()
+    return (checkout / PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH).read_text()
 
 
 # %% syncing settings out of the personal-notes branch
@@ -113,14 +110,17 @@ def test_writes_the_branch_settings_when_the_project_has_none(
     settings_repository: ScratchRepository,
 ):
     settings_repository.update_notes_branch_file(
-        SETTINGS_PATH_ON_NOTES_BRANCH, PERSONAL_SETTINGS
+        PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, PERSONAL_SETTINGS
     )
 
     result = run_hook(settings_repository, "session-start.sh")
 
     assert result.returncode == 0, result.stderr
     assert local_settings_of(settings_repository) == PERSONAL_SETTINGS
-    assert f"local settings:  synced to {LOCAL_SETTINGS_PATH}" in result.stdout
+    assert (
+        f"local settings:  synced to {PersonalNotesPath.LOCAL_SETTINGS}"
+        in result.stdout
+    )
 
 
 def test_writes_no_settings_when_the_branch_has_none(
@@ -129,10 +129,12 @@ def test_writes_no_settings_when_the_branch_has_none(
     result = run_hook(settings_repository, "session-start.sh")
 
     assert result.returncode == 0, result.stderr
-    assert not (settings_repository.project_root / LOCAL_SETTINGS_PATH).exists()
+    assert not (
+        settings_repository.project_root / PersonalNotesPath.LOCAL_SETTINGS
+    ).exists()
     assert (
         f"local settings:  none on 'claude/personal-notes' "
-        f"({SETTINGS_PATH_ON_NOTES_BRANCH})" in result.stdout
+        f"({PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH})" in result.stdout
     )
 
 
@@ -140,11 +142,11 @@ def test_updates_settings_untouched_since_the_last_sync(
     settings_repository: ScratchRepository,
 ):
     settings_repository.update_notes_branch_file(
-        SETTINGS_PATH_ON_NOTES_BRANCH, PERSONAL_SETTINGS
+        PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, PERSONAL_SETTINGS
     )
     run_hook(settings_repository, "session-start.sh")
     settings_repository.update_notes_branch_file(
-        SETTINGS_PATH_ON_NOTES_BRANCH, UPDATED_PERSONAL_SETTINGS
+        PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, UPDATED_PERSONAL_SETTINGS
     )
 
     result = run_hook(settings_repository, "session-start.sh")
@@ -157,12 +159,12 @@ def test_keeps_settings_edited_since_the_last_sync(
     settings_repository: ScratchRepository,
 ):
     settings_repository.update_notes_branch_file(
-        SETTINGS_PATH_ON_NOTES_BRANCH, PERSONAL_SETTINGS
+        PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, PERSONAL_SETTINGS
     )
     run_hook(settings_repository, "session-start.sh")
-    settings_repository.write(LOCAL_SETTINGS_PATH, LOCALLY_EDITED_SETTINGS)
+    settings_repository.write(PersonalNotesPath.LOCAL_SETTINGS, LOCALLY_EDITED_SETTINGS)
     settings_repository.update_notes_branch_file(
-        SETTINGS_PATH_ON_NOTES_BRANCH, UPDATED_PERSONAL_SETTINGS
+        PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, UPDATED_PERSONAL_SETTINGS
     )
 
     result = run_hook(settings_repository, "session-start.sh")
@@ -170,7 +172,7 @@ def test_keeps_settings_edited_since_the_last_sync(
     assert result.returncode == 0, result.stderr
     assert local_settings_of(settings_repository) == LOCALLY_EDITED_SETTINGS
     assert (
-        f"local settings:  kept local edits to {LOCAL_SETTINGS_PATH} - run "
+        f"local settings:  kept local edits to {PersonalNotesPath.LOCAL_SETTINGS} - run "
         "save-personal-settings.sh to push them" in result.stdout
     )
 
@@ -178,9 +180,9 @@ def test_keeps_settings_edited_since_the_last_sync(
 def test_keeps_settings_that_were_never_synced(
     settings_repository: ScratchRepository,
 ):
-    settings_repository.write(LOCAL_SETTINGS_PATH, LOCALLY_EDITED_SETTINGS)
+    settings_repository.write(PersonalNotesPath.LOCAL_SETTINGS, LOCALLY_EDITED_SETTINGS)
     settings_repository.update_notes_branch_file(
-        SETTINGS_PATH_ON_NOTES_BRANCH, PERSONAL_SETTINGS
+        PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, PERSONAL_SETTINGS
     )
 
     result = run_hook(settings_repository, "session-start.sh")
@@ -193,7 +195,7 @@ def test_keeps_settings_that_were_never_synced(
 
 
 def test_saves_local_settings_to_the_branch(settings_repository: ScratchRepository):
-    settings_repository.write(LOCAL_SETTINGS_PATH, PERSONAL_SETTINGS)
+    settings_repository.write(PersonalNotesPath.LOCAL_SETTINGS, PERSONAL_SETTINGS)
 
     result = run_hook(settings_repository, "save-personal-settings.sh")
 
@@ -204,10 +206,10 @@ def test_saves_local_settings_to_the_branch(settings_repository: ScratchReposito
 def test_saved_settings_are_no_longer_treated_as_local_edits(
     settings_repository: ScratchRepository,
 ):
-    settings_repository.write(LOCAL_SETTINGS_PATH, LOCALLY_EDITED_SETTINGS)
+    settings_repository.write(PersonalNotesPath.LOCAL_SETTINGS, LOCALLY_EDITED_SETTINGS)
     run_hook(settings_repository, "save-personal-settings.sh")
     settings_repository.update_notes_branch_file(
-        SETTINGS_PATH_ON_NOTES_BRANCH, UPDATED_PERSONAL_SETTINGS
+        PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, UPDATED_PERSONAL_SETTINGS
     )
 
     result = run_hook(settings_repository, "session-start.sh")
@@ -223,7 +225,7 @@ def test_saving_without_local_settings_fails_with_a_clear_message(
 
     assert result.returncode == 1
     assert result.stderr.startswith(
-        f"No {LOCAL_SETTINGS_PATH} at the project root "
-        f"({settings_repository.project_root / LOCAL_SETTINGS_PATH})"
+        f"No {PersonalNotesPath.LOCAL_SETTINGS} at the project root "
+        f"({settings_repository.project_root / PersonalNotesPath.LOCAL_SETTINGS})"
         " - nothing to save.\n"
     )
