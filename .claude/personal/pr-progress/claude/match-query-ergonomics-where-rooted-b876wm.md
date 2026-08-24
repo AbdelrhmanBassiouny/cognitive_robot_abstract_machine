@@ -56,3 +56,27 @@ the deliverable is a rename, not a design decision.
 - `subscribe_pr_activity` on tracking issue #181 was again denied by the
   auto-mode classifier; #181's comments were read directly instead.
 
+
+## Second half of the round: the landing-order hazard came due
+
+- After the rename was pushed, #182 read `mergeable_state: dirty` and carried
+  the `needs-resolution` label: #186 had merged to `main` that morning, so this
+  branch is the second lander of the constraint roadmap 13/14 recorded.
+- `main` merged in. Two conflicts, both predicted: `mapped_variable.py` (the
+  abstract `Index` - `_rebuild_on_` moved onto `IndexByValue` /
+  `IndexByExpression`, each naming its own class, and the pre-split
+  `_apply_mapping_` dropped) and `exceptions.py` (additive only; all four new
+  exception classes kept).
+- `test/krrood_test/test_eql` after the merge: 1202 passed, 3 skipped.
+- PR description rewritten: the landing-order section now records the
+  adjustment as made rather than pending.
+
+## Still open at the end of this session
+
+- CI is queued on the merged head `49feb244`; its result is not known here.
+- The `needs-resolution` label is left in place - the stack tooling clears it
+  itself once the branch merges cleanly again.
+- The PR description's `## Promote` block did not survive the description
+  rewrite. The branch is already promoted (upstream cram2#563), so the spent
+  link costs nothing, and the tooling rebuilds that block when it needs one.
+
