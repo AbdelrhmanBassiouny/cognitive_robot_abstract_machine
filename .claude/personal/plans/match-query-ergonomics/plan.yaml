@@ -170,6 +170,14 @@ items:
       both docstrings). No behaviour change; both are private to Query and no
       reader of either old name is left in the repository. test_eql 1191
       passed, 3 skipped.
+      The landing-order hazard came due in the same session: #186 had merged
+      to main, so #182 went mergeable_state dirty and this branch is the
+      second lander. main is merged in and the recorded adjustment made -
+      Index is abstract, so _rebuild_on_ moved onto IndexByValue and
+      IndexByExpression, each naming its own class; exceptions.py conflicted
+      additively only and all four new classes are kept. test_eql 1202
+      passed, 3 skipped after the merge. The needs-resolution label is left
+      for the stack tooling to clear itself.
   - id: match-underscore-rename-and-forwarding
     title: "Match behaves like a variable and like a query: underscore-sandwich rename, forwarding, and the shared interfaces"
     branch: claude/match-query-interface-refactor-l55jym

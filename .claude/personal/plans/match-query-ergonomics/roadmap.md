@@ -1017,3 +1017,31 @@ dependencies. A Python 3.12 venv with `krrood`, `probabilistic_model`,
 test can be collected at all. Also worth knowing: running the verbalization tests rewrites
 `test_verbalization/verbalization_results.py`, so check `git status` before committing -
 that edit is the suite's, not yours.
+
+**And the landing-order hazard came due in the same session.** After the rename was
+pushed, #182 read `mergeable_state: dirty` and carried the `needs-resolution` label a
+maintenance pass had added: #186 merged to `main` earlier that day, which is the second
+half of the constraint sections 13 and 14 recorded. So this branch is the second lander,
+and it carries the adjustment both PRs' descriptions name.
+
+Two conflicts, both exactly as predicted:
+
+- `core/mapped_variable.py`: `Index` is now abstract, and this branch's
+  `Index._rebuild_on_` constructed it directly. The abstract base keeps neither the
+  pre-split `_apply_mapping_` nor a constructor of itself; `_rebuild_on_` moved onto
+  `IndexByValue` and `IndexByExpression`, each naming its own class - the same shape
+  `Attribute._rebuild_on_` has, and the same change #186 already made for `dao.py`.
+  Writing it once on the base as `type(self)` would have been shorter and wrong for the
+  reason the hook exists (sections 8 and 10): a new mapping type must not be able to
+  inherit a rebuild it never wrote.
+- `exceptions.py`: additive only - both sides appended new exception classes at the same
+  point. All four are kept (`AmbiguousQueryAttribute`, `UnselectedQueryVariable` from
+  here; `MultipleValuesAlongAccessPath`, `ReadOnlyMapping` from #186).
+
+`query.py`'s `isinstance(step, Index)` needed nothing, as section 13 said. Verification
+after the merge: `test/krrood_test/test_eql` 1202 passed, 3 skipped - the count rises
+because #186's own tests arrive with it.
+
+The `needs-resolution` label is left in place: the stack tooling clears it itself once
+the branch merges cleanly again, and hand-clearing it would be managing a signal that is
+not this session's.
