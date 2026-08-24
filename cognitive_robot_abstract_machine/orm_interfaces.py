@@ -19,8 +19,9 @@ from krrood.class_diagrams.progress_report import (
     ProgressEnvironmentVariable,
 )
 from tqdm import tqdm
-from typing_extensions import Optional, Sequence
+from typing_extensions import List, Optional, Sequence, Tuple
 
+from cognitive_robot_abstract_machine import orm_generation
 from cognitive_robot_abstract_machine.exceptions import (
     MissingOrmGeneratorError,
     OrmGenerationFailedError,
@@ -153,6 +154,11 @@ class OrmInterface:
     Root of the checkout the package lives in.
     """
 
+    dependencies: Tuple[str, ...] = ()
+    """
+    Names of the packages whose ORM model this interface builds on.
+    """
+
     @property
     def generator(self) -> Path:
         """
@@ -181,69 +187,74 @@ class OrmInterface:
         """
         self.path.unlink(missing_ok=True)
 
-    def generate(self, progress: BuildProgress) -> None:
+    def require_generator(self) -> None:
         """
-        Run this package's generator in a subprocess.
+        Make sure the package still has the script that generates its interface.
 
-        :param progress: What to report the classes the generator finishes to.
         :raises MissingOrmGeneratorError: If the package has no generator.
-        :raises OrmGenerationFailedError: If the generator exits without having built
-            the interface.
         """
         if not self.generator.exists():
             raise MissingOrmGeneratorError(self.package_name, self.generator)
-        progress.start(self.package_name)
-        if progress.show_generator_output:
-            self.run_writing_to_the_terminal()
-        else:
-            self.run_reporting_to(progress)
-        progress.finish()
 
-    def run_writing_to_the_terminal(self) -> None:
+
+# %% reading a run's output back
+
+
+@dataclass
+class GenerationOutput:
+    """
+    What a generation run writes, read back one line at a time.
+    """
+
+    progress: BuildProgress
+    """
+    What the classes and interfaces the run finishes are reported to.
+    """
+
+    package_name: Optional[str] = field(default=None, init=False)
+    """
+    The package whose generator is running, absent until the run names one.
+    """
+
+    written: List[str] = field(default_factory=list, init=False)
+    """
+    The lines carrying no report, kept for a failure to quote.
+    """
+
+    def read(self, line: str) -> None:
         """
-        Run the generator with the terminal, so its logging can be read as it happens.
+        Take in one line of the run's output.
 
-        :raises OrmGenerationFailedError: If the generator exits without having built
-            the interface.
+        :param line: The line, as the run wrote it.
         """
-        result = subprocess.run(
-            [sys.executable, str(self.generator)], cwd=self.generator.parent
-        )
-        if result.returncode != 0:
-            raise OrmGenerationFailedError(self.package_name, "")
+        started = orm_generation.GeneratorStarted.from_line(line)
+        if started is not None:
+            self.start(started.package_name)
+            return
+        report = ClassDiagramProgress.from_line(line)
+        if report is None:
+            self.written.append(line)
+            return
+        self.progress.advance(report)
 
-    def run_reporting_to(self, progress: BuildProgress) -> None:
+    def start(self, package_name: str) -> None:
         """
-        Run the generator, counting the classes it reports and keeping the rest of what
-        it writes for a failure to report.
+        Begin reading the output of a package's generator.
 
-        A generator logs its way through a whole class hierarchy, which would bury the
-        bar, so its logging is held back rather than shown.
-
-        :param progress: What to report the classes it finishes to.
-        :raises OrmGenerationFailedError: If the generator exits without having built
-            the interface.
+        :param package_name: The package the run has moved on to.
         """
-        generation = subprocess.Popen(
-            [sys.executable, str(self.generator)],
-            cwd=self.generator.parent,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            env={
-                **os.environ,
-                ProgressEnvironmentVariable.REPORT_PROGRESS: PROGRESS_REQUESTED,
-            },
-        )
-        written = []
-        for line in generation.stdout:
-            report = ClassDiagramProgress.from_line(line)
-            if report is None:
-                written.append(line)
-                continue
-            progress.advance(report)
-        if generation.wait() != 0:
-            raise OrmGenerationFailedError(self.package_name, "".join(written))
+        if self.package_name is not None:
+            self.progress.finish()
+        self.package_name = package_name
+        self.progress.start(package_name)
+
+    def finish(self) -> None:
+        """
+        Count the interface being generated as done.
+        """
+        if self.package_name is None:
+            return
+        self.progress.finish()
 
 
 # %% every interface of the repository
@@ -257,16 +268,15 @@ class WorkspaceOrmInterfaces:
 
     interfaces: Sequence[OrmInterface]
     """
-    The interfaces ordered by dependency: each generator imports the already generated
-    interfaces of the packages listed before it.
+    The interfaces in the order they are built, which follows their dependencies.
     """
 
     def regenerate(self, show_generator_output: bool = False) -> None:
         """
         Build every interface anew, from an empty state and in dependency order.
 
-        ..note:: This takes about a minute and a half, since every package's generator
-            introspects its whole class hierarchy.
+        ..note:: This takes about a minute, since every package's generator introspects
+            its whole class hierarchy.
 
         :param show_generator_output: Whether to let the generators write to the
             terminal. Their logging and the progress bar cannot share it, so asking for
@@ -274,22 +284,99 @@ class WorkspaceOrmInterfaces:
         """
         for interface in self.interfaces:
             interface.remove()
+        for interface in self.interfaces:
+            interface.require_generator()
 
         with BuildProgress(len(self.interfaces), show_generator_output) as progress:
-            for interface in self.interfaces:
-                interface.generate(progress)
+            if show_generator_output:
+                self.run_writing_to_the_terminal()
+                return
+            self.run_reporting_to(progress)
 
+    @property
+    def command(self) -> List[str]:
+        """
+        The command that runs every generator in one interpreter.
 
-WORKSPACE_ORM_INTERFACES = WorkspaceOrmInterfaces(
-    tuple(
-        OrmInterface(package_name, REPOSITORY_ROOT)
-        for package_name in (
-            "semantic_digital_twin",
-            "giskardpy",
-            "coraplex",
-            "segmind",
-            "experiments",
+        ..note:: ``-P`` keeps the working directory off :data:`sys.path`, where the
+            source folder of a package would shadow the installed one.
+        """
+        return [
+            sys.executable,
+            "-P",
+            "-m",
+            orm_generation.__name__,
+            *(str(interface.generator) for interface in self.interfaces),
+        ]
+
+    def run_writing_to_the_terminal(self) -> None:
+        """
+        Run the generators with the terminal, so their logging can be read as it
+        happens.
+
+        :raises OrmGenerationFailedError: If a generator exits without having built its
+            interface.
+        """
+        if subprocess.run(self.command).returncode != 0:
+            raise OrmGenerationFailedError(self.unbuilt_package_name, "")
+
+    def run_reporting_to(self, progress: BuildProgress) -> None:
+        """
+        Run the generators, counting the classes they report and keeping the rest of
+        what they write for a failure to report.
+
+        A generator logs its way through a whole class hierarchy, which would bury the
+        bar, so its logging is held back rather than shown.
+
+        :param progress: What to report the classes and interfaces they finish to.
+        :raises OrmGenerationFailedError: If a generator exits without having built its
+            interface.
+        """
+        generation = subprocess.Popen(
+            self.command,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            env={
+                **os.environ,
+                ProgressEnvironmentVariable.REPORT_PROGRESS: PROGRESS_REQUESTED,
+            },
         )
+        output = GenerationOutput(progress)
+        for line in generation.stdout:
+            output.read(line)
+        if generation.wait() != 0:
+            raise OrmGenerationFailedError(
+                self.unbuilt_package_name, "".join(output.written)
+            )
+        output.finish()
+
+    @property
+    def unbuilt_package_name(self) -> str:
+        """
+        The package whose interface a failed build left unwritten.
+
+        A generator writes its interface last, so the first one missing is the one that
+        gave up.
+        """
+        for interface in self.interfaces:
+            if not interface.path.exists():
+                return interface.package_name
+        return self.interfaces[-1].package_name
+
+
+# Every generator runs in the same interpreter, which imports each package once for the
+# whole build instead of once per generator. The order therefore has to satisfy two
+# constraints: a package follows the packages whose ORM model it builds on, and it
+# precedes every package it does not build on that defines alternative mappings, because
+# ORMatic collects those from all imported subclasses.
+WORKSPACE_ORM_INTERFACES = WorkspaceOrmInterfaces(
+    (
+        OrmInterface("semantic_digital_twin", REPOSITORY_ROOT),
+        OrmInterface("giskardpy", REPOSITORY_ROOT, ("semantic_digital_twin",)),
+        OrmInterface("segmind", REPOSITORY_ROOT, ("semantic_digital_twin",)),
+        OrmInterface("coraplex", REPOSITORY_ROOT, ("giskardpy",)),
+        OrmInterface("experiments", REPOSITORY_ROOT, ("coraplex",)),
     )
 )
 """
