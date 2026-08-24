@@ -2731,7 +2731,7 @@ items:
     branch: claude/plan-item-kickoff-modes-p1yuwc
     track: personal-data
     depends_on: []
-    status: in_progress
+    status: done
     pull_request_number: 149
     session: https://claude.ai/code/session_015v3RfcEvtzNj47uEMac9p9
     notes: >
