@@ -906,3 +906,68 @@ work; a bullet in someone else's test list is not.
 Neither blocks #192, which refuses both cases loudly rather than shipping a silent wrong
 answer. `factories-unwrap-match-and-migrate` already owns the third finding (selecting a
 match) and needed no new item, only the measurement section 19 added to it.
+
+## 21. 2026-08-24: the aggregate signature, and the second read one line below it
+
+`/plan-item-kickoff match-query-ergonomics aggregate-signature-reads-a-missing-attribute`,
+in auto mode. Branch `claude/plan-item-kickoff-match-query-npzr78`, PR #196 (draft, `bug`),
+off `main` at `2b44f1e5`. `depends_on` is empty and the scope check
+(`check_scope_overlap.py`, base `origin/main`) reports no path shared with #182 or #192, so
+the item is independent exactly as section 20 recorded.
+
+**Re-measured on today's `main`, not taken on trust.** Two `Sum`s over different chains:
+
+```
+sum(statement.revenue.money.amount)  ->  ('Sum', None, (('_chain_expression_', None),))
+sum(statement.revenue.money.tax)     ->  ('Sum', None, (('_chain_expression_', None),))
+```
+
+and the user-visible consequence, which section 20 named but nobody had written down:
+
+```
+For the Statement with the highest sum of the amount of money of its revenue,
+report the month of its period, the sum, and the sum of the tax of money of its revenue
+```
+
+The query is ordered by the *tax* sum. The ranking frame names the *amount* sum, and the
+body reduces that one to "the sum" while spelling the ranked one out — the two are exactly
+swapped, because `_ranked_aggregate_column` returns the first selected aggregate whose
+signature "matches" and every `Sum` matches every other.
+
+**Why the seven ranking tests never caught it.** Each of them either ranks by the only
+aggregate selected, or — `test_ranked_report_reduces_only_the_ranked_aggregate` — by an
+aggregate of a *different kind*, where `kind` alone separates the signatures. So the
+failing case needs two aggregates of one kind, which no test had.
+
+**The fix is the field the class defines.** `Aggregator` is a `UnaryExpression`; the
+aggregated expression is its `_child_`, which is what `_source_root_` and
+`_leaf_attribute_` already read. One word.
+
+**A second read of the same shape, one line below, deliberately not fixed here.** The path
+is built as `(step._attribute_name_, step._owner_class_)` for every step, and both names
+belong to `Attribute` alone — so an `Index`, `Call` or `FlatVariable` step takes the same
+silent-symbolic read. Measured on `main`:
+
+```
+order.lines[0].price  and  order.lines[1].price   ->  equal signatures
+```
+
+It is the same root cause, but not the same fix. No existing name is a sound structural key
+for a step: `_name_` is a display name and `Call._name_` drops the call's arguments
+entirely, so a faithful key needs each mapping subclass to report its own constructor
+arguments — the shape #182 is reintroducing as `_rebuild_on_` and #186 landed as the
+hierarchy. That is core API in `mapped_variable.py`, which #182 is rewriting right now, and
+adding it would both widen a focused bug-fix PR past one root cause and collide with an
+in-flight branch. Per section 20's own rule, it is an item rather than a paragraph:
+`chain-signature-reads-attribute-only-names`, `mapping-semantics`, blocked on #182 landing.
+`get_clean_name_from_mapped_variable` already guards the identical read with
+`isinstance(step, Attribute)`, so the guard is established in this codebase, not invented.
+
+The consequence to be honest about: this PR routes aggregates through that path walk for
+the first time, so `sum(o.lines[0].price)` and `sum(o.lines[1].price)` still collide after
+it. That is not a regression — it is the pre-existing defect the new item owns — but it is
+why this PR's fix is necessary and not sufficient.
+
+**A plan-state correction found on the way.** #186
+(`chain-outside-evaluation-truncates-silently`) merged on 2026-08-24 while the manifest
+still read `in_progress`; its status is corrected to `done` in the same save.
