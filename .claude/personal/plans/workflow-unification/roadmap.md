@@ -9396,3 +9396,30 @@ already says to relay it as a clean answer, but the exit code works against that
 description is rewritten to match. Left as the user found it in one respect, flagged rather
 than acted on: the pull request is out of draft, and nothing on record says whether the user
 marked it ready or an earlier session did, so it was not re-drafted after this push.
+
+### The promote link cannot be written from a session, which is new
+
+Rewriting the description ate its own `## Promote` section — the same symptom recorded on #139
+on 2026-08-12, but not the same cause. There the heading appeared twice and
+`description_with_promotion_link` partitioned on the wrong one. Here the heading appears once
+and the *link* is what vanishes: the upstream compare URL, and every character after it,
+including the attribution footer.
+
+Reproduced deliberately rather than assumed. Two `update_pull_request` calls carrying the same
+body, two reads back through a different tool (`list_pull_requests --fields body`, so the read
+path is not the suspect), and both stored bodies end at `` ## Promote\n\n```` `` — the two
+opening backticks and the two closing ones, with the `cram2` URL between them gone. The obvious
+explanation is this session's own GitHub scope, which covers the fork and not `cram2`: a URL
+naming an out-of-scope repository does not survive the write.
+
+Left absent rather than fought. `description_with_promotion_link` appends both the heading and
+the link when the description carries neither, so a pass restores it from the runner, where the
+scope does not apply — which is also the only place it was ever written from. What the
+description now carries in its place is a short section saying so, positioned before the point
+a promote would truncate at.
+
+**Generalizable:** a session can read the upstream through an Action (that is what
+`upstream-reviews` is for) but it cannot even quote an upstream URL into a fork pull request.
+Anything naming `cram2` in a body written from a session should be assumed lost, and the
+symptom is silent truncation from that point on, not an error. The footer being gone too is
+what makes it look like a formatting bug rather than a scrub.
