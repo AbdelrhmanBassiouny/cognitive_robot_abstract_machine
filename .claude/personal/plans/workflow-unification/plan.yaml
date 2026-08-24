@@ -4227,3 +4227,10 @@ items:
     track: stack-tooling
     depends_on: []
     status: in_progress
+
+  - id: session-branch-base
+    title: "Cut session branches from main, not the integration branch"
+    branch: null
+    track: stack-tooling
+    depends_on: []
+    status: not_started

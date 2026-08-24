@@ -9527,3 +9527,51 @@ a collision, recorded so it is a choice rather than a merge conflict.
 it from board.json" and proposes an event-triggered re-sweep on `pull_request: closed`. That is
 about *when* the sweep runs. This item is about the sweep computing the wrong answer whenever
 it does run. Both are needed; neither substitutes for the other.
+
+## Update 2026-08-24 (new item): `session-branch-base` — sessions are cut from the integration branch
+
+Found while checking whether the fork's default branch caused `unfetched-parent-branches`. It
+did not, but it is causing something else, and it is already live rather than latent.
+
+### What is true
+
+`git ls-remote --symref origin HEAD` resolves to `refs/heads/integration`. The fork's default
+branch is the regenerated integration branch `integration-20260823-082804` that
+`integration-branch` (#154) exists to build — a branch whose whole design is to be rebuilt from
+scratch and never merged out of.
+
+The session investigating #64 was handed the branch
+`claude/maintenance-tooling-pinning-gdod18` at HEAD `899a04aac` — byte-identical to
+`origin/integration`: 78 commits behind `main`, carrying eight unlanded branches' merge
+commits. That branch existed only locally; `git ls-remote --heads origin` had no such ref, so
+the clone created it at the default branch's tip. Every session cut from this fork starts the
+same way, and a pull request opened from one would carry all of it.
+
+### What it does not affect
+
+Not the cause of `unfetched-parent-branches`. cram2's default branch is still `main` (verified
+by `git ls-remote --symref cram2 HEAD`, and cram2 has no `integration` branch at all), and
+`upstream_base` is pinned in `.claude/stack/stack.toml`, so the stack tooling never reads a
+default branch. No open fork pull request currently bases on `integration` either.
+
+### What else reads it
+
+`default_branch_name()` in `resolve-personal-notes-config.sh` reads
+`refs/remotes/origin/HEAD` when it is set, and `pr_progress_path` suppresses PR-progress for
+whatever it returns — so in any clone that has the ref set, progress is tracked for `main` and
+suppressed for `integration`, the wrong way round. A pull request opened through the GitHub UI
+would also default its base to `integration`, corrupting the base-is-parent invariant the whole
+stack rests on.
+
+### Adjacent, and not the same as `fresh-base-at-session-start`
+
+#188 fast-forwards `main` at session start and reports "this branch is N commits behind main —
+merge or rebase it before planning on a stale base". It printed exactly that for the session
+above, so it *detects* the symptom; it does not prevent the wrong base, and because it reads
+`upstream_base` rather than `origin/HEAD` it is itself unaffected by the switch.
+
+### The shape of the fix
+
+Restore the fork's default branch to `main`, and make a session refuse to plan or open a pull
+request from a branch not derived from it — so a default-branch change cannot silently re-point
+every future session's base again. Recorded with no branch; a later session picks it up.
