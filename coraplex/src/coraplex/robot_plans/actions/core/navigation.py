@@ -9,7 +9,7 @@ from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.factories import variable_from, and_, ConditionType
 from coraplex.config.action_conf import ActionConfig
 from coraplex.datastructures.dataclasses import Context
-from coraplex.plans.attachment_nodes import BoardNode, LeaveNode
+from coraplex.plans.attachment_nodes import AttachNode, DetachNode
 from coraplex.plans.factories import execute_single, pause_until, sequential
 from coraplex.plans.plan_node import PlanNode
 from giskardpy.motion_statechart.goals.templates import Parallel
@@ -133,12 +133,12 @@ class ElevatorNavigation(ActionDescription):
         return sequential(
             [
                 NavigateAction(self._cabin_pose),
-                BoardNode(body=self.robot.root, new_parent=self.elevator.root),
+                AttachNode(body=self.robot.root, new_parent=self.elevator.root),
                 pause_until(
                     [NavigateAction(self._exit_pose)],
                     monitor=self._elevator_open_at_target_floor,
                 ),
-                LeaveNode(body=self.robot.root, new_parent=self.world.root),
+                DetachNode(body=self.robot.root, new_parent=self.world.root),
             ]
         )
 

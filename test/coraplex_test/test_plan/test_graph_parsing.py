@@ -15,7 +15,7 @@ from coraplex.perception import PerceptionQuery
 from coraplex.plans.executables import (
     Executable,
     GiskardExecutable,
-    ModelChangeExecutable,
+    MoveBranchExecutable,
 )
 from coraplex.plans.factories import (
     cancel_when,
@@ -330,7 +330,7 @@ def test_parse_pick_up(immutable_model_world):
 
     assert len(executable.execution_list) == 3
     assert type(executable.execution_list[0]) == GiskardExecutable
-    assert type(executable.execution_list[1]) == ModelChangeExecutable
+    assert type(executable.execution_list[1]) == MoveBranchExecutable
     assert type(executable.execution_list[2]) == GiskardExecutable
 
 

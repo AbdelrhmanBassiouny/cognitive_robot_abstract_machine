@@ -1,12 +1,10 @@
 from dataclasses import dataclass, field
 
 from coraplex.plans.executables import (
-    Executable,
-    ModelChangeExecutable,
     MoveBranchExecutable,
 )
-from coraplex.plans.plan_node import PlanNode, ExecutionBoundaryNode
-from semantic_digital_twin.world_description.world_entity import Body
+from coraplex.plans.plan_node import ExecutionBoundaryNode
+from semantic_digital_twin.world_description.world_entity import KinematicStructureEntity
 
 
 @dataclass
@@ -20,12 +18,12 @@ class ModelChangeNode(ExecutionBoundaryNode):
     pycram.plan.executables
     """
 
-    body: Body = field(kw_only=True)
+    body: KinematicStructureEntity = field(kw_only=True)
     """
     Body that should be moved in the world model.
     """
 
-    new_parent: Body = field(kw_only=True, default=None)
+    new_parent: KinematicStructureEntity = field(kw_only=True, default=None)
     """
     New parent to which the body should be attached to.
     """
@@ -40,10 +38,6 @@ class ModelChangeNode(ExecutionBoundaryNode):
         return MoveBranchExecutable(
             context=self.plan.context, body=self.body, new_parent=self.new_parent
         )
-        #
-        # return ModelChangeExecutable(
-        #     context=self.plan.context, body=self.body, new_parent=self.new_parent
-        # )
 
 
 @dataclass
@@ -63,35 +57,4 @@ class DetachNode(ModelChangeNode):
     world root (e.g. after placing an object).
 
     Kept as a distinct type so it can be located by type in the plan.
-    """
-
-
-@dataclass
-class RideNode(ModelChangeNode):
-    """
-    Model change that moves a body onto another body without collapsing the moved body's
-    own connection, so a body that is driven stays drivable after the move.
-
-    Its subclasses name the two directions of the move, so a plan reads as the situation
-    it describes rather than as the model change it performs.
-    """
-
-    def parse(self) -> MoveBranchExecutable:
-        return MoveBranchExecutable(
-            context=self.plan.context, body=self.body, new_parent=self.new_parent
-        )
-
-
-@dataclass
-class BoardNode(RideNode):
-    """
-    Model change that puts a body aboard a carrier, so whatever moves the carrier moves
-    the body with it (e.g. a robot riding an elevator).
-    """
-
-
-@dataclass
-class LeaveNode(RideNode):
-    """
-    Model change that takes a body off its carrier and back onto the world.
     """

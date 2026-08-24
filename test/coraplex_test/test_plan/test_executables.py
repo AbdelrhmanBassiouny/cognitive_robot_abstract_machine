@@ -14,6 +14,7 @@ from giskardpy.motion_statechart.graph_node import CancelMotion, EndMotion, Task
 from giskardpy.motion_statechart.monitors.payload_monitors import (
     ThreadedPredicateMonitor,
 )
+from giskardpy.motion_statechart.tasks.cartesian_tasks import CartesianPose
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
@@ -74,7 +75,7 @@ def test_parsing_populates_the_chart_with_the_motions(reach_action_executable):
     chart = reach_action_executable.motion_state_chart
 
     assert len(tasks) == 2
-    assert chart.get_nodes_by_type(Task) == tasks
+    assert chart.get_nodes_by_type(CartesianPose) == tasks
     assert reach_action_executable.root_node in chart.nodes
     for task in tasks:
         assert task in chart.nodes
