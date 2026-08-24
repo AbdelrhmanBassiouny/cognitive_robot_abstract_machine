@@ -6,17 +6,14 @@ simulated MuJoCo world by driving each joint's own position-servo actuator direc
 Giskard never touches the live, physically simulated world under this module: it only
 ever ticks against a :func:`copy.deepcopy` of it, so it cannot race
 :class:`~semantic_digital_twin.adapters.multi_sim.MujocoSynchronizer`'s own
-physics-thread state sync -- the race documented in :mod:`tracy_equipment`'s own
-module docstring, and confirmed this session to also stall a purely kinematic joint's
-motion once solved together with a physically simulated one. Execution then drives
-real MuJoCo actuators the same way :mod:`demo`'s own park loop does, so tracking is
-genuinely closed-loop against measured physics, not open-loop trajectory replay.
+physics-thread state sync (see :mod:`~experiments.tracy_experiments.equipment`'s own
+module docstring). Execution then drives real MuJoCo actuators the same way, so tracking
+is genuinely closed-loop against measured physics, not open-loop trajectory replay.
 
 Every motion here, including park and gripper open/close, is planned this way rather
 than commanded straight to the target: see :func:`plan_joint_trajectory`'s own
-docstring for why commanding a target directly, with no velocity profile at all (as an
-earlier version of this module, and :mod:`demo`'s own park loop, both do), lets a joint
-move far faster than its real hardware ever could.
+docstring for why commanding a target directly, with no velocity profile at all, lets a
+joint move far faster than its real hardware ever could.
 """
 
 from __future__ import annotations
@@ -37,11 +34,13 @@ from giskardpy.motion_statechart.tasks.cartesian_tasks import (
 )
 from giskardpy.motion_statechart.tasks.joint_tasks import JointPositionList
 from giskardpy.qp.qp_controller_config import QPControllerConfig
-from typing_extensions import Dict, List
+from typing_extensions import Dict, List, Tuple
 
 from coraplex.datastructures.enums import Arms
 from coraplex.exceptions import MotionDidNotFinish
 from coraplex.plans.executables import GiskardExecutable
+from experiments.tracy_experiments.equipment import joint_state_of_type
+from experiments.tracy_experiments.real_time_simulation import RealTimeSimulation
 from semantic_digital_twin.datastructures.definitions import (
     GripperState,
     StaticJointState,
@@ -51,10 +50,8 @@ from semantic_digital_twin.robots.tracy import Tracy
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import ActiveConnection1DOF
-from semantic_digital_twin.world_description.world_entity import Actuator
-
-from real_time_simulation import RealTimeSimulation
-from tracy_equipment import joint_state_of_type
+from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
+from semantic_digital_twin.world_description.world_entity import Actuator, Body
 
 logger = logging.getLogger(__name__)
 
@@ -95,11 +92,6 @@ def _plan_trajectory(
     Tick ``task`` (already built against ``scratch_world``) until it converges,
     recording ``joint_connections``' own positions after every tick.
 
-    Shared by :func:`plan_cartesian_trajectory` and :func:`plan_joint_trajectory`: both
-    are one Giskard task ticked in isolation until :meth:`~giskardpy.motion_statechart.
-    motion_statechart.MotionStatechart.is_end_motion`, differing only in which kind of
-    task drives the goal.
-
     :param scratch_world: The isolated world ``task`` was built against.
     :param task: The Giskard task to converge.
     :param joint_connections: Which connections' positions to record each tick.
@@ -115,11 +107,6 @@ def _plan_trajectory(
     """
     motion_state_chart = MotionStatechart()
     motion_state_chart.add_node(task)
-    # Unlike the live Giskard execution this replaces, collision avoidance defaults to
-    # on here: this is the only place a path is actually chosen (execution just
-    # replays it), and skipping it lets Giskard route straight through the table --
-    # confirmed directly, a naive plan drove left_wrist_2_link into real contact with
-    # the table and stalled there.
     if avoid_collisions:
         motion_state_chart.add_node(ExternalCollisionAvoidance())
     end_motion = EndMotion()
@@ -173,28 +160,17 @@ def plan_cartesian_trajectory(
     resulting joint-space trajectory as a list of per-tick position snapshots for the
     given arm's own joints.
 
-    Ticks Giskard purely in-memory against a :func:`copy.deepcopy` of ``world`` -- a
-    fresh clone with no simulator or state-change callbacks attached (see
-    :meth:`~semantic_digital_twin.world.World.__deepcopy__`) -- so nothing else ever
-    reads or writes it while Giskard solves; the live world passed in is never
-    modified by this function.
-
     :param world: The live world to clone; never itself modified.
     :param arm_side: Which arm's tool centre point should reach ``goal_pose``.
     :param goal_pose: Target pose for the arm's tool centre point.
-    :param translation_only: If True, only the tip's position is constrained (matching
-        ``MovementType.TRANSLATION``); otherwise both position and orientation are.
+    :param translation_only: If True, only the tip's position is constrained; otherwise
+        both position and orientation are.
     :param avoid_collisions: See :func:`_plan_trajectory`.
     :param max_ticks: Tick budget before giving up.
     :return: One dict of joint name to position per tick, in order.
     :raises MotionDidNotFinish: If the goal was not reached within ``max_ticks``.
     """
     scratch_world = deepcopy(world)
-    # `deepcopy` replays the original world's own model-modification history (see
-    # `World.__deepcopy__`), which already includes whatever `Tracy.from_world` call
-    # produced the live `robot` passed in -- re-running it here would try to assign
-    # the same robot parts to a second robot and fail. The clone already carries its
-    # own equivalent `Tracy` semantic annotation; just look it up.
     [scratch_robot] = scratch_world.get_semantic_annotations_by_type(Tracy)
     scratch_arm = _arm_of(scratch_robot, arm_side)
     joint_connections = [
@@ -232,15 +208,10 @@ def plan_joint_trajectory(
     resulting trajectory as a list of per-tick position snapshots.
 
     Uses Giskard's own :class:`~giskardpy.motion_statechart.tasks.joint_tasks.
-    JointPositionList` task, the same one a live-executed ``ParkArmsAction``/
-    ``MoveGripperMotion`` builds -- which clamps its own reference velocity to each
-    joint's own real ``dof.limits.upper.velocity`` -- so, unlike commanding a target
-    straight to a position-servo actuator with no velocity profile at all (this
-    function's own first version, and :mod:`demo`'s own park loop), every joint stays
-    within the speed the real robot could actually achieve. Confirmed directly: a
-    joint whose own real hardware caps it at 0.13 rad/s peaked at nearly 7 rad/s when
-    commanded that way -- over 50x faster than the real robot could ever move, and
-    meaningless as a training signal for real-world velocities.
+    JointPositionList` task, which clamps its own reference velocity to each joint's own
+    real ``dof.limits.upper.velocity``, so every joint stays within the speed the real
+    robot could actually achieve, unlike commanding a target straight to a
+    position-servo actuator with no velocity profile at all.
 
     :param world: The live world to clone; never itself modified.
     :param targets: Target position by joint name.
@@ -269,20 +240,12 @@ def follow_joint_trajectory(
 ) -> None:
     """
     Drive ``actuators`` through ``trajectory`` on the real, physically simulated world,
-    one recorded waypoint per :meth:`~real_time_simulation.RealTimeSimulation.advance`
-    step, then hold the final waypoint until every joint settles.
-
-    Each joint's own real position-servo actuator does the actual tracking, reacting to
-    genuine measured position every physics step -- this is closed-loop tracking of a
-    moving reference, not open-loop trajectory replay. A high-inertia joint (e.g. the
-    shoulder, carrying the whole rest of the arm) can lag the reference throughout a
-    fast-moving trajectory, so the final waypoint is held and polled for convergence the
-    same way :func:`park_arms` does, rather than ending the instant the last waypoint
-    was sent.
+    one recorded waypoint per :meth:`~experiments.tracy_experiments.real_time_simulation.
+    RealTimeSimulation.advance` step, then hold the final waypoint until every joint
+    settles.
 
     :param sim: The running real-time simulation to drive.
-    :param actuators: Every joint's own actuator, keyed by joint name (see
-        :func:`tracy_equipment.equip_arms_with_servos`).
+    :param actuators: Every joint's own actuator, keyed by joint name.
     :param trajectory: Waypoints from :func:`plan_cartesian_trajectory`, in order.
     :param tick_period: Simulated seconds to advance per waypoint; matches the tick rate
         the trajectory was planned at.
@@ -331,15 +294,6 @@ def park_arms(
     Plan a velocity-limited joint trajectory to park ``arm_sides`` and play it back on
     the real, physically simulated world.
 
-    The park target is a static joint configuration already known ahead of time (see
-    :func:`tracy_equipment.joint_state_of_type`), planned via
-    :func:`plan_joint_trajectory` (Giskard still never touches the live world -- only
-    the isolated scratch copy that function plans against) rather than commanded
-    straight to the actuator the way this function's own earlier version, and
-    :mod:`demo`'s own park loop, both do: see :func:`plan_joint_trajectory`'s own
-    docstring for why that leaves every joint free to move far faster than the real
-    robot's own hardware ever could.
-
     :param sim: The running real-time simulation to drive.
     :param actuators: Every joint's own actuator, keyed by joint name.
     :param robot: The robot whose arms are parked.
@@ -376,14 +330,10 @@ def set_gripper(
 
     Collision avoidance is always off for this plan (unlike :func:`park_arms`'s own
     default): the goal is to close the fingers around whatever object is between them,
-    which collision avoidance would otherwise treat as an obstacle -- see
-    :func:`_plan_trajectory`'s own docstring. :func:`follow_joint_trajectory`'s own
-    settle timeout already tolerates never reaching the nominal fully-closed target
-    exactly, which a squeeze against a rigid grasped object should not.
+    which collision avoidance would otherwise treat as an obstacle.
 
     :param sim: The running real-time simulation to drive.
-    :param actuators: Every joint's own actuator, keyed by joint name (see
-        :func:`tracy_equipment.equip_grippers_with_servos`).
+    :param actuators: Every joint's own actuator, keyed by joint name.
     :param robot: The robot whose gripper is driven.
     :param arm_side: Which arm's gripper to drive.
     :param state: The gripper state to command, e.g. :attr:`GripperState.CLOSE`.
@@ -393,12 +343,10 @@ def set_gripper(
     """
     goal_state = joint_state_of_type(_arm_of(robot, arm_side).end_effector, state)
     # The gripper's own connections are a mimic linkage: every one of them shares the
-    # same raw_dof (see equip_grippers_with_servos's own docstring), so a naive target
-    # per connection would disagree with itself -- a mimic connection's own target is
-    # expressed in its own, not the raw_dof's, sign and offset (e.g. the right
-    # knuckle's own -0.8 for the same physical close position the left knuckle's own
-    # +0.8 means). Convert each connection's own target back to its raw_dof's own
-    # value first, so every connection agrees on one target per dof.
+    # same raw_dof, so a naive target per connection would disagree with itself -- a
+    # mimic connection's own target is expressed in its own, not the raw_dof's, sign
+    # and offset. Convert each connection's own target back to its raw_dof's own value
+    # first, so every connection agrees on one target per dof.
     raw_targets: Dict[str, float] = {}
     for connection, target in zip(goal_state.connections, goal_state.target_values):
         raw_targets[connection.raw_dof.name.name] = (
@@ -409,3 +357,214 @@ def set_gripper(
         robot._world, raw_targets, avoid_collisions=False, max_ticks=max_ticks
     )
     follow_joint_trajectory(sim, actuators, trajectory, settle_timeout=settle_timeout)
+
+
+def _fingertip_body_names(arm_side: Arms) -> Tuple[str, str]:
+    """
+    The gripper's own two fingertip pad link names, by which arm they belong to.
+
+    :param arm_side: Which arm's gripper to name.
+    :return: The left and right fingertip pad link names.
+    """
+    prefix = "right_" if arm_side == Arms.RIGHT else "left_"
+    return (
+        f"{prefix}robotiq_85_left_finger_tip_link",
+        f"{prefix}robotiq_85_right_finger_tip_link",
+    )
+
+
+SQUEEZE_MARGIN = 0.001
+"""
+How far, in metres, past a grasped object's own half-width the fingers are commanded to
+close, so they press into it firmly rather than merely touching.
+
+Mirrors the proven-working Franka Montessori demo's own
+(``montessori_segmind_integration``) ``MoveGripperMotion.squeeze_margin``: kept small,
+since it is *commanded* penetration into a rigid object, and the whole point of sizing
+the close to the object is to keep that penetration bounded and deliberate.
+"""
+
+
+def _knuckle_raw_dof(robot: Tracy, arm_side: Arms) -> DegreeOfFreedom:
+    """
+    The raw degree of freedom that actually drives an arm's own gripper knuckle; every
+    other finger connection in the mimic linkage follows it.
+
+    :param robot: The robot whose gripper is measured.
+    :param arm_side: Which arm's gripper to measure.
+    """
+    prefix = "right_" if arm_side == Arms.RIGHT else "left_"
+    joint_name = f"{prefix}robotiq_85_left_knuckle_joint"
+    return next(
+        connection.raw_dof
+        for connection in _arm_of(robot, arm_side).end_effector.active_connections
+        if connection.raw_dof.name.name == joint_name
+    )
+
+
+def _finger_pad_inner_x(
+    world: World,
+    gripper_root: Body,
+    left_tip_body: Body,
+    raw_dof: DegreeOfFreedom,
+    raw_angle: float,
+) -> float:
+    """
+    The left fingertip pad's own innermost point along the gripper's closing axis, in
+    the gripper's own root frame, with the knuckle's raw degree of freedom set to
+    ``raw_angle``.
+
+    Kinematic only -- moves ``world``'s own state directly rather than through a physics
+    step, so ``world`` must be an isolated scratch copy, never the live, physically
+    simulated world.
+
+    :param world: An isolated scratch copy of the world to measure against.
+    :param gripper_root: The gripper's own root body.
+    :param left_tip_body: The left fingertip pad body.
+    :param raw_dof: The knuckle joint's own raw degree of freedom.
+    :param raw_angle: The candidate raw angle to measure at.
+    """
+    world.state[raw_dof.id].position = raw_angle
+    world.notify_state_change()
+    world.update_forward_kinematics()
+    return (
+        left_tip_body.collision.as_bounding_box_collection_in_frame(gripper_root)
+        .bounding_box()
+        .min_x
+    )
+
+
+def _closing_raw_angle_for_half_width(
+    world: World,
+    robot: Tracy,
+    arm_side: Arms,
+    target_half_width: float,
+    iterations: int = 30,
+) -> float:
+    """
+    The knuckle raw degree of freedom angle at which the fingertip pads' own inner faces
+    first reach ``target_half_width`` out from the gripper's own centreline.
+
+    The pad's inner x position decreases monotonically as the knuckle closes (confirmed
+    directly, sampled across its own full range: from the pad's own half-open extent
+    down to under a millimetre at the joint's own upper limit), so bisection against an
+    isolated scratch copy of ``world`` converges reliably.
+
+    :param world: The live world to clone for the search; never itself modified.
+    :param robot: The robot whose gripper is measured.
+    :param arm_side: Which arm's gripper closes.
+    :param target_half_width: The half-width, in metres, to close to.
+    :param iterations: Bisection steps; 30 narrows the joint's own ~0.8 rad range to
+        well under a micro-radian.
+    """
+    scratch_world = deepcopy(world)
+    [scratch_robot] = scratch_world.get_semantic_annotations_by_type(Tracy)
+    prefix = "right_" if arm_side == Arms.RIGHT else "left_"
+    gripper_root = _arm_of(scratch_robot, arm_side).end_effector.root
+    left_tip_body = scratch_world.get_body_by_name(
+        f"{prefix}robotiq_85_left_finger_tip_link"
+    )
+    raw_dof = _knuckle_raw_dof(scratch_robot, arm_side)
+
+    def inner_x(raw_angle: float) -> float:
+        return _finger_pad_inner_x(
+            scratch_world, gripper_root, left_tip_body, raw_dof, raw_angle
+        )
+
+    lower, upper = raw_dof.limits.lower.position, raw_dof.limits.upper.position
+    if target_half_width >= inner_x(lower):
+        return lower
+    if target_half_width <= inner_x(upper):
+        return upper
+    for _ in range(iterations):
+        midpoint = (lower + upper) / 2
+        if inner_x(midpoint) > target_half_width:
+            lower = midpoint
+        else:
+            upper = midpoint
+    return upper
+
+
+def close_gripper_around(
+    sim: RealTimeSimulation,
+    actuators: Dict[str, Actuator],
+    robot: Tracy,
+    arm_side: Arms,
+    target_body: Body,
+    squeeze_margin: float = SQUEEZE_MARGIN,
+    max_ticks: int = DEFAULT_MAX_TICKS,
+    tick_period: float = 1.0 / TARGET_FREQUENCY,
+) -> None:
+    """
+    Close an arm's gripper around ``target_body``, sized to the object's own width
+    instead of always driving to the gripper's fully closed position.
+
+    Closing all the way to zero opening on an object that is not perfectly centred
+    between the fingers wedges it sideways rather than gripping it -- confirmed
+    directly on Tracy: the fully-closed target let the fingers close *past* a shape's
+    own width, shoving it out from between them before both sides ever made contact.
+    Mirrors the proven-working Franka Montessori demo's own
+    (``montessori_segmind_integration``) fix: measure the target's own half-width along
+    the gripper's closing axis, in the gripper's own root frame (so it stays correct
+    regardless of the object's orientation relative to the approach), and close to
+    that instead, minus :data:`SQUEEZE_MARGIN` so the fingers press in rather than
+    merely touch. Also stops early if both fingertip pads register real MuJoCo contact
+    against ``target_body`` before reaching the computed target, as a safety net
+    against the target being sized slightly off.
+
+    :param sim: The running real-time simulation to drive.
+    :param actuators: Every joint's own actuator, keyed by joint name.
+    :param robot: The robot whose gripper is driven.
+    :param arm_side: Which arm's gripper to drive.
+    :param target_body: The body to close around.
+    :param squeeze_margin: See :data:`SQUEEZE_MARGIN`.
+    :param max_ticks: Tick budget before giving up.
+    :param tick_period: Simulated seconds to advance per waypoint; matches the tick rate
+        the trajectory was planned at.
+    """
+    world = robot._world
+    gripper_root = _arm_of(robot, arm_side).end_effector.root
+    half_width = target_body.collision.as_bounding_box_collection_in_frame(
+        gripper_root
+    ).bounding_box()
+    half_width = (half_width.max_x - half_width.min_x) / 2
+    target_inner_x = max(0.0, half_width - squeeze_margin)
+    raw_angle = _closing_raw_angle_for_half_width(
+        world, robot, arm_side, target_inner_x
+    )
+
+    raw_dof = _knuckle_raw_dof(robot, arm_side)
+    trajectory = plan_joint_trajectory(
+        world,
+        {raw_dof.name.name: raw_angle},
+        avoid_collisions=False,
+        max_ticks=max_ticks,
+    )
+
+    simulator = sim.multi_sim.simulator
+    left_tip_name, right_tip_name = _fingertip_body_names(arm_side)
+    target_name = target_body.name.name
+
+    def both_fingertips_touching() -> bool:
+        left_contacts = simulator.get_contact_bodies(
+            body_name=left_tip_name, including_children=False
+        ).result
+        right_contacts = simulator.get_contact_bodies(
+            body_name=right_tip_name, including_children=False
+        ).result
+        return target_name in left_contacts and target_name in right_contacts
+
+    for waypoint in trajectory:
+        for joint_name, target in waypoint.items():
+            sim.command(actuators[joint_name], target)
+        sim.advance(tick_period)
+        if both_fingertips_touching():
+            logger.info(
+                "%s: gripper stopped early on both-fingertip contact.", target_body.name
+            )
+            return
+    logger.info(
+        "%s: gripper closed to its own half-width-sized target (%.4fm).",
+        target_body.name,
+        target_inner_x,
+    )

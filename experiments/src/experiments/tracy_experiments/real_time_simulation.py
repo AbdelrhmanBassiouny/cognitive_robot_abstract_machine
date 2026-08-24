@@ -2,15 +2,12 @@
 Runs a world's MuJoCo mirror at wall-clock speed, so the motion can be watched as it
 happens.
 
-Ported verbatim from ``experiments/push_t/real_time_simulation.py`` on
-``ichumuh/cognitive_robot_abstract_machine@t-task-force`` (commit ``f0d0e967a``, "Push a
-T-shaped block onto a target pose in MuJoCo"), which does not exist on this branch. Its
-own docstring explains exactly why this demo needs it: the background-threaded
-:class:`~semantic_digital_twin.adapters.multi_sim.MujocoSim` this repo's other demos use
-makes a caller's own reads of ``world.state`` a race against that thread's own writes --
-confirmed directly here (see :mod:`tracy_equipment`'s own docstring) as the reason
-Giskard's ``ParkArmsAction`` could believe a physically-simulated joint had reached its
-target without the joint having actually moved.
+The background-threaded :class:`~semantic_digital_twin.adapters.multi_sim.MujocoSim`
+this repo's other demos use makes a caller's own reads of ``world.state`` a race against
+that thread's own writes -- confirmed in the cube-stacking demo as the reason Giskard's
+``ParkArmsAction`` could believe a physically-simulated joint had reached its target
+without the joint having actually moved. Stepping physics from the calling thread
+instead sidesteps that race entirely.
 """
 
 from __future__ import annotations
@@ -23,8 +20,6 @@ from typing_extensions import Optional, Self
 from semantic_digital_twin.adapters.multi_sim import MujocoSim
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import Actuator
-
-# %% real-time simulation
 
 
 class SimulationNotStartedError(RuntimeError):

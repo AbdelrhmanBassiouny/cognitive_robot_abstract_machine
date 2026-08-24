@@ -1,13 +1,13 @@
 """
 Montessori shape-sorting scene built directly on Tracy's own built-in table, instead of
-the free-standing table :mod:`~experiments.montessori.world` lays out for a robot with no
-table of its own.
+the free-standing table :mod:`~experiments.montessori.world` lays out for a robot with
+no table of its own.
 
 Tracy (see :class:`~semantic_digital_twin.robots.tracy.Tracy`) ships a real table as a
 fixed part of its own body tree (its
 :meth:`~semantic_digital_twin.robots.tracy.Tracy._get_root_body_name` is literally
-``"table"``), at whatever height that model actually has -- unlike the Franka Panda,
-which has no table of its own and stands next to one this package builds (see
+``"table"``), at whatever height that model actually has -- unlike a fixed-base robot
+with no table of its own, which stands next to one this package builds (see
 :meth:`~experiments.montessori.world.MontessoriWorld.add_robot_stand`). So this module
 does not build (or need) a separate table or robot stand: it only builds the
 shape-sorting board and the loose shapes' row, both placed directly on Tracy's own table
@@ -18,11 +18,10 @@ tiling, and the loose shapes' own geometry) the same way
 
 Tracy is mounted separately, after construction, via
 :meth:`~experiments.montessori.world.MontessoriWorld.mount_stationary_robot` (inherited
-unchanged) with the position :func:`~experiments.montessori.tracy_equipment.tracy_table_mount_position`
-computes -- the same two-step order :mod:`~experiments.montessori.franka_montessori_demo`
-uses for the Panda. This class needs to know the resulting height of Tracy's own table
+unchanged) with the position :func:`~experiments.tracy_experiments.equipment.tracy_table_mount_position`
+computes. This class needs to know the resulting height of Tracy's own table
 top *before* that mounting happens (to place the board and shapes on it), so a caller
-must compute it first (see :func:`~experiments.montessori.tracy_equipment.tracy_table_mount_position`)
+must compute it first (see :func:`~experiments.tracy_experiments.equipment.tracy_table_mount_position`)
 and pass it in as :attr:`TracyMontessoriWorld.table_top_z`.
 """
 
@@ -76,35 +75,57 @@ from semantic_digital_twin.world_description.geometry import Box, Color, Mesh
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
 
-BOARD_POSITION_TRACY = Point3(0.8, 0.0, 0.0)
+BOARD_POSITION_TRACY = Point3(0.85, 0.0, 0.0)
 """
-X/Y of the shape-sorting board on Tracy's own table, straight ahead of it (``y=0``) --
-matching ``coraplex_tracy_stacking_mujoco``'s own proven-reachable ``STACK_XY`` (its cube
-tower's base, placed by both of Tracy's arms in turn). Z is filled in by
+X/Y of the shape-sorting board on Tracy's own table, straight ahead of it (``y=0``).
+
+Brought in from an earlier ``1.15`` (before that, ``1.3``): with both arms starting
+already parked rather than being swept there live, the board no longer has to clear a
+live sweep, only the arms' own *parked-and-settled* geometry -- confirmed directly by
+running MuJoCo's own narrow-phase contact check (not just a bounding-box estimate)
+between the board and both parked arms at ``x`` values from ``1.15`` down to ``0.60``:
+zero contacts at every value tested, since a UR10's own parked wrist links are rounded,
+not box-shaped, so their real collision geometry sits well inside their axis-aligned
+bounding box. ``0.85`` was chosen inside that contact-free range, roughly halfway to
+:const:`SHAPE_ROW_X` rather than at the tested floor, to keep a visible margin for a
+shape that overshoots slightly during a place; a full headless sorting run at this
+position completes with no collision or unreachable-pose errors. Z is filled in by
 :meth:`TracyMontessoriWorld._board_position` once :attr:`TracyMontessoriWorld.table_top_z`
 is known.
 """
 
-SHAPE_ROW_X = 0.65
+SHAPE_ROW_X = 0.55
 """
-X-coordinate of the loose-shape row on Tracy's own table -- matching
-``coraplex_tracy_stacking_mujoco``'s own proven-reachable pickup slots (``x`` in
-``0.65..0.95``), nearer than :const:`BOARD_POSITION_TRACY` so a pick is followed by a
-place that moves further out onto the board.
+X-coordinate of the loose-shape row on Tracy's own table, nearer than
+:const:`BOARD_POSITION_TRACY` so a pick is followed by a place that moves further out
+onto the board.
+
+Kept further away from the board than an earlier ``0.65``: the board's own drawer
+handles project toward the shape row by :data:`~experiments.montessori.world.
+_HANDLE_OFFSET`'s own x-offset, landing only a couple of centimetres from a shape row at
+``0.65`` -- confirmed directly, the right arm's forearm swept into a drawer handle
+reaching for a shape's hover pose. Exactly where the row sits does not matter (nothing
+downstream assumes a particular pick position), only that the arm can reach it and
+approach without clipping the board.
 """
 
-SHAPE_ROW_START_Y = -0.1
+SHAPE_ROW_START_Y = 0.1
 """
-Y-coordinate of the first loose shape in the row, on the side matching
-``coraplex_tracy_stacking_mujoco``'s own proven-reachable right-arm pickup slots
-(``y`` around ``-0.25``/``-0.4``), since :mod:`~experiments.montessori.tracy_montessori_demo`
-only ever picks with :attr:`~coraplex.datastructures.enums.Arms.RIGHT`.
+Y-coordinate of the first loose shape in the row, on the side Tracy's left arm's own
+parked configuration rests towards, since :mod:`~experiments.tracy_experiments.
+montessori_demo_mujoco` picks with :attr:`~coraplex.datastructures.enums.Arms.LEFT`.
+Positive, mirroring an earlier negative value used when the right arm did the picking.
 """
 
-SHAPE_ROW_SPACING = -0.09
+SHAPE_ROW_SPACING = 0.15
 """
-Distance, along y, between adjacent loose shapes in the row; negative, continuing toward
-the same right-arm-reachable side :const:`SHAPE_ROW_START_Y` starts at.
+Distance, along y, between adjacent loose shapes in the row; positive, continuing toward
+the same left-arm-reachable side :const:`SHAPE_ROW_START_Y` starts at.
+
+Widened from an earlier ``-0.09``: with shapes that close together, an empty-gripper
+reach for one shape's own hover pose could sweep the arm into its neighbour. Exactly
+how far apart they sit does not matter, only that neighbouring shapes stay clear of each
+other's own approach path.
 """
 
 _BOARD_POSITION_DELTA_X = float(BOARD_POSITION_TRACY.x) - float(BOARD_POSITION.x)
@@ -178,7 +199,8 @@ class TracyMontessoriWorld(MontessoriWorld):
     table_top_z: float = field(kw_only=True)
     """
     Height, in the world root frame, Tracy's own table's top surface ends up at once
-    mounted (see :func:`~experiments.montessori.tracy_equipment.tracy_table_mount_position`),
+    mounted (see
+    :func:`~experiments.tracy_experiments.equipment.tracy_table_mount_position`),
     computed by the caller before constructing this class since Tracy is mounted only
     afterward.
     """
@@ -299,8 +321,8 @@ class TracyMontessoriWorld(MontessoriWorld):
 
     def _resting_position_on_table(self, body: Body, y: float) -> Point3:
         """
-        Position, at ``y`` along :const:`SHAPE_ROW_X`, at which ``body`` rests exactly on
-        Tracy's own table surface, given its own local geometry.
+        Position, at ``y`` along :const:`SHAPE_ROW_X`, at which ``body`` rests exactly
+        on Tracy's own table surface, given its own local geometry.
 
         Mirrors :meth:`experiments.montessori.world.MontessoriWorld._resting_position_on_table`,
         parametrized by :attr:`table_top_z` instead of that module's fixed table height
