@@ -2611,13 +2611,13 @@ class World(HasSimulatorProperties):
         :param entity: Entity for which a unique name is returned.
         :return: The unique name of this entity as string.
         """
-        id_to_unique_name = self._human_readable_unique_names.get(entity.name.name, None)
+        id_to_unique_name = self._human_readable_unique_names.get(str(entity.name), None)
         if id_to_unique_name is None:
-            self._human_readable_unique_names[entity.name.name] = {entity.id: entity.name.name}
-            return entity.name.name
+            self._human_readable_unique_names[str(entity.name)] = {entity.id: str(entity.name)}
+            return str(entity.name)
         elif entity.id in id_to_unique_name:
             return id_to_unique_name[entity.id]
         else:
-            human_readable_unique_name = f"{entity.name.name}_{len(self._human_readable_unique_names[entity.name.name])}"
-            self._human_readable_unique_names[entity.name.name][entity.id] = human_readable_unique_name
+            human_readable_unique_name = f"{str(entity.name)}_{len(self._human_readable_unique_names[str(entity.name)])}"
+            self._human_readable_unique_names[str(entity.name)][entity.id] = human_readable_unique_name
             return human_readable_unique_name
