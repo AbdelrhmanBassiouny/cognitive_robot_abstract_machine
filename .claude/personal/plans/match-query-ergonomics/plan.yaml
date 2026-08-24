@@ -97,7 +97,7 @@ items:
     track: correctness
     depends_on: []
     status: in_progress
-    session: https://claude.ai/code/session_01AoBPcJ2koNUkKxuGERs8eC
+    session: https://claude.ai/code/session_01T8fersfoxdBJpmYVSpbdh7
     notes: >
       q.where(q.expression.battery >= 50) returns the whole domain with no
       error (verified 2026-08-19 on main 90c241168); only
@@ -158,6 +158,18 @@ items:
       and this PR's Index._rebuild_on_ constructs Index directly, so whichever
       lands second moves that onto the concrete subclasses - a wider
       adjustment than the isinstance check section 13 names.
+      Upstream review round 2026-08-24 (roadmap section 22): the fork PR was
+      green, out of draft and fully resolved, but the branch was stalled on
+      cram2#563, where tomsch420 requested changes over one word - "is
+      correlate the correct wording?" - and the developer had already agreed
+      the name is misleading. correlate is SQL's term for the subquery
+      semantics this fix works against, not for what it does, so
+      _correlate_conditions_/_correlate_condition_ are renamed
+      _reroot_conditions_/_reroot_condition_, the word the rest of the diff
+      already used (_reroot_on_, _rerooted_chains_, _rerooted_on_selection_,
+      both docstrings). No behaviour change; both are private to Query and no
+      reader of either old name is left in the repository. test_eql 1191
+      passed, 3 skipped.
   - id: match-underscore-rename-and-forwarding
     title: "Match behaves like a variable and like a query: underscore-sandwich rename, forwarding, and the shared interfaces"
     branch: claude/match-query-interface-refactor-l55jym

@@ -971,3 +971,49 @@ why this PR's fix is necessary and not sufficient.
 **A plan-state correction found on the way.** #186
 (`chain-outside-evaluation-truncates-silently`) merged on 2026-08-24 while the manifest
 still read `in_progress`; its status is corrected to `done` in the same save.
+
+## 22. 2026-08-24: the stall was upstream, and it was one word
+
+`/plan-item-resolve match-query-ergonomics where-query-rooted-attribute-no-filter`, in
+auto mode. Nothing on the fork said the item was stuck: #182 is open, out of draft, all
+six of its review threads resolved, and all 23 checks green on `15f31d1e`. The block was
+on the upstream pull request, cram2#563, which none of the fork-side calls can see.
+
+**What the upstream review says.** LucaKro approved; **tomsch420 requested changes**
+(2026-08-24T11:20:29Z) with one unresolved thread, on
+`query.py:297`:
+
+> is correlate the correct wording? To me correlate is statistics, but what you do seems
+> to me as moving related conditions where they belong.
+
+and the developer's own reply on that thread: *"yeah true, the name is misleading"*. So the
+change requested is a rename, and it was already agreed before this session started.
+
+**The name the code already had.** `correlate` is SQL's word for the *subquery* semantics
+this fix works against, not for what the fix does, so it named the problem rather than the
+operation - which is why it reads as misleading. Everything else this PR wrote already
+speaks one plain word for the operation: `MappedVariable._reroot_on_`,
+`_rerooted_chains_`, `Query._rerooted_on_selection_`, both docstrings ("Re-root the
+attribute chains ..."), and the PR description. The two methods were the only readers left
+using a second word for it, so `_correlate_conditions_` / `_correlate_condition_` become
+`_reroot_conditions_` / `_reroot_condition_` and the module says one thing once.
+`query.py:111`'s "uncorrelated subquery" stays: it is pre-existing on `main`, and there the
+SQL term is the accurate one, naming the subquery semantics rather than this operation.
+
+The one other place the word had spread was the test file's section header, "conditions
+that must keep their uncorrelated meaning", now "conditions that must keep their subquery
+meaning" - which is what its one test is already named after
+(`test_condition_rooted_at_another_query_stays_a_subquery`).
+
+No behaviour changes: both methods are private to `Query` and a repository-wide search
+finds no reader of either old name left, docs included.
+
+Verification: `test/krrood_test/test_eql` 1191 passed, 3 skipped.
+
+**Environment note, extending section 14's.** The container again started with no project
+dependencies. A Python 3.12 venv with `krrood`, `probabilistic_model`,
+`semantic_digital_twin` and `giskardpy` installed editable, plus `objgraph`, `mujoco`,
+`giskardpy_bullet_bindings` and `mypy`, is what `test/conftest.py` needs before any krrood
+test can be collected at all. Also worth knowing: running the verbalization tests rewrites
+`test_verbalization/verbalization_results.py`, so check `git status` before committing -
+that edit is the suite's, not yours.
