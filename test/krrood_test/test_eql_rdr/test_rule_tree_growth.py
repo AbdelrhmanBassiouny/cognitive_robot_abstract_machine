@@ -5,7 +5,7 @@ Growing a tree dynamically (outside any ``with`` block) must produce the same
 classifications as building the equivalent tree statically with ``with`` blocks.
 """
 
-import unittest
+import pytest
 
 from krrood.entity_query_language.factories import (
     add,
@@ -29,17 +29,13 @@ from krrood.entity_query_language.rdr.rule_tree import (
 from krrood.entity_query_language.exceptions import SelfReferentialInsertionError
 
 from .animal import Animal, Species, make_animal
-from .zoo_loader import load_zoo_animals
+from .zoo_loader import ZooDataset
 
-animals, targets = load_zoo_animals()
-
-
-def first(species: Species) -> Animal:
-    return next(animal for animal, target in zip(animals, targets) if target is species)
+zoo = ZooDataset.load()
 
 
-@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
-class TestRuleTreeGrowth(unittest.TestCase):
+@pytest.mark.skipif(len(zoo) == 0, reason="Failed to load zoo dataset")
+class TestRuleTreeGrowth:
     def test_dynamic_alternative_insertion(self):
         animal = variable(Animal, domain=[])
         query = entity(animal).where(animal.milk == True)
@@ -48,8 +44,10 @@ class TestRuleTreeGrowth(unittest.TestCase):
         query.build()
 
         # Bird does not fire yet.
-        self.assertTrue(
-            classify_case(query, animal, animal.species, first(Species.bird)).conclusion
+        assert (
+            classify_case(
+                query, animal, animal.species, zoo.first(Species.bird)
+            ).conclusion
             is ...
         )
 
@@ -60,18 +58,18 @@ class TestRuleTreeGrowth(unittest.TestCase):
             Species.bird,
         )
 
-        self.assertEqual(
+        assert (
             classify_case(
-                query, animal, animal.species, first(Species.bird)
-            ).conclusion,
-            Species.bird,
+                query, animal, animal.species, zoo.first(Species.bird)
+            ).conclusion
+            == Species.bird
         )
         # Existing rule unaffected.
-        self.assertEqual(
+        assert (
             classify_case(
-                query, animal, animal.species, first(Species.mammal)
-            ).conclusion,
-            Species.mammal,
+                query, animal, animal.species, zoo.first(Species.mammal)
+            ).conclusion
+            == Species.mammal
         )
 
     def test_dynamic_refinement_override(self):
@@ -82,11 +80,11 @@ class TestRuleTreeGrowth(unittest.TestCase):
         query.build()
 
         # Before refinement, a mammal is misclassified as fish.
-        self.assertEqual(
+        assert (
             classify_case(
-                query, animal, animal.species, first(Species.mammal)
-            ).conclusion,
-            Species.fish,
+                query, animal, animal.species, zoo.first(Species.mammal)
+            ).conclusion
+            == Species.fish
         )
 
         insert_refinement(
@@ -97,17 +95,17 @@ class TestRuleTreeGrowth(unittest.TestCase):
         )
 
         # Refinement overrides for mammals; fish still classified as fish.
-        self.assertEqual(
+        assert (
             classify_case(
-                query, animal, animal.species, first(Species.mammal)
-            ).conclusion,
-            Species.mammal,
+                query, animal, animal.species, zoo.first(Species.mammal)
+            ).conclusion
+            == Species.mammal
         )
-        self.assertEqual(
+        assert (
             classify_case(
-                query, animal, animal.species, first(Species.fish)
-            ).conclusion,
-            Species.fish,
+                query, animal, animal.species, zoo.first(Species.fish)
+            ).conclusion
+            == Species.fish
         )
 
     def test_dynamic_growth_matches_static_tree(self):
@@ -141,16 +139,12 @@ class TestRuleTreeGrowth(unittest.TestCase):
             Species.fish,
         )
 
-        for case, target in zip(animals, targets):
+        for case, target in zip(zoo.animals, zoo.targets):
             static = classify_case(s_query, s_animal, s_animal.species, case).conclusion
             dynamic = classify_case(
                 d_query, d_animal, d_animal.species, case
             ).conclusion
-            self.assertEqual(
-                static,
-                dynamic,
-                f"{case.name}: static={static} dynamic={dynamic}",
-            )
+            assert static == dynamic
 
     def test_refinement_then_alternative_nested(self):
         # Grow: backbone->fish ; refine milk->mammal ; alt(of refinement) aquatic->(stay mammal? no)
@@ -169,23 +163,23 @@ class TestRuleTreeGrowth(unittest.TestCase):
         # Alternative to the refinement: backbone & feathers -> bird
         insert_alternative(ref, animal.feathers == True, animal.species, Species.bird)
 
-        self.assertEqual(
+        assert (
             classify_case(
-                query, animal, animal.species, first(Species.mammal)
-            ).conclusion,
-            Species.mammal,
+                query, animal, animal.species, zoo.first(Species.mammal)
+            ).conclusion
+            == Species.mammal
         )
-        self.assertEqual(
+        assert (
             classify_case(
-                query, animal, animal.species, first(Species.bird)
-            ).conclusion,
-            Species.bird,
+                query, animal, animal.species, zoo.first(Species.bird)
+            ).conclusion
+            == Species.bird
         )
-        self.assertEqual(
+        assert (
             classify_case(
-                query, animal, animal.species, first(Species.fish)
-            ).conclusion,
-            Species.fish,
+                query, animal, animal.species, zoo.first(Species.fish)
+            ).conclusion
+            == Species.fish
         )
 
     def test_clone_expression_does_not_corrupt_original_parents(self):
@@ -222,30 +216,14 @@ class TestRuleTreeGrowth(unittest.TestCase):
         clone = condition._node_for_new_position_()
 
         # The original must be untouched.
-        self.assertIs(
-            condition._parent__,
-            orig_parent,
-            "Original _parent__ must not change",
-        )
-        self.assertEqual(
-            condition._parents_,
-            orig_parents_before,
-            "Original _parents_ must not change",
-        )
+        assert condition._parent__ is orig_parent
+        assert condition._parents_ == orig_parents_before
         # Clone must have its own independent lists and no parent.
-        self.assertIsNone(clone._parent__, "Clone must not have a parent")
-        self.assertEqual(len(clone._parents_), 0, "Clone must have empty _parents_")
-        self.assertEqual(len(clone._children_), 0, "Clone must have empty _children_")
-        self.assertIsNot(
-            clone._parents_,
-            condition._parents_,
-            "Clone must NOT share _parents_ list with original",
-        )
-        self.assertIsNot(
-            clone._children_,
-            condition._children_,
-            "Clone must NOT share _children_ list with original",
-        )
+        assert clone._parent__ is None
+        assert len(clone._parents_) == 0
+        assert len(clone._children_) == 0
+        assert clone._parents_ is not condition._parents_
+        assert clone._children_ is not condition._children_
 
     def test_shared_anchor_refinement_does_not_corrupt_sibling_alternative(self):
         """
@@ -302,33 +280,27 @@ class TestRuleTreeGrowth(unittest.TestCase):
         )
 
         # The molusc comparator must still have backbone (not a Refinement) as its left child.
-        self.assertIs(
-            molusc_condition.left,
-            backbone_anchor,
-            "molusc condition's left child was corrupted by the backbone refinement",
-        )
-        self.assertNotIsInstance(
-            molusc_condition.left,
-            ConclusionSelector,
-            "molusc condition must not embed a ConclusionSelector as its left child",
-        )
+        assert molusc_condition.left is backbone_anchor
+        # A ConclusionSelector as the left child would mean the splice went in above
+        # the anchor rather than beside it.
+        assert not isinstance(molusc_condition.left, ConclusionSelector)
 
         # Classification sanity: molusc case (backbone=False) must still classify as
         # molusc.  Without the fix the corrupted condition "(backbone except if
         # not_eggs) == False" does not evaluate the same as "backbone == False",
         # so this fails.
         molusc_case = make_animal("test_molusc", backbone=False, eggs=True)
-        self.assertEqual(
-            classify_case(query, animal, animal.species, molusc_case).conclusion,
-            Species.molusc,
+        assert (
+            classify_case(query, animal, animal.species, molusc_case).conclusion
+            == Species.molusc
         )
 
         # The reptile refinement (not_eggs at backbone) must fire for a case with
         # backbone=True and eggs=False.
         reptile_case = make_animal("test_reptile", backbone=True, eggs=False)
-        self.assertEqual(
-            classify_case(query, animal, animal.species, reptile_case).conclusion,
-            Species.reptile,
+        assert (
+            classify_case(query, animal, animal.species, reptile_case).conclusion
+            == Species.reptile
         )
 
     def test_insert_at_with_anchor_as_condition_raises(self):
@@ -345,15 +317,11 @@ class TestRuleTreeGrowth(unittest.TestCase):
 
         original_conclusions = set(backbone._conclusions_)
 
-        with self.assertRaises(SelfReferentialInsertionError):
+        with pytest.raises(SelfReferentialInsertionError):
             insert_refinement(backbone, backbone, animal.species, Species.reptile)
 
         # Tree must be untouched: backbone's conclusions must not have grown.
-        self.assertEqual(
-            backbone._conclusions_,
-            original_conclusions,
-            "backbone._conclusions_ must not change after a failed self-referential insert",
-        )
+        assert backbone._conclusions_ == original_conclusions
 
     def test_clone_expression_resets_conclusions(self):
         """
@@ -368,7 +336,7 @@ class TestRuleTreeGrowth(unittest.TestCase):
         backbone = query._conditions_root_
 
         # Give backbone a conclusion (it already has one from the query).
-        self.assertTrue(len(backbone._conclusions_) > 0)
+        assert len(backbone._conclusions_) > 0
 
         # Clone a non-MappedVariable expression that has a conclusion attached.
         not_eggs = not_(animal.eggs)
@@ -376,20 +344,12 @@ class TestRuleTreeGrowth(unittest.TestCase):
         # not_eggs now has a parent and no direct conclusions, but we test the set isolation.
         clone = not_eggs._node_for_new_position_()
 
-        self.assertIsNot(
-            clone._conclusions_,
-            not_eggs._conclusions_,
-            "Clone must not share _conclusions_ set with the original",
-        )
-        self.assertEqual(
-            len(clone._conclusions_),
-            0,
-            "Clone's _conclusions_ must be empty after _node_for_new_position_()",
-        )
+        assert clone._conclusions_ is not not_eggs._conclusions_
+        assert len(clone._conclusions_) == 0
 
 
-@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
-class TestBareAttributeWhereCondition(unittest.TestCase):
+@pytest.mark.skipif(len(zoo) == 0, reason="Failed to load zoo dataset")
+class TestBareAttributeWhereCondition:
     """Regression: alternative/refinement DSL when WHERE condition is a bare MappedVariable.
 
     When ``entity(v).where(v.attr)`` is used (bare attribute, not a Comparator),
@@ -422,24 +382,20 @@ class TestBareAttributeWhereCondition(unittest.TestCase):
             ),
             None,
         )
-        self.assertIsNotNone(where_node)
-        self.assertIsInstance(
-            where_node.condition,
-            Alternative,
-            "Where._child_ must be Alternative, not the bare backbone MappedVariable",
-        )
+        assert where_node is not None
+        assert isinstance(where_node.condition, Alternative)
 
-        vertebrate = first(Species.mammal)
-        invertebrate = first(Species.molusc)
-        self.assertEqual(
-            classify_case(query, animal_var, animal_var.species, vertebrate).conclusion,
-            Species.mammal,
+        vertebrate = zoo.first(Species.mammal)
+        invertebrate = zoo.first(Species.molusc)
+        assert (
+            classify_case(query, animal_var, animal_var.species, vertebrate).conclusion
+            == Species.mammal
         )
-        self.assertEqual(
+        assert (
             classify_case(
                 query, animal_var, animal_var.species, invertebrate
-            ).conclusion,
-            Species.molusc,
+            ).conclusion
+            == Species.molusc
         )
 
     def test_refinement_with_bare_attr_where_condition(self):
@@ -467,23 +423,15 @@ class TestBareAttributeWhereCondition(unittest.TestCase):
             ),
             None,
         )
-        self.assertIsNotNone(where_node)
-        self.assertIsInstance(
-            where_node.condition,
-            RefinementClass,
-            "Where._child_ must be Refinement, not the bare backbone MappedVariable",
-        )
+        assert where_node is not None
+        assert isinstance(where_node.condition, RefinementClass)
         # The Refinement's left operand must still be the bare backbone MappedVariable
         # (not the Comparator, which the old code would splice in by mistake).
-        self.assertIs(
-            where_node.condition.left,
-            animal_var.backbone,
-            "Refinement.left must be backbone, not a corrupted Comparator",
-        )
+        assert where_node.condition.left is animal_var.backbone
 
         # backbone=True + (backbone==False is False) → right not yielded → mammal
-        vertebrate = first(Species.mammal)
-        self.assertEqual(
-            classify_case(query, animal_var, animal_var.species, vertebrate).conclusion,
-            Species.mammal,
+        vertebrate = zoo.first(Species.mammal)
+        assert (
+            classify_case(query, animal_var, animal_var.species, vertebrate).conclusion
+            == Species.mammal
         )
