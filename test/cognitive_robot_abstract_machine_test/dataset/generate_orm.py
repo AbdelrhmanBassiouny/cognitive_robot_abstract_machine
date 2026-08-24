@@ -1,13 +1,15 @@
 """
 Stand-in for the ORM interface generator of a workspace package.
 
-Records what the checkout looked like when it ran and then fills its own package's
-interface, so a test can observe in which order and against which state the generators
-were driven.
+Records what the checkout and the interpreter looked like when it ran and then fills its
+own package's interface, so a test can observe in which order, in which process and
+against which state the generators were driven.
 """
 
 from __future__ import annotations
 
+import logging
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -56,6 +58,16 @@ class GenerationRecord:
     Names of the packages whose interface already held content, in alphabetical order.
     """
 
+    process_id: int
+    """
+    The interpreter this generator ran in.
+    """
+
+    root_logger_handlers: int
+    """
+    How many handlers the root logger held once this generator had added its own.
+    """
+
     @classmethod
     def from_line(cls, line: str) -> GenerationRecord:
         """
@@ -64,8 +76,13 @@ class GenerationRecord:
         :param line: One line of the generation log.
         :return: The record the line holds.
         """
-        package_name, generated = line.split(":")
-        return cls(package_name, generated.split(",") if generated else [])
+        package_name, generated, process_id, handlers = line.split(":")
+        return cls(
+            package_name,
+            generated.split(",") if generated else [],
+            int(process_id),
+            int(handlers),
+        )
 
     def to_line(self) -> str:
         """
@@ -73,7 +90,10 @@ class GenerationRecord:
 
         :return: The line, terminated by a line break.
         """
-        return f"{self.package_name}:{','.join(self.generated_packages)}\n"
+        return (
+            f"{self.package_name}:{','.join(self.generated_packages)}"
+            f":{self.process_id}:{self.root_logger_handlers}\n"
+        )
 
 
 def read_generation_log(repository_root: Path) -> List[GenerationRecord]:
@@ -121,7 +141,8 @@ The classes this generator stands in for mapping.
 
 def main() -> None:
     """
-    Log what the checkout holds so far and generate this package's interface.
+    Log what the checkout and the interpreter hold so far, and generate this package's
+    interface.
     """
     print(PROGRESS_LINE)
     if is_progress_wanted():
@@ -129,7 +150,16 @@ def main() -> None:
             report_progress(class_name, len(MAPPED_CLASS_NAMES))
     package_root = Path(__file__).resolve().parents[1]
     repository_root = package_root.parent
-    record = GenerationRecord(package_root.name, generated_packages(repository_root))
+
+    # A real generator raises the verbosity of the code it drives for its own run.
+    logging.getLogger().addHandler(logging.NullHandler())
+
+    record = GenerationRecord(
+        package_root.name,
+        generated_packages(repository_root),
+        os.getpid(),
+        len(logging.getLogger().handlers),
+    )
     with (repository_root / GENERATION_LOG_NAME).open("a", encoding="utf-8") as log:
         log.write(record.to_line())
     interface_of(package_root).write_text(
