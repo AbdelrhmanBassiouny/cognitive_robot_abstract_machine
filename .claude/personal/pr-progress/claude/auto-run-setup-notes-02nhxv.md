@@ -1,59 +1,43 @@
-**Goal:** the planning skills must never ask whether to run
-`/setup-personal-notes` — they run it themselves when `check-setup.sh` reports
-something missing.
+# setup-runs-without-asking — PR #156
 
-**Done:**
-- `setup-personal-notes/prerequisite-check.md`: the offer step is now "say what
-  is missing, invoke `/setup-personal-notes`, re-run the check"; the rationale
-  section explains why the yes/no gate is gone and which questions stay inside
-  the setup skill (notes remote, notes content, labels).
-- Step 0 of `plan-create`, `plan-dashboard`, `plan-item-kickoff` and
-  `plan-item-resolve` reworded to "run it if not".
-- Follow-on wording: `resolve-personal-notes-config.sh`'s constant comment,
-  `hooks/README.md` quick start, `plan-dashboard/example-walkthrough.md`.
+**Plan item:** `workflow-unification` / `setup-runs-without-asking`
+**Branch:** `claude/auto-run-setup-notes-02nhxv` (base `main`)
+**Mode:** `auto`, from the committed default (no personal override exists).
 
-- Draft PR #156 opened off `main`. No `bug` label (behaviour change, not a fix).
-- Tracked as `setup-runs-without-asking` in `workflow-unification`
-  (`personal-data` track, `in_progress`, PR #156); roadmap entry added, saved
-  with `save-plan.sh`.
-- Dashboard republished at the plan's existing URL. The refresh ran the new
-  no-ask path end to end: `dashboard_dependencies` was missing, `/setup-personal-notes`
-  ran without being offered, installed markdown/nh3, and the check then exited 0.
+## The plan
 
-**Review round 2026-08-12** (one comment, posted twice as two threads): the
-step-0 section is duplicated across the skills, dedupe it once unless another PR
-already does. It does — #149 collapses the two plan-item copies into
-`plan-dashboard/plan-item-gathering.md` — so the dedup is left there. Replied on
-both threads with the measurement (the procedure is already single-sourced in
-`prerequisite-check.md`; what repeats is a citation plus a per-skill consequence
-clause, the same shape as `scope-decision.md` / `dependency-readiness.md` /
-`pr-data-fetching.md`) and left both open, since the outcome is a deferral.
+The item was stalled on a merge conflict, not on review or CI. Resolve it per the
+resolution the 2026-08-12 review round already recorded, then carry this branch's
+rule into the two documents that forked the superseded wording while it was open.
 
-**Correction that round produced:** the recorded conflict resolution here was
-wrong. #149's `plan-item-gathering.md` and #135's `add-plan-item/SKILL.md` are
-new files still carrying "offer `/setup-personal-notes`", so neither conflicts
-with this branch and nothing flags them at merge time — landing either after
-#156 reinstates the gate. Right resolution for the two plan-item skills: take
-#149's deletion, carry this PR's wording into its shared document. #135 also
-conflicts in `prerequisite-check.md`, where it only adds `add-plan-item` to the
-opening list. Flagged on both PRs; neither branch was pushed to (both are out of
-draft, so both are the user's). Manifest + roadmap corrected, dashboard
-republished, PR description updated.
+## Done
 
-**Enforcement added (85feee6d)**, so the hazard above no longer needs anyone to
-remember it: `test_setup_prerequisite_documents.py` sweeps every markdown
-document under `.claude/skills/` for a verb of offering governing
-`/setup-personal-notes`. Discovered not listed, an absence assertion, plus a
-vacuity guard. Mutation-checked: 0 offenders here (15 docs), 4 on `main`, 3 on
-#149, 5 on #135. Landing order now stops mattering — whichever lands second goes
-red instead of silently reinstating the gate. 464 tests pass across the three CI
-directories (92 hooks, 194 plan-dashboard, 178 stack); pytest is installable in
-this container after all (`pip install pytest`), so the suite did run.
+- Merged `origin/main`. Three conflicts, all in the step-0 setup instruction:
+  - `plan-item-{kickoff,resolve}/SKILL.md` — took `main`'s deletion (the section
+    moved into `plan-dashboard/plan-item-gathering.md` with #149). Verified against
+    the merge base that the branch's only edit to either file was that wording.
+  - `.claude/hooks/README.md` — kept this branch's wording, added `main`'s
+    `/add-plan-item` to the list.
+  - `prerequisite-check.md` auto-merged correctly (rewrite + the added name).
+- Carried "run it, don't ask" into `plan-dashboard/plan-item-gathering.md` and
+  `add-plan-item/SKILL.md`, which `test_setup_prerequisite_documents.py` flagged
+  the moment `main` came in — exactly the case the guard was written for.
+- 533 tests pass across the four CI directories (was 464 pre-merge).
+- Pushed `e0362dae`; rewrote the PR description; updated `plan.yaml` notes and
+  appended the resolution to `roadmap.md`; republished the dashboard.
+- `/upstream-reviews` run: `cram2` has no pull request with this head, so there is
+  no upstream review to read. The `cram2-link-sent` label means the compare link
+  was built, not that Create was clicked.
 
-**Awaiting a decision:** whether to push the one-word fix to #149 and #135
-directly (plain fast-forward, no force-push — but both are out of draft and
-carry `in-review`, so it re-triggers their upstream review), or leave the guard
-to force it at merge time. Recommended the latter.
+## Next / outstanding
 
-**Next:** nothing else outstanding. The plan's master index was not refreshed
-(`/plan-dashboard` with no argument does that).
+- **Nothing is blocking.** CI was green before the merge and the merge is now
+  pushed; the new run should be watched by the user, not by this session.
+- **The PR is out of draft** and nothing on record says who flipped it. Not
+  re-drafted after this push, to avoid undoing a deliberate signal — the user's
+  call.
+- The two 2026-08-12 review threads stay open on purpose: their outcome was a
+  deferral (the dedup belonged to #149), not a change here.
+- Worth carrying to #194: the upstream-reviews action exits 1 on the clean
+  "no upstream pull request" answer, which reads as a failed run to any caller
+  checking the exit status before the log.
