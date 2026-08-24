@@ -9329,3 +9329,70 @@ green. **The check after a deletion is the mutation that used to fail, or the ca
 never the fact that the suite passes.
 
 617 tests pass.
+
+## Update 2026-08-24 (resolved): `setup-runs-without-asking`'s guard caught the two branches git could not
+
+`/plan-item-resolve workflow-unification setup-runs-without-asking`, session
+https://claude.ai/code/session_01FsFNZpjH5xEYXm72rYo887, mode `auto` from the committed
+default. One merge commit pushed to #156.
+
+### The stall was the conflict, and the conflict was the hazard arriving
+
+The maintenance pass had reported `needs-resolution` twice — 2026-08-22 naming one file, and
+again 2026-08-24 naming three. The second list is the tell: `.claude/hooks/README.md`,
+`plan-item-kickoff/SKILL.md`, `plan-item-resolve/SKILL.md`. Between the two reports, #149 and
+#135 landed, and the two extra conflicts are #149's collapse of step 0 into
+`plan-dashboard/plan-item-gathering.md` meeting this branch's edit of the sections it deleted.
+
+Nothing else about the item was blocked, which is worth stating first: CI was green on all 22
+checks, and the two review threads from 2026-08-12 were already answered and deliberately left
+open as a deferral. The recorded blocker and the real one agreed for once.
+
+### The guard did the job it was built for, on its first real occasion
+
+The prediction recorded on 2026-08-12 was that landing order stops mattering — whichever lands
+second goes red rather than silently reinstating the gate. Both of the others landed first, so
+this branch is the one that went red, exactly as designed. Merging `main` in failed
+`test_setup_prerequisite_documents.py` naming two paths:
+
+```
+.claude/skills/add-plan-item/SKILL.md:                ['offer `/setup-personal-notes']
+.claude/skills/plan-dashboard/plan-item-gathering.md: ['offer `/setup-personal-notes']
+```
+
+Both were new files on their own branches, so neither conflicted with anything here and no
+merge would have flagged either. This is the first time in this plan that a recorded hazard
+was caught by a mechanism built for it rather than by someone remembering a comment — the four
+same-artifact-twice findings before it were all caught by a reader.
+
+### The conflicts resolved to the resolution already on record
+
+The 2026-08-12 review round corrected this item's own notes, which had said to keep both edits
+for the two plan-item skills. The correction was right, and it is what the merge needed: take
+#149's deletion, carry the wording into the shared document. Checked rather than assumed —
+`git diff <merge-base> HEAD` on both skill files shows the branch's only change to either was
+the step-0 wording, so taking `main`'s version whole loses nothing.
+
+`.claude/hooks/README.md` is the one where both sides had content: this branch's "run it for
+you … without stopping to ask" against `main`'s list with `/add-plan-item` added. Kept the
+wording, took the name. `prerequisite-check.md` auto-merged into exactly what the round
+predicted — this branch's rewrite plus that one name — needing no hand resolution at all.
+
+### No upstream pull request, which took a run to establish
+
+The branch carries `cram2-link-sent` and not `in-review`, so the skill's own gate would have
+skipped the upstream read. `always-read-upstream-reviews` (#194) argues that gate is wrong, so
+it was called anyway; the answer is that `cram2` has no pull request with this head. The link
+was built and Create was never clicked. So the gate would have reached the right answer here by
+luck, and the run is what makes that a fact rather than an assumption.
+
+Worth carrying for #194: the action exits 1 on that clean answer, so a caller that checks the
+exit status before the log reads "no upstream pull request" as a failed run. The skill's step 5
+already says to relay it as a clean answer, but the exit code works against that.
+
+### State
+
+533 tests pass across the four directories CI runs, from 464 before the merge. #156's
+description is rewritten to match. Left as the user found it in one respect, flagged rather
+than acted on: the pull request is out of draft, and nothing on record says whether the user
+marked it ready or an earlier session did, so it was not re-drafted after this push.

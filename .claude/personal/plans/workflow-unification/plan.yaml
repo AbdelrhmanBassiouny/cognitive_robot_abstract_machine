@@ -3893,6 +3893,22 @@ items:
       throughout. Passes here over 15 documents and flags 4 on main, 3 on #149 and 5 on
       #135, which is the mutation check. What it buys is that landing order stops mattering:
       whichever lands second goes red rather than silently reinstating the gate.
+      Resolved 2026-08-24. The prediction held exactly. #149 and #135 both landed while this
+      branch sat behind the merge conflict the maintenance pass had reported, so main arrived
+      carrying the two forked copies of the superseded sentence. Merging it in failed
+      test_setup_prerequisite_documents.py on precisely those two paths -
+      plan-dashboard/plan-item-gathering.md and add-plan-item/SKILL.md - which no merge could
+      have flagged, both being new files that conflict with nothing. Both now carry the run-it
+      wording and the sweep is clean. The three conflicts were all the same section: main
+      deletes step 0 from both plan-item skills, having moved it into the shared gathering
+      document, so that deletion is taken - this branch's only edit to either file was the
+      step-0 wording - and .claude/hooks/README.md keeps this branch's wording plus main's
+      added /add-plan-item. prerequisite-check.md merged clean, rewrite and added name
+      together, as recorded. 533 tests pass across the four directories CI runs.
+      No upstream pull request exists: the branch carries cram2-link-sent, meaning the
+      compare link was built, but the upstream-reviews action reports no pull request on
+      cram2 with this head, so Create was never clicked and there is no upstream review
+      to read.
   - id: deferred-items-hidden-by-default
     title: "Hide deferred items in the dashboard by default, behind their own toggle"
     branch: claude/hidden-deferred-plan-items-6weef1
