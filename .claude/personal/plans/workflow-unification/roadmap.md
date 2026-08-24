@@ -9575,3 +9575,61 @@ above, so it *detects* the symptom; it does not prevent the wrong base, and beca
 Restore the fork's default branch to `main`, and make a session refuse to plan or open a pull
 request from a branch not derived from it — so a default-branch change cannot silently re-point
 every future session's base again. Recorded with no branch; a later session picks it up.
+
+## Update 2026-08-24 (implemented): `unfetched-parent-branches` lands on `claude/maintenance-tooling-pinning-gdod18`
+
+Committed as `a70132eb6`, based on `main`. 554 tests pass across the four directories CI runs,
+from 533 before. No pull request opened - the developer had not asked for one.
+
+### The branch this session was handed was the integration branch
+
+`claude/maintenance-tooling-pinning-gdod18` arrived at HEAD `899a04aac`, byte-identical to
+`origin/integration`, and existed only locally - `git ls-remote --heads origin` had no such ref.
+So it was reset onto `main` with a plain `git checkout -B` and pushed fresh; nothing was
+force-pushed and no work was discarded, because the branch carried none. That is the evidence
+behind the sibling item `session-branch-base`, and the branch name is a harness artefact that
+does not name this work.
+
+### The rule for which branch carries a parent was wrong once, and the live fork caught it
+
+The first implementation excluded any candidate that *contained* the branch being placed, to stop
+a branch naming itself or anything stacked on it. Run against the real board it reported #178's
+parent as gone - and that was wrong: #178's own work had been merged up into
+`montessori_fast_inline_monitor`, so the grandparent contained the child as well as the parent,
+and the guard ruled out the one right answer.
+
+Git containment cannot tell a branch stacked on another from one merged into it. Descent is a
+question about the stack, so `Stack.is_stacked_on` walks the bases the board records instead, and
+git containment is left to answer only what it can. Pinned by
+`test_a_grandparent_a_branch_merged_up_into_is_still_where_its_parent_went`, which fails under the
+old guard.
+
+Worth carrying: the pure tests passed under both rules until a test double faithful enough to
+model git's answer was written. A double that only knew the mapping it was handed could not
+reproduce the case, and the live fork found it first.
+
+### Verified against the fork, read-only
+
+From the ref state that produced the silence - every off-board parent ref deleted, exactly a fresh
+maintenance clone - `stack.py reparents` now prints three lines where it printed none:
+
+| PR | base | target |
+|---|---|---|
+| #64 | `D-core-aid` | `main` |
+| #178 | `montessori_live_event_timeline_tab` | `montessori_fast_inline_monitor` |
+| #192 | `claude/match-query-ergonomics-where-rooted-b876wm` | `main` |
+
+#192 was not part of the original report: its parent merged the same morning, and it would have
+been missed silently by the next pass exactly as #64 was. #79 and #21 are placed `gone`, which is
+correct - their bases were closed without merging - and the restack now hands them to their owners
+rather than merging a dead branch every run. `stack.py next` lists #64 among the promotable
+branches again.
+
+### Two tests could not run in this container
+
+`test_a_non_zero_status_says_what_it_means_on_the_way_out` and
+`test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status` hang here: both run the
+executor as a subprocess, which resolves configuration and fetches the personal-notes branch over
+the network. Confirmed pre-existing by stashing this branch's changes and watching them hang on
+unmodified code, so they are this container's network, not a regression. They are not skipped or
+marked - nothing was changed about them - and CI runs them normally.
