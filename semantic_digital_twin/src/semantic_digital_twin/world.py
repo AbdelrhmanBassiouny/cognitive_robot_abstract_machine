@@ -1731,6 +1731,9 @@ class World(HasSimulatorProperties):
         :param branch_root: The root of the branch to be moved.
         :param new_parent: The new parent of the branch.
         """
+        # Ensure FK is up to date before computing the relative pose, since this may be
+        # called mid-block, e.g. from a mount strategy inside a still-open modify_world block.
+        self.update_forward_kinematics()
         new_parent_T_child = self.compute_forward_kinematics(new_parent, branch_root)
         self.remove_connection(branch_root.parent_connection)
         self.add_connection(
