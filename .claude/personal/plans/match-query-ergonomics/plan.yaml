@@ -229,11 +229,12 @@ items:
       modules, which fail identically with the diff stashed).
   - id: aggregate-signature-reads-a-missing-attribute
     title: "Bug: every aggregate of one kind gets the same structural signature"
-    branch: null
-    pull_request_number: null
+    branch: claude/plan-item-kickoff-match-query-npzr78
+    pull_request_number: 196
     track: mapping-semantics
     depends_on: []
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01QK8o4m3ft424DyGFmw5vE3
     notes: >
       Found on #192 (2026-08-23, roadmap section 17) and measured there:
       verbalization/grammar/query/assembler.py:285 reads
