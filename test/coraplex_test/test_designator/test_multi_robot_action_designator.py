@@ -809,7 +809,6 @@ class ElevatorOperator(ModelChangeCallback):
 
 def test_elevator_navigation(mutable_multiple_robot_apartment, rclpy_node):
     world, robot, context = mutable_multiple_robot_apartment
-    VizMarkerPublisher(_world=world, node=rclpy_node).with_tf_publisher()
 
     elevator = world.get_semantic_annotations_by_type(Elevator)[0]
     elevator.open()
