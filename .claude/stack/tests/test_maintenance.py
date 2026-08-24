@@ -37,6 +37,7 @@ from stack import (
     Stack,
     build_stack,
     load_board,
+    resolve_ref,
 )
 
 import maintenance_commands
@@ -304,7 +305,10 @@ def a_stack(checkout: ForkCheckout, pull_requests: list[PullRequest]):
     def is_merged(name: str) -> bool:
         return ancestry.is_ancestor(name, upstream)
 
-    return build_stack(configuration, pull_requests, is_merged)
+    def is_contained_by(candidate: str, container: str) -> bool:
+        return ancestry.is_ancestor(candidate, resolve_ref(configuration, container))
+
+    return build_stack(configuration, pull_requests, is_merged, is_contained_by)
 
 
 # %% running git
@@ -1134,6 +1138,108 @@ def test_a_conflict_labels_the_branch_and_tells_its_owner(
     assert "a-contested-file" in comment.body
     assert "https://claude.ai/code/session_01ABCdef" in comment.body
     assert child.reported_at == "https://example.invalid/comment/1"
+
+
+def an_abandoned_base_and_its_child(fork_checkout: ForkCheckout) -> None:
+    """
+    Publish a branch on a base that reached neither the upstream nor any other branch.
+
+    That is what a base whose own pull request closed without merging leaves behind: the
+    ref is still there, the commits are in nothing, and only the child is on the board.
+
+    :param fork_checkout: The checkout to build the branches in.
+    """
+    fork_checkout.branch_from("an-abandoned-base", UPSTREAM_BASE)
+    fork_checkout.branch_from("a-child", "an-abandoned-base")
+
+
+def the_board_with_an_abandoned_base(
+    labels: list[str] | None = None,
+) -> list[PullRequest]:
+    """
+    :param labels: The labels the child's pull request carries.
+    :return: A board carrying only the child, its base absent as a closed one would be.
+    """
+    return [
+        PullRequest(
+            number=41,
+            head="a-child",
+            base="an-abandoned-base",
+            draft=False,
+            labels=labels or [],
+        )
+    ]
+
+
+def test_a_branch_whose_base_reached_nothing_is_handed_back_to_its_owner(
+    fork_checkout: ForkCheckout,
+):
+    """
+    Merging that base every pass only keeps building on work nobody is going to land,
+    and no rule can say what should replace it - only its owner can.
+    """
+    an_abandoned_base_and_its_child(fork_checkout)
+    board = the_board_with_an_abandoned_base()
+    board[0].session = "https://claude.ai/code/session_01ABCdef"
+    fork = RecordingPullRequests()
+
+    outcomes = restack(a_stack(fork_checkout, board), fork_checkout.git, fork)
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.PARENT_GONE
+    assert fork.label_writes == [
+        RecordedLabelWrite(41, (make_configuration().needs_resolution_label,))
+    ]
+    assert "an-abandoned-base" in fork.comments[0].body
+    assert "https://claude.ai/code/session_01ABCdef" in fork.comments[0].body
+    assert child.reported_at == "https://example.invalid/comment/1"
+
+
+def test_a_branch_whose_base_reached_nothing_publishes_nothing(
+    fork_checkout: ForkCheckout,
+):
+    an_abandoned_base_and_its_child(fork_checkout)
+    published = fork_checkout.commit_on_the_fork("a-child")
+
+    restack(
+        a_stack(fork_checkout, the_board_with_an_abandoned_base()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+    )
+
+    assert fork_checkout.commit_on_the_fork("a-child") == published
+
+
+def test_a_branch_already_delegated_for_a_gone_base_is_not_re_reported(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The label exists so a pass hands a branch back once rather than every run, and a
+    gone base is no more resolvable on the second pass than the first.
+    """
+    an_abandoned_base_and_its_child(fork_checkout)
+    fork = RecordingPullRequests(states={41: "dirty"})
+
+    outcomes = restack(
+        a_stack(
+            fork_checkout,
+            the_board_with_an_abandoned_base(
+                labels=[make_configuration().needs_resolution_label]
+            ),
+        ),
+        fork_checkout.git,
+        fork,
+    )
+
+    assert outcomes[0].outcome == RestackOutcome.WITHHELD
+    assert fork.comments == []
+
+
+def test_a_branch_whose_base_is_gone_is_never_reported_as_a_clean_pass():
+    assert (
+        exit_code_for(a_report(restack_outcome=RestackOutcome.PARENT_GONE))
+        == MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
+    )
 
 
 def test_a_label_write_keeps_every_label_the_branch_already_carried(

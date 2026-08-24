@@ -135,9 +135,15 @@ python .claude/stack/stack.py reparents
 ```
 
 It prints one `branch<TAB>pr<TAB>current base<TAB>target base` line per open pull request whose base
-has already landed - decided by git ancestry, so it also covers a base whose own pull request was
-*closed* rather than merged, which is absent from the board entirely and which nothing else would
-ever look at. Retarget each one with `update_pull_request`.
+has gone from the board and left its commits somewhere else - decided by git ancestry, so it also
+covers a base whose own pull request was *closed* rather than merged, which is absent from the
+board entirely and which nothing else would ever look at. Retarget each one with
+`update_pull_request`.
+
+**Read the target base rather than assuming it.** It is usually the upstream base, but a base whose
+own pull request merged into *its* parent instead left its commits in that branch, so that branch is
+what its child has to build on. A base whose commits reached nothing at all is named by neither
+column: nothing follows from them, so step 2 hands that branch back to its owner instead.
 
 **NATIVE-STACK MEMBERS.** Changing the base of a pull request that belongs to a GitHub stack fails
 with `422 - Cannot change the base branch because the pull request is part of a stack`. This is a
@@ -195,11 +201,18 @@ made. Everything else - `fast_forward`, `landed`, `restacked`, `promoted`,
 `pushed` or `up-to-date` is a branch the pass could not publish; the executor has already labelled
 and commented on it, so name it in the summary and move on.
 
-The one exception is `integration-failed`: integrating the parent failed without conflicting on
-anything, so the branch is not what needs fixing and its owner was deliberately not told. Its
-`explanation` carries what git said - an untracked file in the way, unrelated histories, a
-reference that does not resolve. That is the pass's own environment to fix, so report it in the
-summary as yours rather than the branch owner's, and never label the branch for it.
+Two `restacked` entries mean something more specific than "could not publish":
+
+- `integration-failed` - integrating the parent failed without conflicting on anything, so the
+  branch is not what needs fixing and its owner was deliberately not told. Its `explanation`
+  carries what git said - an untracked file in the way, unrelated histories, a reference that does
+  not resolve. That is the pass's own environment to fix, so report it in the summary as yours
+  rather than the branch owner's, and never label the branch for it.
+- `parent-gone` - the branch's base is in neither the upstream base nor any other open branch, which
+  is what a base whose own pull request closed without merging leaves behind. There is no base to
+  retarget it at, so the executor has already labelled and commented on it exactly as it does a
+  conflict. Name it in the summary as the branch owner's to answer, and do not try to pick a
+  replacement base yourself.
 
 If a landed pull request is somehow still open after the pass, report it rather than closing it
 yourself.
@@ -208,6 +221,9 @@ yourself.
 
 - **It never resolves a conflict** - not the executor, and not you. A conflict is a change to
   somebody else's branch, so it is reported to its owner and left exactly where it is.
+- **It never picks a new base for a branch whose own base led nowhere.** What superseded abandoned
+  work is a judgement about that work, so `parent-gone` is reported and the branch is left where it
+  is.
 - **It never opens the upstream pull request.** Do not attempt that call: promotion builds the
   compare-and-create link and stops there, and the developer clicks Create.
 - **It never debugs or fixes a red check.** Report it to the branch's owner the same way a conflict

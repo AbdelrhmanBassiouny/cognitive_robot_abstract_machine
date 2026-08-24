@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import subprocess
 import sys
-from collections.abc import Container
+from collections.abc import Container, Mapping
 from pathlib import Path
 
 import pytest
 
-from scratch_repository import ScratchRepository
+from scratch_repository import ScratchRepository, initialize_bare_repository
 
 from stack import (
     AmbiguousForkRemoteError,
@@ -25,12 +25,15 @@ from stack import (
     BranchStatus,
     Configuration,
     ContradictoryLabelWriteError,
+    EffectiveParent,
     ExitCode,
     ForkRemoteNotFoundError,
+    GitCommandFailedError,
     LabelWrite,
     MalformedRepositoryError,
     IntegrationStrategy,
     CommitMoveChecks,
+    ParentSituation,
     ProposedCommitMove,
     RefusalReason,
     PromotionLink,
@@ -39,12 +42,17 @@ from stack import (
     Remote,
     Reparent,
     Repository,
+    UnresolvableBranchError,
     build_stack,
+    containment_predicate,
     derive_status,
+    fetch,
     landed_branches,
     load_configuration,
+    merged_predicate,
     next_to_promote,
     print_configuration,
+    referenced_branches,
     reparents,
     resolve_remotes,
     order,
@@ -78,8 +86,48 @@ def make_configuration(upstream_setup_command: str | None = None) -> Configurati
     )
 
 
-def build(prs: list[PullRequest], merged: Container[str] = frozenset()):
-    return build_stack(make_configuration(), prs, lambda name: name in merged)
+def build(
+    prs: list[PullRequest],
+    merged: Container[str] = frozenset(),
+    carried_by: Mapping[str, str] | None = None,
+):
+    """
+    Assemble a stack from an in-memory export and the two git facts it depends on.
+
+    :param prs: The exported pull requests.
+    :param merged: The branches whose commits are in the upstream base.
+    :param carried_by: Each branch whose commits are contained in some other branch,
+        mapped to that branch.
+    :return: The assembled stack.
+    """
+    carried_by = carried_by or {}
+    bases = {pr.head: pr.base for pr in prs}
+
+    def is_contained_by(candidate: str, container: str) -> bool:
+        """
+        Walk back from *container* the way git would, so a branch contains itself,
+        whatever it was cut from, and whatever merged into it.
+        """
+        seen: set[str] = set()
+        reachable = [container]
+        while reachable:
+            current = reachable.pop()
+            if current == candidate:
+                return True
+            if current in seen:
+                continue
+            seen.add(current)
+            reachable.extend(
+                name
+                for name in [bases.get(current)]
+                + [name for name, into in carried_by.items() if into == current]
+                if name is not None
+            )
+        return False
+
+    return build_stack(
+        make_configuration(), prs, lambda name: name in merged, is_contained_by
+    )
 
 
 # %% derive_status
@@ -1230,4 +1278,323 @@ def test_a_promotion_link_is_built_from_the_resolved_repositories(
     assert result.returncode == ExitCode.SUCCESS
     assert result.stdout.strip().endswith(
         "...a-fork-owner:engine?expand=1&title=A%20title&body="
+    )
+
+
+# %% the refs every decision is read from
+
+
+def a_board(*branches: tuple[str, str]) -> list[PullRequest]:
+    """
+    An export of one pull request per ``(head, base)`` pair.
+
+    :param branches: Each pull request's head and base.
+    :return: The exported pull requests, numbered from one.
+    """
+    return [
+        PullRequest(number, head, base, draft=False)
+        for number, (head, base) in enumerate(branches, start=1)
+    ]
+
+
+def test_the_branches_fetched_include_every_base_not_only_the_heads():
+    """
+    A parent whose own pull request has closed is not a head on the board, so fetching
+    heads alone leaves the ref every decision about that parent is read from absent.
+    """
+    assert referenced_branches(a_board(("child", "landed-elsewhere"))) == [
+        "child",
+        "landed-elsewhere",
+    ]
+
+
+def test_a_branch_named_as_both_a_head_and_a_base_is_fetched_once():
+    assert referenced_branches(a_board(("parent", "main"), ("child", "parent"))) == [
+        "parent",
+        "child",
+        "main",
+    ]
+
+
+def test_the_live_stack_fetches_the_bases_as_well_as_the_heads(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """
+    The wiring is the defect this pins: ``referenced_branches`` naming both ends is no
+    use if the one caller that fetches still asks for the heads.
+    """
+    import stack as stack_module
+
+    fetched: list[list[str]] = []
+    monkeypatch.setattr(stack_module, "load_configuration", make_configuration)
+    monkeypatch.setattr(
+        stack_module, "load_board", lambda: a_board(("child", "landed-elsewhere"))
+    )
+    monkeypatch.setattr(
+        stack_module, "fetch", lambda configuration, branches: fetched.append(branches)
+    )
+    monkeypatch.setattr(
+        stack_module, "merged_predicate", lambda configuration: lambda name: False
+    )
+    monkeypatch.setattr(
+        stack_module,
+        "containment_predicate",
+        lambda configuration: lambda candidate, container: False,
+    )
+
+    stack_module.load_stack()
+
+    assert fetched == [["child", "landed-elsewhere"]]
+
+
+def a_fork_checkout(scratch_repository: ScratchRepository) -> ScratchRepository:
+    """
+    A checkout whose fork remote carries one landed branch and one that never landed.
+
+    ``landed-elsewhere`` sits at the commit ``main`` is on, so it is an ancestor of the
+    upstream base; ``never-landed`` carries a commit beyond it, so it is not - and it
+    does contain ``landed-elsewhere``, which is what the containment tests need.
+
+    :param scratch_repository: The scratch repository to build in.
+    :return: The same repository, with ``origin`` and ``cram2`` populated.
+    """
+    run = scratch_repository.run_git
+    run("checkout", "--quiet", "-b", "main")
+    (scratch_repository.project_root / "a-file").write_text("first\n")
+    run("add", "a-file")
+    run("commit", "--quiet", "--message", "first")
+    run("branch", "landed-elsewhere")
+    run("checkout", "--quiet", "-b", "never-landed")
+    (scratch_repository.project_root / "another-file").write_text("second\n")
+    run("add", "another-file")
+    run("commit", "--quiet", "--message", "second")
+    run("checkout", "--quiet", "main")
+    remote = initialize_bare_repository(
+        scratch_repository.project_root.parent / "fork.git"
+    )
+    run("remote", "add", "origin", str(remote))
+    run("remote", "add", "cram2", str(remote))
+    run("push", "--quiet", str(remote), "main", "landed-elsewhere", "never-landed")
+    run("fetch", "--quiet", "origin")
+    run("fetch", "--quiet", "cram2", "main")
+    return scratch_repository
+
+
+def test_a_landed_branch_is_reported_merged(
+    scratch_repository: ScratchRepository, monkeypatch: pytest.MonkeyPatch
+):
+    checkout = a_fork_checkout(scratch_repository)
+    monkeypatch.chdir(checkout.project_root)
+
+    assert merged_predicate(make_configuration())("landed-elsewhere")
+
+
+def test_a_branch_that_never_landed_is_reported_unmerged(
+    scratch_repository: ScratchRepository, monkeypatch: pytest.MonkeyPatch
+):
+    checkout = a_fork_checkout(scratch_repository)
+    monkeypatch.chdir(checkout.project_root)
+
+    assert not merged_predicate(make_configuration())("never-landed")
+
+
+def test_a_branch_whose_ref_was_never_fetched_is_refused_rather_than_read_as_unlanded(
+    scratch_repository: ScratchRepository, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    A ref the pass failed to obtain is not evidence of anything.
+
+    Answering ``False`` for it is what silently suppressed a reparent and a promotion at
+    once.
+    """
+    checkout = a_fork_checkout(scratch_repository)
+    checkout.run_git("update-ref", "-d", "refs/remotes/origin/landed-elsewhere")
+    monkeypatch.chdir(checkout.project_root)
+
+    with pytest.raises(UnresolvableBranchError) as refusal:
+        merged_predicate(make_configuration())("landed-elsewhere")
+
+    assert refusal.value.branch == "landed-elsewhere"
+    assert refusal.value.reference == "origin/landed-elsewhere"
+
+
+def test_a_branch_carried_by_another_branch_is_reported_contained(
+    scratch_repository: ScratchRepository, monkeypatch: pytest.MonkeyPatch
+):
+    checkout = a_fork_checkout(scratch_repository)
+    monkeypatch.chdir(checkout.project_root)
+
+    assert containment_predicate(make_configuration())(
+        "landed-elsewhere", "never-landed"
+    )
+    assert not containment_predicate(make_configuration())(
+        "never-landed", "landed-elsewhere"
+    )
+
+
+def test_containment_refuses_a_reference_that_does_not_resolve(
+    scratch_repository: ScratchRepository, monkeypatch: pytest.MonkeyPatch
+):
+    checkout = a_fork_checkout(scratch_repository)
+    monkeypatch.chdir(checkout.project_root)
+
+    with pytest.raises(UnresolvableBranchError):
+        containment_predicate(make_configuration())("no-such-branch", "never-landed")
+
+
+def test_a_fetch_that_fails_is_raised_rather_than_passing_silently(
+    scratch_repository: ScratchRepository, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    ``git fetch`` is all-or-nothing across the branches it is given, so one name the
+    remote does not have leaves every other ref at whatever it already was.
+    """
+    checkout = a_fork_checkout(scratch_repository)
+    monkeypatch.chdir(checkout.project_root)
+
+    with pytest.raises(GitCommandFailedError) as failure:
+        fetch(make_configuration(), ["main", "no-such-branch-on-the-remote"])
+
+    assert "no-such-branch-on-the-remote" in failure.value.detail
+
+
+# %% a parent whose pull request is gone
+
+
+def test_a_parent_still_on_the_board_is_left_alone():
+    stack = build(a_board(("parent", "main"), ("child", "parent")))
+    child = next(branch for branch in stack.branches if branch.name == "child")
+
+    assert stack.effective_parent(child).situation is ParentSituation.TRACKED
+
+
+def test_a_parent_that_landed_upstream_sends_its_child_to_the_upstream_base():
+    stack = build(a_board(("child", "landed-elsewhere")), merged={"landed-elsewhere"})
+    child = stack.branches[0]
+
+    assert stack.effective_parent(child) == EffectiveParent(
+        "main", ParentSituation.LANDED
+    )
+
+
+def test_a_parent_that_landed_in_another_open_branch_sends_its_child_there():
+    """
+    A parent whose pull request merged into its own parent rather than upstream: its
+    commits are in that branch, so that branch is what the child must build on.
+    """
+    stack = build(
+        a_board(("grandparent", "main"), ("child", "parent")),
+        carried_by={"parent": "grandparent"},
+    )
+    child = next(branch for branch in stack.branches if branch.name == "child")
+
+    assert stack.effective_parent(child) == EffectiveParent(
+        "grandparent", ParentSituation.IN_ANOTHER_BRANCH
+    )
+
+
+def test_a_parent_whose_commits_reached_nothing_is_reported_gone():
+    stack = build(a_board(("child", "abandoned")))
+    child = stack.branches[0]
+
+    assert stack.effective_parent(child) == EffectiveParent(
+        "abandoned", ParentSituation.GONE
+    )
+
+
+def test_a_branch_does_not_name_itself_as_what_carries_its_own_parent():
+    """
+    A branch cut from its parent contains that parent, and so does everything cut from
+    it in turn - none of which is somewhere for it to move to.
+    """
+    stack = build(
+        a_board(("child", "abandoned"), ("grandchild", "child")),
+        carried_by={"abandoned": "child"},
+    )
+    child = next(branch for branch in stack.branches if branch.name == "child")
+
+    assert stack.effective_parent(child).situation is ParentSituation.GONE
+
+
+def test_a_branch_below_the_one_being_placed_is_not_what_carries_its_parent():
+    stack = build(
+        a_board(("child", "abandoned"), ("grandchild", "child")),
+        carried_by={"abandoned": "grandchild"},
+    )
+    child = next(branch for branch in stack.branches if branch.name == "child")
+
+    assert stack.effective_parent(child).situation is ParentSituation.GONE
+
+
+def test_the_nearest_branch_carrying_a_parent_is_the_one_its_child_moves_to():
+    stack = build(
+        a_board(("grandparent", "main"), ("great-aunt", "main"), ("child", "parent")),
+        carried_by={"parent": "grandparent"},
+    )
+    child = next(branch for branch in stack.branches if branch.name == "child")
+
+    assert stack.effective_parent(child).branch == "grandparent"
+
+
+def test_reparents_a_child_whose_parent_landed_in_another_open_branch():
+    stack = build(
+        a_board(("grandparent", "main"), ("child", "parent")),
+        carried_by={"parent": "grandparent"},
+    )
+
+    assert reparents(stack) == [
+        Reparent(
+            branch="child",
+            pull_request_number=2,
+            current_base="parent",
+            target_base="grandparent",
+        )
+    ]
+
+
+def test_a_child_whose_parent_is_gone_is_not_reparented():
+    """
+    Nothing carries that parent's commits, so there is no base to retarget at - the
+    branch's owner has to decide, and the pass reports it instead of guessing.
+    """
+    assert reparents(build(a_board(("child", "abandoned")))) == []
+
+
+def test_the_restack_plan_leaves_a_gone_parent_named_as_it_stands():
+    """
+    Nothing carries those commits, so there is no other branch to name - the executor
+    reads the situation from the stack and reports the branch rather than merging it.
+    """
+    assert restack_plan(build(a_board(("child", "abandoned")))) == [
+        {"branch": "child", "parent": "abandoned", "strategy": "merge"}
+    ]
+
+
+def test_a_child_is_not_promotable_while_its_parent_is_gone():
+    assert next_to_promote(build(a_board(("child", "abandoned")))) is None
+
+
+def test_a_child_is_not_promotable_when_its_parent_only_reached_an_unlanded_branch():
+    stack = build(
+        a_board(("grandparent", "main"), ("child", "parent")),
+        carried_by={"parent": "grandparent"},
+    )
+
+    assert [branch.name for branch in promotion_order(stack)] == ["grandparent"]
+
+
+def test_a_grandparent_a_branch_merged_up_into_is_still_where_its_parent_went():
+    """
+    Stacks whose children merge up leave the grandparent containing the child as well as
+    the parent, and that grandparent is exactly the base the child needs - so a rule
+    reading git containment alone would rule out the one right answer.
+    """
+    stack = build(
+        a_board(("grandparent", "main"), ("child", "parent")),
+        carried_by={"parent": "grandparent", "child": "grandparent"},
+    )
+    child = next(branch for branch in stack.branches if branch.name == "child")
+
+    assert stack.effective_parent(child) == EffectiveParent(
+        "grandparent", ParentSituation.IN_ANOTHER_BRANCH
     )
