@@ -9423,3 +9423,107 @@ a promote would truncate at.
 Anything naming `cram2` in a body written from a session should be assumed lost, and the
 symptom is silent truncation from that point on, not an error. The footer being gone too is
 what makes it look like a formatting bug rather than a scrub.
+
+## Update 2026-08-24 (new item): `unfetched-parent-branches` — the pass decides a parent's fate from a ref it never fetched
+
+Found by asking why PR #64 (`D-core-underspecified`) was never reparented onto `main` nor
+promoted with a cram2 link, after its parent PR #63 merged that morning. The answer is not
+about #64.
+
+### The defect
+
+`load_stack()` fetches `[pr.head for pr in prs]` — the *head* branches of the open pull
+requests on the board (`stack.py:930`, `fetch` at 941-948). A parent whose own pull request is
+closed or merged is not on the board, so `origin/<parent>` is never fetched.
+`_merged_predicate.is_merged` then asks `git merge-base --is-ancestor origin/<parent>
+cram2/main` through `_git_succeeds`, which collapses exit 128 (the ref does not exist) and exit
+1 (not an ancestor) into the same `False`.
+
+A ref the pass failed to obtain therefore reads as *"this parent has not landed"*, and that one
+wrong boolean drives three decisions: `reparents()` omits the child, `restack_plan()` leaves
+`effective_parent` on the dead branch, and `promotion_order()` refuses to promote. One cause,
+three symptoms — which is why the 2026-08-24 pass reported #64 only as
+`merge: origin/D-core-aid - not something we can merge`, filed under its own environment.
+
+### Proven, not inferred
+
+Read-only in a full checkout: with `origin/D-core-aid` present, `stack.py reparents` prints
+`D-core-underspecified 64 D-core-aid main` and `stack.py next` lists #64 as "approved, parent
+'D-core-aid' landed". After `git update-ref -d refs/remotes/origin/D-core-aid` — exactly the
+state a fresh maintenance clone is in — both print nothing at all, silently. #64 carries no
+labels, confirming it was never promoted on any pass.
+
+### Three diseases behind one symptom
+
+Every branch the pass reported as `integration-failed` shares one trait — the parent has no
+open pull request — but for three different reasons, and only the first has a rule today.
+
+| PR | parent | parent's pull request | where the parent's commits actually are |
+|---|---|---|---|
+| #64 | `D-core-aid` | #63 merged | in `main` — should have reparented and promoted |
+| #178 | `montessori_live_event_timeline_tab` | #175 merged | in its **grandparent** `montessori_fast_inline_monitor`, not upstream |
+| #79 | `D-ui-splice-fix` | #78 closed unmerged | nowhere |
+| #21 | `rdr/oo-plan` | #20 closed unmerged | nowhere |
+
+`reparents()`' docstring claims it covers "a parent whose pull request was *closed* rather than
+merged". It covers a closed-**and-landed** parent only; a closed-and-abandoned one has no
+handling at all.
+
+### The unfinished half of `landed-parent-detection`
+
+#117 made the *decision* ancestry-based, precisely because "board.json carries only OPEN fork
+PRs". It never made the *ref that decision reads* present. This item is the other half.
+
+### A recorded decision this reverses, deliberately
+
+The #139 executor entry above records as a choice that `stack.py` "reads git through a helper
+returning `""` on failure - correct for derivation, where a missing ref simply means 'no
+answer', and wrong the moment a push is involved". The first half is disproven here. In this
+path a missing ref is not "no answer": it becomes a confidently wrong answer that suppresses a
+reparent and a promotion, both of which are writes. Layer 2 below reverses it for the ancestry
+predicate.
+
+### Two more silent failures in the same function
+
+`_git` returns `""` on any non-zero exit, so a failed `git fetch` is invisible — and
+`git fetch <remote> a b c` is all-or-nothing (verified: one unknown ref name exits 128 and
+updates nothing), so a single deleted board head would make a whole pass compute on stale refs
+across a 53-pull-request board. `fetch()` has no test coverage at all.
+
+### The shape of the fix
+
+Three layers, one pull request, one root cause, each with its failing test first.
+
+1. **Fetch what the stack references** — the deduped union of board heads *and* bases. This
+   alone unblocks #64 and clears all four bogus `integration-failed` reports.
+2. **A ref the pass could not obtain raises** rather than answering `False`, and a non-zero
+   `git fetch` raises rather than passing silently. The pass stops with "I could not determine
+   whether `<branch>` landed" instead of quietly deciding it did not.
+3. **A policy for a parent whose pull request is gone**, derived from where its commits
+   actually are: in the upstream base → retarget there (today's rule); in another open board
+   branch → retarget onto that branch (#178, uncovered today); nowhere → orphaned, reported to
+   the branch's owner the way a conflict is (comment, `needs-resolution`, withheld) rather than
+   merging a dead branch every run (#79, #21).
+
+### Scope, checked rather than assumed
+
+`check_scope_overlap.py --base main` over the seven paths returns `paths_absent_from_base: []`
+— every file is already on `main`, so no unlanded branch owns this work and it is based off
+`main`. Seven open pull requests touch `stack.py` (#110, #111, #151, #154, #158, #162, #185)
+and none touches `def fetch`, `pr.head for pr in prs`, `_git_succeeds`, `is_merged`,
+`reparents` or `has_landed_upstream`. No duplication.
+
+### Landing order against `bastler-package`
+
+#185 renames `.claude/stack/*.py` to `bastler/*.py` and the tests to `test/bastler_test/`, and
+its `bastler/stack.py:823` carries `fetch(configuration, [pr.head for pr in prs])` verbatim —
+so it inherits the bug rather than fixing it. Whichever lands second moves. This fix goes
+first: it is small, and #185 is conflicted and will re-merge anyway. Not a `depends_on` —
+a collision, recorded so it is a choice rather than a merge conflict.
+
+### Related, deliberately not folded
+
+`routine-cutover` already carries the insight that "ANY pull request leaving the open set drops
+it from board.json" and proposes an event-triggered re-sweep on `pull_request: closed`. That is
+about *when* the sweep runs. This item is about the sweep computing the wrong answer whenever
+it does run. Both are needed; neither substitutes for the other.

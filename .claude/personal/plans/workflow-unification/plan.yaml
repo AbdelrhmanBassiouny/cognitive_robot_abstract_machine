@@ -4220,3 +4220,10 @@ items:
     status: in_progress
     pull_request_number: 194
     session: https://claude.ai/code/session_01Cs9MvTBPS4hsd1HJimooVy
+
+  - id: unfetched-parent-branches
+    title: "Fetch every parent branch the pass decides about, and refuse to decide from a missing ref"
+    branch: null
+    track: stack-tooling
+    depends_on: []
+    status: in_progress
