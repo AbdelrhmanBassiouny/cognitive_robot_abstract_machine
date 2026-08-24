@@ -1,24 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import timedelta
 
-from typing_extensions import Optional, Any, Dict, List
+from typing_extensions import Optional, Any, Dict
 
-from krrood.entity_query_language.core.variable import Variable
-from krrood.entity_query_language.factories import variable_from, and_, ConditionType
 from coraplex.config.action_conf import ActionConfig
 from coraplex.datastructures.dataclasses import Context
 from coraplex.plans.attachment_nodes import AttachNode, DetachNode
 from coraplex.plans.factories import execute_single, pause_until, sequential
 from coraplex.plans.plan_node import PlanNode
+from coraplex.robot_plans.actions.base import ActionDescription
+from coraplex.robot_plans.motions.navigation import MoveMotion
+from coraplex.robot_plans.motions.robot_body import LookingMotion
 from giskardpy.motion_statechart.goals.templates import Parallel
 from giskardpy.motion_statechart.monitors.joint_monitors import (
     JointPositionReached,
 )
-from coraplex.robot_plans.actions.base import ActionDescription
-from coraplex.robot_plans.motions.navigation import MoveMotion
-from coraplex.robot_plans.motions.robot_body import LookingMotion
+from krrood.entity_query_language.core.variable import Variable
+from krrood.entity_query_language.factories import variable_from, and_, ConditionType
 from semantic_digital_twin.reasoning.predicates import allclose
 from semantic_digital_twin.reasoning.robot_predicates import is_pose_free_for_robot
 from semantic_digital_twin.robots.robot_parts import Camera
@@ -51,7 +50,7 @@ class NavigateAction(ActionDescription):
 
     @staticmethod
     def pre_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+            variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
     ) -> ConditionType:
         """
         The robot needs to have a drive and the target location needs to be free from
@@ -65,7 +64,7 @@ class NavigateAction(ActionDescription):
 
     @staticmethod
     def post_condition(
-        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+            variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
     ) -> ConditionType:
         """
         The robot needs to be within 3 cm of the target location.
@@ -132,10 +131,17 @@ class ElevatorNavigation(ActionDescription):
     def _action_plan(self) -> PlanNode:
         return sequential(
             [
-                NavigateAction(self._cabin_pose),
+                NavigateAction(Pose.from_xyz_rpy(
+                    z=self._height_in_cabin, reference_frame=self.elevator.root
+                )),
                 AttachNode(body=self.robot.root, new_parent=self.elevator.root),
                 pause_until(
-                    [NavigateAction(self._exit_pose)],
+                    [NavigateAction(Pose.from_xyz_rpy(
+                        x=float(self.elevator.hole_direction.to_np()[0]) * (
+                                    self.elevator.scale.x / 2 + self.exit_clearance),
+                        z=self._height_in_cabin,
+                        reference_frame=self.elevator.root,
+                    ))],
                     monitor=self._elevator_open_at_target_floor,
                 ),
                 DetachNode(body=self.robot.root, new_parent=self.world.root),
@@ -157,52 +163,9 @@ class ElevatorNavigation(ActionDescription):
         )
 
     @property
-    def _cabin_pose(self) -> Pose:
-        """
-        Where the robot stands while riding, in the cabin's frame.
-        """
-        return Pose.from_xyz_rpy(
-            z=self._height_in_cabin, reference_frame=self.elevator.root
-        )
-
-    @property
-    def _exit_pose(self) -> Pose:
-        """
-        Where the robot stands after driving out, in the cabin's frame.
-        """
-        opening_direction = float(self.elevator.hole_direction.to_np()[0])
-        return Pose.from_xyz_rpy(
-            x=opening_direction * (self.elevator.scale.x / 2 + self.exit_clearance),
-            z=self._height_in_cabin,
-            reference_frame=self.elevator.root,
-        )
-
-    @property
     def _elevator_open_at_target_floor(self) -> Parallel:
         """
         Observes True once the cabin serves :attr:`target_floor` with its doors open.
-        """
-        return Parallel(
-            [self._elevator_at_target_floor] + self._doors_open,
-            name="ElevatorOpenAtTargetFloor",
-        )
-
-    @property
-    def _elevator_at_target_floor(self) -> JointPositionReached:
-        """
-        Observes True once the cabin's drive serves :attr:`target_floor`.
-        """
-        return JointPositionReached(
-            connection=self.elevator.mechanical_joint.root.parent_connection,
-            position=self.elevator.drive_position_for_floor(self.target_floor),
-            threshold=self.arrival_threshold,
-            name="ElevatorAtTargetFloor",
-        )
-
-    @property
-    def _doors_open(self) -> List[JointPositionReached]:
-        """
-        One node per elevator door, observing True once that door stands fully open.
         """
         nodes = []
         for door in self.elevator.doors:
@@ -215,4 +178,13 @@ class ElevatorNavigation(ActionDescription):
                     name=f"{door.name}Open",
                 )
             )
-        return nodes
+        nodes.append(JointPositionReached(
+            connection=self.elevator.mechanical_joint.root.parent_connection,
+            position=self.elevator.drive_position_for_floor(self.target_floor),
+            threshold=self.arrival_threshold,
+            name="ElevatorAtTargetFloor",
+        ))
+        return Parallel(
+            nodes,
+            name="ElevatorOpenAtTargetFloor",
+        )

@@ -641,12 +641,12 @@ def _elevator_world_setup():
         world.add_body(Body(name=PrefixedName("root")))
 
         wall_thickness = 0.05
-        scale = Scale(1, 1, 1)
+        scale = Scale(2, 2, 2)
         name = PrefixedName("elevator")
         elevator = Elevator.get_annotation_specification(
             "Elevator",
             Elevator.get_default_root_kinematic_structure_entity_specification(
-                scale=Scale(1, 1, 1), wall_thickness=0.05
+                scale=Scale(2, 2, 2), wall_thickness=0.05
             ),
         ).spawn(world)
 
@@ -882,7 +882,7 @@ def multi_story_building(_elevator_world_setup):
             parent=world.root,
             child=elevator_copy.root,
             parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
-                -4.5, 0, 0.5
+                -5, 0, 1, yaw=np.pi
             ),
         ),
     )

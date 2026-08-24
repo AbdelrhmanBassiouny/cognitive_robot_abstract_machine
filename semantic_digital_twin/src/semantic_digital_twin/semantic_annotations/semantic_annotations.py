@@ -669,7 +669,7 @@ class Elevator(HasCaseAsRootBody, HasDoors, HasMechanicalJoint):
         :param floor: The floor the elevator should serve.
         :return: The position to drive the elevator's mechanical joint to.
         """
-        return float(floor.floor_plane[0].z + (self.scale.z / 2))
+        return float(floor.floor_plane[0].z )#+ (self.scale.z / 4))
 
     def drive_to_floor(self, floor: Level):
         """

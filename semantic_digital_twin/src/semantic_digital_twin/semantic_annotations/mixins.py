@@ -1087,6 +1087,7 @@ class HasCaseAsRootBody(HasSupportingSurface):
     A mixin class for semantic annotations that have a case as root body.
     """
 
+    # TODO: Having this as class property menas the vector has no reference frame and hence can't be transformed
     @classproperty
     @abstractmethod
     def hole_direction(self) -> Vector3:

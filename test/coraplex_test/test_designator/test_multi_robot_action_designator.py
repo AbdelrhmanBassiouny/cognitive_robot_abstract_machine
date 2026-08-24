@@ -819,7 +819,6 @@ def test_elevator_navigation(mutable_multiple_robot_apartment, rclpy_node):
     elevator_travel = float(elevator.drive_position_for_floor(first_floor)) - float(
         elevator.mechanical_joint.position
     )
-    cabin_position = elevator.root.global_transform.to_position().to_np().flatten()
 
     operator = ElevatorOperator(
         _world=world, elevator=elevator, floor=first_floor, robot=robot
@@ -830,11 +829,13 @@ def test_elevator_navigation(mutable_multiple_robot_apartment, rclpy_node):
     with simulated_robot:
         plan.perform()
 
+    cabin_position = elevator.root.global_transform.to_position().to_np().flatten()
+
     # The robot ends up in front of the elevator's opening, a floor higher.
     distance_from_cabin_center = float(elevator.scale.x) / 2 + action.exit_clearance
     expected_position = (
         cabin_position[:3]
-        + elevator.hole_direction.to_np().flatten()[:3] * distance_from_cabin_center
+        + elevator.hole_direction.to_np().flatten()[:3] * -1 * distance_from_cabin_center
     )
     expected_position[2] = starting_height + elevator_travel
 
