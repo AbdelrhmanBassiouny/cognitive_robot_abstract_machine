@@ -27,7 +27,7 @@ from typing_extensions import (
     Tuple,
 )
 
-from krrood.entity_query_language.core.mapped_variable import Attribute, Index
+from krrood.entity_query_language.core.mapped_variable import Attribute, IndexByValue
 from krrood.entity_query_language._monitoring import monitored
 from krrood.ormatic.data_access_objects.alternative_mappings import AlternativeMapping
 from krrood.ormatic.data_access_objects.base import (
@@ -1142,7 +1142,7 @@ class DataAccessObject(HasGeneric[T]):
                 state._alternative_mappings_being_referenced[instance].append(
                     (
                         domain_object,
-                        Index(
+                        IndexByValue(
                             _key_=index,
                             _child_=Attribute(_attribute_name_=key, _child_=None),
                         ),
