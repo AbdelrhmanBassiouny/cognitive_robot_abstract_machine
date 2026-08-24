@@ -49,7 +49,7 @@ items:
     pull_request_number: 186
     track: mapping-semantics
     depends_on: []
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_0138pFr29XH5xpEzvpmcpzV7
     notes: >
       Found while answering the review on item 1 (roadmap section 10):
@@ -256,6 +256,37 @@ items:
       different Sums have different signatures, then read the aggregated
       expression through the field that actually holds it rather than a name
       the class does not define.
+  - id: chain-signature-reads-attribute-only-names
+    title: "Bug: a structural signature cannot tell two chains apart unless every step is an attribute"
+    branch: null
+    pull_request_number: null
+    track: mapping-semantics
+    depends_on:
+      - where-query-rooted-attribute-no-filter
+    status: blocked
+    blockers:
+      - "Needs #182's per-subclass _rebuild_on_ to have landed: no name a mapping already defines is a sound structural key, so the signature has to ask each subclass for its own constructor arguments, and that API is what #182 is rewriting mapped_variable.py to reintroduce."
+    notes: >
+      Found and measured during the kickoff of
+      aggregate-signature-reads-a-missing-attribute (roadmap section 21), which
+      fixes the same root cause one line above it.
+      QueryAssembler._expression_signature builds its path as
+      (step._attribute_name_, step._owner_class_) for every step of the chain,
+      and both names belong to Attribute alone - so an Index, Call or
+      FlatVariable step takes the same silent-symbolic read the aggregate one
+      did, and the signature cannot tell two chains apart when only that step
+      differs. Measured on main 2b44f1e5: order.lines[0].price and
+      order.lines[1].price get equal signatures. Not folded into #196 because it
+      is a different fix, not a different symptom: no existing name is a sound
+      key for a step - _name_ is a display name and Call._name_ drops the call's
+      arguments entirely - so a faithful one needs each mapping subclass to
+      report its own constructor arguments, which is core API in
+      mapped_variable.py that #182 is currently rewriting.
+      get_clean_name_from_mapped_variable already guards the identical read with
+      isinstance(step, Attribute), so the guard is established here rather than
+      invented. #196 routes aggregates through this walk for the first time, so
+      sum(o.lines[0].price) and sum(o.lines[1].price) still collide after it -
+      pre-existing, and this item's to close.
   - id: factories-unwrap-match-and-migrate
     title: "Factories accept a Match directly; migrate consumers and docs off the detours"
     branch: null
