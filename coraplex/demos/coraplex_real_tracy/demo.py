@@ -44,7 +44,7 @@ giskard_process = subprocess.Popen(
 
 time.sleep(8)  # Wait for the launch file to start
 
-execition_mode = ExecutionType.REAL
+execition_mode = ExecutionType.SIMULATED
 
 print("Init ROS")
 rclpy.init()
@@ -179,8 +179,9 @@ plan = sequential(
 )
 try:
     print("Perform Plan")
-    with ExecutionEnvironment(execution_type=execition_mode, collision_avoidance=False):
-        plan.perform()
+    time.sleep(20)
+    # with ExecutionEnvironment(execution_type=execition_mode, collision_avoidance=False):
+    #     plan.perform()
 finally:
     os.killpg(os.getpgid(giskard_process.pid), signal.SIGTERM)
     giskard_process.wait()
