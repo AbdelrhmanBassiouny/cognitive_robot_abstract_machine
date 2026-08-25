@@ -72,8 +72,8 @@ CUBE_SIZE = 0.03
 Edge length of the cube, in metres.
 """
 
-CUBE_X = 0.8
-CUBE_Y = 0.0
+CUBE_X = 0.59
+CUBE_Y = 0.4
 """
 Where the cube must already be placed by hand before this runs, in the live world's root
 frame.
@@ -121,7 +121,7 @@ def _add_cube(world: World, mounted_table_top_z: float) -> Body:
 
 def main() -> None:
     giskard_process = subprocess.Popen(
-        ["ros2", "launch", "giskardpy_ros", "giskardpy_tracy_standalone.launch.py"],
+        ["ros2", "launch", "giskardpy_ros", "giskardpy_tracy_velocity.launch.py"],
         start_new_session=True,
     )
     time.sleep(8)  # Wait for the launch file to start
@@ -133,44 +133,64 @@ def main() -> None:
     thread = threading.Thread(target=executor.spin, daemon=True, name="rclpy-executor")
     thread.start()
 
+
+    world = fetch_world_from_service(node=node, timeout_seconds=300)
+    WorldSynchronizer(_world=world, node=node)
+    [robot] = world.get_semantic_annotations_by_type(Tracy)
+
+    # cube = _add_cube(world, read_table_top_z(robot))
+    with world.modify_world():
+        box1 = Body(
+            name=PrefixedName("Box1"),
+            collision=ShapeCollection(shapes=[Box(scale=Scale(0.3, 0.3, 0.3))]),
+            visual=ShapeCollection(
+                shapes=[Box(scale=Scale(0.3, 0.3, 0.3), color=Color(1, 0, 0))]
+            ),
+        )
+        world.add_kinematic_structure_entity(box1)
+        world.add_connection(
+            FixedConnection.create_with_dofs(
+                parent=world.root,
+                child=box1,
+                world=world,
+                parent_T_connection_expression=HomogeneousTransformationMatrix.from_xyz_rpy(
+                    0.59, 0.4, 0.92
+                )
+            )
+        )
+    logger.info(
+        "Cube spawned in rviz at x=%.3f, y=%.3f. Check it lines up with the real "
+        "cube, then press Enter to run the pickup.",
+        CUBE_X,
+        CUBE_Y,
+    )
+    # input()
+
+    context = Context(
+        world=world, robot=robot, ros_node=node, evaluate_conditions=False
+    )
+    grasp_description = GraspDescription(
+        ApproachDirection.FRONT,
+        VerticalAlignment.TOP,
+        ViewManager.get_end_effector_view(PICK_ARM, robot),
+    )
+    actions = [
+        ParkArmsAction(Arms.BOTH),
+        PickUpAction(box1, PICK_ARM, grasp_description),
+    ]
+    plan = sequential(actions, context=context).plan
+    input()
+    logger.info("Performing pickup plan on the real robot.")
     try:
-        world = fetch_world_from_service(node=node, timeout_seconds=300)
-        WorldSynchronizer(_world=world, node=node)
-        [robot] = world.get_semantic_annotations_by_type(Tracy)
-
-        cube = _add_cube(world, read_table_top_z(robot))
-
-        logger.info(
-            "Cube spawned in rviz at x=%.3f, y=%.3f. Check it lines up with the real "
-            "cube, then press Enter to run the pickup.",
-            CUBE_X,
-            CUBE_Y,
-        )
-        input()
-
-        context = Context(
-            world=world, robot=robot, ros_node=node, evaluate_conditions=False
-        )
-        grasp_description = GraspDescription(
-            ApproachDirection.FRONT,
-            VerticalAlignment.TOP,
-            ViewManager.get_end_effector_view(PICK_ARM, robot),
-        )
-        actions = [
-            ParkArmsAction(Arms.BOTH),
-            PickUpAction(cube, PICK_ARM, grasp_description),
-        ]
-        plan = sequential(actions, context=context).plan
-
-        logger.info("Performing pickup plan on the real robot.")
-        with ExecutionEnvironment(
-            execution_type=ExecutionType.REAL, collision_avoidance=True
-        ):
-            plan.perform()
+        # with ExecutionEnvironment(
+        #     execution_type=ExecutionType.REAL, collision_avoidance=True
+        # ):
+        #     plan.perform()
         logger.info("Pickup plan finished.")
     finally:
-        os.killpg(os.getpgid(giskard_process.pid), signal.SIGTERM)
-        giskard_process.wait()
+        pass
+        # os.killpg(os.getpgid(giskard_process.pid), signal.SIGTERM)
+        # giskard_process.wait()
 
 
 if __name__ == "__main__":
