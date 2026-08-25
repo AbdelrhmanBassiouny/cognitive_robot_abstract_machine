@@ -325,6 +325,49 @@ def test_model_synchronization_body_only(rclpy_node):
     synchronizer_2.close()
 
 
+def test_get_human_readable_unique_name_agrees_across_synchronized_worlds(rclpy_node):
+    w1 = World(name="w1")
+    w2 = World(name="w2")
+
+    synchronizer_1 = WorldSynchronizer(
+        node=rclpy_node,
+        _world=w1,
+    )
+    synchronizer_2 = WorldSynchronizer(
+        node=rclpy_node,
+        _world=w2,
+    )
+
+    with w1.modify_world():
+        root = Body(name=PrefixedName("map"))
+        w1.add_kinematic_structure_entity(root)
+        body_a = Body(name=PrefixedName("duplicate"))
+        body_b = Body(name=PrefixedName("duplicate"))
+        w1.add_connection(FixedConnection(parent=root, child=body_a))
+        w1.add_connection(FixedConnection(parent=root, child=body_b))
+
+    wait_for_sync_kse_and_return_ids(w1, w2)
+
+    body_a_in_w2 = w2.get_kinematic_structure_entity_by_id(body_a.id)
+    body_b_in_w2 = w2.get_kinematic_structure_entity_by_id(body_b.id)
+
+    # w1 queries a before b, w2 queries b before a: a lazily-computed, per-process cache
+    # would assign the bare name to whichever entity is queried first in each process,
+    # swapping the two worlds' answers. The name must instead depend only on add order.
+    name_a_in_w1 = w1.get_human_readable_unique_name(body_a)
+    name_b_in_w1 = w1.get_human_readable_unique_name(body_b)
+
+    name_b_in_w2 = w2.get_human_readable_unique_name(body_b_in_w2)
+    name_a_in_w2 = w2.get_human_readable_unique_name(body_a_in_w2)
+
+    assert name_a_in_w2 == name_a_in_w1
+    assert name_b_in_w2 == name_b_in_w1
+    assert name_a_in_w1 != name_b_in_w1
+
+    synchronizer_1.close()
+    synchronizer_2.close()
+
+
 def test_model_synchronization_creation_only(rclpy_node):
 
     w1 = World(name="w1")

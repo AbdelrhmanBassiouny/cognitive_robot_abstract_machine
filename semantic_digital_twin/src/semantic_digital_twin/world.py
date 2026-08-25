@@ -960,6 +960,7 @@ class World(HasSimulatorProperties):
         kinematic_structure_entity.index = self.kinematic_structure.add_node(
             kinematic_structure_entity
         )
+        self._register_human_readable_unique_name(kinematic_structure_entity)
 
     def add_degree_of_freedom(self, dof: DegreeOfFreedom) -> None:
         """
@@ -1169,6 +1170,7 @@ class World(HasSimulatorProperties):
         :param kinematic_structure_entity: The kinematic_structure_entity to remove.
         """
         self.kinematic_structure.remove_node(kinematic_structure_entity.index)
+        self._unregister_human_readable_unique_name(kinematic_structure_entity)
         kinematic_structure_entity.remove_from_world()
 
     def remove_degree_of_freedom(self, dof: DegreeOfFreedom) -> None:
@@ -2603,21 +2605,58 @@ class World(HasSimulatorProperties):
                     pass
         self.notify_state_change()
 
+    def _register_human_readable_unique_name(self, entity: KinematicStructureEntity) -> None:
+        """
+        Compute and cache a disambiguated display name for `entity`.
+
+        This is called once, when the entity is added to the world, so that every process
+        that replays the same sequence of entity additions computes the identical mapping.
+
+        :param entity: Entity to register a human-readable unique name for.
+        """
+        id_to_unique_name = self._human_readable_unique_names.get(str(entity.name), None)
+        if id_to_unique_name is None:
+            self._human_readable_unique_names[str(entity.name)] = {entity.id: str(entity.name)}
+        elif entity.id not in id_to_unique_name:
+            human_readable_unique_name = f"{str(entity.name)}_{len(id_to_unique_name)}"
+            id_to_unique_name[entity.id] = human_readable_unique_name
+
+    def _unregister_human_readable_unique_name(self, entity: KinematicStructureEntity) -> None:
+        """
+        Drop `entity`'s cached disambiguated display name.
+
+        Once no entity sharing `entity`'s name remains registered, the name's entry is
+        dropped entirely so a later entity reusing that name starts disambiguating from
+        scratch instead of growing its suffix forever.
+
+        :param entity: Entity to unregister the human-readable unique name of.
+        """
+        id_to_unique_name = self._human_readable_unique_names.get(str(entity.name))
+        if id_to_unique_name is None:
+            return
+        id_to_unique_name.pop(entity.id, None)
+        if not id_to_unique_name:
+            del self._human_readable_unique_names[str(entity.name)]
+
     def get_human_readable_unique_name(self, entity: KinematicStructureEntity) -> str:
         """
         Returns a unique name for this specific entity. Names are created by enumerating the names of enteties,
         so the name of the entity is used and for multiple names a number is appended.
 
+        The disambiguated name is assigned once, when the entity is added to the world (see
+        :meth:`_register_human_readable_unique_name`), so every process synchronized with
+        this world resolves the same entity to the same name regardless of query order.
+
         :param entity: Entity for which a unique name is returned.
         :return: The unique name of this entity as string.
         """
-        id_to_unique_name = self._human_readable_unique_names.get(str(entity.name), None)
-        if id_to_unique_name is None:
-            self._human_readable_unique_names[str(entity.name)] = {entity.id: str(entity.name)}
-            return str(entity.name)
-        elif entity.id in id_to_unique_name:
-            return id_to_unique_name[entity.id]
-        else:
-            human_readable_unique_name = f"{str(entity.name)}_{len(self._human_readable_unique_names[str(entity.name)])}"
-            self._human_readable_unique_names[str(entity.name)][entity.id] = human_readable_unique_name
-            return human_readable_unique_name
+        id_to_unique_name = self._human_readable_unique_names.get(str(entity.name))
+        if id_to_unique_name is None or entity.id not in id_to_unique_name:
+            logger.warning(
+                "%s was not registered when it was added to the world; "
+                "falling back to a lazily computed human-readable name for it.",
+                entity,
+            )
+            self._register_human_readable_unique_name(entity)
+            id_to_unique_name = self._human_readable_unique_names[str(entity.name)]
+        return id_to_unique_name[entity.id]
