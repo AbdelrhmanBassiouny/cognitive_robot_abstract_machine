@@ -30,8 +30,13 @@ where it printed nothing, and `next` lists #64 again.
    container (subprocess -> configuration -> network fetch). Proven pre-existing by
    stashing the changes and watching them hang on unmodified code. Untouched; CI runs them.
 
-**Next, if asked.** Open the pull request (draft, `bug` label, session link in the body, per
-the notes). Nothing else is outstanding on this item.
+**Pull request open.** Draft #198, `bug` label, based on `main`, session link in the body.
+Nothing is outstanding on this item.
+
+**Notes changed the same turn** (`.claude/personal/cram-notes.md`, Pull requests section):
+finishing a piece of work now means opening its draft PR in the same turn without being
+asked, and a pull request is never opened on the upstream repository unless the developer
+accepts it in that session.
 
 **Open, unstarted.** `session-branch-base`: set the fork's default branch back to `main` and
 make a session refuse to work from a branch not derived from it. No branch yet.
