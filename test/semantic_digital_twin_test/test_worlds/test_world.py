@@ -131,7 +131,7 @@ def test_get_human_readable_unique_name_is_independent_of_query_order():
 
     # Querying body_b before body_a must not change either result: the disambiguating
     # suffix is decided by add order, not by query order.
-    assert world.get_human_readable_unique_name(body_b) == "duplicate_1"
+    assert world.get_human_readable_unique_name(body_b) == f"duplicate_{body_b.id.hex[:8]}"
     assert world.get_human_readable_unique_name(body_a) == "duplicate"
 
 
@@ -144,7 +144,7 @@ def test_get_human_readable_unique_name_resets_after_all_duplicates_are_removed(
         world.add_connection(FixedConnection(parent=world.root, child=body_a))
         world.add_connection(FixedConnection(parent=world.root, child=body_b))
     assert world.get_human_readable_unique_name(body_a) == "duplicate"
-    assert world.get_human_readable_unique_name(body_b) == "duplicate_1"
+    assert world.get_human_readable_unique_name(body_b) == f"duplicate_{body_b.id.hex[:8]}"
 
     with world.modify_world():
         world.remove_branch_from_world(body_a)

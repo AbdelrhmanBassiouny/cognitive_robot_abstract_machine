@@ -368,6 +368,68 @@ def test_get_human_readable_unique_name_agrees_across_synchronized_worlds(rclpy_
     synchronizer_2.close()
 
 
+def test_racing_concurrent_additions_of_the_same_base_name_are_stable(rclpy_node):
+    """
+    Two worlds that each add their own same-named body before hearing from the other are a
+    genuine race, not just a query-order difference: neither can know the other already
+    claimed the bare name. Once each world's own answer is decided locally, it must never
+    change again, even after the rival syncs in - the two worlds may end up disagreeing
+    about which of the pair is "duplicate" vs. "duplicate_<hex>", but that disagreement is
+    the accepted trade-off, not a bug, and is checked here for both worlds directly rather
+    than by asserting cross-world agreement.
+    """
+    w1 = World(name="w1")
+    w2 = World(name="w2")
+
+    synchronizer_1 = WorldSynchronizer(node=rclpy_node, _world=w1)
+    synchronizer_2 = WorldSynchronizer(node=rclpy_node, _world=w2)
+
+    with w1.modify_world():
+        root = Body(name=PrefixedName("map"))
+        w1.add_kinematic_structure_entity(root)
+
+    wait_for_sync_kse_and_return_ids(w1, w2)
+    root_in_w2 = w2.get_kinematic_structure_entity_by_id(root.id)
+
+    # The race: each world adds its own same-named body before hearing from the other.
+    body_a = Body(name=PrefixedName("duplicate"))
+    body_b = Body(name=PrefixedName("duplicate"))
+    with w1.modify_world():
+        w1.add_connection(FixedConnection(parent=root, child=body_a))
+    with w2.modify_world():
+        w2.add_connection(FixedConnection(parent=root_in_w2, child=body_b))
+
+    # Each world locally believes its own entity is first and assigns it the bare name
+    # before the other's addition has been received.
+    name_a_in_w1_before_sync = w1.get_human_readable_unique_name(body_a)
+    name_b_in_w2_before_sync = w2.get_human_readable_unique_name(body_b)
+    assert name_a_in_w1_before_sync == "duplicate"
+    assert name_b_in_w2_before_sync == "duplicate"
+
+    wait_for_sync_kse_and_return_ids(w1, w2)
+
+    body_b_in_w1 = w1.get_kinematic_structure_entity_by_id(body_b.id)
+    body_a_in_w2 = w2.get_kinematic_structure_entity_by_id(body_a.id)
+
+    # Each world's already-assigned name for its own entity never changes...
+    assert w1.get_human_readable_unique_name(body_a) == name_a_in_w1_before_sync
+    assert w2.get_human_readable_unique_name(body_b) == name_b_in_w2_before_sync
+
+    # ...and the rival that just arrived gets a stable, id-derived suffix instead of
+    # colliding with (or ever renaming) the entity that already claimed the bare name.
+    assert (
+        w1.get_human_readable_unique_name(body_b_in_w1)
+        == f"duplicate_{body_b.id.hex[:8]}"
+    )
+    assert (
+        w2.get_human_readable_unique_name(body_a_in_w2)
+        == f"duplicate_{body_a.id.hex[:8]}"
+    )
+
+    synchronizer_1.close()
+    synchronizer_2.close()
+
+
 def test_model_synchronization_creation_only(rclpy_node):
 
     w1 = World(name="w1")

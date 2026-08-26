@@ -2609,8 +2609,13 @@ class World(HasSimulatorProperties):
         """
         Compute and cache a disambiguated display name for `entity`.
 
-        This is called once, when the entity is added to the world, so that every process
-        that replays the same sequence of entity additions computes the identical mapping.
+        This is called once, when the entity is added to the world, and never revisited
+        afterwards. The first entity registered for a given name in this process claims the
+        bare name; every later one is suffixed with a fragment of its own id, since that is
+        the only disambiguator every process already agrees on without coordinating - unlike
+        a count of how many were registered so far, which depends on the order entities were
+        added or replayed in *this* process and can differ between two processes that added
+        same-named entities concurrently.
 
         :param entity: Entity to register a human-readable unique name for.
         """
@@ -2618,7 +2623,7 @@ class World(HasSimulatorProperties):
         if id_to_unique_name is None:
             self._human_readable_unique_names[str(entity.name)] = {entity.id: str(entity.name)}
         elif entity.id not in id_to_unique_name:
-            human_readable_unique_name = f"{str(entity.name)}_{len(id_to_unique_name)}"
+            human_readable_unique_name = f"{str(entity.name)}_{entity.id.hex[:8]}"
             id_to_unique_name[entity.id] = human_readable_unique_name
 
     def _unregister_human_readable_unique_name(self, entity: KinematicStructureEntity) -> None:
