@@ -79,16 +79,18 @@ Height, in metres, above ``target_location`` a body is released at, rather than
 descending onto it exactly.
 """
 
-FINGER_PAD_TABLE_CLEARANCE = 0.002
+GRASP_CLOSE_SWING_CLEARANCE = 0.015
 """
-Height, in metres, :func:`_grasp_target_z` keeps the gripper's own fingertip pads above
-the surface a shape rests on.
+Extra height, in metres, added on top of the object's own vertical centre when reaching
+the grasp pose, so the fingertip pads still clear the resting surface after closing.
 
-Not zero: MuJoCo's own contact solver tolerates a little penetration before its
-restoring force fully engages, so a pad aimed exactly at the resting surface's own
-height would still dip into it slightly.
+The pads aren't fixed relative to the tool frame: as the Robotiq-85 knuckle closes, each
+pad's own position travels ~1.35cm further out along the gripper's reach axis (measured
+directly: pad centre sits at 0.1208m from the gripper mount when open, 0.1343m when
+closed) -- confirmed directly, a pad that clears the table by that same ~1.35cm while
+open ends up flush with the table once closed. ``0.015`` covers that swing with a small
+margin.
 """
-
 
 def _bounding_box_center_world(world: World, body: Body) -> numpy.ndarray:
     """
@@ -107,61 +109,6 @@ def _bounding_box_center_world(world: World, body: Body) -> numpy.ndarray:
     )
     root_transform_body = world.compute_forward_kinematics_np(world.root, body)
     return root_transform_body[:3, :3] @ center_local + root_transform_body[:3, 3]
-
-
-def _fingertip_pad_half_height(world: World, robot: Tracy, arm_side: Arms) -> float:
-    """
-    Half the vertical extent of one of an arm's own gripper's fingertip pads.
-
-    Both pads on one gripper share this height by construction, so either one stands in
-    for the pair.
-
-    :param world: The world ``robot`` belongs to.
-    :param robot: The robot whose gripper pad is measured.
-    :param arm_side: Which arm's gripper to measure.
-    """
-    prefix = "right_" if arm_side == Arms.RIGHT else "left_"
-    bounding_box = (
-        world.get_body_by_name(f"{prefix}robotiq_85_left_finger_tip_link")
-        .collision[0]
-        .local_frame_bounding_box
-    )
-    return (bounding_box.max_z - bounding_box.min_z) / 2
-
-
-def _grasp_target_z(
-    world: World,
-    robot: Tracy,
-    arm_side: Arms,
-    body: Body,
-    table_clearance: float = FINGER_PAD_TABLE_CLEARANCE,
-) -> float:
-    """
-    Height, in the world root frame, to place the gripper's own finger midpoint at so
-    its pads clear the surface ``body`` rests on while still closing around ``body``.
-
-    A Robotiq-85 fingertip pad's own vertical extent is taller than any of this demo's
-    thin Montessori shapes, so centering the pad on a shape's own vertical centre -- the
-    previous approach -- puts the pad's own lower edge below the table: confirmed
-    directly, contact-checking during a close showed the pad touching the table on every
-    tick, never the target shape. Anchoring the pad's own lower edge just above the
-    shape's resting surface instead keeps the pad clear of the table while its own,
-    taller extent still reaches up past the shape's own top, so it still closes around
-    the shape's sides.
-
-    :param world: The world ``body`` belongs to.
-    :param robot: The robot whose gripper reaches for ``body``.
-    :param arm_side: Which arm's gripper reaches for ``body``.
-    :param body: The body to be grasped.
-    :param table_clearance: See :data:`FINGER_PAD_TABLE_CLEARANCE`.
-    """
-    bounding_box = body.collision[0].local_frame_bounding_box
-    shape_bottom_z = (
-        _bounding_box_center_world(world, body)[2]
-        - (bounding_box.max_z - bounding_box.min_z) / 2
-    )
-    pad_half_height = _fingertip_pad_half_height(world, robot, arm_side)
-    return shape_bottom_z + pad_half_height + table_clearance
 
 
 def _finger_midpoint_offset(robot: Tracy, arm_side: Arms) -> numpy.ndarray:
@@ -293,11 +240,6 @@ class PickUpActionMujoco(ActionDescription):
     See :data:`HOVER_CLEARANCE`.
     """
 
-    finger_pad_table_clearance: float = FINGER_PAD_TABLE_CLEARANCE
-    """
-    See :data:`FINGER_PAD_TABLE_CLEARANCE`.
-    """
-
     @property
     def _action_plan(self) -> PlanNode:
         return code(self._run)
@@ -308,17 +250,14 @@ class PickUpActionMujoco(ActionDescription):
         pose = _top_down_pose_builder(world, robot, self.arm)
 
         body_center = _bounding_box_center_world(world, self.object_designator)
-        grasp_z = _grasp_target_z(
-            world,
-            robot,
-            self.arm,
-            self.object_designator,
-            self.finger_pad_table_clearance,
-        )
         pick_hover = pose(
             body_center[0], body_center[1], body_center[2] + self.hover_clearance
         )
-        pick_grasp = pose(body_center[0], body_center[1], grasp_z)
+        pick_grasp = pose(
+            body_center[0],
+            body_center[1],
+            body_center[2] + GRASP_CLOSE_SWING_CLEARANCE,
+        )
 
         _reach(world, self.sim, self.actuators, self.arm, pick_hover)
         _reach(world, self.sim, self.actuators, self.arm, pick_grasp)

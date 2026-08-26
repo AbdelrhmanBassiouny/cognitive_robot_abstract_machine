@@ -3,15 +3,17 @@ Tracy's left arm picks up every loose Montessori shape that has a matching hole 
 places it above that hole, with MuJoCo standing in as the real robot: one
 :class:`~experiments.tracy_experiments.pick_and_place_action.PickUpActionMujoco`/
 :class:`~experiments.tracy_experiments.pick_and_place_action.PlaceActionMujoco` pair per
-shape (see :func:`~experiments.tracy_experiments.montessori.montessori_actions.
-build_sorting_actions`), composed into a single :func:`~coraplex.plans.factories.sequential`
-plan -- see :mod:`~experiments.tracy_experiments.pick_and_place_action`'s own docstring
-for why each action's own leaf motion runs plain Python (driving MuJoCo actuators
-directly) rather than a Giskard motion mapping.
+shape, written out as one flat :func:`~coraplex.plans.factories.sequential` plan (Tracy's
+five sorted shapes and their matching holes are fixed by :class:`~experiments.
+tracy_experiments.montessori.world.TracyMontessoriWorld`'s own construction, so the plan
+does not need to be built dynamically) -- see :mod:`~experiments.tracy_experiments.
+pick_and_place_action`'s own docstring for why each action's own leaf motion runs plain
+Python (driving MuJoCo actuators directly) rather than a Giskard motion mapping.
 
 See :mod:`~experiments.tracy_experiments.montessori.montessori_demo_real` for the physical-robot
-counterpart, which builds the same action sequence from the real
-``PickUpAction``/``PlaceAction`` instead.
+counterpart, which builds its action sequence dynamically from the real
+``PickUpAction``/``PlaceAction`` via :func:`~experiments.tracy_experiments.montessori.
+montessori_actions.build_sorting_actions` instead.
 
 Run with (the ``iai_tracy_description`` ROS package must be built and sourced)::
 
@@ -26,8 +28,10 @@ import time
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 from coraplex.datastructures.dataclasses import Context
-from coraplex.datastructures.enums import Arms
+from coraplex.datastructures.enums import ApproachDirection, Arms, VerticalAlignment
+from coraplex.datastructures.grasp import GraspDescription
 from coraplex.plans.factories import sequential
+from coraplex.view_manager import ViewManager
 from experiments.montessori.semantics import MontessoriShape
 from experiments.tracy_experiments.equipment import (
     apply_gravity_compensation,
@@ -42,9 +46,6 @@ from experiments.tracy_experiments.grasp_contact import (
     BOARD_FRICTION,
     apply_contact_friction,
     apply_montessori_grasp_contact_parameters,
-)
-from experiments.tracy_experiments.montessori.montessori_actions import (
-    build_sorting_actions,
 )
 from experiments.tracy_experiments.pick_and_place_action import (
     PickUpActionMujoco,
@@ -117,22 +118,12 @@ def main(headless: bool = False) -> None:
         Tracy, tracy_world, mount_position, mount_yaw=0.0
     )
     world = montessori.world
-    # _strip_drawer_collision(world)
-    # Without this, the loose shapes keep MuJoCo's own soft contact defaults, which let
-    # a shape pinched between the fingers sink in and slip back out as the arm lifts.
     apply_montessori_grasp_contact_parameters(
         world.get_semantic_annotations_by_type(MontessoriShape)
     )
     apply_contact_friction([montessori.board.root], BOARD_FRICTION)
 
     joint_state_of_type(robot.left_arm.end_effector, GripperState.OPEN).apply_to(world)
-    # Both arms start already parked, baked into the initial pose, rather than being
-    # physically driven there once the simulation starts: the sweep from Tracy's raw
-    # parsed (URDF-zero) pose to its park target passes close enough to the board that
-    # driving it for real, with collision avoidance either on (it could not find a
-    # compliant path) or off (a real, high-force contact), either raised a hard
-    # collision error or visibly knocked the loose shapes around -- confirmed directly.
-    # Starting already parked skips that sweep entirely.
     joint_state_of_type(robot.left_arm, StaticJointState.PARK).apply_to(world)
     joint_state_of_type(robot.right_arm, StaticJointState.PARK).apply_to(world)
     world.notify_state_change()
@@ -148,12 +139,6 @@ def main(headless: bool = False) -> None:
     with RealTimeSimulation(world=world, headless=headless, step_size=1e-3) as sim:
         try:
             time.sleep(5)
-            # Both arms' own actuators are commanded to their park targets directly
-            # here, matching the pose already baked into the world's own initial state
-            # (see above) -- not planned and driven there via park_arms, since that
-            # would physically sweep the arm from its raw parsed pose through the
-            # board's own vicinity to reach park, which visibly knocked the loose
-            # shapes around even with collision avoidance off.
             for arm in [robot.left_arm, robot.right_arm]:
                 park_state = joint_state_of_type(arm, StaticJointState.PARK)
                 for connection, target in zip(
@@ -162,28 +147,112 @@ def main(headless: bool = False) -> None:
                     sim.command(actuators[connection.raw_dof.name.name], target)
             sim.advance(0.5)
 
-            actions = build_sorting_actions(
-                world,
-                montessori.board,
-                robot,
-                PICK_ARM,
-                pick_up_action=lambda body, arm, grasp: PickUpActionMujoco(
-                    object_designator=body,
-                    arm=arm,
-                    grasp_description=grasp,
-                    sim=sim,
-                    actuators=actuators,
-                ),
-                place_action=lambda body, target, arm: PlaceActionMujoco(
-                    object_designator=body,
-                    target_location=target,
-                    arm=arm,
-                    sim=sim,
-                    actuators=actuators,
-                ),
+            shapes_by_name = {
+                shape.name.name: shape
+                for shape in world.get_semantic_annotations_by_type(MontessoriShape)
+            }
+            circular_hole_1_shape = shapes_by_name["circular_hole_1_shape"]
+            square_hole_shape = shapes_by_name["square_hole_shape"]
+            triangle_hole_shape = shapes_by_name["triangle_hole_shape"]
+            rectangular_hole_shape = shapes_by_name["rectangular_hole_shape"]
+            circular_hole_2_shape = shapes_by_name["circular_hole_2_shape"]
+
+            grasp_description = GraspDescription(
+                ApproachDirection.FRONT,
+                VerticalAlignment.TOP,
+                ViewManager.get_end_effector_view(PICK_ARM, robot),
             )
 
-            plan = sequential(actions, context).plan
+            plan = sequential(
+                [
+                    # circular_hole_1_shape -> circular_hole_1
+                    PickUpActionMujoco(
+                        object_designator=circular_hole_1_shape.root,
+                        arm=PICK_ARM,
+                        grasp_description=grasp_description,
+                        sim=sim,
+                        actuators=actuators,
+                    ),
+                    PlaceActionMujoco(
+                        object_designator=circular_hole_1_shape.root,
+                        target_location=montessori.board.hole_for(
+                            circular_hole_1_shape
+                        ).root.global_transform.to_pose(),
+                        arm=PICK_ARM,
+                        sim=sim,
+                        actuators=actuators,
+                    ),
+                    # square_hole_shape -> square_hole
+                    PickUpActionMujoco(
+                        object_designator=square_hole_shape.root,
+                        arm=PICK_ARM,
+                        grasp_description=grasp_description,
+                        sim=sim,
+                        actuators=actuators,
+                    ),
+                    PlaceActionMujoco(
+                        object_designator=square_hole_shape.root,
+                        target_location=montessori.board.hole_for(
+                            square_hole_shape
+                        ).root.global_transform.to_pose(),
+                        arm=PICK_ARM,
+                        sim=sim,
+                        actuators=actuators,
+                    ),
+                    # triangle_hole_shape -> triangle_hole
+                    PickUpActionMujoco(
+                        object_designator=triangle_hole_shape.root,
+                        arm=PICK_ARM,
+                        grasp_description=grasp_description,
+                        sim=sim,
+                        actuators=actuators,
+                    ),
+                    PlaceActionMujoco(
+                        object_designator=triangle_hole_shape.root,
+                        target_location=montessori.board.hole_for(
+                            triangle_hole_shape
+                        ).root.global_transform.to_pose(),
+                        arm=PICK_ARM,
+                        sim=sim,
+                        actuators=actuators,
+                    ),
+                    # rectangular_hole_shape -> rectangular_hole
+                    PickUpActionMujoco(
+                        object_designator=rectangular_hole_shape.root,
+                        arm=PICK_ARM,
+                        grasp_description=grasp_description,
+                        sim=sim,
+                        actuators=actuators,
+                    ),
+                    PlaceActionMujoco(
+                        object_designator=rectangular_hole_shape.root,
+                        target_location=montessori.board.hole_for(
+                            rectangular_hole_shape
+                        ).root.global_transform.to_pose(),
+                        arm=PICK_ARM,
+                        sim=sim,
+                        actuators=actuators,
+                    ),
+                    # circular_hole_2_shape -> circular_hole_2
+                    PickUpActionMujoco(
+                        object_designator=circular_hole_2_shape.root,
+                        arm=PICK_ARM,
+                        grasp_description=grasp_description,
+                        sim=sim,
+                        actuators=actuators,
+                    ),
+                    PlaceActionMujoco(
+                        object_designator=circular_hole_2_shape.root,
+                        target_location=montessori.board.hole_for(
+                            circular_hole_2_shape
+                        ).root.global_transform.to_pose(),
+                        arm=PICK_ARM,
+                        sim=sim,
+                        actuators=actuators,
+                    ),
+                ],
+                context,
+            ).plan
             plan.perform()
             logger.info("Sorting plan finished.")
         except Exception as error:

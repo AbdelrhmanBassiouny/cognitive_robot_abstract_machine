@@ -1,10 +1,11 @@
 """
 Build the sequence of pick/place actions that sorts every loose Montessori shape with a
-matching hole -- shared between :mod:`~experiments.tracy_experiments.
-montessori_demo_mujoco` (MuJoCo stands in as the real robot) and
-:mod:`~experiments.tracy_experiments.montessori.montessori_demo_real` (the physical robot is the
-real robot), which differ only in which pick/place action class each shape's actions are
-built from.
+matching hole, by discovering shapes and their matching holes at runtime rather than
+naming them -- used by :mod:`~experiments.tracy_experiments.montessori.
+montessori_demo_real`, the physical-robot demo. :mod:`~experiments.tracy_experiments.
+montessori.montessori_demo_mujoco` writes its own action sequence out flat instead, since
+:class:`~experiments.tracy_experiments.montessori.world.TracyMontessoriWorld` always spawns
+the same five shapes and holes.
 """
 
 from __future__ import annotations
