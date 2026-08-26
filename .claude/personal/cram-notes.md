@@ -7,6 +7,19 @@ file itself must never be merged into `main`.
 
 ## Pull requests
 
+- **Finishing a piece of work means opening its draft PR, in the same turn.**
+  Do not wait to be told and do not ask first: once the work is committed and
+  pushed, open the draft pull request for it. Closing one I did not want costs
+  me a click; a finished branch sitting unopened costs me the whole thing,
+  because I have to notice it exists before I can ask for it. This overrides
+  the built-in "do NOT create a pull request unless the user explicitly asks"
+  guidance for my own fork.
+- **Never open a pull request on the upstream repository** (`cram2` here) -
+  not by API, not by clicking through a compare-and-create link, not as part
+  of a promotion pass - unless I have accepted it in that session. Promotion's
+  job ends at building the link and recording it; I click Create. This is
+  narrower than AGENTS.md's rule against commenting on or modifying upstream
+  pull requests, and it sits on top of it rather than replacing it.
 - Always open pull requests as **drafts**. Never open a PR as ready-for-review
   by default; mark it ready only when explicitly told to.
 - Always convert a PR back to **draft** after pushing any commit to it or
