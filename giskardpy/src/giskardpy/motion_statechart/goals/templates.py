@@ -1,6 +1,7 @@
 from __future__ import division
 
 from dataclasses import dataclass, field
+from datetime import timedelta
 from typing import List
 
 from typing_extensions import Optional
@@ -217,7 +218,7 @@ class RepeatOnStall(RepeatUntil):
         motion statechart is compiled.
     """
 
-    timeout: float = field(default=5.0, kw_only=True)
+    timeout: timedelta = field(default=timedelta(5), kw_only=True)
     """
     Seconds of simulated time without progress after which an attempt counts as failed.
     """
@@ -236,6 +237,6 @@ class RepeatOnStall(RepeatUntil):
         return ProgressStalled(
             name=f"{self.name}/stalled",
             monitored_node=task,
-            timeout=self.timeout,
+            timeout=self.timeout.seconds,
             minimum_convergence_rate=self.minimum_convergence_rate,
         )

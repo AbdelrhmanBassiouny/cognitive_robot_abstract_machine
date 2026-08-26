@@ -122,17 +122,3 @@ def whole_scene_region(immutable_model_world) -> BoundingBox:
         max_y=10,
         max_z=10,
     )
-
-
-@pytest.fixture(scope="session")
-def _multi_story_building_world_setup():
-    world = World.create_with_root_body("root")
-    building_floor = BuildingFloor()
-    building_floor.spawn(world, "ground_floor")
-    building_floor.spawn(
-        world,
-        "first_floor",
-        parent_T_self=HomogeneousTransformationMatrix.from_xyz_rpy(0, 0, 3),
-    )
-
-    return world

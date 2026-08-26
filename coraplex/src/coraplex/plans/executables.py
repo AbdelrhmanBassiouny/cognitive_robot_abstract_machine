@@ -322,12 +322,12 @@ class MoveBranchExecutable(Executable):
 
     body: Body = field(kw_only=True)
     """
-    The body that is moved.
+    The root of the branch in the kinematic structure that is moved 
     """
 
     new_parent: Body = field(kw_only=True)
     """
-    The body the moved body hangs off afterwards.
+    The new parent to which the branch is moved.
     """
 
     def execute(self) -> None:

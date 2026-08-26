@@ -6,7 +6,7 @@ from typing_extensions import Optional, Any, Dict
 
 from coraplex.config.action_conf import ActionConfig
 from coraplex.datastructures.dataclasses import Context
-from coraplex.plans.attachment_nodes import AttachNode, DetachNode
+from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.factories import execute_single, pause_until, sequential
 from coraplex.plans.plan_node import PlanNode
 from coraplex.robot_plans.actions.base import ActionDescription
@@ -18,7 +18,7 @@ from giskardpy.motion_statechart.monitors.joint_monitors import (
 )
 from krrood.entity_query_language.core.variable import Variable
 from krrood.entity_query_language.factories import variable_from, and_, ConditionType
-from semantic_digital_twin.reasoning.predicates import allclose
+from semantic_digital_twin.reasoning.predicates import allclose, InsideOf
 from semantic_digital_twin.reasoning.robot_predicates import is_pose_free_for_robot
 from semantic_digital_twin.robots.robot_parts import Camera
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
@@ -129,24 +129,30 @@ class ElevatorNavigation(ActionDescription):
 
     @property
     def _action_plan(self) -> PlanNode:
+        [current_floor] = [floor for floor in self.world.get_semantic_annotations_by_type(Level) if InsideOf(self.robot.root, floor.root)() > 0.9]
         return sequential(
             [
-                NavigateAction(Pose.from_xyz_rpy(
+                NavigateAction(self._pose_infront_of_elevator),
+                pause_until([NavigateAction(Pose.from_xyz_rpy(
                     z=self._height_in_cabin, reference_frame=self.elevator.root
-                )),
-                AttachNode(body=self.robot.root, new_parent=self.elevator.root),
+                    ))], monitor=self._elevator_open_at_floor(current_floor)),
+                ReAttachNode(body=self.robot.root, new_parent=self.elevator.root),
                 pause_until(
-                    [NavigateAction(Pose.from_xyz_rpy(
+                    [NavigateAction(self._pose_infront_of_elevator)],
+                    monitor=self._elevator_open_at_floor(self.target_floor),
+                ),
+                ReAttachNode(body=self.robot.root, new_parent=self.world.root),
+            ]
+        )
+
+    @property
+    def _pose_infront_of_elevator(self):
+        return Pose.from_xyz_rpy(
                         x=float(self.elevator.hole_direction.to_np()[0]) * (
                                     self.elevator.scale.x / 2 + self.exit_clearance),
                         z=self._height_in_cabin,
                         reference_frame=self.elevator.root,
-                    ))],
-                    monitor=self._elevator_open_at_target_floor,
-                ),
-                DetachNode(body=self.robot.root, new_parent=self.world.root),
-            ]
-        )
+                    )
 
     @property
     def _height_in_cabin(self) -> float:
@@ -162,8 +168,7 @@ class ElevatorNavigation(ActionDescription):
             .z
         )
 
-    @property
-    def _elevator_open_at_target_floor(self) -> Parallel:
+    def _elevator_open_at_floor(self, target_floor: Level) -> Parallel:
         """
         Observes True once the cabin serves :attr:`target_floor` with its doors open.
         """
@@ -180,7 +185,7 @@ class ElevatorNavigation(ActionDescription):
             )
         nodes.append(JointPositionReached(
             connection=self.elevator.mechanical_joint.root.parent_connection,
-            position=self.elevator.drive_position_for_floor(self.target_floor),
+            position=self.elevator.drive_position_for_floor(target_floor),
             threshold=self.arrival_threshold,
             name="ElevatorAtTargetFloor",
         ))

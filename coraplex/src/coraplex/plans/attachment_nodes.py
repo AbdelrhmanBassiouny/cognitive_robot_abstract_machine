@@ -8,7 +8,7 @@ from semantic_digital_twin.world_description.world_entity import KinematicStruct
 
 
 @dataclass
-class ModelChangeNode(ExecutionBoundaryNode):
+class ReAttachNode(ExecutionBoundaryNode):
     """
     Node that represents a change in the world model of the semantic digital twin.
 
@@ -38,23 +38,3 @@ class ModelChangeNode(ExecutionBoundaryNode):
         return MoveBranchExecutable(
             context=self.plan.context, body=self.body, new_parent=self.new_parent
         )
-
-
-@dataclass
-class AttachNode(ModelChangeNode):
-    """
-    Model change that attaches a body to another body (e.g. an object to the gripper
-    after grasping).
-
-    Kept as a distinct type so it can be located by type in the plan.
-    """
-
-
-@dataclass
-class DetachNode(ModelChangeNode):
-    """
-    Model change that detaches a body from its current parent and re-attaches it to the
-    world root (e.g. after placing an object).
-
-    Kept as a distinct type so it can be located by type in the plan.
-    """

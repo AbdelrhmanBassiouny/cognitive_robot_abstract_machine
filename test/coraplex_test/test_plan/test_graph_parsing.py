@@ -10,7 +10,7 @@ from coraplex.datastructures.enums import (
 )
 from coraplex.datastructures.grasp import GraspDescription
 from coraplex.execution_environment import simulated_robot
-from coraplex.plans.attachment_nodes import ModelChangeNode
+from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.perception import PerceptionQuery
 from coraplex.plans.executables import (
     Executable,
@@ -654,11 +654,11 @@ def test_split_by_type(immutable_model_world):
 
     split_list = [
         MoveToolCenterPointMotion(Pose(), Arms.LEFT),
-        ModelChangeNode(body=world.get_body_by_name("milk.stl"), new_parent=world.root),
+        ReAttachNode(body=world.get_body_by_name("milk.stl"), new_parent=world.root),
         MoveToolCenterPointMotion(Pose(), Arms.RIGHT),
     ]
 
-    splitted_list = split_list_by_type(split_list, ModelChangeNode)
+    splitted_list = split_list_by_type(split_list, ReAttachNode)
 
     assert len(splitted_list) == 3
     assert len(splitted_list[0]) == 1
@@ -667,7 +667,7 @@ def test_split_by_type(immutable_model_world):
 
 
 def test_split_by_type_empty_list():
-    assert split_list_by_type([], ModelChangeNode) == []
+    assert split_list_by_type([], ReAttachNode) == []
 
 
 def test_split_by_type_without_match_stays_one_group():
@@ -676,7 +676,7 @@ def test_split_by_type_without_match_stays_one_group():
         MoveToolCenterPointMotion(Pose(), Arms.RIGHT),
     ]
 
-    splitted_list = split_list_by_type(no_model_change, ModelChangeNode)
+    splitted_list = split_list_by_type(no_model_change, ReAttachNode)
 
     assert len(splitted_list) == 1
     assert splitted_list[0] == no_model_change
@@ -684,7 +684,7 @@ def test_split_by_type_without_match_stays_one_group():
 
 def test_split_by_type_groups_consecutive_elements(immutable_model_world):
     world, view, context = immutable_model_world
-    model_change = ModelChangeNode(
+    model_change = ReAttachNode(
         body=world.get_body_by_name("milk.stl"), new_parent=world.root
     )
 
@@ -695,19 +695,19 @@ def test_split_by_type_groups_consecutive_elements(immutable_model_world):
         MoveToolCenterPointMotion(Pose(), Arms.LEFT),
     ]
 
-    splitted_list = split_list_by_type(split_list, ModelChangeNode)
+    splitted_list = split_list_by_type(split_list, ReAttachNode)
 
     assert [len(group) for group in splitted_list] == [2, 1, 1]
     assert splitted_list[1] == [model_change]
-    assert all(not isinstance(element, ModelChangeNode) for element in splitted_list[0])
+    assert all(not isinstance(element, ReAttachNode) for element in splitted_list[0])
 
 
 def test_split_by_type_leading_and_trailing_match(immutable_model_world):
     world, view, context = immutable_model_world
-    first_model_change = ModelChangeNode(
+    first_model_change = ReAttachNode(
         body=world.get_body_by_name("milk.stl"), new_parent=world.root
     )
-    last_model_change = ModelChangeNode(
+    last_model_change = ReAttachNode(
         body=world.get_body_by_name("milk.stl"), new_parent=world.root
     )
 
@@ -717,7 +717,7 @@ def test_split_by_type_leading_and_trailing_match(immutable_model_world):
         last_model_change,
     ]
 
-    splitted_list = split_list_by_type(split_list, ModelChangeNode)
+    splitted_list = split_list_by_type(split_list, ReAttachNode)
 
     assert [len(group) for group in splitted_list] == [1, 1, 1]
     assert splitted_list[0] == [first_model_change]

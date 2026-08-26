@@ -683,6 +683,8 @@ class ActionNode(DesignatorNode):
         return None
 
     def notify(self):
+        #TODO: Notify is called when the executable is created nut this is not when we want to record the data,
+        # might be good to move this to node callbacks
 
         self.create_execution_data_pre_perform()
 
@@ -693,7 +695,6 @@ class ActionNode(DesignatorNode):
         for child in self.children:
             child.notify()
 
-        # TODO: This can't stay here
         self.update_execution_data_post_perform()
 
     @property
