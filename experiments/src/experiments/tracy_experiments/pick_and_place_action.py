@@ -79,7 +79,7 @@ Height, in metres, above ``target_location`` a body is released at, rather than
 descending onto it exactly.
 """
 
-GRASP_CLOSE_SWING_CLEARANCE = 0.015
+GRASP_CLOSE_SWING_CLEARANCE = 0.0435
 """
 Extra height, in metres, added on top of the object's own vertical centre when reaching
 the grasp pose, so the fingertip pads still clear the resting surface after closing.

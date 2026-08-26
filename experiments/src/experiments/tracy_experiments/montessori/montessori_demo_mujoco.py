@@ -4,7 +4,7 @@ places it above that hole, with MuJoCo standing in as the real robot: one
 :class:`~experiments.tracy_experiments.pick_and_place_action.PickUpActionMujoco`/
 :class:`~experiments.tracy_experiments.pick_and_place_action.PlaceActionMujoco` pair per
 shape, written out as one flat :func:`~coraplex.plans.factories.sequential` plan (Tracy's
-five sorted shapes and their matching holes are fixed by :class:`~experiments.
+four sorted shapes and their matching holes are fixed by :class:`~experiments.
 tracy_experiments.montessori.world.TracyMontessoriWorld`'s own construction, so the plan
 does not need to be built dynamically) -- see :mod:`~experiments.tracy_experiments.
 pick_and_place_action`'s own docstring for why each action's own leaf motion runs plain
@@ -118,6 +118,7 @@ def main(headless: bool = False) -> None:
         Tracy, tracy_world, mount_position, mount_yaw=0.0
     )
     world = montessori.world
+
     apply_montessori_grasp_contact_parameters(
         world.get_semantic_annotations_by_type(MontessoriShape)
     )
@@ -155,7 +156,6 @@ def main(headless: bool = False) -> None:
             square_hole_shape = shapes_by_name["square_hole_shape"]
             triangle_hole_shape = shapes_by_name["triangle_hole_shape"]
             rectangular_hole_shape = shapes_by_name["rectangular_hole_shape"]
-            circular_hole_2_shape = shapes_by_name["circular_hole_2_shape"]
 
             grasp_description = GraspDescription(
                 ApproachDirection.FRONT,
@@ -228,23 +228,6 @@ def main(headless: bool = False) -> None:
                         object_designator=rectangular_hole_shape.root,
                         target_location=montessori.board.hole_for(
                             rectangular_hole_shape
-                        ).root.global_transform.to_pose(),
-                        arm=PICK_ARM,
-                        sim=sim,
-                        actuators=actuators,
-                    ),
-                    # circular_hole_2_shape -> circular_hole_2
-                    PickUpActionMujoco(
-                        object_designator=circular_hole_2_shape.root,
-                        arm=PICK_ARM,
-                        grasp_description=grasp_description,
-                        sim=sim,
-                        actuators=actuators,
-                    ),
-                    PlaceActionMujoco(
-                        object_designator=circular_hole_2_shape.root,
-                        target_location=montessori.board.hole_for(
-                            circular_hole_2_shape
                         ).root.global_transform.to_pose(),
                         arm=PICK_ARM,
                         sim=sim,

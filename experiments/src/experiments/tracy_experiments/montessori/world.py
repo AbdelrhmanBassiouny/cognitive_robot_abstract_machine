@@ -27,10 +27,17 @@ and pass it in as :attr:`TracyMontessoriWorld.table_top_z`.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing_extensions import List
 
-from experiments.montessori.hole_geometry import HOLE_MARKER_THICKNESS, HoleFootprint
+import numpy as np
+
+from experiments.montessori.hole_geometry import (
+    HOLE_MARKER_THICKNESS,
+    HoleFootprint,
+    _extrude_polygon,
+)
 from experiments.montessori.semantics import (
     MONTESSORI_SHAPE_CLASSES,
     MontessoriShapeCategory,
@@ -62,16 +69,22 @@ from experiments.montessori.world import (
     _landing_region_height,
     _landing_region_position,
     _name,
-    _shape_body,
 )
 from experiments.montessori.world2 import SPAWNED_SHAPE_CATEGORIES
+from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.semantic_annotations.semantic_annotations import (
     Drawer,
     Floor,
     Handle,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Point3
-from semantic_digital_twin.world_description.geometry import Box, Color, Mesh
+from semantic_digital_twin.world_description.geometry import (
+    Box,
+    Color,
+    Cylinder,
+    Mesh,
+    Scale,
+)
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import Body, Region
 
@@ -126,6 +139,65 @@ Widened from an earlier ``-0.09``: with shapes that close together, an empty-gri
 reach for one shape's own hover pose could sweep the arm into its neighbour. Exactly
 how far apart they sit does not matter, only that neighbouring shapes stay clear of each
 other's own approach path.
+"""
+
+CUBE_EDGE = 0.03
+"""
+Edge length, in metres, of this scene's physical cube piece, measured directly rather
+than derived from the board's own square hole footprint.
+"""
+
+CYLINDER_DIAMETER = 0.028
+"""
+Diameter, in metres, of this scene's one physical cylindrical piece (see
+:const:`SKIPPED_HOLE_KEYS`), measured directly rather than derived from the board's own
+circular hole footprint.
+"""
+
+CYLINDER_HEIGHT = 0.03
+"""
+Height, in metres, of this scene's physical cylindrical piece (see
+:const:`CYLINDER_DIAMETER`).
+"""
+
+RECTANGULAR_PRISM_WIDTH = 0.02
+"""
+Width, in metres, of this scene's physical rectangular-prism piece, measured directly
+rather than derived from the board's own rectangular hole footprint.
+"""
+
+RECTANGULAR_PRISM_LENGTH = 0.04
+"""
+Length, in metres, of this scene's physical rectangular-prism piece (see
+:const:`RECTANGULAR_PRISM_WIDTH`).
+"""
+
+RECTANGULAR_PRISM_HEIGHT = 0.03
+"""
+Height, in metres, of this scene's physical rectangular-prism piece (see
+:const:`RECTANGULAR_PRISM_WIDTH`).
+"""
+
+TRIANGULAR_PRISM_SIDE = 0.037
+"""
+Side length, in metres, of this scene's physical triangular-prism piece's equilateral
+cross-section, measured directly rather than derived from the board's own (slightly
+irregular) triangular hole's true outline.
+"""
+
+TRIANGULAR_PRISM_HEIGHT = 0.03
+"""
+Height, in metres, of this scene's physical triangular-prism piece (see
+:const:`TRIANGULAR_PRISM_SIDE`).
+"""
+
+SKIPPED_HOLE_KEYS = frozenset({"circular_hole_2"})
+"""
+Hole keys with no matching loose piece in this scene, even though their
+:class:`~experiments.montessori.semantics.MontessoriShapeCategory` is otherwise spawned
+(see :data:`~experiments.montessori.world2.SPAWNED_SHAPE_CATEGORIES`): this scene's
+physical set has only one cylindrical piece, sized to :const:`CYLINDER_DIAMETER`, so the
+board's second, differently-sized circular hole is left without a matching piece.
 """
 
 _BOARD_POSITION_DELTA_X = float(BOARD_POSITION_TRACY.x) - float(BOARD_POSITION.x)
@@ -186,6 +258,61 @@ def _build_hole_specs_tracy(
             _hole_spec_from_footprint_tracy(footprint, key, board_position, board_top_z)
         )
     return hole_specs
+
+
+def _equilateral_triangle_boundary(side: float) -> np.ndarray:
+    """
+    Vertices of an equilateral triangle with the given side length, centered on its own
+    centroid, apex pointing along local +y.
+
+    :param side: Length of each of the triangle's three sides.
+    """
+    circumradius = side / math.sqrt(3)
+    inradius = side / (2 * math.sqrt(3))
+    return np.array(
+        [
+            [0.0, circumradius],
+            [-side / 2, -inradius],
+            [side / 2, -inradius],
+        ]
+    )
+
+
+def _measured_shape_body(name: PrefixedName, category: MontessoriShapeCategory) -> Body:
+    """
+    Build the :class:`Body` of a loose Montessori shape from this scene's own measured
+    physical dimensions, rather than
+    :func:`~experiments.montessori.world._shape_body`'s scaled-down copy of the board's
+    own hole footprint.
+
+    :param category: Which measured shape to build; must be one of
+        :attr:`~MontessoriShapeCategory.CUBE`, :attr:`~MontessoriShapeCategory.CYLINDER`,
+        :attr:`~MontessoriShapeCategory.RECTANGULAR_PRISM`, or
+        :attr:`~MontessoriShapeCategory.TRIANGULAR_PRISM`.
+    """
+    color = _SHAPE_COLORS[category]
+    match category:
+        case MontessoriShapeCategory.CUBE:
+            shape = Box(scale=Scale(CUBE_EDGE, CUBE_EDGE, CUBE_EDGE), color=color)
+        case MontessoriShapeCategory.CYLINDER:
+            shape = Cylinder(
+                width=CYLINDER_DIAMETER, height=CYLINDER_HEIGHT, color=color
+            )
+        case MontessoriShapeCategory.RECTANGULAR_PRISM:
+            shape = Box(
+                scale=Scale(
+                    RECTANGULAR_PRISM_WIDTH,
+                    RECTANGULAR_PRISM_LENGTH,
+                    RECTANGULAR_PRISM_HEIGHT,
+                ),
+                color=color,
+            )
+        case MontessoriShapeCategory.TRIANGULAR_PRISM:
+            boundary = _equilateral_triangle_boundary(TRIANGULAR_PRISM_SIDE)
+            solid = _extrude_polygon(boundary, TRIANGULAR_PRISM_HEIGHT)
+            shape = Mesh.from_trimesh(mesh=solid)
+            shape.color = color
+    return _body_with_shape(name, shape)
 
 
 @dataclass(eq=False)
@@ -309,10 +436,11 @@ class TracyMontessoriWorld(MontessoriWorld):
             hole_spec
             for hole_spec in self._hole_specs
             if hole_spec.category in SPAWNED_SHAPE_CATEGORIES
+            and hole_spec.key not in SKIPPED_HOLE_KEYS
         ]
         for index, hole_spec in enumerate(spawned_holes):
             shape_key = f"{hole_spec.key}_shape"
-            body = _shape_body(_name(shape_key), hole_spec.category, hole_spec.shape)
+            body = _measured_shape_body(_name(shape_key), hole_spec.category)
             shape_class = MONTESSORI_SHAPE_CLASSES[hole_spec.category]
             shape = shape_class(name=_name(shape_key), root=body)
             y = SHAPE_ROW_START_Y + index * SHAPE_ROW_SPACING

@@ -503,6 +503,40 @@ def test_builder_assigns_material_to_a_textured_primitive_shape(tmp_path):
     assert texture.file == str(texture_file)
 
 
+def test_builder_converts_cylinder_full_height_to_mujocos_half_height_convention(
+    tmp_path,
+):
+    """
+    Regression test: MujocoCylinderConverter passed Cylinder.height (the shape's full
+    height) straight through as MuJoCo's own cylinder size[1], which MuJoCo defines as a
+    half-length, not a full length - every cylinder synchronized into MuJoCo rendered
+    and collided at twice its intended height.
+    """
+    world = World()
+    with world.modify_world():
+        root = Body(name=PrefixedName("root"))
+        world.add_body(root)
+        cylinder_shape = Cylinder(width=0.028, height=0.03)
+        piece = Body(
+            name=PrefixedName("piece"),
+            visual=ShapeCollection([cylinder_shape]),
+            collision=ShapeCollection([cylinder_shape]),
+        )
+        world.add_kinematic_structure_entity(piece)
+        world.add_connection(FixedConnection(parent=root, child=piece))
+
+    builder = MujocoBuilder()
+    builder.build_world(world=world, file_path=str(tmp_path / "scene.xml"))
+
+    [geom] = [
+        geom
+        for body in builder.spec.bodies
+        for geom in body.geoms
+        if body.name == "piece"
+    ]
+    assert list(geom.size) == pytest.approx([0.014, 0.015, 0.0])
+
+
 def test_mujoco_with_tracy_dae_files():
     try:
         dae_world = URDFParser.from_file(file_path=TEST_URDF_TRACY).parse()
