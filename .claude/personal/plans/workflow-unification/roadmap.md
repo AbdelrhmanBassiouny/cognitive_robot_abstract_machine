@@ -9633,3 +9633,80 @@ executor as a subprocess, which resolves configuration and fetches the personal-
 the network. Confirmed pre-existing by stashing this branch's changes and watching them hang on
 unmodified code, so they are this container's network, not a regression. They are not skipped or
 marked - nothing was changed about them - and CI runs them normally.
+
+## Update 2026-08-27 (kickoff): `session-branch-base` opens, and the guard is a check rather than a topology test
+
+Session: https://claude.ai/code/session_014Fp9aaMYx1E6toT2jDDWdW. Opened as a draft on
+`claude/plan-item-kickoff-workflow-s3mfvk`, based on `main`. Mode `auto` (committed default), so
+this section is the plan rather than a record of one that was approved.
+
+### Still live, three days on
+
+`git ls-remote --symref origin HEAD` still resolves to `refs/heads/integration` at `899a04aac` -
+byte-identical to the SHA the item recorded on 2026-08-24. Nothing has been done about it, and
+this clone happens to hide it: it has no `refs/remotes/origin/HEAD` at all, so
+`default_branch_name()` falls through to its `main`/`master` search and returns the right answer
+for the wrong reason. A clone that *does* carry the ref gets `integration`.
+
+### The dependency check is vacuous, and the scope check says the item is real
+
+`depends_on` is empty. `check_scope_overlap.py --base origin/main` against the three files this
+touches reports `paths_absent_from_base: []` - every one of them already exists on `main`, so
+this is work on top of `main` rather than an edit to what an unlanded item introduces, and there
+is nothing to fold. It does overlap textually with **#188** on all three
+(`resolve-personal-notes-config.sh`, `session-start.sh`, `session-start-messages.sh`) and with
+**#185** on the first; both are open and based on `main`, so the usual
+whichever-lands-second-merges convention applies. #185 is already `dirty` and carries
+`needs-resolution` independently of this.
+
+### Why the guard is not the ancestry test the item's sentence suggests
+
+The item asks for a session that refuses "to plan or open a pull request from a branch not
+derived from it". Read as a git-topology test - the base must be an ancestor of `HEAD`, or the
+other way round - it is wrong, and the fork proves it rather than an argument doing so. `main`
+moves constantly, and #188 fast-forwards it at every session start; every branch that has not
+merged `main` recently is then neither an ancestor nor a descendant of it. Of the 53 open fork
+pull requests, the `main`-based ones alone (#107 from 2026-07-29 onward) would trip such a test,
+and it cannot tell a branch cut from `integration` apart from one legitimately stacked on a
+parent pull request: both carry commits `main` does not have.
+
+What actually distinguishes the failure is upstream of any branch: **the default branch itself is
+wrong**, which is also exactly what the item's own purpose clause names - "so a default-branch
+change cannot silently re-point every future session's base again". So the guard's subject is the
+default branch, not branch topology, and it is delivered through machinery that already refuses:
+
+1. **`upstream_base` becomes the authority.** `configured_base_branch()` reads it from the
+   personal `.claude/personal/stack.toml` override on the notes branch layered over the committed
+   `.claude/stack/stack.toml`, by `grep` on a top-level scalar - the dependency-free idiom
+   `plan_id_for_branch` and the `tracking_issue` extraction already use, and the reason
+   `check-setup.sh` must not gain a parser to report on parsers. `default_branch_name()` prefers
+   it when the branch it names actually exists, and falls back to today's
+   `refs/remotes/origin/HEAD`-then-`main`/`master` search otherwise, so a repository carrying no
+   stack configuration behaves exactly as it does now. That alone rights the inversion the item
+   recorded: `pr_progress_path` and `branch_can_hold_plan_item` stop suppressing `integration`
+   and tracking `main`.
+2. **A `default_branch` row in `check-setup.sh`**, `needs-setup` when the repository's own
+   default branch disagrees with that configured base. This *is* the refusal to plan: every plan
+   skill runs `prerequisite-check.md` before its first real step and stops on a non-zero exit,
+   and `session-start.sh` already surfaces `needs-setup` rows in its summary. Nothing new has to
+   be invented to make a session stop, and a future re-point is caught the same way this one
+   would have been.
+
+### The flip and the guard have to land together
+
+The guard is only correct while the repository is correct: shipping it against today's
+`integration` default would make every plan skill stop and offer a setup that cannot fix it,
+because no session here has `gh` and the GitHub MCP server exposes no repository-settings tool.
+So restoring the default branch to `main` is part of this item's work rather than a follow-up.
+Checked first: none of the 53 open fork pull requests bases on `integration`, and cram2's own
+default is `main`, so the flip has nothing to break.
+
+### A defect in the item's own manifest entry, found by reading it
+
+`notes` is an unquoted YAML scalar containing ` #64`, so YAML ends the scalar there and treats
+the rest of the line as a comment. Every parser - `build_dashboard.py` included - has been
+reading the note as ending at "The session investigating", losing the `default_branch_name()`
+finding, the `fresh-base-at-session-start` comparison and the recorded fix itself. The published
+dashboard has shown the truncated half since the item was created. Quoted in the same pass;
+`plan_item_bootstrap.py` patches lines rather than round-tripping the document, so nothing had
+overwritten it, and nothing would have.
