@@ -248,15 +248,12 @@ class MissingFailureMonitorError(NodeInitializationError):
     """
 
     def error_message(self) -> str:
-        return (
-            f'"{self.node.unique_name}" repeats a task but was given nothing that decides '
-            f"when an attempt failed, so it would never retry."
-        )
+        return f"{self.node.unique_name} is configured to repeat a task, but no failure monitor is defined to determine when an attempt has failed."
 
     def suggest_correction(self) -> str:
         return (
             "Pass a failure_monitor, or use a subclass such as RepeatOnStall that derives "
-            "one from the task."
+            "the failure condition from the task."
         )
 
 
