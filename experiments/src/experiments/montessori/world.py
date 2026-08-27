@@ -100,7 +100,7 @@ Wide enough to carry an arm's base without reaching the montessori table itself,
 two never share a footprint.
 """
 
-BOARD_SCALE = Scale(0.13, 0.30, 0.08)
+BOARD_SCALE = Scale(0.11, 0.282, 0.08)
 BOARD_POSITION = Point3(-0.4, 0.0, 0.553)
 BOARD_COLOR = Color.BEIGE()
 
