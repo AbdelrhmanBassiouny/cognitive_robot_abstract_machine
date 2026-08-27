@@ -50,7 +50,7 @@ class NavigateAction(ActionDescription):
 
     @staticmethod
     def pre_condition(
-            variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
     ) -> ConditionType:
         """
         The robot needs to have a drive and the target location needs to be free from
@@ -64,7 +64,7 @@ class NavigateAction(ActionDescription):
 
     @staticmethod
     def post_condition(
-            variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
+        variables: Dict[str, Variable], context: Context, kwargs: Dict[str, Any]
     ) -> ConditionType:
         """
         The robot needs to be within 3 cm of the target location.
@@ -129,13 +129,25 @@ class ElevatorNavigation(ActionDescription):
 
     @property
     def _action_plan(self) -> PlanNode:
-        [current_floor] = [floor for floor in self.world.get_semantic_annotations_by_type(Level) if InsideOf(self.robot.root, floor.root)() > 0.9]
+        [current_floor] = [
+            floor
+            for floor in self.world.get_semantic_annotations_by_type(Level)
+            if InsideOf(self.robot.root, floor.root)() > 0.9
+        ]
         return sequential(
             [
                 NavigateAction(self._pose_infront_of_elevator),
-                pause_until([NavigateAction(Pose.from_xyz_rpy(
-                    z=self._height_in_cabin, reference_frame=self.elevator.root
-                    ))], monitor=self._elevator_open_at_floor(current_floor)),
+                pause_until(
+                    [
+                        NavigateAction(
+                            Pose.from_xyz_rpy(
+                                z=self._height_in_cabin,
+                                reference_frame=self.elevator.root,
+                            )
+                        )
+                    ],
+                    monitor=self._elevator_open_at_floor(current_floor),
+                ),
                 ReAttachNode(body=self.robot.root, new_parent=self.elevator.root),
                 pause_until(
                     [NavigateAction(self._pose_infront_of_elevator)],
@@ -148,11 +160,11 @@ class ElevatorNavigation(ActionDescription):
     @property
     def _pose_infront_of_elevator(self):
         return Pose.from_xyz_rpy(
-                        x=float(self.elevator.hole_direction.to_np()[0]) * (
-                                    self.elevator.scale.x / 2 + self.exit_clearance),
-                        z=self._height_in_cabin,
-                        reference_frame=self.elevator.root,
-                    )
+            x=float(self.elevator.hole_direction.to_np()[0])
+            * (self.elevator.scale.x / 2 + self.exit_clearance),
+            z=self._height_in_cabin,
+            reference_frame=self.elevator.root,
+        )
 
     @property
     def _height_in_cabin(self) -> float:
@@ -164,7 +176,6 @@ class ElevatorNavigation(ActionDescription):
         """
         return float(
             self.world.transform(self.robot.root.global_transform, self.elevator.root)
-            .to_position()
             .z
         )
 
@@ -183,12 +194,14 @@ class ElevatorNavigation(ActionDescription):
                     name=f"{door.name}Open",
                 )
             )
-        nodes.append(JointPositionReached(
-            connection=self.elevator.mechanical_joint.root.parent_connection,
-            position=self.elevator.drive_position_for_floor(target_floor),
-            threshold=self.arrival_threshold,
-            name="ElevatorAtTargetFloor",
-        ))
+        nodes.append(
+            JointPositionReached(
+                connection=self.elevator.mechanical_joint.root.parent_connection,
+                position=self.elevator.drive_position_for_floor(target_floor),
+                threshold=self.arrival_threshold,
+                name="ElevatorAtTargetFloor",
+            )
+        )
         return Parallel(
             nodes,
             name="ElevatorOpenAtTargetFloor",

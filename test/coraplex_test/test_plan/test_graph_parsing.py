@@ -40,12 +40,10 @@ from coraplex.language import (
     TryInOrderNode,
 )
 from coraplex.language_giskard_templates import (
-    PausedUntilTrue,
-    PausedWhileTrue,
-    StoppedWhenTrue,
     TryAll,
     TryInOrder,
 )
+from giskardpy.motion_statechart.monitors.templates import PausedWhileTrue, PausedUntilTrue, StoppedWhenTrue
 from coraplex.utils import split_list_by_type
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.goals.templates import (
@@ -266,7 +264,7 @@ def test_repeat_node_wraps_its_children_in_a_repeating_goal(
     assert loop.task in loop.nodes
     [counter] = [node for node in loop.nodes if isinstance(node, CountNodeResets)]
     assert counter.target == 3
-    assert counter is loop.monitor
+    assert counter is loop.stop_retry_monitor
     [exhausted] = [node for node in loop.nodes if isinstance(node, CancelMotion)]
     assert exhausted.start_condition.free_variables() == [counter.observation_variable]
 

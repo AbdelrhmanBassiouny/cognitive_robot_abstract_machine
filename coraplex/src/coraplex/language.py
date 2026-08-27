@@ -26,13 +26,11 @@ from giskardpy.motion_statechart.graph_node import (
 )
 from giskardpy.motion_statechart.monitors.payload_monitors import CountNodeResets
 from coraplex.language_giskard_templates import (
-    MonitoredGoal,
-    PausedUntilTrue,
-    PausedWhileTrue,
-    StoppedWhenTrue,
     TryAll,
     TryInOrder,
 )
+from giskardpy.motion_statechart.monitors.templates import MonitoredGoal, PausedWhileTrue, PausedUntilTrue, \
+    StoppedWhenTrue
 from coraplex.plans.executables import (
     GiskardExecutable,
     Executable,

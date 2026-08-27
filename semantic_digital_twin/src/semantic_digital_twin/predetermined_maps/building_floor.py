@@ -20,7 +20,7 @@ from semantic_digital_twin.world_description.world_entity import (
 
 
 @dataclass
-class GenericRoom:
+class SingleDoorRoom:
     """
     World-independent description of a room: a floor with four walls, one of which
     carries a hinged door with a handle, whose entry way cuts a doorway into that wall.
@@ -39,6 +39,11 @@ class GenericRoom:
     door_scale: Scale = field(default_factory=lambda: Scale(0.05, 1, 1.8))
     """
     Extents of the door mounted into the room's last wall.
+    """
+
+    door_color: Color = field(default_factory=lambda: Color.RED())
+    """
+    Color of the door to to visually distinguish it from the wall
     """
 
     def spawn(
@@ -108,7 +113,7 @@ class GenericRoom:
                 z=self.door_scale.z / 2
             ),
         )
-        door.root.collision.shapes[0].color = Color(1, 0, 0, 1)
+        door.root.collision.shapes[0].color = self.door_color
         with world.modify_world():
             wall.add(door.entry_way)
 
@@ -127,7 +132,7 @@ class BuildingFloor:
     Extents of the floor slab.
     """
 
-    room: GenericRoom = field(default_factory=GenericRoom)
+    room: SingleDoorRoom = field(default_factory=SingleDoorRoom)
     """
     The room spawned into each of the floor's four corners.
     """

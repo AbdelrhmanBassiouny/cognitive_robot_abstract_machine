@@ -29,12 +29,10 @@ from giskardpy.motion_statechart.monitors.payload_monitors import (
 
 from coraplex.language import TryAllNode, TryInOrderNode
 from coraplex.language_giskard_templates import (
-    PausedUntilTrue,
-    PausedWhileTrue,
-    StoppedWhenTrue,
     TryAll,
     TryInOrder,
 )
+from giskardpy.motion_statechart.monitors.templates import PausedWhileTrue, PausedUntilTrue, StoppedWhenTrue
 
 # Number of ticks after which the templates below have settled into their final observation.
 SETTLE_TICKS = 4
@@ -58,15 +56,8 @@ def _compile_and_tick(
     return executor
 
 
-MAX_TICKS = 20
-"""
-Upper bound for the tick loops below, so a never-settling chart fails instead of
-hanging.
-"""
-
-
 def _ticks_until_observed_true(
-    goal: MotionStatechartNode, node: MotionStatechartNode
+    goal: MotionStatechartNode, node: MotionStatechartNode, max_ticks: int
 ) -> int:
     """
     Compile `goal` and tick until `node` observes True.
@@ -74,11 +65,11 @@ def _ticks_until_observed_true(
     :return: The number of ticks that took.
     """
     executor = _compile_and_tick(goal, ticks=0)
-    for tick in range(1, MAX_TICKS + 1):
+    for tick in range(1, max_ticks + 1):
         executor.tick()
         if node.observation_state == ObservationStateValues.TRUE:
             return tick
-    raise AssertionError(f"{node.name} never observed True within {MAX_TICKS} ticks")
+    raise AssertionError(f"{node.name} never observed True within {max_ticks} ticks")
 
 
 # --------------------------------------------------------------------------- #
@@ -203,14 +194,14 @@ def test_paused_while_true_costs_the_monitored_node_the_paused_ticks():
         monitored_node=CountControlCycles(control_cycles=2, name="work"),
     )
     ticks_without_pause = _ticks_until_observed_true(
-        unmonitored, unmonitored.monitored_node
+        unmonitored, unmonitored.monitored_node, max_ticks=20
     )
 
     paused = PausedWhileTrue(
         monitor=Pulse(length=pulse_length, name="pulse"),
         monitored_node=CountControlCycles(control_cycles=2, name="work"),
     )
-    ticks_with_pause = _ticks_until_observed_true(paused, paused.monitored_node)
+    ticks_with_pause = _ticks_until_observed_true(paused, paused.monitored_node, max_ticks=20)
 
     assert ticks_with_pause == ticks_without_pause + pulse_length
 

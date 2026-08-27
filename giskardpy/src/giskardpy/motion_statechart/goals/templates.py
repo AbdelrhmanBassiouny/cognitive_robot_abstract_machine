@@ -112,12 +112,12 @@ class RepeatUntil(Goal):
     unit.
     """
 
-    monitor: MotionStatechartNode = field(kw_only=True)
+    stop_retry_monitor: MotionStatechartNode = field(kw_only=True)
     """
     Stops the retrying once it observes True, which makes this goal observe False.
     """
 
-    failure_monitor: Optional[MotionStatechartNode] = field(default=None, kw_only=True)
+    retry_trigger_monitor: Optional[MotionStatechartNode] = field(default=None, kw_only=True)
     """
     Decides that an attempt failed and the task should run again.
 
@@ -132,9 +132,9 @@ class RepeatUntil(Goal):
         :param task: The node whose one run is an attempt.
         :return: A node whose True observation means the attempt failed.
         """
-        if self.failure_monitor is None:
+        if self.retry_trigger_monitor is None:
             raise MissingFailureMonitorError(node=self)
-        return self.failure_monitor
+        return self.retry_trigger_monitor
 
     def expand(self, context: MotionStatechartContext) -> None:
         """
@@ -146,8 +146,8 @@ class RepeatUntil(Goal):
         for the next attempt.
         """
         self.add_node(self.task)
-        self.failure_monitor = self.create_failure_monitor(self.task)
-        self.add_nodes([self.failure_monitor, self.monitor])
+        self.retry_trigger_monitor = self.create_failure_monitor(self.task)
+        self.add_nodes([self.retry_trigger_monitor, self.stop_retry_monitor])
 
         # Each observation is compared against True, so that an undecided Unknown counts
         # as neither, and the results combine as plain booleans.
@@ -155,10 +155,10 @@ class RepeatUntil(Goal):
             self.task.observation_variable == sm.Scalar.const_true()
         )
         attempt_failed = sm.Scalar(
-            self.failure_monitor.observation_variable == sm.Scalar.const_true()
+            self.retry_trigger_monitor.observation_variable == sm.Scalar.const_true()
         )
         still_trying = trinary_logic_not(
-            sm.Scalar(self.monitor.observation_variable == sm.Scalar.const_true())
+            sm.Scalar(self.stop_retry_monitor.observation_variable == sm.Scalar.const_true())
         )
 
         # Starting is gated as well as ending, because a reset task is not started and
@@ -171,12 +171,12 @@ class RepeatUntil(Goal):
         )
         self.task.end_condition = trinary_logic_or(
             self.task.observation_variable,
-            self.monitor.observation_variable,
+            self.stop_retry_monitor.observation_variable,
         )
-        self.failure_monitor.reset_condition = trinary_logic_and(
+        self.retry_trigger_monitor.reset_condition = trinary_logic_and(
             attempt_failed, still_trying
         )
-        self.failure_monitor.end_condition = self.monitor.observation_variable
+        self.retry_trigger_monitor.end_condition = self.stop_retry_monitor.observation_variable
 
     def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
@@ -196,7 +196,7 @@ class RepeatUntil(Goal):
                     ),
                     (
                         sm.Scalar(
-                            self.monitor.observation_variable == sm.Scalar.const_true()
+                            self.stop_retry_monitor.observation_variable == sm.Scalar.const_true()
                         ),
                         sm.Scalar.const_false(),
                     ),
@@ -232,7 +232,7 @@ class RepeatOnStall(RepeatUntil):
     def create_failure_monitor(
         self, task: MotionStatechartNode
     ) -> MotionStatechartNode:
-        if self.failure_monitor is not None:
+        if self.retry_trigger_monitor is not None:
             raise ConflictingFailureMonitorError(node=self)
         return ProgressStalled(
             name=f"{self.name}/stalled",

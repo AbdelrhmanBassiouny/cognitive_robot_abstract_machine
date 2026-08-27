@@ -1248,10 +1248,6 @@ class Goal(MotionStatechartNode):
         """
         Adds a node to this goal and the motion statechart this goal belongs to.
 
-        A node this goal's motion statechart already holds is not registered a second
-        time, so a goal may be populated before compilation and still be expanded as
-        usual. A node coming from an earlier motion statechart is moved into this one.
-
         :param node: The node to add as a child of this goal.
         """
         self._add_node_sanity_check(node)

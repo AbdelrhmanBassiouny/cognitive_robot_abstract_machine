@@ -47,8 +47,8 @@ def _repeat_on_timeout(
     loop = RepeatUntil(
         name="loop",
         task=task,
-        monitor=CountNodeResets(name="counter", node=task, target=target),
-        failure_monitor=CountControlCycles(
+        stop_retry_monitor=CountNodeResets(name="counter", node=task, target=target),
+        retry_trigger_monitor=CountControlCycles(
             name="timeout", control_cycles=ATTEMPT_CYCLES
         ),
     )
@@ -74,7 +74,7 @@ def test_repeat_until_retries_until_the_monitor_gives_up():
     for _ in range(SETTLE_CYCLES):
         executor.tick()
 
-    assert loop.monitor.resets == 3
+    assert loop.stop_retry_monitor.resets == 3
     assert loop.observation_state == ObservationStateValues.FALSE
 
 
@@ -88,7 +88,7 @@ def test_repeat_until_succeeds_without_retrying():
 
     executor.tick_until_end(SETTLE_CYCLES)
 
-    assert loop.monitor.resets == 0
+    assert loop.stop_retry_monitor.resets == 0
     assert loop.observation_state == ObservationStateValues.TRUE
     assert motion_statechart.is_end_motion()
 
@@ -115,8 +115,8 @@ def test_repeat_until_puts_the_task_back_to_not_started():
         and life_cycles[index] == LifeCycleValues.NOT_STARTED
         and life_cycles[index + 1] == LifeCycleValues.RUNNING
     ]
-    assert loop.monitor.resets == 3
-    assert len(restarts) == loop.monitor.target - 1
+    assert loop.stop_retry_monitor.resets == 3
+    assert len(restarts) == loop.stop_retry_monitor.target - 1
 
 
 def test_repeat_until_does_not_retry_after_giving_up():
@@ -129,13 +129,13 @@ def test_repeat_until_does_not_retry_after_giving_up():
 
     for _ in range(SETTLE_CYCLES):
         executor.tick()
-    resets_when_given_up = loop.monitor.resets
+    resets_when_given_up = loop.stop_retry_monitor.resets
     assert loop.observation_state == ObservationStateValues.FALSE
 
     for _ in range(SETTLE_CYCLES):
         executor.tick()
 
-    assert loop.monitor.resets == resets_when_given_up
+    assert loop.stop_retry_monitor.resets == resets_when_given_up
     assert task.life_cycle_state == LifeCycleValues.NOT_STARTED
     assert loop.observation_state == ObservationStateValues.FALSE
 
@@ -154,7 +154,7 @@ def test_repeat_on_stall_retries_a_motion_that_stops_converging(
     loop = RepeatOnStall(
         name="loop",
         task=task,
-        monitor=CountNodeResets(name="counter", node=task, target=2),
+        stop_retry_monitor=CountNodeResets(name="counter", node=task, target=2),
         timeout=1.0,
     )
     motion_statechart = MotionStatechart()
@@ -168,7 +168,7 @@ def test_repeat_on_stall_retries_a_motion_that_stops_converging(
         if loop.observation_state == ObservationStateValues.FALSE:
             break
 
-    assert loop.monitor.resets == 2
+    assert loop.stop_retry_monitor.resets == 2
     assert loop.observation_state == ObservationStateValues.FALSE
 
 
@@ -185,7 +185,7 @@ def test_repeat_on_stall_leaves_a_reachable_motion_alone(cylinder_bot_world: Wor
     loop = RepeatOnStall(
         name="loop",
         task=task,
-        monitor=CountNodeResets(name="counter", node=task, target=1),
+        stop_retry_monitor=CountNodeResets(name="counter", node=task, target=1),
         timeout=1.0,
     )
     motion_statechart = MotionStatechart()
@@ -196,5 +196,5 @@ def test_repeat_on_stall_leaves_a_reachable_motion_alone(cylinder_bot_world: Wor
     executor.compile(motion_statechart=motion_statechart)
     executor.tick_until_end(2000)
 
-    assert loop.monitor.resets == 0
+    assert loop.stop_retry_monitor.resets == 0
     assert loop.observation_state == ObservationStateValues.TRUE
