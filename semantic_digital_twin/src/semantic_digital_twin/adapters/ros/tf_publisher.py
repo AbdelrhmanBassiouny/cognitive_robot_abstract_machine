@@ -21,6 +21,7 @@ from semantic_digital_twin.callbacks.callback import (
     StateChangeCallback,
     ModelChangeCallback,
 )
+from semantic_digital_twin.exceptions import DuplicateEntityNameError
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import (
@@ -112,8 +113,8 @@ class TfPublisherModelCallback(ModelChangeCallback):
             )
             child_link = self._world.get_kinematic_structure_entity_by_id(child_link_id)
 
-            self.tf_message.transforms[i].header.frame_id = self._world.get_human_readable_unique_name(parent_link)
-            self.tf_message.transforms[i].child_frame_id = self._world.get_human_readable_unique_name(child_link)
+            self.tf_message.transforms[i].header.frame_id = str(parent_link.name)
+            self.tf_message.transforms[i].child_frame_id = str(child_link.name)
 
     def update_tf_message(self):
         if self.compiled_tf.is_result_empty():
@@ -176,6 +177,11 @@ class TFPublisher(StateChangeCallback):
 
     def __post_init__(self):
         super().__post_init__()
+
+        duplicate_names = self._world.get_duplicate_kinematic_structure_entity_names()
+        if duplicate_names:
+            raise DuplicateEntityNameError(duplicate_names)
+
         self.tf_pub = self.node.create_publisher(TFMessage, self.tf_topic, 10)
         sleep(0.2)
         self.tf_model_callback = TfPublisherModelCallback(

@@ -14,6 +14,7 @@ from semantic_digital_twin.adapters.ros.visualization.collision_viz_marker impor
     CollisionVisualizationMarkerPublisher,
 )
 from semantic_digital_twin.callbacks.callback import ModelChangeCallback
+from semantic_digital_twin.exceptions import DuplicateEntityNameError
 from visualization_msgs.msg import MarkerArray
 
 
@@ -108,6 +109,10 @@ class VizMarkerPublisher(ModelChangeCallback):
     def __post_init__(self):
         super().__post_init__()
 
+        duplicate_names = self._world.get_duplicate_kinematic_structure_entity_names()
+        if duplicate_names:
+            raise DuplicateEntityNameError(duplicate_names)
+
         self.publisher = self.node.create_publisher(
             MarkerArray, self.topic_name, self.qos_profile
         )
@@ -151,11 +156,11 @@ class VizMarkerPublisher(ModelChangeCallback):
         self.markers = MarkerArray()
         for body in self._world.bodies:
             shapes = self._select_shapes(body)
-            self._add_markers_for_shapes(shapes, self._world.get_human_readable_unique_name(body))
+            self._add_markers_for_shapes(shapes, str(body.name))
 
         for region in self._world.regions:
             self._add_markers_for_shapes(
-                region.area.shapes, self._world.get_human_readable_unique_name(region), force_alpha=self.region_alpha
+                region.area.shapes, str(region.name), force_alpha=self.region_alpha
             )
 
         self.publisher.publish(self.markers)

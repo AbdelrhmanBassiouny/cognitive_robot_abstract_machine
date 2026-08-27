@@ -15,7 +15,9 @@ from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
     ShapeSource,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.exceptions import DuplicateEntityNameError
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
     OmniDrive,
     FixedConnection,
@@ -203,6 +205,18 @@ def test_visualization_marker_regions_are_transparent(rclpy_node, cylinder_bot_w
             break
     else:
         assert False, "Marker not found"
+
+
+def test_visualization_marker_raises_on_duplicate_names(rclpy_node):
+    world = World.create_with_root_body("map")
+    body_a = Body(name=PrefixedName("duplicate"))
+    body_b = Body(name=PrefixedName("duplicate"))
+    with world.modify_world():
+        world.add_connection(FixedConnection(parent=world.root, child=body_a))
+        world.add_connection(FixedConnection(parent=world.root, child=body_b))
+
+    with pytest.raises(DuplicateEntityNameError):
+        VizMarkerPublisher(_world=world, node=rclpy_node)
 
 
 def test_trimesh(rclpy_node):

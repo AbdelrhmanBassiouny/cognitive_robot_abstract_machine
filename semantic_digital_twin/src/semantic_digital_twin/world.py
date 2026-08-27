@@ -631,11 +631,6 @@ class World(HasSimulatorProperties):
     Lock used to prevent multiple threads from modifying the world at the same time.
     """
 
-    _human_readable_unique_names: Dict[str, Dict[UUID, str]] = field(default_factory=dict, init=False)
-    """
-    Dict that translates names to a Tuple of UUID and the unique name
-    """
-
     def __post_init__(self):
         self.state = WorldState(_world=self)
         self._forward_kinematic_manager = ForwardKinematicsManager(_world=self)
@@ -812,6 +807,22 @@ class World(HasSimulatorProperties):
         """
         return list(self.kinematic_structure.nodes())
 
+    def get_duplicate_kinematic_structure_entity_names(
+        self,
+    ) -> Dict[str, List[KinematicStructureEntity]]:
+        """
+        :return: mapping from name to the entities sharing it, for every name held by
+            more than one kinematic structure entity in this world.
+        """
+        entities_by_name: Dict[str, List[KinematicStructureEntity]] = {}
+        for entity in self.kinematic_structure_entities:
+            entities_by_name.setdefault(str(entity.name), []).append(entity)
+        return {
+            name: entities
+            for name, entities in entities_by_name.items()
+            if len(entities) > 1
+        }
+
     @property
     def kinematic_structure_entities_topologically_sorted(
         self,
@@ -960,7 +971,6 @@ class World(HasSimulatorProperties):
         kinematic_structure_entity.index = self.kinematic_structure.add_node(
             kinematic_structure_entity
         )
-        self._register_human_readable_unique_name(kinematic_structure_entity)
 
     def add_degree_of_freedom(self, dof: DegreeOfFreedom) -> None:
         """
@@ -1147,8 +1157,8 @@ class World(HasSimulatorProperties):
         """
         Removes a kinematic_structure_entity from the world.
 
-        Removing a kinematic_structure_entity this world does not own does nothing
-        and is not recorded, so a history can never open with the removal of a
+        Removing a kinematic_structure_entity this world does not own does nothing and
+        is not recorded, so a history can never open with the removal of a
         kinematic_structure_entity nothing added.
 
         :param kinematic_structure_entity: The kinematic_structure_entity to remove.
@@ -1170,16 +1180,15 @@ class World(HasSimulatorProperties):
         :param kinematic_structure_entity: The kinematic_structure_entity to remove.
         """
         self.kinematic_structure.remove_node(kinematic_structure_entity.index)
-        self._unregister_human_readable_unique_name(kinematic_structure_entity)
         kinematic_structure_entity.remove_from_world()
 
     def remove_degree_of_freedom(self, dof: DegreeOfFreedom) -> None:
         """
         Removes a degree of freedom from the world.
 
-        Removing a degree of freedom this world does not own does nothing and is
-        not recorded, so a history can never open with the removal of a degree of
-        freedom nothing added.
+        Removing a degree of freedom this world does not own does nothing and is not
+        recorded, so a history can never open with the removal of a degree of freedom
+        nothing added.
 
         :param dof: The degree of freedom to remove.
         """
@@ -1201,9 +1210,9 @@ class World(HasSimulatorProperties):
         Removes a semantic annotation from the current list of semantic annotations if
         it exists.
 
-        Removing a semantic annotation this world does not own does nothing and is
-        not recorded, so a history can never open with the removal of a semantic
-        annotation nothing added.
+        Removing a semantic annotation this world does not own does nothing and is not
+        recorded, so a history can never open with the removal of a semantic annotation
+        nothing added.
 
         :param semantic_annotation: The semantic annotation instance to be removed.
         """
@@ -1224,9 +1233,8 @@ class World(HasSimulatorProperties):
         """
         Removes an actuator from the current list of actuators if it exists.
 
-        Removing an actuator this world does not own does nothing and is not
-        recorded, so a history can never open with the removal of an actuator
-        nothing added.
+        Removing an actuator this world does not own does nothing and is not recorded,
+        so a history can never open with the removal of an actuator nothing added.
 
         :param actuator: The actuator instance to be removed.
         """
@@ -2604,64 +2612,3 @@ class World(HasSimulatorProperties):
                 case _:
                     pass
         self.notify_state_change()
-
-    def _register_human_readable_unique_name(self, entity: KinematicStructureEntity) -> None:
-        """
-        Compute and cache a disambiguated display name for `entity`.
-
-        This is called once, when the entity is added to the world, and never revisited
-        afterwards. The first entity registered for a given name in this process claims the
-        bare name; every later one is suffixed with a fragment of its own id, since that is
-        the only disambiguator every process already agrees on without coordinating - unlike
-        a count of how many were registered so far, which depends on the order entities were
-        added or replayed in *this* process and can differ between two processes that added
-        same-named entities concurrently.
-
-        :param entity: Entity to register a human-readable unique name for.
-        """
-        id_to_unique_name = self._human_readable_unique_names.get(str(entity.name), None)
-        if id_to_unique_name is None:
-            self._human_readable_unique_names[str(entity.name)] = {entity.id: str(entity.name)}
-        elif entity.id not in id_to_unique_name:
-            human_readable_unique_name = f"{str(entity.name)}_{entity.id.hex[:8]}"
-            id_to_unique_name[entity.id] = human_readable_unique_name
-
-    def _unregister_human_readable_unique_name(self, entity: KinematicStructureEntity) -> None:
-        """
-        Drop `entity`'s cached disambiguated display name.
-
-        Once no entity sharing `entity`'s name remains registered, the name's entry is
-        dropped entirely so a later entity reusing that name starts disambiguating from
-        scratch instead of growing its suffix forever.
-
-        :param entity: Entity to unregister the human-readable unique name of.
-        """
-        id_to_unique_name = self._human_readable_unique_names.get(str(entity.name))
-        if id_to_unique_name is None:
-            return
-        id_to_unique_name.pop(entity.id, None)
-        if not id_to_unique_name:
-            del self._human_readable_unique_names[str(entity.name)]
-
-    def get_human_readable_unique_name(self, entity: KinematicStructureEntity) -> str:
-        """
-        Returns a unique name for this specific entity. Names are created by enumerating the names of enteties,
-        so the name of the entity is used and for multiple names a number is appended.
-
-        The disambiguated name is assigned once, when the entity is added to the world (see
-        :meth:`_register_human_readable_unique_name`), so every process synchronized with
-        this world resolves the same entity to the same name regardless of query order.
-
-        :param entity: Entity for which a unique name is returned.
-        :return: The unique name of this entity as string.
-        """
-        id_to_unique_name = self._human_readable_unique_names.get(str(entity.name))
-        if id_to_unique_name is None or entity.id not in id_to_unique_name:
-            logger.warning(
-                "%s was not registered when it was added to the world; "
-                "falling back to a lazily computed human-readable name for it.",
-                entity,
-            )
-            self._register_human_readable_unique_name(entity)
-            id_to_unique_name = self._human_readable_unique_names[str(entity.name)]
-        return id_to_unique_name[entity.id]

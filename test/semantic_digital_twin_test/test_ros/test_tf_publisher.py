@@ -14,6 +14,7 @@ from semantic_digital_twin.adapters.ros.visualization.viz_marker import (
     VizMarkerPublisher,
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+from semantic_digital_twin.exceptions import DuplicateEntityNameError
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import (
@@ -227,6 +228,18 @@ def test_tf_publisher_with_Regions(rclpy_node, pr2_world_state_reset):
     with pr2_world_state_reset.modify_world():
         pr2_world_state_reset.add_region(region)
         pr2_world_state_reset.add_connection(connection)
+
+
+def test_tf_publisher_raises_on_duplicate_names(rclpy_node):
+    world = World.create_with_root_body("map")
+    body_a = Body(name=PrefixedName("duplicate"))
+    body_b = Body(name=PrefixedName("duplicate"))
+    with world.modify_world():
+        world.add_connection(FixedConnection(parent=world.root, child=body_a))
+        world.add_connection(FixedConnection(parent=world.root, child=body_b))
+
+    with pytest.raises(DuplicateEntityNameError):
+        TFPublisher(node=rclpy_node, _world=world)
 
 
 def test_empty_world(rclpy_node):

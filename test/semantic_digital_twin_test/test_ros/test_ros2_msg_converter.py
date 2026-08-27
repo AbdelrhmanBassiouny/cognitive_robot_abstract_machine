@@ -18,9 +18,6 @@ from semantic_digital_twin.spatial_types import (
     Quaternion,
 )
 from semantic_digital_twin.spatial_types.spatial_types import Pose
-from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
-from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.connections import FixedConnection
 from semantic_digital_twin.world_description.geometry import (
     Box,
     Color,
@@ -29,8 +26,6 @@ from semantic_digital_twin.world_description.geometry import (
     Sphere,
     Mesh,
 )
-from semantic_digital_twin.world_description.shape_collection import ShapeCollection
-from semantic_digital_twin.world_description.world_entity import Body
 
 
 def test_convert_transform(cylinder_bot_world):
@@ -272,26 +267,3 @@ def test_convert_mesh_shape(cylinder_bot_world):
 
     shape2 = SemDTToRos2Converter.convert(mesh2)
     assert shape == shape2
-
-
-def test_convert_shape_frame_id_disambiguates_same_named_bodies():
-    world = World()
-    with world.modify_world():
-        root = Body(name=PrefixedName("root"))
-        wall_a = Body(
-            name=PrefixedName("wall_0"),
-            collision=ShapeCollection(shapes=[Box(scale=Scale(1, 2, 3))]),
-        )
-        wall_b = Body(
-            name=PrefixedName("wall_0"),
-            collision=ShapeCollection(shapes=[Box(scale=Scale(1, 2, 3))]),
-        )
-        world.add_connection(FixedConnection(parent=root, child=wall_a))
-        world.add_connection(FixedConnection(parent=root, child=wall_b))
-
-    marker_a = SemDTToRos2Converter.convert(wall_a.collision.shapes[0])
-    marker_b = SemDTToRos2Converter.convert(wall_b.collision.shapes[0])
-
-    assert marker_a.header.frame_id == world.get_human_readable_unique_name(wall_a)
-    assert marker_b.header.frame_id == world.get_human_readable_unique_name(wall_b)
-    assert marker_a.header.frame_id != marker_b.header.frame_id
