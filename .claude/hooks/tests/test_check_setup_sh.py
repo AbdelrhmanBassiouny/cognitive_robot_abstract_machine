@@ -20,7 +20,9 @@ from scratch_repository import (
     SCRATCH_IDENTITY,
     ScratchRepository,
     SetupPrerequisiteFile,
+    StackConfigurationPath,
     initialize_bare_repository,
+    stack_configuration,
 )
 
 NOTES_PATH = ".claude/personal/cram-notes.md"
@@ -44,6 +46,7 @@ class SetupCheck(StrEnum):
     NOTES_BRANCH = "notes_branch"
     NOTES_FILE = "notes_file"
     GIT_IDENTITY = "git_identity"
+    DEFAULT_BRANCH = "default_branch"
     DASHBOARD_DEPENDENCIES = "dashboard_dependencies"
     CLAUDE_LOCAL_MD = "claude_local_md"
 
@@ -414,3 +417,102 @@ def test_reports_a_claude_local_md_that_was_never_written(
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == 1
     assert report.results[SetupCheck.CLAUDE_LOCAL_MD].status == CheckStatus.NEEDS_SETUP
+
+
+# %% the branch every session is cut from
+
+CONFIGURED_BASE_BRANCH = "main"
+"""
+The branch the scratch repository's committed stack configuration names as its base.
+"""
+
+RE_POINTED_DEFAULT_BRANCH = "integration"
+"""
+A default branch naming something other than the configured base - the state that made
+every session in this fork start from a branch nothing is meant to be cut from.
+"""
+
+
+def test_reports_the_default_branch_as_matching_the_configured_base(
+    check_setup_repository: ScratchRepository,
+):
+    check_setup_repository.write(
+        StackConfigurationPath.COMMITTED, stack_configuration(CONFIGURED_BASE_BRANCH)
+    )
+    check_setup_repository.commit_everything("declare the configured base")
+    check_setup_repository.add_work_remote()
+    check_setup_repository.declare_default_branch(CONFIGURED_BASE_BRANCH)
+
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code == 0
+    assert report.results[SetupCheck.DEFAULT_BRANCH].status == CheckStatus.OK
+    assert CONFIGURED_BASE_BRANCH in report.results[SetupCheck.DEFAULT_BRANCH].detail
+
+
+def test_reports_a_default_branch_that_disagrees_with_the_configured_base(
+    check_setup_repository: ScratchRepository,
+):
+    check_setup_repository.write(
+        StackConfigurationPath.COMMITTED, stack_configuration(CONFIGURED_BASE_BRANCH)
+    )
+    check_setup_repository.commit_everything("declare the configured base")
+    check_setup_repository.add_work_remote()
+    check_setup_repository.declare_default_branch(RE_POINTED_DEFAULT_BRANCH)
+
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code == 1
+    assert report.results[SetupCheck.DEFAULT_BRANCH].status == CheckStatus.NEEDS_SETUP
+    detail = report.results[SetupCheck.DEFAULT_BRANCH].detail
+    assert RE_POINTED_DEFAULT_BRANCH in detail
+    assert CONFIGURED_BASE_BRANCH in detail
+
+
+def test_reads_the_remotes_own_head_when_the_clone_records_no_default_branch(
+    check_setup_repository: ScratchRepository,
+):
+    check_setup_repository.write(
+        StackConfigurationPath.COMMITTED, stack_configuration(CONFIGURED_BASE_BRANCH)
+    )
+    check_setup_repository.commit_everything("declare the configured base")
+    check_setup_repository.add_work_remote()
+    check_setup_repository.declare_default_branch(RE_POINTED_DEFAULT_BRANCH)
+    check_setup_repository.forget_declared_default_branch()
+    check_setup_repository.declare_default_branch_on_work_remote(
+        RE_POINTED_DEFAULT_BRANCH
+    )
+
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code == 1
+    assert report.results[SetupCheck.DEFAULT_BRANCH].status == CheckStatus.NEEDS_SETUP
+    assert RE_POINTED_DEFAULT_BRANCH in report.results[SetupCheck.DEFAULT_BRANCH].detail
+
+
+def test_prefers_the_personal_base_override_over_the_committed_one(
+    check_setup_repository: ScratchRepository,
+):
+    overridden_base = "trunk"
+    check_setup_repository.write(
+        StackConfigurationPath.COMMITTED, stack_configuration(CONFIGURED_BASE_BRANCH)
+    )
+    check_setup_repository.commit_everything("declare the configured base")
+    check_setup_repository.update_notes_branch_file(
+        StackConfigurationPath.PERSONAL, stack_configuration(overridden_base)
+    )
+    check_setup_repository.add_work_remote()
+    check_setup_repository.declare_default_branch(overridden_base)
+
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code == 0
+    assert report.results[SetupCheck.DEFAULT_BRANCH].status == CheckStatus.OK
+    assert overridden_base in report.results[SetupCheck.DEFAULT_BRANCH].detail
+
+
+def test_reports_no_verdict_when_nothing_configures_a_base_branch(
+    check_setup_repository: ScratchRepository,
+):
+    check_setup_repository.add_work_remote()
+    check_setup_repository.declare_default_branch(RE_POINTED_DEFAULT_BRANCH)
+
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code == 0
+    assert report.results[SetupCheck.DEFAULT_BRANCH].status == CheckStatus.INFORMATIONAL

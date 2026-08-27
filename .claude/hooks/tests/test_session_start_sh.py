@@ -23,6 +23,8 @@ from scratch_repository import (
     SCRATCH_IDENTITY,
     WORK_BRANCH,
     ScratchRepository,
+    StackConfigurationPath,
+    stack_configuration,
 )
 from session_start_summary import SummaryMessage, summary_message, summary_value
 
@@ -336,3 +338,68 @@ def test_every_summary_message_renders_something():
     """
     for message in SummaryMessage:
         assert summary_message(message, "first", "second", "third").strip() != ""
+
+
+# %% which branch counts as the default when the repository has been re-pointed
+
+CONFIGURED_BASE_BRANCH = "main"
+"""
+The branch the scratch repository's stack configuration names as its base.
+"""
+
+RE_POINTED_DEFAULT_BRANCH = "integration"
+"""
+The branch the repository wrongly declares as its default - a generated branch nothing
+is meant to be cut from, which is the state this fork was actually found in.
+"""
+
+
+def configure_a_re_pointed_repository(repository: ScratchRepository) -> None:
+    """
+    Set a scratch repository up as one whose declared default branch is not the base its
+    stack configuration names, with a remote-tracking ref for each - the state a clone of
+    a re-pointed repository is really in.
+
+    :param repository: The fixture-built scratch repository.
+    """
+    repository.write(
+        StackConfigurationPath.COMMITTED, stack_configuration(CONFIGURED_BASE_BRANCH)
+    )
+    repository.commit_everything("declare the configured base")
+    repository.add_work_remote()
+    repository.track_remote_branch(CONFIGURED_BASE_BRANCH)
+    repository.declare_default_branch(RE_POINTED_DEFAULT_BRANCH)
+
+
+def test_treats_the_configured_base_as_the_branch_no_plan_item_can_track(
+    session_start_repository: ScratchRepository,
+):
+    configure_a_re_pointed_repository(session_start_repository)
+    session_start_repository.publish_notes_branch({NOTES_PATH: "personal notes\n"})
+    session_start_repository.run_git(
+        "checkout", "--quiet", "-b", CONFIGURED_BASE_BRANCH
+    )
+
+    result = run_session_start(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "plan") == summary_message(
+        SummaryMessage.PLAN_NOT_APPLICABLE
+    )
+
+
+def test_treats_the_re_pointed_default_branch_as_ordinary_work(
+    session_start_repository: ScratchRepository,
+):
+    configure_a_re_pointed_repository(session_start_repository)
+    session_start_repository.publish_notes_branch({NOTES_PATH: "personal notes\n"})
+    session_start_repository.run_git(
+        "checkout", "--quiet", "-b", RE_POINTED_DEFAULT_BRANCH
+    )
+
+    result = run_session_start(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "plan") == summary_message(
+        SummaryMessage.NO_PLANS_TRACKED, NOTES_BRANCH
+    )

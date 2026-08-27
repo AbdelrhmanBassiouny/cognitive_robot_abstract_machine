@@ -169,6 +169,34 @@ else
   report git_identity needs-setup "not checked - the branch that would record it doesn't exist yet"
 fi
 
+# %% the branch every session is cut from
+
+# A repository whose declared default branch is not the base the stacked-PR
+# configuration names re-points every piece of work cut from it afterwards: a
+# fresh clone starts there, and a pull request opened through the web UI
+# targets it. Reported rather than left to be noticed, because nothing about
+# the resulting clone looks wrong from inside it - it is perfectly consistent,
+# just based on the wrong branch.
+#
+# Placed after the notes branch above because the personal override
+# configured_base_branch reads lives on it, and is only in FETCH_HEAD once it
+# has been fetched.
+BASE_BRANCH="$(configured_base_branch || true)"
+DECLARED_DEFAULT_BRANCH="$(repository_default_branch || true)"
+if [ -z "${BASE_BRANCH}" ]; then
+  report default_branch info \
+    "no upstream_base in ${STACK_CONFIG_FILE} or in ${PERSONAL_STACK_CONFIG_PATH} on '${NOTES_BRANCH}', so there is no configured base to check the default branch against"
+elif [ -z "${DECLARED_DEFAULT_BRANCH}" ]; then
+  report default_branch info \
+    "this clone records no default branch and origin reports none, so it cannot be compared against the configured base '${BASE_BRANCH}'"
+elif [ "${DECLARED_DEFAULT_BRANCH}" = "${BASE_BRANCH}" ]; then
+  report default_branch ok \
+    "'${DECLARED_DEFAULT_BRANCH}' is both this repository's default branch and its configured base"
+else
+  report default_branch needs-setup \
+    "this repository's default branch is '${DECLARED_DEFAULT_BRANCH}', but its configured base is '${BASE_BRANCH}' - every fresh clone starts on '${DECLARED_DEFAULT_BRANCH}', and a pull request opened through the web UI would target it. Set the default branch back to '${BASE_BRANCH}' in the repository's settings"
+fi
+
 # %% plan-dashboard dependencies
 
 # Derived from requirements.txt itself rather than a second hand-written list
