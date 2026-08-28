@@ -433,3 +433,86 @@ here would have left `surfaces-from-world` and `perception-backend` showing as
 blocked with no "Start now" button, which is what prompted this item being
 picked up. Opened out of draft at the developer's decision, to unblock them.
 Nothing is merged; `main` is untouched until they say otherwise.
+
+## `surfaces-from-world`: the plan, and what it deliberately leaves to the next item
+
+Kicked off 2026-08-28 in `auto` mode, as pull request #205 off
+`montessori_perception_on_main` (#202, open and out of draft, so ready to stack
+on — `check_dependency_readiness.py` reports `open_ready`).
+
+### The two constants, and where each one is
+
+`node.py` reads the scene from exactly two hand-written values:
+
+- `TRACY_WORKSPACE` (`node.py:102`), the 1.0 × 1.2 m region guess. This is
+  fault 1 in full.
+- `float(BOARD_SCALE.z)`, `build_node`'s default lid offset, imported from
+  `experiments.montessori.world` — the *simulated* scene's own module constant,
+  standing in for the real board's height.
+
+`table_top_z(robot)` is not a constant, but it throws away three quarters of
+what it reads: it picks the tabletop out of `robot.root.collision` by largest
+`scale.x * scale.y`, keeps the height, and discards `scale.x`, `scale.y` and
+the origin — the exact numbers `TRACY_WORKSPACE` guesses at.
+
+So the same read that already gives the height gives the bounds, and the fix is
+to keep what it discards rather than to write a better rectangle.
+
+### What is being built
+
+One place that answers "which horizontal surface is this, where does it reach,
+and how high does it stand", returning both together rather than a bare float:
+
+- Prefer `HasSupportingSurface.supporting_surface` when the world carries one.
+- Fall back to the body's own tabletop collision shape — `table_top_z`'s
+  existing largest-area pick, now keeping the extent as well as the height.
+
+`build_node` then reads the table and the board's lid out of the fetched world
+and hands the pipeline a region and two plane heights that came from the world.
+
+**`supporting_surface` is `None` on every world in this workspace today.**
+Nothing calls `calculate_supporting_surface`, and the field defaults to `None`,
+so on the live robot the fallback is the path that actually runs. The annotated
+path is written because the item asks for it and because
+`detect-per-supporting-surface` will populate it, not because it fires now —
+worth knowing before reading the fallback as dead code.
+
+### Deliberately not done here
+
+- **The pipeline keeps `region` / `table_height` / `board_height` as they are.**
+  Restructuring it into one pass per surface is `detect-per-supporting-surface`,
+  the next item in this track, and building it here would take that item's work.
+  The lid offset is computed at the wiring site from two world-read heights
+  instead.
+- **The region is the table, not a reachability envelope.** `TRACY_WORKSPACE`'s
+  docstring calls it "the reachable stretch of Tracy's own table", but nothing
+  in this plan asks perception to clip to what the arms can reach, and fault 1
+  is the region showing the *floor*, not showing unreachable table. If the real
+  table turns out wider than the arms reach, that is a new observation and a new
+  item, not a constant to reintroduce.
+
+### The checkable outcome
+
+`montessori-perception-on-main`'s own roadmap section recorded that
+`montessori/world.py` and `tracy_experiments/equipment.py` were dragged onto
+`main` for a single symbol each — `BOARD_SCALE` and `table_top_z` — and that
+"both symbols are exactly what `surfaces-from-world` replaces with values read
+from the world". So the test of this item is not only that the clip looks right:
+it is that `node.py` imports neither module afterwards. That is asserted, not
+just observed.
+
+### Verification
+
+Tests first, against `MontessoriWorld` — a synthetic world already carrying a
+`Table`, a `Floor` and a `ShapeSortingBoard`, which `test_montessori_world.py`
+builds today — so the derived region and heights are asserted against the
+world's own `TABLE_SCALE`/`TABLE_POSITION` and `BOARD_SCALE`/`BOARD_POSITION`
+rather than against a second copy of those numbers.
+
+Run with `--noconftest` and the workspace on `PYTHONPATH`, for the reason #202
+recorded: the repository's conftest regenerates the ORM interfaces on
+collection, which imports `giskardpy` and needs a ROS 2 installation the
+container lacks, and that failure reproduces on unmodified `main`.
+
+Nothing here can be verified against the live camera from a container. The clip
+actually showing the table is `demo-runs-on-grounded-perception`'s job.
