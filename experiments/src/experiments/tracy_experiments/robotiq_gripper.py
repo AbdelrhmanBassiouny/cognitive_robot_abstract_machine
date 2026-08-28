@@ -33,18 +33,26 @@ logger = logging.getLogger(__name__)
 
 
 class RobotiqGripperError(Exception):
-    """Base class for failures while driving a Robotiq gripper action."""
+    """
+    Base class for failures while driving a Robotiq gripper action.
+    """
 
 
 @dataclass
 class GripperActionServerUnavailable(RobotiqGripperError):
-    """The gripper action server was not reachable within the wait budget."""
+    """
+    The gripper action server was not reachable within the wait budget.
+    """
 
     arm: Arms
-    """Arm whose gripper action server was missing."""
+    """
+    Arm whose gripper action server was missing.
+    """
 
     action_name: str
-    """Fully qualified name of the action that was waited on."""
+    """
+    Fully qualified name of the action that was waited on.
+    """
 
     def __str__(self) -> str:
         return (
@@ -55,13 +63,19 @@ class GripperActionServerUnavailable(RobotiqGripperError):
 
 @dataclass
 class GripperCommandTimedOut(RobotiqGripperError):
-    """The gripper action accepted the goal but did not finish in time."""
+    """
+    The gripper action accepted the goal but did not finish in time.
+    """
 
     arm: Arms
-    """Arm whose gripper command did not finish."""
+    """
+    Arm whose gripper command did not finish.
+    """
 
     action_name: str
-    """Fully qualified name of the action that was waited on."""
+    """
+    Fully qualified name of the action that was waited on.
+    """
 
     def __str__(self) -> str:
         return (
@@ -77,13 +91,19 @@ class GripperCommandRejected(RobotiqGripperError):
     """
 
     arm: Arms
-    """Arm whose gripper command was not completed."""
+    """
+    Arm whose gripper command was not completed.
+    """
 
     reached_goal: bool
-    """Whether the controller reported the commanded position as reached."""
+    """
+    Whether the controller reported the commanded position as reached.
+    """
 
     stalled: bool
-    """Whether the controller reported the fingers as stalled."""
+    """
+    Whether the controller reported the fingers as stalled.
+    """
 
     def __str__(self) -> str:
         return (
@@ -102,10 +122,14 @@ class FingerSetpoint(float, Enum):
     """
 
     OPEN = 0.0
-    """Fully open."""
+    """
+    Fully open.
+    """
 
     CLOSED = 0.5
-    """Fully closed."""
+    """
+    Fully closed.
+    """
 
     @classmethod
     def for_state(cls, state: GripperState) -> "FingerSetpoint":
@@ -117,13 +141,19 @@ _STATE_SETPOINTS: Dict[GripperState, FingerSetpoint] = {
     GripperState.OPEN: FingerSetpoint.OPEN,
     GripperState.CLOSE: FingerSetpoint.CLOSED,
 }
-"""Finger setpoint realising each :class:`GripperState` this controller supports."""
+"""
+Finger setpoint realising each :class:`GripperState` this controller supports.
+"""
 
 _ARM_SIDES: Dict[Arms, str] = {Arms.LEFT: "left", Arms.RIGHT: "right"}
-"""Body-side token in the action name for each single-arm :class:`Arms` member."""
+"""
+Body-side token in the action name for each single-arm :class:`Arms` member.
+"""
 
 GRIPPER_ACTION_TEMPLATE = "/{side}_gripper/robotiq_gripper_controller/gripper_cmd"
-"""Action name of a Robotiq gripper controller, parameterised by body side."""
+"""
+Action name of a Robotiq gripper controller, parameterised by body side.
+"""
 
 
 # %% controller
@@ -140,18 +170,26 @@ class RobotiqGripperController:
     """
 
     node: Node
-    """ROS node that owns the action clients."""
+    """
+    ROS node that owns the action clients.
+    """
 
     server_timeout: float = 10.0
-    """Seconds to wait for a gripper action server before raising."""
+    """
+    Seconds to wait for a gripper action server before raising.
+    """
 
     command_timeout: float = 15.0
-    """Seconds to wait for an accepted gripper command to finish before raising."""
+    """
+    Seconds to wait for an accepted gripper command to finish before raising.
+    """
 
     _clients: Dict[Arms, ActionClient] = field(
         default_factory=dict, init=False, repr=False
     )
-    """Action client per single arm, created on first use."""
+    """
+    Action client per single arm, created on first use.
+    """
 
     def move(self, arm: Arms, state: GripperState) -> None:
         """
@@ -168,6 +206,25 @@ class RobotiqGripperController:
             reaching the commanded position and without stalling.
         """
         setpoint = FingerSetpoint.for_state(state)
+        for single_arm in self._single_arms(arm):
+            self._send(single_arm, setpoint)
+
+    def close_to(self, arm: Arms, setpoint: float) -> None:
+        """
+        Drive the given arm's gripper to a raw finger ``setpoint``.
+
+        Unlike :meth:`move`, the setpoint is used as given rather than taken from the
+        two-step :class:`FingerSetpoint`, so a grasp can be sized to the piece it is
+        about to hold. As with :meth:`move`, stalling against an object counts as done.
+
+        :param arm: Arm whose gripper to move; :attr:`Arms.BOTH` moves both.
+        :param setpoint: Target finger position in the controller's own units, where
+            ``0`` is fully open.
+        :raises GripperActionServerUnavailable: If a gripper action server is missing.
+        :raises GripperCommandTimedOut: If an accepted command does not finish in time.
+        :raises GripperCommandRejected: If a command is rejected, or stops without
+            reaching the commanded position and without stalling.
+        """
         for single_arm in self._single_arms(arm):
             self._send(single_arm, setpoint)
 
@@ -191,8 +248,10 @@ class RobotiqGripperController:
         """:return: The gripper action name for a single arm."""
         return GRIPPER_ACTION_TEMPLATE.format(side=_ARM_SIDES[arm])
 
-    def _send(self, arm: Arms, setpoint: FingerSetpoint) -> None:
-        """Send one finger-position command to a single arm and wait for its result."""
+    def _send(self, arm: Arms, setpoint: float) -> None:
+        """
+        Send one finger-position command to a single arm and wait for its result.
+        """
         client = self._client(arm)
         action_name = self._action_name(arm)
         if not client.wait_for_server(timeout_sec=self.server_timeout):

@@ -29,7 +29,7 @@ import signal
 import subprocess
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -63,6 +63,7 @@ from experiments.montessori.world import (
     _shape_body,
 )
 from experiments.tracy_experiments.equipment import table_top_z as read_table_top_z
+from experiments.tracy_experiments.montessori.grasp_widths import GraspCloseTable
 from experiments.tracy_experiments.robotiq_gripper import RobotiqGripperController
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -318,6 +319,9 @@ class _SortingRig:
     table_top_z: float
     """Height of the live robot's own table top."""
 
+    close_table: GraspCloseTable = field(default_factory=GraspCloseTable)
+    """Per-shape close setpoint the grasp is sized to."""
+
     def sort(
         self, body: Body, category: MontessoriShapeCategory, half_height: float
     ) -> None:
@@ -326,10 +330,12 @@ class _SortingRig:
         hole matching ``category``.
 
         The gripper is opened and closed through :attr:`gripper` rather than a plan
-        node, since Giskard cannot command Tracy's real fingers.
+        node, since Giskard cannot command Tracy's real fingers, and the close is sized
+        to ``category`` via :attr:`close_table`.
 
         :param body: The shape to sort, already spawned on the table.
-        :param category: The board hole the shape belongs to.
+        :param category: The board hole the shape belongs to, and the shape whose close
+            setpoint the grasp uses.
         :param half_height: Half the shape's own height, for seating it above the hole.
         """
         reach = ReachAction(
@@ -391,7 +397,7 @@ class _SortingRig:
 
         self.gripper.move(PICK_ARM, GripperState.OPEN)
         reach_plan.perform()
-        self.gripper.move(PICK_ARM, GripperState.CLOSE)
+        self.gripper.close_to(PICK_ARM, self.close_table.setpoint_for(category))
         lift.perform()
         place.perform()
         self.gripper.move(PICK_ARM, GripperState.OPEN)
