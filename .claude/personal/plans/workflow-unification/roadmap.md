@@ -10305,3 +10305,40 @@ not the instructions.** Every assertion here was about what the script produced 
 it read, and all 22 passed while step 3 pointed at a page with no variable list on it.
 The check that found it is the one nothing in the repository can perform — following the
 output as its reader would.
+
+## 2026-08-28 — the dashboard's own refresh, and a shared name for "button that copies a command"
+
+Asked for while refreshing the rdr-refactor dashboard, which is exactly the moment it names:
+the page in front of you is a snapshot, nothing on it can republish itself, and the way back
+to a current one lived entirely outside the page — the skill's name and the plan's id, both
+recalled from memory. The masthead now carries a Refresh button that copies
+`/plan-dashboard <plan-id>`.
+
+### It is the same affordance as the item buttons, so it is not a second one
+
+The item action buttons were already "a button whose click copies a slash command"; the
+refresh is that with a different command and no model dropdown. Rather than a second copy
+of the markup and the clipboard handler, both now render through one `copy_command_button`
+macro over a `CopyableCommand` base declaring the two things the markup reads — `label` and
+`command`. `ItemAction` keeps the item identifier its command needs;
+`RefreshDashboardAction` is its page-level sibling, carrying only the plan id.
+
+### A hint, because a Refresh button that does not refresh is a trap
+
+Clicking copies rather than reloads. The button gives its "Copied!" feedback after the fact,
+which is too late for someone who clicked expecting the page to rebuild itself, so a short
+line beside it says what the click does before it happens.
+
+### Landing order with the Bastler move, and one screenshot deliberately left stale
+
+`#185` moves `build_dashboard.py` and `templates/dashboard.html` into the bastler package
+verbatim, so this is not a dependency in either direction — whichever lands second carries
+the other's change through the merge it already needs. `example/screenshots/dashboard-overview.png`
+now trails the masthead by one element; re-rendering it headlessly would leave it visually
+inconsistent with the two screenshots beside it, so it was left as it is and the gap recorded
+here rather than papered over.
+
+### Track placement
+
+`dashboards`, not the plan the request arrived through. The button is dashboard tooling that
+every plan's page gets; rdr-refactor was the page being looked at, not the subject.
