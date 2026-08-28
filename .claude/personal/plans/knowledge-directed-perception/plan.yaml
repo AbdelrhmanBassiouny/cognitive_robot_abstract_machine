@@ -141,10 +141,11 @@ items:
   - id: surfaces-from-world
     title: "Take the workspace from the table the robot knows about, not from a constant"
     branch: perception_surfaces_from_world
-    pull_request_number: null
+    pull_request_number: 205
     track: surfaces
     depends_on: [montessori-perception-on-main]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_011NPnTyfe9ZfBPvv13CVZcM
     notes: >-
       Fixes the first fault: the clip shows the floor because TRACY_WORKSPACE
       (node.py:102) is a hand-written 1.0 x 1.2 m rectangle. table_top_z()
