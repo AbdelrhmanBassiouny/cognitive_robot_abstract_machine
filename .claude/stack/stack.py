@@ -49,6 +49,10 @@ from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote
 
+sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
+
+from git_commands import GitCommandRunner
+
 # %% configuration
 
 CONFIGURATION_PATH = Path(__file__).with_name("stack.toml")
@@ -298,7 +302,18 @@ class Configuration:
     """Fork-PR label opting a branch into the rebase strategy instead of the default merge."""
 
     needs_resolution_label: str
-    """Fork-PR label marking a branch withheld from promotion pending conflict resolution."""
+    """Fork-PR label marking a branch withheld from promotion pending conflict resolution.
+
+    Applied when a branch conflicts with its own base, and cleared again by the pass that
+    applied it once GitHub stops reporting the pull request as conflicted."""
+
+    integration_conflict_label: str
+    """Fork-PR label marking a branch that breaks a sibling it merges cleanly with.
+
+    A separate label from :attr:`needs_resolution_label` rather than a reuse of it: such
+    a break never makes either pull request conflicted, so the state that clears that one
+    would clear this on evidence that says nothing here. Nothing removes it
+    automatically."""
 
     fork_repository: Repository
     """The fork that holds the full stack, as GitHub names it."""
@@ -317,6 +332,71 @@ class Configuration:
 
     upstream_setup_command: str | None
     """The command adding the upstream remote, or ``None`` once this checkout has one."""
+
+    integration_test_command: str = ""
+    """The command run against a finished integration branch, as a shell-style word list.
+
+    Empty when this checkout's configuration names none, which the integration build
+    refuses rather than reading as a suite that passed."""
+
+    @property
+    def blocking_labels(self) -> tuple[str, ...]:
+        """The labels that hold a branch out of a pass and out of promotion.
+
+        One collection rather than a check per label, so a branch withheld from the pass
+        and a branch excluded from promotion can never be decided by different rules.
+
+        :return: Every label that blocks a branch.
+        """
+        return (self.needs_resolution_label, self.integration_conflict_label)
+
+
+class DefaultLabel(StrEnum):
+    """Every label this workflow writes, as a fork spells it before configuring anything.
+
+    A checkout may rename any of them in its own configuration; these are what it gets
+    when it does not.
+    """
+
+    @property
+    def configuration_key(self) -> str:
+        """The configuration key this label is overridden by.
+
+        Derived rather than listed a second time, which also makes it the name of
+        :class:`Configuration`'s own field for the label.
+
+        :return: The key, as both files spell it.
+        """
+        return f"{self.name.lower()}_label"
+
+    IN_REVIEW = "in-review"
+    """Marks a branch as promoted to the upstream and under review."""
+
+    REBASE = "rebase"
+    """Opts a branch into the rebase strategy instead of the default merge."""
+
+    NEEDS_RESOLUTION = "needs-resolution"
+    """Marks a branch withheld pending resolution of a conflict with its own base."""
+
+    INTEGRATION_CONFLICT = "integration-conflict"
+    """Marks a branch that breaks a sibling it merges cleanly with."""
+
+
+class ConfigurationKey(StrEnum):
+    """Every key the configuration files are read by, apart from the labels.
+
+    A label's key is :attr:`DefaultLabel.configuration_key`, derived from the label
+    itself rather than named again here.
+    """
+
+    UPSTREAM_REPOSITORY = "upstream_repository"
+    """The repository every fork is forked from."""
+
+    UPSTREAM_BASE = "upstream_base"
+    """The upstream base branch every stack ultimately targets."""
+
+    INTEGRATION_TEST_COMMAND = "integration_test_command"
+    """The suite run against a finished integration branch."""
 
 
 def load_configuration(
@@ -339,19 +419,23 @@ def load_configuration(
     """
     values = _configuration_values(path)
     upstream_repository = upstream_repository or Repository.parse(
-        values["upstream_repository"]
+        values[ConfigurationKey.UPSTREAM_REPOSITORY]
     )
     resolution = resolved_remotes(path, fork_repository, upstream_repository)
     return Configuration(
-        in_review_label=values.get("in_review_label", "in-review"),
-        rebase_label=values.get("rebase_label", "rebase"),
-        needs_resolution_label=values.get("needs_resolution_label", "needs-resolution"),
+        **{
+            label.configuration_key: values.get(label.configuration_key, label)
+            for label in DefaultLabel
+        },
         fork_repository=resolution.fork.repository,
         fork_remote=resolution.fork.name,
         upstream_repository=upstream_repository,
         upstream_remote=resolution.upstream_name,
-        upstream_base=values.get("upstream_base", "main"),
+        upstream_base=values.get(ConfigurationKey.UPSTREAM_BASE, "main"),
         upstream_setup_command=resolution.upstream_setup_command,
+        integration_test_command=values.get(
+            ConfigurationKey.INTEGRATION_TEST_COMMAND, ""
+        ),
     )
 
 
@@ -384,7 +468,8 @@ def resolved_remotes(
     configured_fork = values.get("fork_repository")
     return resolve_remotes(
         _remote_urls(),
-        upstream_repository or Repository.parse(values["upstream_repository"]),
+        upstream_repository
+        or Repository.parse(values[ConfigurationKey.UPSTREAM_REPOSITORY]),
         values.get("upstream_remote", "cram2"),
         fork_repository
         or (Repository.parse(configured_fork) if configured_fork else None),
@@ -455,6 +540,20 @@ class BranchStatus(StrEnum):
 
     MERGED = "merged"
     """Its own commits are already contained in the upstream base."""
+
+    @property
+    def is_out_of_draft(self) -> bool:
+        """Whether its author has reviewed it themselves.
+
+        This repository's convention is that a pull request stays a draft until its
+        author has read it back, so leaving draft *is* that review. Both statuses beyond
+        draft have had it, and :func:`derive_status` gives ``in-review`` precedence over
+        ``ready`` - so asking for ``ready`` alone silently excludes everything already
+        promoted upstream.
+
+        :return: Whether the branch has been reviewed by its author.
+        """
+        return self in {BranchStatus.READY, BranchStatus.IN_REVIEW}
 
 
 class IntegrationStrategy(StrEnum):
@@ -542,6 +641,18 @@ class Stack:
         :return: Whether the branch is withheld from promotion pending conflict resolution.
         """
         return self.configuration.needs_resolution_label in branch.labels
+
+    def is_blocked(self, branch: Branch) -> bool:
+        """Whether any label withholds this branch from the workflow.
+
+        Read from :attr:`Configuration.blocking_labels` rather than a check per label, so
+        a branch a pass withholds and a branch a build leaves out cannot be decided by
+        different rules.
+
+        :param branch: The branch to check.
+        :return: Whether it is blocked.
+        """
+        return bool(set(self.configuration.blocking_labels).intersection(branch.labels))
 
     def has_landed_upstream(self, branch_name: str) -> bool:
         """Whether a branch's commits are already in the upstream base.
@@ -775,16 +886,26 @@ class PromotionLink:
 # %% git plumbing
 
 
+def _runner() -> GitCommandRunner:
+    """:return: A runner over the current working directory.
+
+    Resolved per call rather than once at import, since this module is read by tests
+    that change directory between them.
+    """
+    return GitCommandRunner(working_directory=Path.cwd())
+
+
 def _git(*args: str) -> str:
     """Run a git command and return its stripped stdout (empty string on failure).
+
+    Answering nothing on failure is deliberate and is why this reads through
+    ``attempt``: every caller here derives, where a reference that does not resolve
+    simply means there is no answer.
 
     :param args: The git subcommand and its arguments.
     :return: The command's stripped stdout.
     """
-    result = subprocess.run(
-        ["git", *args], capture_output=True, text=True, cwd=Path.cwd()
-    )
-    return result.stdout.strip()
+    return _runner().attempt(*args).output
 
 
 def _git_succeeds(*args: str) -> bool:
@@ -793,10 +914,7 @@ def _git_succeeds(*args: str) -> bool:
     :param args: The git subcommand and its arguments.
     :return: Whether the command exited successfully.
     """
-    result = subprocess.run(
-        ["git", *args], capture_output=True, text=True, cwd=Path.cwd()
-    )
-    return result.returncode == 0
+    return _runner().attempt(*args).succeeded
 
 
 def _merged_predicate(configuration: Configuration):
@@ -1351,12 +1469,14 @@ def print_configuration(configuration: Configuration) -> None:
 
     Keys are :class:`Configuration`'s own field names, so a caller reading one by name cannot
     be reading a name this module never prints. A setting with no value is omitted rather than
-    printed empty, which is what keeps ``upstream_setup_command`` readable as "run this".
+    printed empty - whether it carries no value by being unset (``upstream_setup_command``,
+    which is readable as "run this" precisely because it is absent otherwise) or by being
+    empty (``integration_test_command``, which a checkout need not name at all).
 
     :param configuration: The configuration to report.
     """
     for name, value in vars(configuration).items():
-        if value is None:
+        if not value:
             continue
         print(f"{name}\t{value}")
 

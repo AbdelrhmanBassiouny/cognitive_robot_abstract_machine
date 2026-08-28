@@ -1,0 +1,127 @@
+name: Integration refresh
+
+# Rebuilds the integration branch: bring every stale tip forward, assemble the upstream
+# base plus every reviewed, unblocked branch in flight, and move the branch onto the
+# result once this repository's own checks have passed over it.
+#
+# Why a candidate pull request rather than judging the pushed branch directly: ci.yml
+# triggers on `push` to main and on `pull_request`, and on nothing else - so a build
+# that is only pushed collects no checks at all. The candidate exists to be judged and
+# is closed unmerged either way; a build is regenerated from scratch, so it shares no
+# history with the branch it replaces and there is nothing to merge.
+#
+# Why a stored token rather than GITHUB_TOKEN: GitHub starts no workflow run from an
+# event that GITHUB_TOKEN caused, so a candidate opened with it would sit with no checks
+# forever. INTEGRATION_REFRESH_TOKEN is a fine-grained token with Contents and Pull
+# requests write; both halves were probed on 2026-08-23 - it pushed a commit touching
+# .github/workflows/, and a run appeared for the branch it pushed.
+#
+# Runs unchanged in any fork: the repositories come from .claude/stack/stack.toml and
+# the runner's own context, so none is named here.
+
+on:
+  schedule:
+    # Four times a day. A rebuild is only useful once something it would carry has
+    # moved, and the branches move on a working day's rhythm rather than an hourly one.
+    - cron: "0 5,11,17,23 * * *"
+  workflow_dispatch:
+
+concurrency:
+  # Two rebuilds at once would race for the same branch and open two candidates for it.
+  group: integration-refresh
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  refresh:
+    name: Rebuild the integration branch and publish it if it is green
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the tooling dependencies
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          pip install pytest -r "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"
+
+      - name: Add the upstream the build is based on
+        env:
+          GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          eval "$(python "${STACK_DIRECTORY}/stack.py" configuration \
+            | awk -F'\t' '$1 == "upstream_setup_command" { print $2 }')"
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+
+      - name: Bring the fork's base onto the upstream
+        env:
+          GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          python "${STACK_DIRECTORY}/maintenance.py" fast-forward
+
+      - name: Restack every stale tip and build
+        id: build
+        env:
+          GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          set +e
+          python "${STACK_DIRECTORY}/integration.py" build --restack --no-test \
+            --json > "${RUNNER_TEMP}/build.json"
+          status=$?
+          set -e
+          # 0: every tip is in the branch. 10: at least one was left out, which is a
+          # collision to triage rather than a build that failed. Anything else is.
+          case $status in 0 | 10) ;; *) cat "${RUNNER_TEMP}/build.json"; exit $status ;; esac
+          echo "branch=$(python -c "import json;print(json.load(open('${RUNNER_TEMP}/build.json'))['build_branch'])")" >> "$GITHUB_OUTPUT"
+
+      - name: Open the candidate that gets it checked
+        id: candidate
+        env:
+          GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          python "${STACK_DIRECTORY}/integration.py" open-candidate \
+            --build "${{ steps.build.outputs.branch }}" --json \
+            > "${RUNNER_TEMP}/candidate.json"
+          python - <<'READ' >> "$GITHUB_OUTPUT"
+          import json, os
+          opened = json.load(open(os.environ["RUNNER_TEMP"] + "/candidate.json"))
+          print(f"number={opened['candidate']}")
+          print(f"head={opened['head']}")
+          READ
+
+      - name: Publish the build once its checks pass
+        env:
+          GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          # Each call is one decision read on its own; the waiting is here rather than
+          # inside it, so a caller that does not want to wait need not.
+          for _ in $(seq 60); do
+            set +e
+            python "${STACK_DIRECTORY}/integration.py" settle-candidate \
+              --candidate "${{ steps.candidate.outputs.number }}" \
+              --build "${{ steps.build.outputs.branch }}" \
+              --head "${{ steps.candidate.outputs.head }}" --json
+            status=$?
+            set -e
+            # 13 is the checks not having finished; anything else is a verdict.
+            if [ $status -ne 13 ]; then exit $status; fi
+            sleep 60
+          done
+          echo "::error::the candidate's checks had not finished after an hour"
+          exit 1
