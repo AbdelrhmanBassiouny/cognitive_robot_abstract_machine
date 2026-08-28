@@ -123,3 +123,28 @@ class NoSceneAvailable(DataclassException):
             "Check that the camera and the robot's transform tree are running, and "
             "that the configured topic names match the ones being published."
         )
+
+
+@dataclass
+class WorkspaceOutOfView(DataclassException):
+    """
+    Raised when the stretch of table perception looks at falls outside the camera image
+    altogether, so there is nothing of it to show.
+    """
+
+    image_shape: Tuple[int, ...]
+    """
+    Height and width of the image the workspace was looked for in.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The workspace falls outside the {self.image_shape} image, so the camera "
+            "is not looking at it."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Check where the camera is mounted and which frame its pose is given in, "
+            "and that the configured workspace names the table it is pointed at."
+        )

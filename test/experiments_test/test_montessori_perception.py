@@ -33,6 +33,7 @@ from experiments.montessori.perception.exceptions import (
     DepthAndColourNotRegistered,
     UndecodableCompressedImage,
     UnsupportedImageEncoding,
+    WorkspaceOutOfView,
 )
 from experiments.montessori.perception.footprint import (
     CrossSectionClassifier,
@@ -80,7 +81,11 @@ from experiments.montessori.perception.viewer import (
 from experiments.montessori.semantics import MontessoriShapeCategory
 from krrood.entity_query_language.factories import a, the
 
-from .dataset.montessori_scene_renderer import MontessoriSceneRenderer, PlacedPiece
+from .dataset.montessori_scene_renderer import (
+    MontessoriSceneRenderer,
+    PlacedPiece,
+    piece_color,
+)
 
 # %% fixtures
 
@@ -734,6 +739,17 @@ def test_the_point_under_the_camera_lands_on_its_principal_point():
     assert pixels[0] == pytest.approx([320.0, 240.0])
 
 
+def test_a_point_in_space_lands_where_its_own_plane_puts_it():
+    frame = frame_seen_from_above()
+    standing_at = 0.3
+
+    pixels = frame.project(np.array([[0.1, 0.2, standing_at]]))
+
+    assert pixels[0] == pytest.approx(
+        project_to_pixels(frame, np.array([[0.1, 0.2]]), standing_at)[0]
+    )
+
+
 def test_a_point_beside_the_camera_axis_lands_beside_the_principal_point():
     pixels = project_to_pixels(frame_seen_from_above(), np.array([[0.1, 0.0]]), 0.0)
 
@@ -814,6 +830,80 @@ def test_a_standing_piece_is_boxed_around_the_top_face_the_camera_sees(
         assert pixels[:, 0].max() <= right
         assert pixels[:, 1].min() >= top
         assert pixels[:, 1].max() <= bottom
+
+
+# %% cutting the view down to the workspace
+
+
+def _colored_pixels(image: np.ndarray, piece: KnownPiece) -> int:
+    """
+    How many pixels of an image the renderer drew in one piece's own colour.
+
+    :param image: The image to count in, blue/green/red.
+    :param piece: The piece whose colour is counted.
+    """
+    wanted = cv2.cvtColor(
+        np.array([[piece_color(piece)]], dtype=np.uint8), cv2.COLOR_HSV2BGR
+    )[0, 0]
+    return int((image == wanted).all(axis=2).sum())
+
+
+def test_the_view_is_cut_down_to_the_workspace(
+    renderer: MontessoriSceneRenderer,
+    pipeline: MontessoriPerceptionPipeline,
+    placed_pieces: List[PlacedPiece],
+):
+    frame = renderer.render(placed_pieces)
+
+    clipped = pipeline.workspace.clip(frame.color, frame)
+
+    assert clipped.shape[0] < frame.height
+    assert clipped.shape[1] < frame.width
+
+
+def test_everything_standing_in_the_workspace_stays_in_view(
+    renderer: MontessoriSceneRenderer,
+    pipeline: MontessoriPerceptionPipeline,
+    placed_pieces: List[PlacedPiece],
+):
+    frame = renderer.render(placed_pieces)
+
+    clipped = pipeline.workspace.clip(frame.color, frame)
+
+    for placed in placed_pieces:
+        assert _colored_pixels(clipped, placed.known_piece) == _colored_pixels(
+            frame.color, placed.known_piece
+        )
+
+
+def test_the_depth_image_is_cut_down_the_same_way_as_the_colour_one(
+    renderer: MontessoriSceneRenderer,
+    pipeline: MontessoriPerceptionPipeline,
+    placed_pieces: List[PlacedPiece],
+):
+    frame = renderer.render(placed_pieces)
+    workspace = pipeline.workspace
+
+    assert (
+        workspace.clip(frame.depth, frame).shape
+        == workspace.clip(frame.color, frame).shape[:2]
+    )
+
+
+def test_a_camera_that_is_not_looking_at_the_workspace_has_nothing_to_show(
+    renderer: MontessoriSceneRenderer, pipeline: MontessoriPerceptionPipeline
+):
+    elsewhere = looking_straight_down(pipeline.table_height + 1.0)
+    elsewhere[0, 3] = 100.0
+    frame = RgbdFrame(
+        color=np.zeros((64, 64, 3), dtype=np.uint8),
+        depth=np.zeros((64, 64), dtype=np.float32),
+        intrinsics=renderer.intrinsics,
+        reference_frame_T_camera=elsewhere,
+    )
+
+    with pytest.raises(WorkspaceOutOfView):
+        pipeline.workspace.clip(frame.color, frame)
 
 
 # %% the rectified view

@@ -227,9 +227,9 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
         """
         Pair a colour image with the newest depth image and run the pipeline on the two.
 
-        The bare colour image is shown only while the camera cannot be placed in the
-        world, since a viewer that is about to be handed the same image with the
-        detections on it would otherwise flash the bare one first.
+        The bare images are shown only while the camera cannot be placed in the world,
+        since a viewer that is about to be handed the same ones cut down to the
+        workspace and drawn on would otherwise flash the bare ones first.
 
         :param message: The colour image.
         """
@@ -240,12 +240,11 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
         depth = decode_compressed_depth_image(
             self._latest_depth.data, self._latest_depth.format
         )
-        if self.viewer is not None:
-            self.viewer.show_depth(depth)
         frame = self._build_frame(color, depth)
         if frame is None:
             if self.viewer is not None:
                 self.viewer.show_color(color)
+                self.viewer.show_depth(depth)
             return
         scene = self.pipeline.detect(frame)
         with self._lock:
@@ -260,10 +259,17 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
         Draw one look at the scene, on the camera's own image and on the top-down view
         the outlines were measured in.
 
+        The camera's own image is cut down to the workspace first, so the window shows
+        the stretch of table being worked on rather than the whole room it stands in.
+
         :param frame: The frame the detections were found in.
         :param scene: The detections to draw.
         """
-        self.viewer.show_color(self.overlay.draw(CameraView(frame), scene))
+        workspace = self.pipeline.workspace
+        self.viewer.show_color(
+            workspace.clip(self.overlay.draw(CameraView(frame), scene), frame)
+        )
+        self.viewer.show_depth(workspace.clip(frame.depth, frame))
         self.viewer.show_rectified(
             self.overlay.draw(
                 RectifiedView(frame, self.pipeline.rectify_table(frame)), scene
