@@ -4233,6 +4233,13 @@ items:
       green" currently holds one that was never verified. Whatever shape the stable branch takes, its
       first correct value has to be established rather than inherited.
 
+      The Actions-client premise is stale in the direction that helps. `upstream-review-reader`
+      (#146) merged on 2026-08-22, so the measurement it carried is landed rather than pending - and
+      it landed as a working precedent rather than only a probe: `.github/workflows/upstream-reviews.yml`
+      is a `workflow_dispatch` job that a skill dispatches and then reads back out of the job log,
+      which is the same shape Part D needs for reading a candidate run's conclusion. What is left is
+      the reading of a run's conclusion, not an API surface nobody has exercised.
+
       The delivery route this entry recorded is being withdrawn while Part D is unwritten.
       `session-branch-base` (#199) restores the fork's default branch to `main`, so "sessions clone
       it" stops being how reviewed tooling reaches daily use. That does not touch Part D's mechanics -

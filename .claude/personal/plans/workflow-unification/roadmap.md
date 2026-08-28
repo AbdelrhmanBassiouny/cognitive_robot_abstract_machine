@@ -9736,6 +9736,15 @@ manifest still described a fine-grained PAT as "a required setup step, not a har
 how the design left it; what it does not say is that the step was then taken. Part D's largest
 unproven dependency is discharged. Recorded on `integration-branch-ci-verdict` in the same pass.
 
+### The Actions client is no longer missing, and there is a precedent to copy
+
+`upstream-review-reader` (#146) merged on 2026-08-22. The ci-verdict item still reads "it needs an
+Actions client this tree does not have, since #146 ... is unlanded", which was true when it was
+written. What landed is more than the measurement: `.github/workflows/upstream-reviews.yml` is a
+dispatch-only job whose output a skill reads back out of the job log, which is exactly the shape
+Part D needs to read a candidate run's conclusion. The remaining work is reading a conclusion, not
+proving an API surface.
+
 ### The stable branch holds an unverified build
 
 `integration` is at `899a04a` — the Phase 1 build with `tests_passed: null`. Part D's whole design
