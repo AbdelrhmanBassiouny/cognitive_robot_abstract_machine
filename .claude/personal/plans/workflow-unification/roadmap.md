@@ -9783,3 +9783,29 @@ a fresh clone cannot run it yet - recorded here rather than acted on, since it i
 call whether the rebuild is scheduled, per-session, or gated on #154 landing.
 
 541 tests pass across the four directories CI runs, from 538.
+
+### A stale-path save dropped half of this, and a stop hook caught it rather than any check
+
+Recording the near-miss, because it is the fourth instance of the stale-save hazard on this plan
+and the first with a new tell. The reversal above was written as one manifest edit and one
+roadmap append. The roadmap landed; **the manifest note did not**, and the dashboard was
+published without it.
+
+The cause was not a stale read - the anti-stale-save rule was followed, and both files were
+fetched immediately before editing. It was a stale *path*: the shell's working directory reset
+between commands, so the edit was written to a `plan-live.yaml` in the repository root while
+`save-plan.sh` was handed the untouched copy still sitting in the scratchpad. Both commands
+succeeded, `save-plan.sh` reported success, and the dashboard rendered cleanly from a manifest
+missing the note - the failure is silent at every step.
+
+What surfaced it was the stop hook complaining about **untracked files in the repository**: the
+two scratch copies that had leaked into the repo root. Nothing about the plan tooling noticed,
+and the obvious response to that hook - commit them - would have been actively wrong, since plan
+data must never be tracked on a pull request branch.
+
+Two things worth carrying. **`save-plan.sh` reporting success says the push happened, not that
+the push carried your edit** - the check is reading the field back off the notes branch
+afterwards, which is what #160 already added to `plan_item_bootstrap.py` for exactly this reason
+and which the shell route still leaves to the caller. And **a scratch file inside the repository
+is the hazard, not merely untidy**: write plan scratch to an absolute path outside the working
+tree, so a cwd reset cannot silently redirect an edit into a file nothing will save.
