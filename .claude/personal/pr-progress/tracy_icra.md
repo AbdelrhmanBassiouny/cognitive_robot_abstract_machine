@@ -1,6 +1,6 @@
 ## Branch `tracy_icra` - Montessori perception over the wifi link
 
-Committed as `ea1f6f73a` and pushed to `origin/tracy_icra`. Note the branch's
+Committed as `ea1f6f73a` and `5865ecb03`, pushed to `origin/tracy_icra`. Note the branch's
 configured upstream is `sorin/tracy_icra` (a colleague's fork); the push went to
 `origin` by explicit choice and the upstream was left pointing at sorin.
 
@@ -48,6 +48,17 @@ package living in `cram2/cram_ros2_packages` (confirmed by cloning it), which
 `.github/docker/setup_workspace.py` clones for CI but which is absent from the
 local `~/Projects/ros2_ws`. So it is an environment gap, not a repo bug, and it
 does not warrant a bug-fix PR. Fix is to build that package locally.
+
+### `watch_camera` (done, commit `5865ecb03`)
+`python -m experiments.montessori.perception.watch_camera` subscribes to the two
+camera streams and draws them, with no world fetch and no transform tree, so a
+silent camera and an absent robot no longer look alike. Verified against the live
+camera with a recording display standing in for the screen: both windows drawn at
+960x540.
+
+The viewer's `show(color, depth)` became `show_color` / `show_depth` for this, so
+one dead stream leaves only its own window empty. That case is real - the depth
+stream's plain `compressed` transport publishes a 0-byte payload.
 
 ### Next / open
 - `decode_color_image` and `decode_depth_image` (the raw-message decoders) now
