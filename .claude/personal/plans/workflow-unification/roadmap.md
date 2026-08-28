@@ -10147,3 +10147,51 @@ never moving. That reason is now spent, and a better one replaced it the same da
 is what caught the #154-against-#158 break hours earlier, and it answers *before* a build is pushed
 rather than after a candidate has run a matrix. What the CI verdict replaces is the **publishing**
 decision, which it now makes; it does not replace a fast answer with a slow one.
+
+## 2026-08-28 - Decision 14: the first-time setup is part of the Bastler track
+
+The user asked for the Bastler system's setup to be as easy, as short and as clear as it can be
+for someone arriving at it for the first time, and for the steps they must perform in their own
+fork, GitHub account and Claude settings to be spelled out.
+
+### The gap
+
+`check-setup.sh` is honest about its own boundary, in its header: it deliberately checks nothing
+that lives behind an API rather than in a file. That boundary is drawn in exactly the wrong place
+for a newcomer, because everything on the far side of it is what only they can do - the
+`merged`/`bug`/`in-review` labels a fresh fork does not have, Claude's access to that fork, and
+the `CLAUDE_PERSONAL_NOTES_*` variables a fresh-clone environment needs because git config set
+inside one session is gone by the next. All three existed only as prose, spread across a 237-line
+hooks README and a 238-line setup skill, and a first-time user had to read both to find them.
+
+### What was built
+
+`.claude/SETUP.md` is now the front door and is 41 lines: run `/setup-personal-notes`, run
+`setup_steps.py`, run `check-setup.sh`. `setup_steps.py` prints the three external steps with the
+values already substituted for the clone it lives in - the fork resolved from the notes remote in
+either its name or its raw-URL form, the `gh label create` command per label, and only the
+variable lines whose setting has actually been moved off its default. Both READMEs keep their role
+as the reference and point at the page rather than restating it.
+
+### Drift, and why two lists are duplicated on purpose
+
+The labels cannot be read from `build_dashboard.PullRequestLabel` at runtime: that module needs the
+dashboard dependencies, which is one of the things this script runs *before* are installed. The
+settings cannot be read from `resolve-personal-notes-config.sh` either: it exports nothing a child
+process could read. So both are mirrored, and both are pinned by a test against the definition they
+mirror - which is the only thing that makes a second copy acceptable.
+
+### Track placement
+
+Put in the `bastler` track rather than `stack-tooling` or `personal-data`, and the track's
+description widened to say so. The track's items are all package-extraction steps, so the item is
+the odd one out by shape; it is the right one by subject, because this is how someone reaches the
+Bastler system in the first place, and a front door filed under a different track is a front door
+nobody finds. Structural, so recorded here as well as in the manifest.
+
+### Deliberately not done
+
+`.claude/skills/setup-personal-notes/SKILL.md` is untouched. #107 rewrites it (+103/-188) and adds
+its own deterministic `setup-personal-notes.sh`; wiring `setup_steps.py` into the agent-facing path
+belongs on top of that pull request, where it is a few lines, rather than underneath it, where it is
+a conflict.
