@@ -138,11 +138,12 @@ class MultipleEffectVariablesNotSupported(DataclassException):
 @dataclass
 class JointQueryAcrossClassesNotSupported(DataclassException):
     """
-    Raised when a probabilistic query (``probability(...)``, ``moment(...)``)
-    references attributes of more than one EQL class, e.g. ``moment(x.A, y.B)`` for
+    Raised when a probabilistic query (``probability_of(...)``, ``average(...)``)
+    references attributes of more than one EQL class, e.g. ``average(x.A)`` combined
+    with attributes of a second class in the same call, for
     ``x = variable(ClassOne)`` and ``y = variable(ClassTwo)``.
 
-    ``distribution(...)`` never raises this: it wraps a single ``Match``, which is
+    ``distribution_of(...)`` never raises this: it wraps a single ``Match``, which is
     always for one class by construction.
 
     Every :class:`~krrood.parametrization.model_registries.ModelRegistry` resolves a
@@ -167,4 +168,35 @@ class JointQueryAcrossClassesNotSupported(DataclassException):
         return (
             "Reference attributes reached from a single variable(...) root, or split "
             "into separate queries."
+        )
+
+
+@dataclass
+class RelationalCircuitRegistryRequiresMatch(DataclassException):
+    """
+    Raised when a :class:`~krrood.parametrization.model_registries.RelationalCircuitRegistry`
+    is asked to resolve a model for parameters that aren't a
+    :class:`~krrood.parametrization.parameterizer.UnderspecifiedParameters` (i.e. not a
+    ``Match``, directly or wrapped by ``distribution_of(...)``) -- ``probability_of(...)``
+    and a bare ``average(...)`` build the lighter
+    :class:`~krrood.parametrization.parameterizer.ConditionParameters`/
+    :class:`~krrood.parametrization.parameterizer.SelectedAttributesParameters`
+    instead, which carry no match statement to ground.
+    """
+
+    parameters: Any
+    """
+    The parameters that were given instead of an ``UnderspecifiedParameters``.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"RelationalCircuitRegistry needs a Match's full statement to ground its "
+            f"circuit, but got {type(self.parameters).__name__}, which carries none."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Use RelationalCircuitRegistry only with distribution_of(...) (or a bare "
+            "Match), not probability_of(...)/average(...)."
         )

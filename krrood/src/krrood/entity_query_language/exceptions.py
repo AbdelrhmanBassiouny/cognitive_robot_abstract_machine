@@ -34,6 +34,7 @@ if TYPE_CHECKING:
     )
     from krrood.entity_query_language.operators.probabilistic_queries import (
         ProbabilisticQuery,
+        Probability,
     )
 
 
@@ -942,8 +943,8 @@ class BackendCannotEvaluateProbabilisticQuery(DataclassException):
     """
     Raised when a
     :class:`~krrood.entity_query_language.operators.probabilistic_queries.ProbabilisticQuery`
-    (``distribution(...)``, ``probability(...)``, ``moment(...)``) is evaluated
-    natively or with any backend other than
+    (``distribution_of(...)``, ``probability_of(...)``) is evaluated natively or with
+    any backend other than
     :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`.
 
     Querying a probabilistic model directly is a probabilistic operation, not a data
@@ -964,6 +965,32 @@ class BackendCannotEvaluateProbabilisticQuery(DataclassException):
 
     def suggest_correction(self) -> str:
         return "Evaluate with a ProbabilisticBackend backed by a model registry, e.g. .evaluate(backend=ProbabilisticBackend(...))."
+
+
+@dataclass
+class ProbabilityConditionNotVerbalizable(DataclassException):
+    """
+    Raised when ``verbalize_expression`` is asked to verbalize a
+    :class:`~krrood.entity_query_language.operators.probabilistic_queries.Probability`
+    (``probability_of(...)``) whose condition is a plain ``bool`` rather than an EQL
+    expression -- e.g. ``probability_of(True)``. There is no attribute/chain to scan
+    for referring expressions (articles, coreference) in a bare literal, unlike every
+    other condition shape ``.where(...)``/``probability_of(...)`` accept.
+    """
+
+    probability: Probability
+    """
+    The probability expression whose condition could not be verbalized.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.probability} has a plain bool condition, which carries nothing "
+            f"to verbalize."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Only verbalize a probability_of(...) built from an EQL condition (comparators, and_/or_/not_), not a bare True/False."
 
 
 @dataclass

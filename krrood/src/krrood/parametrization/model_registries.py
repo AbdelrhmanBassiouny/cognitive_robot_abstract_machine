@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing_extensions import Type, Dict, Union
 
+from krrood.parametrization.exceptions import RelationalCircuitRegistryRequiresMatch
 from krrood.parametrization.parameterizer import (
     UnderspecifiedParameters,
     SelectedAttributesParameters,
@@ -79,9 +80,11 @@ class RelationalCircuitRegistry(ModelRegistry):
     returning.
 
     Only supports :class:`~krrood.parametrization.parameterizer.UnderspecifiedParameters`
-    (i.e. a ``Match``, directly or wrapped by ``distribution(...)``): grounding needs
-    the full match statement, which ``moment``'s/``probability``'s lighter parameter
-    classes don't carry.
+    (i.e. a ``Match``, directly or wrapped by ``distribution_of(...)``): grounding needs
+    the full match statement, which ``average``'s/``probability_of``'s lighter
+    parameter classes don't carry -- resolving one of those raises
+    :class:`~krrood.parametrization.exceptions.RelationalCircuitRegistryRequiresMatch`
+    rather than failing on a missing attribute.
     """
 
     relational_probabilistic_circuit: RelationalProbabilisticCircuit
@@ -89,7 +92,9 @@ class RelationalCircuitRegistry(ModelRegistry):
     The trained relational probabilistic circuit to ground.
     """
 
-    def get_model(self, parameters: UnderspecifiedParameters) -> ProbabilisticModel:
+    def get_model(self, parameters: ModelResolutionParameters) -> ProbabilisticModel:
+        if not isinstance(parameters, UnderspecifiedParameters):
+            raise RelationalCircuitRegistryRequiresMatch(parameters)
         grounded = self.relational_probabilistic_circuit.ground(parameters.statement)
         class_prefix = self.relational_probabilistic_circuit.class_.__name__
         rename_map = {}

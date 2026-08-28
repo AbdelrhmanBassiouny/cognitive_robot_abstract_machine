@@ -662,16 +662,19 @@ class UnderspecifiedParameters:
 
 def _single_owner_class(attributes: Iterable[Attribute]) -> Type:
     """
-    :param attributes: The attributes a probabilistic query (``marginal(...)``,
-        ``probability(...)``, ``conditional(...)``, ``truncated(...)``,
-        ``moment(...)``) was given.
-    :return: The single class every attribute is reached from.
+    :param attributes: The attributes a probabilistic query (``distribution_of(...)``,
+        ``probability_of(...)``, ``average(...)``) was given.
+    :return: The single class every attribute is reached from -- the class of each
+        attribute chain's root ``variable(...)``, not its immediate parent (so a
+        multi-hop chain like ``x.arm.battery`` resolves to ``x``'s class, matching what
+        every :class:`ModelRegistry <krrood.parametrization.model_registries.ModelRegistry>`
+        is keyed on, not ``Arm``).
     :raises JointQueryAcrossClassesNotSupported: If the attributes are reached from
         more than one owner class -- every :class:`ModelRegistry
         <krrood.parametrization.model_registries.ModelRegistry>` resolves a single
         model per class, so a query joining several classes' models is not supported.
     """
-    owner_classes = {attribute._owner_class_ for attribute in attributes}
+    owner_classes = {attribute._chain_root_._type_ for attribute in attributes}
     if len(owner_classes) != 1:
         raise JointQueryAcrossClassesNotSupported(owner_classes)
     return owner_classes.pop()
@@ -687,9 +690,9 @@ class SelectedAttributesParameters:
     :class:`~krrood.entity_query_language.query.match.Match` -- glue between
     `ProbabilisticModel` and EQL -- but for constructs that select attributes directly
     rather than a structural match, since there are no where conditions, literal
-    assignments or cause/confounder markers to extract. Used by
-    {py:class}`~krrood.entity_query_language.operators.marginal.Marginal` and
-    {py:class}`~krrood.entity_query_language.operators.probabilistic_queries.Moment`.
+    assignments or cause/confounder markers to extract. Used to resolve a bare
+    ``average(...)`` selection under
+    :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`.
     """
 
     attributes: tuple[Attribute, ...]

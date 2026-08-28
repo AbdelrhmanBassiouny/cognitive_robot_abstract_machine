@@ -5,7 +5,7 @@ from types import NoneType
 from typing import Iterable, TypeVar
 
 import random_events.variable
-from random_events.product_algebra import Event, VariableMap
+from random_events.product_algebra import Event
 from sqlalchemy.orm import sessionmaker
 from typing_extensions import ClassVar, Dict, List, Optional
 
@@ -343,6 +343,10 @@ class ProbabilisticBackend(GenerativeBackend):
             return None
         if aggregator._leaf_attribute_ is None:
             return None
+        if aggregator._distinct_:
+            # native evaluation deduplicates values before averaging; the closed-form
+            # expectation has no notion of that, so it must not silently stand in
+            return None
         if any(
             builder is not None
             for builder in (
@@ -358,7 +362,7 @@ class ProbabilisticBackend(GenerativeBackend):
     def _resolve_average(self, average: Average) -> float:
         """
         Resolve a bare ``average(...)`` selection to the exact expectation of its
-        attribute, via ``ProbabilisticModel.moment``, instead of sampling and
+        attribute, via ``ProbabilisticModel.expectation``, instead of sampling and
         averaging rows.
 
         :param average: The average aggregator to resolve.
@@ -368,9 +372,7 @@ class ProbabilisticBackend(GenerativeBackend):
         parameters = SelectedAttributesParameters((attribute,))
         model = self.model_registry.get_model(parameters)
         [random_event_variable] = parameters.variables.values()
-        order = VariableMap({random_event_variable: 1})
-        center = VariableMap({random_event_variable: 0})
-        return model.moment(order, center)[random_event_variable]
+        return model.expectation((random_event_variable,))[random_event_variable]
 
     def _evaluate(self, expression: Match[T]) -> Iterable[T]:
 
