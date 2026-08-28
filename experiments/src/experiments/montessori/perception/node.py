@@ -225,7 +225,8 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
             self._latest_depth.data, self._latest_depth.format
         )
         if self.viewer is not None:
-            self.viewer.show(color, depth)
+            self.viewer.show_color(color)
+            self.viewer.show_depth(depth)
         frame = self._build_frame(color, depth)
         if frame is None:
             return
