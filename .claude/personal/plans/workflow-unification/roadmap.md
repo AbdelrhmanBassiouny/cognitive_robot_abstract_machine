@@ -9711,68 +9711,75 @@ dashboard has shown the truncated half since the item was created. Quoted in the
 `plan_item_bootstrap.py` patches lines rather than round-tripping the document, so nothing had
 overwritten it, and nothing would have.
 
-## Update 2026-08-28 (audit): what the integration mechanism actually has, and the one decision it is waiting on
+## Update 2026-08-28 (reversed): the default branch is deliberate; the branch cut from it is the defect
 
-Session: https://claude.ai/code/session_01MwawsPiaFK3ufUK4YHak3X. Read-only — no branch, no pull
-request, nothing changed outside this manifest. Prompted by the question of whether an Action
-already runs the integration mechanism on a pull request leaving draft.
+The kickoff above recommended restoring the fork's default branch to `main`, and the user
+rejected it in one sentence: making `integration` the default *is* the fast-PR process. It is
+what puts reviewed-but-unlanded work into every fresh checkout, so flipping it back destroys the
+thing it exists for. Their requirement alongside it is that a pull request be based on `main` or
+on a parent pull request, never on `integration`.
 
-### It does not, and no part of the automation exists
+### The two requirements are not in conflict, and the recommendation conflated them
 
-Checked across every branch on the fork rather than on the checkout in hand: `ready_for_review`
-appears in no workflow at all, `ci.yml` triggers on `push: main`, `pull_request` and `workflow_run`
-only, and no pytest marker named for `integration_conflict_label` is registered. `board.yml` and
-`token-probe.yml` are both registered in the Actions listing while existing on no branch, which is
-GitHub keeping the workflow row after the file is deleted rather than anything left to clean up.
+Where a clone **starts** and where a work branch is **cut from** are separate events. The first
+is the arrangement and should stay; only the second can be wrong, and only when it actually
+happens - a branch cut from `integration`'s tip and opened against `main` carries every merge
+`integration` holds into its diff, which is the #41 inflated-diff shape met from a new direction.
 
-Draft-to-ready is load-bearing for the mechanism, which is what makes the question a fair one — but
-as a *selection* signal read live at build time (`BranchStatus.is_out_of_draft`, read down the whole
-chain), not as an event anything subscribes to.
+The recommendation optimised for the guard that had been built rather than for the workflow. The
+generalisable half: **a configuration that looks like a defect from inside one check may be the
+deliberate answer to a requirement the check does not know about.** The tell was available - the
+item's own notes recorded the default branch as the fast-PR mechanism, and the kickoff read that
+as context rather than as the constraint it was.
 
-### The token prerequisite is already met, and nothing recorded that
+### The ancestry test was right, and was rejected for testing the wrong thing
 
-`INTEGRATION_REFRESH_TOKEN` is a repository secret and the 2026-08-23 probes both passed. The
-manifest still described a fine-grained PAT as "a required setup step, not a hardening", which is
-how the design left it; what it does not say is that the step was then taken. Part D's largest
-unproven dependency is discharged. Recorded on `integration-branch-ci-verdict` in the same pass.
+The kickoff rejected "refuse a branch not derived from the base" because `main` advances
+constantly - #188 fast-forwards it at every session start - so within a day a branch cut from it
+is neither its ancestor nor its descendant, and every `main`-based pull request on the fork would
+trip it. That reasoning holds, and it is an argument against testing ancestry **against `main`**,
+not against ancestry.
 
-### The Actions client is no longer missing, and there is a precedent to copy
+Against the staging branch the same test is exact:
 
-`upstream-review-reader` (#146) merged on 2026-08-22. The ci-verdict item still reads "it needs an
-Actions client this tree does not have, since #146 ... is unlanded", which was true when it was
-written. What landed is more than the measurement: `.github/workflows/upstream-reviews.yml` is a
-dispatch-only job whose output a skill reads back out of the job log, which is exactly the shape
-Part D needs to read a candidate run's conclusion. The remaining work is reading a conclusion, not
-proving an API surface.
+```
+git merge-base --is-ancestor origin/integration HEAD
+```
 
-### The stable branch holds an unverified build
+It flags a branch cut from `integration`; it is silent for one cut from `main` and for one
+stacked on a parent pull request, since neither descends from it. It never references `main`, so
+`main` moving cannot make it fire. Measured across all 198 remote branches of this fork: **0
+flagged**. `test_accepts_a_branch_whose_configured_base_has_moved_on_without_it` pins the choice -
+mutating the implementation to test against the configured base fails exactly that test, plus the
+one for the case the guard exists to catch.
 
-`integration` is at `899a04a` — the Phase 1 build with `tests_passed: null`. Part D's whole design
-turns on `integration` meaning "the last build whose CI went green", so its first value has to be
-established by a real run rather than inherited from what the pointer happens to hold today.
+Worth carrying: **a rule rejected on a measurement is only rejected for the subject it was
+measured against.** One substitution turned the discarded design into the correct one, and the
+kickoff had not tried it.
 
-### The delivery route is being withdrawn under it
+### What `default_branch_name()` is for, restated
 
-The 2026-08-23 speed decision had two halves: build the integration branch, and make sessions clone
-it by pointing the fork's default branch at it. `session-branch-base` (#199) is reverting the second
-half right now, for reasons that stand on their own — `default_branch_name()` reads
-`refs/remotes/origin/HEAD`, so PR-progress keys on the wrong branch, and a pull request opened
-through the GitHub UI would default its base to `integration` and break the base-is-parent
-invariant.
+The `configured_base_branch()` change stays and is still right, for a narrower reason than the
+kickoff gave: it is what stops `pr_progress_path` and `branch_can_hold_plan_item` treating
+`integration` as the branch no plan item can track and `main` as ordinary work. That is a
+resolution bug regardless of whether the default branch is deliberate.
 
-Part D's mechanics are unaffected: the verdict comes from a candidate pull request's own `ci.yml`
-run either way, and `upstream_base` was always pinned in `stack.toml` rather than derived from the
-default branch. What is affected is the reason the speed decision was made. Once `main` is the
-default again, nothing routes reviewed-but-unlanded tooling into daily use, and the integration
-branch goes back to being something you opt into by checking it out. Whether that is the intended
-end state or whether the daily-use half needs a different mechanism is the developer's call, and it
-is the only open question the automation work is actually waiting on — the rest is implementation.
+`plan_item_bootstrap.py open` needed nothing: `--base` is `required=True` and it runs
+`checkout -b <branch> <base>`, so it never cuts from `HEAD`. The exposure is a hand-rolled
+`git checkout -b` while sitting on the staging branch, which is what happened.
 
-### The stable-branch shape is still the first unsettled design decision
+### Fast-forwarding `main` at session start is right, and is half the job
 
-Recorded at kickoff and never resolved: is `integration` a real merge target that accumulates
-history, or a pointer force-updated to each build that goes green? The tension is that a build is
-regenerated from scratch, so a candidate shares no history with the stable branch — its pull
-request's diff is everything that changed between two independent builds, and merging it makes the
-branch accumulate history, which is the one property this design has rejected since it was
-recorded.
+#188 reads `upstream_base` rather than the default branch, so the flip does not affect it, and
+keeping `main` current is what makes "cut from `main`" correct. Running `/stacked-pr-maintenance`
+in its place would be the wrong instrument - it reparents, restacks and force-pushes other
+people's branches, which is a periodic pass rather than a session-start step.
+
+What is missing is neither: **`integration` is 124 commits and five days behind `main`** (built
+2026-08-23; `main`'s tip 2026-08-27), so the process is currently delivering unlanded work on top
+of a stale base. #188 freshens `main` while the session sits on `integration`, so the working tree
+never sees it. That is a rebuild-cadence question, and `integration.py build` is only on #154, so
+a fresh clone cannot run it yet - recorded here rather than acted on, since it is the developer's
+call whether the rebuild is scheduled, per-session, or gated on #154 landing.
+
+541 tests pass across the four directories CI runs, from 538.

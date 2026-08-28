@@ -4211,42 +4211,6 @@ items:
 
       Accepted cost, stated rather than discovered later: #154 was already 52 files, 8121 additions,
       38 commits and 75 review threads before Part D is written.
-      Audited 2026-08-28 (session
-      https://claude.ai/code/session_01MwawsPiaFK3ufUK4YHak3X), read-only, and three of the facts
-      this entry rests on have moved.
-
-      The prerequisite this entry called "a required setup step" is done. `INTEGRATION_REFRESH_TOKEN`
-      exists as a repository secret and both probes passed on 2026-08-23: run 2 pushed a commit
-      touching `.github/workflows/` through `actions/checkout`'s persisted credential, and run 3
-      existing at all is the proof that the token's push started a workflow run. Both probe branches
-      are deleted and `token-probe.yml` is on no branch; only the orphaned entry in the Actions
-      listing survives, which is GitHub's own bookkeeping rather than a file to clean up. So Part D
-      starts from a proven token rather than an unprobed one.
-
-      No integration workflow exists yet, checked rather than assumed: `ready_for_review` appears in
-      no workflow on any of the fork's branches, `ci.yml` still triggers on `push: main`,
-      `pull_request` and `workflow_run` only, and no pytest marker named for
-      `integration_conflict_label` is registered anywhere. Nothing of Part D is written.
-
-      `integration` still points at `899a04a`, the Phase 1 build this entry recorded as
-      `tests_passed: null`, so the branch Part D is meant to define as "the last build whose CI went
-      green" currently holds one that was never verified. Whatever shape the stable branch takes, its
-      first correct value has to be established rather than inherited.
-
-      The Actions-client premise is stale in the direction that helps. `upstream-review-reader`
-      (#146) merged on 2026-08-22, so the measurement it carried is landed rather than pending - and
-      it landed as a working precedent rather than only a probe: `.github/workflows/upstream-reviews.yml`
-      is a `workflow_dispatch` job that a skill dispatches and then reads back out of the job log,
-      which is the same shape Part D needs for reading a candidate run's conclusion. What is left is
-      the reading of a run's conclusion, not an API surface nobody has exercised.
-
-      The delivery route this entry recorded is being withdrawn while Part D is unwritten.
-      `session-branch-base` (#199) restores the fork's default branch to `main`, so "sessions clone
-      it" stops being how reviewed tooling reaches daily use. That does not touch Part D's mechanics -
-      the candidate pull request is what reaches a verdict either way, and `upstream_base` was always
-      pinned in `stack.toml` - but it does leave the 2026-08-23 speed decision without the half that
-      delivered it, which is a question for the developer rather than a fact to record here.
-
 
   - id: always-read-upstream-reviews
     title: "Read upstream review threads whether or not the fork pull request is labelled"
