@@ -348,3 +348,40 @@ next round of work is tracked, not here.
 - No pull request opened. This work folds into `tracy_icra`, which already
   carries a colleague's commits and tracks their fork, so a PR for it would be
   proposing their work too. Left for the user to decide.
+
+## Merge with `main`, 2026-08-28 (`demo-catches-up-with-main`)
+
+Plan item `demo-catches-up-with-main` of `knowledge-directed-perception`. The
+plan's reasoning is in that plan's `roadmap.md`; this is the branch-level log.
+
+Merged `origin/main` into `tracy_icra` — 277 commits since the 2026-08-19 merge
+base `1646dd355`, against the 234 the plan recorded four days earlier.
+
+### Done
+- `fb0d0e41` — the merge. One conflict, in `multi_sim.py`, eight hunks, both
+  sides having reworked the same MuJoCo sync. Resolved as a union: `main`'s
+  extracted `_read_connections_from_qpos` / `_write_connections_to_qpos` under
+  `_world_lock` (which subsumes this branch's inline `_model_lock` loops), with
+  this branch's `renderer.lock()` carried into both helpers and every
+  `physically_simulated_dofs` behaviour kept in full.
+- `ece5eb74` — three call sites in branch-only files that `main` had broken
+  without conflicting, because `main` never had those files:
+  `with_tf_publisher()` (removed), `translate_free_space_to_where_condition` and
+  `navigation_map_at_target` (moved onto `PlanarGraphOfBoundingBoxes`), and a
+  `Point3` passed to a planar graph's `Point2`-bound `node_of_point`.
+- The merge drops the `ormatic_interface.py` files this branch still tracked.
+  `main` already ignores them, which is what `AGENTS.md` requires.
+
+### Next
+- The three wave-1 perception items stack on this: `surfaces-from-world`,
+  `detect-per-supporting-surface`, `one-detection-per-thing`.
+- `montessori-perception-on-main` still has to cut the perception package off
+  `main` as its own reviewable branch. Untouched by this merge, which
+  deliberately left `tracy_icra` where it is rather than rewriting it.
+
+### Watch out for
+- The `multi_sim.py` sync path is threading code whose failure mode is a lost
+  write under contention. No unit test in that module exercises it; the merge is
+  only really proven by the demo running on the real robot.
+- The branch's upstream still points at `sorin/tracy_icra`. This merge went to
+  `origin`, as the earlier rounds did.
