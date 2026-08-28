@@ -19,7 +19,7 @@ from maintenance_constants import (
     MERGEABLE_STATE_WITH_CONFLICTS,
 )
 from maintenance_board import PullRequestField
-from maintenance_git_commands import GitCommandRunner, ProposedPush
+from maintenance_git_commands import MaintenanceGitCommandRunner, ProposedPush
 from maintenance_github import ForkPullRequests
 from stack import (
     Branch,
@@ -76,8 +76,9 @@ class RestackOutcome(StrEnum):
 
     WITHHELD = "withheld"
     """
-    It is still conflicted against its base from a previous pass, so it was left
-    untouched rather than re-reported.
+    A label from an earlier pass still blocks it - conflicted against its base, or
+    breaking a branch it merges cleanly with - so it was left untouched rather than
+    re-reported.
     """
 
 
@@ -189,7 +190,7 @@ class BranchUnderRestack:
     The derived stack it belongs to.
     """
 
-    git: GitCommandRunner
+    git: MaintenanceGitCommandRunner
     """
     The runner to execute through.
     """
@@ -256,21 +257,35 @@ class RestackStep(ABC):
 
 
 @dataclass(frozen=True)
-class WithholdBranchStillConflicting(RestackStep):
+class WithholdBlockedBranch(RestackStep):
     """
-    Leaves a branch alone while it is still conflicted from an earlier pass.
+    Leaves a branch alone while any label blocking it is still on it.
 
-    Clears the label as a side effect when it is not, since that is what lets the branch
-    rejoin the pass without anybody remembering to remove it by hand.
+    Clears ``needs-resolution`` as a side effect once the pull request stops reporting a
+    conflict, since that is what lets the branch rejoin the pass without anybody
+    remembering to remove it by hand. It is the only one cleared here, and deliberately:
+    the mergeable state describes a branch's conflict with its own base, which is what
+    that label was applied for. A branch that breaks a sibling it merges cleanly with is
+    never conflicted, so clearing on the same evidence would drop its label on the very
+    next pass and reopen the loop the labels exist to close.
     """
 
     def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
         """:param restacking: The branch being restacked.
-        :return: A withheld outcome while it still conflicts, otherwise ``None``."""
+        :return: A withheld outcome while a label still blocks it, otherwise ``None``.
+        """
         branch = restacking.branch
-        label = restacking.configuration.needs_resolution_label
-        if label not in branch.labels:
+        configuration = restacking.configuration
+        blocking = [
+            label for label in configuration.blocking_labels if label in branch.labels
+        ]
+        if not blocking:
             return None
+        if configuration.integration_conflict_label in blocking:
+            return restacking.concluded(
+                RestackOutcome.WITHHELD,
+                explanation="breaks a branch it merges cleanly with",
+            )
         state = PullRequestField.MERGEABLE_STATE.read(
             restacking.fork.pull_request(branch.pull_request_number),
             branch.pull_request_number,
@@ -282,7 +297,9 @@ class WithholdBranchStillConflicting(RestackStep):
             )
         restacking.fork.replace_labels(
             branch.pull_request_number,
-            LabelWrite.replacing(branch.labels, removed=[label]).labels,
+            LabelWrite.replacing(
+                branch.labels, removed=[configuration.needs_resolution_label]
+            ).labels,
         )
         return None
 

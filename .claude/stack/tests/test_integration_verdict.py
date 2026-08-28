@@ -1,0 +1,476 @@
+"""
+The candidate a build is judged as, and what its checks amount to.
+
+A build is regenerated from scratch, so publishing one is moving a pointer rather than
+merging anything - and the only thing that can say whether it is worth moving to is the
+repository's own checks, which run on a pull request and nowhere else.
+"""
+
+from __future__ import annotations
+
+import argparse
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import pytest
+import yaml
+
+from maintenance_github import CandidatePullRequests, CheckRunRecord
+
+import integration
+from integration import IntegrationExitCode, ReportKey
+
+from test_maintenance import make_configuration
+
+from integration_verdict import (
+    CandidateChecks,
+    CandidateVerdict,
+    CheckRunConclusion,
+    CheckRunField,
+    CheckRunStatus,
+    VerdictReportKey,
+    VerdictReport,
+    candidate_description,
+    candidate_title,
+    open_candidate,
+    read_verdict,
+)
+
+A_BUILD_BRANCH = "integration-20260828-212654"
+"""
+A build, named the way one is.
+"""
+
+THE_BASE = "integration"
+"""
+The branch a green build replaces.
+"""
+
+A_HEAD = "933161a263"
+"""
+The build's head, which its checks are reported against.
+"""
+
+
+def a_check(
+    name: str = "test_bastler",
+    status: str = CheckRunStatus.COMPLETED,
+    conclusion: str | None = CheckRunConclusion.SUCCESS,
+) -> CheckRunRecord:
+    """
+    :param name: What the check is called.
+    :param status: Whether it has finished.
+    :param conclusion: How it finished.
+    :return: One check run, as the API answers it.
+    """
+    return {
+        CheckRunField.NAME: name,
+        CheckRunField.STATUS: status,
+        CheckRunField.CONCLUSION: conclusion,
+    }
+
+
+@dataclass(frozen=True)
+class RecordingCandidates(CandidatePullRequests):
+    """
+    A fork stand-in recording what a candidate did to it.
+
+    Frozen because its base is: a dataclass refuses a non-frozen subclass of a frozen
+    one, and the recording is appended to rather than reassigned.
+    """
+
+    checks: list[CheckRunRecord] = field(default_factory=list)
+    """What it answers a check-run read with."""
+
+    number: int = 4242
+    """The number it gives a pull request it opens."""
+
+    opened: list[dict[str, str]] = field(default_factory=list)
+    """Every pull request opened on it."""
+
+    closed: list[int] = field(default_factory=list)
+    """Every pull request closed on it."""
+
+    def open_pull_request(self, title: str, head: str, base: str, body: str) -> int:
+        """
+        :param title: The pull request's title.
+        :param head: The branch to be judged.
+        :param base: The branch it is opened against.
+        :param body: The description.
+        :return: The number it was given.
+        """
+        self.opened.append({"title": title, "head": head, "base": base, "body": body})
+        return self.number
+
+    def close_pull_request(self, number: int) -> None:
+        """:param number: The pull request closed."""
+        self.closed.append(number)
+
+    def check_runs(self, head: str) -> list[CheckRunRecord]:
+        """
+        :param head: The commit read.
+        :return: The checks this stand-in was given.
+        """
+        return self.checks
+
+
+# %% what the checks amount to
+
+
+def test_every_check_passing_is_the_only_thing_that_publishes_a_build():
+    """
+    A build replaces the branch a developer works from, so the one state that moves the
+    pointer is every check finished and none of them failed.
+    """
+    checks = CandidateChecks.of([a_check(), a_check(name="test_each_lib")])
+
+    assert checks.verdict is CandidateVerdict.PASSED
+    assert checks.failed == ()
+
+
+def test_a_check_still_running_is_not_a_verdict():
+    """
+    Publishing on a partial pass would move the pointer to a build the matrix had not
+    finished judging.
+    """
+    checks = CandidateChecks.of(
+        [a_check(), a_check(name="slow", status="in_progress", conclusion=None)]
+    )
+
+    assert checks.verdict is CandidateVerdict.RUNNING
+
+
+def test_a_failure_is_answered_without_waiting_for_the_rest():
+    """
+    The build is not publishable either way, and waiting out a matrix to say so costs
+    the time the candidate exists to save.
+    """
+    checks = CandidateChecks.of(
+        [
+            a_check(name="broke", conclusion="failure"),
+            a_check(name="slow", status="in_progress", conclusion=None),
+        ]
+    )
+
+    assert checks.verdict is CandidateVerdict.FAILED
+
+
+def test_a_failure_names_the_checks_that_failed():
+    """
+    "The candidate is red" is not actionable; which job went red is where a reader
+    starts.
+    """
+    checks = CandidateChecks.of(
+        [
+            a_check(),
+            a_check(name="test_each_lib (coraplex)", conclusion="failure"),
+            a_check(name="test_each_lib (krrood)", conclusion="timed_out"),
+        ]
+    )
+
+    assert [run.name for run in checks.failed] == [
+        "test_each_lib (coraplex)",
+        "test_each_lib (krrood)",
+    ]
+
+
+@pytest.mark.parametrize("conclusion", sorted(CheckRunConclusion))
+def test_a_check_that_declined_to_judge_does_not_hold_a_build_back(conclusion: str):
+    """
+    A skipped or neutral check says nothing about the tree it was asked about, so
+    treating either as a failure would hold every build behind a job that declined to
+    run.
+    """
+    checks = CandidateChecks.of([a_check(conclusion=conclusion)])
+
+    assert checks.verdict is CandidateVerdict.PASSED
+
+
+def test_no_check_at_all_is_told_apart_from_one_still_running():
+    """
+    This is the state that can mean something is wrong rather than slow: a candidate
+    opened by a credential whose pushes start no workflow run sits here forever rather
+    than turning red, and a caller that read it as "running" would wait forever with it.
+    """
+    assert CandidateChecks.of([]).verdict is CandidateVerdict.ABSENT
+
+
+# %% the candidate itself
+
+
+def test_the_candidate_is_opened_against_the_branch_the_build_would_replace():
+    """
+    Opened against anything else, the checks judge a different tree from the one that
+    would be published.
+    """
+    fork = RecordingCandidates()
+
+    candidate = open_candidate(fork, A_BUILD_BRANCH, THE_BASE, A_HEAD)
+
+    assert fork.opened[0]["head"] == A_BUILD_BRANCH
+    assert fork.opened[0]["base"] == THE_BASE
+    assert candidate.number == fork.number
+
+
+def test_the_candidate_says_it_is_never_merged():
+    """
+    A reader meets it as an ordinary pull request and it is not one: merging it would
+    give the branch a history the next build cannot regenerate.
+    """
+    description = candidate_description(A_BUILD_BRANCH, THE_BASE)
+
+    assert "never merged" in description.lower()
+    assert A_BUILD_BRANCH in description and THE_BASE in description
+
+
+def test_the_candidate_is_recognisable_among_the_fork_s_pull_requests():
+    """
+    It sits in the same list as everything a person opened, so its title has to say what
+    it is without being read.
+    """
+    assert candidate_title(A_BUILD_BRANCH).endswith(A_BUILD_BRANCH)
+    assert candidate_title(A_BUILD_BRANCH) != A_BUILD_BRANCH
+
+
+def test_the_verdict_is_read_against_the_build_s_own_head():
+    """
+    Checks belong to a commit rather than to a branch, and a branch moves.
+    """
+    fork = RecordingCandidates(checks=[a_check()])
+    candidate = open_candidate(fork, A_BUILD_BRANCH, THE_BASE, A_HEAD)
+
+    assert read_verdict(fork, candidate).verdict is CandidateVerdict.PASSED
+
+
+# %% what a run of it reports
+
+
+def test_the_report_names_the_failures_and_whether_anything_was_published():
+    """
+    The document is what a scheduled run leaves behind, and both halves are what a
+    reader has to act on: which checks failed, and whether the branch moved.
+    """
+    fork = RecordingCandidates()
+    candidate = open_candidate(fork, A_BUILD_BRANCH, THE_BASE, A_HEAD)
+    checks = CandidateChecks.of([a_check(name="broke", conclusion="failure")])
+
+    document = VerdictReport(
+        candidate=candidate, checks=checks, published=False
+    ).as_json()
+
+    assert document == {
+        VerdictReportKey.VERDICT: str(CandidateVerdict.FAILED),
+        VerdictReportKey.CANDIDATE: fork.number,
+        VerdictReportKey.BUILD_BRANCH: A_BUILD_BRANCH,
+        VerdictReportKey.HEAD: A_HEAD,
+        VerdictReportKey.FAILED_CHECKS: ["broke"],
+        VerdictReportKey.PUBLISHED: False,
+    }
+
+
+# %% the statuses the commands leave a caller with
+
+
+@pytest.mark.parametrize(
+    "verdict,expected",
+    [
+        (CandidateVerdict.PASSED, IntegrationExitCode.SUCCESS),
+        (CandidateVerdict.FAILED, IntegrationExitCode.CANDIDATE_FAILED),
+        (CandidateVerdict.RUNNING, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
+        (CandidateVerdict.ABSENT, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
+    ],
+)
+def test_each_verdict_leaves_the_status_a_caller_acts_on(
+    verdict: CandidateVerdict, expected: IntegrationExitCode
+):
+    """
+    A scheduled run reads the status rather than the document, so a verdict that mapped
+    onto the wrong one would either throw away a good build or publish a red one.
+
+    An absent check is answered as still running: a caller that read it as red would
+    discard a build nothing had judged.
+    """
+    assert integration._verdict_exit_code(verdict) is expected
+
+
+def test_every_verdict_is_mapped_to_a_status():
+    """
+    The mapping is a chain of ifs with a fallthrough, so a verdict added later would
+    silently take whichever branch happens to be last rather than one chosen for it.
+    """
+    assert {
+        integration._verdict_exit_code(verdict) for verdict in CandidateVerdict
+    } <= set(IntegrationExitCode)
+
+
+# %% the scheduled job that drives them
+
+
+REFRESH_WORKFLOW = (
+    Path(__file__).parent.parent.parent.parent
+    / ".github"
+    / "workflows"
+    / "integration-refresh.yml"
+)
+"""
+The scheduled job that rebuilds the branch and publishes a green build.
+"""
+
+
+def refresh_job_script() -> str:
+    """Every shell the scheduled job runs, with its comments taken out.
+
+    Stripped because the comments explain the very statuses and names these tests look
+    for: left in, a status the job branches on wrongly would still be found in the
+    sentence explaining what the right one means.
+
+    :return: The executable shell, as one text.
+    """
+    job = yaml.safe_load(REFRESH_WORKFLOW.read_text())["jobs"]["refresh"]
+    return "\n".join(
+        line
+        for step in job["steps"]
+        for line in step.get("run", "").splitlines()
+        if not line.lstrip().startswith("#")
+    )
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        integration.BuildCommand(),
+        integration.OpenCandidateCommand(),
+        integration.SettleCandidateCommand(),
+    ],
+)
+def test_the_scheduled_job_invokes_each_command_by_the_name_it_answers_to(command):
+    """
+    A workflow cannot import a constant, so these are the one place each name is spelled
+    a second time - and a name that had drifted would fail the run rather than doing
+    something else, which is the good half; the bad half is a rename nothing catches
+    until the schedule next fires with nobody watching.
+    """
+    assert command.invoked_as in refresh_job_script()
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        IntegrationExitCode.TIP_LEFT_OUT,
+        IntegrationExitCode.CANDIDATE_STILL_RUNNING,
+    ],
+)
+def test_the_scheduled_job_reads_the_statuses_it_branches_on(
+    status: IntegrationExitCode,
+):
+    """
+    Both are read as numbers in shell, and both mean "not a failure": a tip left out is
+    a collision to triage, and an unfinished check is a verdict not yet given. Reading
+    either as a failure stops the pipeline on a healthy build.
+    """
+    assert str(int(status)) in refresh_job_script()
+
+
+@pytest.mark.parametrize(
+    "key",
+    [ReportKey.BUILD_BRANCH, ReportKey.CANDIDATE, ReportKey.HEAD],
+)
+def test_the_scheduled_job_reads_the_document_keys_the_commands_write(key: str):
+    """
+    The steps hand each other a build branch, a candidate number and a head through the
+    documents the commands print, so a key spelled differently in either place breaks
+    the hand-off - and does it between two steps rather than inside one.
+    """
+    assert str(key) in refresh_job_script()
+
+
+@dataclass(frozen=True)
+class RecordingGit:
+    """
+    A git stand-in recording the commands a settling ran.
+    """
+
+    commands: list[tuple[str, ...]] = field(default_factory=list)
+    """Every command run through it, in order."""
+
+    def run(self, *arguments: str) -> str:
+        """
+        :param arguments: The git command.
+        :return: Nothing, which is all a settling reads.
+        """
+        self.commands.append(arguments)
+        return ""
+
+
+@dataclass(frozen=True)
+class RecordingIntegrationRun:
+    """
+    An :class:`~integration.IntegrationRun` stand-in for a settling that touches no
+    repository.
+    """
+
+    fork_answers: RecordingCandidates
+    """The fork it hands out."""
+
+    git: RecordingGit = field(default_factory=RecordingGit)
+    """The runner it hands out."""
+
+    configuration: object = field(default_factory=make_configuration)
+    """The resolved configuration, which names the remote a push goes to."""
+
+    def fork(self) -> RecordingCandidates:
+        """:return: The fork."""
+        return self.fork_answers
+
+
+def settle(checks: list[CheckRunRecord]) -> RecordingIntegrationRun:
+    """Settle a candidate against the checks it collected.
+
+    :param checks: What its checks say.
+    :return: The run, carrying what the settling did.
+    """
+    run = RecordingIntegrationRun(RecordingCandidates(checks=checks))
+    integration.SettleCandidateCommand().run(
+        run,
+        argparse.Namespace(candidate=41, build=A_BUILD_BRANCH, head=A_HEAD, json=True),
+    )
+    return run
+
+
+def deleted_branches(run: RecordingIntegrationRun) -> list[str]:
+    """
+    :param run: A settling that has happened.
+    :return: Every branch it deleted from the fork.
+    """
+    return [command[-1] for command in run.git.commands if "--delete" in command]
+
+
+def test_a_published_build_s_branch_is_deleted_once_the_pointer_holds_it():
+    """
+    A rebuild runs on a schedule, so a branch left behind each time accumulates without
+    limit - and once the pointer holds the same commit there is nothing in it to lose.
+    """
+    run = settle([a_check()])
+
+    assert deleted_branches(run) == [A_BUILD_BRANCH]
+
+
+def test_a_rejected_build_s_branch_is_kept_for_whoever_reads_its_checks():
+    """
+    Its candidate names checks somebody has to look at, and a closed pull request whose
+    head is gone cannot be read.
+    """
+    run = settle([a_check(name="broke", conclusion="failure")])
+
+    assert deleted_branches(run) == []
+    assert run.fork_answers.closed == [41]
+
+
+def test_a_candidate_still_running_is_left_open_and_its_branch_left_alone():
+    """
+    Nothing has been decided, so closing it would throw away the run that was going to
+    decide it.
+    """
+    run = settle([a_check(status="in_progress", conclusion=None)])
+
+    assert deleted_branches(run) == [] and run.fork_answers.closed == []
