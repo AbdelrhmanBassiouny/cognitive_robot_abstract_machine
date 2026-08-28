@@ -113,6 +113,22 @@ def rectangle_boundary(width: float, length: float) -> np.ndarray:
     )
 
 
+def points_along(outline: np.ndarray, spacing: float) -> np.ndarray:
+    """
+    Spread points evenly along a closed outline, corners included.
+
+    :param outline: The outline's corners, as ``(n, 2)`` ``(x, y)`` points in metres.
+    :param spacing: How far apart, in metres, to place the points.
+    :return: The points, as ``(m, 2)`` ``(x, y)`` points in metres.
+    """
+    corners = np.vstack([outline, outline[:1]])
+    walked = []
+    for start, end in zip(corners[:-1], corners[1:]):
+        steps = max(1, int(round(float(np.linalg.norm(end - start)) / spacing)))
+        walked.append(start + np.outer(np.arange(steps) / steps, end - start))
+    return np.vstack(walked)
+
+
 def circle_boundary(diameter: float) -> np.ndarray:
     """
     Corners of a many-sided polygon standing in for a circle centered on its own middle.

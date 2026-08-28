@@ -444,7 +444,7 @@ def report(scene: MontessoriScene) -> None:
             f"{piece.category} at "
             f"({piece.pose.to_position().to_np()[0]:.3f}, "
             f"{piece.pose.to_position().to_np()[1]:.3f}) "
-            f"turned {math.degrees(piece.yaw):+.0f} deg, fit {piece.outline_overlap:.2f}"
+            f"turned {math.degrees(piece.yaw):+.0f} deg, fit {piece.outline_agreement:.2f}"
             for piece in scene.shapes
         ),
     )

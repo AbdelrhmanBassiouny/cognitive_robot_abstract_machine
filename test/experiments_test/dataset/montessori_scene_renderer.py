@@ -49,13 +49,21 @@ Saturation of a loose piece, measured off the real ones.
 
 PIECE_BRIGHTNESS = 220
 """
-Value of a loose piece, measured off the real ones.
+Value of a loose piece's lit top face, measured off the real ones.
+"""
+
+PIECE_SIDE_BRIGHTNESS = 150
+"""
+Value of a loose piece's shaded sides, measured off the real ones.
+
+The light comes from above, so a piece's sides read markedly darker than the face it
+turns to it, and the crease between the two is an edge perception can find.
 """
 
 
 def piece_color(piece: KnownPiece) -> Tuple[int, int, int]:
     """
-    Hue, saturation and value one loose piece is drawn in.
+    Hue, saturation and value one loose piece's top face is drawn in.
 
     Each piece carries its own measured hue, since that is what tells the two colours in
     this set apart.
@@ -63,6 +71,15 @@ def piece_color(piece: KnownPiece) -> Tuple[int, int, int]:
     :param piece: The piece to colour.
     """
     return (piece.hue, PIECE_SATURATION, PIECE_BRIGHTNESS)
+
+
+def piece_side_color(piece: KnownPiece) -> Tuple[int, int, int]:
+    """
+    Hue, saturation and value one loose piece's sides are drawn in.
+
+    :param piece: The piece to colour.
+    """
+    return (piece.hue, PIECE_SATURATION, PIECE_SIDE_BRIGHTNESS)
 
 
 # %% what is in the scene
@@ -117,6 +134,15 @@ class MontessoriSceneRenderer:
     board_height: float = 0.08
     """
     How far the board's lid stands above the table, in metres.
+    """
+
+    reflection_spread: float = 0.0
+    """
+    How far, in metres, the table smears a piece's own colour across itself around the
+    piece, which is what a polished metal table does and a matte one does not.
+
+    The smear carries the piece's colour and fades away with no boundary anywhere, so it
+    joins the piece in anything segmented by colour while leaving no edge of its own.
     """
 
     board_x: float = 0.83
@@ -207,6 +233,8 @@ class MontessoriSceneRenderer:
         canvas[:, :] = TABLE_COLOR
         self._draw_board(canvas)
         for piece in pieces:
+            self._draw_reflection(canvas, piece)
+        for piece in pieces:
             self._draw_piece(canvas, piece)
         return RgbdFrame(
             color=cv2.cvtColor(canvas, cv2.COLOR_HSV2BGR),
@@ -257,10 +285,59 @@ class MontessoriSceneRenderer:
             for sign_x, sign_y in ((-1, -1), (1, -1), (1, 1), (-1, 1))
         ]
 
+    def _draw_reflection(self, canvas: np.ndarray, piece: PlacedPiece) -> None:
+        """
+        Smear one piece's colour across the table around it.
+
+        The smear takes the piece's own hue and fades from the piece's brightness back
+        into the table's, so it has no edge for a fit to catch on.
+
+        :param canvas: The hue-saturation-value image to draw into.
+        :param piece: The piece whose colour is smeared.
+        """
+        if self.reflection_spread <= 0.0:
+            return
+        known = piece.known_piece
+        boundary = self._piece_boundary(piece)
+        spread = self._pixels_across(boundary, self.reflection_spread)
+        cast = np.zeros(canvas.shape[:2], dtype=np.uint8)
+        cv2.fillPoly(
+            cast, [self._project(boundary, self.table_height).astype(np.int32)], 255
+        )
+        cast = cv2.GaussianBlur(
+            cv2.dilate(cast, np.ones((spread, spread), np.uint8)),
+            (2 * spread + 1, 2 * spread + 1),
+            0,
+        )
+        share = (cast.astype(float) / 255)[..., None]
+        smeared = np.array(piece_side_color(known), dtype=float)
+        lit = cast > 0
+        canvas[lit] = (
+            (1 - share) * np.array(TABLE_COLOR, dtype=float) + share * smeared
+        ).astype(np.uint8)[lit]
+        canvas[lit, 0] = known.hue
+
+    def _pixels_across(
+        self, boundary: Sequence[Tuple[float, float]], reach: float
+    ) -> int:
+        """
+        How many pixels of the camera image a distance on the table covers, measured
+        where a piece stands.
+
+        :param boundary: The piece's world-frame ``(x, y)`` outline.
+        :param reach: The distance to convert, in metres.
+        :return: The distance in pixels, at least one.
+        """
+        here = self._project(boundary[:1], self.table_height)
+        there = self._project(
+            [(boundary[0][0] + reach, boundary[0][1])], self.table_height
+        )
+        return max(1, int(round(float(np.linalg.norm(there - here)))))
+
     def _draw_piece(self, canvas: np.ndarray, piece: PlacedPiece) -> None:
         """
-        Draw one loose piece as the camera sees it: its base, its top, and the sides
-        joining the two.
+        Draw one loose piece as the camera sees it: the sides standing on its base, and
+        its lit top face over them.
 
         :param canvas: The hue-saturation-value image to draw into.
         :param piece: The piece to draw.
@@ -270,7 +347,8 @@ class MontessoriSceneRenderer:
         base = self._project(boundary, self.table_height)
         top = self._project(boundary, self.table_height + known.height)
         silhouette = cv2.convexHull(np.vstack([base, top]).astype(np.int32))
-        cv2.fillPoly(canvas, [silhouette], piece_color(known))
+        cv2.fillPoly(canvas, [silhouette], piece_side_color(known))
+        cv2.fillPoly(canvas, [top.astype(np.int32)], piece_color(known))
 
     @staticmethod
     def _piece_boundary(piece: PlacedPiece) -> List[Tuple[float, float]]:

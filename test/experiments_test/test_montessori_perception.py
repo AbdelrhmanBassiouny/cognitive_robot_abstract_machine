@@ -54,6 +54,7 @@ from experiments.montessori.perception.overlay import (
     RectifiedView,
     project_to_pixels,
 )
+from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.piece_matcher import PieceMatcher
 from experiments.montessori.perception.pipeline import (
     MontessoriPerceptionPipeline,
@@ -933,9 +934,58 @@ TURNABLE_PIECES = [piece for piece in KNOWN_PIECES if piece.rotation_period is n
 The pieces a turn can be told on at all, so the ones a period means something for.
 """
 
+DRAWN_TABLE_COLOR = (60, 60, 60)
+"""
+Blue, green and red of the bare table a test draws a piece's top face onto.
+"""
+
+DRAWN_PIECE_COLOR = (200, 220, 230)
+"""
+Blue, green and red of the top face a test draws.
+"""
+
+CLEAN_FIT_AGREEMENT = 0.75
+"""
+How well a piece laid exactly over the outline it was drawn at agrees with it.
+
+Short of one because an edge found in a millimetre-resolution picture lies about a pixel
+off the line that drew it, which costs a share of every point of the outline.
+"""
+
 
 def _piece_id(piece: KnownPiece) -> str:
     return str(piece.category)
+
+
+def _drawn(
+    outline: np.ndarray, center: Tuple[float, float] = (0.0, 0.0)
+) -> EdgeDistances:
+    """
+    The edges of a rectified view holding one outline drawn on a bare table.
+
+    :param outline: The outline to draw, as ``(n, 2)`` ``(x, y)`` points in metres about
+        its own centre.
+    :param center: Where in the world frame to draw it, in metres.
+    :return: The edges seen in that view.
+    """
+    reach = 0.1
+    region = WorkspaceRegion(
+        minimum_x=center[0] - reach,
+        maximum_x=center[0] + reach,
+        minimum_y=center[1] - reach,
+        maximum_y=center[1] + reach,
+    )
+    image = np.zeros((region.height_in_pixels, region.width_in_pixels, 3), np.uint8)
+    image[:, :] = DRAWN_TABLE_COLOR
+    corners = np.stack(
+        [
+            (outline[:, 0] + center[0] - region.minimum_x) / region.resolution,
+            (outline[:, 1] + center[1] - region.minimum_y) / region.resolution,
+        ],
+        axis=1,
+    )
+    cv2.fillPoly(image, [np.round(corners).astype(np.int32)], DRAWN_PIECE_COLOR)
+    return EdgeDistances.of(Orthophoto(image=image, region=region, plane_height=0.0))
 
 
 @pytest.mark.parametrize("piece", KNOWN_PIECES, ids=_piece_id)
@@ -943,10 +993,10 @@ def test_each_known_piece_is_recognised_from_its_own_outline(piece: KnownPiece):
     matcher = PieceMatcher()
     placed = math.radians(17)
 
-    match = matcher.match(piece.turned_outline(placed), (0.0, 0.0), piece.hue)
+    match = matcher.match(_drawn(piece.turned_outline(placed)), (0.0, 0.0), piece.hue)
 
     assert match.piece.category is piece.category
-    assert match.overlap > 0.95
+    assert match.outline_agreement > CLEAN_FIT_AGREEMENT
     assert match.yaw == pytest.approx(
         piece.smallest_equivalent_turn(placed), abs=matcher.angle_step
     )
@@ -957,7 +1007,7 @@ def test_a_piece_turned_by_its_own_period_looks_untouched(piece: KnownPiece):
     matcher = PieceMatcher()
 
     match = matcher.match(
-        piece.turned_outline(piece.rotation_period), (0.0, 0.0), piece.hue
+        _drawn(piece.turned_outline(piece.rotation_period)), (0.0, 0.0), piece.hue
     )
 
     assert match.piece.category is piece.category
@@ -969,44 +1019,78 @@ def test_an_orientation_is_reported_as_the_smallest_turn_that_reaches_it():
     matcher = PieceMatcher()
     placed = cube.rotation_period - math.radians(10)
 
-    match = matcher.match(cube.turned_outline(placed), (0.0, 0.0), cube.hue)
+    match = matcher.match(_drawn(cube.turned_outline(placed)), (0.0, 0.0), cube.hue)
 
     assert match.yaw == pytest.approx(math.radians(-10), abs=matcher.angle_step)
+
+
+@pytest.mark.parametrize("piece", KNOWN_PIECES, ids=_piece_id)
+def test_a_piece_is_found_where_it_stands_and_not_where_it_was_looked_for(
+    piece: KnownPiece,
+):
+    """
+    A piece read together with its reflection is seeded from the middle of the two, so
+    the fit has to walk to the piece itself.
+    """
+    matcher = PieceMatcher()
+    stands_at = (0.6, 0.2)
+    looked_for = (stands_at[0] - 0.012, stands_at[1] + 0.009)
+
+    match = matcher.match(_drawn(piece.outline, stands_at), looked_for, piece.hue)
+
+    assert match.center == pytest.approx(stands_at, abs=matcher.step)
 
 
 def test_a_piece_is_never_recognised_as_one_of_the_other_colour():
     cylinder = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CYLINDER]
     matcher = PieceMatcher()
+    edges = _drawn(cylinder.outline)
 
-    recognised = matcher.match(cylinder.outline, (0.0, 0.0), cylinder.hue)
-    seen_yellow = matcher.match(cylinder.outline, (0.0, 0.0), YELLOW_HUE)
+    recognised = matcher.match(edges, (0.0, 0.0), cylinder.hue)
+    seen_yellow = matcher.match(edges, (0.0, 0.0), YELLOW_HUE)
 
     assert recognised.piece.category is MontessoriShapeCategory.CYLINDER
-    assert seen_yellow.piece.hue == YELLOW_HUE
+    assert seen_yellow is None or seen_yellow.piece.hue == YELLOW_HUE
 
 
 def test_a_colour_no_piece_wears_leaves_nothing_to_recognise():
     cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
     unworn = (CYAN_HUE + YELLOW_HUE) // 2
 
-    assert PieceMatcher().match(cube.outline, (0.0, 0.0), unworn) is None
+    assert PieceMatcher().match(_drawn(cube.outline), (0.0, 0.0), unworn) is None
 
 
-def test_an_outline_no_known_piece_covers_is_refused():
-    reach = max(piece.radius for piece in KNOWN_PIECES) * 3
+def test_edges_no_known_piece_follows_are_refused():
+    reach = max(piece.radius for piece in KNOWN_PIECES) * 1.5
     sprawl = np.array(
         [[-reach, -reach], [reach, -reach], [reach, reach], [-reach, reach]]
     )
 
-    assert PieceMatcher().match(sprawl, (0.0, 0.0), CYAN_HUE) is None
+    assert PieceMatcher().match(_drawn(sprawl), (0.0, 0.0), CYAN_HUE) is None
 
 
 def test_an_outline_with_no_colour_to_read_is_recognised_by_its_shape_alone():
     triangle = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
 
-    match = PieceMatcher().match(triangle.outline, (0.0, 0.0), None)
+    match = PieceMatcher().match(_drawn(triangle.outline), (0.0, 0.0), None)
 
     assert match.piece.category is MontessoriShapeCategory.TRIANGULAR_PRISM
+
+
+def test_a_reflection_around_a_piece_does_not_move_where_it_is_recognised():
+    """
+    The table throws a diffuse copy of each piece back at the camera, which segmenting
+    by colour takes in along with the piece; the edges the fit follows are the piece's
+    own.
+    """
+    cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+    stands_at = (0.6, 0.2)
+    edges = _drawn(cube.outline, stands_at)
+
+    match = PieceMatcher().match(edges, (stands_at[0] - 0.015, stands_at[1]), cube.hue)
+
+    assert match.piece.category is MontessoriShapeCategory.CUBE
+    assert match.center == pytest.approx(stands_at, abs=0.002)
 
 
 @pytest.mark.parametrize("piece", TURNABLE_PIECES, ids=_piece_id)
@@ -1026,6 +1110,63 @@ def test_a_piece_is_detected_at_the_angle_it_was_placed(
     )
 
 
+REFLECTION_SPREAD = 0.015
+"""
+How far this lab's table smears a piece's colour around it, in metres.
+
+Measured off the outlines colour alone gives on the real table, where a twenty by forty
+millimetre piece came out forty-seven by fifty-one; drawing the smear this wide brings
+the rendered outlines to the same size.
+"""
+
+
+def test_a_piece_is_recognised_through_the_reflection_the_table_throws(
+    pipeline: MontessoriPerceptionPipeline, placed_pieces: List[PlacedPiece]
+):
+    reflecting = MontessoriSceneRenderer(reflection_spread=REFLECTION_SPREAD)
+
+    scene = pipeline.detect(reflecting.render(placed_pieces))
+
+    assert {detected.category for detected in scene.shapes} == {
+        placed.category for placed in placed_pieces
+    }
+
+
+def test_a_piece_is_reported_where_it_stands_and_not_where_its_reflection_reaches(
+    pipeline: MontessoriPerceptionPipeline, placed_pieces: List[PlacedPiece]
+):
+    reflecting = MontessoriSceneRenderer(reflection_spread=REFLECTION_SPREAD)
+
+    scene = pipeline.detect(reflecting.render(placed_pieces))
+
+    stands_at = {placed.category: (placed.x, placed.y) for placed in placed_pieces}
+    for detected in scene.shapes:
+        assert detected.pose.to_position().to_np()[:2] == pytest.approx(
+            stands_at[detected.category], abs=0.003
+        )
+
+
+def test_a_piece_only_half_in_view_is_not_reported(
+    renderer: MontessoriSceneRenderer, placed_pieces: List[PlacedPiece]
+):
+    cut_through_a_piece = MontessoriPerceptionPipeline(
+        region=WorkspaceRegion(
+            minimum_x=0.35,
+            maximum_x=1.35,
+            minimum_y=placed_pieces[0].y,
+            maximum_y=0.75,
+        ),
+        table_height=renderer.table_height,
+        board_height=renderer.board_height,
+    )
+
+    scene = cut_through_a_piece.detect(renderer.render(placed_pieces))
+
+    assert placed_pieces[0].category not in {
+        detected.category for detected in scene.shapes
+    }
+
+
 def test_a_cleanly_seen_piece_reports_how_closely_it_fitted(scene: MontessoriScene):
     for detected in scene.shapes:
-        assert detected.outline_overlap > PieceMatcher().minimum_overlap
+        assert detected.outline_agreement > PieceMatcher().minimum_agreement

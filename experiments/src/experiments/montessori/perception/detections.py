@@ -115,14 +115,13 @@ class MontessoriShapeDetection(MontessoriDetection):
     :attr:`pose` places the piece's centre half this height above the resting surface.
     """
 
-    outline_overlap: float = field(kw_only=True)
+    outline_agreement: float = field(kw_only=True)
     """
-    How much of the recognised piece's own outline the measured one covered, as the area
-    they share divided by the area they cover together.
+    How much of the recognised piece's own outline lay along an edge the camera saw.
 
-    One is an exact fit. A low value says the camera's outline was not this piece's own
-    shape, which on a reflective table is what happens when a piece's reflection is
-    taken in along with it.
+    One is a perfect fit. A low value says no placement of this piece follows what is in
+    the picture, which is how a piece is told apart from its own reflection in the
+    table.
     """
 
     @property
