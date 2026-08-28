@@ -117,7 +117,7 @@ class SelfCollisionMatrixInterface:
         self.robot = MinimalRobot.from_world(self.world)
         VizMarkerPublisher(
             _world=self.world, node=rospy.node, shape_source=ShapeSource.COLLISION_ONLY
-        ).with_tf_publisher()
+        )
 
     def dye_all_bodies_white_transparent(self):
         with self.world.modify_world():
