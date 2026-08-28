@@ -4367,6 +4367,59 @@ items:
       Worth carrying for Part D: the local `--test` verdict is what caught the break, so it stays
       until the CI verdict replaces it rather than beside it.
 
+      Part D built and the pipeline started, 2026-08-28. The premise that had to go first was mine
+      rather than the design's: this was recorded as gated on #154 landing, because a scheduled
+      Action must invoke `integration.py` and that is not on `main`. It does not have to be. A
+      `schedule:` trigger registers from the repository's *default* branch, which here is
+      `integration`, and `integration` is `main` plus every carried tip - so anything on #154
+      reaches it. The proof was already sitting there: `integration-checks.yml` exists on no branch
+      but #154 and was on `origin/integration` before any of this. So the whole pipeline is built on
+      #154's branch and runs from there with no merge to `main` at all.
+
+      What was built. `maintenance_github.py` gains `CandidatePullRequests` - open a pull request,
+      close one, read a commit's check runs - declared apart from the reads and writes a maintenance
+      pass makes, because nothing that maintains the stack opens a pull request and a pass handed
+      that interface could open one by mistake. `integration_verdict.py` turns a commit's check runs
+      into one of four verdicts, and `integration.py` gains `open-candidate` and `settle-candidate`.
+
+      The shape of it, and why. A build is judged as a candidate pull request because `ci.yml`
+      triggers on `push` to `main` and on `pull_request` and on nothing else - a pushed build
+      collects no checks at all, which is what makes the candidate the only shape that reaches a
+      verdict rather than one option among several. The candidate is never merged: a build is
+      regenerated from scratch, so it shares no history with the branch it replaces and merging
+      would give that branch a history the next build cannot regenerate. Green moves the branch onto
+      the build and closes the candidate unmerged; red closes it naming the checks that failed;
+      unfinished does nothing and says so with its own status, so a caller waiting asks again rather
+      than discarding a build nothing had judged. `ABSENT` is told apart from `RUNNING` deliberately
+      - it is the state that can mean something is wrong rather than slow, and the thing that causes
+      it is exactly the credential mistake below. The waiting is in the workflow rather than in the
+      command, which keeps every invocation a decision that can be read on its own.
+
+      A published build's branch is deleted, since the pointer then holds the same commit and a
+      scheduled rebuild would otherwise leave one behind four times a day; a rejected build's is
+      kept, because its candidate names checks somebody has to look at and a closed pull request
+      whose head is gone cannot be read.
+
+      `.github/workflows/integration-refresh.yml` runs it four times a day and on dispatch, holding
+      `INTEGRATION_REFRESH_TOKEN` rather than `GITHUB_TOKEN` - GitHub starts no workflow run from an
+      event `GITHUB_TOKEN` caused, so a candidate opened with it would sit with no checks forever.
+      The names the workflow retypes are asserted against their definitions, since a workflow cannot
+      import a constant; that test strips the shell's comments first, which a mutation check is what
+      found - branching on the wrong status still passed while the comment explaining the right one
+      satisfied the search.
+
+      744 tests pass across the four directories CI runs, from 715. Six mutations checked, each
+      caught by exactly the test naming its rule. Bootstrapped by one hand-run rebuild, since the
+      workflow could not dispatch itself until it was on the default branch: `integration` is at
+      `201a903a67` with five tips merged and the suite green, GitHub lists `Integration refresh` as
+      an active workflow, and run 33214932131 is the first dispatch of it.
+
+      Not done, and now for a better reason than before: `integration_test_command`, `--test`,
+      `--no-test` and `_run_tests` stay. The local suite is what caught the #154-against-#158 break
+      hours earlier, and it answers before a build is pushed rather than after a candidate has run a
+      matrix. Removing it once the CI verdict works would trade a fast answer for a slow one; what
+      the CI verdict replaces is the *publishing* decision, which it now makes.
+
   - id: always-read-upstream-reviews
     title: "Read upstream review threads whether or not the fork pull request is labelled"
     branch: claude/plan-item-kickoff-workflow-y2xfva
