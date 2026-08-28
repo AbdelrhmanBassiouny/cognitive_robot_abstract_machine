@@ -15,6 +15,12 @@ same rviz the physical robot renders in (via ``WorldSynchronizer``), so its posi
 be checked against the real cube before the pickup runs -- the script pauses for that
 check right after spawning it.
 
+Each pick is watched by a SegMind :func:`~experiments.tracy_experiments.montessori.
+event_monitoring.build_pick_monitor` monitor -- support, grasp, lift and pick-up, but
+no hole-contact or insertion, since the shapes here are bare bodies with no board model.
+Its events stream to the live dashboard at ``http://127.0.0.1:5000`` while the demo
+runs, and a per-shape yes/no verdict is logged after each pick.
+
 Run with (``iai_tracy_description`` and the Giskard/world-fetcher ROS stack must be
 running)::
 
@@ -63,6 +69,10 @@ from experiments.montessori.world import (
     _shape_body,
 )
 from experiments.tracy_experiments.equipment import table_top_z as read_table_top_z
+from experiments.tracy_experiments.montessori.event_dashboard import (
+    EventFeed,
+    run_dashboard,
+)
 from experiments.tracy_experiments.montessori.event_monitoring import (
     MontessoriEventMonitor,
     build_pick_monitor,
@@ -70,6 +80,7 @@ from experiments.tracy_experiments.montessori.event_monitoring import (
 from experiments.tracy_experiments.montessori.grasp_widths import GraspCloseTable
 from experiments.tracy_experiments.robotiq_gripper import RobotiqGripperController
 from segmind.datastructures.events import (
+    DetectionEvent,
     GraspEvent,
     LiftEvent,
     LossOfGraspEvent,
@@ -77,6 +88,7 @@ from segmind.datastructures.events import (
     PickUpEvent,
     SupportEvent,
 )
+from segmind.detectors.base import SegmindContext
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
@@ -373,6 +385,9 @@ class _SortingRig:
     robot: Tracy
     """The robot doing the sorting, for the SegMind grasp and lift detectors."""
 
+    feed: EventFeed
+    """Sink the per-shape SegMind events are streamed to for the live dashboard."""
+
     gripper: RobotiqGripperController
     """Direct Robotiq gripper control, bypassing Giskard."""
 
@@ -470,6 +485,11 @@ class _SortingRig:
         monitor = build_pick_monitor(
             world=self.world, tracked_body=body, robot=self.robot, arm=PICK_ARM
         )
+        shape_name = body.name.name
+        monitor.context.require_extension(SegmindContext).logger.add_callback(
+            DetectionEvent,
+            lambda event, name=shape_name: self.feed.publish(name, event),
+        )
         monitor.start()
         try:
             self.gripper.move(PICK_ARM, GripperState.OPEN)
@@ -490,6 +510,9 @@ def main() -> None:
     #     start_new_session=True,
     # )
     # time.sleep(8)  # Wait for the launch file to start
+
+    feed = EventFeed()
+    run_dashboard(feed)
 
     rclpy.init()
     node = rclpy.create_node("tracy_pickup_demo_real")
@@ -542,7 +565,14 @@ def main() -> None:
     gripper = RobotiqGripperController(node)
     tool_frame = ViewManager.get_end_effector_view(PICK_ARM, robot).tool_frame
     rig = _SortingRig(
-        context, world, robot, gripper, grasp_description, tool_frame, table_top_z
+        context,
+        world,
+        robot,
+        feed,
+        gripper,
+        grasp_description,
+        tool_frame,
+        table_top_z,
     )
 
     park = sequential([ParkArmsAction(PICK_ARM)], context=context).plan
