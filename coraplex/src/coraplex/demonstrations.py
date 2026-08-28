@@ -228,7 +228,6 @@ class RobotDemonstration(ABC):
         if self.execution_type is not ExecutionType.REAL:
             world = self.build_simulated_world()
             viz = VizMarkerPublisher(node=self.ros_node, _world=world)
-            viz.with_tf_publisher()
             return world
 
         world = self.ros_session.fetch_world()

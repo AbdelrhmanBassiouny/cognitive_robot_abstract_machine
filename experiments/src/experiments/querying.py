@@ -192,7 +192,7 @@ def build_plan() -> Plan:
         )
 
         ros_node = rclpy.create_node("viz_marker")
-        VizMarkerPublisher(_world=world, node=ros_node).with_tf_publisher()
+        VizMarkerPublisher(_world=world, node=ros_node)
     except ImportError:
         ros_node = None
 
