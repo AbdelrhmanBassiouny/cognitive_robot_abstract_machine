@@ -102,10 +102,41 @@ setup that sends a multi-megabyte sample over wifi will fail the same way, and
 the general cure is a Fast DDS `maxMessageSize` below the MTU on the *sending*
 side, which the robot would have to set.
 
+### Network check and detection overlay (commit `241b3239b`)
+`experiments/network_limits.py` reads the interface the default route leaves over
+and, only when it is wireless, refuses to start with the exact `sysctl` command
+if the limits are too low. The wired PC is untouched. Wired into both
+`montessori_demo.main` and the perception node's `main`. The requirements are
+declared once and the remedy command is generated from them, so the check and
+the command cannot drift.
+
+`perception/overlay.py` draws each detection's box, centre and name onto the
+frame the viewer shows, reusing `OrthophotoProjector.pixel_T_region` rather than
+writing new projection maths. `detections.py` gained `surface_height` - a piece's
+pose stands half its height above the surface, everything else lies in its plane -
+so the outline is projected onto the plane it was actually measured on.
+`perception/colors.py` now holds the palette that `markers.py` had privately, so
+rviz and the camera window agree.
+
+Verified live: box, centre dot and label land on the real pieces, holes and
+board. The box marks the footprint, so a piece's top face and shadow fall
+outside it - that is the parallax the pipeline deliberately cancels, not an
+error. 103 tests pass across the montessori and network files.
+
+Watch out: `scripts/format_docstrings.py` damaged unrelated docstrings in
+`montessori_demo.py` (split an `:attr:` reference across a blank line, and broke
+another mid-identifier). Those hunks were reverted and the two needed lines
+re-applied by hand. Check the diff after running it on a file you are only
+touching lightly.
+
 ### Next / open
 - `decode_color_image` and `decode_depth_image` (the raw-message decoders) now
   have no production caller and are only used by tests. AGENTS.md says to consult
   the developer before removing them - waiting on that decision.
+- The pipeline labels every loose piece `cylinder` on the real table, including
+  the cube and the triangular prism, while the board's holes come out right. The
+  overlay makes this plainly visible now. Not investigated - it is the
+  classifier's behaviour on real data, not anything from this work.
 - No pull request opened. This work folds into `tracy_icra`, which already
   carries a colleague's commits and tracks their fork, so a PR for it would be
   proposing their work too. Left for the user to decide.
