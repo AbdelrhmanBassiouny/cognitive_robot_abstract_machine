@@ -19,10 +19,18 @@ Run with (``iai_tracy_description`` and the Giskard/world-fetcher ROS stack must
 running)::
 
     python -m experiments.tracy_experiments.pickup.pickup_demo_real
+
+Pass ``--record`` to capture a rosbag of the camera, depth camera and joint states for
+the duration of the sorting. Bags are written to
+:data:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_BAG_DIRECTORY` and keep
+one camera frame in :data:`KEEP_EVERY_NTH_FRAME`; both are overridable, see
+``--bag-directory`` and ``--keep-every-nth-frame``.
 """
 
 from __future__ import annotations
 
+import argparse
+import contextlib
 import logging
 import os
 import signal
@@ -52,6 +60,11 @@ from coraplex.robot_plans.actions.core.pick_up import ReachAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from coraplex.robot_plans.motions.gripper import MoveToolCenterPointMotion
 from coraplex.view_manager import ViewManager
+from experiments.tracy_experiments.rosbag_recording import (
+    DEFAULT_BAG_DIRECTORY,
+    DECIMATED_TOPICS,
+    RosbagRecorder,
+)
 from experiments.montessori.hole_geometry import HoleFootprint
 from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.montessori.world import (
@@ -113,12 +126,12 @@ Vertical offset added to the read table-top height when seating the board, match
 same correction :func:`_add_cube` applies to the cube.
 """
 
-PLACE_HOVER = 0.035
+PLACE_HOVER = 0.04
 """
 Height above the board's top surface at which a shape is released over its hole.
 """
 
-SHAPE_TABLE_CLEARANCE = 0.032
+SHAPE_TABLE_CLEARANCE = 0.04
 """
 Vertical offset added to the read table-top height when seating a loose shape, so its
 model rests where the real object does.
@@ -155,6 +168,23 @@ PICK_TARGETS: list[PickTarget] = [
 """
 Every loose shape besides the cube, in pick order. All share :data:`CUBE_X`; only the Y
 differs.
+"""
+
+
+BAG_NAME_PREFIX = "tracy_pickup_demo"
+"""
+Leading part of the recorded bag's directory name, completed with a timestamp so
+consecutive runs do not collide.
+"""
+
+KEEP_EVERY_NTH_FRAME = 10
+"""
+How much of the camera streams a recorded run keeps, by default.
+
+Recording every frame costs around 230 MB of disk per second of wall clock: a sorting
+run fills tens of gigabytes, almost all of it registered depth and point cloud. One frame
+in ten still shows what the arm did, at roughly a ninth of the size. Pass
+``--keep-every-nth-frame 1`` for a run that genuinely needs every frame.
 """
 
 
@@ -404,12 +434,52 @@ class _SortingRig:
         retract_and_park.perform()
 
 
+def _parse_arguments() -> argparse.Namespace:
+    """
+    :return: The demo's own command line arguments.
+    """
+    parser = argparse.ArgumentParser(
+        description="Sort the Montessori shapes with the physical Tracy."
+    )
+    parser.add_argument(
+        "--record",
+        action="store_true",
+        help=(
+            "Record a rosbag of the camera, depth camera, joint states and transforms "
+            "for the duration of the sorting."
+        ),
+    )
+    parser.add_argument(
+        "--bag-directory",
+        default=DEFAULT_BAG_DIRECTORY,
+        help=(
+            f"Directory the recorded bag is placed in. Default: "
+            f"{DEFAULT_BAG_DIRECTORY}."
+        ),
+    )
+    parser.add_argument(
+        "--keep-every-nth-frame",
+        type=int,
+        default=KEEP_EVERY_NTH_FRAME,
+        metavar="N",
+        help=(
+            f"Record only one in every N frames of the heavy camera streams "
+            f"({', '.join(DECIMATED_TOPICS)}). Joint states and transforms are always "
+            f"recorded whole. Pass 1 to record every frame. Default: "
+            f"{KEEP_EVERY_NTH_FRAME}."
+        ),
+    )
+    return parser.parse_args()
+
+
 def main() -> None:
     # giskard_process = subprocess.Popen(
     #     ["ros2", "launch", "giskardpy_ros", "giskardpy_tracy_velocity.launch.py"],
     #     start_new_session=True,
     # )
     # time.sleep(8)  # Wait for the launch file to start
+
+    arguments = _parse_arguments()
 
     rclpy.init()
     node = rclpy.create_node("tracy_pickup_demo_real")
@@ -469,8 +539,23 @@ def main() -> None:
 
     input()
     logger.info("Sorting %d shapes on the real robot.", len(shape_bodies) + 1)
-    with ExecutionEnvironment(
-        execution_type=ExecutionType.REAL, collision_avoidance=True
+    # Recording starts here rather than at start-up so the bag holds the sorting itself,
+    # not the operator's wait at the prompt above, and closes as soon as the last shape
+    # is placed.
+    recorder = (
+        RosbagRecorder.timestamped(
+            BAG_NAME_PREFIX,
+            arguments.bag_directory,
+            keep_every_nth_frame=arguments.keep_every_nth_frame,
+        )
+        if arguments.record
+        else contextlib.nullcontext()
+    )
+    with (
+        recorder,
+        ExecutionEnvironment(
+            execution_type=ExecutionType.REAL, collision_avoidance=True
+        ),
     ):
         park.perform()
         rig.sort(cube, MontessoriShapeCategory.CUBE, CUBE_SIZE / 2)
