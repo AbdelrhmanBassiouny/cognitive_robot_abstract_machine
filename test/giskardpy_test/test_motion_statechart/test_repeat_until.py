@@ -6,6 +6,7 @@ The loop itself is exercised with a plain ``RepeatUntil`` whose failure monitor 
 control cycles, so it needs neither a world nor a converging task, and ``RepeatOnStall``
 is exercised against a motion that really does stop making progress.
 """
+
 from datetime import timedelta
 
 from giskardpy.executor import Executor
@@ -141,6 +142,45 @@ def test_repeat_until_does_not_retry_after_giving_up():
     assert loop.observation_state == ObservationStateValues.FALSE
 
 
+# %% the stall timeout
+
+
+def _repeat_on_stall(**timeout_argument) -> RepeatOnStall:
+    """
+    Build a loop around a placeholder task, to read back how its stall timeout reached
+    the progress monitor.
+    """
+    task = ConstFalseNode(name="task")
+    return RepeatOnStall(
+        name="loop",
+        task=task,
+        stop_retry_monitor=CountNodeResets(name="counter", node=task, target=1),
+        **timeout_argument,
+    )
+
+
+def test_stall_timeout_is_measured_in_seconds():
+    """
+    A window longer than a day reaches the progress monitor whole, rather than losing
+    its days on the way.
+    """
+    timeout = timedelta(days=1, seconds=30)
+
+    loop = _repeat_on_stall(timeout=timeout)
+
+    assert loop.retry_trigger_monitor.timeout == timeout.total_seconds()
+
+
+def test_default_stall_timeout_leaves_an_attempt_time_to_converge():
+    """
+    The default window spans several seconds of simulated time, so an attempt is not
+    declared stalled on the first control cycle in which nothing moves.
+    """
+    loop = _repeat_on_stall()
+
+    assert loop.retry_trigger_monitor.timeout == timedelta(seconds=5).total_seconds()
+
+
 # %% retrying a motion that stops making progress
 
 
@@ -156,7 +196,7 @@ def test_repeat_on_stall_retries_a_motion_that_stops_converging(
         name="loop",
         task=task,
         stop_retry_monitor=CountNodeResets(name="counter", node=task, target=2),
-        timeout=timedelta(1.0),
+        timeout=timedelta(seconds=1),
     )
     motion_statechart = MotionStatechart()
     motion_statechart.add_node(loop)
@@ -187,7 +227,7 @@ def test_repeat_on_stall_leaves_a_reachable_motion_alone(cylinder_bot_world: Wor
         name="loop",
         task=task,
         stop_retry_monitor=CountNodeResets(name="counter", node=task, target=1),
-        timeout=timedelta(.5),
+        timeout=timedelta(seconds=0.5),
     )
     motion_statechart = MotionStatechart()
     motion_statechart.add_node(loop)

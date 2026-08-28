@@ -195,6 +195,32 @@ def test_perform_repeat_runs_a_succeeding_motion_once(immutable_model_world):
     plan.validate()
 
 
+def test_repeat_does_not_give_up_on_a_child_that_starts_at_its_goal(
+    immutable_model_world,
+):
+    """
+    A child that is already where it should be finishes without converging on anything,
+    which must not be mistaken for an attempt that stalled.
+    """
+    world, robot_view, context = immutable_model_world
+    with simulated_robot:
+        sequential([MoveTorsoAction(TorsoState.HIGH)], context).plan.perform()
+
+    plan = repeat(
+        [MoveTorsoAction(TorsoState.HIGH), MoveTorsoAction(TorsoState.LOW)],
+        maximum_repetitions=3,
+        context=context,
+    ).plan
+    with simulated_robot:
+        plan.perform()
+
+    [torso_down] = (
+        robot_view.get_torso().get_joint_state_by_type(TorsoState.LOW).target_values
+    )
+    assert _torso_position(world) == pytest.approx(torso_down, abs=0.05)
+    assert plan.root.status == TaskStatus.SUCCEEDED
+
+
 def test_exception_sequential(immutable_model_world):
     world, robot_view, context = immutable_model_world
 
@@ -345,7 +371,7 @@ def test_repeat_raises_when_it_runs_out_of_attempts(immutable_model_world):
         [MoveToolCenterPointMotion(target=unreachable, arm=Arms.RIGHT)],
         maximum_repetitions=2,
         context=context,
-        repeat_template=partial(RepeatOnStall, timeout=timedelta(1.0)),
+        repeat_template=partial(RepeatOnStall, timeout=timedelta(seconds=1)),
     ).plan
 
     with pytest.raises(RepetitionsExhausted):

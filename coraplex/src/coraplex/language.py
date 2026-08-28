@@ -186,7 +186,7 @@ class RepeatNode(ExecutesSequentially):
     Use it for a decision derived from the children, such as a stall. It is called with
     the children's goal, the attempt counter and :attr:`failure_monitor`, so a template
     needing more configuration is passed pre-configured, for instance
-    ``partial(RepeatOnStall, timeout=1.0)``.
+    ``partial(RepeatOnStall, timeout=timedelta(seconds=1))``.
     """
 
     failure_monitor: Optional[MotionStatechartNode] = field(default=None, kw_only=True)

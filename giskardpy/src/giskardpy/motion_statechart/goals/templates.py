@@ -203,9 +203,9 @@ class RepeatOnStall(RepeatUntil):
         motion statechart is compiled.
     """
 
-    timeout: timedelta = field(default=timedelta(5), kw_only=True)
+    timeout: timedelta = field(default=timedelta(seconds=5), kw_only=True)
     """
-    Seconds of simulated time without progress after which an attempt counts as failed.
+    Simulated time without progress after which an attempt counts as failed.
     """
 
     minimum_convergence_rate: float = field(default=0.05, kw_only=True)
@@ -216,7 +216,7 @@ class RepeatOnStall(RepeatUntil):
 
     retry_trigger_monitor: MotionStatechartNode = field(init=False)
     """
-    Monitors that triggers a retry of the observed node
+    Monitors that triggers a retry of the observed node.
     """
 
     def __post_init__(self):
@@ -224,6 +224,6 @@ class RepeatOnStall(RepeatUntil):
         self.retry_trigger_monitor = ProgressStalled(
             name=f"{self.name}/stalled",
             monitored_node=self.task,
-            timeout=self.timeout.seconds,
+            timeout=self.timeout.total_seconds(),
             minimum_convergence_rate=self.minimum_convergence_rate,
         )

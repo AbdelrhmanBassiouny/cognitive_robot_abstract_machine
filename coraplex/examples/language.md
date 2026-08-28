@@ -290,16 +290,18 @@ fixed amount of simulation time.
 
 There are three factories for this:
 
-* {func}`~coraplex.plans.factories.cancel_when` stops the children once the monitor observes True. The plan continues
-  with the next node afterwards; a stopped subtree is not a failure.
+* {func}`~coraplex.plans.factories.cancel_when` stops the children once the monitor observes True and gives up on
+  the plan with a {class}`~coraplex.plans.failures.PlanCancelled`, instead of leaving the rest of the plan waiting for
+  a subtree that will not finish.
 * {func}`~coraplex.plans.factories.pause_while` holds the children for as long as the monitor observes True.
 * {func}`~coraplex.plans.factories.pause_until` holds the children until the monitor observes True, then lets them run.
 
 For the example we will use the previous example with the robot moving up and down, and stop it after 2 seconds of
-simulation time instead of running the whole plan 3 times.
+simulation time. Since cancelling gives up on the plan, performing it raises {class}`~coraplex.plans.failures.PlanCancelled`.
 
 ```python
 from coraplex.plans.factories import cancel_when, repeat
+from coraplex.plans.failures import PlanCancelled
 from coraplex.robot_plans.actions.core.robot_body import MoveTorsoAction
 from giskardpy.motion_statechart.monitors.payload_monitors import CountSimulationTimeSeconds
 from semantic_digital_twin.datastructures.definitions import TorsoState
@@ -313,8 +315,11 @@ plan = cancel_when(
     context=context,
 ).plan
 
-with simulated_robot:
-    plan.perform()
+try:
+    with simulated_robot:
+        plan.perform()
+except PlanCancelled as cancelled:
+    print(cancelled)
 ```
 
 {func}`~coraplex.plans.factories.pause_until` can be used the same way to launch a subtree in a paused state that is
