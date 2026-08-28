@@ -63,8 +63,20 @@ from experiments.montessori.world import (
     _shape_body,
 )
 from experiments.tracy_experiments.equipment import table_top_z as read_table_top_z
+from experiments.tracy_experiments.montessori.event_monitoring import (
+    MontessoriEventMonitor,
+    build_pick_monitor,
+)
 from experiments.tracy_experiments.montessori.grasp_widths import GraspCloseTable
 from experiments.tracy_experiments.robotiq_gripper import RobotiqGripperController
+from segmind.datastructures.events import (
+    GraspEvent,
+    LiftEvent,
+    LossOfGraspEvent,
+    LossOfSupportEvent,
+    PickUpEvent,
+    SupportEvent,
+)
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
@@ -109,8 +121,7 @@ world's root frame.
 
 BOARD_TABLE_CLEARANCE = 0
 """
-Vertical offset added to the read table-top height when seating the board, matching the
-same correction :func:`_add_cube` applies to the cube.
+Vertical offset added to the read table-top height when seating the board.
 """
 
 PLACE_HOVER = 0.035
@@ -118,10 +129,16 @@ PLACE_HOVER = 0.035
 Height above the board's top surface at which a shape is released over its hole.
 """
 
-SHAPE_TABLE_CLEARANCE = 0.032
+GRASP_HEIGHT_OFFSET = 0.032
 """
-Vertical offset added to the read table-top height when seating a loose shape, so its
-model rests where the real object does.
+Height, in metres, the reach, grasp and lift are aimed above a loose shape's own centre.
+
+The shapes and cube are spawned resting on the table (:func:`_add_montessori_shape`,
+:func:`_add_cube`), so the model sits where the real object does and SegMind's own
+model-based support and contact detectors see it on the table. This offset then lifts
+the grasp target back up by the same distance the shapes used to be spawned hovering, so
+the arm still reaches where it did before the spawn was lowered. A starting point to
+tune on hardware, not a measured value.
 """
 
 
@@ -181,7 +198,7 @@ def _add_cube(world: World, mounted_table_top_z: float) -> Body:
             ]
         ),
     )
-    cube_center_z = mounted_table_top_z + CUBE_SIZE / 2 + SHAPE_TABLE_CLEARANCE
+    cube_center_z = mounted_table_top_z + CUBE_SIZE / 2
     with world.modify_world():
         world.add_kinematic_structure_entity(cube)
         world.add_connection(
@@ -234,6 +251,17 @@ def _hole_place_pose(
     )
 
 
+def _grasp_target_pose(body: Body, grasp_height_offset: float) -> Pose:
+    """
+    :return: The pose the reach, grasp and lift are aimed at: ``body``'s own origin
+        raised by ``grasp_height_offset`` (see :data:`GRASP_HEIGHT_OFFSET`).
+
+    The shapes are spawned resting on the table, with no roll or pitch, so the offset
+    along the body frame's own vertical is the offset along the world's.
+    """
+    return Pose.from_xyz_rpy(0.0, 0.0, grasp_height_offset, reference_frame=body)
+
+
 def _add_montessori_shape(
     world: World, mounted_table_top_z: float, target: PickTarget
 ) -> Body:
@@ -249,7 +277,7 @@ def _add_montessori_shape(
     body = _shape_body(
         PrefixedName(target.name), target.category, _hole_footprint(target.category)
     )
-    shape_center_z = mounted_table_top_z + target.half_height + SHAPE_TABLE_CLEARANCE
+    shape_center_z = mounted_table_top_z + target.half_height
     with world.modify_world():
         world.add_kinematic_structure_entity(body)
         world.add_connection(
@@ -294,6 +322,41 @@ def _add_montessori_board(world: World, mounted_table_top_z: float) -> Body:
     return board
 
 
+REPORTED_PICK_EVENT_TYPES: tuple[type, ...] = (
+    SupportEvent,
+    LossOfSupportEvent,
+    GraspEvent,
+    LossOfGraspEvent,
+    LiftEvent,
+    PickUpEvent,
+)
+"""
+Event types :func:`_log_pick_events` reports a yes/no on after each shape's pick.
+"""
+
+
+def _log_pick_events(body: Body, monitor: MontessoriEventMonitor) -> None:
+    """
+    Log which of :data:`REPORTED_PICK_EVENT_TYPES` SegMind detected for ``body``.
+
+    :param body: The shape body the monitor tracked.
+    :param monitor: The stopped monitor that tracked it.
+    """
+    events = monitor.events
+
+    def detected(event_type: type) -> bool:
+        return any(
+            isinstance(event, event_type) and event.tracked_object is body
+            for event in events
+        )
+
+    verdicts = ", ".join(
+        f"{event_type.__name__}={detected(event_type)}"
+        for event_type in REPORTED_PICK_EVENT_TYPES
+    )
+    logger.info("segmind for %s: %s", body.name, verdicts)
+
+
 @dataclass
 class _SortingRig:
     """
@@ -306,6 +369,9 @@ class _SortingRig:
 
     world: World
     """The live, fetched world."""
+
+    robot: Tracy
+    """The robot doing the sorting, for the SegMind grasp and lift detectors."""
 
     gripper: RobotiqGripperController
     """Direct Robotiq gripper control, bypassing Giskard."""
@@ -322,6 +388,9 @@ class _SortingRig:
     close_table: GraspCloseTable = field(default_factory=GraspCloseTable)
     """Per-shape close setpoint the grasp is sized to."""
 
+    grasp_height_offset: float = GRASP_HEIGHT_OFFSET
+    """Height the reach, grasp and lift are aimed above a shape's own centre."""
+
     def sort(
         self, body: Body, category: MontessoriShapeCategory, half_height: float
     ) -> None:
@@ -331,20 +400,23 @@ class _SortingRig:
 
         The gripper is opened and closed through :attr:`gripper` rather than a plan
         node, since Giskard cannot command Tracy's real fingers, and the close is sized
-        to ``category`` via :attr:`close_table`.
+        to ``category`` via :attr:`close_table`. The reach and lift are aimed
+        :attr:`grasp_height_offset` above ``body``'s own centre, since the shape is
+        spawned resting on the table.
 
         :param body: The shape to sort, already spawned on the table.
         :param category: The board hole the shape belongs to, and the shape whose close
             setpoint the grasp uses.
         :param half_height: Half the shape's own height, for seating it above the hole.
         """
+        grasp_target = _grasp_target_pose(body, self.grasp_height_offset)
         reach = ReachAction(
-            target_pose=Pose(reference_frame=body),
+            target_pose=grasp_target,
             object_designator=body,
             arm=PICK_ARM,
             grasp_description=self.grasp_description,
         )
-        _, _, lift_to_pose = self.grasp_description.grasp_pose_sequence(body)
+        _, _, lift_to_pose = self.grasp_description.pose_sequence(grasp_target, body)
         place_target = _hole_place_pose(
             self.world, self.table_top_z, category, half_height
         )
@@ -395,13 +467,21 @@ class _SortingRig:
             context=self.context,
         ).plan
 
-        self.gripper.move(PICK_ARM, GripperState.OPEN)
-        reach_plan.perform()
-        self.gripper.close_to(PICK_ARM, self.close_table.setpoint_for(category))
-        lift.perform()
-        place.perform()
-        self.gripper.move(PICK_ARM, GripperState.OPEN)
-        retract_and_park.perform()
+        monitor = build_pick_monitor(
+            world=self.world, tracked_body=body, robot=self.robot, arm=PICK_ARM
+        )
+        monitor.start()
+        try:
+            self.gripper.move(PICK_ARM, GripperState.OPEN)
+            reach_plan.perform()
+            self.gripper.close_to(PICK_ARM, self.close_table.setpoint_for(category))
+            lift.perform()
+            place.perform()
+            self.gripper.move(PICK_ARM, GripperState.OPEN)
+            retract_and_park.perform()
+        finally:
+            monitor.stop()
+        _log_pick_events(body, monitor)
 
 
 def main() -> None:
@@ -462,7 +542,7 @@ def main() -> None:
     gripper = RobotiqGripperController(node)
     tool_frame = ViewManager.get_end_effector_view(PICK_ARM, robot).tool_frame
     rig = _SortingRig(
-        context, world, gripper, grasp_description, tool_frame, table_top_z
+        context, world, robot, gripper, grasp_description, tool_frame, table_top_z
     )
 
     park = sequential([ParkArmsAction(PICK_ARM)], context=context).plan
