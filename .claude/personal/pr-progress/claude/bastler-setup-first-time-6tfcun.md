@@ -21,13 +21,26 @@ CLAUDE_PERSONAL_NOTES_* variables - where they are read rather than in prose.
 - Committed, pushed, draft PR #203 opened off main. Manifest and roadmap
   (decision 14) saved to the notes branch.
 
+## Review round 2026-08-28 (four threads, 3cc3a417)
+
+- PersonalNotesSetting is an Enum mixing a frozen specification; needs both
+  __new__ and __init__, unlike PullRequestField on main, whose defaulted
+  fields hide the hazard. RepositoryLabel merges LabelPurpose + the dataclass
+  + REQUIRED_LABELS into one StrEnum whose members line up with
+  PullRequestLabel's, so the contract test holds names as well as values.
+  git_value is one seam for the two subprocess calls. The labels step leads
+  with the by-hand page and marks the gh commands conditional.
+- GitCommandRunner declined with the measurement (a production sys.path
+  insert #185 is deleting; no config/remote method); thread left open.
+- 553 tests, from 551; six mutations checked. Manifest, roadmap and dashboard
+  all updated in the same turn.
+
 ## Next
 
-- Nothing outstanding in this session. Dashboard republished at the plan's
-  existing artifact URL (56 items, no drift).
+- Nothing outstanding in this session.
 - After #107 lands: wire setup_steps.py into setup-personal-notes/SKILL.md's
   steps 4 and 8, which this PR left untouched to avoid conflicting with that
   rewrite.
-- CI on #203 not yet read; the .claude/-only diff is covered by
-  test_claude_dev_tooling, which passes locally at 551.
+- CI on #203 not read this session; the .claude/-only diff is covered by
+  test_claude_dev_tooling, which passes locally at 553.
 
