@@ -32,12 +32,9 @@ from krrood.entity_query_language.query.match import Match
 from semantic_digital_twin.exceptions import PointOccupiedError
 from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Table
-from semantic_digital_twin.spatial_types.spatial_types import Point3, Pose, Pose2D
-from semantic_digital_twin.world_description.graph_of_convex_sets.base import (
-    translate_free_space_to_where_condition,
-)
+from semantic_digital_twin.spatial_types.spatial_types import Point2, Point3, Pose, Pose2D
 from semantic_digital_twin.world_description.graph_of_convex_sets.boxes import (
-    navigation_map_at_target,
+    PlanarGraphOfBoundingBoxes,
 )
 from semantic_digital_twin.world_description.world_entity import Body
 
@@ -193,7 +190,7 @@ class InsertMontessoriShapeAction(ActionDescription):
         A point just outside ``surface``'s bounding box, offset from whichever edge is
         nearest to ``target_position``, at ``target_position``'s height.
 
-        :func:`~semantic_digital_twin.world_description.graph_of_convex_sets.boxes.navigation_map_at_target`
+        :meth:`~semantic_digital_twin.world_description.graph_of_convex_sets.boxes.PlanarGraphOfBoundingBoxes.navigation_map_at_target`
         projects obstacles to a 2D floor footprint (any point above or on a wide
         surface like a table or the sorting board reads as occupied, regardless of
         height), so a reach target actually on ``surface`` is never in free space.
@@ -351,8 +348,12 @@ class InsertMontessoriShapeAction(ActionDescription):
             navigation map's free space, or if no standing room remains for the
             robot's own footprint near it.
         """
-        reachability_gcs = navigation_map_at_target(target=target)
-        target_node = reachability_gcs.node_of_point(target_pose_end_effector.position)
+        reachability_gcs = PlanarGraphOfBoundingBoxes.navigation_map_at_target(
+            target=target
+        )
+        target_node = reachability_gcs.node_of_point(
+            Point2.from_pose(target_pose_end_effector)
+        )
         if target_node is None:
             raise PointOccupiedError(
                 self.world.transform(target_pose_end_effector, self.world.root).position
@@ -366,7 +367,7 @@ class InsertMontessoriShapeAction(ActionDescription):
         ]
 
         standing_search_range = 2 * DEFAULT_ROBOT_STANDOFF_DISTANCE
-        standing_gcs = navigation_map_at_target(
+        standing_gcs = PlanarGraphOfBoundingBoxes.navigation_map_at_target(
             target=target,
             search_range_x=standing_search_range,
             search_range_y=standing_search_range,
@@ -395,13 +396,17 @@ class InsertMontessoriShapeAction(ActionDescription):
             target_pose_end_effector=target_pose_end_effector,
             grasp_description=self._grasp_description_query(),
         )
-        where_condition = translate_free_space_to_where_condition(
-            standing_gcs.free_space_event,
-            reach_query.expression,
-            x_variable_name="MoveToReach.target_pose_offset_robot.x",
-            y_variable_name="MoveToReach.target_pose_offset_robot.y",
+        # constrain_to_free_space attaches the condition to the underlying Entity,
+        # which is all a query evaluation needs. reach_query (the Match) tracks its
+        # where conditions separately, for the parametrization that resolves this
+        # plan's underspecified fields, so it also needs to know about the condition
+        # -- appended directly rather than via Match.where(), since that would re-add
+        # it to the Entity a second time.
+        free_space_condition = standing_gcs.constrain_to_free_space(
+            reach_query.expression.target_pose_offset_robot
         )
-        return reach_query.where(where_condition)
+        reach_query._where_conditions_.append(free_space_condition)
+        return reach_query
 
     @property
     def _action_plan(self) -> PlanNode:

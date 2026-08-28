@@ -420,7 +420,6 @@ def main() -> None:
     # construction; a sync update landing in that window reaches it before its
     # tf_model_callback is set and takes down the executor thread.
     viz_marker_publisher = VizMarkerPublisher(_world=world, node=node)
-    viz_marker_publisher.with_tf_publisher()
 
     WorldSynchronizer(_world=world, node=node)
 
