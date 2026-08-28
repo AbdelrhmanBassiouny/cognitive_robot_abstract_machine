@@ -25,7 +25,10 @@ if TYPE_CHECKING:
         SymbolicExpression,
         Selectable,
     )
-    from krrood.entity_query_language.core.mapped_variable import MappedVariable
+    from krrood.entity_query_language.core.mapped_variable import (
+        Attribute,
+        MappedVariable,
+    )
     from krrood.entity_query_language.core.variable import Variable
     from krrood.entity_query_language.query.match import (
         Match,
@@ -278,6 +281,33 @@ class AmbiguousQueryAttribute(UsageError):
             "Take the attribute from the variable it belongs to, e.g. `body.name` instead of "
             "`query.name`, or index the query by that variable, e.g. `query[body].name`."
         )
+
+
+@dataclass
+class NotNumberLikeFieldError(UsageError):
+    """
+    Raised when accessing a field expected to be number-like (see
+    :meth:`~krrood.entity_query_language.core.mapped_variable.Attribute.number_like_field`),
+    but it does not exist or resolves to a non-numeric type.
+    """
+
+    attribute: Attribute
+    """
+    The attribute that was accessed.
+    """
+
+    resolved_type: Optional[Type]
+    """
+    The attribute's resolved type, or None if it does not exist at all.
+    """
+
+    def error_message(self) -> str:
+        if self.resolved_type is None:
+            return f"{self.attribute} does not exist."
+        return f"{self.attribute} is {self.resolved_type}, not number-like."
+
+    def suggest_correction(self) -> str:
+        return f"give the queried type a number-valued '{self.attribute._attribute_name_}' field."
 
 
 @dataclass

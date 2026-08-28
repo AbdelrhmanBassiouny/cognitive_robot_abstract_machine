@@ -43,7 +43,7 @@ from semantic_digital_twin.world_description.geometry import (
     Box,
     Scale,
     Color,
-    BoundingBox,
+    VolumetricBoundingBox,
 )
 from semantic_digital_twin.world_description.shape_collection import ShapeCollection
 from semantic_digital_twin.world_description.world_entity import (
@@ -456,7 +456,9 @@ def test_blocking(pr2_world_copy):
 def test_region_is_occupied(pr2_world_state_reset):
     view = pr2_world_state_reset.get_semantic_annotations_by_type(PR2)[0]
 
-    target_box = BoundingBox(0, 0, 0, 1, 1, 1, HomogeneousTransformationMatrix())
+    target_box = VolumetricBoundingBox(
+        0, 0, 0, 1, 1, 1, HomogeneousTransformationMatrix()
+    )
     assert not is_place_occupied(
         target_box,
         Pose.from_xyz_rpy(2.5, 2, 0, reference_frame=pr2_world_state_reset.root),
