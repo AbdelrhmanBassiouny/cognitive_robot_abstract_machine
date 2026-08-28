@@ -38,9 +38,14 @@ from experiments.montessori.perception.footprint import (
     CrossSectionClassifier,
     Footprint,
 )
+from experiments.montessori.perception.colors import HOLE_COLOR, PIECE_COLOR
 from experiments.montessori.perception.orthophoto import (
     OrthophotoProjector,
     WorkspaceRegion,
+)
+from experiments.montessori.perception.overlay import (
+    DetectionOverlay,
+    project_to_pixels,
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.scene_source import FixedScene, PerceivedObjects
@@ -643,3 +648,95 @@ def test_closing_the_viewer_takes_its_windows_off_screen():
     CameraFrameViewer(display=display).close()
 
     assert display.closed
+
+
+# %% drawing the detections onto the frame
+
+
+@pytest.fixture
+def frame(
+    renderer: MontessoriSceneRenderer, placed_pieces: list[PlacedPiece]
+) -> RgbdFrame:
+    return renderer.render(placed_pieces)
+
+
+def looking_straight_down(height: float) -> np.ndarray:
+    """
+    A camera hanging at a height above the world origin, pointing down.
+
+    :param height: How far above the origin it hangs, in metres.
+    :return: Its pose as a 4x4 homogeneous transformation.
+    """
+    pose = np.eye(4)
+    pose[:3, :3] = np.array([[1.0, 0.0, 0.0], [0.0, -1.0, 0.0], [0.0, 0.0, -1.0]])
+    pose[:3, 3] = (0.0, 0.0, height)
+    return pose
+
+
+def frame_seen_from_above(height: float = 1.0) -> RgbdFrame:
+    """
+    An empty frame taken by a camera hanging above the world origin.
+
+    :param height: How far above the origin the camera hangs, in metres.
+    """
+    return RgbdFrame(
+        color=np.zeros((480, 640, 3), dtype=np.uint8),
+        depth=np.full((480, 640), height, dtype=np.float32),
+        intrinsics=CameraIntrinsics(100.0, 100.0, 320.0, 240.0),
+        reference_frame_T_camera=looking_straight_down(height),
+    )
+
+
+def test_the_point_under_the_camera_lands_on_its_principal_point():
+    pixels = project_to_pixels(frame_seen_from_above(), np.array([[0.0, 0.0]]), 0.0)
+
+    assert pixels[0] == pytest.approx([320.0, 240.0])
+
+
+def test_a_point_beside_the_camera_axis_lands_beside_the_principal_point():
+    pixels = project_to_pixels(frame_seen_from_above(), np.array([[0.1, 0.0]]), 0.0)
+
+    assert pixels[0] == pytest.approx([330.0, 240.0])
+
+
+def test_a_piece_rests_half_its_height_below_its_own_pose(scene: MontessoriScene):
+    piece = scene.shapes[0]
+
+    assert piece.surface_height == pytest.approx(
+        float(piece.pose.to_position().to_np()[2]) - piece.height / 2
+    )
+
+
+def test_a_hole_lies_on_the_surface_its_pose_names(scene: MontessoriScene):
+    hole = scene.holes[0]
+
+    assert hole.surface_height == pytest.approx(
+        float(hole.pose.to_position().to_np()[2])
+    )
+
+
+def test_drawing_nothing_leaves_the_frame_as_it_was():
+    frame = frame_seen_from_above()
+
+    drawn = DetectionOverlay().draw(frame, MontessoriScene())
+
+    assert np.array_equal(drawn, frame.color)
+
+
+def test_the_overlay_leaves_the_frame_it_drew_from_untouched(
+    frame: RgbdFrame, scene: MontessoriScene
+):
+    before = frame.color.copy()
+
+    DetectionOverlay().draw(frame, scene)
+
+    assert np.array_equal(frame.color, before)
+
+
+def test_each_kind_of_detection_is_drawn_in_its_own_colour(
+    frame: RgbdFrame, scene: MontessoriScene
+):
+    drawn = DetectionOverlay().draw(frame, scene)
+
+    for color in (PIECE_COLOR, HOLE_COLOR):
+        assert (drawn == np.array(color.to_bgr(), dtype=np.uint8)).all(axis=2).any()
