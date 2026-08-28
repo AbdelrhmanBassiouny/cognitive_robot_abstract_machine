@@ -33,26 +33,34 @@ fetched world.
 the two single-symbol couplings #202 had to drag onto `main`. Asserted, not
 just observed.
 
-## Done
+## Done - the item is built and pushed
 
-- Branch cut off `montessori_perception_on_main`, pushed, draft PR #205 opened.
+- Branch cut off `montessori_perception_on_main`; draft PR #205 opened.
 - `plan.yaml` records branch/session/PR and `status: in_progress`; roadmap
-  section written.
+  carries both the plan and the outcome section.
+- `d8f30ffb` implements it: new `perception/surfaces.py` with
+  `SupportingSurface.of` / `.of_body`, `MontessoriPerceptionPipeline.of_world`,
+  `build_node` rewired, two new typed exceptions.
+- 9 new tests. `137 passed, 1 skipped` across the four `test_montessori_*`
+  modules vs `128 passed, 1 skipped` on the parent - no regressions.
+- `scripts/format_docstrings.py` run; PR description rewritten to match.
 
-## Next
+## Outstanding, for the developer
 
-1. Tests first, against `MontessoriWorld` (already carries a `Table`, a
-   `Floor` and a `ShapeSortingBoard`): the derived region and both plane
-   heights asserted against the world's own `TABLE_SCALE`/`TABLE_POSITION` and
-   `BOARD_SCALE`/`BOARD_POSITION`, plus a test that `node.py` no longer
-   imports either module.
-2. Implement the surface derivation and rewire `build_node`.
-3. Run `pytest test/experiments_test/test_montessori_perception.py` with
-   `--noconftest` and the workspace on `PYTHONPATH` (the repo conftest
-   regenerates the ORM interfaces, which needs a ROS 2 install the container
-   lacks - it fails identically on unmodified `main`).
-4. `scripts/format_docstrings.py` on every modified file.
-5. Keep #205 a draft; update its description to match what landed.
+1. **Open question raised on the PR, not decided here:** `of_body` picks the
+   body's *widest* horizontal face, preserving `table_top_z`'s existing rule.
+   The *highest* face is arguably truer to "the surface things rest on"; the
+   two differ only for a body whose widest shape is not its top (a splayed
+   base, or a mounting plate on the tabletop within the same body - plausibly
+   why the original chose widest against the real URDF). Not overturned
+   silently.
+2. **`pipeline.py` still imports `BOARD_SCALE`** for
+   `BoardDetector.board_footprint`, a detector tolerance rather than a plane.
+   So the `world.py` coupling is narrowed, not deleted; `equipment.py`'s is
+   gone outright. Left to `detect-per-supporting-surface`.
+3. **Nothing verified against the live camera** - a container cannot. That the
+   clip actually shows the table is `demo-runs-on-grounded-perception`'s job.
+4. CI on #205 has not been read; per my notes this session does not watch it.
 
 ## Held deliberately out of scope
 
@@ -60,9 +68,10 @@ just observed.
   restructuring it into one pass per surface is `detect-per-supporting-surface`.
 - The region is the table, not a reachability envelope.
 
-## Known, not a blocker
+## Behaviour change worth knowing
 
-`supporting_surface` is `None` on every world in this workspace - nothing calls
-`calculate_supporting_surface`. The fallback is the path that runs on the live
-robot today; the annotated path is written because the item asks for it and
-because the next item populates it.
+A fetched world carrying no `ShapeSortingBoard` is now refused
+(`BoardMissingFromWorld`) rather than falling back to a constant: once the
+constant is gone the lid's height cannot be invented.
+`supporting_surface` is `None` on every world in this workspace, so the
+body-shape fallback is the path that runs on the live robot today.
