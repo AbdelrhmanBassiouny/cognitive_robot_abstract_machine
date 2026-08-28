@@ -42,6 +42,8 @@ from experiments.montessori.perception.orthophoto import (
     OrthophotoProjector,
     WorkspaceRegion,
 )
+from experiments.montessori.perception.piece_matcher import PieceMatcher
+from experiments.montessori.pieces import HUE_RANGE, HUE_TOLERANCE, PIECE_HUES
 from experiments.montessori.world import BOARD_SCALE
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world_description.world_entity import (
@@ -100,6 +102,61 @@ class SurfaceColors:
         )
         return mask.astype(np.uint8) * 255
 
+    minimum_hue_saturation: int = 30
+    """
+    Saturation at or above which a pixel's hue is worth reading.
+
+    Lower than :attr:`minimum_saturation`, which has to tell a coloured surface from a
+    colourless one on its own: a pixel held against the pieces' own colours need only be
+    colourful enough for its hue to mean something, and the pale pieces in this set wash
+    out towards white where they catch the light.
+    """
+
+    def piece_mask(self, orthophoto: Orthophoto) -> np.ndarray:
+        """
+        Mark the pixels wearing one of the loose pieces' own colours.
+
+        A piece is picked out by the colour it is rather than by standing out from the
+        surface under it, because that surface is whatever the table happens to be
+        covered with: bare metal has no colour to be told apart from, but paper laid
+        over it to stop the reflections has plenty.
+
+        :param orthophoto: The rectified image to segment.
+        :return: A ``uint8`` mask, 255 on a piece's colour and 0 elsewhere.
+        """
+        hue_saturation_value = cv2.cvtColor(orthophoto.image, cv2.COLOR_BGR2HSV)
+        hue = hue_saturation_value[:, :, 0].astype(int)
+        apart = np.stack([np.abs(hue - worn) for worn in PIECE_HUES], axis=0)
+        wears_one = np.minimum(apart, HUE_RANGE - apart).min(axis=0) <= HUE_TOLERANCE
+        mask = (
+            wears_one
+            & (hue_saturation_value[:, :, 1] >= self.minimum_hue_saturation)
+            & (hue_saturation_value[:, :, 2] >= self.minimum_value)
+            & orthophoto.observed
+        )
+        return mask.astype(np.uint8) * 255
+
+    def measure_hue(self, orthophoto: Orthophoto, region: np.ndarray) -> Optional[int]:
+        """
+        Read the colour one region of a rectified image is.
+
+        Only the coloured pixels are read: a specular highlight washes a lit face towards
+        white, where the hue a pixel reports is noise. A piece's reflection in the table
+        carries the piece's own colour, so a region that has taken some of that in still
+        reports the colour of the piece.
+
+        :param orthophoto: The rectified image the region was found in.
+        :param region: Mask of the region to read, 255 inside it and 0 outside.
+        :return: The middle of its coloured pixels' hue, or None where it has none.
+        """
+        hue_saturation_value = cv2.cvtColor(orthophoto.image, cv2.COLOR_BGR2HSV)
+        colored = (region > 0) & (
+            hue_saturation_value[:, :, 1] >= self.minimum_hue_saturation
+        )
+        if not colored.any():
+            return None
+        return int(np.median(hue_saturation_value[:, :, 0][colored]))
+
     @staticmethod
     def dark_mask(orthophoto: Orthophoto, region: np.ndarray) -> np.ndarray:
         """
@@ -133,6 +190,19 @@ _OPENING_KERNEL = np.ones((3, 3), np.uint8)
 """
 Structuring element that removes isolated speckles left by sensor noise.
 """
+
+
+def _filled(contour: np.ndarray, orthophoto: Orthophoto) -> np.ndarray:
+    """
+    The area one contour encloses, as a mask over the image it was found in.
+
+    :param contour: The contour, in rectified pixels.
+    :param orthophoto: The rectified view it was found in.
+    :return: A ``uint8`` mask, 255 inside the contour and 0 outside.
+    """
+    region = np.zeros(orthophoto.image.shape[:2], dtype=np.uint8)
+    cv2.drawContours(region, [contour], -1, 255, cv2.FILLED)
+    return region
 
 
 def _clean(mask: np.ndarray) -> np.ndarray:
@@ -289,8 +359,7 @@ class BoardDetector:
         :param reference_frame: Frame the resulting poses are expressed in.
         :return: One detection per hole that is the right size and a recognisable shape.
         """
-        region = np.zeros(orthophoto.image.shape[:2], dtype=np.uint8)
-        cv2.drawContours(region, [surface], -1, 255, cv2.FILLED)
+        region = _filled(surface, orthophoto)
         # Left unopened on purpose: the narrowest hole on the board is five millimetres
         # across, which the speckle-removing kernel would eat entirely. Slivers are
         # rejected by area instead, in :attr:`hole_size`.
@@ -455,9 +524,9 @@ class LoosePieceDetector:
     Finds the loose Montessori pieces in a view rectified onto the table they rest on.
     """
 
-    classifier: FootprintClassifier = field(default_factory=CrossSectionClassifier)
+    matcher: PieceMatcher = field(default_factory=PieceMatcher)
     """
-    Decides which shape each piece is.
+    Recognises which piece an outline is and how far it is turned.
     """
 
     colors: SurfaceColors = field(default_factory=SurfaceColors)
@@ -509,8 +578,8 @@ class LoosePieceDetector:
         """
         mask = _clean(
             cv2.bitwise_and(
-                self.colors.surface_mask(orthophoto),
-                self.colors.surface_mask(top_orthophoto),
+                self.colors.piece_mask(orthophoto),
+                self.colors.piece_mask(top_orthophoto),
             )
         )
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -520,11 +589,16 @@ class LoosePieceDetector:
             footprint = Footprint.from_contour(contour, orthophoto.region.resolution)
             if not self.piece_size.admits(footprint):
                 continue
-            category = self.classifier.classify(footprint)
-            if category is None:
-                continue
             x, y = orthophoto.contour_center(contour)
             if board is not None and board.encloses(x, y):
+                continue
+            outline = _to_world_outline(contour, orthophoto)
+            match = self.matcher.match(
+                outline,
+                (x, y),
+                self.colors.measure_hue(orthophoto, _filled(contour, orthophoto)),
+            )
+            if match is None:
                 continue
             height = _measure_height(contour, orthophoto, frame, self.piece_height)
             pieces.append(
@@ -533,13 +607,14 @@ class LoosePieceDetector:
                         x,
                         y,
                         orthophoto.plane_height + height / 2,
-                        yaw=footprint.yaw,
+                        yaw=match.yaw,
                         reference_frame=reference_frame,
                     ),
                     footprint=footprint,
-                    outline=_to_world_outline(contour, orthophoto),
-                    category=category,
+                    outline=outline,
+                    category=match.piece.category,
                     height=height,
+                    outline_overlap=match.overlap,
                 )
             )
         return pieces
@@ -580,9 +655,7 @@ def _measure_height(
     :param nominal_height: Height to report where the depth image cannot answer.
     :return: The height in metres.
     """
-    interior = np.zeros(orthophoto.image.shape[:2], dtype=np.uint8)
-    cv2.drawContours(interior, [contour], -1, 255, cv2.FILLED)
-    rows, columns = np.nonzero(interior)
+    rows, columns = np.nonzero(_filled(contour, orthophoto))
     rows = rows[::_HEIGHT_SAMPLE_STRIDE]
     columns = columns[::_HEIGHT_SAMPLE_STRIDE]
     if rows.size == 0:

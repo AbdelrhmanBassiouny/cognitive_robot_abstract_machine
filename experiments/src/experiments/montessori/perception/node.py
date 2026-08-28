@@ -17,6 +17,7 @@ checked against the real table.
 from __future__ import annotations
 
 import logging
+import math
 import threading
 import time
 from argparse import ArgumentParser, Namespace
@@ -442,7 +443,8 @@ def report(scene: MontessoriScene) -> None:
         ", ".join(
             f"{piece.category} at "
             f"({piece.pose.to_position().to_np()[0]:.3f}, "
-            f"{piece.pose.to_position().to_np()[1]:.3f})"
+            f"{piece.pose.to_position().to_np()[1]:.3f}) "
+            f"turned {math.degrees(piece.yaw):+.0f} deg, fit {piece.outline_overlap:.2f}"
             for piece in scene.shapes
         ),
     )

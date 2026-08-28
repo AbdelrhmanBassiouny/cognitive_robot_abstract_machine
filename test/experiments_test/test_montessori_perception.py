@@ -44,6 +44,7 @@ from experiments.montessori.perception.colors import (
     DetectionColor,
 )
 from experiments.montessori.perception.orthophoto import (
+    Orthophoto,
     OrthophotoProjector,
     WorkspaceRegion,
 )
@@ -53,7 +54,20 @@ from experiments.montessori.perception.overlay import (
     RectifiedView,
     project_to_pixels,
 )
-from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
+from experiments.montessori.perception.piece_matcher import PieceMatcher
+from experiments.montessori.perception.pipeline import (
+    MontessoriPerceptionPipeline,
+    SurfaceColors,
+)
+from experiments.montessori.pieces import (
+    CYAN_HUE,
+    HUE_RANGE,
+    KNOWN_PIECES,
+    KNOWN_PIECE_BY_CATEGORY,
+    YELLOW_HUE,
+    KnownPiece,
+    hue_distance,
+)
 from experiments.montessori.perception.scene_source import FixedScene, PerceivedObjects
 from experiments.montessori.perception.viewer import (
     CameraFrameViewer,
@@ -865,3 +879,153 @@ def test_a_hole_has_no_thickness_to_stand_above_its_own_surface(
     hole = scene.holes[0]
 
     assert hole.top_height == hole.surface_height
+
+
+# %% reading a piece's colour
+
+
+def _painted(hue_saturation_value: np.ndarray) -> Orthophoto:
+    """
+    A rectified view of one flat patch painted a given colour.
+
+    :param hue_saturation_value: The colour of every pixel, as a hue-saturation-value
+        image.
+    """
+    return Orthophoto(
+        image=cv2.cvtColor(hue_saturation_value, cv2.COLOR_HSV2BGR),
+        region=WorkspaceRegion(
+            minimum_x=0.0,
+            maximum_x=0.001 * hue_saturation_value.shape[1],
+            minimum_y=0.0,
+            maximum_y=0.001 * hue_saturation_value.shape[0],
+        ),
+        plane_height=0.0,
+    )
+
+
+def test_a_region_is_read_as_the_colour_of_its_own_pixels():
+    painted = np.zeros((8, 8, 3), dtype=np.uint8)
+    painted[:, :4] = (CYAN_HUE, 200, 200)
+    painted[:, 4:] = (YELLOW_HUE, 200, 200)
+    region = np.zeros((8, 8), dtype=np.uint8)
+    region[:, :4] = 255
+
+    assert SurfaceColors().measure_hue(_painted(painted), region) == CYAN_HUE
+
+
+def test_a_washed_out_region_carries_no_colour_to_read():
+    colors = SurfaceColors()
+    painted = np.zeros((8, 8, 3), dtype=np.uint8)
+    painted[:, :] = (CYAN_HUE, colors.minimum_hue_saturation - 1, 250)
+
+    assert colors.measure_hue(_painted(painted), np.full((8, 8), 255, np.uint8)) is None
+
+
+def test_hue_is_measured_the_short_way_round_the_colour_circle():
+    assert hue_distance(2, HUE_RANGE - 3) == 5
+    assert hue_distance(20, 25) == 5
+
+
+# %% recognising a piece and how it is turned
+
+TURNABLE_PIECES = [piece for piece in KNOWN_PIECES if piece.rotation_period is not None]
+"""
+The pieces a turn can be told on at all, so the ones a period means something for.
+"""
+
+
+def _piece_id(piece: KnownPiece) -> str:
+    return str(piece.category)
+
+
+@pytest.mark.parametrize("piece", KNOWN_PIECES, ids=_piece_id)
+def test_each_known_piece_is_recognised_from_its_own_outline(piece: KnownPiece):
+    matcher = PieceMatcher()
+    placed = math.radians(17)
+
+    match = matcher.match(piece.turned_outline(placed), (0.0, 0.0), piece.hue)
+
+    assert match.piece.category is piece.category
+    assert match.overlap > 0.95
+    assert match.yaw == pytest.approx(
+        piece.smallest_equivalent_turn(placed), abs=matcher.angle_step
+    )
+
+
+@pytest.mark.parametrize("piece", TURNABLE_PIECES, ids=_piece_id)
+def test_a_piece_turned_by_its_own_period_looks_untouched(piece: KnownPiece):
+    matcher = PieceMatcher()
+
+    match = matcher.match(
+        piece.turned_outline(piece.rotation_period), (0.0, 0.0), piece.hue
+    )
+
+    assert match.piece.category is piece.category
+    assert match.yaw == pytest.approx(0.0, abs=matcher.angle_step)
+
+
+def test_an_orientation_is_reported_as_the_smallest_turn_that_reaches_it():
+    cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+    matcher = PieceMatcher()
+    placed = cube.rotation_period - math.radians(10)
+
+    match = matcher.match(cube.turned_outline(placed), (0.0, 0.0), cube.hue)
+
+    assert match.yaw == pytest.approx(math.radians(-10), abs=matcher.angle_step)
+
+
+def test_a_piece_is_never_recognised_as_one_of_the_other_colour():
+    cylinder = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CYLINDER]
+    matcher = PieceMatcher()
+
+    recognised = matcher.match(cylinder.outline, (0.0, 0.0), cylinder.hue)
+    seen_yellow = matcher.match(cylinder.outline, (0.0, 0.0), YELLOW_HUE)
+
+    assert recognised.piece.category is MontessoriShapeCategory.CYLINDER
+    assert seen_yellow.piece.hue == YELLOW_HUE
+
+
+def test_a_colour_no_piece_wears_leaves_nothing_to_recognise():
+    cube = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CUBE]
+    unworn = (CYAN_HUE + YELLOW_HUE) // 2
+
+    assert PieceMatcher().match(cube.outline, (0.0, 0.0), unworn) is None
+
+
+def test_an_outline_no_known_piece_covers_is_refused():
+    reach = max(piece.radius for piece in KNOWN_PIECES) * 3
+    sprawl = np.array(
+        [[-reach, -reach], [reach, -reach], [reach, reach], [-reach, reach]]
+    )
+
+    assert PieceMatcher().match(sprawl, (0.0, 0.0), CYAN_HUE) is None
+
+
+def test_an_outline_with_no_colour_to_read_is_recognised_by_its_shape_alone():
+    triangle = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.TRIANGULAR_PRISM]
+
+    match = PieceMatcher().match(triangle.outline, (0.0, 0.0), None)
+
+    assert match.piece.category is MontessoriShapeCategory.TRIANGULAR_PRISM
+
+
+@pytest.mark.parametrize("piece", TURNABLE_PIECES, ids=_piece_id)
+def test_a_piece_is_detected_at_the_angle_it_was_placed(
+    renderer: MontessoriSceneRenderer,
+    pipeline: MontessoriPerceptionPipeline,
+    piece: KnownPiece,
+):
+    placed = math.radians(25)
+    frame = renderer.render([PlacedPiece(piece.category, x=0.58, y=0.15, yaw=placed)])
+
+    [detected] = pipeline.detect(frame).shapes
+
+    assert detected.category is piece.category
+    assert detected.yaw == pytest.approx(
+        piece.smallest_equivalent_turn(placed), abs=math.radians(4)
+    )
+
+
+def test_a_cleanly_seen_piece_reports_how_closely_it_fitted(scene: MontessoriScene):
+    for detected in scene.shapes:
+        assert detected.outline_overlap > PieceMatcher().minimum_overlap
