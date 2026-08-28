@@ -36,6 +36,7 @@ from experiments.montessori.perception.detections import (
     ShapeSortingHoleDetection,
 )
 from experiments.montessori.perception.edges import EdgeDistances
+from experiments.montessori.perception.exceptions import BoardMissingFromWorld
 from experiments.montessori.perception.footprint import (
     CrossSectionClassifier,
     Footprint,
@@ -48,10 +49,14 @@ from experiments.montessori.perception.orthophoto import (
     WorkspaceRegion,
 )
 from experiments.montessori.perception.piece_matcher import PieceMatcher
+from experiments.montessori.perception.surfaces import SupportingSurface
 from experiments.montessori.pieces import HUE_RANGE, HUE_TOLERANCE, PIECE_HUES
+from experiments.montessori.semantics import ShapeSortingBoard
 from experiments.montessori.world import BOARD_SCALE
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import (
+    Body,
     KinematicStructureEntity,
 )
 
@@ -792,6 +797,34 @@ class MontessoriPerceptionPipeline:
     Wide enough for the board's lid and for a piece held over it on its way in; anything
     higher is a passing arm or the room behind the table.
     """
+
+    @classmethod
+    def of_world(cls, world: World, table: Body) -> MontessoriPerceptionPipeline:
+        """
+        Build the pipeline that looks at the Montessori scene a world describes.
+
+        The stretch of table to search, the plane the loose pieces rest on and the plane
+        the board's holes lie in are all read from the world, so perception looks where
+        the robot's own model says the scene is.
+
+        :param world: The world the scene is described in.
+        :param table: The body carrying the surface the scene is set up on.
+        :raises BoardMissingFromWorld: If the world describes no shape-sorting board.
+        :raises SurfaceHasNothingToMeasure: If a surface the scene needs has no shape.
+        """
+        reference_frame = world.root
+        surface = SupportingSurface.of_body(table, reference_frame)
+        boards = world.get_semantic_annotations_by_type(ShapeSortingBoard)
+        if not boards:
+            raise BoardMissingFromWorld()
+        [board] = boards
+        lid = SupportingSurface.of(board, reference_frame)
+        return cls(
+            region=surface.region,
+            table_height=surface.height,
+            board_height=lid.height - surface.height,
+            reference_frame=reference_frame,
+        )
 
     @property
     def lid_height(self) -> float:
