@@ -44,10 +44,12 @@ from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.exceptions import NoSceneAvailable
 from experiments.montessori.perception.markers import DetectionMarkerPublisher
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
+from experiments.montessori.perception.overlay import DetectionOverlay
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.scene_source import MontessoriSceneSource
 from experiments.montessori.perception.viewer import CameraFrameViewer
 from experiments.montessori.world import BOARD_SCALE
+from experiments.network_limits import check_large_messages_can_arrive
 from experiments.tracy_experiments.equipment import table_top_z
 from semantic_digital_twin.adapters.ros.tfwrapper import TFWrapper
 from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
@@ -140,6 +142,11 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
     viewer: Optional[CameraFrameViewer] = None
     """
     Shows the frames as they arrive, or None to open no window.
+    """
+
+    overlay: DetectionOverlay = field(default_factory=DetectionOverlay)
+    """
+    Draws the detections onto the frame the viewer shows.
     """
 
     _transforms: TFWrapper = field(init=False)
@@ -235,6 +242,8 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
             self._scene = scene
         if self.markers is not None:
             self.markers.publish(scene)
+        if self.viewer is not None:
+            self.viewer.show_color(self.overlay.draw(frame, scene))
 
     def _ready(self) -> bool:
         """
@@ -421,6 +430,7 @@ def main() -> None:
     """
     arguments = parse_arguments()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
+    check_large_messages_can_arrive()
     rclpy.init()
     node = rclpy.create_node(NODE_NAME)
     executor = MultiThreadedExecutor()

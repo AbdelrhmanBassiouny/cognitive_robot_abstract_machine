@@ -1,9 +1,9 @@
 """
 What one look at the Montessori scene found.
 
-These are the values an :mod:`entity query language <krrood.entity_query_language>` query
-ranges over, so they carry the pose a caller asks for together with the measurements that
-let a query pick one detection out of several.
+These are the values an :mod:`entity query language <krrood.entity_query_language>`
+query ranges over, so they carry the pose a caller asks for together with the
+measurements that let a query pick one detection out of several.
 """
 
 from __future__ import annotations
@@ -40,9 +40,19 @@ class MontessoriDetection(ABC):
 
     outline: np.ndarray
     """
-    The outline itself, as ``(n, 2)`` world-frame ``(x, y)`` points on the surface it was
-    seen on.
+    The outline itself, as ``(n, 2)`` world-frame ``(x, y)`` points on the surface it
+    was seen on.
     """
+
+    @property
+    def surface_height(self) -> float:
+        """
+        Height of the surface this was seen lying on, in metres.
+
+        A detection sits on the plane it was rectified from, so its pose already names
+        that height.
+        """
+        return float(self.pose.to_position().to_np()[2])
 
     @property
     @abstractmethod
@@ -87,6 +97,16 @@ class MontessoriShapeDetection(MontessoriDetection):
     :attr:`pose` places the piece's centre half this height above the resting surface,
     so an unmeasured piece is reported as lying in the surface itself.
     """
+
+    @property
+    def surface_height(self) -> float:
+        """
+        Height of the surface this piece rests on, in metres.
+
+        Its pose stands half its own height above that surface, unlike a detection that
+        lies flat in the plane it was found in.
+        """
+        return float(self.pose.to_position().to_np()[2]) - self.height / 2
 
     @property
     def label(self) -> str:
