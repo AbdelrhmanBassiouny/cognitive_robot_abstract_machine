@@ -9828,3 +9828,106 @@ has rejected throughout, and the candidate was never a review surface anyway.
 What this leaves live is rebuild cadence. `integration` is 124 commits behind `main` and holds an
 unverified build, so the fast-PR process is currently serving unlanded work on a stale base. That
 belongs to Part D rather than beside it: an automatic rebuild is only safe once a verdict exists.
+
+## Update 2026-08-28 (resolved): Part D's clearing half, and the conflict nobody was counting
+
+`/plan-item-resolve workflow-unification integration-branch-ci-verdict`, session
+https://claude.ai/code/session_01FWoysReVCQMi9VBY5cVgcP, execution mode `auto`.
+
+### Two things were stalling it and only one was recorded
+
+The recorded half was that nothing of Part D existed. The unrecorded half was that #154 was
+`mergeable_state: dirty` against `main`: 157 commits behind, conflicting in
+`plan-item-kickoff/SKILL.md` and `plan-item-resolve/SKILL.md`. The maintenance pass had
+reported it four times since 2026-08-18, the last on 2026-08-24, and each report is also a
+`needs-resolution` label that holds the branch out of the next pass. A conflicted pull
+request is excluded from its own base merge, so the branch drifts further out every day the
+item sits - the item's own audit five days earlier read the state and did not count this.
+
+Worth carrying: **a `needs-resolution` label recorded as "stale, the pass clears it itself"
+is worth re-reading rather than inheriting.** The 2026-08-23 entry left it deliberately,
+correctly, on the reasoning that the next clean-merging pass clears it. What that reasoning
+missed is that `main` kept moving, so the next pass found a *new* conflict rather than a
+clean merge, and the label was continuously re-earned rather than stale.
+
+The resolution is additive on both sides. `main` had restructured both skills around
+execution modes - seven sections to four, the gathering half moved out to a shared document -
+while this branch added a manifest-staleness step to each. Main's numbering is the live
+structure and each branch-added step is demoted to a subsection of the step it generalises:
+the recording step under `plan-item-resolve`'s "Draft the plan", the currency rule under
+`plan-item-kickoff`'s bootstrap. What was dropped is only what main already says in its own
+words - the branch's "check whether the question is already answered" paragraph, which main
+opens the same section by delegating to the gathering document.
+
+### The label that could not stop can stop now
+
+`integration-conflict` shipped documented as never cleared automatically, and that is a
+defect rather than missing polish: the 08-11 round established that `WithholdBlockedBranch`
+cannot clear it, since a break between two cleanly merging branches never makes either pull
+request conflicted. The reproduction test pushed onto the breaking branch was already the
+evidence; nothing read it.
+
+It now carries a marker naming the branch it was broken against.
+`.claude/stack/integration_reproduction.py` is that marker, the document a run of them
+writes, and the lifting; it is also the `pytest` plugin the targeted job loads, registered as
+a plugin instance rather than module state so a run's collection belongs to that run.
+`.github/workflows/integration-checks.yml` runs every marked test on `pull_request` and
+`workflow_dispatch` and hands the document to `integration.py clear-fixed-breaks`.
+
+Three rules the tests pin rather than the prose asserting, each mutation-checked:
+
+- A branch is fixed only when **every** reproduction recorded against it passes - it can
+  break more than one sibling, and clearing on the first passing one lifts the block while a
+  recorded break still reproduces.
+- A reproduction counts as passing only if its body ran and **no phase of it failed**, so one
+  that was skipped or errored in setup leaves the block standing rather than lifting it on
+  evidence that never ran.
+- A branch carrying **no** block is not written to at all, since a reproduction keeps passing
+  on every later run once the break is gone and every later run would otherwise comment again.
+
+Nothing is spelled twice that can be derived: the marker is `DefaultLabel.INTEGRATION_CONFLICT`
+with the hyphen a marker name cannot carry replaced, the plugin's option flag comes from where
+its value lands, and the dataset's reproductions and the assertions about them read the branch
+they name from the one module that defines it.
+
+### The kickoff left four names in YAML with nothing checking them
+
+Found while writing the workflow rather than by review. A workflow cannot import a constant,
+so the marker selection, the plugin name, the report path and the subcommand are the one place
+each is spelled a second time - and the failure mode is silent in the worst direction: a
+selection naming something else runs nothing and still reports success. All four are now
+asserted against their definitions.
+
+Generalisable: **the place a constant has to be retyped is exactly the place a test is worth
+writing**, and it is the opposite of the wire-format guard the 08-20 sixth round deleted. That
+one restated an enum both sides already read; these check the one boundary no shared definition
+crosses.
+
+### The marker is left in the default selection, restated because it looks like an oversight
+
+Adding it to `pytest.ini`'s `addopts` exclusion the way `slow` is would keep the breaking
+branch's own CI green, and that is precisely the wrong outcome: the reproduction is pushed to
+that branch because it is the only artifact making the failure visible from inside the branch
+that causes it, and a test excluded from that branch's own run is invisible exactly there.
+
+### Where the boundary is, and why it is there rather than further on
+
+Not built: the candidate pull request, the Actions and check-run reads, the force-update of
+`integration` on green, and the removal of `integration_test_command`, `--test`, `--no-test`,
+`TestCommandNotConfiguredError` and `_run_tests`.
+
+Two reasons, neither of them running out of room.
+
+**The removal cannot come first.** `build_integration` currently moves `integration` to every
+finished build unconditionally, so taking the local verdict out before the CI verdict is proven
+on a real run leaves the branch never moving at all. That regresses the fast-PR process rather
+than staging the migration - the half-migration the item's own notes warned about, met from the
+direction the notes did not name.
+
+**The candidate's shape depends on an unanswered question.** Rebuild cadence - scheduled,
+per-session, or gated on #154 landing - was recorded by the 2026-08-28 audit as still live and
+the developer's call, and it decides whether the candidate is opened by a workflow holding
+`INTEGRATION_REFRESH_TOKEN` or by a session. Building either before it is answered builds the
+wrong one. It is on the item as a blocker now rather than as a sentence in a roadmap section.
+
+705 tests pass across the four directories CI runs, from 675.
