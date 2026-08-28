@@ -38,6 +38,35 @@ class UnsupportedImageEncoding(DataclassException):
 
 
 @dataclass
+class UndecodableCompressedImage(DataclassException):
+    """
+    Raised when a transport-compressed image's payload cannot be read back into pixels.
+    """
+
+    image_format: str
+    """
+    The ``format`` the message declared its payload in.
+    """
+
+    payload_size: int
+    """
+    Number of payload bytes that failed to decode.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"Could not decode the {self.payload_size} byte payload of an image "
+            f"declared as {self.image_format}."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Check that the topic carries the transport its name promises, since a "
+            "payload compressed one way cannot be read as another."
+        )
+
+
+@dataclass
 class DepthAndColourNotRegistered(DataclassException):
     """
     Raised when a frame's depth and colour images differ in size, which means they were

@@ -66,6 +66,8 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.degree_of_freedom import DegreeOfFreedom
 from semantic_digital_twin.world_description.world_entity import Actuator
 
+from experiments.network_limits import check_large_messages_can_arrive
+
 if TYPE_CHECKING:
     # coraplex.datastructures.dataclasses pulls in rclpy at module level (see
     # _insert_all_shapes), so this is only ever imported for type hints, never at
@@ -721,6 +723,7 @@ def main() -> None:
     """
     logging.basicConfig(level=logging.INFO)
     arguments = _parse_arguments()
+    check_large_messages_can_arrive()
 
     montessori = MontessoriWorld()
 

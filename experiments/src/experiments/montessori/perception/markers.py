@@ -16,9 +16,16 @@ from geometry_msgs.msg import Point
 from rclpy.node import Node
 from rclpy.publisher import Publisher
 from std_msgs.msg import ColorRGBA
-from typing_extensions import List, Tuple
+from typing_extensions import List
 from visualization_msgs.msg import Marker, MarkerArray
 
+from experiments.montessori.perception.colors import (
+    BOARD_COLOR,
+    HOLE_COLOR,
+    LABEL_COLOR,
+    PIECE_COLOR,
+    DetectionColor,
+)
 from experiments.montessori.perception.detections import (
     MontessoriDetection,
     MontessoriScene,
@@ -57,22 +64,6 @@ How long a marker stays on screen if perception stops replacing it, so a stale d
 disappears rather than lingering.
 """
 
-_PIECE_COLOR = (0.1, 0.9, 0.3, 1.0)
-"""
-Colour a loose piece's outline is drawn in, as red, green, blue and alpha.
-"""
-
-_HOLE_COLOR = (1.0, 0.6, 0.0, 1.0)
-"""
-Colour a hole's outline is drawn in, as red, green, blue and alpha.
-"""
-
-_BOARD_COLOR = (0.3, 0.5, 1.0, 1.0)
-"""
-Colour the board's outline is drawn in, as red, green, blue and alpha.
-"""
-
-
 # %% publishing
 
 
@@ -107,16 +98,16 @@ class DetectionMarkerPublisher:
         :param scene: The detections to draw.
         """
         markers = [
-            self._outline(piece, MarkerNamespace.PIECES, index, _PIECE_COLOR)
+            self._outline(piece, MarkerNamespace.PIECES, index, PIECE_COLOR)
             for index, piece in enumerate(scene.shapes)
         ]
         markers += [
-            self._outline(hole, MarkerNamespace.HOLES, index, _HOLE_COLOR)
+            self._outline(hole, MarkerNamespace.HOLES, index, HOLE_COLOR)
             for index, hole in enumerate(scene.holes)
         ]
         if scene.board is not None:
             markers.append(
-                self._outline(scene.board, MarkerNamespace.BOARD, 0, _BOARD_COLOR)
+                self._outline(scene.board, MarkerNamespace.BOARD, 0, BOARD_COLOR)
             )
         markers += [
             self._label(piece, index)
@@ -129,7 +120,7 @@ class DetectionMarkerPublisher:
         detection: MontessoriDetection,
         namespace: MarkerNamespace,
         identifier: int,
-        color: Tuple[float, float, float, float],
+        color: DetectionColor,
     ) -> Marker:
         """
         Draw one detection's measured outline as a closed line strip.
@@ -142,7 +133,8 @@ class DetectionMarkerPublisher:
         """
         marker = self._new_marker(namespace, identifier, Marker.LINE_STRIP)
         marker.scale.x = _OUTLINE_WIDTH
-        marker.color = ColorRGBA(r=color[0], g=color[1], b=color[2], a=color[3])
+        red, green, blue, alpha = color.to_rgba()
+        marker.color = ColorRGBA(r=red, g=green, b=blue, a=alpha)
         height = float(detection.pose.to_position().to_np()[2])
         points = [Point(x=float(x), y=float(y), z=height) for x, y in detection.outline]
         marker.points = points + points[:1]
@@ -161,7 +153,8 @@ class DetectionMarkerPublisher:
             MarkerNamespace.PIECES, 1000 + identifier, Marker.TEXT_VIEW_FACING
         )
         marker.scale.z = 0.02
-        marker.color = ColorRGBA(r=1.0, g=1.0, b=1.0, a=1.0)
+        red, green, blue, alpha = LABEL_COLOR.to_rgba()
+        marker.color = ColorRGBA(r=red, g=green, b=blue, a=alpha)
         position = detection.pose.to_position().to_np()
         marker.pose.position = Point(
             x=float(position[0]), y=float(position[1]), z=float(position[2]) + 0.05

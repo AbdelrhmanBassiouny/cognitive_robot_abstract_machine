@@ -1,9 +1,9 @@
 """
 What one look at the Montessori scene found.
 
-These are the values an :mod:`entity query language <krrood.entity_query_language>` query
-ranges over, so they carry the pose a caller asks for together with the measurements that
-let a query pick one detection out of several.
+These are the values an :mod:`entity query language <krrood.entity_query_language>`
+query ranges over, so they carry the pose a caller asks for together with the
+measurements that let a query pick one detection out of several.
 """
 
 from __future__ import annotations
@@ -40,9 +40,29 @@ class MontessoriDetection(ABC):
 
     outline: np.ndarray
     """
-    The outline itself, as ``(n, 2)`` world-frame ``(x, y)`` points on the surface it was
-    seen on.
+    The outline itself, as ``(n, 2)`` world-frame ``(x, y)`` points on the surface it
+    was seen on.
     """
+
+    @property
+    def surface_height(self) -> float:
+        """
+        Height of the surface this was seen lying on, in metres.
+
+        A detection sits on the plane it was rectified from, so its pose already names
+        that height.
+        """
+        return float(self.pose.to_position().to_np()[2])
+
+    @property
+    def top_height(self) -> float:
+        """
+        Height of this detection's own topmost surface, in metres.
+
+        A detection with no measured thickness lies flat in the surface it was found in,
+        so its top is that surface.
+        """
+        return self.surface_height
 
     @property
     @abstractmethod
@@ -79,14 +99,31 @@ class MontessoriShapeDetection(MontessoriDetection):
     """
     How far its top surface stands above the surface it rests on, in metres.
 
-    Read from the depth image, and zero when it could not be measured: either the sensor
-    returned too few readings across the piece, or the height it did return fell below
-    the resting surface, which a piece standing on that surface cannot do and which
-    means the depth stream and the robot's own model of the table disagree.
+    Read from the depth image where that image resolves the piece, and otherwise the
+    height :attr:`~experiments.montessori.perception.pipeline.LoosePieceDetector.piece_height`
+    says a loose piece stands: a depth sensor that cannot tell a two centimetre piece
+    from the surface under it says nothing about how tall the piece is, and reporting
+    zero would place it in the surface itself.
 
-    :attr:`pose` places the piece's centre half this height above the resting surface,
-    so an unmeasured piece is reported as lying in the surface itself.
+    :attr:`pose` places the piece's centre half this height above the resting surface.
     """
+
+    @property
+    def surface_height(self) -> float:
+        """
+        Height of the surface this piece rests on, in metres.
+
+        Its pose stands half its own height above that surface, unlike a detection that
+        lies flat in the plane it was found in.
+        """
+        return float(self.pose.to_position().to_np()[2]) - self.height / 2
+
+    @property
+    def top_height(self) -> float:
+        """
+        Height of this piece's own top face, in metres.
+        """
+        return self.surface_height + self.height
 
     @property
     def label(self) -> str:
