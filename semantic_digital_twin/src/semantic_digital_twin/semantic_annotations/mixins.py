@@ -322,11 +322,8 @@ class HasRootKinematicStructureEntity(
         return self._world.get_kinematic_structure_entities_of_branch(self.root)
 
 
-TBody = TypeVar("TBody", bound=Body)
-
-
 @dataclass(eq=False)
-class HasRootBody(HasRootKinematicStructureEntity[TBody]):
+class HasRootBody(HasRootKinematicStructureEntity[Body]):
     """
     Abstract base class for all objects which have a unambiguous root reference frame.
 
@@ -399,11 +396,8 @@ class HasRootBody(HasRootKinematicStructureEntity[TBody]):
         )
 
 
-TRegion = TypeVar("TRegion", bound=Region)
-
-
 @dataclass(eq=False)
-class HasRootRegion(HasRootKinematicStructureEntity[TRegion]):
+class HasRootRegion(HasRootKinematicStructureEntity[Region]):
     """
     A mixin class for semantic annotations that have a region.
     """

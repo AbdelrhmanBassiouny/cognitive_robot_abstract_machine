@@ -371,12 +371,13 @@ def _spawn_robot_and_prepare_pick_up(
     context.evaluate_conditions = False
 
     apple = world.get_body_by_name(apple_name)
+    apple_annotation = world.get_semantic_annotations_by_type(Apple)[0]
     plan = sequential(
         [
             ParkArmsAction(Arms.BOTH),
             MoveTorsoAction(TorsoState.HIGH),
             PickUpAction(
-                apple,
+                apple_annotation,
                 Arms.RIGHT,
                 GraspDescription(
                     ApproachDirection.FRONT,
