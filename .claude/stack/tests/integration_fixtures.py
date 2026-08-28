@@ -9,6 +9,7 @@ pytest collects ``test_*.py`` only, so nothing here runs on its own.
 from __future__ import annotations
 
 import subprocess
+from collections.abc import Sequence
 from pathlib import Path
 
 from stack import Branch, BranchStatus, IntegrationStrategy, PullRequest, Stack
@@ -108,7 +109,6 @@ markers a developer edits between is only answerable by reading it, so the marke
 named here rather than spelled at the assertion.
 """
 
-
 # %% the objects a build is described with
 
 
@@ -117,12 +117,14 @@ def create_branch_object(
     number: int,
     parent: str = UPSTREAM_BASE,
     status: BranchStatus = BranchStatus.READY,
+    labels: Sequence[str] = (),
 ) -> Branch:
     """
     :param name: The branch name.
     :param number: The fork pull request number.
     :param parent: The branch it sits on, which is its pull request's base.
     :param status: Its lifecycle position, which decides whether a build may carry it.
+    :param labels: What its pull request carries, one of which may withhold it.
     :return: A stack node, for the selection tests that need no repository.
     """
     return Branch(
@@ -131,7 +133,7 @@ def create_branch_object(
         pull_request_number=number,
         status=status,
         strategy=IntegrationStrategy.MERGE,
-        labels=[],
+        labels=list(labels),
     )
 
 
@@ -188,12 +190,12 @@ def outcome_for(report: IntegrationReport, branch: str) -> PullRequestStackTipOu
 def create_report(
     tips: tuple[PullRequestStackTipOutcome, ...] = (),
     tests_passed: bool | None = None,
-    unreviewed: tuple[PullRequestStackTipOutcome, ...] = (),
+    left_out: tuple[PullRequestStackTipOutcome, ...] = (),
 ) -> IntegrationReport:
     """
     :param tips: What became of each tip.
     :param tests_passed: Whether the suite passed, or ``None`` if it was not run.
-    :param unreviewed: The branches the build left out as unreviewed.
+    :param left_out: The branches the build never tried to merge.
     :return: A report to read a status off.
     """
     return IntegrationReport(
@@ -201,7 +203,23 @@ def create_report(
         base=UPSTREAM_BASE,
         tips=tips,
         tests_passed=tests_passed,
-        unreviewed=unreviewed,
+        left_out=left_out,
+    )
+
+
+def create_blocked_branch(
+    branch: str, blocked_ancestor: str | None = None
+) -> PullRequestStackTipOutcome:
+    """
+    :param branch: The branch a label withheld.
+    :param blocked_ancestor: The blocked branch beneath it, if that is why.
+    :return: One entry of a build's left-out list.
+    """
+    return PullRequestStackTipOutcome(
+        branch=branch,
+        pull_request_number=0,
+        status=integration.TipStatus.BLOCKED,
+        attributed_to=blocked_ancestor,
     )
 
 

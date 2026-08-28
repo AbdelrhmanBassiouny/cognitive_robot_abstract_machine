@@ -172,7 +172,7 @@ def test_a_build_survives_the_document_it_is_written_to():
                 explanation="what git said",
             ),
         ),
-        unreviewed=(create_unreviewed_branch(THIRD_TIP, SECOND_TIP),),
+        left_out=(create_unreviewed_branch(THIRD_TIP, SECOND_TIP),),
         tests_passed=False,
     )
 

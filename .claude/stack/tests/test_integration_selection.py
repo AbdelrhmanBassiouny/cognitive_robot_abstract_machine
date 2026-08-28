@@ -7,24 +7,41 @@ repository involved.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 
-from stack import BranchStatus
+import pytest
 
+from stack import BranchStatus, Stack
+
+import integration
 from integration import (
     IntegrationExitCode,
     TipStatus,
     exit_code_for,
     select_for_build,
+    stack_to_build,
     tips_of,
 )
 
 from integration_fixtures import (
+    create_blocked_branch,
     create_branch_object,
     create_report,
     create_stack_object,
     create_tip,
     create_unreviewed_branch,
+    make_configuration,
 )
+
+BLOCKING_LABEL = make_configuration().needs_resolution_label
+"""
+One of the labels that withholds a branch, read from the configuration that names them.
+"""
+
+A_FORK = object()
+"""
+Stands in for the fork, which the stack reader is handed and this stand-in ignores.
+"""
 
 # %% which branches a build is made of
 
@@ -136,7 +153,7 @@ def test_an_unreviewed_branch_is_named_rather_than_silently_dropped():
     """
     draft = create_branch_object("unreviewed", 7, status=BranchStatus.DRAFT)
 
-    left_out_branches = select_for_build(create_stack_object([draft])).unreviewed
+    left_out_branches = select_for_build(create_stack_object([draft])).left_out
 
     assert [
         (left_out.branch, left_out.pull_request_number)
@@ -153,7 +170,7 @@ def test_a_branch_nobody_reviewed_carries_the_status_that_says_so():
     """
     draft = create_branch_object("unreviewed", 7, status=BranchStatus.DRAFT)
 
-    left_out_branches = select_for_build(create_stack_object([draft])).unreviewed
+    left_out_branches = select_for_build(create_stack_object([draft])).left_out
 
     assert left_out_branches[0].status is TipStatus.UNREVIEWED
     assert not left_out_branches[0].is_integrated
@@ -167,9 +184,7 @@ def test_a_branch_left_out_for_its_ancestor_names_that_ancestor():
     beneath = create_branch_object("beneath", 1, status=BranchStatus.DRAFT)
     above = create_branch_object("above", 2, parent=beneath.name)
 
-    left_out_branches = select_for_build(
-        create_stack_object([beneath, above])
-    ).unreviewed
+    left_out_branches = select_for_build(create_stack_object([beneath, above])).left_out
 
     assert {
         left_out.branch: left_out.attributed_to for left_out in left_out_branches
@@ -187,7 +202,7 @@ def test_leaving_a_branch_out_as_unreviewed_is_not_a_failed_build():
     status = exit_code_for(
         create_report(
             tips=(create_tip("carried", TipStatus.MERGED),),
-            unreviewed=(create_unreviewed_branch("a-draft"),),
+            left_out=(create_unreviewed_branch("a-draft"),),
         )
     )
 
@@ -207,3 +222,157 @@ def test_a_reviewed_branch_whose_only_child_is_a_draft_becomes_the_merge_point()
     tips = tips_of(create_stack_object([reviewed, unreviewed]))
 
     assert [tip.name for tip in tips] == [reviewed.name]
+
+
+# %% the branches a label withholds
+
+
+def test_a_branch_carrying_a_blocking_label_is_left_out():
+    """
+    The label says this branch conflicts with its base or has broken a sibling. Carrying
+    it puts a known conflict or a known break into the branch this workflow exists to
+    build from, which is the one thing it is for.
+    """
+    blocked = create_branch_object("blocked", 1, labels=[BLOCKING_LABEL])
+
+    selection = select_for_build(create_stack_object([blocked]))
+
+    assert selection.integrated == ()
+    assert [absent.branch for absent in selection.left_out] == [blocked.name]
+
+
+def test_a_blocked_branch_says_a_label_is_why_rather_than_want_of_review():
+    """
+    "Unreviewed" sends its author to review a branch they have already reviewed. The
+    status names the rule that actually left it out, so the action it implies is the
+    one that would let it back in.
+    """
+    blocked = create_branch_object("blocked", 1, labels=[BLOCKING_LABEL])
+
+    left_out = select_for_build(create_stack_object([blocked])).left_out
+
+    assert left_out[0].status is TipStatus.BLOCKED
+    assert not left_out[0].is_integrated
+    assert left_out[0].attributed_to is None
+
+
+def test_a_branch_standing_on_a_blocked_one_is_left_out_naming_it():
+    """
+    A tip contains its whole stack, so carrying one that stands on a blocked branch
+    carries the blocked branch's commits under another name - and its author, whose own
+    branch is unlabelled, is told nothing they can act on unless it names the one below.
+    """
+    beneath = create_branch_object("beneath", 1, labels=[BLOCKING_LABEL])
+    above = create_branch_object("above", 2, parent=beneath.name)
+
+    left_out = select_for_build(create_stack_object([beneath, above])).left_out
+
+    assert {absent.branch: absent.attributed_to for absent in left_out} == {
+        beneath.name: None,
+        above.name: beneath.name,
+    }
+    assert {absent.status for absent in left_out} == {TipStatus.BLOCKED}
+
+
+@pytest.mark.parametrize("label", make_configuration().blocking_labels)
+def test_every_configured_blocking_label_holds_a_branch_out(label: str):
+    """
+    One collection decides what a pass withholds and what a build leaves out, so a label
+    added to it is honoured here without anything being written down twice.
+    """
+    blocked = create_branch_object("blocked", 1, labels=[label])
+
+    assert select_for_build(create_stack_object([blocked])).integrated == ()
+
+
+def test_leaving_a_blocked_branch_out_is_not_a_failed_build():
+    """
+    Withholding it is the rule working, exactly as excluding a draft is - so it must not
+    reach the status that means a tip the build tried to carry did not make it.
+    """
+    status = exit_code_for(
+        create_report(
+            tips=(create_tip("carried", TipStatus.MERGED),),
+            left_out=(create_blocked_branch("blocked"),),
+        )
+    )
+
+    assert status is IntegrationExitCode.SUCCESS
+
+
+# %% which stack a build is made from
+
+
+@dataclass
+class RunReadingStacksInTurn:
+    """An :class:`~integration.IntegrationRun` stand-in handing out one stack per read.
+
+    What it is for is the difference between them: a restack writes labels and moves
+    tips, so a second read has to see something the first could not.
+    """
+
+    stacks: list[Stack]
+    """The stacks to hand out, in the order they are read."""
+
+    git: str = "a-git-runner"
+    """Stands in for the runner, which only the restack is handed."""
+
+    reads: int = 0
+    """How many times the stack has been read."""
+
+    def stack(self, fork: object) -> Stack:
+        """
+        :param fork: Ignored - this stand-in reads no pull requests.
+        :return: The next stack, or the last one once they run out.
+        """
+        self.reads += 1
+        return self.stacks[min(self.reads, len(self.stacks)) - 1]
+
+    def refresh_remotes(self) -> None:
+        """Fetches nothing."""
+
+
+def test_a_build_that_restacks_is_made_from_the_stack_the_restack_left_behind(
+    monkeypatch,
+):
+    """
+    A restack writes the label that withholds a branch it could not move, so a stack read
+    before it cannot say which branches this pass has just blocked - and a build made
+    from that snapshot carries them.
+    """
+    before = create_stack_object([create_branch_object("a-branch", 1)])
+    after = create_stack_object(
+        [create_branch_object("a-branch", 1, labels=[BLOCKING_LABEL])]
+    )
+    run = RunReadingStacksInTurn([before, after])
+    monkeypatch.setattr(integration, "restack", lambda *arguments: None)
+
+    assert stack_to_build(run, A_FORK, restack_first=True) is after
+
+
+def test_a_build_that_restacks_restacks_before_reading_again(monkeypatch):
+    """
+    Reading twice buys nothing if the second read happens first.
+    """
+    reads_when_restacked: list[int] = []
+    run = RunReadingStacksInTurn([create_stack_object([])])
+    monkeypatch.setattr(
+        integration,
+        "restack",
+        lambda *arguments: reads_when_restacked.append(run.reads),
+    )
+
+    stack_to_build(run, A_FORK, restack_first=True)
+
+    assert reads_when_restacked == [1] and run.reads == 2
+
+
+def test_a_build_that_does_not_restack_reads_the_stack_once():
+    """
+    Nothing has moved, so a second read would cost an API call to be told the same thing.
+    """
+    only = create_stack_object([])
+    run = RunReadingStacksInTurn([only])
+
+    assert stack_to_build(run, A_FORK, restack_first=False) is only
+    assert run.reads == 1

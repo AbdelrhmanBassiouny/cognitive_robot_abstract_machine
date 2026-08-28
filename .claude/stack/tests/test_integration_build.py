@@ -107,7 +107,7 @@ def test_a_build_leaves_an_unreviewed_branch_out_and_says_so(
     report = build(fork_checkout, [reviewed, unreviewed])
 
     assert [entry.branch for entry in report.tips] == [reviewed.head]
-    assert [entry.branch for entry in report.unreviewed] == [unreviewed.head]
+    assert [entry.branch for entry in report.left_out] == [unreviewed.head]
     fork_checkout.git.switch_to(A_BUILD_BRANCH)
     assert not fork_checkout.file_added_by(unreviewed.head).exists()
 

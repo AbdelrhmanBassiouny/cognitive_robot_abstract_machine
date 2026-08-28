@@ -151,8 +151,8 @@ class ReportKey(StrEnum):
     TESTS_PASSED = "tests_passed"
     """Whether the suite passed, absent when it was not run."""
 
-    UNREVIEWED = "unreviewed"
-    """The branches left out because their author has not reviewed them."""
+    LEFT_OUT = "left_out"
+    """The branches a build never tried to merge, each saying which rule left it out."""
 
     TIPS_TESTED = "tips_tested"
     """The tips a search ran the suite over, in order."""
@@ -262,6 +262,11 @@ class TipStatus(StrEnum):
     """Its author has not reviewed it, or has not reviewed something beneath it, so the
     build never tried to merge it. Left out by the rule working rather than by a build
     going wrong, which is why it is reported apart from the tips a build attempted."""
+
+    BLOCKED = TipStatusSpecification("blocked", integrated=False)
+    """It carries a label that withholds it, or stands on something that does, so the
+    build never tried to merge it. Carrying it would put a known conflict or a known
+    break into the branch this workflow exists to build from."""
 
 
 class ResolutionAuthor(StrEnum):
@@ -414,13 +419,14 @@ class PullRequestStackTipOutcome:
 
 @dataclass(frozen=True)
 class BuildSelection:
-    """What a build may integrate, and what it leaves behind as unreviewed."""
+    """What a build may integrate, and what it never tries to."""
 
     integrated: tuple[Branch, ...]
-    """Every branch reviewed all the way down to the base, parents before children."""
+    """Every branch reviewed and unblocked all the way down to the base, parents before
+    children."""
 
-    unreviewed: tuple[PullRequestStackTipOutcome, ...]
-    """Every branch left out, each naming the draft that keeps it out.
+    left_out: tuple[PullRequestStackTipOutcome, ...]
+    """Every branch left out, each naming the branch that keeps it out.
 
     Named rather than merely absent: a build that integrates nine branches out of
     nineteen and says so only by omission reads as having covered everything.
@@ -442,33 +448,59 @@ def select_for_build(stack: Stack) -> BuildSelection:
     in_the_stack = {branch.name for branch in stack.branches}
     integrated: list[Branch] = []
     integrated_names: set[str] = set()
-    unreviewed: list[PullRequestStackTipOutcome] = []
-    unreviewed_ancestors: dict[str, str] = {}
+    left_out: list[PullRequestStackTipOutcome] = []
+    reasons: dict[str, tuple[TipStatus, str]] = {}
     for branch in order(stack):
         stands_on_integrated_work = (
             branch.parent in integrated_names
             or branch.parent not in in_the_stack
             or stack.has_landed_upstream(branch.parent)
         )
-        if branch.status.is_out_of_draft and stands_on_integrated_work:
+        blocked = stack.is_blocked(branch)
+        if branch.status.is_out_of_draft and not blocked and stands_on_integrated_work:
             integrated.append(branch)
             integrated_names.add(branch.name)
             continue
-        ancestor = (
-            None
-            if not branch.status.is_out_of_draft
-            else unreviewed_ancestors.get(branch.parent, branch.parent)
-        )
-        unreviewed_ancestors[branch.name] = ancestor or branch.name
-        unreviewed.append(
+        if blocked:
+            reason = (TipStatus.BLOCKED, branch.name)
+        elif not branch.status.is_out_of_draft:
+            reason = (TipStatus.UNREVIEWED, branch.name)
+        else:
+            reason = reasons.get(branch.parent, (TipStatus.UNREVIEWED, branch.parent))
+        reasons[branch.name] = reason
+        status, held_out_by = reason
+        left_out.append(
             PullRequestStackTipOutcome(
                 branch=branch.name,
                 pull_request_number=branch.pull_request_number,
-                status=TipStatus.UNREVIEWED,
-                attributed_to=ancestor,
+                status=status,
+                attributed_to=None if held_out_by == branch.name else held_out_by,
             )
         )
-    return BuildSelection(integrated=tuple(integrated), unreviewed=tuple(unreviewed))
+    return BuildSelection(integrated=tuple(integrated), left_out=tuple(left_out))
+
+
+def stack_to_build(
+    run: IntegrationRun, fork: GitHubRepository, restack_first: bool
+) -> Stack:
+    """The stack a build is made from, read after anything that could change it.
+
+    A restack moves published tips and writes the label that withholds a branch it could
+    not move, so a stack read before it describes a fork that no longer exists. Reading it
+    again is what lets :func:`select_for_build` leave out the branch this very pass has
+    just blocked.
+
+    :param run: What this run has resolved.
+    :param fork: The fork to read the open pull requests from.
+    :param restack_first: Whether to bring stale tips forward before reading.
+    :return: The stack to build from.
+    """
+    stack = run.stack(fork)
+    if not restack_first:
+        return stack
+    restack(stack, run.git, fork)
+    run.refresh_remotes()
+    return run.stack(fork)
 
 
 def tips_of(stack: Stack) -> list[Branch]:
@@ -671,7 +703,7 @@ def build_integration(
         base=stack.configuration.upstream_base,
         tips=tuple(outcomes),
         tests_passed=tests_passed,
-        unreviewed=selection.unreviewed,
+        left_out=selection.left_out,
     )
 
 
@@ -1063,12 +1095,12 @@ class IntegrationReport:
     """Whether the configured suite passed, or ``None`` when it was not run - which a
     caller has to be able to tell from a suite that ran and passed."""
 
-    unreviewed: tuple[PullRequestStackTipOutcome, ...] = ()
-    """The branches left out because their author has not reviewed them yet.
+    left_out: tuple[PullRequestStackTipOutcome, ...] = ()
+    """The branches the build never tried to merge - unreviewed, or blocked by a label.
 
     Kept apart from :attr:`tips` rather than filed among them: a tip left out is a build
-    that did not do what it set out to, and a draft left out is the build doing exactly
-    what it was asked to."""
+    that did not do what it set out to, and one of these is the build doing exactly what
+    it was asked to."""
 
     def as_json(self) -> str:
         """:return: The build as one machine-readable document, led by its status."""
@@ -1101,9 +1133,9 @@ class IntegrationReport:
                 for outcome in document[ReportKey.TIPS]
             ),
             tests_passed=document.get(ReportKey.TESTS_PASSED),
-            unreviewed=tuple(
+            left_out=tuple(
                 PullRequestStackTipOutcome.from_json(outcome)
-                for outcome in document[ReportKey.UNREVIEWED]
+                for outcome in document[ReportKey.LEFT_OUT]
             ),
         )
 
@@ -1210,13 +1242,9 @@ def print_build(report: IntegrationReport) -> None:
         )
         collided = f" (with {outcome.attributed_to})" if outcome.attributed_to else ""
         print(f"{outcome.branch}\t{outcome.status}{collided}\t{detail}")
-    for left_out in report.unreviewed:
-        beneath = (
-            f"under {left_out.attributed_to}"
-            if left_out.attributed_to
-            else "still a draft"
-        )
-        print(f"{left_out.branch}\t{left_out.status}\t{beneath}")
+    for absent in report.left_out:
+        beneath = f"under {absent.attributed_to}" if absent.attributed_to else "itself"
+        print(f"{absent.branch}\t{absent.status}\t{beneath}")
     if report.tests_passed is not None:
         print(
             f"{report.build_branch}\ttests\t{'passed' if report.tests_passed else 'failed'}"
@@ -1415,10 +1443,7 @@ class BuildCommand(IntegrationCommand):
         test_command = self._test_command(run.configuration, arguments.run_tests)
         fork = run.fork()
         run.refresh_remotes()
-        stack = run.stack(fork)
-        if arguments.restack:
-            restack(stack, run.git, fork)
-            run.refresh_remotes()
+        stack = stack_to_build(run, fork, restack_first=arguments.restack)
         report = build_integration(
             stack=stack,
             git=run.git,

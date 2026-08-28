@@ -162,10 +162,18 @@ of the two should change is a judgement, and `/integration-conflict-triage` is w
 author has read it back, so leaving draft is that review, and a build is made of work that has
 had it. Because a tip contains its whole stack, this is read down the entire chain: a reviewed
 branch standing on a draft is left out with it, and the branch merged for a stack is the last one
-reached before its first draft. Everything left out is named in the report - as `unreviewed`,
-distinct from a tip the build tried to integrate and could not - so a build that integrated nine
-branches out of nineteen says which nine and why, rather than saying so only by omission. Leaving a draft
-out is the rule working, so it is not a failing build and does not change the exit status.
+reached before its first draft.
+
+**A branch a label withholds is left out too**, and so is anything standing on it - a branch that
+conflicts with its base or has broken a sibling is exactly what this branch must not be built from.
+The labels are the ones a maintenance pass writes, so run `build --restack` and the pass's own
+verdict decides what the build carries; a build reads the stack again afterwards, since the restack
+is what writes those labels.
+
+Everything left out is named in the report - as `blocked` or `unreviewed`, distinct from a tip the
+build tried to integrate and could not - so a build that integrated nine branches out of nineteen
+says which nine and why, rather than saying so only by omission. Leaving either out is the rule
+working, so it is not a failing build and does not change the exit status.
 
 Two branches can also merge perfectly and still not work together - one removing what another's
 test imports, one adding a dependency another's fixture does not provide. No per-branch check can

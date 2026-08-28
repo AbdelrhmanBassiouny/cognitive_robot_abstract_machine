@@ -642,6 +642,18 @@ class Stack:
         """
         return self.configuration.needs_resolution_label in branch.labels
 
+    def is_blocked(self, branch: Branch) -> bool:
+        """Whether any label withholds this branch from the workflow.
+
+        Read from :attr:`Configuration.blocking_labels` rather than a check per label, so
+        a branch a pass withholds and a branch a build leaves out cannot be decided by
+        different rules.
+
+        :param branch: The branch to check.
+        :return: Whether it is blocked.
+        """
+        return bool(set(self.configuration.blocking_labels).intersection(branch.labels))
+
     def has_landed_upstream(self, branch_name: str) -> bool:
         """Whether a branch's commits are already in the upstream base.
 
