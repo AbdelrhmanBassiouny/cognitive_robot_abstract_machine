@@ -27,16 +27,25 @@ and pass it in as :attr:`TracyMontessoriWorld.table_top_z`.
 
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass, field
-from typing_extensions import List
 
-import numpy as np
+from typing_extensions import List
 
 from experiments.montessori.hole_geometry import (
     HOLE_MARKER_THICKNESS,
     HoleFootprint,
     _extrude_polygon,
+)
+from experiments.montessori.pieces import (
+    CUBE_EDGE,
+    CYLINDER_DIAMETER,
+    CYLINDER_HEIGHT,
+    RECTANGULAR_PRISM_HEIGHT,
+    RECTANGULAR_PRISM_LENGTH,
+    RECTANGULAR_PRISM_WIDTH,
+    TRIANGULAR_PRISM_HEIGHT,
+    TRIANGULAR_PRISM_SIDE,
+    equilateral_triangle_boundary,
 )
 from experiments.montessori.semantics import (
     MONTESSORI_SHAPE_CLASSES,
@@ -103,8 +112,8 @@ bounding box. ``0.85`` was chosen inside that contact-free range, roughly halfwa
 :const:`SHAPE_ROW_X` rather than at the tested floor, to keep a visible margin for a
 shape that overshoots slightly during a place; a full headless sorting run at this
 position completes with no collision or unreachable-pose errors. Z is filled in by
-:meth:`TracyMontessoriWorld._board_position` once :attr:`TracyMontessoriWorld.table_top_z`
-is known.
+:meth:`TracyMontessoriWorld._board_position` once
+:attr:`TracyMontessoriWorld.table_top_z` is known.
 """
 
 SHAPE_ROW_X = 0.55
@@ -126,6 +135,7 @@ SHAPE_ROW_START_Y = 0.1
 """
 Y-coordinate of the first loose shape in the row, on the side Tracy's left arm's own
 parked configuration rests towards, since :mod:`~experiments.tracy_experiments.
+
 montessori_demo_mujoco` picks with :attr:`~coraplex.datastructures.enums.Arms.LEFT`.
 Positive, mirroring an earlier negative value used when the right arm did the picking.
 """
@@ -136,59 +146,9 @@ Distance, along y, between adjacent loose shapes in the row; positive, continuin
 the same left-arm-reachable side :const:`SHAPE_ROW_START_Y` starts at.
 
 Widened from an earlier ``-0.09``: with shapes that close together, an empty-gripper
-reach for one shape's own hover pose could sweep the arm into its neighbour. Exactly
-how far apart they sit does not matter, only that neighbouring shapes stay clear of each
+reach for one shape's own hover pose could sweep the arm into its neighbour. Exactly how
+far apart they sit does not matter, only that neighbouring shapes stay clear of each
 other's own approach path.
-"""
-
-CUBE_EDGE = 0.03
-"""
-Edge length, in metres, of this scene's physical cube piece, measured directly rather
-than derived from the board's own square hole footprint.
-"""
-
-CYLINDER_DIAMETER = 0.028
-"""
-Diameter, in metres, of this scene's one physical cylindrical piece (see
-:const:`SKIPPED_HOLE_KEYS`), measured directly rather than derived from the board's own
-circular hole footprint.
-"""
-
-CYLINDER_HEIGHT = 0.03
-"""
-Height, in metres, of this scene's physical cylindrical piece (see
-:const:`CYLINDER_DIAMETER`).
-"""
-
-RECTANGULAR_PRISM_WIDTH = 0.02
-"""
-Width, in metres, of this scene's physical rectangular-prism piece, measured directly
-rather than derived from the board's own rectangular hole footprint.
-"""
-
-RECTANGULAR_PRISM_LENGTH = 0.04
-"""
-Length, in metres, of this scene's physical rectangular-prism piece (see
-:const:`RECTANGULAR_PRISM_WIDTH`).
-"""
-
-RECTANGULAR_PRISM_HEIGHT = 0.03
-"""
-Height, in metres, of this scene's physical rectangular-prism piece (see
-:const:`RECTANGULAR_PRISM_WIDTH`).
-"""
-
-TRIANGULAR_PRISM_SIDE = 0.037
-"""
-Side length, in metres, of this scene's physical triangular-prism piece's equilateral
-cross-section, measured directly rather than derived from the board's own (slightly
-irregular) triangular hole's true outline.
-"""
-
-TRIANGULAR_PRISM_HEIGHT = 0.03
-"""
-Height, in metres, of this scene's physical triangular-prism piece (see
-:const:`TRIANGULAR_PRISM_SIDE`).
 """
 
 SKIPPED_HOLE_KEYS = frozenset({"circular_hole_2"})
@@ -213,7 +173,9 @@ _DRAWER_XY_TRACY: List[tuple[float, float]] = [
 X/Y of :const:`~experiments.montessori.world._DRAWER_POSITIONS` (hand-placed relative to
 :const:`~experiments.montessori.world.BOARD_POSITION`), carried over to
 :const:`BOARD_POSITION_TRACY` by the same x/y offset -- mirrors
-:mod:`~experiments.montessori.world2`'s own ``_DRAWER_POSITIONS_2``. Z is filled in by
+:mod:`~experiments.montessori.world2`'s own ``_DRAWER_POSITIONS_2``.
+
+Z is filled in by
 :meth:`TracyMontessoriWorld._build_shape_sorting_board` once :attr:`TracyMontessoriWorld.table_top_z`
 is known.
 """
@@ -260,30 +222,11 @@ def _build_hole_specs_tracy(
     return hole_specs
 
 
-def _equilateral_triangle_boundary(side: float) -> np.ndarray:
-    """
-    Vertices of an equilateral triangle with the given side length, centered on its own
-    centroid, apex pointing along local +y.
-
-    :param side: Length of each of the triangle's three sides.
-    """
-    circumradius = side / math.sqrt(3)
-    inradius = side / (2 * math.sqrt(3))
-    return np.array(
-        [
-            [0.0, circumradius],
-            [-side / 2, -inradius],
-            [side / 2, -inradius],
-        ]
-    )
-
-
 def _measured_shape_body(name: PrefixedName, category: MontessoriShapeCategory) -> Body:
     """
     Build the :class:`Body` of a loose Montessori shape from this scene's own measured
-    physical dimensions, rather than
-    :func:`~experiments.montessori.world._shape_body`'s scaled-down copy of the board's
-    own hole footprint.
+    physical dimensions, rather than :func:`~experiments.montessori.world._shape_body`'s
+    scaled-down copy of the board's own hole footprint.
 
     :param category: Which measured shape to build; must be one of
         :attr:`~MontessoriShapeCategory.CUBE`, :attr:`~MontessoriShapeCategory.CYLINDER`,
@@ -308,7 +251,7 @@ def _measured_shape_body(name: PrefixedName, category: MontessoriShapeCategory) 
                 color=color,
             )
         case MontessoriShapeCategory.TRIANGULAR_PRISM:
-            boundary = _equilateral_triangle_boundary(TRIANGULAR_PRISM_SIDE)
+            boundary = equilateral_triangle_boundary(TRIANGULAR_PRISM_SIDE)
             solid = _extrude_polygon(boundary, TRIANGULAR_PRISM_HEIGHT)
             shape = Mesh.from_trimesh(mesh=solid)
             shape.color = color

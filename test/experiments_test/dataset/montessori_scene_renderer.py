@@ -19,6 +19,7 @@ from typing_extensions import List, Sequence, Tuple
 
 from experiments.montessori.hole_geometry import HoleFootprint, detect_hole_footprints
 from experiments.montessori.perception.camera import CameraIntrinsics, RgbdFrame
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY, KnownPiece
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
@@ -41,10 +42,27 @@ HOLE_COLOR = (17, 149, 79)
 Hue, saturation and value seen through a hole in the lid, measured off the real board.
 """
 
-PIECE_COLOR = (22, 115, 220)
+PIECE_SATURATION = 115
 """
-Hue, saturation and value of a loose piece, measured off the real ones.
+Saturation of a loose piece, measured off the real ones.
 """
+
+PIECE_BRIGHTNESS = 220
+"""
+Value of a loose piece, measured off the real ones.
+"""
+
+
+def piece_color(piece: KnownPiece) -> Tuple[int, int, int]:
+    """
+    Hue, saturation and value one loose piece is drawn in.
+
+    Each piece carries its own measured hue, since that is what tells the two colours in
+    this set apart.
+
+    :param piece: The piece to colour.
+    """
+    return (piece.hue, PIECE_SATURATION, PIECE_BRIGHTNESS)
 
 
 # %% what is in the scene
@@ -71,10 +89,18 @@ class PlacedPiece:
     Where its centre stands along the world frame's y-axis, in metres.
     """
 
-    height: float = 0.03
+    yaw: float = 0.0
     """
-    How tall it stands, in metres.
+    How far it is turned about the world frame's z-axis, in radians.
     """
+
+    @property
+    def known_piece(self) -> KnownPiece:
+        """
+        The piece of this kind the physical set contains, which fixes its outline, its
+        height and its colour.
+        """
+        return KNOWN_PIECE_BY_CATEGORY[self.category]
 
 
 @dataclass
@@ -239,25 +265,23 @@ class MontessoriSceneRenderer:
         :param canvas: The hue-saturation-value image to draw into.
         :param piece: The piece to draw.
         """
+        known = piece.known_piece
         boundary = self._piece_boundary(piece)
         base = self._project(boundary, self.table_height)
-        top = self._project(boundary, self.table_height + piece.height)
+        top = self._project(boundary, self.table_height + known.height)
         silhouette = cv2.convexHull(np.vstack([base, top]).astype(np.int32))
-        cv2.fillPoly(canvas, [silhouette], PIECE_COLOR)
+        cv2.fillPoly(canvas, [silhouette], piece_color(known))
 
-    def _piece_boundary(self, piece: PlacedPiece) -> List[Tuple[float, float]]:
+    @staticmethod
+    def _piece_boundary(piece: PlacedPiece) -> List[Tuple[float, float]]:
         """
-        A piece's own outline in the world frame, taken from the board hole it is made
-        to fit through.
+        A piece's own outline in the world frame, as the physical piece was measured and
+        turned to where it was placed.
 
         :param piece: The piece to outline.
         """
-        footprint = next(
-            candidate
-            for candidate in self.hole_footprints()
-            if candidate.category is piece.category
-        )
-        return [(piece.x + x, piece.y + y) for x, y in footprint.boundary]
+        turned = piece.known_piece.turned_outline(piece.yaw)
+        return [(piece.x + x, piece.y + y) for x, y in turned]
 
     def _fill(
         self,
