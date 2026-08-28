@@ -29,13 +29,12 @@ def execute_single(
     context: Optional[Context] = None,
 ) -> PlanNode:
     """
-    Executes the given action like on its own
+    Executes the given action like on its own.
 
     :param action_like: The action like to execute
     :param context: Plan context to pass to the action
     :return: The root node of the plan in which the action is build
     """
-
     node = make_node(action_like)
     plan = Plan(context=context)
     plan.add_node(node)
@@ -47,8 +46,9 @@ def sequential(
     context: Optional[Context] = None,
 ) -> SequentialNode:
     """
-    Executes the given actions or motions in order, one after the other. If any of them fails, the plan fails.
+    Executes the given actions or motions in order, one after the other.
 
+    If any of them fails, the plan fails.
     :param children: The actions to be executed
     :param context: The plan context to pass to the actions
     :return: The root node of the plan in which the actions are built
@@ -63,7 +63,8 @@ def parallel(
     context: Optional[Context] = None,
 ) -> ParallelNode:
     """
-    Executes the given actions in parallel as far as possible, this uses the Giskard Template for parallel.
+    Executes the given actions in parallel as far as possible, this uses the Giskard
+    Template for parallel.
 
     .. warning:: If there are model changes during the execution unexpected behaviour can occur, so avoid using manipulation actions such as Pick and Place in this
 
@@ -81,8 +82,8 @@ def try_in_order(
     context: Optional[Context] = None,
 ) -> TryInOrderNode:
     """
-    Executes the given actions or motions one after another, if one fails the next one is executed until one succeeds or
-    all fail.
+    Executes the given actions or motions one after another, if one fails the next one
+    is executed until one succeeds or all fail.
 
     :param children: The actions or motions to be executed
     :param context: The plan context that should be passed to the build plan
@@ -98,8 +99,10 @@ def try_all(
     context: Optional[Context] = None,
 ) -> TryAllNode:
     """
-    Tries all given actions or motions, similar to try_in_order but executes them in parallel. Succeeded if at least one
-    child succeeds.
+    Tries all given actions or motions, similar to try_in_order but executes them in
+    parallel.
+
+    Succeeded if at least one child succeeds.
 
     :param children: Actions or motions to be executed
     :param context: the plan context that should be passed to the children
@@ -118,7 +121,8 @@ def pause_while(
     """
     Hold `children` for as long as `monitor` observes True.
 
-    :param children: Actions or motions that should be under the monitor, meaning they are paused when the monitor is true
+    :param children: Actions or motions that should be under the monitor, meaning they
+        are paused when the monitor is true
     :param monitor: The motion state chart node observed while the children run.
     :param context: The context of the plan to be passed to the children
     """
@@ -137,7 +141,8 @@ def pause_until(
     """
     Hold `children` until `monitor` observes True.
 
-    :param children: Actions or motions that should be paused until the monitor turns true
+    :param children: Actions or motions that should be paused until the monitor turns
+        true
     :param monitor: The motion state chart node observed while the children run.
     :param context: The plan context to be passed to the children
     """
@@ -154,10 +159,11 @@ def cancel_when(
     context: Optional[Context] = None,
 ) -> CancelMonitor:
     """
-    Stop `children` once `monitor` observes True; the plan continues afterwards.
+    Stop `children` once `monitor` observes True and cancel the rest of the plan.
 
     :param monitor: The motion state chart node observed while the children run.
-    :param children: Actions or motions that should be cancelled when the monitor turns true
+    :param children: Actions or motions that should be cancelled when the monitor turns
+        true
     :param context: The plan context to be passed to the children
     """
     from coraplex.language import CancelMonitor
@@ -176,7 +182,8 @@ def repeat(
     """
     Attempt `children` until they succeed, at most `maximum_repetitions` times.
 
-    :param children: Actions or motions that should be repeated according to the repeat arguments
+    :param children: Actions or motions that should be repeated according to the repeat
+        arguments
     :param maximum_repetitions: How many attempts before the repeating is given up on.
     :param repeat_arguments: Passed to :class:`~coraplex.language.RepeatNode`, for
         instance a `repeat_template` or a `failure_monitor`.

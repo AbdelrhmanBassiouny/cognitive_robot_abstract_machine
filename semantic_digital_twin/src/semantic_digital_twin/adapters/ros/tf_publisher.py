@@ -239,9 +239,6 @@ class TFPublisher(StateChangeCallback):
     def __post_init__(self):
         super().__post_init__()
 
-        duplicate_names = self._world.get_duplicate_kinematic_structure_entity_names()
-        if duplicate_names:
-            raise DuplicateEntityNameError(duplicate_names)
 
         self.tf_pub = self.node.create_publisher(TFMessage, self.tf_topic, 10)
         sleep(0.2)

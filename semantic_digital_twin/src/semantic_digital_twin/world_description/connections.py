@@ -823,6 +823,74 @@ class WheeledDrive(ActiveConnection, HasUpdateState, ABC):
     Superclass for connections that describe a drive, e.g., an omnidirectional drive or
     a differential drive.
     """
+    x: DegreeOfFreedom = field(kw_only=True)
+    """
+    Passive DoFs describing the measured odometry in x with respect to parent frame.
+    """
+
+    y: DegreeOfFreedom = field(kw_only=True)
+    """
+    Passive DoFs describing the measured odometry in y with respect to parent frame.
+    """
+
+    roll: DegreeOfFreedom = field(kw_only=True)
+    """
+    Passive DoF describing the measured odometry in roll using the IMU sensor.
+    """
+
+    pitch: DegreeOfFreedom = field(kw_only=True)
+    """
+    Passive DoF describing the measured odometry in pitch using the IMU sensor.
+    """
+
+    yaw: DegreeOfFreedom = field(kw_only=True)
+    """
+    Active DoF describing rotation around the robot's z-axis.
+    """
+
+
+    @property
+    def origin(self) -> HomogeneousTransformationMatrix:
+        return super().origin
+
+    @origin.setter
+    def origin(
+        self, transformation: Union[NpMatrix4x4, HomogeneousTransformationMatrix]
+    ) -> None:
+        """
+        Overwrites the origin of the connection.
+
+        The origin is ``parent_T_connection_expression @ _kinematics @
+        connection_T_child_expression``, of which only ``_kinematics`` is degree of
+        freedom backed, so ``transformation`` is un-composed with the other two to find
+        the drive's state that produces it.
+
+        .. warning:: Ignores z position, pitch, and roll values, because a drive cannot
+            reach them.
+
+        The degree-of-freedom writes and the notification they trigger are held
+        together under ``World._world_lock``. They form one logical pose
+        change, and an observer that reads or writes the state between them --
+        such as a running physics simulator syncing its own values back into
+        the world -- would otherwise see, and be able to overwrite, a pose that
+        is only half applied.
+
+        :param transformation: The desired parent-to-child origin.
+        """
+        if isinstance(transformation, np.ndarray):
+            transformation = HomogeneousTransformationMatrix(data=transformation)
+        local_kinematics = (
+            self.parent_T_connection_expression.inverse()
+            @ transformation
+            @ self.connection_T_child_expression.inverse()
+        )
+        position = local_kinematics.to_position()
+        roll, pitch, yaw = local_kinematics.to_rotation_matrix().to_rpy()
+        with self._world._world_lock:
+            self._world.state[self.x.id].position = position.x
+            self._world.state[self.y.id].position = position.y
+            self._world.state[self.yaw.id].position = yaw
+            self._world.notify_state_change()
 
 
 @dataclass(eq=False)
@@ -843,16 +911,19 @@ class OmniDrive(WheeledDrive):
         They are combined into one active dof.
     """
 
-    # passive dofs
-    x: DegreeOfFreedom = field(kw_only=True)
-    y: DegreeOfFreedom = field(kw_only=True)
-    roll: DegreeOfFreedom = field(kw_only=True)
-    pitch: DegreeOfFreedom = field(kw_only=True)
 
-    # active dofs
-    yaw: DegreeOfFreedom = field(kw_only=True)
     x_velocity: DegreeOfFreedom = field(kw_only=True)
+    """
+    Active DoF describing the measured and commanded velocity in x.
+
+    Represented with respect to the child frame.
+    """
     y_velocity: DegreeOfFreedom = field(kw_only=True)
+    """
+    Active DoF describing the measured and commanded velocity in y.
+
+    Represented with respect to the child frame.
+    """
 
     def to_json(self) -> Dict[str, Any]:
         result = super().to_json()
@@ -1057,49 +1128,6 @@ class OmniDrive(WheeledDrive):
         y_velocity = np.sin(delta) * x_vel + np.cos(delta) * y_vel
         state[self.y.id].position += y_velocity * dt
 
-    @property
-    def origin(self) -> HomogeneousTransformationMatrix:
-        return super().origin
-
-    @origin.setter
-    def origin(
-        self, transformation: Union[NpMatrix4x4, HomogeneousTransformationMatrix]
-    ) -> None:
-        """
-        Overwrites the origin of the connection.
-
-        The origin is ``parent_T_connection_expression @ _kinematics @
-        connection_T_child_expression``, of which only ``_kinematics`` is degree of
-        freedom backed, so ``transformation`` is un-composed with the other two to find
-        the drive's state that produces it.
-
-        .. warning:: Ignores z position, pitch, and roll values, because a drive cannot
-            reach them.
-
-        The degree-of-freedom writes and the notification they trigger are held
-        together under ``World._world_lock``. They form one logical pose
-        change, and an observer that reads or writes the state between them --
-        such as a running physics simulator syncing its own values back into
-        the world -- would otherwise see, and be able to overwrite, a pose that
-        is only half applied.
-
-        :param transformation: The desired parent-to-child origin.
-        """
-        if isinstance(transformation, np.ndarray):
-            transformation = HomogeneousTransformationMatrix(data=transformation)
-        local_kinematics = (
-            self.parent_T_connection_expression.inverse()
-            @ transformation
-            @ self.connection_T_child_expression.inverse()
-        )
-        position = local_kinematics.to_position()
-        roll, pitch, yaw = local_kinematics.to_rotation_matrix().to_rpy()
-        with self._world._world_lock:
-            self._world.state[self.x.id].position = position.x
-            self._world.state[self.y.id].position = position.y
-            self._world.state[self.yaw.id].position = yaw
-            self._world.notify_state_change()
-
     def get_free_variable_names(self) -> list[UUID]:
         return [self.x.id, self.y.id, self.yaw.id]
 
@@ -1144,34 +1172,9 @@ class DifferentialDrive(WheeledDrive):
     x-y plane.
     """
 
-    x: DegreeOfFreedom = field(kw_only=True)
-    """
-    Passive DoFs describing the measured odometry in x with respect to parent frame.
-    """
-
-    y: DegreeOfFreedom = field(kw_only=True)
-    """
-    Passive DoFs describing the measured odometry in y with respect to parent frame.
-    """
-
-    roll: DegreeOfFreedom = field(kw_only=True)
-    """
-    Passive DoF describing the measured odometry in roll using the IMU sensor.
-    """
-
-    pitch: DegreeOfFreedom = field(kw_only=True)
-    """
-    Passive DoF describing the measured odometry in pitch using the IMU sensor.
-    """
-
-    yaw: DegreeOfFreedom = field(kw_only=True)
-    """
-    Active DoF describing rotation around the robot's z-axis.
-    """
-
     x_velocity: DegreeOfFreedom = field(kw_only=True)
     """
-    Actibe DoF describing the measured and commanded velocity in x.
+    Active DoF describing the measured and commanded velocity in x.
 
     Represented with respect to the child frame.
     """
@@ -1357,49 +1360,6 @@ class DifferentialDrive(WheeledDrive):
         state[self.x.id].position += x_velocity * dt
         y_velocity = np.sin(delta) * x_vel
         state[self.y.id].position += y_velocity * dt
-
-    @property
-    def origin(self) -> HomogeneousTransformationMatrix:
-        return super().origin
-
-    @origin.setter
-    def origin(
-        self, transformation: Union[NpMatrix4x4, HomogeneousTransformationMatrix]
-    ) -> None:
-        """
-        Overwrites the origin of the connection.
-
-        The origin is ``parent_T_connection_expression @ _kinematics @
-        connection_T_child_expression``, of which only ``_kinematics`` is degree of
-        freedom backed, so ``transformation`` is un-composed with the other two to find
-        the drive's state that produces it.
-
-        .. warning:: Ignores z position, pitch, and roll values, because a drive cannot
-            reach them.
-
-        The degree-of-freedom writes and the notification they trigger are held
-        together under ``World._world_lock``. They form one logical pose
-        change, and an observer that reads or writes the state between them --
-        such as a running physics simulator syncing its own values back into
-        the world -- would otherwise see, and be able to overwrite, a pose that
-        is only half applied.
-
-        :param transformation: The desired parent-to-child origin.
-        """
-        if isinstance(transformation, np.ndarray):
-            transformation = HomogeneousTransformationMatrix(data=transformation)
-        local_kinematics = (
-            self.parent_T_connection_expression.inverse()
-            @ transformation
-            @ self.connection_T_child_expression.inverse()
-        )
-        position = local_kinematics.to_position()
-        roll, pitch, yaw = local_kinematics.to_rotation_matrix().to_rpy()
-        with self._world._world_lock:
-            self._world.state[self.x.id].position = position.x
-            self._world.state[self.y.id].position = position.y
-            self._world.state[self.yaw.id].position = yaw
-            self._world.notify_state_change()
 
     def get_free_variable_names(self) -> list[UUID]:
         return [self.x.id, self.y.id, self.yaw.id]

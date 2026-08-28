@@ -7,17 +7,7 @@ from typing import List
 from typing_extensions import Optional
 
 import krrood.symbolic_math.symbolic_math as sm
-from krrood.symbolic_math.symbolic_math import (
-    sum,
-    trinary_logic_and,
-    trinary_logic_not,
-    trinary_logic_or,
-)
 from giskardpy.motion_statechart.context import MotionStatechartContext
-from giskardpy.motion_statechart.exceptions import (
-    ConflictingFailureMonitorError,
-    MissingFailureMonitorError,
-)
 from giskardpy.motion_statechart.graph_node import (
     Goal,
     MotionStatechartNode,
@@ -25,6 +15,12 @@ from giskardpy.motion_statechart.graph_node import (
     TerminalNode,
 )
 from giskardpy.motion_statechart.monitors.progress_monitors import ProgressStalled
+from krrood.symbolic_math.symbolic_math import (
+    sum,
+    trinary_logic_and,
+    trinary_logic_not,
+    trinary_logic_or,
+)
 
 
 @dataclass(repr=False, eq=False)
@@ -117,24 +113,13 @@ class RepeatUntil(Goal):
     Stops the retrying once it observes True, which makes this goal observe False.
     """
 
-    retry_trigger_monitor: Optional[MotionStatechartNode] = field(default=None, kw_only=True)
+    retry_trigger_monitor: MotionStatechartNode = field(kw_only=True)
     """
     Decides that an attempt failed and the task should run again.
 
     Subclasses that derive one from the task leave this unset and override
     :meth:`create_failure_monitor`; it holds the node in use once this goal was expanded.
     """
-
-    def create_failure_monitor(
-        self, task: MotionStatechartNode
-    ) -> MotionStatechartNode:
-        """
-        :param task: The node whose one run is an attempt.
-        :return: A node whose True observation means the attempt failed.
-        """
-        if self.retry_trigger_monitor is None:
-            raise MissingFailureMonitorError(node=self)
-        return self.retry_trigger_monitor
 
     def expand(self, context: MotionStatechartContext) -> None:
         """
@@ -151,15 +136,11 @@ class RepeatUntil(Goal):
 
         # Each observation is compared against True, so that an undecided Unknown counts
         # as neither, and the results combine as plain booleans.
-        attempt_succeeded = sm.Scalar(
-            self.task.observation_variable == sm.Scalar.const_true()
-        )
-        attempt_failed = sm.Scalar(
-            self.retry_trigger_monitor.observation_variable == sm.Scalar.const_true()
-        )
-        still_trying = trinary_logic_not(
-            sm.Scalar(self.stop_retry_monitor.observation_variable == sm.Scalar.const_true())
-        )
+        attempt_succeeded = self.task.observation_variable.is_true()
+
+        attempt_failed = self.retry_trigger_monitor.observation_variable.is_true()
+
+        still_trying = trinary_logic_not(self.stop_retry_monitor.observation_variable.is_false())
 
         # Starting is gated as well as ending, because a reset task is not started and
         # ending is not considered while it is not.
@@ -176,7 +157,9 @@ class RepeatUntil(Goal):
         self.retry_trigger_monitor.reset_condition = trinary_logic_and(
             attempt_failed, still_trying
         )
-        self.retry_trigger_monitor.end_condition = self.stop_retry_monitor.observation_variable
+        self.retry_trigger_monitor.end_condition = (
+            self.stop_retry_monitor.observation_variable
+        )
 
     def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
@@ -196,7 +179,8 @@ class RepeatUntil(Goal):
                     ),
                     (
                         sm.Scalar(
-                            self.stop_retry_monitor.observation_variable == sm.Scalar.const_true()
+                            self.stop_retry_monitor.observation_variable
+                            == sm.Scalar.const_true()
                         ),
                         sm.Scalar.const_false(),
                     ),
@@ -229,14 +213,16 @@ class RepeatOnStall(RepeatUntil):
     task's own threshold per second.
     """
 
-    def create_failure_monitor(
-        self, task: MotionStatechartNode
-    ) -> MotionStatechartNode:
-        if self.retry_trigger_monitor is not None:
-            raise ConflictingFailureMonitorError(node=self)
-        return ProgressStalled(
+    retry_trigger_monitor: MotionStatechartNode = field(init=False)
+    """
+    Monitors that triggers a retry of the observed node
+    """
+
+    def __post_init__(self):
+        super().__post_init__()
+        self.retry_trigger_monitor = ProgressStalled(
             name=f"{self.name}/stalled",
-            monitored_node=task,
+            monitored_node=self.task,
             timeout=self.timeout.seconds,
             minimum_convergence_rate=self.minimum_convergence_rate,
         )

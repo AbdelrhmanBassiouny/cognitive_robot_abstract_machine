@@ -32,7 +32,11 @@ from coraplex.language_giskard_templates import (
     TryAll,
     TryInOrder,
 )
-from giskardpy.motion_statechart.monitors.templates import PausedWhileTrue, PausedUntilTrue, StoppedWhenTrue
+from giskardpy.motion_statechart.monitors.templates import (
+    PausedWhileTrue,
+    PausedUntilTrue,
+    StoppedWhenTrue,
+)
 
 # Number of ticks after which the templates below have settled into their final observation.
 SETTLE_TICKS = 4
@@ -201,7 +205,9 @@ def test_paused_while_true_costs_the_monitored_node_the_paused_ticks():
         monitor=Pulse(length=pulse_length, name="pulse"),
         monitored_node=CountControlCycles(control_cycles=2, name="work"),
     )
-    ticks_with_pause = _ticks_until_observed_true(paused, paused.monitored_node, max_ticks=20)
+    ticks_with_pause = _ticks_until_observed_true(
+        paused, paused.monitored_node, max_ticks=20
+    )
 
     assert ticks_with_pause == ticks_without_pause + pulse_length
 
@@ -246,10 +252,10 @@ def test_stopped_when_true_ends_the_monitored_node():
     assert goal.monitored_node.observation_state == ObservationStateValues.FALSE
 
 
-def test_stopped_when_true_succeeds_once_it_stopped_the_monitored_node():
+def test_stopped_when_true_fails_once_it_stopped_the_monitored_node():
     """
-    Its observation turns True even though the monitored node never did, so a stopped
-    subtree still lets the surrounding motion advance and terminate.
+    Its observation turns False, reporting that the monitored node was cut short rather
+    than reaching its goal.
     """
     goal = StoppedWhenTrue(
         monitor=CountControlCycles(control_cycles=2, name="trip"),
@@ -257,7 +263,7 @@ def test_stopped_when_true_succeeds_once_it_stopped_the_monitored_node():
     )
     _compile_and_tick(goal)
 
-    assert goal.observation_state == ObservationStateValues.TRUE
+    assert goal.observation_state == ObservationStateValues.FALSE
 
 
 def test_monitored_goals_observe_the_monitored_node_when_the_monitor_never_fires():

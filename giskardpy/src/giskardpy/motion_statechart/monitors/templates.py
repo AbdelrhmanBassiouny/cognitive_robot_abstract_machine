@@ -5,8 +5,17 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from giskardpy.motion_statechart.context import MotionStatechartContext
-from giskardpy.motion_statechart.graph_node import Goal, MotionStatechartNode, NodeArtifacts
-from krrood.symbolic_math.symbolic_math import trinary_logic_not, trinary_logic_or
+from giskardpy.motion_statechart.graph_node import (
+    Goal,
+    MotionStatechartNode,
+    NodeArtifacts,
+)
+from krrood.symbolic_math.symbolic_math import (
+    Scalar,
+    if_cases,
+    trinary_logic_not,
+    trinary_logic_or,
+)
 
 
 @dataclass(repr=False, eq=False)
@@ -75,17 +84,25 @@ class StoppedWhenTrue(MonitoredGoal):
     """
     Ends the monitored node as soon as the monitor observes True.
 
-    Its observation turns True once the monitored node finished *or* the monitor stopped
-    it, so a stopped subtree still lets the surrounding motion advance and terminate.
+    It observes True once the monitored node reached its goal, False once the monitor
+    stopped it before that, and Unknown while the monitored node is still running.
     """
 
     def wire_monitor(self) -> None:
-        self.monitored_node.end_condition = trinary_logic_or(self.monitored_node.end_condition, self.monitor.observation_variable)
+        self.monitored_node.end_condition = trinary_logic_or(
+            self.monitored_node.end_condition, self.monitor.observation_variable
+        )
 
     def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(
-            observation=trinary_logic_or(
-                self.monitored_node.observation_variable,
-                self.monitor.observation_variable,
+            observation=if_cases(
+                [
+                    (
+                        self.monitored_node.observation_variable == True,
+                        Scalar.const_true(),
+                    ),
+                    (self.monitor.observation_variable == True, Scalar.const_false()),
+                ],
+                Scalar.const_trinary_unknown(),
             )
         )

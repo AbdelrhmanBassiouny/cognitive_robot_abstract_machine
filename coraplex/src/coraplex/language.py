@@ -26,11 +26,15 @@ from giskardpy.motion_statechart.graph_node import (
 )
 from giskardpy.motion_statechart.monitors.payload_monitors import CountNodeResets
 from coraplex.language_giskard_templates import (
+    CancelledWhenTrue,
     TryAll,
     TryInOrder,
 )
-from giskardpy.motion_statechart.monitors.templates import MonitoredGoal, PausedWhileTrue, PausedUntilTrue, \
-    StoppedWhenTrue
+from giskardpy.motion_statechart.monitors.templates import (
+    MonitoredGoal,
+    PausedUntilTrue,
+    PausedWhileTrue,
+)
 from coraplex.plans.executables import (
     GiskardExecutable,
     Executable,
@@ -38,6 +42,7 @@ from coraplex.plans.executables import (
 from coraplex.datastructures.enums import TaskStatus
 from coraplex.plans.failures import (
     AllChildrenFailed,
+    PlanCancelled,
     PlanFailure,
     RepetitionsExhausted,
 )
@@ -319,14 +324,19 @@ class MonitorNode(LanguageNode, ABC):
 @dataclass(eq=False)
 class CancelMonitor(MonitorNode):
     """
-    Stops its children once the monitor observes True.
+    Cancels the plan once the monitor observes True.
 
-    The plan continues with the next node afterwards; a stopped subtree is not a
-    failure.
+    Its children are stopped and the whole motion ends, raising
+    :class:`~coraplex.plans.failures.PlanCancelled`, because the state the rest of the
+    plan assumed no longer holds.
     """
 
     def create_monitored_goal(self) -> MonitoredGoal:
-        return StoppedWhenTrue(monitor=self.monitor, name=type(self).__name__)
+        return CancelledWhenTrue(
+            monitor=self.monitor,
+            name=type(self).__name__,
+            exception=PlanCancelled(language_node=self),
+        )
 
 
 @dataclass(eq=False)
@@ -336,8 +346,8 @@ class PauseMonitor(MonitorNode):
 
     .. warning:: A monitor that never turns False again holds the children forever, so the
         motion runs out of control cycles and fails with
-        :class:`~coraplex.exceptions.MotionDidNotFinish`. Use :class:`CancelMonitor` to end
-        a subtree for good.
+        :class:`~coraplex.exceptions.MotionDidNotFinish`. Use :class:`CancelMonitor` to
+        give up on the plan instead.
     """
 
     def create_monitored_goal(self) -> MonitoredGoal:
@@ -351,8 +361,8 @@ class PauseUntilMonitor(MonitorNode):
 
     .. warning:: A monitor that never turns True holds the children forever, so the
         motion runs out of control cycles and fails with
-        :class:`~coraplex.exceptions.MotionDidNotFinish`. Use :class:`CancelMonitor` to end
-        a subtree for good.
+        :class:`~coraplex.exceptions.MotionDidNotFinish`. Use :class:`CancelMonitor` to
+        give up on the plan instead.
     """
 
     def create_monitored_goal(self) -> MonitoredGoal:

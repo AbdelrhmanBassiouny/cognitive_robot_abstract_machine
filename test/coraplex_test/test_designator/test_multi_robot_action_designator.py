@@ -826,7 +826,7 @@ def test_elevator_navigation(mutable_multiple_robot_apartment, rclpy_node):
     plan = execute_single(action, context=context)
 
     robot.root.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-        1, -3, 0, reference_frame=world.root
+        1, -5, 0, reference_frame=world.root
     )
 
     with simulated_robot:

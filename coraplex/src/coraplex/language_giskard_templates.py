@@ -5,13 +5,16 @@ from typing import List
 
 from typing_extensions import Optional
 
+from krrood.exceptions import DataclassException
 from krrood.symbolic_math.symbolic_math import trinary_logic_or, trinary_logic_not
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.graph_node import (
+    CancelMotion,
     Goal,
     MotionStatechartNode,
     NodeArtifacts,
 )
+from giskardpy.motion_statechart.monitors.templates import StoppedWhenTrue
 
 
 @dataclass(repr=False, eq=False)
@@ -92,3 +95,32 @@ class TryInOrder(Goal):
             else trinary_logic_or(*observations)
         )
         return NodeArtifacts(observation=observation)
+
+
+@dataclass(repr=False, eq=False)
+class CancelledWhenTrue(StoppedWhenTrue):
+    """
+    Ends the monitored node as soon as the monitor observes True, and ends the motion
+    with it.
+
+    Nothing in a plan waits for a node that failed, so a monitor that gives up on its
+    subtree has to end the motion rather than leave the rest of the plan waiting for a
+    subtree that will never succeed.
+    """
+
+    exception: DataclassException = field(kw_only=True)
+    """
+    The failure reported once the monitor ends the motion.
+    """
+
+    def expand(self, context: MotionStatechartContext) -> None:
+        """
+        Add the monitor and the monitored node, and the node that ends the motion once
+        the monitor observes True.
+        """
+        super().expand(context)
+        cancelled = CancelMotion(
+            name=f"{self.name}/cancelled", exception=self.exception
+        )
+        self.add_node(cancelled)
+        cancelled.start_condition = self.monitor.observation_variable

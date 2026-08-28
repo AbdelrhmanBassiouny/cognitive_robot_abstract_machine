@@ -6,6 +6,7 @@ from typing_extensions import Optional, Any, Dict
 
 from coraplex.config.action_conf import ActionConfig
 from coraplex.datastructures.dataclasses import Context
+from coraplex.exceptions import WrongLevelException
 from coraplex.plans.attachment_nodes import ReAttachNode
 from coraplex.plans.factories import execute_single, pause_until, sequential
 from coraplex.plans.plan_node import PlanNode
@@ -129,11 +130,6 @@ class ElevatorNavigation(ActionDescription):
 
     @property
     def _action_plan(self) -> PlanNode:
-        [current_floor] = [
-            floor
-            for floor in self.world.get_semantic_annotations_by_type(Level)
-            if InsideOf(self.robot.root, floor.root)() > 0.9
-        ]
         return sequential(
             [
                 NavigateAction(self._pose_infront_of_elevator),
@@ -146,7 +142,7 @@ class ElevatorNavigation(ActionDescription):
                             )
                         )
                     ],
-                    monitor=self._elevator_open_at_floor(current_floor),
+                    monitor=self._elevator_open_at_floor(self._current_floor),
                 ),
                 ReAttachNode(body=self.robot.root, new_parent=self.elevator.root),
                 pause_until(
@@ -156,6 +152,25 @@ class ElevatorNavigation(ActionDescription):
                 ReAttachNode(body=self.robot.root, new_parent=self.world.root),
             ]
         )
+
+    @property
+    def _current_floor(self) -> Level:
+        """
+        Finds the floor the robot is currently on, based on its position in the world.
+        Raises :class:`WrongLevelException` if the robot is not on any floor or on
+        multiple floors at once.
+        :return: The semantic annotation for the floor
+        """
+        current_floor = [
+            floor
+            for floor in self.world.get_semantic_annotations_by_type(Level)
+            if InsideOf(self.robot.bodies_with_collision[0], floor.root)() > 0.9
+        ]
+        if len(current_floor) == 0:
+            raise WrongLevelException("Robot is not on any recognized floor.")
+        if len(current_floor) > 1:
+            raise WrongLevelException("Robot is on multiple floors at once.")
+        return current_floor[0]
 
     @property
     def _pose_infront_of_elevator(self):

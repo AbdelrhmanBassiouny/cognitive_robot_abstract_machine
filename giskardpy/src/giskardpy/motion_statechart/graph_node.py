@@ -1282,9 +1282,7 @@ class Goal(MotionStatechartNode):
             moved into this goal's statechart; only two parents within one statechart are
             an error.
         """
-        if node._motion_statechart is not self.motion_statechart:
-            return
-        if node.parent_node != self:
+        if node.belongs_to_motion_statechart() and node.parent_node != self:
             raise NodeAlreadyBelongsToDifferentNodeError(node=self, new_node=node)
 
     def add_nodes(self, nodes: List[MotionStatechartNode]) -> None:

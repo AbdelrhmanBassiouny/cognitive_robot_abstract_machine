@@ -126,10 +126,6 @@ class VizMarkerPublisher(ModelChangeCallback):
     def __post_init__(self):
         super().__post_init__()
 
-        duplicate_names = self._world.get_duplicate_kinematic_structure_entity_names()
-        if duplicate_names:
-            raise DuplicateEntityNameError(duplicate_names)
-
         if self.tf_publisher is None:
             self.tf_publisher = self._tf_publisher_of_world()
         self.publisher = self.node.create_publisher(

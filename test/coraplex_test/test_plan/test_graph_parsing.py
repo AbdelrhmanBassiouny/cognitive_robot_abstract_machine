@@ -40,10 +40,14 @@ from coraplex.language import (
     TryInOrderNode,
 )
 from coraplex.language_giskard_templates import (
+    CancelledWhenTrue,
     TryAll,
     TryInOrder,
 )
-from giskardpy.motion_statechart.monitors.templates import PausedWhileTrue, PausedUntilTrue, StoppedWhenTrue
+from giskardpy.motion_statechart.monitors.templates import (
+    PausedUntilTrue,
+    PausedWhileTrue,
+)
 from coraplex.utils import split_list_by_type
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.goals.templates import (
@@ -209,11 +213,34 @@ def test_cancel_monitor_ends_the_children_goal(immutable_model_world, rclpy_node
     executable = _parse_and_compile(plan, world, context)
 
     monitored_goal = _monitored_goal_of(executable)
-    assert type(monitored_goal) is StoppedWhenTrue
-    assert monitored_goal.nodes == [monitor, monitored_goal.monitored_node]
+    assert type(monitored_goal) is CancelledWhenTrue
+    assert monitored_goal.nodes[:2] == [monitor, monitored_goal.monitored_node]
     assert monitored_goal.monitored_node.end_condition.free_variables() == [
         monitor.observation_variable
     ]
+
+
+def test_cancel_monitor_ends_the_motion_when_the_monitor_fires(
+    immutable_model_world, rclpy_node
+):
+    """
+    The monitored goal holds a node that ends the motion, so giving up on the subtree
+    gives up on the plan rather than leaving the rest of it waiting.
+    """
+    world, view, context = immutable_model_world
+    monitor = ConstFalseNode(name="never")
+
+    plan = cancel_when(
+        [MoveTorsoAction(TorsoState.HIGH)], monitor=monitor, context=context
+    )
+    executable = _parse_and_compile(plan, world, context)
+
+    monitored_goal = _monitored_goal_of(executable)
+    [cancelled] = [
+        node for node in monitored_goal.nodes if isinstance(node, CancelMotion)
+    ]
+    assert cancelled.exception == monitored_goal.exception
+    assert cancelled.start_condition.free_variables() == [monitor.observation_variable]
 
 
 def test_monitored_subtree_nested_in_a_sequence_compiles(
@@ -238,7 +265,7 @@ def test_monitored_subtree_nested_in_a_sequence_compiles(
     )
     executable = _parse_and_compile(plan, world, context)
 
-    assert len(executable.motion_state_chart.get_nodes_by_type(StoppedWhenTrue)) == 1
+    assert len(executable.motion_state_chart.get_nodes_by_type(CancelledWhenTrue)) == 1
 
 
 # %% repeating a subtree

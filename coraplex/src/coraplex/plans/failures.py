@@ -85,6 +85,27 @@ class RepetitionsExhausted(PlanFailure):
 
 
 @dataclass
+class PlanCancelled(PlanFailure):
+    """
+    Thrown when a monitor cancelled the plan it was watching.
+    """
+
+    language_node: LanguageNode
+    """
+    The node whose monitor cancelled the plan.
+    """
+
+    def error_message(self) -> str:
+        return f"The monitor of {self.language_node} cancelled the plan."
+
+    def suggest_correction(self) -> str:
+        return (
+            "The world is no longer in the state the rest of the plan assumed, so plan "
+            "again from the state the robot is in now."
+        )
+
+
+@dataclass
 class RobotInCollision(PlanFailure):
     """Thrown when the robot is in collision with the environment."""
 

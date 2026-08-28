@@ -10,7 +10,7 @@ from coraplex.datastructures.enums import (
     DetectionTechnique,
 )
 
-from coraplex.plans.failures import PlanFailure, RepetitionsExhausted
+from coraplex.plans.failures import PlanCancelled, PlanFailure, RepetitionsExhausted
 from coraplex.fluent import Fluent
 from coraplex.language import (
     CancelMonitor,
@@ -273,8 +273,7 @@ def _torso_position(world):
 
 def test_cancel_monitor_stops_the_motion_it_wraps(immutable_model_world):
     """
-    A monitor that is true from the start stops the motion before it moves, and the plan
-    still finishes successfully - stopping is not a failure.
+    A monitor that is true from the start stops the motion before it moves.
     """
     world, robot_view, context = immutable_model_world
     start_position = _torso_position(world)
@@ -284,11 +283,34 @@ def test_cancel_monitor_stops_the_motion_it_wraps(immutable_model_world):
         monitor=ConstTrueNode(name="always"),
         context=context,
     ).plan
-    with simulated_robot:
-        plan.perform()
+    with pytest.raises(PlanCancelled):
+        with simulated_robot:
+            plan.perform()
 
     assert _torso_position(world) == pytest.approx(start_position, abs=0.05)
-    assert plan.root.status == TaskStatus.SUCCEEDED
+
+
+def test_cancel_monitor_gives_up_on_the_plan_instead_of_stalling(immutable_model_world):
+    """
+    Cancelling reports that the plan has to be made again, rather than leaving the
+    surrounding plan waiting for a subtree that will never succeed until the motion runs
+    out of control cycles.
+    """
+    world, robot_view, context = immutable_model_world
+
+    plan = sequential(
+        [
+            cancel_when(
+                [MoveTorsoAction(TorsoState.HIGH)],
+                monitor=ConstTrueNode(name="always"),
+            ),
+            MoveTorsoAction(TorsoState.LOW),
+        ],
+        context=context,
+    ).plan
+    with pytest.raises(PlanCancelled):
+        with simulated_robot:
+            plan.perform()
 
 
 def test_never_firing_cancel_monitor_leaves_the_motion_alone(immutable_model_world):
