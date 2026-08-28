@@ -516,3 +516,42 @@ container lacks, and that failure reproduces on unmodified `main`.
 
 Nothing here can be verified against the live camera from a container. The clip
 actually showing the table is `demo-runs-on-grounded-perception`'s job.
+
+### What it actually took, and two things the plan did not know
+
+Built 2026-08-28 as pull request #205, `d8f30ffb`. 9 new tests; `137 passed, 1
+skipped` across the four `test_montessori_*` modules against `128 passed, 1
+skipped` on the parent branch.
+
+**The `world.py` coupling is not fully gone, and the plan implied it would be.**
+`pipeline.py` reads `BOARD_SCALE` too, for `BoardDetector.board_footprint` — how
+far apart two holes may lie and still belong to one board. That is a detector
+tolerance rather than a plane height or the workspace, so it is not what this
+item removes, and rewriting it would take `detect-per-supporting-surface`'s
+ground. The checkable outcome therefore narrowed to what is actually true:
+`node.py` imports neither module, asserted directly by
+`test_the_node_takes_no_scene_constant_from_another_module`. The `equipment.py`
+coupling *is* gone outright.
+
+**Widest face or highest face — left as the developer's call.** `of_body` picks
+the body's widest horizontal face, which is exactly the pick `table_top_z`
+already made for the height alone. The obvious alternative, the *highest* face,
+is arguably the truer reading of "the surface things rest on", and a test
+written against a wide-based pedestal caught the two rules disagreeing. They
+diverge only for a body whose widest shape is not its top: a splayed base, or a
+mounting plate sitting on the tabletop as part of the same body — and that
+second case is a plausible reason `table_top_z` chose widest against the real
+URDF in the first place. Overturning a choice made against hardware that cannot
+be inspected from a container is not this item's call to make silently, so the
+existing rule was preserved and the question raised on the pull request instead.
+
+**A world with no board is refused rather than assumed.** Once the constant is
+gone the lid's height cannot be invented, so `MontessoriPerceptionPipeline.of_world`
+raises `BoardMissingFromWorld`. This is a real behaviour change for a caller
+whose fetched world carries no `ShapeSortingBoard` — but
+`detect-per-supporting-surface` needs the board in the world regardless, so the
+requirement arrives with this item rather than being deferred into it.
+
+`supporting_surface` was `None` on every world in this workspace as predicted,
+so the fallback is the path that runs; the declared-region path is covered by a
+test that places a `Region` in its own world.
