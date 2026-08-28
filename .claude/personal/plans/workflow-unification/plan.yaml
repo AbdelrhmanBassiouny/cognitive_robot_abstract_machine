@@ -4212,6 +4212,39 @@ items:
       Accepted cost, stated rather than discovered later: #154 was already 52 files, 8121 additions,
       38 commits and 75 review threads before Part D is written.
 
+      Audited 2026-08-28 (session https://claude.ai/code/session_01MwawsPiaFK3ufUK4YHak3X), and
+      three premises this entry rests on have moved, all in the direction that helps.
+
+      The token is no longer a pending setup step. `INTEGRATION_REFRESH_TOKEN` is a repository
+      secret and both probes passed on 2026-08-23: one pushed a commit touching
+      `.github/workflows/` through `actions/checkout`'s persisted credential, and the second run
+      existing at all is the proof that the token's push started a run. The probe branches and
+      `token-probe.yml` are gone.
+
+      The Actions client exists as a precedent rather than as an unexercised API.
+      `upstream-review-reader` (#146) merged on 2026-08-22, and what it landed is
+      `.github/workflows/upstream-reviews.yml` - a `workflow_dispatch` job whose output a skill
+      reads back out of the job log, which is the shape Part D needs for a candidate run's
+      conclusion.
+
+      Nothing of Part D is written, checked rather than assumed: no workflow on any branch of the
+      fork triggers on `ready_for_review`, `ci.yml` still triggers on `push: main`, `pull_request`
+      and `workflow_run` only, no pytest marker for `integration_conflict_label` is registered, and
+      `integration_test_command`, `--test`, `--no-test` and `_run_tests` are all still live.
+
+      The stable-branch shape is settled, by the developer on 2026-08-28: the candidate pull
+      request exists to trigger CI and nothing else, `integration` is force-updated to the
+      candidate once its run is green, and the candidate is closed unmerged. That keeps the
+      regenerate-from-scratch property a merge target would have cost, and it is available because
+      the branch is a pointer rather than history anyone builds on.
+
+      `integration` still points at `899a04a` - `tests_passed: null`, and #199 measured it 124
+      commits and five days behind `main`. So the branch this item defines as "the last build whose
+      CI went green" currently holds one that was never verified and is stale besides, and its first
+      correct value has to be earned by a real run rather than inherited. Rebuild cadence is the
+      open question underneath that, and it is this item's to answer now that the verdict is what
+      makes an automatic rebuild safe.
+
   - id: always-read-upstream-reviews
     title: "Read upstream review threads whether or not the fork pull request is labelled"
     branch: claude/plan-item-kickoff-workflow-y2xfva

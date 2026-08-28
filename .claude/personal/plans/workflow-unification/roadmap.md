@@ -9809,3 +9809,22 @@ afterwards, which is what #160 already added to `plan_item_bootstrap.py` for exa
 and which the shell route still leaves to the caller. And **a scratch file inside the repository
 is the hazard, not merely untidy**: write plan scratch to an absolute path outside the working
 tree, so a cwd reset cannot silently redirect an edit into a file nothing will save.
+
+## Update 2026-08-28 (audit): Part D's premises, and the stable-branch shape settled
+
+Session: https://claude.ai/code/session_01MwawsPiaFK3ufUK4YHak3X, read-only apart from this record.
+Re-applied after the stale-save above dropped it.
+
+Three of `integration-branch-ci-verdict`'s premises had gone stale, all favourably: the fine-grained
+token is provisioned and probed, `upstream-review-reader` (#146) landed the Actions pattern Part D
+needs rather than leaving it unexercised, and nothing of Part D itself is written yet. Detail is on
+the item.
+
+The stable-branch shape, open since kickoff, is settled: **the candidate pull request is a CI
+trigger only** - `integration` is force-updated to it on green and the candidate is closed unmerged.
+A real merge target would make the branch accumulate history, which is the one property the design
+has rejected throughout, and the candidate was never a review surface anyway.
+
+What this leaves live is rebuild cadence. `integration` is 124 commits behind `main` and holds an
+unverified build, so the fast-PR process is currently serving unlanded work on a stale base. That
+belongs to Part D rather than beside it: an automatic rebuild is only safe once a verdict exists.
