@@ -10195,3 +10195,77 @@ nobody finds. Structural, so recorded here as well as in the manifest.
 its own deterministic `setup-personal-notes.sh`; wiring `setup_steps.py` into the agent-facing path
 belongs on top of that pull request, where it is a few lines, rather than underneath it, where it is
 a conflict.
+
+## Update 2026-08-28 (review round): the enum idiom on `main` does not survive three required fields
+
+Four threads on #203, applied in `3cc3a417`; three resolved, one answered differently and
+left open.
+
+### Two enums, and a hazard the landed idiom hides
+
+`PERSONAL_NOTES_SETTINGS` and `LabelPurpose` were both asked to become enums, and each
+did — but only the first found anything new.
+
+`PersonalNotesSetting` mixes a frozen specification into `Enum`, the `PullRequestField` /
+`ManifestKey` idiom. Copying it verbatim fails, and the reason is worth carrying because
+it is invisible in the file it was copied from. The enum machinery builds a member's
+value by calling the mixed-in type with the member's value as its arguments, so
+`PullRequestFieldSpecification(spec_instance)` *succeeds* — two of its three fields have
+defaults — and lands the whole instance in `key`, which `__init__` then overwrites. That
+is the silently-wrong case its own docstring warns about, and it is why `__init__` alone
+is enough there. With three required fields nothing is silent:
+
+```
+TypeError: PersonalNotesSettingSpecification.__init__() missing 2 required positional arguments
+```
+
+`__new__` alone does not fix it either — `EnumType.__set_name__` calls both — so the
+member carries a real keyword-constructed specification and both are defined. Removing
+either fails at import, so nothing extra guards it.
+
+**Generalizable: an idiom that works because of a default is an idiom that has not been
+tested.** `PullRequestField` reads as though it demonstrates the pattern; what it
+demonstrates is the pattern plus a coincidence, and the coincidence is the part that
+makes the hazard its docstring names reachable.
+
+### Merging the labels made the link to the dashboard stronger
+
+`LabelPurpose`, the `RepositoryLabel` dataclass and the `REQUIRED_LABELS` tuple were three
+things for one concept. One `RepositoryLabel` `StrEnum` now, whose member *is* its own
+label name and carries its description through `__new__`.
+
+Importing `build_dashboard.PullRequestLabel` remains impossible, and for this script's own
+reason: it needs the dashboard dependencies `setup_steps.py` exists to run *before*. What
+the merge bought is that the member names now line up with that enum's, so the contract
+test holds `{name: value}` equal rather than only the value set. Mutation-checked both
+ways — the value rename was already caught, the *member* rename was invisible.
+
+### `GitCommandRunner` is the right seam and the wrong location
+
+The third thread asked why the two `subprocess.run(["git", ...])` calls are not
+`GitCommandRunner`. Measured rather than answered from the name: `.claude/hooks/` and
+`.claude/stack/` are separate `sys.path` roots, so importing it costs a production
+`sys.path.insert` — and `main` carries exactly one of those today, `upstream_reviews.py:31`,
+which #185 is deleting as a carrier of the hackery decision 8 ends. It also drags `stack`
+(1,600 lines) into a stdlib-only script for two two-argument reads, and has no `config` or
+`remote` method.
+
+Its `attempt` contract *is* right, so what shipped is the smallest honest move: one
+`git_value` seam in this file, whose docstring names the contract this script needs — an
+unset key and an unknown remote are ordinary outcomes, so it reports nothing rather than
+raising. One call site for the migration to replace instead of two, recorded as a fourth
+caller on `bastler-notes-core-python`'s `git_interface.py` alongside #135's, `plan_item_bootstrap.py`'s
+and `stack.py`'s deliberately-opposite `_git`. Thread left open, since the ask was answered
+differently.
+
+### `gh` is not guaranteed, and the step said otherwise by ordering
+
+Present on Actions runners, absent from a session container — so on the machine most likely
+to read this output the commands do not run. The fork's labels page was already the
+fallback and was last, introduced with "Or create them by hand", which reads as the lesser
+option. It leads now, with the commands marked conditional. Nothing is lost for someone who
+has `gh`.
+
+Still true and stated rather than implied: the step cannot verify the labels exist. That
+needs a GitHub call, which is the boundary `check-setup.sh` draws and the reason this
+script prints rather than checks.
