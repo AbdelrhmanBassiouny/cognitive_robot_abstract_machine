@@ -1,8 +1,8 @@
 ## Branch `tracy_icra` - Montessori perception over the wifi link
 
-### Plan
-Make the continuous Montessori perception node actually receive camera data from
-the real camera over the robot's wifi network.
+Committed as `ea1f6f73a` and pushed to `origin/tracy_icra`. Note the branch's
+configured upstream is `sorin/tracy_icra` (a colleague's fork); the push went to
+`origin` by explicit choice and the upstream was left pointing at sorin.
 
 ### Diagnosis (done)
 The node subscribed to the raw streams `/camera/color/image_raw` and
@@ -22,28 +22,37 @@ Two things confused the picture early on and are worth remembering:
   `compressedDepth` looked dead this way but is fine with a real subscriber.
 
 ### Done
-- `camera.py`: added `ImageTransport`, `CompressedImageFormat` (parses the
-  `format` field), `DepthQuantization` (the `compressedDepth` header), and
+- `camera.py`: `ImageTransport`, `CompressedImageFormat` (parses the `format`
+  field), `DepthQuantization` (the `compressedDepth` header), and
   `decode_compressed_color_image` / `decode_compressed_depth_image`.
-- `exceptions.py`: added `UndecodableCompressedImage`.
-- `node.py`: `CameraTopic` now names `/camera/color/image_raw/compressed` and
-  `/camera/depth/image_raw/compressedDepth`; subscriptions take `CompressedImage`.
-- Tests: 8 new decoder tests written before the implementation; 35 pass in
-  `test_montessori_perception.py`, 75 across the montessori files.
-- Verified live against the real camera through the node's own code path: colour
-  (1080, 1920, 3) uint8, depth (1080, 1920) float32 spanning 0.79-2.47 m, and the
-  two registered onto each other.
+- `exceptions.py`: `UndecodableCompressedImage`.
+- `node.py`: reads `/camera/color/image_raw/compressed` and
+  `/camera/depth/image_raw/compressedDepth`; decoding moved out of `_build_frame`
+  into `_on_color`, so a frame is shown even when the transform tree cannot yet
+  place the camera.
+- `viewer.py`: `CameraFrameViewer` plus an `ImageDisplay` abstraction over
+  OpenCV's windowing, so the drawing logic is testable without a screen. Exposed
+  as `--show-images`.
+- 43 tests in `test_montessori_perception.py`, 83 across the montessori files.
+- Verified live: colour and depth both decode and render off the real camera.
 
 Measured transports on this camera: colour compressed 18.9 Hz / 3.83 MB/s;
 `compressedDepth` PNG ~118 kB per frame. `/camera/depth/image_raw/compressed` is
 JPEG-mono8 and publishes a 0-byte payload, so it is not usable for depth.
 
+### `json_msgs` - investigated, nothing to port
+The user recalled a fix on `claude/cramera-voice-questions-ttwcza`. There is
+none: local and origin are the same SHA, there are no stashes, and every ref in
+the repo that has `feedback_publisher.py` imports `json_msgs`. It is a real ROS 2
+package living in `cram2/cram_ros2_packages` (confirmed by cloning it), which
+`.github/docker/setup_workspace.py` clones for CI but which is absent from the
+local `~/Projects/ros2_ws`. So it is an environment gap, not a repo bug, and it
+does not warrant a bug-fix PR. Fix is to build that package locally.
+
 ### Next / open
 - `decode_color_image` and `decode_depth_image` (the raw-message decoders) now
   have no production caller and are only used by tests. AGENTS.md says to consult
   the developer before removing them - waiting on that decision.
-- Nothing committed yet; these changes sit in the working tree on `tracy_icra`
-  alongside pre-existing unrelated modifications.
-- Pre-existing and unrelated: `test/experiments_test/` fails to collect as a
-  whole because `json_msgs` is not installed. Reproduced with these changes
-  stashed, so it is not from this work.
+- No pull request opened. This work folds into `tracy_icra`, which already
+  carries a colleague's commits and tracks their fork, so a PR for it would be
+  proposing their work too. Left for the user to decide.
