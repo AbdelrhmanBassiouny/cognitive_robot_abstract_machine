@@ -6,6 +6,7 @@ The loop itself is exercised with a plain ``RepeatUntil`` whose failure monitor 
 control cycles, so it needs neither a world nor a converging task, and ``RepeatOnStall``
 is exercised against a motion that really does stop making progress.
 """
+from datetime import timedelta
 
 from giskardpy.executor import Executor
 from giskardpy.motion_statechart.context import MotionStatechartContext
@@ -155,7 +156,7 @@ def test_repeat_on_stall_retries_a_motion_that_stops_converging(
         name="loop",
         task=task,
         stop_retry_monitor=CountNodeResets(name="counter", node=task, target=2),
-        timeout=1.0,
+        timeout=timedelta(1.0),
     )
     motion_statechart = MotionStatechart()
     motion_statechart.add_node(loop)
@@ -186,7 +187,7 @@ def test_repeat_on_stall_leaves_a_reachable_motion_alone(cylinder_bot_world: Wor
         name="loop",
         task=task,
         stop_retry_monitor=CountNodeResets(name="counter", node=task, target=1),
-        timeout=1.0,
+        timeout=timedelta(.5),
     )
     motion_statechart = MotionStatechart()
     motion_statechart.add_node(loop)
