@@ -1,0 +1,250 @@
+schema_version: 1
+id: knowledge-directed-perception
+title: "Knowledge-directed Montessori perception"
+description: >
+  Perception that decides where to look and how to look from what the robot
+  knows, rather than from constants written into the pipeline. The supporting
+  surfaces, their extent and their finish come from the semantic digital twin;
+  a query is answered by looking, through a perception backend of the entity
+  query language that pushes what it can into the search and filters the rest
+  afterwards; which detector answers it is a rule decision over the target and
+  the surface; and Segmind's support events plus an action's declared
+  effects arm what perception expects to find, which is what makes a failure
+  detectable. Detectors sit behind an interface, so a RoboKudo analysis engine
+  can be one of them without the reasoning layer knowing.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 201
+
+waves:
+
+  - id: grounding
+    name: "Perception reads the scene from the world"
+    description: >-
+      The three faults visible in the running demo - a clip that shows the
+      floor, pieces on the board lid that are never found, and duplicate
+      detections on the board's borders - are one fault: the scene is described
+      by constants instead of read from the world the node already fetches.
+      Removing the constants is what this wave does, and each fault is the test
+      that its item worked.
+
+  - id: requests
+    name: "A query is answered by looking"
+    description: >-
+      Perception becomes an entity query language backend beside the native and
+      SQLAlchemy ones, so asking is evaluating rather than calling a pipeline
+      by hand: the backend pushes what it can of a query's conditions into the
+      search, filters the rest over the detections that come back, and a rule
+      tree over the target and the surface says which detector runs.
+
+  - id: expectation
+    name: "Perception knows what should be true"
+    description: >-
+      What the robot did, and what Segmind saw it do, say where a thing should
+      now be. Perception looks there, and reports a violated expectation as a
+      failure rather than as an absence.
+
+tracks:
+
+  - id: package-landing
+    name: "The perception package reaches main"
+    wave: grounding
+    description: >-
+      Everything in this plan edits files that exist on no branch but
+      tracy_icra. Landing them first is what makes every later item a normal
+      reviewable pull request.
+
+  - id: surfaces
+    name: "Surfaces, not constants"
+    wave: grounding
+    description: >-
+      Sequential: each item edits the same pipeline the previous one left
+      behind, so they stack rather than run in parallel.
+
+  - id: request-language
+    name: "Perception as a query backend"
+    wave: requests
+    description: >-
+      The backend itself and the compiler behind it, following the shape
+      SQLAlchemyBackend already set: take the query, translate it into another
+      engine's plan, execute it there.
+
+  - id: method-selection
+    name: "Choosing how to look"
+    wave: requests
+    description: >-
+      The digital twin extension and the rule tree that reads it. The
+      annotation touches only semantic_digital_twin, so it can be written
+      before or alongside the request language.
+
+  - id: events
+    name: "Expectation and failure"
+    wave: expectation
+
+  - id: executors
+    name: "A second detector behind the interface"
+    wave: expectation
+    description: >-
+      The evidence that the reasoning layer is executor-agnostic, and the
+      route by which this work reaches RoboKudo after the deadline.
+
+items:
+
+  - id: montessori-perception-on-main
+    title: "Land the Montessori perception package on main"
+    branch: montessori_perception_on_main
+    pull_request_number: null
+    track: package-landing
+    depends_on: []
+    status: not_started
+    notes: >-
+      experiments/src/experiments/montessori/perception/ and its tests exist
+      only on tracy_icra, which also carries seventeen unrelated commits
+      (Franka demos, Mujoco tuning, stacking). This item cuts a branch off main
+      carrying the perception package alone - sorinar329's original node commit
+      75258debd plus the seven that follow it - so the rest of the plan stacks
+      on reviewable ground instead of on a branch whose upstream points at a
+      colleague's fork. tracy_icra itself is left alone.
+
+  - id: surfaces-from-world
+    title: "Take the workspace from the table the robot knows about, not from a constant"
+    branch: perception_surfaces_from_world
+    pull_request_number: null
+    track: surfaces
+    depends_on: [montessori-perception-on-main]
+    status: not_started
+    notes: >-
+      Fixes the first fault: the clip shows the floor because TRACY_WORKSPACE
+      (node.py:102) is a hand-written 1.0 x 1.2 m rectangle. table_top_z()
+      already pulls the tabletop's collision shape out of the fetched world for
+      its height and discards scale.x, scale.y and the origin, which are
+      exactly the bounds being guessed. Derives the region and every plane
+      height from the world, and from HasSupportingSurface.supporting_surface
+      where one exists.
+
+  - id: detect-per-supporting-surface
+    title: "Look at every supporting surface, not only the table"
+    branch: perception_per_supporting_surface
+    pull_request_number: null
+    track: surfaces
+    depends_on: [surfaces-from-world]
+    status: not_started
+    notes: >-
+      Fixes the second fault: a piece resting on the board's lid is invisible
+      twice over. The pipeline rectifies loose pieces onto exactly one plane
+      (table_height), so a piece eighty millimetres higher is parallax-shifted
+      out of both silhouettes; and pipeline.py:626 drops any contour the board
+      encloses, coding the board as an obstacle when it is physically a
+      supporting surface like the table. One detection pass per surface, each
+      at its own plane height, with detections attributed to the surface
+      supporting them.
+
+  - id: one-detection-per-thing
+    title: "One physical thing, one detection, and none inside a body already known"
+    branch: perception_one_detection_per_thing
+    pull_request_number: null
+    track: surfaces
+    depends_on: [detect-per-supporting-surface]
+    status: not_started
+    notes: >-
+      Fixes the third fault: the duplicate boxes on the board's borders are the
+      lid's own edges, which a rectangular or triangular prism template fits at
+      about 0.7 - above the 0.62 threshold. board.encloses only rejects a
+      contour whose centre falls inside the board, and a contour riding the
+      border has its centre outside; nothing anywhere forbids two detections
+      occupying one place. Rejects a detection intersecting a known body's
+      volume, and resolves overlapping detections against each other.
+      semantic_digital_twin.reasoning.predicates.is_place_occupied already
+      exists for the first half.
+
+  - id: perception-backend
+    title: "Answer a query by looking, as a backend of the entity query language"
+    branch: perception_eql_backend
+    pull_request_number: null
+    track: request-language
+    depends_on: [surfaces-from-world]
+    status: not_started
+    notes: >-
+      A PerceptionBackend beside EntityQueryLanguageBackend and
+      SQLAlchemyBackend, so evaluating a query runs perception rather than a
+      pipeline being called by hand. SQLAlchemyBackend already sets the shape -
+      eql_to_sql translates the query into another engine's plan and runs it
+      there - and the compiler from a query to a detection pipeline is the same
+      move against a camera. Conditions are split the way a query planner
+      splits them: those that can be pushed down shape the search (which
+      surface to rectify, which piece models are candidates, what seeds
+      segmentation - via is_supported_by, is_body_in_region, InsideOf, the
+      selected type and the appearance constraints), and those that cannot are
+      kept as a residual filter over the detections that come back, so nothing
+      is silently ignored. A condition that can be neither raises a typed
+      exception alongside SelectiveBackendCannotResolveEllipsisMatch. Also
+      gives the backend its own opening_directive so a query answered by
+      looking verbalizes as "Look for ..." rather than "Find ...", which needs
+      one Directive member in krrood. PerceivedObjects, the domain that runs
+      the whole pipeline on iteration and yields everything, is retired by it:
+      a query then runs only what it asked for.
+
+  - id: surface-finish-annotation
+    title: "Say in the digital twin how a surface takes light"
+    branch: sdt_surface_finish_annotation
+    pull_request_number: null
+    track: method-selection
+    depends_on: []
+    status: not_started
+    notes: >-
+      The digital twin models a surface's colour but not its finish, which is
+      the property that decides whether colour segmentation works at all: the
+      brushed steel table throws a diffuse, piece-coloured reflection with no
+      sharp boundary anywhere, which is why the edge fit had to be written.
+      A matte / glossy / mirror finish annotation is what turns "the steel
+      table and the wooden lid need different pipelines" into something the
+      robot knows rather than a branch somebody wrote. Touches only
+      semantic_digital_twin, so it can start off main immediately.
+
+  - id: choose-detection-method
+    title: "Choose the detector by rule from the target and the surface"
+    branch: perception_choose_detection_method
+    pull_request_number: null
+    track: method-selection
+    depends_on: [perception-backend, surface-finish-annotation]
+    status: not_started
+    notes: >-
+      The detector interface the backend dispatches to, chosen by a rule tree -
+      krrood's ripple-down rules, whose conditions are already entity query
+      language expressions - over properties of the surface and the target: a mirror-finish surface with a known-geometry prism selects
+      the edge fit; a matte contrasting surface selects the cheaper colour
+      blob, which works there and is faster; a target with no geometric model
+      selects a learned detector. This is where perception measurably gets better as
+      the robot knows more, and it is the item the paper's claim rests on.
+
+  - id: expectations-from-events
+    title: "Expect what the action promised, and report the difference as a failure"
+    branch: perception_expectations_from_events
+    pull_request_number: null
+    track: events
+    depends_on: [choose-detection-method]
+    status: not_started
+    notes: >-
+      Segmind already emits SupportEvent, LossOfSupportEvent, PickUpEvent,
+      PlacingEvent and InsertionEvent over is_supported_by. Perception keeps a
+      set of expectations from them - after LossOfSupport(piece, table) stop
+      searching the table; after Placing(piece, lid) search the lid - and the
+      action model gets there first, since an action declares its own effect
+      and so the expectation can be armed before the event confirms it. The
+      same mechanism gives failure detection: perception looked exactly where
+      the action promised, found nothing, and says so.
+
+  - id: robokudo-detector
+    title: "Answer a request with a RoboKudo analysis engine"
+    branch: perception_robokudo_detector
+    pull_request_number: null
+    track: executors
+    depends_on: [choose-detection-method]
+    status: not_started
+    notes: >-
+      One adapter implementing the detector interface over a RoboKudo analysis
+      engine, so the rule tree can choose a learned detector (RoboKudo ships
+      CLIP and YOLO annotators) for a target with no geometric model. Proves
+      the reasoning layer is executor-agnostic and is the route by which this
+      work moves into RoboKudo after the deadline. Deliberately last: nothing
+      earlier depends on it, and it can be dropped without weakening items 1-8
+      if the deadline gets tight.
