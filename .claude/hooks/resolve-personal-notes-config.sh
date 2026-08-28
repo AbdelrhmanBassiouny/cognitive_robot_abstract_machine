@@ -323,6 +323,10 @@ RECORD_DASHBOARD_URL_MODULE="bastler.record_dashboard_url"
 # records its manifest entry - invoked from plan-item-kickoff/SKILL.md and
 # add-plan-item/SKILL.md.
 PLAN_ITEM_BOOTSTRAP_MODULE="bastler.plan_item_bootstrap"
+# plan_item_mode: resolves whether a plan-item skill asks, plans, or
+# implements on its own - invoked from plan-item-mode/SKILL.md and from
+# plan-item-kickoff/plan-item-resolve via execution-modes.md.
+PLAN_ITEM_MODE_MODULE="bastler.plan_item_mode"
 # plan_manifest_tools: reads a plan id out of a manifest and regenerates
 # the branch index - the manifest plumbing save-plan.sh calls.
 PLAN_MANIFEST_TOOLS_MODULE="bastler.plan_manifest_tools"
@@ -347,6 +351,11 @@ BASTLER_REQUIREMENTS_FILE="${BASTLER_PACKAGE_DIRECTORY}/requirements.txt"
 # stack.toml: the committed defaults stack.py's load_configuration layers a
 # personal-notes .claude/personal/stack.toml override on top of.
 STACK_CONFIG_FILE="${BASTLER_PACKAGE_DIRECTORY}/stack.toml"
+# plan-item-modes.toml: the committed execution-mode defaults plan_item_mode
+# layers a personal-notes .claude/personal/plan-item-modes.toml override on
+# top of - the same committed-defaults/personal-override split as stack.toml.
+PLAN_ITEM_MODES_CONFIG_FILE="${BASTLER_PACKAGE_DIRECTORY}/plan-item-modes.toml"
+PERSONAL_PLAN_ITEM_MODES_PATH=".claude/personal/plan-item-modes.toml"
 # test/bastler_test/: the one pytest suite covering every module above -
 # the exact directory CI and a session both run against. One directory
 # rather than the three this suite was merged from, since one package has
@@ -427,6 +436,20 @@ SCOPE_DECISION_DOCUMENT="${ADD_PLAN_ITEM_DIRECTORY}/scope-decision.md"
 # bootstrap step, i.e. a real caller this codebase controls - the same
 # duplication risk, just for a hook script instead of a plan-dashboard one.
 SAVE_PLAN_SCRIPT=".claude/hooks/save-plan.sh"
+
+# EXECUTION_MODES_DOCUMENT: the shared "which mode is in force, what it
+# obliges, and when auto mode still asks" procedure that plan-item-kickoff and
+# plan-item-resolve both reference instead of each restating it - same
+# reasoning as DEPENDENCY_READINESS_DOCUMENT above.
+EXECUTION_MODES_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/execution-modes.md"
+
+# PLAN_ITEM_GATHERING_DOCUMENT: the shared "what is already known and already
+# decided about this item?" procedure - the setup check, resolving the item off
+# the notes branch, the tracking-issue subscription, the full roadmap read, the
+# dependency chain and the standing conventions. plan-item-kickoff and
+# plan-item-resolve both run it in full and then add only what their own
+# situation needs, instead of each carrying its own copy.
+PLAN_ITEM_GATHERING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/plan-item-gathering.md"
 
 # GITHUB_LIST_PULL_REQUESTS_TOOL / GITHUB_PULL_REQUEST_READ_TOOL: the two
 # MCP tools every pr_data.json-gathering procedure in this system calls

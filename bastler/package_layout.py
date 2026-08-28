@@ -182,6 +182,19 @@ UNINSTALLED_INVOCATIONS: tuple[UninstalledInvocation, ...] = (
         module_name="plan_updates_since_support",
         reason="A hook script, so it runs wherever the session does and installs nothing.",
     ),
+    UninstalledInvocation(
+        caller=".claude/skills/plan-dashboard/execution-modes.md",
+        module_name="plan_item_mode",
+        reason=(
+            "Every plan-item skill resolves its mode before doing anything else, so it "
+            "runs in whatever session was invoked and installs nothing first."
+        ),
+    ),
+    UninstalledInvocation(
+        caller=".claude/skills/plan-item-mode/SKILL.md",
+        module_name="plan_item_mode",
+        reason="Pins the mode from a session that asked for nothing else.",
+    ),
 )
 """
 Every caller that runs a module of this package on a checkout where nothing is installed.
