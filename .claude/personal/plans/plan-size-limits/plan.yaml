@@ -1,0 +1,144 @@
+schema_version: 1
+id: plan-size-limits
+title: "Plans and roadmaps stay small, enforced by tooling"
+description: >
+  Make plan size a property the tooling holds rather than one sessions have to
+  remember. A hard budget covers a plan's plan.yaml and roadmap.md together;
+  save-plan.sh refuses a save that breaks it; /plan-create and /add-plan-item
+  read the budget and open a new plan instead of growing a full one; and the
+  roadmap-writing guidance across the plan skills stops asking for detail the
+  budget cannot afford. Because the budget is enforced by refusal, the two plans
+  already over it are split first.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 200
+
+waves:
+  - id: budget
+    name: "Wave 1 - the budget, measured"
+    description: >
+      The budget exists and every plan can be measured against it, but nothing
+      is refused yet. Report-only, so no plan is stranded while the migration
+      below is still outstanding.
+  - id: migration
+    name: "Wave 2 - split the plans already over it"
+    description: >
+      The two oversized plans come under budget. This must land before any
+      refusal, or their own state becomes unsaveable mid-flight.
+  - id: enforcement
+    name: "Wave 3 - refusal and the skills"
+    description: >
+      The gate starts refusing, and the skills that write plans learn to route
+      new work elsewhere and to write less.
+
+tracks:
+  - id: budget-measurement
+    name: "The budget and its report"
+    wave: budget
+  - id: plan-splits
+    name: "Splitting the oversized plans"
+    wave: migration
+  - id: gate-and-skills
+    name: "The save gate and the writing skills"
+    wave: enforcement
+
+items:
+  - id: size-budget-and-report
+    title: "A named size budget, and a report of every plan against it"
+    branch: null
+    pull_request_number: null
+    track: budget-measurement
+    depends_on: []
+    status: not_started
+    notes: >
+      The budget as named constants - 15 items and 2,000 combined plan.yaml +
+      roadmap.md lines - with a typed check and a command reporting every plan
+      against it. Report-only: nothing is refused at this stage, so it can land
+      while workflow-unification and rdr-refactor are still over. Numbers chosen
+      from the live measurement on 2026-08-28: the largest healthy plan is
+      montessori-eql-stack at 13 items / 1,634 lines, and the two outliers are
+      3,676 and 14,259 lines, so the budget clears six of eight plans untouched.
+      The count must parse the YAML rather than grep it - rdr-refactor reads 0
+      items under `grep '^  - id:'` because its manifest indents differently,
+      and 49 once parsed.
+    blockers:
+      - >
+        Where the constants live is undecided and depends on landing order.
+        .claude/shared/plan_model.py already holds ItemStatus and is the natural
+        home, but it exists only on PR #151 and PR #154, not on main. Either base
+        on one of them or place the constants elsewhere until they land - do not
+        build a third copy.
+
+  - id: split-workflow-unification
+    title: "Split workflow-unification into plans under the budget"
+    branch: null
+    pull_request_number: null
+    track: plan-splits
+    depends_on: [size-budget-and-report]
+    status: not_started
+    notes: >
+      55 items / 14,259 lines becomes several under-budget plans. Its existing
+      tracks - personal-data, stack-tooling, dashboards, bastler, cutover -
+      already name the natural seams. Personal-notes data only, so branch stays
+      null and no pull request is opened; the precedent is that plan's own
+      eql-roadmap-migration item. The split rewrites _generated/branch-index.tsv
+      and _generated/dashboard-urls.yaml, both keyed by plan id, so every moved
+      item's branch mapping and every cached dashboard URL must be regenerated -
+      otherwise session-start.sh stops finding items by branch and
+      /plan-dashboard mints duplicate pages for the new ids. Every item carrying
+      an open pull request keeps its number across the move.
+
+  - id: split-rdr-refactor
+    title: "Split rdr-refactor into plans under the budget"
+    branch: null
+    pull_request_number: null
+    track: plan-splits
+    depends_on: [size-budget-and-report]
+    status: not_started
+    notes: >
+      49 items / 3,676 lines, same treatment and same index regeneration as the
+      sibling split. Its waves already separate the engine work from the Why &
+      Montessori track and the expert framework, which is the likely seam.
+
+  - id: refuse-oversized-save
+    title: "Refuse a save that leaves a plan over budget"
+    branch: null
+    pull_request_number: null
+    track: gate-and-skills
+    depends_on: [split-workflow-unification, split-rdr-refactor]
+    status: not_started
+    notes: >
+      save-plan.sh gains the gate, with a typed error naming which half of the
+      budget was blown and by how much. The natural seam is alongside the
+      existing `plan_manifest_tools.py read-id` call the script already makes
+      before pushing. Depends on both splits: landing this while either plan is
+      still over would refuse every save of that plan, including the ones
+      recording this plan's own progress.
+
+  - id: new-plan-when-full
+    title: "Open a new plan instead of growing a full one"
+    branch: null
+    pull_request_number: null
+    track: gate-and-skills
+    depends_on: [size-budget-and-report]
+    status: not_started
+    notes: >
+      /plan-create and /add-plan-item read the budget and route new work to a new
+      plan when the plan they would otherwise grow is at it. Only needs the
+      budget to exist, not the splits, so it can land ahead of wave 2. This item
+      is the reason the plan exists: without it the budget is a wall with no door.
+
+  - id: minimal-roadmap-writing
+    title: "Write roadmap sections against the budget, not against completeness"
+    branch: null
+    pull_request_number: null
+    track: gate-and-skills
+    depends_on: [size-budget-and-report]
+    status: not_started
+    notes: >
+      plan-create/SKILL.md currently instructs the opposite - "preserve its detail
+      rather than compressing it away" - and plan-item-kickoff and
+      plan-item-resolve append unbounded narrative through record's
+      --roadmap-section. Both change so the budget is not re-spent within weeks of
+      a split. Measured evidence that per-item discipline cannot catch this:
+      during the session that created this plan, workflow-unification grew 51
+      manifest and 103 roadmap lines while gaining zero items.
