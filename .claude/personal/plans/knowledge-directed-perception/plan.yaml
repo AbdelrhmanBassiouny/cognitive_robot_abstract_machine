@@ -119,10 +119,11 @@ items:
   - id: montessori-perception-on-main
     title: "Land the Montessori perception package on main"
     branch: montessori_perception_on_main
-    pull_request_number: null
+    pull_request_number: 202
     track: package-landing
     depends_on: []
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01FMKabzWhaJpTERyAaSc7Kh
     notes: >-
       Everything that depends on this is *stacked* on its branch, not waiting
       for it to merge - the same way every item of montessori-eql-stack is
