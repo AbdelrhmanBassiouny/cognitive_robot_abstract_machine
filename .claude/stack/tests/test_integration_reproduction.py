@@ -12,6 +12,7 @@ from __future__ import annotations
 import configparser
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -91,6 +92,28 @@ REPORT_PATH = "${RUNNER_TEMP}/reproductions.json"
 Where that job writes the run's document, which both of its steps name.
 """
 
+CONTINUOUS_INTEGRATION_WORKFLOW = (
+    Path(__file__).parent.parent.parent.parent / ".github" / "workflows" / "ci.yml"
+)
+"""
+The repository's own workflow, one job of which installs what the targeted job installs.
+"""
+
+REQUIREMENTS_INSTALL = "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"
+"""
+The install that identifies a job carrying the tooling dependencies and nothing else.
+"""
+
+PYTEST_INVOCATION = "python -m pytest"
+"""
+How either job runs the tests it collects.
+"""
+
+TEST_DIRECTORY_VARIABLE = re.compile(r"\$\{(\w*TESTS_DIRECTORY)\}")
+"""
+Names the shell variable a job collects a test directory through.
+"""
+
 PLUGIN_ENVIRONMENT = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
 """
 What a subprocess needs to load the plugin by name.
@@ -144,6 +167,33 @@ def reproduction_job_script() -> str:
         for script in map(step_script, workflow_steps())
         if REPRODUCTION_REPORT_OPTION in script
     )
+
+
+def tooling_job_script() -> str:
+    """
+    The pytest invocation of the job that installs the same dependencies.
+
+    Found by that install rather than by the job's name, since what makes its
+    collectible tree the same as the targeted job's is what it installs.
+
+    :return: The shell of that job's pytest step.
+    """
+    jobs = yaml.safe_load(CONTINUOUS_INTEGRATION_WORKFLOW.read_text())["jobs"]
+    for job in jobs.values():
+        scripts = [step_script(step) for step in job.get("steps", [])]
+        if any(REQUIREMENTS_INSTALL in script for script in scripts):
+            return next(script for script in scripts if PYTEST_INVOCATION in script)
+    raise AssertionError(
+        f"no job in {CONTINUOUS_INTEGRATION_WORKFLOW} installs {REQUIREMENTS_INSTALL}"
+    )
+
+
+def collected_test_directories(script: str) -> set[str]:
+    """
+    :param script: The shell of a step that runs the tests.
+    :return: The test directories it collects, by the variable naming each.
+    """
+    return set(TEST_DIRECTORY_VARIABLE.findall(script))
 
 
 def clearing_job_script() -> str:
@@ -599,6 +649,21 @@ def test_the_job_selects_the_marker_the_plugin_records():
     still reporting success.
     """
     assert f"-m {REPRODUCTION_MARKER}" in reproduction_job_script()
+
+
+def test_the_job_collects_only_the_trees_its_dependencies_cover():
+    """
+    Collecting the repository root loads every ``conftest.py``, the robotics stack's
+    included, and that one imports ``numpy`` - so a runner carrying the tooling
+    dependencies alone dies during collection before it reaches a reproduction, and the
+    job fails without having run one.
+
+    Which trees it can import is decided by what it installs, so they are read off the
+    job that installs the same thing rather than listed a second time here.
+    """
+    assert collected_test_directories(
+        reproduction_job_script()
+    ) == collected_test_directories(tooling_job_script())
 
 
 def test_the_job_loads_the_plugin_that_writes_the_document():

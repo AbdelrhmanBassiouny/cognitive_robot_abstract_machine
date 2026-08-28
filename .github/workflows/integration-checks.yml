@@ -41,6 +41,14 @@ jobs:
           source .claude/hooks/resolve-personal-notes-config.sh
           pip install pytest -r "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"
 
+      # Collected over the tooling test directories rather than the repository root:
+      # the root loads every conftest, the robotics stack's included, and that one
+      # imports numpy - so a runner carrying the tooling dependencies alone dies during
+      # collection before it reaches a reproduction at all. These are the same
+      # directories ci.yml's tooling job names, because it installs the same
+      # dependencies. A reproduction that has to live inside a robotics package is
+      # therefore not collected here and its branch stays blocked, which is the safe
+      # direction and the limit this job was scoped with.
       - name: Run every recorded reproduction
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
@@ -48,7 +56,9 @@ jobs:
           PYTHONPATH="${STACK_DIRECTORY}" python -m pytest \
             -p integration_reproduction \
             --reproduction-report="${RUNNER_TEMP}/reproductions.json" \
-            -m integration_conflict .
+            -m integration_conflict \
+            "${PLAN_DASHBOARD_TESTS_DIRECTORY}" "${HOOKS_TESTS_DIRECTORY}" \
+            "${STACK_TESTS_DIRECTORY}" "${ADD_PLAN_ITEM_TESTS_DIRECTORY}"
           status=$?
           set -e
           # 0: every recorded break is fixed. 1: at least one still reproduces, which
