@@ -4091,7 +4091,14 @@ items:
     - integration-branch
     status: in_progress
     pull_request_number: 154
-    session: https://claude.ai/code/session_01Aw5p5xzSFUKNCueN8oG6Tg
+    session: https://claude.ai/code/session_01FWoysReVCQMi9VBY5cVgcP
+    blockers:
+      - >-
+          Rebuild cadence is unanswered and is the developer's call - scheduled, per-session, or
+          gated on #154 landing. It decides whether the candidate pull request is opened by a
+          workflow holding INTEGRATION_REFRESH_TOKEN or by a session, so the remaining half of Part
+          D (candidate, verdict, force-update, and the removal of the local `--test` surface) cannot
+          be built until it is settled.
     notes: >
       Split out of `integration-branch` (#154) on 2026-08-13, on the user's decision, rather than
       folded into it. Part D of that item's own review round: the verdict moves from a local
@@ -4216,10 +4223,9 @@ items:
       three premises this entry rests on have moved, all in the direction that helps.
 
       The token is no longer a pending setup step. `INTEGRATION_REFRESH_TOKEN` is a repository
-      secret and both probes passed on 2026-08-23: one pushed a commit touching
-      `.github/workflows/` through `actions/checkout`'s persisted credential, and the second run
-      existing at all is the proof that the token's push started a run. The probe branches and
-      `token-probe.yml` are gone.
+      secret and both probes passed on 2026-08-23: one pushed a commit touching `.github/workflows/`
+      through `actions/checkout`'s persisted credential, and the second run existing at all is the
+      proof that the token's push started a run. The probe branches and `token-probe.yml` are gone.
 
       The Actions client exists as a precedent rather than as an unexercised API.
       `upstream-review-reader` (#146) merged on 2026-08-22, and what it landed is
@@ -4232,11 +4238,11 @@ items:
       and `workflow_run` only, no pytest marker for `integration_conflict_label` is registered, and
       `integration_test_command`, `--test`, `--no-test` and `_run_tests` are all still live.
 
-      The stable-branch shape is settled, by the developer on 2026-08-28: the candidate pull
-      request exists to trigger CI and nothing else, `integration` is force-updated to the
-      candidate once its run is green, and the candidate is closed unmerged. That keeps the
-      regenerate-from-scratch property a merge target would have cost, and it is available because
-      the branch is a pointer rather than history anyone builds on.
+      The stable-branch shape is settled, by the developer on 2026-08-28: the candidate pull request
+      exists to trigger CI and nothing else, `integration` is force-updated to the candidate once
+      its run is green, and the candidate is closed unmerged. That keeps the regenerate-from-scratch
+      property a merge target would have cost, and it is available because the branch is a pointer
+      rather than history anyone builds on.
 
       `integration` still points at `899a04a` - `tests_passed: null`, and #199 measured it 124
       commits and five days behind `main`. So the branch this item defines as "the last build whose
@@ -4244,6 +4250,51 @@ items:
       correct value has to be earned by a real run rather than inherited. Rebuild cadence is the
       open question underneath that, and it is this item's to answer now that the verdict is what
       makes an automatic rebuild safe.
+
+      Resolved 2026-08-28 (session https://claude.ai/code/session_01FWoysReVCQMi9VBY5cVgcP), and
+      Part D is now half built rather than unwritten. Two things were actually stalling it, and only
+      one was recorded. The recorded half was that nothing of Part D existed. The unrecorded half
+      was that #154 was `mergeable_state: dirty` against `main` - 157 commits behind, conflicting in
+      `plan-item-kickoff/SKILL.md` and `plan-item-resolve/SKILL.md`, reported by the maintenance
+      pass four times since 2026-08-18 and last on 2026-08-24. A conflicted pull request is excluded
+      from its own base merge, so the branch was drifting further out every day the item sat. `main`
+      had restructured both skills around execution modes (seven sections to four) while this branch
+      added a manifest-staleness step to each; both survive, with main's numbering as the live
+      structure and each branch-added step demoted to a subsection of the step it generalises. The
+      clearing condition `integration-conflict` shipped without is built and verified. The marker is
+      derived from the label rather than spelled again - `DefaultLabel.INTEGRATION_CONFLICT` with
+      the hyphen a marker name cannot carry replaced - and it is registered in `pytest.ini` and
+      deliberately left in the default selection, since excluding it the way `slow` is excluded
+      would keep the breaking branch's own run green, which is the one outcome the reproduction
+      exists to prevent. `.claude/stack/integration_reproduction.py` is the marker, the run's
+      document and the lifting; it is also the pytest plugin the targeted job loads, registered as a
+      plugin instance rather than module state so a run's collection belongs to that run.
+      `.github/workflows/integration-checks.yml` runs every marked test on `pull_request` and
+      `workflow_dispatch` and hands the document to `integration.py clear-fixed-breaks`. 705 tests
+      pass across the four directories CI runs, from 675. Three rules the tests pin rather than the
+      prose asserting: a branch is fixed only when every reproduction recorded against it passes,
+      since it can break more than one sibling; a reproduction counts as passing only if its body
+      ran and no phase failed, so a skipped one leaves the block standing rather than lifting it on
+      evidence that never ran; and a branch carrying no block is not written to at all, since a
+      reproduction keeps passing on every later run once the break is gone. Both were
+      mutation-checked - `all` to `any`, and clearing every recorded branch rather than only the
+      fixed ones - and each fails exactly one test, for its own reason. One correction to what the
+      2026-08-22 kickoff settled, found while writing it: the kickoff put the workflow's marker
+      selection, plugin name, report path and subcommand in YAML with nothing checking them. A
+      workflow cannot import a constant, so those four are the one place each name is spelled twice;
+      they are now asserted against their definitions, and a selection naming something else would
+      otherwise have run nothing while still reporting success. What is not built, and why the
+      boundary is there rather than further on: the candidate pull request, the Actions/check-run
+      reads, the force-update of `integration` on green, and the removal of
+      `integration_test_command`, `--test`, `--no-test`, `TestCommandNotConfiguredError` and
+      `_run_tests`. Two reasons, neither of them running out of room. The removal cannot come before
+      the candidate/verdict is proven on a real CI run, because `build_integration` currently moves
+      `integration` to every finished build unconditionally - taking that out before the verdict
+      works leaves the branch never moving at all, which regresses the fast-PR process rather than
+      staging it. And the shape of what opens the candidate depends on rebuild cadence, which the
+      2026-08-28 audit recorded as still live and the developer's call: scheduled, per-session, or
+      gated on #154 landing decides whether the candidate is opened by a workflow holding the PAT or
+      by a session, and building either before that is answered builds the wrong one.
 
   - id: always-read-upstream-reviews
     title: "Read upstream review threads whether or not the fork pull request is labelled"
