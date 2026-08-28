@@ -65,7 +65,7 @@ try:
     )
 
     node = rclpy.create_node("viz_marker")
-    v = VizMarkerPublisher(_world=world, node=node).with_tf_publisher()
+    v = VizMarkerPublisher(_world=world, node=node)
 except ImportError:
     node = None
 
