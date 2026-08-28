@@ -35,6 +35,19 @@ CLAUDE_PERSONAL_NOTES_* variables - where they are read rather than in prose.
 - 553 tests, from 551; six mutations checked. Manifest, roadmap and dashboard
   all updated in the same turn.
 
+## Checked against the services, not the script (7114b3b4)
+
+- Running the script and its tests only proves the script does what it says.
+  Following the printed steps found: the docs URL named the cloud-sessions
+  overview rather than cloud-environments#set-environment-variables, which is
+  the page with the variable list; that list is .env format, where an unquoted
+  value is read only as far as the first # (quoted_if_needed now quotes those);
+  and the connector URL was the list rather than the GitHub authorization flow.
+- Confirmed rather than corrected: merged/in-review/bug all exist on the fork
+  under these names (checked through the API, not just PullRequestLabel), and
+  gh is genuinely absent from a session container.
+- 555 tests, from 553.
+
 ## Next
 
 - Nothing outstanding in this session.
