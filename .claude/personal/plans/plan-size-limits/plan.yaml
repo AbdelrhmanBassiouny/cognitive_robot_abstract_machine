@@ -60,14 +60,9 @@ items:
       3,676 and 14,259 lines, so the budget clears six of eight plans untouched.
       The count must parse the YAML rather than grep it - rdr-refactor reads 0
       items under `grep '^  - id:'` because its manifest indents differently,
-      and 49 once parsed.
-    blockers:
-      - >
-        Where the constants live is undecided and depends on landing order.
-        .claude/shared/plan_model.py already holds ItemStatus and is the natural
-        home, but it exists only on PR #151 and PR #154, not on main. Either base
-        on one of them or place the constants elsewhere until they land - do not
-        build a third copy.
+      and 49 once parsed. Landed as .claude/hooks/plan_size_budget.py, a module
+      of its own on main rather than a third copy of .claude/shared/plan_model.py
+      - the later items import the budget from there.
 
   - id: split-workflow-unification
     title: "Split workflow-unification into plans under the budget"
