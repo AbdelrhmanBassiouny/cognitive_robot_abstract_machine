@@ -307,6 +307,23 @@ Note the box is bigger than the table region at the table plane, on purpose: the
 hull covers the region at both heights, so something tall standing at the edge of
 the region is still shown whole.
 
+### Where this work continues: the `knowledge-directed-perception` plan
+
+Created 2026-08-28. `tracy_icra` is not one of its item branches, so
+`session-start.sh` will not auto-discover it from this branch - this pointer is
+how a session working here finds it.
+
+- Manifest: `.claude/personal/plans/knowledge-directed-perception/plan.yaml` on
+  `claude/personal-notes` (9 items, 3 waves).
+- Dashboard: https://claude.ai/code/artifact/f53db2a5-babc-4316-a0d8-8961e7759aaa
+- Tracking issue: cram2 fork #201.
+
+Its first item, `montessori-perception-on-main`, lands
+`experiments/src/experiments/montessori/perception/` on `main` off this branch -
+sorinar329's `75258debd` plus the seven commits after it, and nothing else from
+`tracy_icra`. Everything below stays true of this branch; the plan is where the
+next round of work is tracked, not here.
+
 ### Next / open
 - The x/y bounds of `TRACY_WORKSPACE` (x 0.35-1.35, y -0.45..0.75) still reach
   past the pieces and take in the clutter at the table's far edge (a jar, a spray
