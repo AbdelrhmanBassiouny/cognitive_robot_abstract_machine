@@ -23,8 +23,11 @@ CLAUDE_PERSONAL_NOTES_* variables - where they are read rather than in prose.
 
 ## Next
 
-- Dashboard republish for workflow-unification.
+- Nothing outstanding in this session. Dashboard republished at the plan's
+  existing artifact URL (56 items, no drift).
 - After #107 lands: wire setup_steps.py into setup-personal-notes/SKILL.md's
   steps 4 and 8, which this PR left untouched to avoid conflicting with that
   rewrite.
+- CI on #203 not yet read; the .claude/-only diff is covered by
+  test_claude_dev_tooling, which passes locally at 551.
 
