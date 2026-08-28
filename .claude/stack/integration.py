@@ -91,6 +91,12 @@ from integration_reproduction import (  # noqa: E402
     ReproductionRun,
     clear_fixed_breaks,
 )
+from integration_verdict import (  # noqa: E402
+    Candidate,
+    CandidateVerdict,
+    open_candidate,
+    read_verdict,
+)
 
 POINTER_BRANCH = "integration"
 """The branch a developer checks out, moved to each build that finishes.
@@ -153,6 +159,21 @@ class ReportKey(StrEnum):
 
     LEFT_OUT = "left_out"
     """The branches a build never tried to merge, each saying which rule left it out."""
+
+    CANDIDATE = "candidate"
+    """The pull request opened so a build's checks run."""
+
+    HEAD = "head"
+    """The commit a candidate's checks are reported against."""
+
+    VERDICT = "verdict"
+    """What a candidate's checks amount to."""
+
+    FAILED_CHECKS = "failed_checks"
+    """Every finished check of a candidate that failed, by name."""
+
+    PUBLISHED = "published"
+    """Whether the base branch was moved to the build being judged."""
 
     TIPS_TESTED = "tips_tested"
     """The tips a search ran the suite over, in order."""
@@ -1196,6 +1217,15 @@ class IntegrationExitCode(IntEnum):
     without review. Distinct from an ordinary red suite because the answer differs:
     report and stop, since re-resolving into the same failure is how a build thrashes."""
 
+    CANDIDATE_STILL_RUNNING = 13
+    """The candidate's checks have not finished, so there is nothing to act on yet. Its
+    own status rather than a failure: a caller waiting for a verdict asks again, and one
+    that read this as red would throw away a build nothing had judged."""
+
+    CANDIDATE_FAILED = 14
+    """The candidate's checks failed, so the build is not one to hand anybody. The
+    branches it was made of are where the failure is."""
+
     @property
     def name_for_a_caller(self) -> str:
         """What this status means, in words rather than as a number to be looked up.
@@ -1573,6 +1603,187 @@ class BlockBranchCommand(IntegrationCommand):
         blocked = localised.block_the_branch_that_causes_it(run.configuration, fork)
         print(blocked.as_json() if arguments.json else blocked.as_line())
         return report.exit_code
+
+
+@dataclass(frozen=True)
+class OpenCandidateCommand(IntegrationCommand):
+    """Publishes a build and opens the pull request that gets it judged."""
+
+    @property
+    def invoked_as(self) -> str:
+        """The name it is invoked by on the command line."""
+        return "open-candidate"
+
+    @property
+    def description(self) -> str:
+        """What it does, as ``--help`` puts it."""
+        return "publish a build and open the pull request that gets it checked"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare this command's flags on."""
+        parser.add_argument(
+            "--build", required=True, help="the build branch to have judged"
+        )
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """Publish the build and open its candidate.
+
+        The build is pushed first: a pull request naming a branch the fork does not
+        carry cannot be opened, and the checks are reported against the commit rather
+        than the branch, so the head is read back from what was pushed.
+
+        :param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        head = run.git.run("rev-parse", arguments.build).strip()
+        run.git.run(
+            "push",
+            "--force",
+            run.configuration.fork_remote,
+            f"{arguments.build}:{arguments.build}",
+        )
+        candidate = open_candidate(run.fork(), arguments.build, POINTER_BRANCH, head)
+        document = {
+            ReportKey.CANDIDATE: candidate.number,
+            ReportKey.BUILD_BRANCH: candidate.build_branch,
+            ReportKey.HEAD: candidate.head,
+        }
+        print(
+            json.dumps(document, indent=2)
+            if arguments.json
+            else _candidate_line(candidate)
+        )
+        return IntegrationExitCode.SUCCESS
+
+
+@dataclass(frozen=True)
+class SettleCandidateCommand(IntegrationCommand):
+    """Reads a candidate's checks once, and acts on what they say."""
+
+    @property
+    def invoked_as(self) -> str:
+        """The name it is invoked by on the command line."""
+        return "settle-candidate"
+
+    @property
+    def description(self) -> str:
+        """What it does, as ``--help`` puts it."""
+        return "publish the build a candidate judged green, or report why not"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare this command's flags on."""
+        parser.add_argument(
+            "--candidate", required=True, type=int, help="the candidate's number"
+        )
+        parser.add_argument(
+            "--build", required=True, help="the build branch it is judging"
+        )
+        parser.add_argument(
+            "--head", required=True, help="the commit its checks are reported against"
+        )
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """Act on the checks as they stand, once.
+
+        Read once rather than waited on: a caller that wants to wait asks again, and
+        keeping the waiting outside makes every invocation a decision that can be read
+        on its own.
+
+        A published build's branch is deleted, since the pointer now holds the same
+        commit and a rebuild would otherwise leave one behind every time. A rejected
+        one is kept: its candidate names checks somebody has to look at, and a closed
+        pull request whose head is gone cannot be read.
+
+        :param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        fork = run.fork()
+        candidate = Candidate(
+            number=arguments.candidate,
+            build_branch=arguments.build,
+            head=arguments.head,
+        )
+        checks = read_verdict(fork, candidate)
+        published = checks.verdict is CandidateVerdict.PASSED
+        if published:
+            run.git.run(
+                "push",
+                "--force",
+                run.configuration.fork_remote,
+                f"{candidate.head}:refs/heads/{POINTER_BRANCH}",
+            )
+        if checks.verdict is not CandidateVerdict.RUNNING:
+            fork.close_pull_request(candidate.number)
+        if published:
+            run.git.run(
+                "push",
+                "--delete",
+                run.configuration.fork_remote,
+                candidate.build_branch,
+            )
+        document = {
+            ReportKey.VERDICT: str(checks.verdict),
+            ReportKey.CANDIDATE: candidate.number,
+            ReportKey.BUILD_BRANCH: candidate.build_branch,
+            ReportKey.HEAD: candidate.head,
+            ReportKey.FAILED_CHECKS: [run.name for run in checks.failed],
+            ReportKey.PUBLISHED: published,
+        }
+        print(
+            json.dumps(document, indent=2)
+            if arguments.json
+            else _verdict_line(candidate, checks, published)
+        )
+        return _verdict_exit_code(checks.verdict)
+
+
+def _candidate_line(candidate: Candidate) -> str:
+    """:param candidate: The candidate opened.
+    :return: One tab-separated line naming it."""
+    return f"{candidate.build_branch}\tcandidate\t{candidate.number}"
+
+
+def _verdict_line(candidate: Candidate, checks: Any, published: bool) -> str:
+    """:param candidate: The candidate read.
+    :param checks: What its checks say.
+    :param published: Whether the base branch was moved.
+    :return: One tab-separated line."""
+    detail = ",".join(run.name for run in checks.failed) or (
+        POINTER_BRANCH if published else ""
+    )
+    return f"{candidate.build_branch}\t{checks.verdict}\t{detail}"
+
+
+def _verdict_exit_code(verdict: CandidateVerdict) -> IntegrationExitCode:
+    """Map a verdict onto the status a caller acts on.
+
+    An absent check is answered as still running rather than as a failure: a caller that
+    threw the build away would be discarding one nothing had judged.
+
+    :param verdict: What the checks amount to.
+    :return: The process exit code.
+    """
+    if verdict is CandidateVerdict.PASSED:
+        return IntegrationExitCode.SUCCESS
+    if verdict is CandidateVerdict.FAILED:
+        return IntegrationExitCode.CANDIDATE_FAILED
+    return IntegrationExitCode.CANDIDATE_STILL_RUNNING
 
 
 @dataclass(frozen=True)
