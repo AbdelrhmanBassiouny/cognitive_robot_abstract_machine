@@ -10069,3 +10069,81 @@ One thing this settles for Part D: **the local `--test` verdict is what caught t
 stays until the CI verdict replaces it rather than being removed beside it. That is the same
 conclusion the boundary drawn on 2026-08-28 reached from the other direction, now with a case
 behind it rather than an argument.
+
+## Update 2026-08-28 (Part D): the gate was mine, not the design's
+
+`integration-branch-ci-verdict` had been recorded as gated on #154 landing on `main`, because a
+scheduled Action must invoke `integration.py` and that is not on `main`. **It does not have to
+be.** A `schedule:` trigger registers from the repository's *default* branch; here the default
+branch is `integration`, and `integration` is `main` plus every carried tip — so anything on #154
+reaches it. The proof had been sitting in the tree the whole time: `integration-checks.yml` exists
+on no branch but #154 and was already on `origin/integration`.
+
+So the whole pipeline is built on #154's branch and runs from there, with no merge to `main`.
+Worth carrying as a shape rather than a fact about this fork: **a claim that work is blocked is
+worth re-deriving before it is acted on**, and this one had been carried through three entries
+without anyone checking what actually registers a schedule.
+
+### The pieces
+
+`maintenance_github.py` gains `CandidatePullRequests` — open a pull request, close one, read a
+commit's check runs — declared *apart* from the reads and writes a maintenance pass makes, because
+nothing that maintains the stack opens a pull request and a pass handed that interface could open
+one by mistake. `integration_verdict.py` turns a commit's check runs into one of four verdicts, and
+`integration.py` gains `open-candidate` and `settle-candidate`.
+
+### Why a candidate at all
+
+`ci.yml` triggers on `push` to `main` and on `pull_request` and on nothing else, so a build that is
+only pushed collects no checks. That is what makes the candidate the only shape that reaches a
+verdict rather than one option among several. It is never merged: a build is regenerated from
+scratch, shares no history with the branch it replaces, and merging would give that branch a
+history the next build cannot regenerate.
+
+Green moves the branch onto the build and closes the candidate unmerged; red closes it naming the
+checks that failed; unfinished does nothing and says so with its own status, so a caller waiting
+asks again rather than discarding a build nothing had judged. `ABSENT` is told apart from `RUNNING`
+on purpose — it is the state that can mean something is *wrong* rather than slow, and the thing
+that causes it is exactly the credential mistake below.
+
+The waiting is in the workflow rather than in the command, which keeps every invocation a decision
+that can be read on its own.
+
+### Two operational rules the schedule forces
+
+A published build's branch is **deleted**: the pointer then holds the same commit, and a rebuild
+four times a day would otherwise leave one behind every time. A rejected build's branch is **kept**
+— its candidate names checks somebody has to look at, and a closed pull request whose head is gone
+cannot be read.
+
+`INTEGRATION_REFRESH_TOKEN` rather than `GITHUB_TOKEN`: GitHub starts no workflow run from an event
+`GITHUB_TOKEN` caused, so a candidate opened with it would sit with no checks forever.
+
+### A test that passed on a comment
+
+The workflow retypes command names, exit statuses and document keys, since a workflow cannot import
+a constant, and those are asserted against their definitions. The first version of that assertion
+searched the whole step script — and a mutation check showed it **passing** while the job branched
+on the wrong status, because the comment explaining the right one satisfied the search. The helper
+strips comments now.
+
+Generalizable, and a sharper form of a lesson this roadmap already carries: **a contract test over
+prose has to search the executable part.** The explanation of a rule and the rule itself sit
+inches apart in a shell script, and only one of them runs.
+
+### State
+
+744 tests pass across the four directories CI runs, from 715; six mutations checked, each caught by
+exactly the test naming its rule. Bootstrapped by one hand-run rebuild, since the workflow could
+not dispatch itself until it was on the default branch: `integration` is at `201a903a67` with five
+tips merged and the suite green, GitHub lists `Integration refresh` as an active workflow, and run
+`33214932131` is the first dispatch of it.
+
+### What is deliberately not removed, for a better reason than before
+
+`integration_test_command`, `--test`, `--no-test` and `_run_tests` stay. The earlier reason was
+sequencing — the pointer moved unconditionally, so removing the local verdict first left the branch
+never moving. That reason is now spent, and a better one replaced it the same day: the local suite
+is what caught the #154-against-#158 break hours earlier, and it answers *before* a build is pushed
+rather than after a candidate has run a matrix. What the CI verdict replaces is the **publishing**
+decision, which it now makes; it does not replace a fast answer with a slow one.
