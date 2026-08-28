@@ -12,6 +12,11 @@ description: >
   effects arm what perception expects to find, which is what makes a failure
   detectable. Detectors sit behind an interface, so a RoboKudo analysis engine
   can be one of them without the reasoning layer knowing.
+
+  The deliverable is the running demo on tracy_icra, not the pull requests:
+  every item merges into that branch as soon as it works, without waiting for
+  its own pull request to land on main, and each wave has a demo item that says
+  what has to be true on the real robot before the wave counts as finished.
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 201
 
@@ -44,6 +49,23 @@ waves:
       failure rather than as an absence.
 
 tracks:
+
+  - id: demo-grounding
+    name: "The demo runs on perception that reads the world"
+    wave: grounding
+    description: >-
+      The deadline deliverable, tracked in the same wave as the work it
+      integrates rather than left to the end. Runs in parallel with the
+      surfaces track: an item merges into tracy_icra when it works, not when
+      its pull request lands.
+
+  - id: demo-requests
+    name: "The demo asks by query"
+    wave: requests
+
+  - id: demo-expectation
+    name: "The demo detects and recovers from a failure"
+    wave: expectation
 
   - id: package-landing
     name: "The perception package reaches main"
@@ -245,6 +267,67 @@ items:
       engine, so the rule tree can choose a learned detector (RoboKudo ships
       CLIP and YOLO annotators) for a target with no geometric model. Proves
       the reasoning layer is executor-agnostic and is the route by which this
-      work moves into RoboKudo after the deadline. Deliberately last: nothing
-      earlier depends on it, and it can be dropped without weakening items 1-8
-      if the deadline gets tight.
+      work moves into RoboKudo after the deadline. Deliberately last and
+      expected to fall after it: nothing else depends on it, no demo item needs
+      it, and it is the first thing to drop if the deadline tightens.
+
+  - id: demo-catches-up-with-main
+    title: "Bring the demo branch up to date with main while it is still cheap"
+    branch: tracy_icra
+    pull_request_number: null
+    track: demo-grounding
+    depends_on: []
+    status: not_started
+    notes: >-
+      Do this first and do it now. main is 234 commits ahead of tracy_icra and
+      their merge base is 2026-08-19; a trial merge today conflicts in exactly
+      one file, semantic_digital_twin/adapters/multi_sim.py, which is a
+      colleague's Mujoco work and unrelated to perception. Every day this is
+      left the merge gets more expensive, and every later item in this plan is
+      developed off main and has to reach this branch. No pull request: this
+      merges into tracy_icra, which is not proposed anywhere.
+
+  - id: demo-runs-on-grounded-perception
+    title: "The demo sees only the table, finds pieces on the lid, and reports each once"
+    branch: tracy_icra
+    pull_request_number: null
+    track: demo-grounding
+    depends_on: [one-detection-per-thing, demo-catches-up-with-main]
+    status: not_started
+    notes: >-
+      Wave one is finished when the three faults are gone on the real robot,
+      not when their pull requests are approved: the clipped windows show the
+      table and nothing beyond it, a cube resting on the board's lid is
+      detected there, and no detection rides the board's borders. Verified
+      against the live camera, with a captured frame kept for the tests.
+
+  - id: demo-asks-by-query
+    title: "The demo's perception runs because a query was evaluated"
+    branch: tracy_icra
+    pull_request_number: null
+    track: demo-requests
+    depends_on: [choose-detection-method, demo-runs-on-grounded-perception]
+    status: not_started
+    notes: >-
+      Every perception call in montessori_demo.py goes through the backend
+      rather than calling the pipeline by hand, and the detector that answers
+      is the one the rule tree chose from the surface and the target - visibly
+      a different one for the steel table than for the board's lid. This is the
+      wave's claim made demonstrable: the same question, answered differently
+      because the robot knows what it is looking at.
+
+  - id: demo-detects-and-recovers-a-failed-insert
+    title: "A failed insertion is noticed because perception looked where the action promised"
+    branch: tracy_icra
+    pull_request_number: null
+    track: demo-expectation
+    depends_on: [expectations-from-events, demo-asks-by-query]
+    status: not_started
+    notes: >-
+      The end-to-end story the paper is written around: the robot picks a
+      piece, Segmind's LossOfSupportEvent takes the table out of the search,
+      the insertion's declared effect points perception at the board's lid, and
+      when the insertion fails perception finds the piece somewhere the plan
+      did not expect and says so. Recovery follows from that report. If the
+      deadline forces a cut, this is the item to protect and robokudo-detector
+      is the one to drop.

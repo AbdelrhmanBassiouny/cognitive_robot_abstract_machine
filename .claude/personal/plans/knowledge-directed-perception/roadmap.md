@@ -168,6 +168,40 @@ the event confirms it. The same mechanism is free failure detection —
 perception looked exactly where the action promised, found nothing, and says
 so, which is what a recovery can act on.
 
+## The deliverable is the demo, not the pull requests
+
+Added 2026-08-28 after the developer pointed out that the first cut of this
+plan tracked nine engineering items and none of them meant "the demo runs".
+That was a real gap: the deadline is a working demonstration on `tracy_icra`,
+and a plan that only tracked branches off `main` could have every item green
+while the robot ran none of it.
+
+**The standing rule: an item's branch merges into `tracy_icra` as soon as it
+works, without waiting for its own pull request to land on `main`.** The pull
+request is the review record; `tracy_icra` is the running truth. Coupling them
+would let review latency starve the demo, which is the one thing that cannot
+slip. When review changes an item afterwards, re-merge.
+
+**Each wave has a demo item** saying what has to be true on the real robot
+before the wave counts as finished — `demo-runs-on-grounded-perception`,
+`demo-asks-by-query`, `demo-detects-and-recovers-a-failed-insert`. They sit in
+their own tracks so they run alongside the engineering rather than queueing
+behind it.
+
+**`demo-catches-up-with-main` comes first, and should be done immediately.**
+Measured 2026-08-28: `main` is 234 commits ahead of `tracy_icra`, their merge
+base is `1646dd355` from 2026-08-19, and a trial merge (`git merge-tree
+--write-tree`) conflicts in exactly one file —
+`semantic_digital_twin/src/semantic_digital_twin/adapters/multi_sim.py`, a
+colleague's Mujoco work, unrelated to perception. Every later item in this plan
+is developed off `main` and has to reach this branch, and this merge only gets
+more expensive while it waits.
+
+**If the deadline forces a cut**, protect
+`demo-detects-and-recovers-a-failed-insert` — it is the end-to-end story the
+paper is written around — and drop `robokudo-detector`, which nothing else
+depends on and no demo item needs.
+
 ## Sequencing decisions
 
 - **The perception package lands on `main` first** (`montessori-perception-on-main`).
