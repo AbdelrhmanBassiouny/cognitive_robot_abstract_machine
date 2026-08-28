@@ -172,15 +172,25 @@ class CameraFrameViewer:
     Guards the held frame against being read while it is being replaced.
     """
 
-    def show(self, color: np.ndarray, depth: np.ndarray) -> None:
+    def show_color(self, color: np.ndarray) -> None:
         """
-        Hand in the newest frame, to be drawn at the next :meth:`refresh`.
+        Hand in the newest colour image, to be drawn at the next :meth:`refresh`.
 
         :param color: The colour image, blue/green/red.
-        :param depth: The depth image in metres.
         """
         with self._lock:
             self._color = color
+
+    def show_depth(self, depth: np.ndarray) -> None:
+        """
+        Hand in the newest depth image, to be drawn at the next :meth:`refresh`.
+
+        Held apart from the colour image so a stream that has stopped leaves its own
+        window empty instead of emptying both.
+
+        :param depth: The depth image in metres.
+        """
+        with self._lock:
             self._depth = depth
 
     def refresh(self) -> None:

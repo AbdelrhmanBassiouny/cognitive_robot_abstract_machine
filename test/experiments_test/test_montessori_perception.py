@@ -608,15 +608,24 @@ def test_a_wide_image_is_shrunk_to_the_window_keeping_its_proportions():
 def test_the_viewer_draws_the_newest_frame_it_was_shown():
     display = RecordingDisplay()
     viewer = CameraFrameViewer(display=display)
-    viewer.show(np.zeros((2, 2, 3), dtype=np.uint8), np.zeros((2, 2), dtype=np.float32))
-    viewer.show(
-        np.full((2, 2, 3), 7, dtype=np.uint8), np.ones((2, 2), dtype=np.float32)
-    )
+    viewer.show_color(np.zeros((2, 2, 3), dtype=np.uint8))
+    viewer.show_depth(np.ones((2, 2), dtype=np.float32))
+    viewer.show_color(np.full((2, 2, 3), 7, dtype=np.uint8))
 
     viewer.refresh()
 
     assert display.drawn[CameraWindow.COLOR][0, 0].tolist() == [7, 7, 7]
     assert set(display.drawn) == {CameraWindow.COLOR, CameraWindow.DEPTH}
+
+
+def test_a_stream_that_has_not_arrived_leaves_only_its_own_window_empty():
+    display = RecordingDisplay()
+    viewer = CameraFrameViewer(display=display)
+    viewer.show_color(np.zeros((2, 2, 3), dtype=np.uint8))
+
+    viewer.refresh()
+
+    assert set(display.drawn) == {CameraWindow.COLOR}
 
 
 def test_the_viewer_draws_nothing_before_a_frame_has_arrived():
