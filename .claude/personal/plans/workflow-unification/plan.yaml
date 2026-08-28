@@ -4302,6 +4302,21 @@ items:
       would drop the branch that carries this work out of the process it exists to serve. Review
       state is carried by the pull request being open and unmerged instead.
 
+      The targeted job's first real run failed, and the cause is worth carrying because it follows
+      from the job's own design rather than from a mistake in it. It collected `-m
+      integration_conflict .` from the repository root, which loads every `conftest.py` -including
+      the robotics stack's, which imports `numpy` - so a runner carrying the tooling dependencies
+      alone died during collection, exit 4, before reaching a reproduction at all. Fixed in
+      `db134d33` by collecting the four test directories `ci.yml`'s tooling job names, which is
+      exactly the tree those dependencies cover. The rule is read off that job rather than listed a
+      second time, since what makes the two trees the same is the install, not the name;
+      mutation-checked, and reverting to the root fails only the test that names the rule. Verified
+      locally as the healthy-tree case: 706 collected, all deselected, exit 5, an empty document
+      written, and the clearing step reading it back and clearing nothing at exit 0. It also makes
+      the limit recorded at kickoff concrete rather than theoretical - a reproduction that has to
+      live inside a robotics package is not collected here and its branch stays blocked, which is
+      the safe direction. 706 tests pass across the four directories CI runs, from 705.
+
   - id: always-read-upstream-reviews
     title: "Read upstream review threads whether or not the fork pull request is labelled"
     branch: claude/plan-item-kickoff-workflow-y2xfva
