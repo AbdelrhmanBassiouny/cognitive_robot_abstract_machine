@@ -44,11 +44,12 @@ tracks:
 items:
   - id: size-budget-and-report
     title: "A named size budget, and a report of every plan against it"
-    branch: null
-    pull_request_number: null
+    branch: claude/plan-size-limits-budget-alp8p2
+    pull_request_number: 207
     track: budget-measurement
     depends_on: []
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01SziLFUkhv1REwwQM8dQoJj
     notes: >
       The budget as named constants - 15 items and 2,000 combined plan.yaml +
       roadmap.md lines - with a typed check and a command reporting every plan

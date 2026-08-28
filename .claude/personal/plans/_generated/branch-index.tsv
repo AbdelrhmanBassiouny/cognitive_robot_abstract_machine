@@ -38,6 +38,7 @@ montessori_live_event_timeline_tab	montessori-eql-stack
 claude/eql-underspecified-queries-hwufbl	montessori-eql-stack
 claude/plan-graph-executing-node-hqkt32	montessori-eql-stack
 montessori_detachable_panels	montessori-eql-stack
+claude/plan-size-limits-budget-alp8p2	plan-size-limits
 query-class-refactor	rdr-refactor
 eql-core-prep	rdr-refactor
 code-extraction	rdr-refactor
