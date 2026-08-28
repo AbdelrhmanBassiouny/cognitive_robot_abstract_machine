@@ -21,6 +21,12 @@ no hole-contact or insertion, since the shapes here are bare bodies with no boar
 Its events stream to the live dashboard at ``http://127.0.0.1:5000`` while the demo
 runs, and a per-shape yes/no verdict is logged after each pick.
 
+While a shape is carried to its hole, the left gripper's knuckle joint is watched for
+slip: the close is re-commanded a little past fully closed on a fixed period and, if the
+fingers then travel past where the grasp first settled, the shape has left the pads (see
+:mod:`~experiments.tracy_experiments.montessori.gripper_feedback`). Each poll's verdict
+is logged, and a slip also shows on the dashboard as a ``GripperSlipEvent``.
+
 Run with (``iai_tracy_description`` and the Giskard/world-fetcher ROS stack must be
 running)::
 
@@ -35,6 +41,7 @@ import signal
 import subprocess
 import threading
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -78,6 +85,13 @@ from experiments.tracy_experiments.montessori.event_monitoring import (
     build_pick_monitor,
 )
 from experiments.tracy_experiments.montessori.grasp_widths import GraspCloseTable
+from experiments.tracy_experiments.montessori.gripper_feedback import (
+    GraspVerdict,
+    GripperJointStateListener,
+    GripperSlipEvent,
+    LiveGraspGuard,
+    confirm_grasp,
+)
 from experiments.tracy_experiments.robotiq_gripper import RobotiqGripperController
 from segmind.datastructures.events import (
     DetectionEvent,
@@ -151,6 +165,12 @@ model-based support and contact detectors see it on the table. This offset then 
 the grasp target back up by the same distance the shapes used to be spawned hovering, so
 the arm still reaches where it did before the spawn was lowered. A starting point to
 tune on hardware, not a measured value.
+"""
+
+SLIP_WATCH_INTERVAL_SECONDS = 1.0
+"""
+Seconds between the slip watch's re-closes while a shape is carried to its hole (see
+:class:`~experiments.tracy_experiments.montessori.gripper_feedback.LiveGraspGuard`).
 """
 
 
@@ -391,6 +411,9 @@ class _SortingRig:
     gripper: RobotiqGripperController
     """Direct Robotiq gripper control, bypassing Giskard."""
 
+    gripper_listener: GripperJointStateListener
+    """Live knuckle-position feed for the pick arm, read by the slip watch."""
+
     grasp_description: GraspDescription
     """Grasp used for every shape."""
 
@@ -405,6 +428,9 @@ class _SortingRig:
 
     grasp_height_offset: float = GRASP_HEIGHT_OFFSET
     """Height the reach, grasp and lift are aimed above a shape's own centre."""
+
+    slip_watch_interval: float = SLIP_WATCH_INTERVAL_SECONDS
+    """Seconds between the slip watch's re-closes while carrying a shape."""
 
     def sort(
         self, body: Body, category: MontessoriShapeCategory, half_height: float
@@ -490,18 +516,83 @@ class _SortingRig:
             DetectionEvent,
             lambda event, name=shape_name: self.feed.publish(name, event),
         )
+        close_setpoint = self.close_table.setpoint_for(category)
         monitor.start()
         try:
             self.gripper.move(PICK_ARM, GripperState.OPEN)
             reach_plan.perform()
-            self.gripper.close_to(PICK_ARM, self.close_table.setpoint_for(category))
+            self.gripper.close_to(PICK_ARM, close_setpoint)
             lift.perform()
-            place.perform()
+            self._carry_watching_for_slip(body, close_setpoint, place.perform)
             self.gripper.move(PICK_ARM, GripperState.OPEN)
             retract_and_park.perform()
         finally:
             monitor.stop()
         _log_pick_events(body, monitor)
+
+    def _carry_watching_for_slip(
+        self, body: Body, close_setpoint: float, carry: Callable[[], None]
+    ) -> None:
+        """
+        Run ``carry`` -- the transport and release -- while watching the left gripper's
+        knuckle joint for ``body`` slipping out.
+
+        The close is firmed to ``close_setpoint`` and the knuckle read once: an empty
+        gripper (the grasp missed) skips the watch. Otherwise the close is re-commanded
+        every :attr:`slip_watch_interval` seconds for as long as ``carry`` runs; each
+        poll's verdict is logged, and a slip also streams a
+        :class:`~experiments.tracy_experiments.montessori.gripper_feedback.
+        GripperSlipEvent` to the dashboard.
+
+        :param body: The shape being carried.
+        :param close_setpoint: The shape's own close setpoint, re-commanded to firm the
+            grasp before the knuckle is read.
+        :param carry: Runs the transport-and-place motion.
+        """
+        shape_name = body.name.name
+        self.gripper.close_to(PICK_ARM, close_setpoint)
+        confirmation = confirm_grasp(self.gripper_listener.latest_closure)
+        logger.info("%s: grasp check -> %s.", shape_name, confirmation.verdict)
+        if confirmation.slip_detector is None:
+            carry()
+            return
+
+        guard = LiveGraspGuard(
+            controller=self.gripper,
+            listener=self.gripper_listener,
+            arm=PICK_ARM,
+            slip_detector=confirmation.slip_detector,
+            period=self.slip_watch_interval,
+        )
+        carry_done = threading.Event()
+        watcher = threading.Thread(
+            target=guard.watch,
+            args=(
+                lambda: not carry_done.is_set(),
+                lambda verdict: self._report_slip_verdict(body, verdict),
+            ),
+            daemon=True,
+            name=f"slip-watch-{shape_name}",
+        )
+        watcher.start()
+        try:
+            carry()
+        finally:
+            carry_done.set()
+            watcher.join(timeout=2.0)
+
+    def _report_slip_verdict(self, body: Body, verdict: GraspVerdict) -> None:
+        """
+        Log one slip-watch poll and, if ``body`` has slipped, stream a
+        :class:`~experiments.tracy_experiments.montessori.gripper_feedback.
+        GripperSlipEvent` for it to the dashboard.
+
+        :param body: The shape being carried.
+        :param verdict: The poll's held-or-slipped verdict.
+        """
+        logger.info("%s: slip watch -> %s.", body.name.name, verdict)
+        if verdict is GraspVerdict.OBJECT_SLIPPED:
+            self.feed.publish(body.name.name, GripperSlipEvent(tracked_object=body))
 
 
 def main() -> None:
@@ -563,6 +654,7 @@ def main() -> None:
     # still runs through the plan; the gripper is driven straight through its Robotiq
     # action server instead.
     gripper = RobotiqGripperController(node)
+    gripper_listener = GripperJointStateListener(node=node, arm=PICK_ARM)
     tool_frame = ViewManager.get_end_effector_view(PICK_ARM, robot).tool_frame
     rig = _SortingRig(
         context,
@@ -570,6 +662,7 @@ def main() -> None:
         robot,
         feed,
         gripper,
+        gripper_listener,
         grasp_description,
         tool_frame,
         table_top_z,

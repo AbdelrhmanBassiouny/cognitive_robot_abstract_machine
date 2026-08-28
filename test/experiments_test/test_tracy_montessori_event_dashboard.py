@@ -12,6 +12,7 @@ from experiments.tracy_experiments.montessori.event_dashboard import (
     FeedEntry,
     _entry_to_json,
 )
+from experiments.tracy_experiments.montessori.gripper_feedback import GripperSlipEvent
 from segmind.datastructures.events import GraspEvent, PickUpEvent
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world_description.world_entity import Body
@@ -81,3 +82,16 @@ def test_entry_to_json_leaves_with_object_absent_for_a_single_object_event():
     entry = FeedEntry(shape_name="cube", event=PickUpEvent(tracked_object=shape))
 
     assert _entry_to_json(entry)["with_object"] is None
+
+
+def test_entry_to_json_renders_a_gripper_slip_event():
+    shape, _ = _bodies()
+    slip = GripperSlipEvent(tracked_object=shape)
+    entry = FeedEntry(shape_name="cube", event=slip)
+
+    assert _entry_to_json(entry) == {
+        "shape": "cube",
+        "event_type": "GripperSlipEvent",
+        "with_object": None,
+        "timestamp": slip.timestamp.isoformat(),
+    }
