@@ -82,11 +82,25 @@ not the socket buffer - it is the kernel's IP reassembly cache
 storm while nothing ever completes.
 
 `FetchWorldServer` sends the whole world as one JSON string in a
-`std_srvs/Trigger` response, with no chunking and no compression, so it is a
-single very large sample - the same shape of payload that killed the raw camera
-stream. Awaiting a root-level sysctl test on the receiver before deciding
-between tuning, a Fast DDS `maxMessageSize` profile on both machines, or
-shrinking the payload.
+`std_srvs/Trigger` response, with no chunking and no compression - measured at
+about 30 MB - so it is a single very large sample, the same shape of payload that
+killed the raw camera stream.
+
+Fixed by raising the receiver's reassembly limits (`ipfrag_high_thresh` to 256 MB,
+`ipfrag_time` to 3 s, `rmem` to 64 MB, `netdev_max_backlog` to 30000). The same
+call now returns in 11 s with 720 datagrams reassembled against 2,785 failures,
+where before it never returned at all. `python -m
+experiments.montessori.perception.node --show-images` then runs end to end,
+reporting 6 pieces and 6 holes once a second.
+
+Applied at runtime only: writing `/etc/sysctl.d/60-ros2-large-messages.conf` was
+blocked by the permission classifier, so the file is prepared in the session
+scratchpad and the user has to install it for the tuning to survive a reboot.
+
+Worth remembering: this is one root cause behind two symptoms. Anything on this
+setup that sends a multi-megabyte sample over wifi will fail the same way, and
+the general cure is a Fast DDS `maxMessageSize` below the MTU on the *sending*
+side, which the robot would have to set.
 
 ### Next / open
 - `decode_color_image` and `decode_depth_image` (the raw-message decoders) now
