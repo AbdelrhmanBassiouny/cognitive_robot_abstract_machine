@@ -9710,3 +9710,60 @@ finding, the `fresh-base-at-session-start` comparison and the recorded fix itsel
 dashboard has shown the truncated half since the item was created. Quoted in the same pass;
 `plan_item_bootstrap.py` patches lines rather than round-tripping the document, so nothing had
 overwritten it, and nothing would have.
+
+## Update 2026-08-28 (audit): what the integration mechanism actually has, and the one decision it is waiting on
+
+Session: https://claude.ai/code/session_01MwawsPiaFK3ufUK4YHak3X. Read-only — no branch, no pull
+request, nothing changed outside this manifest. Prompted by the question of whether an Action
+already runs the integration mechanism on a pull request leaving draft.
+
+### It does not, and no part of the automation exists
+
+Checked across every branch on the fork rather than on the checkout in hand: `ready_for_review`
+appears in no workflow at all, `ci.yml` triggers on `push: main`, `pull_request` and `workflow_run`
+only, and no pytest marker named for `integration_conflict_label` is registered. `board.yml` and
+`token-probe.yml` are both registered in the Actions listing while existing on no branch, which is
+GitHub keeping the workflow row after the file is deleted rather than anything left to clean up.
+
+Draft-to-ready is load-bearing for the mechanism, which is what makes the question a fair one — but
+as a *selection* signal read live at build time (`BranchStatus.is_out_of_draft`, read down the whole
+chain), not as an event anything subscribes to.
+
+### The token prerequisite is already met, and nothing recorded that
+
+`INTEGRATION_REFRESH_TOKEN` is a repository secret and the 2026-08-23 probes both passed. The
+manifest still described a fine-grained PAT as "a required setup step, not a hardening", which is
+how the design left it; what it does not say is that the step was then taken. Part D's largest
+unproven dependency is discharged. Recorded on `integration-branch-ci-verdict` in the same pass.
+
+### The stable branch holds an unverified build
+
+`integration` is at `899a04a` — the Phase 1 build with `tests_passed: null`. Part D's whole design
+turns on `integration` meaning "the last build whose CI went green", so its first value has to be
+established by a real run rather than inherited from what the pointer happens to hold today.
+
+### The delivery route is being withdrawn under it
+
+The 2026-08-23 speed decision had two halves: build the integration branch, and make sessions clone
+it by pointing the fork's default branch at it. `session-branch-base` (#199) is reverting the second
+half right now, for reasons that stand on their own — `default_branch_name()` reads
+`refs/remotes/origin/HEAD`, so PR-progress keys on the wrong branch, and a pull request opened
+through the GitHub UI would default its base to `integration` and break the base-is-parent
+invariant.
+
+Part D's mechanics are unaffected: the verdict comes from a candidate pull request's own `ci.yml`
+run either way, and `upstream_base` was always pinned in `stack.toml` rather than derived from the
+default branch. What is affected is the reason the speed decision was made. Once `main` is the
+default again, nothing routes reviewed-but-unlanded tooling into daily use, and the integration
+branch goes back to being something you opt into by checking it out. Whether that is the intended
+end state or whether the daily-use half needs a different mechanism is the developer's call, and it
+is the only open question the automation work is actually waiting on — the rest is implementation.
+
+### The stable-branch shape is still the first unsettled design decision
+
+Recorded at kickoff and never resolved: is `integration` a real merge target that accumulates
+history, or a pointer force-updated to each build that goes green? The tension is that a build is
+regenerated from scratch, so a candidate shares no history with the stable branch — its pull
+request's diff is everything that changed between two independent builds, and merging it makes the
+branch accumulate history, which is the one property this design has rejected since it was
+recorded.
