@@ -199,7 +199,75 @@ exact for a *sharp* reflection but the real one is a diffuse streak far larger
 than the 11 mm mirror displacement. A real fix means changing how the pieces are
 segmented; not attempted without agreeing it first.
 
+### Piece matching, colour and orientation (commit `4824cc757`)
+`experiments/montessori/pieces.py` now holds the physical set: measured dimensions
+(moved out of `tracy_experiments/montessori/world.py`, which imports them back),
+each piece's cross-section outline, its measured hue, and its rotation period.
+`perception/piece_matcher.py` lays each known piece over the measured outline and
+turns it through one period, scoring by intersection over union; the best fit
+gives shape, yaw and confidence together. Holes keep the old
+`CrossSectionClassifier` - they read correctly.
+
+Yaw is the *smallest* turn reaching the observed pose (cube at 80 deg reports
+-10; cylinder reports 0). `MontessoriDetection.yaw` and
+`MontessoriShapeDetection.outline_overlap` expose it; `report()` logs both.
+
+`SurfaceColors.piece_mask` segments by *wearing a piece colour* rather than by
+standing out from the surface. This was forced by the user laying paper towels
+down mid-session: the mat reads hue 42 / saturation 45, right at
+`minimum_saturation`, so it passed as one 481 cm2 object and swallowed the
+pieces (1 of 4 found). With the hue gate the mat is excluded outright.
+`minimum_hue_saturation` (30) is separate from `minimum_saturation` (45) because
+the hue gate lets the saturation floor drop, and the pale cyan pieces wash out
+towards white where they catch the light. Do not raise it back - at 45 the
+cylinder is lost.
+
+Measured hues (median over each blob's coloured pixels, as the pipeline reads
+them): cube 86, cylinder 86, rect prism 22, tri prism 23, beige disk 28, white
+ball 27, paper mat 42, board lid 20, bare steel saturation 12-20 (colourless).
+So `HUE_TOLERANCE = 4` separates pieces (within 2) from clutter (6-7 away). The
+board lid at 20 is inside the yellow window but is excluded by `board.encloses`.
+
+Results. Clean render: 4/4 categories, yaw within 3 deg, overlap 0.94-0.97. Bare
+steel, real frame: 2/4 correct (cube 0.85, cylinder 0.66), 0 wrong, 2 refused -
+the yellow pieces are still swallowed by their own reflection. Was 0/4 before.
+`minimum_overlap = 0.6` sits above the widest wrong-shape fit measured (0.52)
+and below a piece read through its reflection (0.66).
+
+### Point cloud + plane fit + clustering - tried, does not work here
+The user asked whether PCL-style plane segmentation and euclidean clustering
+would separate the pieces. Ran it (open3d 0.19 is installed) on live frames.
+
+Bare steel: 693k points, RANSAC plane holds only 34% of them, table points
+scatter +/-17 mm about the fitted plane. Clustering above the plane at 5/10/15 mm
+clearance gives 12-20 clusters, but they are sheets of noise - cluster spans of
+622x367x273 mm and 759x626x239 mm. None of the four pieces appears. Probing a
+20 mm column of cloud directly over each piece: z medians 18.5, 7.1, 8.4 and 0.4
+mm *below* the modelled table, with per-piece spreads of 22-31 mm. The pieces do
+not stand out of this cloud at all.
+
+With the mat: markedly better - plane inliers 34% -> 69%, scatter 17 -> 12 mm.
+Correcting for the fitted plane's own tilt (dz/dx = -0.223), the cube reads 33 mm
+and the triangle 25 mm above the local surface (true 30), but the rect prism
+reads 11 and the cylinder 3.5. Clustering still fails to isolate them. So the
+mat roughly halves the problem but does not solve it.
+
+Conclusion: the method is the textbook one and is not the issue; this sensor
+cannot see 30 mm objects on this table. A stereo depth camera on a mirror either
+drops out or matches the reflection, which lands *behind* the surface - which is
+exactly the negative heights above. Scripts: `point_cloud_trial.py`.
+
 ### Next / open
+- The two yellow pieces on bare steel. Their outlines are still inflated by the
+  diffuse reflection (52x53 mm for a 20x40 piece), so the fit refuses them. The
+  mat fixes this; edge-based fitting (chamfer against a distance transform of the
+  rectified edge map) would fix it without one, since the reflection is blurry
+  and the piece's edges are sharp.
+- The pale cyan pieces are under-segmented on the mat (cube read 18x29 mm for a
+  30x30, cylinder missed). Their lit faces wash out towards white.
+- The *hole* classifier degraded in the later lighting (frame3 read five of six
+  holes as triangular_prism). Untouched by this work - it uses the old
+  threshold-based `CrossSectionClassifier`. Worth pointing the same fit at it.
 - `decode_color_image` and `decode_depth_image` (the raw-message decoders) now
   have no production caller and are only used by tests. AGENTS.md says to consult
   the developer before removing them - waiting on that decision.
