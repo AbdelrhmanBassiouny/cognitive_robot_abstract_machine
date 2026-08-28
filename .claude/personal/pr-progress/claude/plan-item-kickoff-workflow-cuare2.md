@@ -1,93 +1,47 @@
-# bastler-package — PR #185 (draft), branch `claude/plan-item-kickoff-workflow-cuare2`
+# bastler-package (#185) — `claude/plan-item-kickoff-workflow-cuare2`
 
-Plan `workflow-unification`, track `bastler`, wave `upstream`. Kicked off and implemented in
-session https://claude.ai/code/session_01JN9p5Kf2DKtzryspPX2KqZ; merged `main` and worked the
-2026-08-22/23 review round in https://claude.ai/code/session_01Hgt7hWYnT9ZMK6AgusPwkk.
+Plan `workflow-unification`, track `bastler`, wave `upstream`. Draft PR #185, based on
+`main`. Session https://claude.ai/code/session_01723FcMWYnpQHrq4fdxxs8j.
 
-Create the `bastler` package and move every Python module under `.claude/` into it, so the
-three separate `sys.path` roots stop preventing any shared definition from existing. Full
-rationale in the plan's `roadmap.md` under the 2026-08-20 kickoff, the 2026-08-21
-implementation, and the 2026-08-23 resolution.
+## Why this session was here
+
+`/plan-item-resolve workflow-unification bastler-package`. The pull request was `dirty`,
+labelled `needs-resolution`, and had been skipped by four maintenance passes since
+2026-08-22. CI was green on the head commit, so the merge conflict was the whole blocker.
+
+## The plan, as settled
+
+1. Merge `origin/main`, then run `git ls-tree -r origin/main --name-only .claude/` against
+   the merged tree — the 2026-08-23 lesson, since a conflict report cannot name a file a
+   moved directory makes dangerous. It found `plan_item_mode.py` and `plan-item-modes.toml`,
+   landed with #149, which git had not reported.
+2. Fold both into `bastler/`, defaults resolved beside the module, `pyproject` package-data.
+3. Repoint every caller at `python3 -m`, and add the two skill documents to
+   `UNINSTALLED_INVOCATIONS` so the closure constrains the module.
+4. Convert the incoming test to the package's own conventions (`PythonModuleRunner`,
+   `constants.py`, `Location`).
+5. Verify by mutation, not by a green suite.
 
 ## Done
 
-- [x] Skeleton, `pyproject.toml`, contract tests (`39bc17c27`); the move (`a4405fbd5`);
-      package data for an installed copy (`a826533b4`).
-- [x] **Merged `main`** (`13bda614`). Not three conflicts but three modules: `main` gained
-      `check_scope_overlap.py` (#135), `record_dashboard_url.py` (#150) and
-      `upstream_reviews.py` (#146) under `.claude/` after this branch was cut, so resolving
-      only the reported conflicts would have merged and then failed this branch's own
-      "no `.py` under `.claude/`" contract.
-- [x] **Metadata and self-declaration** (`52b44390`): empty `__init__.py` + `bastler/README.md`,
-      full `pyproject` metadata, repository versioning via `scripts/sync_version.py`,
-      `bastler/package_layout.py`, `ItemStatus.display_label`.
-- [x] **Constants and the runner hierarchy** (`db910e90`): derive module names/paths from the
-      import; `test/bastler_test/constants.py` for what has no import;
-      `script_runner.py`'s `ScriptRunner`/`PythonModuleRunner`/`BashScriptRunner`.
-- [x] **Fixture consolidation** (`4e8ad6fb9`): `PersonalNotesPath`, `install_hook_scripts_into`,
-      `ScratchRepository.install_stack_configuration`.
-- [x] 616 tests pass (479 on `main` before the move). `check-setup.sh` exits 0, every row `ok`;
-      all thirteen entry points answer `--help`.
-- [x] Manifest, roadmap section, PR description all current.
-- [x] **Dead members of the declaration deleted** (`d13afaf8b`): `REQUIREMENTS_FILE`,
-      `MODULES_BY_NAME` and `PackageModule.path` had no reader anywhere. 616 tests still pass.
-- [x] **The layout is derived, not declared** (`a62a79525`): modules from the directory, entry
-      points from each module's `__main__` block via `ast`, requirement import names from
-      `requirements.txt` through `packages_distributions()`. The 29-entry list, `DependencyTier`
-      and the tier table are gone. What is left is one exception set plus one named uninstalled
-      caller, both held in both directions. 621 tests pass.
-- [x] **Callers declared, modules derived** (`b45903ffc`): the exception set named a permission,
-      so it is gone. `UNINSTALLED_INVOCATIONS` names five callers that install nothing, and the
-      closure of what they reach is computed - 17 modules, no module named anywhere. A module no
-      such caller reaches may import what it likes. 617 tests pass.
+- All of the above, in one merge commit `56d4f829`, pushed.
+- 642 tests pass (617 before). Four mutations checked, each caught by its own test —
+  including one that only failed *after* a prose mention of the module was removed from
+  `plan-item-mode/SKILL.md`, because `names_of()` matches anywhere in a caller's file.
+- `check-setup.sh` exits 0; all fourteen entry points answer `--help`; the built wheel
+  carries `plan-item-modes.toml`.
+- PR description updated; manifest `notes`/`session` and `roadmap.md` saved (`94240ab5`).
 
-## Findings worth carrying
+## Next
 
-- **A green suite after a deletion proves nothing.** Deleting a block by slicing between two
-  anchors also deleted the test sitting between them; 66 still passed. It surfaced only when a
-  mutation caught an hour earlier stopped being caught. Check the mutation, or the case count.
-- **A permission list has nothing behind it.** "Modules that may import X" cannot distinguish a
-  correct entry from an over-broad one. "Callers that cannot install" can, because the caller's
-  own file is the evidence - and the module set then derives from it.
-- **The cheaper shape caught what the elaborate one could not.** Replacing 29 tier
-  declarations with a derived layout plus one exception set immediately found
-  `record_dashboard_url` declared `PLAN_MANIFEST` while importing only the standard library.
-  The old test could not see it by construction - it checked a module stayed *within* its
-  tier, never that it *needed* it, so an over-broad declaration was invisible.
-- **Fewer tests passing still reads as passing.** The first cut of that change took the suite
-  616 -> 592 because 21 modules silently stopped being checked. Count the parametrized cases
-  when replacing a classification with a short list.
-- **A grep over the hooks is not a survey of the callers.** The tier's justification was
-  measured against `session-start.sh`, which reaches no module here - and the conclusion
-  "nothing depends on the tier" was wrong. The live caller is
-  `.github/workflows/upstream-reviews.yml`, which runs `python3 -m bastler.upstream_reviews`
-  on a bare runner with **no `pip install` step**, so that module and `bastler.stack` must
-  stay standard-library-only. Grep for the module, not for the callers you expect.
-- **A conflict report names files; the dangerous ones are the files it does not name.** Three
-  of the six were flagged by git's "added in `origin/main` inside a directory that was renamed
-  in HEAD"; the other three had no tell at all. The check is one command:
-  `git ls-tree origin/main` for the pattern the branch claims to have emptied.
-- **The dependency tier's stated reason was false.** It claimed a hook may import only the
-  standard library because a hook runs where nothing is installed. `session-start.sh` reaches
-  no module of this package at all — bash plus one stdlib-only heredoc in `check-setup.sh`. The
-  tier answers something narrower and real: whether an entry point runs before
-  `pip install -r bastler/requirements.txt`.
-- **A docstring claimed a guard that did not exist** (`ItemStatus`'s "a test holds the two
-  equal"). Cheap check: grep for the import the test would have to make.
-- **`monkeypatch.setattr` takes the attribute name as a string by signature**, so it cannot be
-  derived from importing the value — but it is already guarded, because `setattr` raises when
-  the attribute is absent.
-
-## Open / carried
-
-- **34 review threads answered in code; inline replies still to post.** Two were answered
-  differently from what they asked and must not be resolved: the `monkeypatch.setattr` derivation
-  (impossible, with the measurement) and the SessionStart auto-install (available, deliberately
-  not taken).
-- **Not subscribed to tracking issue #102** — refused by the permission classifier in the kickoff
-  session. Concurrent structural changes reach a session here only via `plan-updates-since.sh`.
-- **CI job rename** `test_claude_dev_tooling` → `test_bastler` changes the reported check name;
-  branch protection needs updating if the old name is required. Flagged, not acted on.
-- **`run_git` is now reachable** (`check_scope_overlap.py` landed on `main`), but the seam stays
-  `bastler-notes-core-python`'s by name. #151's `Subcommand` is still unlanded.
-- Re-drafted after each push, per the standing rule.
+- Nothing outstanding on this branch. CI is re-running on `56d4f829`; the
+  `needs-resolution` label clears itself once a pass sees the branch merge cleanly.
+- **For the user, not for a session to decide**: `main` retired every workspace member's
+  `requirements.txt` for static `[project] dependencies` (`4b4cfdf4`). `bastler` is not a
+  workspace member so nothing fails, but its `requirements.txt` is now the last in the
+  repository and four things read it. Whether it follows is a review call.
+- Ten of the 2026-08-23 round's 34 review threads stay open on purpose (answered
+  differently, or waiting on the user). Not this session's to resolve.
+- Landing order, not dependencies: #198 fixes a bug this branch carries verbatim at
+  `bastler/stack.py:823`; #203 adds `.claude/setup_steps.py`, which is the same
+  new-`.py`-under-`.claude/` problem a third time.
