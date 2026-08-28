@@ -80,8 +80,7 @@ class StoppedWhenTrue(MonitoredGoal):
     """
 
     def wire_monitor(self) -> None:
-        self.monitored_node.end_condition = self.monitor.observation_variable
-        # self.monitored_node.end_condition = trinary_logic_or(self.monitored_node.end_condition, self.monitor.observation_variable)
+        self.monitored_node.end_condition = trinary_logic_or(self.monitored_node.end_condition, self.monitor.observation_variable)
 
     def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         return NodeArtifacts(

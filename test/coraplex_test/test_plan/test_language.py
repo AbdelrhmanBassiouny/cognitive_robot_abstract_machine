@@ -1,4 +1,5 @@
 import threading
+from datetime import timedelta
 from functools import partial
 
 import numpy as np
@@ -322,7 +323,7 @@ def test_repeat_raises_when_it_runs_out_of_attempts(immutable_model_world):
         [MoveToolCenterPointMotion(target=unreachable, arm=Arms.RIGHT)],
         maximum_repetitions=2,
         context=context,
-        repeat_template=partial(RepeatOnStall, timeout=1.0),
+        repeat_template=partial(RepeatOnStall, timeout=timedelta(1.0)),
     ).plan
 
     with pytest.raises(RepetitionsExhausted):
