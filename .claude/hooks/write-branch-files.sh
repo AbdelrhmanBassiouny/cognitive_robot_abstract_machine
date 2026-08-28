@@ -160,7 +160,7 @@ for index in "${!SOURCE_FILES[@]}"; do
 done
 
 if git -C "${SCRATCH_DIR}" diff --cached --quiet; then
-  echo "No changes - '${BRANCH}' on '${REMOTE}' already matches every file given."
+  echo "No changes to save - '${BRANCH}' on '${REMOTE}' is already up to date."
   exit 0
 fi
 

@@ -787,6 +787,13 @@ class Item:
     all ready yet (starting now would build on unsafe state). Every other
     status always gets one: something is always actionable next."""
 
+    is_bug_fix: bool = field(default=False, init=False)
+    """Whether this item's pull request carries :attr:`PullRequestLabel.BUG`,
+    filled in by :meth:`DashboardRenderer.render`. Marks the item wherever it
+    already appears rather than grouping it separately: fixing a bug is a
+    property of the work, not a distinct next action, and it can apply to an
+    item in any of the sidebar's action groups."""
+
     needs_review: bool = field(default=False, init=False)
     """Whether this item's pull request is open, still a draft, and actually worth
     reviewing right now, filled in by :meth:`DashboardRenderer.render`.
@@ -803,8 +810,7 @@ class Item:
 
     @property
     def has_open_pull_request(self) -> bool:
-        """Whether this item currently has an open (draft or ready) pull request -
-        used to decide whether a dependent's pull request is safe to review yet."""
+        """Whether this item currently has an open (draft or ready) pull request."""
         return self.live_state in (LiveState.OPEN_DRAFT, LiveState.OPEN_READY)
 
     @property
@@ -851,6 +857,19 @@ class Item:
         draft is the one state that isn't safe to build on top of, since it
         can still see heavy rework."""
         return self.is_effectively_done() or self.live_state is LiveState.OPEN_READY
+
+    def is_ready_for_dependent_review(self) -> bool:
+        """Whether a dependent's pull request is worth reviewing yet: this item's
+        own pull request exists and has reached review, whether it is still open
+        or has already landed. Having no pull request at all is the one state
+        that makes a dependent premature to review.
+
+        ..note:: Deliberately weaker than :meth:`is_ready_to_unblock_dependents`,
+            which additionally requires being out of draft: building a branch on
+            a dependency that can still see heavy rework is unsafe, while merely
+            reviewing the branch above it is not.
+        """
+        return self.has_open_pull_request or self.is_effectively_done()
 
 
 @dataclass
@@ -1047,6 +1066,9 @@ class DashboardRenderer:
         drift_items = [item for item in self.plan.items if item.drift_description]
         ready_to_start, blocker_maybe_cleared = self._compute_next_steps()
         ready_to_review = self._compute_ready_to_review()
+        next_step_items = (
+            drift_items + ready_to_start + blocker_maybe_cleared + ready_to_review
+        )
 
         template = create_template_environment().get_template("dashboard.html")
         output = template.render(
@@ -1062,6 +1084,7 @@ class DashboardRenderer:
             ready_to_start=ready_to_start,
             blocker_maybe_cleared=blocker_maybe_cleared,
             ready_to_review=ready_to_review,
+            has_bug_fix_next_steps=any(item.is_bug_fix for item in next_step_items),
             roadmap_html=render_markdown_to_html(self.roadmap_text),
             waves=self._build_wave_sections(),
             available_models=AVAILABLE_MODELS,
@@ -1079,9 +1102,9 @@ class DashboardRenderer:
     def _classify_items(self) -> None:
         """Fill in every item's :attr:`Item.live_state`,
         :attr:`Item.drift_description`, :attr:`Item.pull_request_url`,
-        :attr:`Item.needs_review`, :attr:`Item.dependency_chips`, and
-        :attr:`Item.action` from live pull request data and the plan's other items,
-        in place.
+        :attr:`Item.is_bug_fix`, :attr:`Item.needs_review`,
+        :attr:`Item.dependency_chips`, and :attr:`Item.action` from live pull
+        request data and the plan's other items, in place.
 
         Runs in two passes: :attr:`Item.live_state` must be filled in for
         every item before :meth:`_action_for` can check whether *another*
@@ -1091,6 +1114,7 @@ class DashboardRenderer:
             item.live_state = self._live_state_of(item)
             item.drift_description = self._drift_description_of(item)
             item.pull_request_url = self._pull_request_url_of(item)
+            item.is_bug_fix = self._is_bug_fix(item)
             item.needs_review = (
                 item.live_state is LiveState.OPEN_DRAFT
                 and item.status is not ItemStatus.DEFERRED
@@ -1185,6 +1209,23 @@ class DashboardRenderer:
             self.pull_requests_by_repository,
         )
 
+    def _pull_request_record_of(self, item: Item) -> PullRequestRecord | None:
+        """Look up one item's live pull request record, or ``None`` if it has
+        no pull request yet or GitHub returned nothing for the one it names."""
+        if item.pull_request_number is None:
+            return None
+        repository = item.repository or self.plan.default_repository
+        repository_pull_requests = self.pull_requests_by_repository.get(repository, {})
+        return repository_pull_requests.get(str(item.pull_request_number))
+
+    def _is_bug_fix(self, item: Item) -> bool:
+        """Whether one item's pull request is labelled as a bug fix."""
+        pull_request = self._pull_request_record_of(item)
+        return (
+            pull_request is not None
+            and PullRequestLabel.BUG in pull_request.identified_labels
+        )
+
     @staticmethod
     def _drift_description_of(item: Item) -> str | None:
         """Describe why :attr:`Item.status` disagrees with its live state, if it does."""
@@ -1246,10 +1287,11 @@ class DashboardRenderer:
 
     def _compute_ready_to_review(self) -> list[Item]:
         """Items with an open draft pull request that are actually reviewable right
-        now: not blocked, and every dependency (if any) already has its own
-        open pull request - reviewing a stacked pull request before its base even has one open
-        yet is premature, even though the base need not itself be past
-        review. A deferred item never reaches here in the first place -
+        now: not blocked, and every dependency (if any) has itself reached review
+        (:meth:`Item.is_ready_for_dependent_review`) - reviewing a stacked pull
+        request before its base even has one open yet is premature, even though
+        the base need not itself be past review, nor still be open once it has
+        landed. A deferred item never reaches here in the first place -
         :attr:`Item.needs_review` is already ``False`` for it."""
         ready_to_review: list[Item] = []
         for item in self.plan.items:
@@ -1260,7 +1302,10 @@ class DashboardRenderer:
                 for identifier in item.depends_on
                 if identifier in self.items_by_identifier
             ]
-            if all(dependency.has_open_pull_request for dependency in dependencies):
+            if all(
+                dependency.is_ready_for_dependent_review()
+                for dependency in dependencies
+            ):
                 ready_to_review.append(item)
         return ready_to_review
 

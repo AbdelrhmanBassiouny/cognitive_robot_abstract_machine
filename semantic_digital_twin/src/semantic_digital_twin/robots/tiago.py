@@ -4,10 +4,12 @@ import os
 from abc import ABC
 from collections import defaultdict
 from dataclasses import dataclass, field
+from enum import StrEnum
 from importlib.resources import files
 from pathlib import Path
 from typing import Self, List
 
+from krrood.ormatic.utils import classproperty
 from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidExternalCollisions,
     AvoidSelfCollisions,
@@ -50,6 +52,40 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+
+class TiagoJoint(StrEnum):
+    """
+    Names of the Tiago's commandable connections, as spelled in its URDF.
+
+    Members are usable wherever a connection name is expected, so a configuration keyed by
+    them stays a plain mapping of names to positions.
+
+    ..note:: Connections that no controller commands, such as the base wheels and the
+        gripper's coupled knuckle and inner finger joints, are left out.
+    """
+
+    TORSO_LIFT = "torso_lift_joint"
+    HEAD_1 = "head_1_joint"
+    HEAD_2 = "head_2_joint"
+
+    LEFT_ARM_1 = "arm_left_1_joint"
+    LEFT_ARM_2 = "arm_left_2_joint"
+    LEFT_ARM_3 = "arm_left_3_joint"
+    LEFT_ARM_4 = "arm_left_4_joint"
+    LEFT_ARM_5 = "arm_left_5_joint"
+    LEFT_ARM_6 = "arm_left_6_joint"
+    LEFT_ARM_7 = "arm_left_7_joint"
+    LEFT_GRIPPER_FINGER = "gripper_left_finger_joint"
+
+    RIGHT_ARM_1 = "arm_right_1_joint"
+    RIGHT_ARM_2 = "arm_right_2_joint"
+    RIGHT_ARM_3 = "arm_right_3_joint"
+    RIGHT_ARM_4 = "arm_right_4_joint"
+    RIGHT_ARM_5 = "arm_right_5_joint"
+    RIGHT_ARM_6 = "arm_right_6_joint"
+    RIGHT_ARM_7 = "arm_right_7_joint"
+    RIGHT_GRIPPER_FINGER = "gripper_right_finger_joint"
 
 
 @dataclass(eq=False)
@@ -151,7 +187,7 @@ class TiagoLeftGripper(
 
     def setup_hardware_interfaces(self):
         controlled_joints = [
-            "gripper_left_finger_joint",
+            TiagoJoint.LEFT_GRIPPER_FINGER,
         ]
         for joint_name in controlled_joints:
             connection: ActiveConnection = self._world.get_connection_by_name(
@@ -198,7 +234,7 @@ class TiagoRightGripper(
 
     def setup_hardware_interfaces(self):
         controlled_joints = [
-            "gripper_right_finger_joint",
+            TiagoJoint.RIGHT_GRIPPER_FINGER,
         ]
         for joint_name in controlled_joints:
             connection: ActiveConnection = self._world.get_connection_by_name(
@@ -243,13 +279,13 @@ class TiagoLeftArm(Arm[TiagoLeftGripper]):
 
     def setup_hardware_interfaces(self):
         controlled_joints = [
-            "arm_left_1_joint",
-            "arm_left_2_joint",
-            "arm_left_3_joint",
-            "arm_left_4_joint",
-            "arm_left_5_joint",
-            "arm_left_6_joint",
-            "arm_left_7_joint",
+            TiagoJoint.LEFT_ARM_1,
+            TiagoJoint.LEFT_ARM_2,
+            TiagoJoint.LEFT_ARM_3,
+            TiagoJoint.LEFT_ARM_4,
+            TiagoJoint.LEFT_ARM_5,
+            TiagoJoint.LEFT_ARM_6,
+            TiagoJoint.LEFT_ARM_7,
         ]
         for joint_name in controlled_joints:
             connection: ActiveConnection = self._world.get_connection_by_name(
@@ -289,13 +325,13 @@ class TiagoRightArm(Arm[TiagoRightGripper]):
 
     def setup_hardware_interfaces(self):
         controlled_joints = [
-            "arm_right_1_joint",
-            "arm_right_2_joint",
-            "arm_right_3_joint",
-            "arm_right_4_joint",
-            "arm_right_5_joint",
-            "arm_right_6_joint",
-            "arm_right_7_joint",
+            TiagoJoint.RIGHT_ARM_1,
+            TiagoJoint.RIGHT_ARM_2,
+            TiagoJoint.RIGHT_ARM_3,
+            TiagoJoint.RIGHT_ARM_4,
+            TiagoJoint.RIGHT_ARM_5,
+            TiagoJoint.RIGHT_ARM_6,
+            TiagoJoint.RIGHT_ARM_7,
         ]
         for joint_name in controlled_joints:
             connection: ActiveConnection = self._world.get_connection_by_name(
@@ -360,8 +396,8 @@ class TiagoNeck(Neck[TiagoCamera]):
 
     def setup_hardware_interfaces(self):
         controlled_joints = [
-            "head_1_joint",
-            "head_2_joint",
+            TiagoJoint.HEAD_1,
+            TiagoJoint.HEAD_2,
         ]
         for joint_name in controlled_joints:
             connection: ActiveConnection = self._world.get_connection_by_name(
@@ -391,7 +427,7 @@ class TiagoTorso(
 
     def setup_hardware_interfaces(self):
         controlled_joints = [
-            "torso_lift_joint",
+            TiagoJoint.TORSO_LIFT,
         ]
         for joint_name in controlled_joints:
             connection: ActiveConnection = self._world.get_connection_by_name(
@@ -438,6 +474,10 @@ class TiagoTorso(
 @dataclass(eq=False)
 class TiagoMobileBase(MobileBase[DifferentialDrive], HasTorso[TiagoTorso]):
 
+    @classproperty
+    def forward_axis(cls) -> Vector3:
+        return Vector3.X()
+
     full_body_controlled: bool = field(default=True, kw_only=True)
 
     def setup_hardware_interfaces(self):
@@ -452,7 +492,6 @@ class TiagoMobileBase(MobileBase[DifferentialDrive], HasTorso[TiagoTorso]):
     ) -> Self:
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(robot_root, "base_link"),
-            forward_axis=Vector3.X(),
         )
 
 
@@ -797,6 +836,10 @@ class TiagoMujocoTorso(
 @dataclass(eq=False)
 class TiagoMujocoMobileBase(MobileBase[DifferentialDrive], HasTorso[TiagoMujocoTorso]):
 
+    @classproperty
+    def forward_axis(cls) -> Vector3:
+        return Vector3.X()
+
     def setup_hardware_interfaces(self):
         pass
 
@@ -809,7 +852,6 @@ class TiagoMujocoMobileBase(MobileBase[DifferentialDrive], HasTorso[TiagoMujocoT
     ) -> Self:
         return cls(
             root=robot_root._world.get_body_in_branch_by_name(robot_root, "base_link"),
-            forward_axis=Vector3.X(),
             full_body_controlled=False,
         )
 
