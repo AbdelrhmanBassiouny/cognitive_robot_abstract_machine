@@ -194,8 +194,10 @@ def _start_rviz_publisher(
     if not rclpy.ok():
         rclpy.init()
     node = rclpy.create_node("robocasa_kitchen_demo")
-    marker_publisher = VizMarkerPublisher(_world=world, node=node)
     tf_publisher = TFPublisher(_world=world, node=node)
+    marker_publisher = VizMarkerPublisher(
+        _world=world, node=node, tf_publisher=tf_publisher
+    )
 
     node.create_timer(tf_period_seconds, tf_publisher.on_state_change)
     node.create_timer(marker_period_seconds, marker_publisher.on_model_change)
