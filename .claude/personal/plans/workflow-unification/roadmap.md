@@ -10431,3 +10431,58 @@ visible. `#198` fixes a bug this branch carries verbatim at `bastler/stack.py:82
 2026-08-24 entry recording it says it lands first and #185 picks it up; it has not landed,
 so the bug is still here. Neither is a dependency; both are landing order, and the
 `git ls-tree` check is what catches the first of them whichever way round they go.
+
+## Update 2026-08-29 (new item): a red candidate the local suite cannot reproduce
+
+Split out of `integration-branch-ci-verdict` rather than folded into it. Part D put the
+publishing verdict on the candidate's own `ci.yml` run; what it did not build is what
+happens when that verdict comes back red for a reason the local suite cannot see.
+
+### The residual case, now that the common one is gone
+
+`block-branch` localises a break by re-assembling the tips in order and re-running the
+**configured** suite - the four tooling directories - after each. That reaches a break
+between two branches whose tooling code disagrees, and reaches nothing in the docker
+matrix, where `test_each_lib (krrood)` and its fifteen siblings live. So a candidate red
+on a matrix job is reported and left: the candidate is closed naming the failing check,
+and nobody is told which tip turned it.
+
+Most of that gap closed with the red-tip exclusion of 2026-08-29, and the remainder is
+worth stating precisely, because it is much narrower than it was. A candidate can now go
+red for two reasons:
+
+- **a tip whose checks had not finished when the build was assembled** and have since
+  failed. The next rebuild reads them as finished and leaves it out, so this heals in one
+  cycle without anybody doing anything;
+- **a genuine break only the matrix sees** - two branches that each pass their own full
+  `ci.yml` run, merge cleanly, and fail a matrix job together.
+
+Only the second needs this item, and only the second is a break in the sense the workflow
+means.
+
+### What it would cost, which is why it is its own item
+
+Localising it means re-running the matrix rather than a suite: push each prefix of the
+merge order as its own branch, open or dispatch a run for each, and read the conclusions -
+against roughly twenty minutes a run and sixteen jobs apiece. Everything about that is
+different from `_run_tests`: the waiting, the concurrency, the credential, and what a
+partial answer means when one prefix's run is still going. It also has a cheaper variant
+worth measuring first - re-run only the *failing job* per prefix rather than the whole
+matrix, which `ci.yml`'s per-library job names make expressible.
+
+Recorded as `red-candidate-localisation`, `stack-tooling`, depending on
+`integration-branch-ci-verdict`. Not started, no branch.
+
+### Why not folded into #154
+
+Run against the prefer-the-change test rather than judged. It edits `integration.py` for
+subcommand wiring, and strip that and a whole dispatched-run localisation subsystem
+remains - a client for opening and reading matrix runs per prefix, the waiting, and the
+report. That stands alone by a wide margin, which is the same answer the rule gave Part D
+itself against #154 on 2026-08-13.
+
+It does *not* replace `locate-failure`. The local suite answers before a build is pushed
+and caught the #154-against-#158 break hours before any candidate existed; this answers
+after a candidate has run, for the failures the local suite is structurally blind to. Two
+mechanisms for two different moments, which is what the 2026-08-28 boundary already
+settled when it kept `--test`.
