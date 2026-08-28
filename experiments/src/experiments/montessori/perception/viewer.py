@@ -21,13 +21,15 @@ from typing_extensions import Optional
 # %% what gets drawn where
 
 
-class CameraWindow(StrEnum):
+class PerceptionWindow(StrEnum):
     """
-    The windows the frames are drawn in, one per stream so both can be watched at once.
+    The windows the frames are drawn in, one per view so all of them can be watched at
+    once.
     """
 
     COLOR = "montessori perception: colour"
     DEPTH = "montessori perception: depth"
+    RECTIFIED = "montessori perception: rectified table"
 
 
 BRIGHTEST_SHADE = 255
@@ -63,19 +65,26 @@ def colorize_depth(depth: np.ndarray) -> np.ndarray:
     return colored
 
 
-def scale_to_fit(image: np.ndarray, maximum_width: int) -> np.ndarray:
+def scale_to_fit(
+    image: np.ndarray, maximum_width: int, maximum_height: int
+) -> np.ndarray:
     """
-    Shrink an image too wide to sit on screen, keeping its proportions.
+    Shrink an image too large to sit on screen, keeping its proportions.
+
+    Both bounds are needed because the views are not all landscape: the rectified table
+    is taller than it is wide, so a limit on width alone would leave it off the bottom
+    of the screen.
 
     :param image: The image to fit.
     :param maximum_width: Widest the result may be, in pixels.
+    :param maximum_height: Tallest the result may be, in pixels.
     :return: The image itself where it already fits, or a smaller copy.
     """
-    width = image.shape[1]
-    if width <= maximum_width:
+    height, width = image.shape[:2]
+    shrink = min(maximum_width / width, maximum_height / height)
+    if shrink >= 1.0:
         return image
-    height = round(image.shape[0] * maximum_width / width)
-    return cv2.resize(image, (maximum_width, height))
+    return cv2.resize(image, (round(width * shrink), round(height * shrink)))
 
 
 # %% putting images on screen
@@ -148,7 +157,12 @@ class CameraFrameViewer:
     maximum_width: int = 960
     """
     Widest a frame is drawn, in pixels, so a full resolution frame is scaled down far
-    enough to leave both windows on screen at once.
+    enough to leave every window on screen at once.
+    """
+
+    maximum_height: int = 540
+    """
+    Tallest a frame is drawn, in pixels, which is what bounds the rectified table.
     """
 
     refresh_milliseconds: int = 30
@@ -165,6 +179,11 @@ class CameraFrameViewer:
     _depth: Optional[np.ndarray] = field(init=False, default=None)
     """
     The newest depth image in metres, or None until one has arrived.
+    """
+
+    _rectified: Optional[np.ndarray] = field(init=False, default=None)
+    """
+    The newest top-down view of the table, or None until one has been rectified.
     """
 
     _lock: threading.Lock = field(init=False, default_factory=threading.Lock)
@@ -193,6 +212,16 @@ class CameraFrameViewer:
         with self._lock:
             self._depth = depth
 
+    def show_rectified(self, rectified: np.ndarray) -> None:
+        """
+        Hand in the newest top-down view of the table, to be drawn at the next
+        :meth:`refresh`.
+
+        :param rectified: The rectified image, blue/green/red.
+        """
+        with self._lock:
+            self._rectified = rectified
+
     def refresh(self) -> None:
         """
         Draw the newest frame and let the windows answer the keyboard.
@@ -201,17 +230,24 @@ class CameraFrameViewer:
         not being heard.
         """
         with self._lock:
-            color, depth = self._color, self._depth
+            color, depth, rectified = self._color, self._depth, self._rectified
         if color is not None:
-            self.display.draw(
-                CameraWindow.COLOR, scale_to_fit(color, self.maximum_width)
-            )
+            self.display.draw(PerceptionWindow.COLOR, self._fitted(color))
         if depth is not None:
             self.display.draw(
-                CameraWindow.DEPTH,
-                scale_to_fit(colorize_depth(depth), self.maximum_width),
+                PerceptionWindow.DEPTH, self._fitted(colorize_depth(depth))
             )
+        if rectified is not None:
+            self.display.draw(PerceptionWindow.RECTIFIED, self._fitted(rectified))
         self.display.wait(self.refresh_milliseconds)
+
+    def _fitted(self, image: np.ndarray) -> np.ndarray:
+        """
+        Shrink an image to the size this viewer draws at.
+
+        :param image: The image to fit.
+        """
+        return scale_to_fit(image, self.maximum_width, self.maximum_height)
 
     def close(self) -> None:
         """

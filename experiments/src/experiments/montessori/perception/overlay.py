@@ -1,10 +1,15 @@
 """
-Draw what perception found onto the camera image it was found in, so a detection can be
-checked against the pixels it came from without leaving the camera window.
+Draw what perception found onto an image it was found in, so a detection can be checked
+against the pixels it came from without leaving the camera window.
+
+The same drawing serves the camera's own image and the top-down view rectified from it:
+the two differ only in where a point on a horizontal plane lands, which is what a
+:class:`DetectionView` answers.
 """
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 
 import cv2
@@ -22,9 +27,22 @@ from experiments.montessori.perception.detections import (
     MontessoriDetection,
     MontessoriScene,
 )
-from experiments.montessori.perception.orthophoto import OrthophotoProjector
+from experiments.montessori.perception.orthophoto import Orthophoto, OrthophotoProjector
 
-# %% where a detection falls in the image
+# %% where a detection falls in an image
+
+
+def _map_plane_points(homography: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """
+    Send points on a horizontal plane through a homography.
+
+    :param homography: The 3x3 mapping to apply.
+    :param points: The points as ``(n, 2)`` ``(x, y)`` pairs.
+    :return: The mapped points, as ``(n, 2)`` ``(x, y)`` pairs.
+    """
+    on_plane = np.asarray(points, dtype=float).reshape(-1, 2)
+    mapped = np.column_stack([on_plane, np.ones(len(on_plane))]) @ homography.T
+    return mapped[:, :2] / mapped[:, 2:3]
 
 
 def project_to_pixels(
@@ -38,11 +56,83 @@ def project_to_pixels(
     :param height: Height of the plane they lie on, in metres.
     :return: The pixels they fall on, as ``(n, 2)`` ``(x, y)`` pairs.
     """
-    on_plane = np.column_stack(
-        [np.asarray(points, dtype=float).reshape(-1, 2), np.ones(len(points))]
-    )
-    projected = on_plane @ OrthophotoProjector.pixel_T_region(frame, height).T
-    return projected[:, :2] / projected[:, 2:3]
+    return _map_plane_points(OrthophotoProjector.pixel_T_region(frame, height), points)
+
+
+class DetectionView(ABC):
+    """
+    An image detections can be drawn on, together with where a point on a horizontal
+    plane falls in it.
+    """
+
+    @abstractmethod
+    def to_image(self) -> np.ndarray:
+        """
+        :return: A copy of the image itself, to be drawn on.
+        """
+
+    @abstractmethod
+    def to_pixels(self, points: np.ndarray, height: float) -> np.ndarray:
+        """
+        Where points on a horizontal plane fall in this image.
+
+        :param points: The points as ``(n, 2)`` world-frame ``(x, y)`` pairs.
+        :param height: Height of the plane they lie on, in metres.
+        :return: The pixels they fall on, as ``(n, 2)`` ``(x, y)`` pairs.
+        """
+
+
+@dataclass(frozen=True)
+class CameraView(DetectionView):
+    """
+    The camera's colour image as it was taken.
+    """
+
+    frame: RgbdFrame
+    """
+    The camera data, carrying the image, the camera's own pose and its intrinsics.
+    """
+
+    def to_image(self) -> np.ndarray:
+        return self.frame.color.copy()
+
+    def to_pixels(self, points: np.ndarray, height: float) -> np.ndarray:
+        return project_to_pixels(self.frame, points, height)
+
+
+@dataclass(frozen=True)
+class RectifiedView(DetectionView):
+    """
+    The metric top-down view rectified from a frame onto one horizontal plane.
+
+    Only that plane is rectified, so anything standing above it is drawn where the
+    camera saw it, and a detection's box carries the same parallax the rectified image
+    itself shows.
+    """
+
+    frame: RgbdFrame
+    """
+    The camera data the view was rectified from.
+    """
+
+    orthophoto: Orthophoto
+    """
+    The rectified view itself.
+    """
+
+    def to_image(self) -> np.ndarray:
+        return self.orthophoto.image.copy()
+
+    def to_pixels(self, points: np.ndarray, height: float) -> np.ndarray:
+        camera_pixel_T_view = (
+            OrthophotoProjector.pixel_T_region(self.frame, self.orthophoto.plane_height)
+            @ self.orthophoto.region.region_T_pixel
+        )
+        return _map_plane_points(
+            np.linalg.inv(camera_pixel_T_view)
+            @ OrthophotoProjector.pixel_T_region(self.frame, height),
+            points,
+        )
 
 
 # %% drawing them
@@ -51,11 +141,12 @@ def project_to_pixels(
 @dataclass
 class DetectionOverlay:
     """
-    Draws each detection's outline box, its centre and its name onto a frame.
+    Draws each detection's outline box, its centre and its name onto a view.
 
-    The box is the smallest upright rectangle holding the detection's own measured
-    outline, projected back into the image, so a detection that is the wrong shape or in
-    the wrong place is visibly so against the thing it claims to be.
+    The box is the smallest upright rectangle holding the whole of the detection's own
+    measured body -- its outline drawn both at the surface it rests on and at its own
+    top -- so a piece standing above the surface is boxed together with the top face the
+    camera sees pushed off to one side of it.
     """
 
     line_width: int = 2
@@ -78,41 +169,49 @@ class DetectionOverlay:
     How far above its box a name is written, in pixels.
     """
 
-    def draw(self, frame: RgbdFrame, scene: MontessoriScene) -> np.ndarray:
+    def draw(self, view: DetectionView, scene: MontessoriScene) -> np.ndarray:
         """
         Draw everything one look at the scene found.
 
-        :param frame: The frame the detections were found in.
+        :param view: The view the detections are drawn on.
         :param scene: The detections to draw.
-        :return: A copy of the frame's colour image with the detections on it.
+        :return: A copy of the view's image with the detections on it.
         """
-        image = frame.color.copy()
+        image = view.to_image()
         for piece in scene.shapes:
-            self._draw_detection(image, frame, piece, PIECE_COLOR)
+            self._draw_detection(image, view, piece, PIECE_COLOR)
         for hole in scene.holes:
-            self._draw_detection(image, frame, hole, HOLE_COLOR)
+            self._draw_detection(image, view, hole, HOLE_COLOR)
         if scene.board is not None:
-            self._draw_detection(image, frame, scene.board, BOARD_COLOR)
+            self._draw_detection(image, view, scene.board, BOARD_COLOR)
         return image
 
     def _draw_detection(
         self,
         image: np.ndarray,
-        frame: RgbdFrame,
+        view: DetectionView,
         detection: MontessoriDetection,
         color: DetectionColor,
     ) -> None:
         """
         Draw one detection's box, centre and name.
 
+        The centre is drawn on the surface the detection rests on, which is where a
+        caller asking for its position is told it stands.
+
         :param image: The image to draw on, changed in place.
-        :param frame: The frame the detection was found in.
+        :param view: The view the detection is drawn on.
         :param detection: The detection to draw.
         :param color: The colour to draw it in.
         """
-        outline = project_to_pixels(frame, detection.outline, detection.surface_height)
+        body = np.vstack(
+            [
+                view.to_pixels(detection.outline, height)
+                for height in (detection.surface_height, detection.top_height)
+            ]
+        )
         left, top, width, height = cv2.boundingRect(
-            outline.astype(np.float32).reshape(-1, 1, 2)
+            body.astype(np.float32).reshape(-1, 1, 2)
         )
         cv2.rectangle(
             image,
@@ -121,8 +220,7 @@ class DetectionOverlay:
             color.to_bgr(),
             self.line_width,
         )
-        [center] = project_to_pixels(
-            frame,
+        [center] = view.to_pixels(
             detection.pose.to_position().to_np()[:2].reshape(1, 2),
             detection.surface_height,
         )

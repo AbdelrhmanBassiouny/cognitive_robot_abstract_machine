@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 import cv2
 import numpy as np
 import pytest
-from typing_extensions import Dict, List
+from typing_extensions import Dict, List, Tuple
 
 from experiments.montessori.perception.camera import (
     CameraIntrinsics,
@@ -38,20 +38,26 @@ from experiments.montessori.perception.footprint import (
     CrossSectionClassifier,
     Footprint,
 )
-from experiments.montessori.perception.colors import HOLE_COLOR, PIECE_COLOR
+from experiments.montessori.perception.colors import (
+    HOLE_COLOR,
+    PIECE_COLOR,
+    DetectionColor,
+)
 from experiments.montessori.perception.orthophoto import (
     OrthophotoProjector,
     WorkspaceRegion,
 )
 from experiments.montessori.perception.overlay import (
+    CameraView,
     DetectionOverlay,
+    RectifiedView,
     project_to_pixels,
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.scene_source import FixedScene, PerceivedObjects
 from experiments.montessori.perception.viewer import (
     CameraFrameViewer,
-    CameraWindow,
+    PerceptionWindow,
     ImageDisplay,
     colorize_depth,
     scale_to_fit,
@@ -596,18 +602,26 @@ def test_a_depth_image_with_nothing_measured_is_drawn_black():
     assert not colored.any()
 
 
-def test_an_image_narrower_than_the_window_is_drawn_at_its_own_size():
+def test_an_image_smaller_than_the_window_is_drawn_at_its_own_size():
     image = np.zeros((4, 8, 3), dtype=np.uint8)
 
-    assert scale_to_fit(image, 16) is image
+    assert scale_to_fit(image, 16, 16) is image
 
 
 def test_a_wide_image_is_shrunk_to_the_window_keeping_its_proportions():
     image = np.zeros((100, 400, 3), dtype=np.uint8)
 
-    scaled = scale_to_fit(image, 200)
+    scaled = scale_to_fit(image, 200, 200)
 
     assert scaled.shape == (50, 200, 3)
+
+
+def test_a_tall_image_is_shrunk_to_the_window_keeping_its_proportions():
+    image = np.zeros((400, 100, 3), dtype=np.uint8)
+
+    scaled = scale_to_fit(image, 200, 200)
+
+    assert scaled.shape == (200, 50, 3)
 
 
 def test_the_viewer_draws_the_newest_frame_it_was_shown():
@@ -619,8 +633,20 @@ def test_the_viewer_draws_the_newest_frame_it_was_shown():
 
     viewer.refresh()
 
-    assert display.drawn[CameraWindow.COLOR][0, 0].tolist() == [7, 7, 7]
-    assert set(display.drawn) == {CameraWindow.COLOR, CameraWindow.DEPTH}
+    assert display.drawn[PerceptionWindow.COLOR][0, 0].tolist() == [7, 7, 7]
+    assert set(display.drawn) == {PerceptionWindow.COLOR, PerceptionWindow.DEPTH}
+
+
+def test_the_rectified_view_is_drawn_in_its_own_window():
+    display = RecordingDisplay()
+    viewer = CameraFrameViewer(display=display)
+    viewer.show_color(np.zeros((2, 2, 3), dtype=np.uint8))
+    viewer.show_rectified(np.full((2, 2, 3), 5, dtype=np.uint8))
+
+    viewer.refresh()
+
+    assert display.drawn[PerceptionWindow.RECTIFIED][0, 0].tolist() == [5, 5, 5]
+    assert set(display.drawn) == {PerceptionWindow.COLOR, PerceptionWindow.RECTIFIED}
 
 
 def test_a_stream_that_has_not_arrived_leaves_only_its_own_window_empty():
@@ -630,7 +656,7 @@ def test_a_stream_that_has_not_arrived_leaves_only_its_own_window_empty():
 
     viewer.refresh()
 
-    assert set(display.drawn) == {CameraWindow.COLOR}
+    assert set(display.drawn) == {PerceptionWindow.COLOR}
 
 
 def test_the_viewer_draws_nothing_before_a_frame_has_arrived():
@@ -718,7 +744,7 @@ def test_a_hole_lies_on_the_surface_its_pose_names(scene: MontessoriScene):
 def test_drawing_nothing_leaves_the_frame_as_it_was():
     frame = frame_seen_from_above()
 
-    drawn = DetectionOverlay().draw(frame, MontessoriScene())
+    drawn = DetectionOverlay().draw(CameraView(frame), MontessoriScene())
 
     assert np.array_equal(drawn, frame.color)
 
@@ -728,7 +754,7 @@ def test_the_overlay_leaves_the_frame_it_drew_from_untouched(
 ):
     before = frame.color.copy()
 
-    DetectionOverlay().draw(frame, scene)
+    DetectionOverlay().draw(CameraView(frame), scene)
 
     assert np.array_equal(frame.color, before)
 
@@ -736,7 +762,106 @@ def test_the_overlay_leaves_the_frame_it_drew_from_untouched(
 def test_each_kind_of_detection_is_drawn_in_its_own_colour(
     frame: RgbdFrame, scene: MontessoriScene
 ):
-    drawn = DetectionOverlay().draw(frame, scene)
+    drawn = DetectionOverlay().draw(CameraView(frame), scene)
 
     for color in (PIECE_COLOR, HOLE_COLOR):
         assert (drawn == np.array(color.to_bgr(), dtype=np.uint8)).all(axis=2).any()
+
+
+def _extent_drawn_in(
+    image: np.ndarray, color: DetectionColor
+) -> Tuple[int, int, int, int]:
+    """
+    The bounding box of everything one colour was drawn in.
+
+    :param image: The image that was drawn on.
+    :param color: The colour to look for.
+    :return: Its leftmost, topmost, rightmost and bottommost pixel.
+    """
+    marked = (image == np.array(color.to_bgr(), dtype=np.uint8)).all(axis=2)
+    rows, columns = np.nonzero(marked)
+    return columns.min(), rows.min(), columns.max(), rows.max()
+
+
+def test_a_standing_piece_is_boxed_around_the_top_face_the_camera_sees(
+    renderer: MontessoriSceneRenderer, pipeline: MontessoriPerceptionPipeline
+):
+    frame = renderer.render([PlacedPiece(MontessoriShapeCategory.CUBE, x=0.58, y=0.15)])
+    [piece] = pipeline.detect(frame).shapes
+    view = CameraView(frame)
+
+    drawn = DetectionOverlay().draw(view, MontessoriScene(shapes=[piece]))
+
+    left, top, right, bottom = _extent_drawn_in(drawn, PIECE_COLOR)
+    for height in (piece.surface_height, piece.top_height):
+        pixels = view.to_pixels(piece.outline, height)
+        assert pixels[:, 0].min() >= left
+        assert pixels[:, 0].max() <= right
+        assert pixels[:, 1].min() >= top
+        assert pixels[:, 1].max() <= bottom
+
+
+# %% the rectified view
+
+
+def test_a_point_on_the_rectified_plane_lands_on_the_pixel_that_samples_it(
+    frame: RgbdFrame, pipeline: MontessoriPerceptionPipeline
+):
+    orthophoto = pipeline.rectify_table(frame)
+    x, y = 0.6, 0.2
+
+    [pixel] = RectifiedView(frame, orthophoto).to_pixels(
+        np.array([[x, y]]), orthophoto.plane_height
+    )
+
+    assert orthophoto.region.to_world_position(*pixel) == pytest.approx((x, y))
+
+
+def test_a_point_above_the_rectified_plane_lands_further_from_the_camera_axis(
+    frame: RgbdFrame, pipeline: MontessoriPerceptionPipeline
+):
+    orthophoto = pipeline.rectify_table(frame)
+    view = RectifiedView(frame, orthophoto)
+    below_camera = np.array(frame.reference_frame_T_camera[:2, 3]).reshape(1, 2)
+    point = below_camera + np.array([[0.2, 0.0]])
+
+    on_plane, above_plane = (
+        view.to_pixels(point, height)[0]
+        for height in (orthophoto.plane_height, orthophoto.plane_height + 0.03)
+    )
+    [nadir] = view.to_pixels(below_camera, orthophoto.plane_height)
+
+    assert np.linalg.norm(above_plane - nadir) > np.linalg.norm(on_plane - nadir)
+
+
+def test_the_rectified_view_draws_on_the_rectified_image(
+    frame: RgbdFrame, pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
+):
+    orthophoto = pipeline.rectify_table(frame)
+
+    drawn = DetectionOverlay().draw(RectifiedView(frame, orthophoto), scene)
+
+    assert drawn.shape == orthophoto.image.shape
+    assert (drawn == np.array(PIECE_COLOR.to_bgr(), dtype=np.uint8)).all(axis=2).any()
+
+
+# %% how tall a piece is taken to stand
+
+
+def test_a_piece_the_depth_image_cannot_resolve_stands_at_its_nominal_height(
+    pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
+):
+    nominal = pipeline.piece_detector.piece_height
+
+    for piece in scene.shapes:
+        assert piece.height == pytest.approx(nominal)
+        assert piece.surface_height == pytest.approx(pipeline.table_height)
+        assert piece.top_height == pytest.approx(pipeline.table_height + nominal)
+
+
+def test_a_hole_has_no_thickness_to_stand_above_its_own_surface(
+    scene: MontessoriScene,
+):
+    hole = scene.holes[0]
+
+    assert hole.top_height == hole.surface_height
