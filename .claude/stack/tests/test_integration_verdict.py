@@ -474,3 +474,16 @@ def test_a_candidate_still_running_is_left_open_and_its_branch_left_alone():
     run = settle([a_check(status="in_progress", conclusion=None)])
 
     assert deleted_branches(run) == [] and run.fork_answers.closed == []
+
+
+def test_the_scheduled_job_runs_the_suite_before_it_pushes_anything():
+    """
+    The candidate's own checks include this suite, so running it here is duplication -
+    on a good build. On a bad one it is what stops a known-broken build being pushed, a
+    candidate being opened to be closed red, and a whole matrix being spent saying so.
+
+    Asserted as the absence of the flag that turns it off rather than as the command
+    line's shape, since that is the one edit that would give the duplication back its
+    cost without giving back what it buys.
+    """
+    assert "--no-test" not in refresh_job_script()

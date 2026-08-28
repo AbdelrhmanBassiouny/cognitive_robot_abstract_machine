@@ -72,6 +72,13 @@ jobs:
           source .claude/hooks/resolve-personal-notes-config.sh
           python "${STACK_DIRECTORY}/maintenance.py" fast-forward
 
+      # The suite runs here rather than being left to the candidate, even though the
+      # candidate's own checks include it. A build the tooling suite rejects is one
+      # nobody should be handed, and catching it here costs three minutes where letting
+      # it through costs a whole matrix, a candidate opened to be closed red, and the
+      # time between the two. The asymmetry is the whole argument: it is spent on every
+      # good build to be saved on every bad one, and bad ones are what this branch
+      # exists to find.
       - name: Restack every stale tip and build
         id: build
         env:
@@ -79,12 +86,13 @@ jobs:
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
           set +e
-          python "${STACK_DIRECTORY}/integration.py" build --restack --no-test \
+          python "${STACK_DIRECTORY}/integration.py" build --restack \
             --json > "${RUNNER_TEMP}/build.json"
           status=$?
           set -e
           # 0: every tip is in the branch. 10: at least one was left out, which is a
-          # collision to triage rather than a build that failed. Anything else is.
+          # collision to triage rather than a build that failed. Anything else is - a
+          # red suite included, which stops the run before anything is pushed.
           case $status in 0 | 10) ;; *) cat "${RUNNER_TEMP}/build.json"; exit $status ;; esac
           echo "branch=$(python -c "import json;print(json.load(open('${RUNNER_TEMP}/build.json'))['build_branch'])")" >> "$GITHUB_OUTPUT"
 
