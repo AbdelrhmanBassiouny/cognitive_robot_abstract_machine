@@ -367,3 +367,69 @@ under contention, which no unit test in that module exercises anyway. The merge
 is proven by the demo running on the real robot — which is
 `demo-runs-on-grounded-perception`'s job, and one more reason to get there by
 3 September.
+
+## `montessori-perception-on-main`: what the package actually needed
+
+Run 2026-08-28, as pull request #202 off `main`. Twelve commits, 34 files,
+9,664 insertions, zero deletions.
+
+**The item's premise was wrong in one respect, and it matters for the items
+stacked on it.** The plan described this branch as carrying "the perception
+package alone — sorinar329's original node commit `75258debd` plus the seven
+that follow it". Those eight commits are exactly right and all eight are here,
+with sorinar329's authorship preserved on the first. But the package does not
+import-close against `main`: four files it reads exist only on `tracy_icra`.
+
+| file | lines | what it is here for |
+|---|---|---|
+| `montessori/semantics.py` | 345 | `MontessoriShapeCategory`, the shape vocabulary everything is typed against |
+| `montessori/hole_geometry.py` | 237 | the board's hole footprints, read by the test renderer and by `world.py` |
+| `montessori/world.py` | 1167 | `BOARD_SCALE`, and nothing else |
+| `tracy_experiments/equipment.py` | 579 | `table_top_z`, and nothing else |
+
+The last two contribute a single symbol each. **Both symbols are exactly what
+`surfaces-from-world` replaces with values read from the world**, so this
+coupling is expected to be short-lived — which is worth knowing when that item
+runs, because deleting those two dependencies is a visible, checkable outcome
+of it rather than an incidental cleanup. Their own tests came across too, so
+`main` gains no untested code.
+
+The eight commits' hunks touching `montessori_demo.py` and
+`tracy_experiments/montessori/world.py` were dropped: those files stay on
+`tracy_icra`.
+
+### Two gaps that only appear off `tracy_icra`
+
+Both are environment accidents on the demo branch, and both would have broken
+a fresh checkout of `main`:
+
+- `hole_geometry.py` loads `resources/board.stl` **at import time**, and the
+  mesh is not a Python file — so an import-closure check over modules alone
+  never sees it. Without it, importing `experiments.montessori.world` raises
+  before any test runs.
+- `experiments` has never declared `opencv`, though the perception package
+  imports `cv2` in six modules. It works on `tracy_icra` only because
+  `robokudo` pulls opencv into the same environment.
+
+Worth generalizing: a closure check that only follows `import` statements
+proves less than it looks. Data files loaded at import time and undeclared
+third-party packages both sit outside it.
+
+### Verification
+
+140 passed, 1 skipped — every test the branch adds, run against the branch.
+Run with `--noconftest` and the workspace on `PYTHONPATH`, because the
+repository's conftest regenerates the ORM interfaces on collection, which
+imports `giskardpy` and needs a ROS 2 installation the container lacks; that
+failure reproduces on unmodified `main`, so it is the environment, not the
+branch. The ORM path is therefore unexercised here.
+
+### Opened ready for review, deliberately
+
+The dashboard's `is_ready_to_unblock_dependents()` counts a dependency as ready
+only when it is done, merged, or **open and out of draft** — a still-open draft
+is the one state it refuses to let a dependent stack on. So a draft pull request
+here would have left `surfaces-from-world` and `perception-backend` showing as
+blocked with no "Start now" button, which is what prompted this item being
+picked up. Opened out of draft at the developer's decision, to unblock them.
+Nothing is merged; `main` is untouched until they say otherwise.
