@@ -910,7 +910,7 @@ items:
     depends_on: [setup-personal-notes-pr101, stack-tooling-on-main]
     status: in_progress
     pull_request_number: 185
-    session: https://claude.ai/code/session_01JN9p5Kf2DKtzryspPX2KqZ
+    session: https://claude.ai/code/session_01723FcMWYnpQHrq4fdxxs8j
     notes: >
       Move the existing Python (.claude/stack/stack.py, build_dashboard.py + siblings,
       plan_manifest_tools.py) into the package PR 3 created, with all their tests moved to the
@@ -1129,6 +1129,31 @@ items:
       green run after a deletion says nothing about what the deletion took with it; the check
       is the mutation that used to fail, or the test count.
 
+
+      Resolved again 2026-08-28 (session https://claude.ai/code/session_01723FcMWYnpQHrq4fdxxs8j).
+      The pull request had been needs-resolution and skipped by every maintenance pass since
+      2026-08-22, reported four times; CI was green on its head, so the merge conflict was the
+      whole blocker. The 2026-08-23 lesson repeated exactly: git named two conflicting files and
+      could not name the one that mattered, plan_item_mode.py, which landed on main with #149
+      after the last merge along with plan-item-modes.toml. Left there, the branch's own "no .py
+      remains under .claude/" contract fails. Both move into bastler/, the test with them.
+
+      plan_item_mode reads its committed defaults from the package directory, named off its own
+      __file__ rather than written down, and pyproject carries the file as package data - checked
+      in a built wheel rather than assumed. The two documents that invoke it, execution-modes.md
+      and plan-item-mode/SKILL.md, join UNINSTALLED_INVOCATIONS, so the closure holds the module
+      to the standard library without naming it; the prose spelling of the module in the skill
+      had to go for that entry to bite, since names_of matches anywhere in the caller's file and
+      a mention satisfied it as readily as the invocation. Four mutations checked, each caught by
+      exactly the test that names it. 642 tests pass, from 617.
+
+      Two things flagged rather than done. main has retired every workspace member's
+      requirements.txt for static [project] dependencies (4b4cfdf4) and guards it with
+      test/version_test/test_dependency_declarations.py, which reads [tool.uv.workspace] members
+      - bastler is not one, so nothing fails, but this package's requirements.txt is now the last
+      in the repository and whether it follows is the user's call, not a merge's. And ten of the
+      2026-08-23 round's 34 threads are still open on purpose, each answered differently or
+      waiting on the user; nothing here resolves them.
   - id: bastler-notes-core-python
     branch: null
     title: "Bash→Python 1: notes-core modules (config, git seam, writer, markers)"

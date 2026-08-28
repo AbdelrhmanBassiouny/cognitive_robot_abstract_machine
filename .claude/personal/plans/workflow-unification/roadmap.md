@@ -10342,3 +10342,92 @@ here rather than papered over.
 
 `dashboards`, not the plan the request arrived through. The button is dashboard tooling that
 every plan's page gets; rdr-refactor was the page being looked at, not the subject.
+
+## Update 2026-08-28 (resolved): #185's second merge, and a caller test a prose mention had disarmed
+
+`/plan-item-resolve workflow-unification bastler-package`, session
+https://claude.ai/code/session_01723FcMWYnpQHrq4fdxxs8j. One thing was wrong and the
+manifest recorded it no better than last time: the pull request had been `dirty` and
+labelled `needs-resolution` since 2026-08-22, skipped by four maintenance passes, the last
+of them three hours before this session started. CI was green on its head commit — all 23
+checks, `test_bastler` among them — so the conflict was the entire blocker, and the item's
+`notes` said nothing about either.
+
+### The 2026-08-23 lesson repeated, which is what makes it a rule
+
+git reported two conflicts: `resolve-personal-notes-config.sh`, and
+`test/bastler_test/test_plan_item_mode.py` as an "added inside a directory that was
+renamed" file-location conflict. The file that decided the job was neither of them.
+`plan_item_mode.py` and `plan-item-modes.toml` landed on `main` with #149 after this
+branch's last merge, and a merge that left them where they fell would have failed this
+branch's own `test_no_python_module_remains_under_the_claude_directory`.
+
+The check that finds them is the one the previous round wrote down —
+`git ls-tree -r origin/main --name-only .claude/ | grep '\.py$'` against the merged tree —
+and it took one command. Two rounds in a row now: **a conflict report names the files two
+sides both edited, never the ones a moved directory makes dangerous.** The file-location
+conflict git *did* raise is the tell when the new file has a test; there is no tell at all
+when it does not.
+
+### What the fold cost, and where it landed
+
+`resolve-personal-notes-config.sh` keeps `main`'s two new `*_DOCUMENT` paths verbatim,
+gains `PLAN_ITEM_MODE_MODULE` beside the other module constants and
+`PLAN_ITEM_MODES_CONFIG_FILE` beside `stack.toml`'s, and drops `main`'s re-added
+`PLAN_ITEM_BOOTSTRAP_SCRIPT` for the `*_MODULE` form this branch already carries.
+
+`plan_item_mode` resolves its committed defaults from the package directory, read off its
+own `__file__` rather than written down — the same treatment `stack.toml` already has, and
+`pyproject`'s `package-data` carries the file, verified in a built wheel rather than
+assumed. `test_plan_item_mode` runs the scratch layout's copy through `PythonModuleRunner`
+and takes its paths from `constants.py` and the module's own `Location`, so nothing in it
+spells a path the package could rename underneath it.
+
+### A prose mention had disarmed the caller test, and only the mutation showed it
+
+Both documents that invoke the module — `execution-modes.md` and `plan-item-mode/SKILL.md`
+— join `UNINSTALLED_INVOCATIONS`, which is what holds `plan_item_mode` to the standard
+library through the closure rather than by naming it. The first mutation run said the
+declaration was worthless: removing the invocation from `plan-item-mode/SKILL.md` left the
+suite green.
+
+The cause is worth carrying. `names_of()` matches any spelling of the module *anywhere in
+the caller's file*, and the same edit that repointed the invocation had also repointed a
+sentence of prose to `` `bastler.plan_item_mode` ``. The prose satisfied the test on its
+own, so the entry would have outlived the invocation it exists to describe. The sentence
+names the module no longer, and the mutation fails as it should. **A test that reads a
+whole file for a string is only as strong as the file's discipline about mentioning it** —
+and nothing about the test says so, which is why the mutation and not the reading is what
+found it.
+
+Four mutations, each caught by exactly the test that names it: the module growing an
+`import yaml`, each of the two callers ceasing to invoke it, and a caller gaining a
+`pip install` step. 642 tests pass, from 617. `check-setup.sh` exits 0 with every row `ok`
+and all fourteen entry points answer `--help`.
+
+### Two things flagged rather than acted on
+
+**`main` has retired `requirements*.txt`.** `4b4cfdf4` moved every workspace member's
+dependencies into static `[project] dependencies` and added
+`test/version_test/test_dependency_declarations.py` to hold them there. It parametrizes
+over `[tool.uv.workspace] members`, which does not list `bastler`, so nothing on this
+branch fails — checked rather than assumed. But `bastler/requirements.txt` is now the last
+one in the repository, and four things read it: `pyproject`'s `rendering` extra,
+`BASTLER_REQUIREMENTS_FILE`, `check-setup.sh`'s `dashboard_dependencies` row, and
+`package_layout`'s `packages_distributions()` mapping. Following the new convention is a
+contract change to what this pull request's own review settled, so it is the user's call
+and not a merge's.
+
+**Ten of the 2026-08-23 round's 34 threads are still open**, and correctly so: each was
+answered differently from what it asked, or asks a question still waiting on the user
+(publishing the package, the `StrEnum` for script names, whether the remaining fixture
+literals should move). The convention is that a thread answered differently stays open for
+the user to close, so this session resolved none of them.
+
+### Recorded for whoever merges next
+
+`#203` adds `.claude/setup_steps.py` — a third round of exactly the problem above, already
+visible. `#198` fixes a bug this branch carries verbatim at `bastler/stack.py:823`, and the
+2026-08-24 entry recording it says it lands first and #185 picks it up; it has not landed,
+so the bug is still here. Neither is a dependency; both are landing order, and the
+`git ls-tree` check is what catches the first of them whichever way round they go.
