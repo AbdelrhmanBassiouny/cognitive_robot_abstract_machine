@@ -14,13 +14,18 @@ from dataclasses import dataclass, field
 from coraplex.datastructures.enums import Arms
 from experiments.tracy_experiments.montessori.gripper_feedback import (
     FULLY_CLOSED_KNUCKLE_POSITION,
+    RECLOSE_MARGIN,
     RECLOSE_SETPOINT,
     GripperClosure,
     GripperSlipEvent,
 )
+from experiments.tracy_experiments.montessori.grasp_widths import (
+    RECTANGULAR_PRISM_CLOSE_SETPOINT,
+)
 from experiments.tracy_experiments.pickup.pickup_demo_real import (
     GRASP_HEIGHT_OFFSET,
     PICK_TARGETS,
+    POST_LIFT_SETTLE_SECONDS,
     _add_montessori_shape,
     _grasp_target_pose,
     _SortingRig,
@@ -179,6 +184,7 @@ def _slip_watch_rig(
         tool_frame=None,
         table_top_z=0.0,
         slip_watch_interval=0.01,
+        post_lift_settle=0.0,
     )
 
 
@@ -234,6 +240,57 @@ def test_a_held_grasp_re_closes_past_fully_closed_while_the_shape_is_carried():
     assert gripper.close_to_setpoints[0] == 0.5
     assert RECLOSE_SETPOINT in gripper.close_to_setpoints[1:]
     assert _no_slip_watch_thread_left_running()
+
+
+def test_the_slip_watch_re_closes_past_a_shapes_own_firmer_close_setpoint():
+    """
+    A shape closed to more than ``FingerSetpoint.CLOSED`` must be re-closed past *its*
+    setpoint, not past ``CLOSED``.
+
+    The rectangular prism grasps at ``0.6``. Re-commanding the ``CLOSED``-derived
+    ``0.55`` would ease the fingers open on every poll and drop the piece.
+    """
+    gripper = RecordingGripper()
+    rig = _slip_watch_rig(gripper, _held())
+
+    rig._carry_watching_for_slip(
+        Body(name=PrefixedName("rectangular_prism")),
+        RECTANGULAR_PRISM_CLOSE_SETPOINT,
+        lambda: _wait_until(lambda: len(gripper.close_to_setpoints) > 1),
+    )
+
+    assert gripper.close_to_setpoints[0] == RECTANGULAR_PRISM_CLOSE_SETPOINT
+    re_closes = gripper.close_to_setpoints[1:]
+    assert re_closes
+    assert all(
+        setpoint == RECTANGULAR_PRISM_CLOSE_SETPOINT + RECLOSE_MARGIN
+        for setpoint in re_closes
+    )
+    assert all(setpoint > RECTANGULAR_PRISM_CLOSE_SETPOINT for setpoint in re_closes)
+    assert _no_slip_watch_thread_left_running()
+
+
+def test_the_grasp_is_left_to_settle_after_the_lift_before_it_is_read():
+    """
+    The knuckle is still moving as the fingers take up the lifted shape's weight, so the
+    reading that seeds the slip detector must wait :attr:`_SortingRig.post_lift_settle`.
+    """
+    gripper = RecordingGripper()
+    rig = _slip_watch_rig(gripper, _held())
+    rig.post_lift_settle = 0.2
+
+    started = time.monotonic()
+    rig._carry_watching_for_slip(
+        Body(name=PrefixedName("cube")), 0.5, lambda: None
+    )
+
+    assert time.monotonic() - started >= 0.2
+    assert gripper.close_to_setpoints[0] == 0.5
+    assert _no_slip_watch_thread_left_running()
+
+
+def test_the_post_lift_settle_defaults_to_five_seconds():
+    assert POST_LIFT_SETTLE_SECONDS == 5.0
 
 
 def test_a_slip_streams_a_gripper_slip_event_to_the_feed():

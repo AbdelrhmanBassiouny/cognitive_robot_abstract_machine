@@ -91,6 +91,7 @@ from experiments.tracy_experiments.montessori.gripper_feedback import (
     GripperSlipEvent,
     LiveGraspGuard,
     confirm_grasp,
+    reclose_setpoint_for,
 )
 from experiments.tracy_experiments.robotiq_gripper import RobotiqGripperController
 from segmind.datastructures.events import (
@@ -171,6 +172,18 @@ SLIP_WATCH_INTERVAL_SECONDS = 1.0
 """
 Seconds between the slip watch's re-closes while a shape is carried to its hole (see
 :class:`~experiments.tracy_experiments.montessori.gripper_feedback.LiveGraspGuard`).
+"""
+
+POST_LIFT_SETTLE_SECONDS = 5.0
+"""
+Seconds to hold still after the lift before the grasp is read and the slip watch starts.
+
+The knuckle keeps moving for a moment after the shape leaves the table: the fingers take
+up the piece's weight and it settles between the pads. Reading immediately catches that
+transient, which both seeds
+:class:`~experiments.tracy_experiments.montessori.gripper_feedback.SlipDetector` from a
+position the grasp has not actually reached and risks a first poll that reads the
+still-settling travel as a slip.
 """
 
 
@@ -432,6 +445,9 @@ class _SortingRig:
     slip_watch_interval: float = SLIP_WATCH_INTERVAL_SECONDS
     """Seconds between the slip watch's re-closes while carrying a shape."""
 
+    post_lift_settle: float = POST_LIFT_SETTLE_SECONDS
+    """Seconds to let the grasp settle after the lift before it is read."""
+
     def sort(
         self, body: Body, category: MontessoriShapeCategory, half_height: float
     ) -> None:
@@ -537,9 +553,14 @@ class _SortingRig:
         Run ``carry`` -- the transport and release -- while watching the left gripper's
         knuckle joint for ``body`` slipping out.
 
-        The close is firmed to ``close_setpoint`` and the knuckle read once: an empty
-        gripper (the grasp missed) skips the watch. Otherwise the close is re-commanded
-        every :attr:`slip_watch_interval` seconds for as long as ``carry`` runs; each
+        The grasp is first given :attr:`post_lift_settle` seconds to settle: the lift has
+        just transferred the shape's weight onto the fingers and the knuckle is still
+        moving, so a reading taken now would seed the slip detector from a position the
+        grasp never reaches. Then the close is firmed to ``close_setpoint`` and the
+        knuckle read once: an empty
+        gripper (the grasp missed) skips the watch. Otherwise a re-close just past
+        ``close_setpoint`` is commanded every :attr:`slip_watch_interval` seconds for as
+        long as ``carry`` runs; each
         poll's verdict is logged, and a slip also streams a
         :class:`~experiments.tracy_experiments.montessori.gripper_feedback.
         GripperSlipEvent` to the dashboard.
@@ -550,6 +571,7 @@ class _SortingRig:
         :param carry: Runs the transport-and-place motion.
         """
         shape_name = body.name.name
+        time.sleep(self.post_lift_settle)
         self.gripper.close_to(PICK_ARM, close_setpoint)
         confirmation = confirm_grasp(self.gripper_listener.latest_closure)
         logger.info("%s: grasp check -> %s.", shape_name, confirmation.verdict)
@@ -563,6 +585,7 @@ class _SortingRig:
             arm=PICK_ARM,
             slip_detector=confirmation.slip_detector,
             period=self.slip_watch_interval,
+            reclose_setpoint=reclose_setpoint_for(close_setpoint),
         )
         carry_done = threading.Event()
         watcher = threading.Thread(

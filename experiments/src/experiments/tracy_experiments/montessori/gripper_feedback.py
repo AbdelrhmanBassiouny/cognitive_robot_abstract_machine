@@ -66,19 +66,39 @@ counts as the shape having left the fingers.
 
 RECLOSE_MARGIN = 0.05
 """
-How far, in the gripper controller's own command units, past
-:attr:`~experiments.tracy_experiments.robotiq_gripper.FingerSetpoint.CLOSED` the slip
-watch drives each re-close.
+How far, in the gripper controller's own command units, past the setpoint a grasp was
+taken at the slip watch drives each re-close.
 
-At the plain ``CLOSED`` command the fingers only just pinch a held piece, so a poll
+At the grasp's own close command the fingers only just pinch a held piece, so a poll
 would barely move the knuckle whether or not the piece is still there. Commanding
 slightly past it forces measurable inward travel the instant the piece is gone.
 """
 
-RECLOSE_SETPOINT = float(FingerSetpoint.CLOSED) + RECLOSE_MARGIN
+
+def reclose_setpoint_for(close_setpoint: float) -> float:
+    """
+    The setpoint the slip watch should re-command while carrying a shape grasped at
+    ``close_setpoint``.
+
+    Must be derived from the shape's *own* close setpoint rather than from
+    :attr:`~experiments.tracy_experiments.robotiq_gripper.FingerSetpoint.CLOSED`. Shapes
+    that need a firmer grasp than ``CLOSED`` (the rectangular prism closes to ``0.6``)
+    would otherwise be re-commanded to a setpoint below the one holding them, so every
+    poll would ease the fingers open and drop the piece.
+
+    :param close_setpoint: The setpoint the grasp itself was closed to.
+    :return: ``close_setpoint`` plus :data:`RECLOSE_MARGIN`.
+    """
+    return close_setpoint + RECLOSE_MARGIN
+
+
+RECLOSE_SETPOINT = reclose_setpoint_for(float(FingerSetpoint.CLOSED))
 """
-Finger setpoint the slip watch re-commands on every poll: the fully-closed command plus
-:data:`RECLOSE_MARGIN`.
+Re-close setpoint for a shape grasped at the plain fully-closed command.
+
+Only correct for shapes whose close setpoint is
+:attr:`~experiments.tracy_experiments.robotiq_gripper.FingerSetpoint.CLOSED`; anything
+else must use :func:`reclose_setpoint_for`.
 """
 
 
@@ -381,7 +401,11 @@ class LiveGraspGuard:
 
     reclose_setpoint: float = RECLOSE_SETPOINT
     """
-    See :data:`RECLOSE_SETPOINT`.
+    Setpoint re-commanded on every poll. Callers guarding a shape grasped at anything
+    other than
+    :attr:`~experiments.tracy_experiments.robotiq_gripper.FingerSetpoint.CLOSED` must
+    pass :func:`reclose_setpoint_for` of that shape's close setpoint; the default only
+    suits a plain ``CLOSED`` grasp. See :data:`RECLOSE_SETPOINT`.
     """
 
     def poll(self) -> GraspVerdict:

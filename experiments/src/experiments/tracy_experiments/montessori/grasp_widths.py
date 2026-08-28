@@ -34,7 +34,7 @@ Equal to :attr:`~experiments.tracy_experiments.robotiq_gripper.FingerSetpoint.CL
 the value the demo drove every grasp to before this module existed.
 """
 
-RECTANGULAR_PRISM_CLOSE_SETPOINT = 0.7
+RECTANGULAR_PRISM_CLOSE_SETPOINT = 0.6
 """
 Close setpoint for the rectangular prism, driven further in than
 :data:`DEFAULT_CLOSE_SETPOINT` because the piece is too thin for the fingers to reach at
