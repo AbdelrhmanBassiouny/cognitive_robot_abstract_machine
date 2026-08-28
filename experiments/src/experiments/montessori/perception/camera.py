@@ -5,14 +5,17 @@ intrinsics, and where the camera stood when it was taken.
 
 from __future__ import annotations
 
+import struct
 from dataclasses import dataclass
 from enum import StrEnum
 
+import cv2
 import numpy as np
-from typing_extensions import Self
+from typing_extensions import Optional, Self
 
 from experiments.montessori.perception.exceptions import (
     DepthAndColourNotRegistered,
+    UndecodableCompressedImage,
     UnsupportedImageEncoding,
 )
 
@@ -35,6 +38,28 @@ MILLIMETRES_PER_METRE = 1000.0
 Divisor turning a :attr:`ImageEncoding.DEPTH_IN_MILLIMETRES` reading into metres.
 """
 
+
+class ImageTransport(StrEnum):
+    """
+    The compressed streams ``image_transport`` offers alongside a camera's raw one.
+
+    A camera advertises each of these as a sub-topic of its raw image topic, so
+    ``/camera/color/image_raw`` also carries ``/camera/color/image_raw/compressed``.
+    """
+
+    COMPRESSED = "compressed"
+    COMPRESSED_DEPTH = "compressedDepth"
+
+
+FORMAT_FIELD_SEPARATOR = ";"
+"""
+Separates the source encoding from the codec in a ``CompressedImage``'s ``format``.
+"""
+
+PAYLOAD_ENCODING_MARKER = "compressed"
+"""
+Word a ``format`` field puts in front of the encoding its payload is stored in.
+"""
 
 # %% intrinsics
 
@@ -228,7 +253,8 @@ def decode_depth_image(
     :param step: Row stride in bytes.
     :param encoding: The message's own encoding.
     :return: Depth in metres, shape ``(height, width)``, zero where unmeasured.
-    :raises UnsupportedImageEncoding: If the encoding is neither ``16UC1`` nor ``32FC1``.
+    :raises UnsupportedImageEncoding: If the encoding is neither ``16UC1`` nor
+        ``32FC1``.
     """
     if encoding == ImageEncoding.DEPTH_IN_MILLIMETRES:
         rows = np.frombuffer(data, dtype=np.uint16).reshape(height, step // 2)
@@ -240,3 +266,180 @@ def decode_depth_image(
         encoding,
         [ImageEncoding.DEPTH_IN_MILLIMETRES, ImageEncoding.DEPTH_IN_METRES],
     )
+
+
+# %% transport-compressed messages
+
+
+COMPRESSED_DEPTH_HEADER_LAYOUT = "iff"
+"""
+Layout of the header a ``compressedDepth`` payload begins with, as :mod:`struct` reads
+it: the compression format, then the two quantization terms.
+"""
+
+COMPRESSED_DEPTH_HEADER_SIZE = struct.calcsize(COMPRESSED_DEPTH_HEADER_LAYOUT)
+"""
+Number of bytes :data:`COMPRESSED_DEPTH_HEADER_LAYOUT` occupies.
+"""
+
+
+@dataclass(frozen=True)
+class CompressedImageFormat:
+    """
+    A ``sensor_msgs/CompressedImage``'s ``format`` field, split into the parts that say
+    how to read its payload.
+
+    ``image_transport`` writes colour as ``rgb8; jpeg compressed bgr8`` and depth as
+    ``16UC1; compressedDepth png``: the encoding the camera produced comes first, and
+    what the codec did with it follows.
+    """
+
+    source_encoding: str
+    """
+    The encoding the camera published the image in before it was compressed.
+    """
+
+    payload_encoding: Optional[str]
+    """
+    The encoding the payload's pixels are stored in, or None where the codec names no
+    encoding of its own, as ``compressedDepth`` does not.
+    """
+
+    @classmethod
+    def from_format_field(cls, format_field: str) -> Self:
+        """
+        Read a message's own ``format`` field.
+
+        :param format_field: The field as the publisher wrote it.
+        """
+        source_encoding, _, codec = format_field.partition(FORMAT_FIELD_SEPARATOR)
+        words = codec.split()
+        marks_payload = PAYLOAD_ENCODING_MARKER in words and words.index(
+            PAYLOAD_ENCODING_MARKER
+        ) + 1 < len(words)
+        return cls(
+            source_encoding=source_encoding.strip(),
+            payload_encoding=(
+                words[words.index(PAYLOAD_ENCODING_MARKER) + 1]
+                if marks_payload
+                else None
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class DepthQuantization:
+    """
+    The header ``compressedDepth`` writes in front of its PNG payload.
+
+    A :attr:`ImageEncoding.DEPTH_IN_METRES` image cannot be stored in a 16-bit PNG as it
+    stands, so the codec maps each distance onto an integer and records here what it
+    would take to undo that.
+    """
+
+    compression_format: int
+    """
+    Which of the codec's own compression formats produced the payload.
+    """
+
+    quantization_a: float
+    """
+    Numerator of the mapping from a stored integer back to a distance.
+    """
+
+    quantization_b: float
+    """
+    Offset subtracted from a stored integer before it is divided into
+    :attr:`quantization_a`.
+    """
+
+    @classmethod
+    def from_header_bytes(cls, header: bytes) -> Self:
+        """
+        Read the header off the front of a ``compressedDepth`` payload.
+
+        :param header: The header's own :data:`COMPRESSED_DEPTH_HEADER_SIZE` bytes.
+        """
+        return cls(*struct.unpack(COMPRESSED_DEPTH_HEADER_LAYOUT, header))
+
+    def to_header_bytes(self) -> bytes:
+        """
+        :return: This header as ``compressedDepth`` writes it.
+        """
+        return struct.pack(
+            COMPRESSED_DEPTH_HEADER_LAYOUT,
+            self.compression_format,
+            self.quantization_a,
+            self.quantization_b,
+        )
+
+    def to_metres(self, quantized: np.ndarray) -> np.ndarray:
+        """
+        Undo the mapping the codec applied to a
+        :attr:`ImageEncoding.DEPTH_IN_METRES` image.
+
+        :param quantized: The integers the payload stored.
+        :return: Depth in metres, zero where the sensor returned no reading.
+        """
+        metres = np.zeros(quantized.shape, dtype=np.float32)
+        measured = quantized > 0
+        metres[measured] = self.quantization_a / (
+            quantized[measured].astype(np.float32) - self.quantization_b
+        )
+        return metres
+
+
+def decode_compressed_color_image(data: bytes, image_format: str) -> np.ndarray:
+    """
+    Read a compressed ``sensor_msgs/CompressedImage`` into an OpenCV-ordered colour
+    image.
+
+    :param data: The message's payload.
+    :param image_format: The message's own ``format`` field.
+    :return: The image, shape ``(height, width, 3)`` of ``uint8`` blue/green/red.
+    :raises UndecodableCompressedImage: If the payload does not decode into pixels.
+    """
+    image = cv2.imdecode(np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR)
+    if image is None:
+        raise UndecodableCompressedImage(image_format, len(data))
+    if CompressedImageFormat.from_format_field(image_format).payload_encoding == (
+        ImageEncoding.RGB8
+    ):
+        return image[:, :, ::-1].copy()
+    return image
+
+
+def decode_compressed_depth_image(data: bytes, image_format: str) -> np.ndarray:
+    """
+    Read a ``compressedDepth`` ``sensor_msgs/CompressedImage`` into a depth image in
+    metres.
+
+    :param data: The message's payload, header included.
+    :param image_format: The message's own ``format`` field.
+    :return: Depth in metres, shape ``(height, width)``, zero where unmeasured.
+    :raises UndecodableCompressedImage: If the payload does not decode into pixels.
+    :raises UnsupportedImageEncoding: If the camera published the depth in an encoding
+        this package cannot read.
+    """
+    source_encoding = CompressedImageFormat.from_format_field(
+        image_format
+    ).source_encoding
+    if source_encoding not in (
+        ImageEncoding.DEPTH_IN_MILLIMETRES,
+        ImageEncoding.DEPTH_IN_METRES,
+    ):
+        raise UnsupportedImageEncoding(
+            source_encoding,
+            [ImageEncoding.DEPTH_IN_MILLIMETRES, ImageEncoding.DEPTH_IN_METRES],
+        )
+    quantized = cv2.imdecode(
+        np.frombuffer(data[COMPRESSED_DEPTH_HEADER_SIZE:], dtype=np.uint8),
+        cv2.IMREAD_UNCHANGED,
+    )
+    if quantized is None:
+        raise UndecodableCompressedImage(image_format, len(data))
+    if source_encoding == ImageEncoding.DEPTH_IN_MILLIMETRES:
+        return quantized.astype(np.float32) / MILLIMETRES_PER_METRE
+    return DepthQuantization.from_header_bytes(
+        data[:COMPRESSED_DEPTH_HEADER_SIZE]
+    ).to_metres(quantized)

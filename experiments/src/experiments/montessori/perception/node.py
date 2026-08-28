@@ -19,6 +19,7 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass, field
 from enum import StrEnum
 
@@ -29,14 +30,15 @@ from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import qos_profile_sensor_data
 from rclpy.time import Time
-from sensor_msgs.msg import CameraInfo, Image
+from sensor_msgs.msg import CameraInfo, CompressedImage
 from typing_extensions import List, Optional
 
 from experiments.montessori.perception.camera import (
     CameraIntrinsics,
+    ImageTransport,
     RgbdFrame,
-    decode_color_image,
-    decode_depth_image,
+    decode_compressed_color_image,
+    decode_compressed_depth_image,
 )
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.exceptions import NoSceneAvailable
@@ -44,6 +46,7 @@ from experiments.montessori.perception.markers import DetectionMarkerPublisher
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.scene_source import MontessoriSceneSource
+from experiments.montessori.perception.viewer import CameraFrameViewer
 from experiments.montessori.world import BOARD_SCALE
 from experiments.tracy_experiments.equipment import table_top_z
 from semantic_digital_twin.adapters.ros.tfwrapper import TFWrapper
@@ -67,16 +70,26 @@ class CameraTopic(StrEnum):
 
     The depth stream must be the one the driver has registered onto colour: both carry
     the same frame, resolution and intrinsics, so a pixel names the same ray in each.
+
+    Both images are read over a compressed transport rather than raw. A raw frame of
+    this camera is several megabytes, which a wireless link cannot carry: the datagrams
+    are fragmented and almost none of them arrive whole, so a node subscribed to the raw
+    stream is served nothing at all.
     """
 
-    COLOR = "/camera/color/image_raw"
-    DEPTH = "/camera/depth/image_raw"
+    COLOR = f"/camera/color/image_raw/{ImageTransport.COMPRESSED}"
+    DEPTH = f"/camera/depth/image_raw/{ImageTransport.COMPRESSED_DEPTH}"
     CAMERA_INFO = "/camera/color/camera_info"
 
 
 NODE_NAME = "montessori_perception"
 """
 Name this node registers under.
+"""
+
+REPORT_PERIOD_SECONDS = 1.0
+"""
+How often the scene is logged while the node runs.
 """
 
 TRACY_WORKSPACE = WorkspaceRegion(
@@ -86,7 +99,6 @@ TRACY_WORKSPACE = WorkspaceRegion(
 The reachable stretch of Tracy's own table that the Montessori scene is set up on, which
 also keeps the far edge of the table and whatever stands beyond it out of view.
 """
-
 
 # %% the node
 
@@ -125,6 +137,11 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
     Draws the detections into rviz, or None to publish nothing.
     """
 
+    viewer: Optional[CameraFrameViewer] = None
+    """
+    Shows the frames as they arrive, or None to open no window.
+    """
+
     _transforms: TFWrapper = field(init=False)
     """
     Reads where the camera stood when a frame was taken.
@@ -140,7 +157,7 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
     The frame the camera last reported its images in.
     """
 
-    _latest_depth: Optional[Image] = field(init=False, default=None)
+    _latest_depth: Optional[CompressedImage] = field(init=False, default=None)
     """
     The newest depth image, held until a colour image arrives to pair it with.
     """
@@ -169,10 +186,10 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
             qos_profile_sensor_data,
         )
         self.node.create_subscription(
-            Image, CameraTopic.DEPTH, self._on_depth, qos_profile_sensor_data
+            CompressedImage, CameraTopic.DEPTH, self._on_depth, qos_profile_sensor_data
         )
         self.node.create_subscription(
-            Image, CameraTopic.COLOR, self._on_color, qos_profile_sensor_data
+            CompressedImage, CameraTopic.COLOR, self._on_color, qos_profile_sensor_data
         )
 
     # %% subscriptions
@@ -186,7 +203,7 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
         self._intrinsics = CameraIntrinsics.from_camera_info_matrix(message.k)
         self._camera_frame = message.header.frame_id
 
-    def _on_depth(self, message: Image) -> None:
+    def _on_depth(self, message: CompressedImage) -> None:
         """
         Hold the newest depth image until a colour image arrives to pair it with.
 
@@ -194,7 +211,7 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
         """
         self._latest_depth = message
 
-    def _on_color(self, message: Image) -> None:
+    def _on_color(self, message: CompressedImage) -> None:
         """
         Pair a colour image with the newest depth image and run the pipeline on the two.
 
@@ -203,7 +220,13 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
         if not self._ready() or time.monotonic() - self._last_run < self.minimum_period:
             return
         self._last_run = time.monotonic()
-        frame = self._build_frame(message)
+        color = decode_compressed_color_image(message.data, message.format)
+        depth = decode_compressed_depth_image(
+            self._latest_depth.data, self._latest_depth.format
+        )
+        if self.viewer is not None:
+            self.viewer.show(color, depth)
+        frame = self._build_frame(color, depth)
         if frame is None:
             return
         scene = self.pipeline.detect(frame)
@@ -231,26 +254,22 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
             missing.append(str(CameraTopic.COLOR))
         return missing
 
-    def _build_frame(self, color: Image) -> Optional[RgbdFrame]:
+    def _build_frame(self, color: np.ndarray, depth: np.ndarray) -> Optional[RgbdFrame]:
         """
-        Assemble one colour image, the newest depth image, and the camera's pose into a
-        frame the pipeline can read.
+        Assemble one colour image, the depth image taken with it, and the camera's pose
+        into a frame the pipeline can read.
 
-        :param color: The colour image to build the frame around.
+        :param color: The colour image, blue/green/red.
+        :param depth: The depth image in metres.
         :return: The frame, or None while the camera's pose is not yet known to the
             transform tree.
         """
-        depth = self._latest_depth
         reference_frame_T_camera = self._camera_pose()
         if reference_frame_T_camera is None:
             return None
         return RgbdFrame(
-            color=decode_color_image(
-                color.data, color.height, color.width, color.step, color.encoding
-            ),
-            depth=decode_depth_image(
-                depth.data, depth.height, depth.width, depth.step, depth.encoding
-            ),
+            color=color,
+            depth=depth,
             intrinsics=self._intrinsics,
             reference_frame_T_camera=reference_frame_T_camera,
         )
@@ -319,7 +338,10 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
 
 
 def build_node(
-    node: Node, board_height: float = float(BOARD_SCALE.z), draw_markers: bool = True
+    node: Node,
+    board_height: float = float(BOARD_SCALE.z),
+    draw_markers: bool = True,
+    show_images: bool = False,
 ) -> MontessoriPerceptionNode:
     """
     Wire the perception node against the live robot: fetch its world to learn where its
@@ -328,6 +350,7 @@ def build_node(
     :param node: The node to subscribe and publish on.
     :param board_height: How far the board's lid stands above the table, in metres.
     :param draw_markers: Whether to draw the detections into rviz.
+    :param show_images: Whether to open a window on each camera stream.
     :return: The wired, already-subscribing perception node.
     """
     world = fetch_world_from_service(node=node, timeout_seconds=300)
@@ -351,13 +374,51 @@ def build_node(
         if draw_markers
         else None
     )
-    return MontessoriPerceptionNode(node=node, pipeline=pipeline, markers=markers)
+    return MontessoriPerceptionNode(
+        node=node,
+        pipeline=pipeline,
+        markers=markers,
+        viewer=CameraFrameViewer() if show_images else None,
+    )
+
+
+def parse_arguments() -> Namespace:
+    """
+    Read the options this node is run with.
+    """
+    parser = ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--show-images",
+        action="store_true",
+        help="open a window on each camera stream, to watch the frames arriving",
+    )
+    return parser.parse_args()
+
+
+def report(scene: MontessoriScene) -> None:
+    """
+    Log what a scene holds and where.
+
+    :param scene: The scene to report.
+    """
+    logger.info(
+        "%d pieces, %d holes: %s",
+        len(scene.shapes),
+        len(scene.holes),
+        ", ".join(
+            f"{piece.category} at "
+            f"({piece.pose.to_position().to_np()[0]:.3f}, "
+            f"{piece.pose.to_position().to_np()[1]:.3f})"
+            for piece in scene.shapes
+        ),
+    )
 
 
 def main() -> None:
     """
     Run the perception node until interrupted, logging what it sees.
     """
+    arguments = parse_arguments()
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     rclpy.init()
     node = rclpy.create_node(NODE_NAME)
@@ -365,22 +426,17 @@ def main() -> None:
     executor.add_node(node)
     threading.Thread(target=executor.spin, daemon=True, name="rclpy-executor").start()
 
-    perception = build_node(node)
-    scene = perception.wait_for_scene()
+    perception = build_node(node, show_images=arguments.show_images)
+    report(perception.wait_for_scene())
+    next_report = time.monotonic() + REPORT_PERIOD_SECONDS
     while rclpy.ok():
-        logger.info(
-            "%d pieces, %d holes: %s",
-            len(scene.shapes),
-            len(scene.holes),
-            ", ".join(
-                f"{piece.category} at "
-                f"({piece.pose.to_position().to_np()[0]:.3f}, "
-                f"{piece.pose.to_position().to_np()[1]:.3f})"
-                for piece in scene.shapes
-            ),
-        )
-        time.sleep(1.0)
-        scene = perception.scene()
+        if time.monotonic() >= next_report:
+            next_report = time.monotonic() + REPORT_PERIOD_SECONDS
+            report(perception.scene())
+        if perception.viewer is None:
+            time.sleep(REPORT_PERIOD_SECONDS)
+            continue
+        perception.viewer.refresh()
 
 
 if __name__ == "__main__":

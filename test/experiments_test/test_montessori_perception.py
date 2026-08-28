@@ -6,16 +6,22 @@ answers through.
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
 import pytest
+from typing_extensions import Dict, List
 
 from experiments.montessori.perception.camera import (
     CameraIntrinsics,
+    CompressedImageFormat,
+    DepthQuantization,
     ImageEncoding,
     RgbdFrame,
     decode_color_image,
+    decode_compressed_color_image,
+    decode_compressed_depth_image,
     decode_depth_image,
 )
 from experiments.montessori.perception.detections import (
@@ -25,6 +31,7 @@ from experiments.montessori.perception.detections import (
 )
 from experiments.montessori.perception.exceptions import (
     DepthAndColourNotRegistered,
+    UndecodableCompressedImage,
     UnsupportedImageEncoding,
 )
 from experiments.montessori.perception.footprint import (
@@ -37,6 +44,13 @@ from experiments.montessori.perception.orthophoto import (
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.scene_source import FixedScene, PerceivedObjects
+from experiments.montessori.perception.viewer import (
+    CameraFrameViewer,
+    CameraWindow,
+    ImageDisplay,
+    colorize_depth,
+    scale_to_fit,
+)
 from experiments.montessori.semantics import MontessoriShapeCategory
 from krrood.entity_query_language.factories import a, the
 
@@ -419,3 +433,204 @@ def test_a_frame_whose_images_are_not_registered_is_refused():
             intrinsics=intrinsics,
             reference_frame_T_camera=np.eye(4),
         )
+
+
+# %% reading transport-compressed camera messages
+
+COLOR_FORMAT_FIELD = "rgb8; jpeg compressed bgr8"
+"""
+The ``format`` the camera stamps on its compressed colour stream.
+"""
+
+DEPTH_FORMAT_FIELD = "16UC1; compressedDepth png"
+"""
+The ``format`` the camera stamps on its compressed depth stream.
+"""
+
+
+def encode_compressed_depth(
+    quantized: np.ndarray, quantization: DepthQuantization
+) -> bytes:
+    """
+    Build the payload ``compressedDepth`` publishes: its header, then a PNG.
+
+    :param quantized: The image as ``compressedDepth`` stores it.
+    :param quantization: The header to put in front of the PNG.
+    :return: The bytes a ``sensor_msgs/CompressedImage`` would carry.
+    """
+    return quantization.to_header_bytes() + cv2.imencode(".png", quantized)[1].tobytes()
+
+
+def test_a_colour_format_field_names_the_encoding_its_payload_is_stored_in():
+    parsed = CompressedImageFormat.from_format_field(COLOR_FORMAT_FIELD)
+
+    assert parsed.source_encoding == ImageEncoding.RGB8
+    assert parsed.payload_encoding == ImageEncoding.BGR8
+
+
+def test_a_depth_format_field_names_no_payload_encoding():
+    parsed = CompressedImageFormat.from_format_field(DEPTH_FORMAT_FIELD)
+
+    assert parsed.source_encoding == ImageEncoding.DEPTH_IN_MILLIMETRES
+    assert parsed.payload_encoding is None
+
+
+def test_a_compressed_colour_image_is_read_into_opencv_channel_order():
+    blue_pixel = np.full((2, 3, 3), (255, 0, 0), dtype=np.uint8)
+    payload = cv2.imencode(".png", blue_pixel)[1].tobytes()
+
+    image = decode_compressed_color_image(payload, "bgr8; png compressed bgr8")
+
+    assert image.shape == (2, 3, 3)
+    assert image[0, 0].tolist() == [255, 0, 0]
+
+
+def test_a_compressed_colour_payload_stored_in_rgb_order_is_swapped():
+    payload_pixel = np.full((1, 1, 3), (255, 0, 0), dtype=np.uint8)
+    payload = cv2.imencode(".png", payload_pixel)[1].tobytes()
+
+    image = decode_compressed_color_image(payload, "rgb8; png compressed rgb8")
+
+    assert image[0, 0].tolist() == [0, 0, 255]
+
+
+def test_compressed_millimetre_depth_is_read_as_metres():
+    millimetres = np.array([[1500, 0]], dtype=np.uint16)
+    payload = encode_compressed_depth(millimetres, DepthQuantization(0, 0.0, 0.0))
+
+    depth = decode_compressed_depth_image(payload, DEPTH_FORMAT_FIELD)
+
+    assert depth[0, 0] == pytest.approx(1.5)
+    assert depth[0, 1] == pytest.approx(0.0)
+
+
+def test_compressed_metre_depth_is_read_back_through_its_own_quantisation():
+    quantization = DepthQuantization(0, 1000.0, 100.0)
+    metres = 2.5
+    quantized = np.array(
+        [[quantization.quantization_a / metres + quantization.quantization_b, 0]],
+        dtype=np.uint16,
+    )
+    payload = encode_compressed_depth(quantized, quantization)
+
+    depth = decode_compressed_depth_image(payload, "32FC1; compressedDepth png")
+
+    assert depth[0, 0] == pytest.approx(metres, abs=1e-3)
+    assert depth[0, 1] == pytest.approx(0.0)
+
+
+def test_a_compressed_image_whose_payload_is_not_an_image_is_refused():
+    with pytest.raises(UndecodableCompressedImage):
+        decode_compressed_color_image(b"not an image", COLOR_FORMAT_FIELD)
+
+
+def test_a_compressed_depth_image_in_an_unknown_encoding_is_refused():
+    payload = encode_compressed_depth(
+        np.zeros((1, 1), dtype=np.uint16), DepthQuantization(0, 0.0, 0.0)
+    )
+
+    with pytest.raises(UnsupportedImageEncoding):
+        decode_compressed_depth_image(payload, "mono8; compressedDepth png")
+
+
+# %% watching the frames as they arrive
+
+
+@dataclass
+class RecordingDisplay(ImageDisplay):
+    """
+    Stands in for a screen, remembering what it was asked to draw.
+    """
+
+    drawn: Dict[str, np.ndarray] = field(default_factory=dict)
+    """
+    The newest image drawn in each window, by window name.
+    """
+
+    waits: List[int] = field(default_factory=list)
+    """
+    How long each call to :meth:`wait` was given, in milliseconds.
+    """
+
+    closed: bool = False
+    """
+    Whether the windows have been taken off screen.
+    """
+
+    def draw(self, window_name: str, image: np.ndarray) -> None:
+        self.drawn[window_name] = image
+
+    def wait(self, milliseconds: int) -> None:
+        self.waits.append(milliseconds)
+
+    def close(self) -> None:
+        self.closed = True
+
+
+def test_unmeasured_depth_pixels_are_drawn_black():
+    depth = np.array([[1.0, 0.0]], dtype=np.float32)
+
+    colored = colorize_depth(depth)
+
+    assert colored.shape == (1, 2, 3)
+    assert colored[0, 1].tolist() == [0, 0, 0]
+
+
+def test_the_nearest_and_furthest_depths_are_drawn_in_different_colours():
+    depth = np.array([[0.5, 2.5]], dtype=np.float32)
+
+    colored = colorize_depth(depth)
+
+    assert colored[0, 0].tolist() != colored[0, 1].tolist()
+
+
+def test_a_depth_image_with_nothing_measured_is_drawn_black():
+    colored = colorize_depth(np.zeros((2, 3), dtype=np.float32))
+
+    assert colored.shape == (2, 3, 3)
+    assert not colored.any()
+
+
+def test_an_image_narrower_than_the_window_is_drawn_at_its_own_size():
+    image = np.zeros((4, 8, 3), dtype=np.uint8)
+
+    assert scale_to_fit(image, 16) is image
+
+
+def test_a_wide_image_is_shrunk_to_the_window_keeping_its_proportions():
+    image = np.zeros((100, 400, 3), dtype=np.uint8)
+
+    scaled = scale_to_fit(image, 200)
+
+    assert scaled.shape == (50, 200, 3)
+
+
+def test_the_viewer_draws_the_newest_frame_it_was_shown():
+    display = RecordingDisplay()
+    viewer = CameraFrameViewer(display=display)
+    viewer.show(np.zeros((2, 2, 3), dtype=np.uint8), np.zeros((2, 2), dtype=np.float32))
+    viewer.show(
+        np.full((2, 2, 3), 7, dtype=np.uint8), np.ones((2, 2), dtype=np.float32)
+    )
+
+    viewer.refresh()
+
+    assert display.drawn[CameraWindow.COLOR][0, 0].tolist() == [7, 7, 7]
+    assert set(display.drawn) == {CameraWindow.COLOR, CameraWindow.DEPTH}
+
+
+def test_the_viewer_draws_nothing_before_a_frame_has_arrived():
+    display = RecordingDisplay()
+
+    CameraFrameViewer(display=display).refresh()
+
+    assert display.drawn == {}
+    assert display.waits
+
+
+def test_closing_the_viewer_takes_its_windows_off_screen():
+    display = RecordingDisplay()
+
+    CameraFrameViewer(display=display).close()
+
+    assert display.closed
