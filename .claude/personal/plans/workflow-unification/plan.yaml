@@ -4445,6 +4445,49 @@ items:
       matrix. Removing it once the CI verdict works would trade a fast answer for a slow one; what
       the CI verdict replaces is the *publishing* decision, which it now makes.
 
+      The first unattended run reached a verdict and it was `failed`, on `test_each_lib (krrood)` -
+      and diagnosing it found a selection defect rather than an integration break.
+      `D-core-serialization` is red on its own pull request, at the same commit the build merged:
+      `test/krrood_test/test_eql_rdr/test_serialization.py` imports `what_do_we_know_about`, which
+      is defined on the `D-ui`/`D-store`/`D-deco` sub-stack and on neither `main` nor that branch's
+      own chain. So the build carried a branch that could not pass and the candidate reported a
+      failure saying nothing about the combination. Reported on #66 rather than fixed here - it is a
+      single-branch defect integration did not cause, and which branch of that stack should carry
+      the test is a design call about it.
+
+      `select_for_build` read draft state, the chain and the blocking labels, and never asked
+      whether a branch's own checks pass, so a build was guaranteed red whenever any carried tip was
+      red alone. It now leaves out a branch whose own checks have *finished badly*, and anything
+      standing on one, as `TipStatus.CHECKS_FAILED` - named apart from `BLOCKED` because nobody
+      labelled it and what lets it back in is its checks going green rather than a label coming off.
+
+      This does not reopen the no-CI-gate decision of 2026-08-10, whose reasoning still holds as
+      written: requiring green empties the build after every restack, since a restacked head re-runs
+      and reads pending. Excluding a *known* failure has no such deadlock, and the rule is
+      self-limiting for the same reason - a branch the restack moves reads `running` and is carried,
+      so only a branch it did not move and which is finished-red is left out. A flaky red costs one
+      build cycle and clears on the next push or re-run.
+
+      Read through `Branch.ci`, declared on `main` and dead since - `BoardExport._pull_request` sets
+      it from a key the payload does not carry, which #139's review flagged and nothing fixed.
+      Giving it a producer is better than the parameter the first attempt threaded through:
+      `tips_of` and `select_for_build` both decide from it, so a parameter handed to one and not the
+      other merges a branch the report says was left out. The read happens in `stack_to_build`,
+      after the restack has moved what it is about, and against the branch rather than a commit, so
+      it answers for whatever the branch points at now. `CandidateChecks` and `CandidateVerdict`
+      became `ReportedChecks` and `ChecksVerdict` with it.
+
+      Measured on the real board: 59 open pull requests, 28 passed, 23 failed, 5 running, 3 absent.
+      The failures concentrate in `coraplex` (17), `experiments` (12) and `giskardpy` (9) - the
+      signature of branches far behind `main`, every one of which a restack moves. Four mutations
+      checked, each caught by exactly the test naming its rule; 753 tests pass across the four
+      directories CI runs, from 746.
+
+      What is still not localised, now split out as `red-candidate-localisation`: a candidate red on
+      a matrix job for a genuine break, which `block-branch` cannot reproduce because it re-runs the
+      configured tooling suite. Most of that gap closed here - the common case was a tip that was
+      already red - and the remainder needs the matrix re-run per prefix rather than a suite.
+
   - id: always-read-upstream-reviews
     title: "Read upstream review threads whether or not the fork pull request is labelled"
     branch: claude/plan-item-kickoff-workflow-y2xfva
