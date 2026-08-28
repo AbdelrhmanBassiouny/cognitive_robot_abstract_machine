@@ -9994,3 +9994,78 @@ correctly, and named its selection correctly; what it got wrong was assuming it 
 a tree it had not installed. Any job that installs a subset of the repository's
 dependencies has to collect a matching subset of its tree, and the honest way to say which
 subset is to read it off whatever else installs the same thing.
+
+## Update 2026-08-28 (the pipeline's first restacked build): a break nobody could have read out of a diff
+
+The developer's point settled the ordering: a rebuild should depend on restacking first, and
+can then use the labels stacking writes. Half of that existed and half did not, and the half
+that did not had a trap under it.
+
+**What existed.** `build --restack` already restacked, refreshed remotes and built.
+
+**What did not.** `select_for_build` read draft state and the chain and never looked at a
+label, so a branch a maintenance pass had explicitly withheld went into the build anyway —
+and was then reported as colliding with whichever sibling it met there, rather than as the
+branch whose own conflict was already recorded. It now leaves out any branch carrying one of
+`Configuration.blocking_labels` and anything standing on one (a tip contains its whole stack),
+reported as `blocked` rather than `unreviewed` — the latter would send an author to review a
+branch they had already reviewed.
+
+**The trap.** The stack was read *before* `restack()` ran and the same object was built from,
+so the labels that pass had just written were invisible. That is the shape this roadmap already
+records against the 2026-08-05 promotion incident — a write computed from a snapshot a later
+step in the same pass invalidates — met a second time, and it would have made the label filter
+silently useless for exactly the branches the pass had just blocked. `stack_to_build` reads the
+stack again after restacking.
+
+`BuildSelection.unreviewed` and `IntegrationReport.unreviewed` become `left_out`: the field now
+holds two reasons, and a field named for one of them describes the other wrongly.
+
+### The run, which is the actual evidence
+
+`fast-forward` moved fork `main` **43 commits** onto `cram2/main`. That conflicted #154 for
+real — so the `needs-resolution` label it was carrying was correct rather than stale, which is
+the opposite of what the 2026-08-23 entry had assumed when it left the label for a later pass.
+Resolved in `pytest.ini`, additive on both sides. The next restack cleared the label, the build
+carried #154, and the suite failed:
+
+```
+maintenance.py: from exceptions import GitCommandFailed
+ModuleNotFoundError: No module named 'exceptions'
+```
+
+**#154 breaks #158.** #158's `WorkingTreeTooling` copied `.claude/stack/`'s contents flat;
+#154 introduces `.claude/shared/` (inherited from #151's extraction), so on the merged tree the
+pinned `maintenance.py` imports from a directory the pin does not carry. Both branches green
+alone, merging with no conflict, broken together — the exact class the integration branch exists
+to catch, found on the *first* restacked build rather than by anyone reading a diff.
+
+Fixed on #158, where the under-specified pin is, rather than on #154. Two halves, and the second
+is the one that is easy to miss: the copy now carries every sibling directory the tool's own
+modules name in a `sys.path` insertion — read out of the modules by an `ast` walk rather than
+listed beside them — **and** keeps the layout instead of flattening it, because such an insertion
+is relative to the module making it, so flattened the same line resolves outside the copy and
+finds whatever happens to be there. A sibling nothing imports from is still left where it is;
+pinning every sibling would copy most of the repository.
+
+**The reproduction is expressible on #158 alone even though the break is not.** Neither branch
+can host the merged tree, but the *rule* can be stated without it: pin a synthetic tree whose
+tool inserts `../shared` and imports from it. That fails before the fix and passes after. Worth
+carrying, because the design's own instruction — push the reproduction to the breaking branch —
+does not fit a case where the breaking branch lacks the code that breaks: the test belongs
+wherever the rule can be stated, which is the branch that owns the rule.
+
+### State
+
+`integration` is published at `933161a263` — 0 behind `main`, 194 ahead, and carrying
+`integration.py`, `.claude/shared/` and `integration-checks.yml` for the first time. Until this
+build the fork's default branch, which every fresh session is cloned from, did **not** contain
+the tool that builds it: #154 had been conflicted since 08-18 and was therefore excluded from its
+own build. Four tips merged, five skipped on ordinary textual collisions with #154's
+`.claude/shared/` extraction (`build_dashboard.py`, `plan_item_bootstrap.py`, `conftest.py`) —
+whoever-lands-second-adapts, not semantic breaks — and sixteen left out as blocked.
+
+One thing this settles for Part D: **the local `--test` verdict is what caught the break**, so it
+stays until the CI verdict replaces it rather than being removed beside it. That is the same
+conclusion the boundary drawn on 2026-08-28 reached from the other direction, now with a case
+behind it rather than an argument.
