@@ -10582,3 +10582,102 @@ And the narrower one: **a recorded reason for not doing something is a reason ag
 thing it names, not against everything nearby.** "No CI gate" had stood since 2026-08-10
 and reads as settled; it argues against requiring green and says nothing about excluding
 red, and re-reading what it actually claimed is what made this available.
+
+## Update 2026-08-28 (resolved): #110's stall was two things, and the second one nothing had looked at
+
+`/plan-item-resolve workflow-unification setup-stacked-prs-skill`, session
+https://claude.ai/code/session_015HBn7bNMj6Ao5inyStmrMN. The manifest recorded the conflict —
+`needs-resolution` since 2026-08-12, reported seven times, most recently hours before this run.
+It did not record the other half: **a review round of 2026-08-20 that nothing had touched**,
+because the branch's last commit is 2026-08-10. A resolve that had read only `blockers`/`notes`
+would have cleared the conflict and left the review untouched for a third week.
+
+The recorded CI blocker cleared itself meanwhile: `greenlet` 3.5.5's missing Linux wheel, carried
+in the notes as repository-wide, no longer fails — `test_each_lib (robokudo)` is green on the head
+this run started from. Worth carrying because the note argued for waiting rather than pushing, and
+waiting turned out to be right.
+
+### The conflict resolution that keeping either side gets wrong
+
+Four files conflicted and three are the additive shape the previous merges taught us to expect.
+`test_check_setup_sh.py` is not: `main` replaced the inline `subprocess.run` with
+`run_hook_script`, which scrubs the environment, while this branch had moved `SetupReport` into a
+shared `setup_report.py` whose `from_completed_process` takes the check enum from its caller.
+`main`'s side drops the `SetupCheck` argument; this branch's side references an `environment`
+builder that no longer exists. **Both sides are individually broken and the resolution is neither
+of them** — the runner call *with* the argument. A conflict where each side alone fails is the
+case a marker cannot signal, and it is worth naming separately from the additive kind.
+
+### Four breaks behind clean markers, and the one that is the headline change
+
+None of these appears in a diff; all four came from running the suite.
+
+1. **`maintenance.py` does not import.** It arrives from `main` importing `ForkRemoteNotFoundError`
+   and `AmbiguousForkRemoteError`, both deleted here with the ~120-line inference — *this pull
+   request's whole point*. `maintenance.py` was written after that deletion existed and against a
+   `main` that did not have it. It catches `ForkRepositoryNotConfiguredError` now, at the same
+   `REMOTES_UNRESOLVED`, exactly as `stack.py`'s own `main()` already does.
+2. **`test_maintenance.py` built a `Configuration`** missing `cram2_link_sent_label` and
+   `fork_setup_command`, the two settings this branch adds.
+3. **Its `ForkCheckout` was an unconfigured checkout.** Every subprocess run exited `4` before
+   reaching the status it asserts — the designed behaviour, met by a fixture that meant to stand
+   in for a working checkout. The fixture records the fork on the personal-notes branch now, which
+   is what setup writes, and pins the notes remote so an ambient `CLAUDE_PERSONAL_NOTES_REMOTE`
+   cannot redirect the fetch out of the scratch layout.
+4. **A second wording for one event.** `write-branch-files.sh` reported its no-op as "already
+   matches every file given" where `save-personal-notes.sh`, `save-plan.sh` and
+   `save-pr-progress.sh` all say "is already up to date", and `save-git-identity.sh`'s test reads
+   that message through this branch's delegation. The established phrasing wins.
+
+### The recurring break got a mechanism instead of a fourth fix
+
+`install_hook_scripts` took a list of script names, so a test module naming the script it is about
+got a layout that script could not run in whenever a *transitive* dependency was involved. That is
+this branch's `write-personal-notes-file.sh` → `write-branch-files.sh` delegation, and it has now
+broken `test_personal_settings_sync.py` (recorded 2026-08-05), then `test_git_identity_sync.py`
+and `test_plan_item_mode.py` here — three times, each fixed by adding a name to one more call site.
+
+It derives the dependency now, from the two ways a shell hook actually names a sibling: the
+configuration script's constant for it, or a `${SCRIPT_DIR}` reference. Written failing first in
+`test_scratch_repository.py`, with exact-set assertions rather than presence checks.
+
+**The general shape: a fix applied three times at three call sites is a missing mechanism, not
+three bugs.** The check that it was the right call is that it fixed something nobody was asking it
+to — two of the base's own seven failures, from `main`'s `session-start-messages.sh`, which the
+same walk installs.
+
+### The review threads are answered and still open, and that is not a lapse
+
+Both belong to a review that is still **pending**. GitHub allows one pending review per user, so
+every inline reply is refused with `user_id can only have one pending review per pull request`.
+Submitting or editing that draft is the user's, not a session's, so the replies went into a
+conversation comment and both threads stay open. **A resolve without an inline reply is forbidden
+by the standing convention, and the convention held here rather than being worked around.**
+
+What the threads asked for is done: `remote_branch_commit` repeated `run_git`'s own `cwd`, capture
+and non-zero assertion four lines from where they are defined, and uses the runner now; the two
+direct git calls left are module-level functions with no repository to bind to.
+`SetupReport.exit_code` is an `ExitCode(IntEnum)` — `SET_UP` / `NEEDS_SETUP`, the two statuses both
+checkers can exit, set identically from whether any row needs setup — and fourteen assertions read
+the member rather than `0` or `1`.
+
+### Five red, and the discipline that made "not ours" a measurement
+
+626 tests pass across the four directories CI runs, from 463. The five failures are
+`test_setup_personal_notes_sh.py`'s, and they are a **strict subset of the seven red on
+`claude/setup-personal-notes-script` itself** — established by checking out the base into a
+worktree and running the same suite, not by reading the diff and concluding. `main` added a
+`git_identity` check to `check-setup.sh`; `setup-personal-notes.sh` records no identity and exits
+with that check's status, so a full setup run cannot return `0`.
+
+Left to #107: its script, and it lands first, so patching it in the child would not make the parent
+green. The fix is small and stated on the pull request rather than merely deferred — either the
+setup script records an identity as one of its steps, or the identity check does not gate its exit;
+which one is a design call about `--remote` being the only thing that script is given.
+
+### Two things re-checked rather than assumed
+
+`github-api.sh` is still not on `main`, so the base stays #107 — the same check the 2026-08-03
+entry made, run again rather than carried forward. And the notes branch had moved by 430 lines on
+this plan between reading it and writing it, so the manifest edit was re-applied onto the fetched
+copy; the anti-stale-save rule caught nothing this time only because it was followed.

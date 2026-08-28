@@ -297,7 +297,7 @@ items:
     track: stack-tooling
     depends_on: [stack-tooling-on-main]
     status: in_progress
-    session: https://claude.ai/code/session_01QurCwih1r6STYtP34bpJpf
+    session: https://claude.ai/code/session_015HBn7bNMj6Ao5inyStmrMN
     notes: >
       Mirrors PR #101's pattern (read-only check-stack-setup.sh + guided skill +
       prerequisite-check.md) and #107's script/skill split. Two install modes: native (tooling on
@@ -381,6 +381,52 @@ items:
       against main is a 4-line .gitignore addition, touching no dependency manifest. Nothing
       pushed for it; the mechanical workarounds are constraining greenlet below 3.5.5 or the
       tool.uv.required-environments entry uv itself suggests.
+
+
+      Resolved 2026-08-28 (session https://claude.ai/code/session_015HBn7bNMj6Ao5inyStmrMN).
+      Two things were blocking it and only one was on record. The conflict was reported seven
+      times by the pass since 2026-08-12, most recently hours before this run; the other was a
+      review round of 2026-08-20 that nothing had touched, because the branch's last commit was
+      2026-08-10. The greenlet blocker recorded above has cleared on its own - robokudo is green
+      on the head this run started from.
+
+      Fourth base merge. Four conflicts, all the benign additive shape, both sides kept in each -
+      but one of them is not resolvable by keeping either side: test_check_setup_sh.py parses
+      through main's new run_hook_script, which scrubs the environment, while still passing this
+      branch's SetupCheck, because the shared setup_report.py takes the check enum from its
+      caller and #107's inline copy did not. Taking either side alone breaks it.
+
+      Four integration breaks behind clean markers, none visible in a diff. maintenance.py
+      arrives from main importing ForkRemoteNotFoundError and AmbiguousForkRemoteError, both
+      deleted here with the inference - it catches ForkRepositoryNotConfiguredError now at the
+      same REMOTES_UNRESOLVED, as stack.py's own main() already does. test_maintenance.py built
+      a Configuration without cram2_link_sent_label or fork_setup_command. Its ForkCheckout stood
+      in for a checkout nobody had run setup on, so every subprocess run exited 4 before reaching
+      its assertion. And write-branch-files.sh reported a no-op in wording of its own, where
+      three sibling hooks already say "is already up to date" and save-git-identity.sh's test
+      reads that message through this branch's delegation.
+
+      install_hook_scripts installs the siblings a script runs, derived from the scripts
+      themselves rather than listed at each call site. That list is what produced this break
+      three times running - the write-branch-files.sh delegation broke test_personal_settings_sync.py,
+      then test_git_identity_sync.py and test_plan_item_mode.py - and it fixed two of the base's
+      own failures for free.
+
+      Review round applied. remote_branch_commit uses run_git instead of repeating it; the two
+      direct git calls left are module-level functions with no repository to run in.
+      SetupReport.exit_code is an ExitCode(IntEnum) with SET_UP and NEEDS_SETUP, the idiom three
+      modules on main already carry, and fourteen assertions read the member rather than 0 or 1.
+      Both threads sit inside a pending, unsubmitted review, so GitHub refuses every inline reply
+      ("user_id can only have one pending review per pull request"); submitting that draft is the
+      user's, so the replies went into a conversation comment and both threads stay open. They
+      are answered in code, not outstanding.
+
+      626 tests pass across the four directories CI runs, was 463. The 5 that fail are
+      test_setup_personal_notes_sh.py's and are a strict subset of the 7 red on the base itself,
+      measured by running #107's own tree: main added a git_identity check to check-setup.sh,
+      setup-personal-notes.sh records no identity, and it exits with that check's status, so a
+      full setup run cannot return 0. Left to #107 - its script, and it lands first. Base
+      re-checked rather than assumed: github-api.sh is still not on main.
 
   - id: stack-maintenance-executor
     branch: claude/plan-item-kickoff-workflow-koufa6
