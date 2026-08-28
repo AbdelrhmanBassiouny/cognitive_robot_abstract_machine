@@ -74,9 +74,22 @@ class DetectAction(ActionDescription):
     :attr:`~coraplex.perception.PerceptionQuery.trust_detected_orientation`.
     """
 
+    accept_first_if_multiple: bool = False
+    """
+    Whether several candidates may be resolved by taking the first one.
+
+    When False, several candidates raise
+    :class:`~coraplex.exceptions.UnidentifiedDetections` instead of being chosen between.
+    """
+
     @property
     def _action_plan(self) -> PlanNode:
-        return execute_single(DetectingMotion(query=self._build_query()))
+        return execute_single(
+            DetectingMotion(
+                query=self._build_query(),
+                accept_first_if_multiple=self.accept_first_if_multiple,
+            )
+        )
 
     def _build_query(self) -> PerceptionQuery:
         """
