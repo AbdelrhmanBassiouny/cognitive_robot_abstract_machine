@@ -44,7 +44,11 @@ from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.exceptions import NoSceneAvailable
 from experiments.montessori.perception.markers import DetectionMarkerPublisher
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
-from experiments.montessori.perception.overlay import DetectionOverlay
+from experiments.montessori.perception.overlay import (
+    CameraView,
+    DetectionOverlay,
+    RectifiedView,
+)
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.scene_source import MontessoriSceneSource
 from experiments.montessori.perception.viewer import CameraFrameViewer
@@ -222,6 +226,10 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
         """
         Pair a colour image with the newest depth image and run the pipeline on the two.
 
+        The bare colour image is shown only while the camera cannot be placed in the
+        world, since a viewer that is about to be handed the same image with the
+        detections on it would otherwise flash the bare one first.
+
         :param message: The colour image.
         """
         if not self._ready() or time.monotonic() - self._last_run < self.minimum_period:
@@ -232,10 +240,11 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
             self._latest_depth.data, self._latest_depth.format
         )
         if self.viewer is not None:
-            self.viewer.show_color(color)
             self.viewer.show_depth(depth)
         frame = self._build_frame(color, depth)
         if frame is None:
+            if self.viewer is not None:
+                self.viewer.show_color(color)
             return
         scene = self.pipeline.detect(frame)
         with self._lock:
@@ -243,7 +252,22 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
         if self.markers is not None:
             self.markers.publish(scene)
         if self.viewer is not None:
-            self.viewer.show_color(self.overlay.draw(frame, scene))
+            self._show(frame, scene)
+
+    def _show(self, frame: RgbdFrame, scene: MontessoriScene) -> None:
+        """
+        Draw one look at the scene, on the camera's own image and on the top-down view
+        the outlines were measured in.
+
+        :param frame: The frame the detections were found in.
+        :param scene: The detections to draw.
+        """
+        self.viewer.show_color(self.overlay.draw(CameraView(frame), scene))
+        self.viewer.show_rectified(
+            self.overlay.draw(
+                RectifiedView(frame, self.pipeline.rectify_table(frame)), scene
+            )
+        )
 
     def _ready(self) -> bool:
         """

@@ -55,6 +55,16 @@ class MontessoriDetection(ABC):
         return float(self.pose.to_position().to_np()[2])
 
     @property
+    def top_height(self) -> float:
+        """
+        Height of this detection's own topmost surface, in metres.
+
+        A detection with no measured thickness lies flat in the surface it was found in,
+        so its top is that surface.
+        """
+        return self.surface_height
+
+    @property
     @abstractmethod
     def label(self) -> str:
         """
@@ -89,13 +99,13 @@ class MontessoriShapeDetection(MontessoriDetection):
     """
     How far its top surface stands above the surface it rests on, in metres.
 
-    Read from the depth image, and zero when it could not be measured: either the sensor
-    returned too few readings across the piece, or the height it did return fell below
-    the resting surface, which a piece standing on that surface cannot do and which
-    means the depth stream and the robot's own model of the table disagree.
+    Read from the depth image where that image resolves the piece, and otherwise the
+    height :attr:`~experiments.montessori.perception.pipeline.LoosePieceDetector.piece_height`
+    says a loose piece stands: a depth sensor that cannot tell a two centimetre piece
+    from the surface under it says nothing about how tall the piece is, and reporting
+    zero would place it in the surface itself.
 
-    :attr:`pose` places the piece's centre half this height above the resting surface,
-    so an unmeasured piece is reported as lying in the surface itself.
+    :attr:`pose` places the piece's centre half this height above the resting surface.
     """
 
     @property
@@ -107,6 +117,13 @@ class MontessoriShapeDetection(MontessoriDetection):
         lies flat in the plane it was found in.
         """
         return float(self.pose.to_position().to_np()[2]) - self.height / 2
+
+    @property
+    def top_height(self) -> float:
+        """
+        Height of this piece's own top face, in metres.
+        """
+        return self.surface_height + self.height
 
     @property
     def label(self) -> str:

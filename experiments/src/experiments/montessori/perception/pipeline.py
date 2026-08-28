@@ -196,8 +196,8 @@ slot, and above the slivers of shadow that fall along the lid's own edges.
 @dataclass
 class BoardDetector:
     """
-    Finds the shape-sorting board and the holes in its lid, in a view rectified onto that
-    lid.
+    Finds the shape-sorting board and the holes in its lid, in a view rectified onto
+    that lid.
 
     The board is picked out by the holes themselves rather than by being the largest
     thing in view: an arm reaching over the table is both larger and just as strongly
@@ -473,7 +473,8 @@ class LoosePieceDetector:
     piece_height: float = 0.03
     """
     Roughly how tall a loose piece stands, in metres, used to cancel the parallax that
-    would otherwise stretch its outline (see :meth:`detect`).
+    would otherwise stretch its outline (see :meth:`detect`) and reported as a piece's
+    own height wherever the depth image cannot resolve it.
 
     The pieces in this set stand between twenty and thirty millimetres tall, and the
     cancellation is forgiving of the difference.
@@ -525,7 +526,7 @@ class LoosePieceDetector:
             x, y = orthophoto.contour_center(contour)
             if board is not None and board.encloses(x, y):
                 continue
-            height = _measure_height(contour, orthophoto, frame)
+            height = _measure_height(contour, orthophoto, frame, self.piece_height)
             pieces.append(
                 MontessoriShapeDetection(
                     pose=Pose.from_xyz_rpy(
@@ -561,7 +562,10 @@ cheap while still leaving hundreds of readings for a piece of any usable size.
 
 
 def _measure_height(
-    contour: np.ndarray, orthophoto: Orthophoto, frame: RgbdFrame
+    contour: np.ndarray,
+    orthophoto: Orthophoto,
+    frame: RgbdFrame,
+    nominal_height: float,
 ) -> float:
     """
     Measure how far a piece's top surface stands above the plane it was rectified on.
@@ -573,8 +577,8 @@ def _measure_height(
     :param contour: The piece's outline, in rectified pixels.
     :param orthophoto: The rectified view it was found in.
     :param frame: The camera data to read depth from.
-    :return: The height in metres, or zero when the sensor returned too few readings
-        across the piece to measure it.
+    :param nominal_height: Height to report where the depth image cannot answer.
+    :return: The height in metres.
     """
     interior = np.zeros(orthophoto.image.shape[:2], dtype=np.uint8)
     cv2.drawContours(interior, [contour], -1, 255, cv2.FILLED)
@@ -582,7 +586,7 @@ def _measure_height(
     rows = rows[::_HEIGHT_SAMPLE_STRIDE]
     columns = columns[::_HEIGHT_SAMPLE_STRIDE]
     if rows.size == 0:
-        return 0.0
+        return nominal_height
 
     pixel_T_region = OrthophotoProjector.pixel_T_region(frame, orthophoto.plane_height)
     homography = pixel_T_region @ orthophoto.region.region_T_pixel
@@ -592,7 +596,7 @@ def _measure_height(
 
     depths = frame.depth_at(camera_pixels)
     if depths.size < _MINIMUM_DEPTH_SAMPLES:
-        return 0.0
+        return nominal_height
 
     projected_center = homography @ np.array([columns.mean(), rows.mean(), 1.0])
     center_pixel = projected_center[:2] / projected_center[2]
@@ -602,7 +606,8 @@ def _measure_height(
     reference_frame_P_top = frame.reference_frame_T_camera @ np.append(
         camera_P_top, 1.0
     )
-    return max(float(reference_frame_P_top[2]) - orthophoto.plane_height, 0.0)
+    measured = float(reference_frame_P_top[2]) - orthophoto.plane_height
+    return measured if measured > 0.0 else nominal_height
 
 
 def _position_of(detection: MontessoriDetection) -> np.ndarray:
@@ -681,6 +686,16 @@ class MontessoriPerceptionPipeline:
         """
         return self.table_height + self.board_height
 
+    def rectify_table(self, frame: RgbdFrame) -> Orthophoto:
+        """
+        Rectify a frame onto the table the loose pieces rest on, which is the plane
+        their outlines are measured in.
+
+        :param frame: The camera data to rectify.
+        :return: The table's top-down view.
+        """
+        return OrthophotoProjector(region=self.region).project(frame, self.table_height)
+
     def detect(self, frame: RgbdFrame) -> MontessoriScene:
         """
         Recognise everything in one frame.
@@ -693,7 +708,7 @@ class MontessoriPerceptionPipeline:
             projector.project(frame, self.lid_height), self.reference_frame
         )
         pieces = self.piece_detector.detect(
-            projector.project(frame, self.table_height),
+            self.rectify_table(frame),
             projector.project(
                 frame, self.table_height + self.piece_detector.piece_height
             ),
