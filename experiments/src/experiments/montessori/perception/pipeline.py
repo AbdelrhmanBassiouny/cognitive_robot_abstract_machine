@@ -44,6 +44,7 @@ from experiments.montessori.perception.footprint import (
 from experiments.montessori.perception.orthophoto import (
     Orthophoto,
     OrthophotoProjector,
+    WorkspaceBox,
     WorkspaceRegion,
 )
 from experiments.montessori.perception.piece_matcher import PieceMatcher
@@ -784,12 +785,32 @@ class MontessoriPerceptionPipeline:
     Finds the loose pieces on the table.
     """
 
+    headroom: float = 0.15
+    """
+    How far above the table, in metres, the view still holds something worth seeing.
+
+    Wide enough for the board's lid and for a piece held over it on its way in; anything
+    higher is a passing arm or the room behind the table.
+    """
+
     @property
     def lid_height(self) -> float:
         """
         Height of the board's lid above the world frame's origin, in metres.
         """
         return self.table_height + self.board_height
+
+    @property
+    def workspace(self) -> WorkspaceBox:
+        """
+        The space this pipeline looks at: its own patch of table, and the room above it
+        a piece or the board can stand in.
+        """
+        return WorkspaceBox(
+            region=self.region,
+            minimum_height=self.table_height,
+            maximum_height=self.table_height + self.headroom,
+        )
 
     def rectify_table(self, frame: RgbdFrame) -> Orthophoto:
         """

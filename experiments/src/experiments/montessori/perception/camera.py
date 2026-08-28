@@ -18,6 +18,7 @@ from experiments.montessori.perception.exceptions import (
     UndecodableCompressedImage,
     UnsupportedImageEncoding,
 )
+from semantic_digital_twin.spatial_types.math import inverse_frame
 
 # %% encodings
 
@@ -194,6 +195,22 @@ class RgbdFrame:
         Number of image columns.
         """
         return int(self.color.shape[1])
+
+    def project(self, points: np.ndarray) -> np.ndarray:
+        """
+        Where points in the world fall in this frame's image.
+
+        :param points: Points in the frame the camera's pose was given in, as ``(n, 3)``
+            ``(x, y, z)`` in metres.
+        :return: The pixels they land on, as ``(n, 2)`` ``(x, y)`` pairs.
+        """
+        points = np.asarray(points, dtype=float).reshape(-1, 3)
+        camera_T_reference_frame = inverse_frame(self.reference_frame_T_camera)
+        camera_points = (
+            camera_T_reference_frame @ np.hstack([points, np.ones((len(points), 1))]).T
+        )[:3]
+        pixels = self.intrinsics.to_matrix() @ camera_points
+        return (pixels[:2] / pixels[2]).T
 
     def depth_at(self, pixels: np.ndarray) -> np.ndarray:
         """

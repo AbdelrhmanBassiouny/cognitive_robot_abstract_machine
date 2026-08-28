@@ -4,10 +4,10 @@ plane.
 
 Everything the board and the shapes need to be told apart is a flat footprint lying on a
 known horizontal surface -- the table for the loose shapes, the board's lid for its
-holes. Warping the camera view onto that surface removes the perspective the camera adds,
-so a contour's area, side lengths, and orientation are read straight off in metres and in
-the world frame, and the thresholds that classify it are real dimensions rather than
-numbers tied to where the camera happened to stand.
+holes. Warping the camera view onto that surface removes the perspective the camera
+adds, so a contour's area, side lengths, and orientation are read straight off in metres
+and in the world frame, and the thresholds that classify it are real dimensions rather
+than numbers tied to where the camera happened to stand.
 """
 
 from __future__ import annotations
@@ -19,6 +19,7 @@ import numpy as np
 from typing_extensions import Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
+from experiments.montessori.perception.exceptions import WorkspaceOutOfView
 from semantic_digital_twin.spatial_types.math import inverse_frame
 
 # %% the region being looked at
@@ -111,6 +112,80 @@ class WorkspaceRegion:
             self.minimum_x <= x <= self.maximum_x
             and self.minimum_y <= y <= self.maximum_y
         )
+
+
+# %% the space being looked at
+
+
+@dataclass(frozen=True)
+class WorkspaceBox:
+    """
+    The stretch of table perception looks at, together with the room above it that
+    anything worth seeing stands in.
+
+    Everything outside it is somebody else's: the far half of the table, the floor
+    beyond its edge, whatever is stacked against the wall behind. Cutting the camera
+    image down to this box is what makes a window onto the scene show the scene.
+    """
+
+    region: WorkspaceRegion
+    """
+    The patch of the table the box stands on.
+    """
+
+    minimum_height: float
+    """
+    Height of the box's floor above the world frame's origin, in metres.
+    """
+
+    maximum_height: float
+    """
+    Height of the box's ceiling above the world frame's origin, in metres.
+    """
+
+    @property
+    def corners(self) -> np.ndarray:
+        """
+        The box's eight corners, as ``(8, 3)`` world-frame points in metres.
+        """
+        return np.array(
+            [
+                [x, y, height]
+                for x in (self.region.minimum_x, self.region.maximum_x)
+                for y in (self.region.minimum_y, self.region.maximum_y)
+                for height in (self.minimum_height, self.maximum_height)
+            ]
+        )
+
+    def outline_in(self, frame: RgbdFrame) -> np.ndarray:
+        """
+        The outline this box covers in a camera image.
+
+        :param frame: The camera data, carrying the camera's own pose.
+        :return: The outline as an OpenCV contour, in image pixels.
+        """
+        return cv2.convexHull(frame.project(self.corners).astype(np.float32))
+
+    def clip(self, image: np.ndarray, frame: RgbdFrame) -> np.ndarray:
+        """
+        Cut a camera image down to the part of it this box covers.
+
+        :param image: An image taken through ``frame``'s camera, of any number of
+            channels.
+        :param frame: The camera data the image was taken with.
+        :return: The image cropped to the box, blacked out where the box does not reach.
+        """
+        covered = np.zeros(image.shape[:2], dtype=np.uint8)
+        cv2.fillConvexPoly(
+            covered, np.round(self.outline_in(frame)).astype(np.int32), 255
+        )
+        left, top, width, height = cv2.boundingRect(covered)
+        if width == 0 or height == 0:
+            raise WorkspaceOutOfView(image.shape[:2])
+        kept = np.zeros_like(image)
+        inside = covered > 0
+        kept[inside] = image[inside]
+        return kept[top : top + height, left : left + width]
 
 
 # %% the rectified view
