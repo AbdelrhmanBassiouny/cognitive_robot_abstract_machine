@@ -26,6 +26,7 @@ from krrood.entity_query_language.verbalization.rendering.renderer import (
     ParagraphRenderer,
 )
 from krrood.entity_query_language.verbalization.verbalizer import EQLVerbalizer
+from krrood.entity_query_language.operators.probabilistic_queries import Distribution
 from krrood.entity_query_language.query.match import Match
 from krrood.entity_query_language.query.query import Query
 
@@ -143,6 +144,8 @@ class VerbalizationPipeline:
             expression.expression.build()
         elif isinstance(expression, Query):
             expression.build()
+        elif isinstance(expression, Distribution):
+            expression.match.expression.build()
         fragment = self._verbalizer.build(
             expression, services, performative=directive_for_backend(backend)
         )

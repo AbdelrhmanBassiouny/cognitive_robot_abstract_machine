@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from typing_extensions import Any, List, Type
+from typing_extensions import Any, List, Set, Type
 
 import random_events.variable
 from krrood.entity_query_language.core.variable import Variable
@@ -133,3 +133,38 @@ class MultipleEffectVariablesNotSupported(DataclassException):
 
     def suggest_correction(self) -> str:
         return "Declare exactly one effect per query."
+
+
+@dataclass
+class JointQueryAcrossClassesNotSupported(DataclassException):
+    """
+    Raised when a probabilistic query (``probability(...)``, ``moment(...)``)
+    references attributes of more than one EQL class, e.g. ``moment(x.A, y.B)`` for
+    ``x = variable(ClassOne)`` and ``y = variable(ClassTwo)``.
+
+    ``distribution(...)`` never raises this: it wraps a single ``Match``, which is
+    always for one class by construction.
+
+    Every :class:`~krrood.parametrization.model_registries.ModelRegistry` resolves a
+    single model per class, so there is no established way to ground a query spanning
+    two different classes' models yet.
+    """
+
+    owner_classes: Set[Type]
+    """
+    The distinct owner classes found among the query's referenced attributes.
+    """
+
+    def error_message(self) -> str:
+        names = ", ".join(sorted(cls.__name__ for cls in self.owner_classes))
+        return (
+            f"The query referenced attributes owned by {len(self.owner_classes)} "
+            f"different classes ({names}), but only a single-class query is "
+            f"supported."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Reference attributes reached from a single variable(...) root, or split "
+            "into separate queries."
+        )
