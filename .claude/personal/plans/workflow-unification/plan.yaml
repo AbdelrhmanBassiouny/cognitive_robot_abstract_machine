@@ -4092,13 +4092,6 @@ items:
     status: in_progress
     pull_request_number: 154
     session: https://claude.ai/code/session_01FWoysReVCQMi9VBY5cVgcP
-    blockers:
-      - >-
-          Rebuild cadence is unanswered and is the developer's call - scheduled, per-session, or
-          gated on #154 landing. It decides whether the candidate pull request is opened by a
-          workflow holding INTEGRATION_REFRESH_TOKEN or by a session, so the remaining half of Part
-          D (candidate, verdict, force-update, and the removal of the local `--test` surface) cannot
-          be built until it is settled.
     notes: >
       Split out of `integration-branch` (#154) on 2026-08-13, on the user's decision, rather than
       folded into it. Part D of that item's own review round: the verdict moves from a local

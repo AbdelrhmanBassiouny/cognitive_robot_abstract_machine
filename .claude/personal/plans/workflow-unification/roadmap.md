@@ -9931,3 +9931,26 @@ the developer's call, and it decides whether the candidate is opened by a workfl
 wrong one. It is on the item as a blocker now rather than as a sentence in a roadmap section.
 
 705 tests pass across the four directories CI runs, from 675.
+
+### Rebuild cadence answered, and the draft convention overridden once
+
+Both settled by the developer at the end of the same session.
+
+**Cadence is a scheduled Action.** The candidate is opened by a workflow holding
+`INTEGRATION_REFRESH_TOKEN` rather than by a session — which is what that token was
+provisioned and probed for on 2026-08-23, and what makes `maintenance_github.py`'s Actions and
+check-run reads have a caller with a real credential. It unblocks the rest of Part D and settles
+its shape rather than merely permitting it: `open-candidate` and the verdict read are workflow
+steps, so removing the local `--test` surface finally has somewhere to land.
+
+Worth stating because it looks like a contradiction: this is a timer on **deterministic
+automation**, not a scheduled LLM check. `routine-cutover`'s whole endgame is exactly that
+split — deterministic duties on a plain Action, judgment work in on-demand sessions — so it sits
+inside that decision rather than against the no-scheduled-checks rule.
+
+**#154 stays out of draft**, overriding the re-draft-after-every-push convention deliberately.
+A draft is excluded from every integration build, so re-drafting would drop the branch carrying
+this work out of the process the work exists to serve. What the convention protects — that the
+developer reviews before anything is final — is carried here by the pull request being open and
+unmerged instead. Recorded rather than done silently, since a session leaving its own pull
+request un-drafted is otherwise the exact thing that convention exists to catch.
