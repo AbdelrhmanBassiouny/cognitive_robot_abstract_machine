@@ -221,7 +221,6 @@ class RepeatNode(ExecutesSequentially):
             name=type(self).__name__,
             task=children_goal,
             stop_retry_monitor=counter,
-            retry_trigger_monitor=self.failure_monitor,
         )
         parent_goal.add_node(loop)
         loop.add_node(children_goal)

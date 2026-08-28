@@ -131,7 +131,6 @@ class RepeatUntil(Goal):
         for the next attempt.
         """
         self.add_node(self.task)
-        self.retry_trigger_monitor = self.create_failure_monitor(self.task)
         self.add_nodes([self.retry_trigger_monitor, self.stop_retry_monitor])
 
         # Each observation is compared against True, so that an undecided Unknown counts
@@ -140,7 +139,9 @@ class RepeatUntil(Goal):
 
         attempt_failed = self.retry_trigger_monitor.observation_variable.is_true()
 
-        still_trying = trinary_logic_not(self.stop_retry_monitor.observation_variable.is_false())
+        still_trying = trinary_logic_not(
+            self.stop_retry_monitor.observation_variable.is_true()
+        )
 
         # Starting is gated as well as ending, because a reset task is not started and
         # ending is not considered while it is not.
