@@ -10269,3 +10269,39 @@ has `gh`.
 Still true and stated rather than implied: the step cannot verify the labels exist. That
 needs a GitHub call, which is the boundary `check-setup.sh` draws and the reason this
 script prints rather than checks.
+
+### Testing the script is not testing the steps
+
+The round above was verified by running `setup_steps.py`, its tests and `check-setup.sh` —
+all of which check that the script does what the script says. The user asked whether the
+steps themselves had been tested, and they had not: nothing had been checked against the
+services the three steps are *about*. Doing that turned up three things.
+
+**The docs URL named the wrong page.** Step 3 said "paste these into your environment's
+variable list" and linked `claude-code-on-the-web`, which mentions that an environment
+carries variables and then points at `cloud-environments#set-environment-variables` for
+the list itself. A reader following the link arrived somewhere they could not act on. It
+names the section now, and the step also says *where* the environment is edited — the
+selector at `claude.ai/code`, not a settings page.
+
+**That page documents a silent truncation the step was walking into.** The variable list
+is `.env` format: one `KEY=value` per line, and *an unquoted value is read as far as the
+first `#`, with the rest of the line dropped*. A branch or path carrying one would have
+been set to a prefix of itself — the variable present, the value wrong, nothing to see.
+`quoted_if_needed` quotes exactly those, mutation-checked in both directions (never quote,
+always quote).
+
+**The connector URL was the list rather than the flow**, so it now carries the query that
+opens the GitHub authorization directly.
+
+Two claims came back confirmed rather than corrected, which is worth recording too:
+`merged`, `in-review` and `bug` all exist on the fork under the names this prints —
+checked through the API, so against GitHub rather than only against `PullRequestLabel` —
+and `gh` really is absent from a session container, which is what the previous round's
+reordering was for.
+
+**Generalizable: a test suite over a script that prints instructions tests the printing,
+not the instructions.** Every assertion here was about what the script produced from what
+it read, and all 22 passed while step 3 pointed at a page with no variable list on it.
+The check that found it is the one nothing in the repository can perform — following the
+output as its reader would.
