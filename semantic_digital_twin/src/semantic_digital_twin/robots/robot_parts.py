@@ -68,7 +68,10 @@ from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
     DegreeOfFreedom,
 )
-from semantic_digital_twin.world_description.geometry import BoundingBox, Scale
+from semantic_digital_twin.world_description.geometry import (
+    VolumetricBoundingBox,
+    Scale,
+)
 from semantic_digital_twin.world_description.world_entity import (
     Body,
     KinematicStructureEntity,
@@ -591,7 +594,7 @@ class MobileBase(AbstractRobotPart, Generic[TGenericDrive], ABC):
         return get_generic_type_parameters(cls, MobileBase)[0]
 
     @property
-    def bounding_box(self) -> BoundingBox:
+    def bounding_box(self) -> VolumetricBoundingBox:
         return self.root.collision.as_bounding_box_collection_in_frame(
             self._world.root
         ).bounding_box()

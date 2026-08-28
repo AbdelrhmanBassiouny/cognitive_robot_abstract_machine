@@ -66,7 +66,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import Bowl
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix, Point3
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.geometry import BoundingBox
+from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 
 PERCEIVED_MILK_POSITION = (2.6, 2.2, 1.05)
 """
@@ -284,7 +284,7 @@ def test_world_perception_reports_nothing_outside_the_queried_region(
     The region is part of the question, so a body outside it is not an answer.
     """
     world, view, context = immutable_model_world
-    empty_region = BoundingBox(
+    empty_region = VolumetricBoundingBox(
         origin=HomogeneousTransformationMatrix(reference_frame=world.root),
         min_x=-10,
         min_y=-10,
