@@ -347,18 +347,19 @@ CONFIGURED_BASE_BRANCH = "main"
 The branch the scratch repository's stack configuration names as its base.
 """
 
-RE_POINTED_DEFAULT_BRANCH = "integration"
+STAGING_DEFAULT_BRANCH = "integration"
 """
-The branch the repository wrongly declares as its default - a generated branch nothing
-is meant to be cut from, which is the state this fork was actually found in.
+A default branch that is not the configured base - deliberately, since it is what puts
+reviewed-but-unlanded work into every fresh checkout. Nothing may be based on it, but
+that is the setup check's business; here it only has to stop standing in for the base.
 """
 
 
-def configure_a_re_pointed_repository(repository: ScratchRepository) -> None:
+def configure_a_staged_repository(repository: ScratchRepository) -> None:
     """
     Set a scratch repository up as one whose declared default branch is not the base its
     stack configuration names, with a remote-tracking ref for each - the state a clone of
-    a re-pointed repository is really in.
+    such a repository is really in.
 
     :param repository: The fixture-built scratch repository.
     """
@@ -368,13 +369,13 @@ def configure_a_re_pointed_repository(repository: ScratchRepository) -> None:
     repository.commit_everything("declare the configured base")
     repository.add_work_remote()
     repository.track_remote_branch(CONFIGURED_BASE_BRANCH)
-    repository.declare_default_branch(RE_POINTED_DEFAULT_BRANCH)
+    repository.declare_default_branch(STAGING_DEFAULT_BRANCH)
 
 
 def test_treats_the_configured_base_as_the_branch_no_plan_item_can_track(
     session_start_repository: ScratchRepository,
 ):
-    configure_a_re_pointed_repository(session_start_repository)
+    configure_a_staged_repository(session_start_repository)
     session_start_repository.publish_notes_branch({NOTES_PATH: "personal notes\n"})
     session_start_repository.run_git(
         "checkout", "--quiet", "-b", CONFIGURED_BASE_BRANCH
@@ -388,13 +389,13 @@ def test_treats_the_configured_base_as_the_branch_no_plan_item_can_track(
     )
 
 
-def test_treats_the_re_pointed_default_branch_as_ordinary_work(
+def test_treats_the_staging_default_branch_as_ordinary_work(
     session_start_repository: ScratchRepository,
 ):
-    configure_a_re_pointed_repository(session_start_repository)
+    configure_a_staged_repository(session_start_repository)
     session_start_repository.publish_notes_branch({NOTES_PATH: "personal notes\n"})
     session_start_repository.run_git(
-        "checkout", "--quiet", "-b", RE_POINTED_DEFAULT_BRANCH
+        "checkout", "--quiet", "-b", STAGING_DEFAULT_BRANCH
     )
 
     result = run_session_start(session_start_repository)

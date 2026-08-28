@@ -469,17 +469,48 @@ class ScratchRepository:
         self.run_git("remote", "add", "origin", str(self.work_remote_path))
         return self.work_remote_path
 
-    def track_remote_branch(self, branch: str) -> None:
+    def track_remote_branch(self, branch: str, commit: str = "HEAD") -> None:
         """
         Give this clone a remote-tracking ref for *branch*, the way cloning a repository
         that has it does.
 
         :param branch: The branch the work remote is to be known to have.
+        :param commit: What that branch points at, defaulting to the current checkout.
         """
-        head = self.run_git("rev-parse", "HEAD").stdout.strip()
-        self.run_git("update-ref", f"refs/remotes/origin/{branch}", head)
+        resolved = self.run_git("rev-parse", commit).stdout.strip()
+        self.run_git("update-ref", f"refs/remotes/origin/{branch}", resolved)
 
-    def declare_default_branch(self, branch: str) -> None:
+    def publish_staging_branch(self, branch: str) -> str:
+        """
+        Give the remote a *branch* carrying a commit the checked-out branch does not,
+        and leave the checkout where it started.
+
+        Models the branch fresh clones start on when that is not the configured base:
+        what makes it unusable as a pull request's base is precisely that it holds
+        commits of its own, so a fixture pinning it to the same commit as everything
+        else could not exercise the rule at all.
+
+        :param branch: The branch to publish.
+        :return: The commit it points at.
+        """
+        starting_point = self.run_git("rev-parse", "HEAD").stdout.strip()
+        self.write(f"{branch}-only.txt", f"a change only {branch} carries\n")
+        self.commit_everything(f"stage {branch}")
+        staged = self.run_git("rev-parse", "HEAD").stdout.strip()
+        self.track_remote_branch(branch, staged)
+        self.run_git("reset", "--hard", "--quiet", starting_point)
+        return staged
+
+    def start_branch_from(self, branch: str, start_point: str) -> None:
+        """
+        Check out a new *branch* cut from *start_point*, the way a session opens work.
+
+        :param branch: The branch to create.
+        :param start_point: The commit or ref it is cut from.
+        """
+        self.run_git("checkout", "--quiet", "-b", branch, start_point)
+
+    def declare_default_branch(self, branch: str, commit: str = "HEAD") -> None:
         """
         Record *branch* as the work remote's default in this clone, the way a real
         ``git clone`` does.
@@ -489,8 +520,11 @@ class ScratchRepository:
         symbolic ref would assert against a state git never produces.
 
         :param branch: The branch the repository declares as its default.
+        :param commit: What that branch points at, defaulting to the current checkout.
+            Pass it explicitly for a branch that has already been published somewhere
+            other than the checkout, so declaring it does not silently move it back.
         """
-        self.track_remote_branch(branch)
+        self.track_remote_branch(branch, commit)
         self.run_git(
             "symbolic-ref", "refs/remotes/origin/HEAD", f"refs/remotes/origin/{branch}"
         )

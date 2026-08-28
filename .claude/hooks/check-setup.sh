@@ -169,32 +169,42 @@ else
   report git_identity needs-setup "not checked - the branch that would record it doesn't exist yet"
 fi
 
-# %% the branch every session is cut from
+# %% the branch this work would be based on
 
-# A repository whose declared default branch is not the base the stacked-PR
-# configuration names re-points every piece of work cut from it afterwards: a
-# fresh clone starts there, and a pull request opened through the web UI
-# targets it. Reported rather than left to be noticed, because nothing about
-# the resulting clone looks wrong from inside it - it is perfectly consistent,
-# just based on the wrong branch.
+# A repository whose default branch is not the base the stacked-PR
+# configuration names is a deliberate arrangement rather than a defect: it is
+# what puts reviewed-but-unlanded work into every fresh checkout. What such a
+# branch cannot be is a pull request's base, because a branch cut from it
+# carries everything it holds into the diff. So the default branch itself is
+# left alone, and what is refused is a branch that actually descends from it.
+#
+# Ancestry against the default branch rather than against the configured base:
+# the base moves constantly, so every branch that has not merged it recently is
+# neither its ancestor nor its descendant, and a branch legitimately stacked on
+# a parent pull request is not derived from it either. Descending from the
+# staging branch is the one condition that means exactly what it says.
 #
 # Placed after the notes branch above because the personal override
 # configured_base_branch reads lives on it, and is only in FETCH_HEAD once it
 # has been fetched.
 BASE_BRANCH="$(configured_base_branch || true)"
 DECLARED_DEFAULT_BRANCH="$(repository_default_branch || true)"
+STAGING_REFERENCE="refs/remotes/origin/${DECLARED_DEFAULT_BRANCH}"
 if [ -z "${BASE_BRANCH}" ]; then
-  report default_branch info \
-    "no upstream_base in ${STACK_CONFIG_FILE} or in ${PERSONAL_STACK_CONFIG_PATH} on '${NOTES_BRANCH}', so there is no configured base to check the default branch against"
-elif [ -z "${DECLARED_DEFAULT_BRANCH}" ]; then
-  report default_branch info \
-    "this clone records no default branch and origin reports none, so it cannot be compared against the configured base '${BASE_BRANCH}'"
-elif [ "${DECLARED_DEFAULT_BRANCH}" = "${BASE_BRANCH}" ]; then
-  report default_branch ok \
-    "'${DECLARED_DEFAULT_BRANCH}' is both this repository's default branch and its configured base"
+  report branch_base info \
+    "no upstream_base in ${STACK_CONFIG_FILE} or in ${PERSONAL_STACK_CONFIG_PATH} on '${NOTES_BRANCH}', so there is no configured base to check this branch against"
+elif [ -z "${DECLARED_DEFAULT_BRANCH}" ] || [ "${DECLARED_DEFAULT_BRANCH}" = "${BASE_BRANCH}" ]; then
+  report branch_base ok \
+    "'${BASE_BRANCH}' is this repository's configured base, with no other branch staged in front of it"
+elif ! git show-ref --verify --quiet "${STAGING_REFERENCE}"; then
+  report branch_base info \
+    "this repository starts fresh clones on '${DECLARED_DEFAULT_BRANCH}' rather than on its configured base '${BASE_BRANCH}', and this clone has no copy of it to check this branch against"
+elif git merge-base --is-ancestor "${STAGING_REFERENCE}" HEAD 2>/dev/null; then
+  report branch_base needs-setup \
+    "this branch descends from '${DECLARED_DEFAULT_BRANCH}', which is where fresh clones start but is not a base any pull request may target - a pull request from here would carry everything '${DECLARED_DEFAULT_BRANCH}' holds into its diff against '${BASE_BRANCH}'. Re-cut it from '${BASE_BRANCH}', or from the pull request it belongs on top of, before planning or opening one"
 else
-  report default_branch needs-setup \
-    "this repository's default branch is '${DECLARED_DEFAULT_BRANCH}', but its configured base is '${BASE_BRANCH}' - every fresh clone starts on '${DECLARED_DEFAULT_BRANCH}', and a pull request opened through the web UI would target it. Set the default branch back to '${BASE_BRANCH}' in the repository's settings"
+  report branch_base ok \
+    "this branch does not descend from '${DECLARED_DEFAULT_BRANCH}', so '${BASE_BRANCH}' is a sound base for it"
 fi
 
 # %% plan-dashboard dependencies
