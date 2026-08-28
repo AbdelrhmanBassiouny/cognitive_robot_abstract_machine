@@ -15,7 +15,7 @@ from semantic_digital_twin.semantic_annotations.mixins import IsPerceivable
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
-from semantic_digital_twin.world_description.geometry import BoundingBox
+from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import (
     SemanticAnnotation,
     Body,
@@ -58,7 +58,7 @@ class PerceptionQuery(SubclassJSONSerializer):
     The semantic annotation for which to perceive.
     """
 
-    region: BoundingBox
+    region: VolumetricBoundingBox
     """
     The region in which the object should be detected.
     """

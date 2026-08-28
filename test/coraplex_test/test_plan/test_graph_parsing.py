@@ -36,7 +36,7 @@ from semantic_digital_twin.datastructures.definitions import TorsoState
 from semantic_digital_twin.semantic_annotations.semantic_annotations import Milk
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
 from semantic_digital_twin.spatial_types.spatial_types import Pose, Point3
-from semantic_digital_twin.world_description.geometry import BoundingBox
+from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 
 
 def test_parse_simple_action(immutable_model_world):
@@ -321,7 +321,7 @@ def test_detecting_motion_merges_with_the_motions_around_it(immutable_model_worl
     world, view, context = immutable_model_world
     query = PerceptionQuery(
         Milk,
-        BoundingBox(
+        VolumetricBoundingBox(
             origin=HomogeneousTransformationMatrix(reference_frame=world.root),
             min_x=-10,
             min_y=-10,
