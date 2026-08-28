@@ -1003,6 +1003,11 @@ class RecordingPullRequests(ForkPullRequests):
     *now* rather than what the board snapshot opened the pass with.
     """
 
+    heads: dict[int, str] = dataclasses_field(default_factory=dict)
+    """
+    What branch to report each pull request number as publishing.
+    """
+
     label_writes: list[RecordedLabelWrite] = dataclasses_field(default_factory=list)
     """
     Every label set written, in order.
@@ -1025,7 +1030,13 @@ class RecordingPullRequests(ForkPullRequests):
         :return: Every pull request this stand-in has been given state for, in number
             order - the same records reading one of them by number answers with.
         """
-        known = {*self.states, *self.descriptions, *self.titles, *self.labels}
+        known = {
+            *self.states,
+            *self.descriptions,
+            *self.titles,
+            *self.labels,
+            *self.heads,
+        }
         return [self.pull_request(number) for number in sorted(known)]
 
     def pull_request(self, number: int) -> dict:
@@ -1042,6 +1053,7 @@ class RecordingPullRequests(ForkPullRequests):
                 number, f"Pull request {number}"
             ),
             PullRequestField.LABELS.key: list(self.labels.get(number, [])),
+            PullRequestField.HEAD.key: self.heads.get(number, f"a-branch-{number}"),
         }
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:

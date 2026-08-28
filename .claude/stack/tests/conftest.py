@@ -6,6 +6,10 @@ directories are added to ``sys.path`` here rather than requiring an
 ``__init__.py``/packaging setup just for tests. Mirrors
 ``.claude/skills/plan-dashboard/tests/conftest.py`` and
 ``.claude/hooks/tests/conftest.py``.
+
+The reproduction dataset joins them so the branch its marked tests name is read
+from the one module that defines it, by those tests and by the assertions about
+them alike.
 """
 
 import sys
@@ -15,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "shared"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "hooks"))
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "hooks" / "tests"))
+sys.path.insert(0, str(Path(__file__).parent / "dataset" / "reproductions"))
 
 import pytest  # noqa: E402
 from scratch_repository import ScratchRepository  # noqa: E402

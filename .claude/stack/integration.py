@@ -39,6 +39,7 @@ import subprocess
 import sys
 import tempfile
 from abc import abstractmethod
+from collections.abc import Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import IntEnum, StrEnum
@@ -84,6 +85,11 @@ from maintenance_restack_procedure import (  # noqa: E402
     DetachedCheckout,
     RestackWorktree,
     restack,
+)
+from integration_reproduction import (  # noqa: E402
+    ClearedBranchReport,
+    ReproductionRun,
+    clear_fixed_breaks,
 )
 
 POINTER_BRANCH = "integration"
@@ -195,6 +201,9 @@ class ReportKey(StrEnum):
 
     WORKTREE = "worktree"
     """Where a staged collision is live, for a resolution to be written into."""
+
+    CLEARED = "cleared"
+    """The branches whose block a clearing run lifted."""
 
 
 # %% what became of one tip
@@ -1539,6 +1548,86 @@ class BlockBranchCommand(IntegrationCommand):
         blocked = localised.block_the_branch_that_causes_it(run.configuration, fork)
         print(blocked.as_json() if arguments.json else blocked.as_line())
         return report.exit_code
+
+
+@dataclass(frozen=True)
+class ClearFixedBreaksCommand(IntegrationCommand):
+    """Lifts the block on every branch whose recorded breaks now pass."""
+
+    @property
+    def invoked_as(self) -> str:
+        """The name it is invoked by on the command line."""
+        return "clear-fixed-breaks"
+
+    @property
+    def description(self) -> str:
+        """What it does, as ``--help`` puts it."""
+        return "unblock every branch whose reproduction tests now pass"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare this command's flags on."""
+        parser.add_argument(
+            "--report",
+            required=True,
+            type=Path,
+            help="the document the reproduction run wrote",
+        )
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """Lift the block on every branch the reproduction run found fixed.
+
+        :param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        cleared = self.clear(arguments.report, run.configuration, run.fork())
+        if arguments.json:
+            print(self.as_json(cleared))
+        else:
+            for unblocked in cleared:
+                print(f"{unblocked.branch}\tunblocked\t{unblocked.label}")
+        return IntegrationExitCode.SUCCESS
+
+    @staticmethod
+    def clear(
+        report: Path, configuration: Configuration, fork: ForkPullRequests
+    ) -> tuple[ClearedBranchReport, ...]:
+        """Read what the reproduction run found, and act on it.
+
+        :param report: The document the reproduction run wrote.
+        :param configuration: The resolved configuration, naming the label to remove.
+        :param fork: The fork to label and comment on.
+        :return: What was written where, one entry per branch unblocked.
+        """
+        return clear_fixed_breaks(
+            ReproductionRun.from_json(report.read_text()), configuration, fork
+        )
+
+    @staticmethod
+    def as_json(cleared: Sequence[ClearedBranchReport]) -> str:
+        """:param cleared: The branches unblocked.
+        :return: Them as one machine-readable document."""
+        return json.dumps(
+            {
+                ReportKey.CLEARED: [
+                    {
+                        ReportKey.BRANCH: unblocked.branch,
+                        ReportKey.PULL_REQUEST_NUMBER: unblocked.pull_request_number,
+                        ReportKey.LABEL: unblocked.label,
+                        ReportKey.COMMENT: unblocked.comment,
+                    }
+                    for unblocked in cleared
+                ]
+            },
+            indent=2,
+        )
 
 
 @dataclass(frozen=True)
