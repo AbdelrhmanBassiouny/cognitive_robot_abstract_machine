@@ -167,11 +167,20 @@ attached.
 ### The verdicts
 
 **adapt** - one branch's assumption has been made untrue by the other, and that branch changes
-to match. This is the common case. It is a real change to a published pull request, so it is
-**proposed, never applied** - the same bound as `reconcile`. *Which* of the two should change
-is intent rather than fact, so **ask before proposing**: the branch that broke the assumption
-and the branch that held it are both defensible places to fix it, and picking for the developer
-launders your guess as their decision.
+to match. This is the common case, and unlike `reconcile` it is **fixed, not proposed**. A break
+is a defect: one branch's code cannot run in the presence of the other's, somebody has to fix it,
+and this pass is what found it. Handing it back as a question leaves the integration branch red
+and costs a round trip to be told the obvious.
+
+*Which* branch changes is usually a fact rather than intent, and it is settled by reading: it is
+the branch whose **own stated contract** the break violates. A pin that promises "every file the
+tool needs to run" and copies one directory is defective against its own promise the moment the
+tool reaches a second one - nothing about that needs deciding. Read both pull requests' own words
+for what each undertakes, and fix where the undertaking is broken.
+
+Ask only when no contract settles it - when the fix would change what a pull request **promises**
+rather than what it **delivers**, so either branch could defensibly absorb it. That is intent, and
+it is the developer's.
 
 **reconcile** - as in step 3. A break can reveal a duplicated abstraction just as a conflict
 can, and it is worth looking for before settling for `adapt`.
@@ -180,11 +189,22 @@ can, and it is worth looking for before settling for `adapt`.
 the second is ordinary work on a normal base, with a real review behind it. Nothing to do now
 but record it where the plan's state lives, and say which order makes it go away.
 
-Whichever it is, say plainly that the integration branch is red until somebody acts, and which
+A fix carries a **reproduction test** with it, and the test goes wherever the rule it states can
+be stated - which is not always the branch being fixed and not always the branch that broke it.
+Neither branch holds the merged tree, so a test that needs it cannot be written on either; what
+can always be written is the rule, against a small tree the test builds itself. A fix without one
+is a fix the next build cannot tell from a break that went away on its own.
+
+Whichever it is, say plainly whether the integration branch is red until somebody acts, and which
 area of the suite is affected - a developer can still work from a branch whose breakage they
 know the shape of, and cannot from one they do not.
 
 ### Step 5 - block the branch, because a comment alone is missed
+
+This step is for a break left standing - one whose `adapt` had no contract to settle it and went
+to the developer, or a `sequence`. A break you fixed needs no block: the reproduction is what
+says it is gone, and blocking a branch whose fix is already pushed withholds it from the next
+build for nothing.
 
 A failure nobody acts on is carried by every later build. So the branch that causes it is
 **blocked**, not merely mentioned, and blocking it is one command rather than four steps done
