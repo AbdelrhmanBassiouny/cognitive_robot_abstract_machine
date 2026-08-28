@@ -96,7 +96,7 @@ items:
     pull_request_number: 182
     track: correctness
     depends_on: []
-    status: in_progress
+    status: done
     session: https://claude.ai/code/session_01T8fersfoxdBJpmYVSpbdh7
     notes: >
       q.where(q.expression.battery >= 50) returns the whole domain with no
