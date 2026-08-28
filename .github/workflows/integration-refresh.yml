@@ -91,9 +91,20 @@ jobs:
           status=$?
           set -e
           # 0: every tip is in the branch. 10: at least one was left out, which is a
-          # collision to triage rather than a build that failed. Anything else is - a
-          # red suite included, which stops the run before anything is pushed.
-          case $status in 0 | 10) ;; *) cat "${RUNNER_TEMP}/build.json"; exit $status ;; esac
+          # collision to triage rather than a build that failed.
+          case $status in 0 | 10) ;; *) cat "${RUNNER_TEMP}/build.json" ;; esac
+          # 11 is two branches that each pass alone, merge cleanly and break together.
+          # Nothing GitHub reports can find that, so it is found here or not at all -
+          # and a break nobody acts on is carried by every later build. block-branch
+          # localises it to the tip that turned the suite and blocks that branch, so the
+          # next run leaves it out and builds cleanly without it.
+          if [ $status -eq 11 ]; then
+            python "${STACK_DIRECTORY}/integration.py" block-branch --json
+          fi
+          # The job still fails on anything but a build: the branch did not move, and
+          # that is what a red run in the Actions list is telling somebody. Blocking the
+          # branch is what keeps it to one red run rather than one every six hours.
+          case $status in 0 | 10) ;; *) exit $status ;; esac
           echo "branch=$(python -c "import json;print(json.load(open('${RUNNER_TEMP}/build.json'))['build_branch'])")" >> "$GITHUB_OUTPUT"
 
       - name: Open the candidate that gets it checked

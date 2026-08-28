@@ -487,3 +487,15 @@ def test_the_scheduled_job_runs_the_suite_before_it_pushes_anything():
     cost without giving back what it buys.
     """
     assert "--no-test" not in refresh_job_script()
+
+
+def test_a_build_the_suite_turns_red_blocks_the_branch_that_turned_it():
+    """
+    Two branches that each pass alone, merge cleanly and break together are found here
+    or nowhere - no per-branch check can see it. And a break nobody acts on is carried
+    by every later build, so finding it and leaving it is worse than not looking: the
+    same red run repeats every six hours with nothing changed.
+
+    Blocking the branch is what makes the next run build cleanly without it.
+    """
+    assert integration.BlockBranchCommand().invoked_as in refresh_job_script()
