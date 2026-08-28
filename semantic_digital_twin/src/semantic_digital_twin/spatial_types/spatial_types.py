@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from copy import deepcopy, copy
 from dataclasses import dataclass, field
+from enum import Enum
 
 import casadi as ca
 import numpy as np
@@ -40,6 +41,26 @@ if TYPE_CHECKING:
     from semantic_digital_twin.world_description.world_entity import (
         KinematicStructureEntity,
     )
+
+
+class _ConstantMatrixParts(ca.SX, Enum):
+    """
+    The entries a homogeneous matrix always holds, whatever it represents.
+
+    Assigned as whole rows and columns rather than element by element, because
+    :meth:`SpatialType._verify_type` runs on every intermediate product and each casadi
+    element write costs about as much as the whole slice.
+    """
+
+    HOMOGENEOUS_BOTTOM_ROW = [[0.0, 0.0, 0.0, 1.0]]
+    """
+    The last row every 4x4 homogeneous matrix ends in.
+    """
+
+    ZERO_TRANSLATION = [[0.0], [0.0], [0.0]]
+    """
+    The translation column of a matrix that carries rotation only.
+    """
 
 
 @dataclass(eq=False, repr=False)
@@ -126,26 +147,34 @@ class SpatialType:
                     )
         return reference_frame
 
-    def __deepcopy__(self, memo) -> Self:
+    def _copy_with_data(self, data: ca.SX) -> Self:
         """
-        Even in a deep copy, we don't want to copy the reference and child frame, just
-        the matrix itself, because are just references to kinematic structure entities.
+        Build a copy of this spatial object around already-copied matrix data.
+
+        Bypasses the constructor: `data` comes from an object of this very type, so it
+        already satisfies :meth:`_verify_type`, and it contains the same free variables,
+        which are carried over rather than re-derived from the expression graph.
+
+        :param data: The copied matrix data the result takes ownership of.
+        :return: A copy of this object holding `data`.
         """
-        if id(self) in memo:
-            return memo[id(self)]
-        result = type(self).from_casadi_sx(deepcopy(self.casadi_sx))
+        result = type(self).__new__(type(self))
+        result._casadi_sx = data
         result.reference_frame = self.reference_frame
+        result.pinned_free_variables = self.pinned_free_variables
         return result
 
-    def __copy__(self, memo) -> Self:
+    def __deepcopy__(self, memo) -> Self:
         """
-        Even in a deep copy, we don't want to copy the reference and child frame, just
-        the matrix itself, because are just references to kinematic structure entities.
+        Copy the matrix, but share the frames.
+
+        Frames are references to kinematic structure entities, which belong to the world
+        rather than to this object, so a deep copy must not duplicate them.
         """
         if id(self) in memo:
             return memo[id(self)]
-        result = type(self).from_casadi_sx(copy(self.casadi_sx))
-        result.reference_frame = self.reference_frame
+        result = self._copy_with_data(deepcopy(self.casadi_sx))
+        memo[id(self)] = result
         return result
 
 
@@ -180,13 +209,11 @@ class HomogeneousTransformationMatrix(
         self.child_frame = child_frame
         if data is None:
             self._casadi_sx = ca.SX.eye(4)
-            return
-        if isinstance(data, SpatialType):
+        elif isinstance(data, SpatialType):
             # create a copy if data is a spatial type, because they are often still being used
-            casadi_sx = copy(data.casadi_sx)
+            self.casadi_sx = copy(data.casadi_sx)
         else:
-            casadi_sx = sm.to_sx(data)
-        self.casadi_sx = casadi_sx
+            self.casadi_sx = sm.to_sx(data)
         super().__post_init__()
 
     def _verify_type(self):
@@ -194,10 +221,7 @@ class HomogeneousTransformationMatrix(
             raise WrongDimensionsError(
                 expected_dimensions=(4, 4), actual_dimensions=self.shape
             )
-        self[3, 0] = 0.0
-        self[3, 1] = 0.0
-        self[3, 2] = 0.0
-        self[3, 3] = 1.0
+        self[3, :] = _ConstantMatrixParts.HOMOGENEOUS_BOTTOM_ROW
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
@@ -484,18 +508,10 @@ class HomogeneousTransformationMatrix(
         result.reference_frame = self.reference_frame
         return result
 
-    def __deepcopy__(self, memo) -> HomogeneousTransformationMatrix:
-        """
-        Even in a deep copy, we don't want to copy the reference and child frame, just
-        the matrix itself, because are just references to kinematic structure entities.
-        """
-        if id(self) in memo:
-            return memo[id(self)]
-        return HomogeneousTransformationMatrix(
-            data=deepcopy(self.casadi_sx),
-            reference_frame=self.reference_frame,
-            child_frame=self.child_frame,
-        )
+    def _copy_with_data(self, data: ca.SX) -> HomogeneousTransformationMatrix:
+        result = super()._copy_with_data(data)
+        result.child_frame = self.child_frame
+        return result
 
     def copy_with_new_reference_frames(
         self,
@@ -548,10 +564,10 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         self.reference_frame = reference_frame
         if data is None:
             self._casadi_sx = ca.SX.eye(4)
-            return
-        empty_data = to_sx(Matrix.eye(4))
-        empty_data[:3, :3] = sm.to_sx(data)[:3, :3]
-        self._casadi_sx = empty_data
+        else:
+            empty_data = to_sx(Matrix.eye(4))
+            empty_data[:3, :3] = sm.to_sx(data)[:3, :3]
+            self._casadi_sx = empty_data
         super().__post_init__()
 
     def _verify_type(self):
@@ -559,13 +575,8 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             raise WrongDimensionsError(
                 expected_dimensions=(4, 4), actual_dimensions=self.shape
             )
-        self[0, 3] = 0
-        self[1, 3] = 0
-        self[2, 3] = 0
-        self[3, 0] = 0
-        self[3, 1] = 0
-        self[3, 2] = 0
-        self[3, 3] = 1
+        self[:3, 3] = _ConstantMatrixParts.ZERO_TRANSLATION
+        self[3, :] = _ConstantMatrixParts.HOMOGENEOUS_BOTTOM_ROW
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
@@ -1921,10 +1932,7 @@ class Pose(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
             raise WrongDimensionsError(
                 expected_dimensions=(4, 4), actual_dimensions=self.shape
             )
-        self[3, 0] = 0.0
-        self[3, 1] = 0.0
-        self[3, 2] = 0.0
-        self[3, 3] = 1.0
+        self[3, :] = _ConstantMatrixParts.HOMOGENEOUS_BOTTOM_ROW
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:

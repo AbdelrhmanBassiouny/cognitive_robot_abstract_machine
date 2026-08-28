@@ -299,15 +299,23 @@ class MechanicalJoint(HasRootBody):
             main_has_root_body_annotation.root.parent_connection
         ) is type(self.root.parent_connection)
 
-        self._world.move_branch(self.root, whole_parent)
+        # Mounting always runs inside a still-open modification block, so take the
+        # offline path, like every other mount strategy does.
+        self._world.move_branch(
+            self.root, whole_parent, enable_unsafe_inside_world_block=True
+        )
 
         if whole_already_carries_this_joint_type:
             main_has_root_body_annotation._world.move_branch_with_fixed_connection(
-                main_has_root_body_annotation.root, self.root
+                main_has_root_body_annotation.root,
+                self.root,
+                enable_unsafe_inside_world_block=True,
             )
         else:
             main_has_root_body_annotation._world.move_branch(
-                main_has_root_body_annotation.root, self.root
+                main_has_root_body_annotation.root,
+                self.root,
+                enable_unsafe_inside_world_block=True,
             )
 
     @property
