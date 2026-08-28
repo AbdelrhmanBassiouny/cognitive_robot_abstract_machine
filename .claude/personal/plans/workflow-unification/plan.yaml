@@ -3943,56 +3943,69 @@ items:
     status: in_progress
     session: https://claude.ai/code/session_016DukdvsJzggwAAF3CkKaDZ
     notes: >
-      Bug found while running /stacked-pr-maintenance on 2026-08-12, and fixed at the
-      source rather than worked around. The skill invoked the tooling by its in-tree path
-      for a whole run, which assumes .claude/stack/ is the same file from step 0 to the
-      end - and it is not, since that path is tracked content and a pass switches branch
-      in the checkout it runs from. The failure is either loud (a command validated in
-      step 0 comes back as an argparse invalid choice, which is exactly what the
-      preflight -> check-move rename produces) or quiet (the same command name answering
-      with semantics the skill does not describe). In the reported run it produced a
-      string of spurious failures partway through a restack pass, survived only because
-      the operator hand-copied the tool to a stable path and continued from there.
-      stack.py pin-tooling copies the modules and stack.toml - not board.json, which
-      belongs to the pass that exported it - to a digest-named directory outside every
-      checkout and prints the copy's stack.py. Digest naming makes pinning idempotent per
-      version and stops a later pass overwriting the copy an earlier one is still
-      running; the copy is staged beside its destination and moved there whole, so a
-      caller never invokes a half-written one. SKILL.md step 0 gains part c, pinning the
-      moment configuration answers, and every command after it names the pinned copy.
-      Deterministic rather than a note to remember: it is a subcommand, and a test asserts
-      the skill runs nothing else from the working tree.
-      New rather than a change to something in flight, tested mechanically:
-      git ls-tree main -- .claude/stack/stack.py .claude/skills/stacked-pr-maintenance/
-      returns both, so this edits files #106 and #139 already landed. #110 is the only
-      in-flight branch touching .claude/stack/ and owns setup, not the maintenance pass.
-      #139's RestackWorktree already isolates the executor's own branch switching, which
-      is one instance of this hazard; pinning closes the rest - the commands a session
-      runs by hand and the resume paths - and removes the assumption instead of leaving
-      each future step to remember the worktree.
+      Bug found while running /stacked-pr-maintenance on 2026-08-12, and fixed at the source rather
+      than worked around. The skill invoked the tooling by its in-tree path for a whole run, which
+      assumes .claude/stack/ is the same file from step 0 to the end - and it is not, since that
+      path is tracked content and a pass switches branch in the checkout it runs from. The failure
+      is either loud (a command validated in step 0 comes back as an argparse invalid choice, which
+      is exactly what the preflight -> check-move rename produces) or quiet (the same command name
+      answering with semantics the skill does not describe). In the reported run it produced a
+      string of spurious failures partway through a restack pass, survived only because the operator
+      hand-copied the tool to a stable path and continued from there. stack.py pin-tooling copies
+      the modules and stack.toml - not board.json, which belongs to the pass that exported it - to a
+      digest-named directory outside every checkout and prints the copy's stack.py. Digest naming
+      makes pinning idempotent per version and stops a later pass overwriting the copy an earlier
+      one is still running; the copy is staged beside its destination and moved there whole, so a
+      caller never invokes a half-written one. SKILL.md step 0 gains part c, pinning the moment
+      configuration answers, and every command after it names the pinned copy. Deterministic rather
+      than a note to remember: it is a subcommand, and a test asserts the skill runs nothing else
+      from the working tree. New rather than a change to something in flight, tested mechanically:
+      git ls-tree main -- .claude/stack/stack.py .claude/skills/stacked-pr-maintenance/ returns
+      both, so this edits files #106 and #139 already landed. #110 is the only in-flight branch
+      touching .claude/stack/ and owns setup, not the maintenance pass. #139's RestackWorktree
+      already isolates the executor's own branch switching, which is one instance of this hazard;
+      pinning closes the rest - the commands a session runs by hand and the resume paths - and
+      removes the assumption instead of leaving each future step to remember the worktree.
 
-      Review round 2026-08-12, two items, applied in 0c7eef93. The inline one asked the test
-      helper to use the GitCommandRunner class from the branch that implemented it; there is
-      nothing to base on, since that class landed on main with #139 hours earlier, so the helper
-      calls main's copy directly. #151 only moves it to .claude/shared/ and is 159 commits behind
-      main, so basing a standalone bug fix there would have inflated the diff the way #41's stale
-      base did. Replied and left open, since the literal ask was answered differently.
+      Review round 2026-08-12, two items, applied in 0c7eef93. The inline one asked the test helper
+      to use the GitCommandRunner class from the branch that implemented it; there is nothing to
+      base on, since that class landed on main with #139 hours earlier, so the helper calls main's
+      copy directly. #151 only moves it to .claude/shared/ and is 159 commits behind main, so basing
+      a standalone bug fix there would have inflated the diff the way #41's stale base did. Replied
+      and left open, since the literal ask was answered differently.
 
-      Using the runner exposed a weakness in the test that the raw invocation had hidden: the
-      helper created the branch and then wrote the other version, so the working tree changed
-      because the test wrote it rather than because version control moved it - a weaker
-      reproduction than the bug. Both versions are committed at install time now and the step is
-      nothing but a branch switch. Mutation-checked: removing the switch now fails the hazard
-      test, where before the write masked it.
+      Using the runner exposed a weakness in the test that the raw invocation had hidden: the helper
+      created the branch and then wrote the other version, so the working tree changed because the
+      test wrote it rather than because version control moved it - a weaker reproduction than the
+      bug. Both versions are committed at install time now and the step is nothing but a branch
+      switch. Mutation-checked: removing the switch now fails the hazard test, where before the
+      write masked it.
 
-      The review-level question - whether fast-forwarding fork main and restacking everything
-      first would solve this instead - is answered on the pull request and calls for no change. It
-      is circular, since the restack is performed by the tool whose version is in question, so
+      The review-level question - whether fast-forwarding fork main and restacking everything first
+      would solve this instead - is answered on the pull request and calls for no change. It is
+      circular, since the restack is performed by the tool whose version is in question, so
       uniformity arrives at the end of the pass and the tool must be stable at the start. It also
       cannot reach the branches that differ most: #110 and #111 both carry preflight rather than
-      check-move and no maintenance.py at all, and both are needs-resolution, which is exactly
-      what WithholdBranchStillConflicting withholds. And a branch whose own diff edits the tooling
-      is meant to differ. 471 tests pass across the three directories CI runs.
+      check-move and no maintenance.py at all, and both are needs-resolution, which is exactly what
+      WithholdBranchStillConflicting withholds. And a branch whose own diff edits the tooling is
+      meant to differ. 471 tests pass across the three directories CI runs.
+
+      An integration build found the pin incomplete, 2026-08-28, and fixed in `89135e9161`.
+      `WorkingTreeTooling.files` listed one directory's contents and `pin_to` copied them flat,
+      which is complete only while the tool imports nothing outside `.claude/stack/`. Built together
+      with a branch that has moved shared modules into `.claude/shared/`, the pinned
+      `maintenance.py` dies on `from exceptions import GitCommandFailed` - so the pin produced a
+      program that cannot start, which is the one thing a pinned tool must not be. Both halves had
+      to change, and the second is the one that is easy to miss: the copy now carries every sibling
+      directory the tool's own modules name in a `sys.path` insertion, read out of the modules by an
+      `ast` walk rather than listed beside them, *and* it keeps the layout instead of flattening it
+      - such an insertion is relative to the module making it, so flattened the same line resolves
+      outside the copy and finds whatever happens to be there. A sibling nothing imports from is
+      still left where it is, since pinning every sibling would copy most of the repository. Three
+      mutations checked, each caught by the test naming its rule. The reproduction is expressible on
+      this branch alone even though the break is not: it pins a synthetic tree whose tool inserts
+      `../shared` and imports from it, which fails before the fix and passes after. 542 tests pass
+      across the four directories CI runs.
 
   - id: plan-item-bootstrap-yaml-indent
     title: "Fix plan_item_bootstrap writing item fields at the wrong indentation"
