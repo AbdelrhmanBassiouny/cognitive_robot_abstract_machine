@@ -1491,6 +1491,51 @@ def test_the_pinned_copy_carries_what_the_maintenance_executor_imports(tmp_path:
     assert result.returncode == ExitCode.SUCCESS, result.stderr
 
 
+def test_a_sibling_directory_the_tool_imports_from_is_pinned_with_it(tmp_path: Path):
+    """
+    The tool is not always one directory.
+
+    A module beside it may put a sibling on the import path, and a copy without that sibling is a program that cannot start - so the
+    copy keeps the tool where it stood relative to what it imports, and the same insert
+    resolves inside the copy.
+    """
+    tree = tmp_path / "tree"
+    shared = tree / "shared"
+    shared.mkdir(parents=True)
+    (shared / "carried.py").write_text("ANSWER = 'carried'\n")
+    tooling = a_tooling_directory(tree / "stack", {ENTRY_POINT_NAME})
+    (tooling / ENTRY_POINT_NAME).write_text(
+        "import sys\n"
+        "from pathlib import Path\n"
+        "sys.path.insert(0, str(Path(__file__).parent.parent / 'shared'))\n"
+        "from carried import ANSWER\n"
+        "print(ANSWER)\n"
+    )
+
+    pinned = WorkingTreeTooling(tooling).pin_to(tmp_path / "pinned")
+
+    answered = subprocess.run(
+        [sys.executable, str(pinned.entry_point)], capture_output=True, text=True
+    )
+    assert answered.returncode == 0, answered.stderr
+    assert answered.stdout.strip() == "carried"
+
+
+def test_a_directory_the_tool_never_imports_from_is_left_where_it_is(tmp_path: Path):
+    """
+    Pinning a sibling nothing reaches would copy whatever happens to sit beside the
+    tool, which on a real checkout is most of the repository.
+    """
+    tree = tmp_path / "tree"
+    (tree / "unrelated").mkdir(parents=True)
+    (tree / "unrelated" / "elsewhere.py").write_text("")
+    tooling = a_tooling_directory(tree / "stack", {ENTRY_POINT_NAME})
+
+    pinned = WorkingTreeTooling(tooling).pin_to(tmp_path / "pinned")
+
+    assert not (pinned.directory.parent / "unrelated").exists()
+
+
 def test_pinning_the_same_tool_twice_names_the_same_copy(tmp_path: Path):
     """
     A pass that pins again - resuming, or re-running a step - keeps the copy it had.

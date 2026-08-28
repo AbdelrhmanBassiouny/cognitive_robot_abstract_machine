@@ -112,7 +112,8 @@ python -m bastler.stack pin-tooling
 ```
 
 It prints one path: the copy's `stack.py`, in a directory outside this checkout, with
-`maintenance.py` and every module beside it. **Every command below written as `<pinned>/…` means
+`maintenance.py` and every module beside it - and, where the tool imports from a sibling
+directory, that sibling copied alongside so the same import resolves inside the copy. **Every command below written as `<pinned>/…` means
 that directory** - substitute the real path in each time you run one, since a shell variable does
 not survive from one command to the next. `stack.py` imports nothing of its own siblings, so
 invoking it there by path is enough on its own; `maintenance.py` imports `bastler.*` absolutely, so
