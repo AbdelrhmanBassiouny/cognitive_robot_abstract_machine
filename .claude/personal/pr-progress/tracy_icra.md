@@ -60,6 +60,34 @@ The viewer's `show(color, depth)` became `show_color` / `show_depth` for this, s
 one dead stream leaves only its own window empty. That case is real - the depth
 stream's plain `compressed` transport publishes a 0-byte payload.
 
+### `json_msgs` - fixed in the environment
+Built into `~/Projects/ros2_ws`. Two things bit on the way: the package lives in
+`cram2/cram_ros2_packages` (not this repo), and the first `colcon build` picked
+the `cram2` virtualenv's python, which has no `empy`, so `rosidl_adapter` failed
+with `No module named 'em'`. The system python has `empy` 3.3.4 and `lark`, so
+the build has to run with the venv off the PATH - and because CMake caches
+`_Python3_EXECUTABLE`, `build/json_msgs` had to be wiped before reconfiguring.
+`test/experiments_test/` now collects; the 5 remaining failures there are the
+documented empty-ORM-interface state (`NoDAOFoundError`), fixed by
+`scripts/regenerate_all_orm.py`, not by anything here.
+
+### World fetch timeout - same root cause as the camera
+`fetch_world_from_service` timed out after 300 s against a service that *is*
+advertised and *is* answering. Measured: with nothing subscribed the link carries
+zero IP fragment traffic; during one `ros2 service call` on
+`/semantic_digital_twin/fetch_world`, 375,918 fragments arrived, 21 datagrams
+reassembled, 374,828 failed (99.99%). `UdpRcvbufErrors` stayed at zero, so it is
+not the socket buffer - it is the kernel's IP reassembly cache
+(`ipfrag_high_thresh` 4 MB, `ipfrag_time` 30 s) thrashing under a retransmit
+storm while nothing ever completes.
+
+`FetchWorldServer` sends the whole world as one JSON string in a
+`std_srvs/Trigger` response, with no chunking and no compression, so it is a
+single very large sample - the same shape of payload that killed the raw camera
+stream. Awaiting a root-level sysctl test on the receiver before deciding
+between tuning, a Fast DDS `maxMessageSize` profile on both machines, or
+shrinking the payload.
+
 ### Next / open
 - `decode_color_image` and `decode_depth_image` (the raw-message decoders) now
   have no production caller and are only used by tests. AGENTS.md says to consult
