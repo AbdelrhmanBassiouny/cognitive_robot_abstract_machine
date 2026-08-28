@@ -43,6 +43,7 @@ invoke, so what starts a run is what finishes it.
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -471,6 +472,21 @@ DIGEST_FIELD_SEPARATOR = b"\0"
 cannot digest alike by moving bytes from the one into the other."""
 
 
+def _inserts_on_the_import_path(called: ast.expr) -> bool:
+    """
+    :param called: What a call names.
+    :return: Whether it is ``sys.path.insert``.
+    """
+    return (
+        isinstance(called, ast.Attribute)
+        and called.attr == "insert"
+        and isinstance(called.value, ast.Attribute)
+        and called.value.attr == "path"
+        and isinstance(called.value.value, ast.Name)
+        and called.value.value.id == "sys"
+    )
+
+
 @dataclass(frozen=True)
 class PinnedTooling:
     """A copy of the tool that no checkout carries, and so no checkout can replace."""
@@ -499,8 +515,47 @@ class WorkingTreeTooling:
     """Where the tool is, defaulting to wherever the running copy of it is."""
 
     @property
+    def imported_directories(self) -> tuple[Path, ...]:
+        """The sibling directories the tool's own modules put on the import path.
+
+        Read out of the modules rather than listed beside them: a module that begins
+        importing from a new sibling is pinned with it, and a copy cannot fall behind
+        what the tool actually reaches.
+
+        :return: Each sibling, in a fixed order.
+        """
+        beside = self.directory.parent
+        return tuple(
+            sorted(
+                {
+                    candidate
+                    for name in self._names_put_on_the_import_path()
+                    if (candidate := beside / name).is_dir()
+                }
+            )
+        )
+
+    def _names_put_on_the_import_path(self) -> set[str]:
+        """:return: Every name a ``sys.path`` insertion in this tool spells out."""
+        names: set[str] = set()
+        for module in self.directory.glob("*.py"):
+            for node in ast.walk(ast.parse(module.read_text())):
+                if not isinstance(node, ast.Call) or not _inserts_on_the_import_path(
+                    node.func
+                ):
+                    continue
+                names.update(
+                    spelled.value
+                    for spelled in ast.walk(node)
+                    if isinstance(spelled, ast.Constant)
+                    and isinstance(spelled.value, str)
+                )
+        return names
+
+    @property
     def files(self) -> tuple[Path, ...]:
-        """Every file the tool needs to run: the modules and configuration beside it.
+        """Every file the tool needs to run: the modules and configuration beside it,
+        plus whatever it imports from a sibling directory.
 
         The exported board is not one of them. It is one pass's snapshot of the fork's
         pull requests, so a copy of it would be stale for every pass after - and stale in
@@ -511,19 +566,34 @@ class WorkingTreeTooling:
         return tuple(
             sorted(
                 path
-                for path in self.directory.iterdir()
+                for directory in (self.directory, *self.imported_directories)
+                for path in directory.iterdir()
                 if path.is_file() and path.name != BOARD_PATH.name
             )
         )
 
+    def copied_as(self, path: Path) -> Path:
+        """Where one file sits inside a copy, relative to the copy's own root.
+
+        The layout is kept rather than flattened, because an insertion the tool makes is
+        relative to the module making it: flattened, the same line would resolve outside
+        the copy and find whatever happened to be there.
+
+        :param path: A file this tool is made of.
+        :return: Its path within a copy.
+        """
+        return path.relative_to(self.directory.parent)
+
     @property
     def digest(self) -> str:
-        """:return: A short digest of the files' names and contents, telling one version
+        """:return: A short digest of the files' paths and contents, telling one version
         of the tool from another."""
         fingerprint = hashlib.sha256()
         for path in self.files:
             fingerprint.update(
-                path.name.encode() + DIGEST_FIELD_SEPARATOR + path.read_bytes()
+                str(self.copied_as(path)).encode()
+                + DIGEST_FIELD_SEPARATOR
+                + path.read_bytes()
             )
         return fingerprint.hexdigest()[:PINNED_COPY_NAME_LENGTH]
 
@@ -542,12 +612,14 @@ class WorkingTreeTooling:
         destination = root / self.digest
         staged = Path(tempfile.mkdtemp(dir=root))
         for path in self.files:
-            shutil.copy2(path, staged / path.name)
+            copy = staged / self.copied_as(path)
+            copy.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, copy)
         if destination.exists():
             shutil.rmtree(staged)
-            return PinnedTooling(destination)
-        staged.rename(destination)
-        return PinnedTooling(destination)
+        else:
+            staged.rename(destination)
+        return PinnedTooling(destination / self.directory.name)
 
 
 # %% domain model
