@@ -8,11 +8,14 @@ read off the table's plane instead, the lid's outline is magnified by the ratio 
 two camera distances, which walks the outer holes several centimetres away from where
 they are.
 
-Colour carries the segmentation and depth only refines it. The pieces are brightly
-coloured and the holes are dark openings in pale wood, both of which separate cleanly by
-saturation and brightness; the table they stand on is bare metal, whose specular
-reflections leave the depth image with large dropouts and centimetre-scale noise -- far
-too coarse to find a twenty millimetre piece by height alone.
+Colour says where to look and edges say what is there. The pieces are brightly coloured
+and the holes are dark openings in pale wood, both of which separate cleanly by
+saturation and brightness, but the table under them is polished metal that throws a
+coloured reflection of every piece back at the camera, so a coloured region is only ever
+a place worth searching. Which piece stands there is settled by fitting the pieces this
+set contains to the edges seen around that place. Depth is asked how tall a piece stands
+and usually cannot say: the same reflections leave the depth image with large dropouts
+and centimetre-scale noise, far too coarse to measure a thirty millimetre piece.
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from experiments.montessori.perception.detections import (
     MontessoriShapeDetection,
     ShapeSortingHoleDetection,
 )
+from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.footprint import (
     CrossSectionClassifier,
     Footprint,
@@ -203,6 +207,23 @@ def _filled(contour: np.ndarray, orthophoto: Orthophoto) -> np.ndarray:
     region = np.zeros(orthophoto.image.shape[:2], dtype=np.uint8)
     cv2.drawContours(region, [contour], -1, 255, cv2.FILLED)
     return region
+
+
+def _wholly_within(contour: np.ndarray, orthophoto: Orthophoto) -> bool:
+    """
+    Whether a contour lies inside the rectified view rather than running off its edge.
+
+    :param contour: The contour, in rectified pixels.
+    :param orthophoto: The rectified view it was found in.
+    """
+    height, width = orthophoto.image.shape[:2]
+    pixels = contour.reshape(-1, 2)
+    return bool(
+        (pixels[:, 0] > 0).all()
+        and (pixels[:, 0] < width - 1).all()
+        and (pixels[:, 1] > 0).all()
+        and (pixels[:, 1] < height - 1).all()
+    )
 
 
 def _clean(mask: np.ndarray) -> np.ndarray:
@@ -526,7 +547,7 @@ class LoosePieceDetector:
 
     matcher: PieceMatcher = field(default_factory=PieceMatcher)
     """
-    Recognises which piece an outline is and how far it is turned.
+    Recognises which piece stands where, and how far it is turned.
     """
 
     colors: SurfaceColors = field(default_factory=SurfaceColors)
@@ -560,13 +581,21 @@ class LoosePieceDetector:
         """
         Find the pieces lying on the table.
 
-        A piece seen from off to one side hides none of itself but shows its sides as
-        well as its top, so its silhouette rectified onto the table is the piece's
-        footprint together with its top face pushed away from the point directly below
-        the camera -- on this table that stretches a thirty millimetre piece by nearly
-        twenty. Rectifying onto the piece's top instead pushes the *base* the other way,
-        towards that point, so the two silhouettes overstate the footprint on opposite
-        sides and what they agree on is the footprint itself.
+        Colour says where to look and the edges say what is there. A piece seen from off
+        to one side hides none of itself but shows its sides as well as its top, so its
+        silhouette rectified onto the table is the piece's footprint together with its
+        top face pushed away from the point directly below the camera -- on this table
+        that stretches a thirty millimetre piece by nearly twenty. Rectifying onto the
+        piece's top instead pushes the *base* the other way, towards that point, so what
+        the two silhouettes agree on is roughly the footprint, and roughly is as far as
+        colour gets on a table that reflects each piece back at the camera.
+
+        The piece itself is then found by fitting the known pieces to the edges of the
+        view rectified onto their tops, where a piece's own top face lies at exactly its
+        footprint, undistorted and sharply bounded.
+
+        An outline that reaches the edge of the region is passed over: only part of it
+        was seen, so how large it is and what shape it has were never measured.
 
         :param orthophoto: The rectified view of the table's plane.
         :param top_orthophoto: The rectified view of the plane a piece's top stands on.
@@ -583,18 +612,20 @@ class LoosePieceDetector:
             )
         )
         contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+        edges = EdgeDistances.of(top_orthophoto)
 
         pieces = []
         for contour in contours:
             footprint = Footprint.from_contour(contour, orthophoto.region.resolution)
             if not self.piece_size.admits(footprint):
                 continue
+            if not _wholly_within(contour, orthophoto):
+                continue
             x, y = orthophoto.contour_center(contour)
             if board is not None and board.encloses(x, y):
                 continue
-            outline = _to_world_outline(contour, orthophoto)
             match = self.matcher.match(
-                outline,
+                edges,
                 (x, y),
                 self.colors.measure_hue(orthophoto, _filled(contour, orthophoto)),
             )
@@ -604,17 +635,18 @@ class LoosePieceDetector:
             pieces.append(
                 MontessoriShapeDetection(
                     pose=Pose.from_xyz_rpy(
-                        x,
-                        y,
+                        match.center[0],
+                        match.center[1],
                         orthophoto.plane_height + height / 2,
                         yaw=match.yaw,
                         reference_frame=reference_frame,
                     ),
                     footprint=footprint,
-                    outline=outline,
+                    outline=match.piece.turned_outline(match.yaw)
+                    + np.asarray(match.center),
                     category=match.piece.category,
                     height=height,
-                    outline_overlap=match.overlap,
+                    outline_agreement=match.outline_agreement,
                 )
             )
         return pieces

@@ -1,35 +1,38 @@
 """
-Recognise a loose piece by fitting the pieces this set is known to contain to the
-outline the camera measured.
+Recognise a loose piece by laying the pieces this set is known to contain over the edges
+the camera saw, and keeping the one that follows them best.
 
 Rather than measuring proportions of an outline and deciding from thresholds what shape
 they suggest (which is how the holes in the board's lid are still read, see
 :class:`~experiments.montessori.perception.footprint.CrossSectionClassifier`), each known
-piece is laid over the measured outline and turned until it fits best. The set is small
-and every piece in it has been measured, so the question is not *what shape is this* but
-*which of these four is it, and how is it turned* -- a question with a far narrower
-answer, and one whose answer carries how well it fitted.
+piece is placed and turned until its own outline lies along the edges in the picture. The
+set is small and every piece in it has been measured, so the question is not *what shape
+is this* but *which of these four is it, where, and how is it turned* -- a question with
+a far narrower answer, and one whose answer carries how well it fitted.
 
-That fit is what makes the shape and the orientation one result rather than two: an
-outline is recognised at the same moment its turn is found, and a piece no known outline
-covers is refused instead of being reported as whichever threshold it happened to fall
-between.
+Fitting to edges rather than to a segmented colour is what lets a piece be recognised on
+a mirror-finish table (see
+:mod:`~experiments.montessori.perception.edges`): the colour of a piece runs on into its
+own reflection, so a coloured region says roughly where a piece is but neither how large
+it is nor which one it is. The fit answers all of that at once, and refuses an outline no
+known piece follows instead of reporting whichever threshold it happened to fall between.
 """
 
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-import cv2
 import numpy as np
-from typing_extensions import List, Optional, Tuple
+from typing_extensions import List, Optional, Sequence, Tuple
 
+from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.pieces import (
     HUE_TOLERANCE,
     KNOWN_PIECES,
     KnownPiece,
     hue_distance,
+    points_along,
 )
 
 # %% what a fit came to
@@ -38,12 +41,17 @@ from experiments.montessori.pieces import (
 @dataclass(frozen=True, eq=False)
 class MatchedPiece:
     """
-    Which known piece an outline was recognised as, and how it is turned.
+    Which known piece the edges were recognised as, and where it stands.
     """
 
     piece: KnownPiece
     """
-    The piece the outline was recognised as.
+    The piece the edges were recognised as.
+    """
+
+    center: Tuple[float, float]
+    """
+    The world-frame ``(x, y)`` its own centre was fitted to, in metres.
     """
 
     yaw: float
@@ -54,14 +62,12 @@ class MatchedPiece:
     reported within an eighth of a turn of straight and a circle at zero.
     """
 
-    overlap: float
+    outline_agreement: float
     """
-    How much of the two outlines coincided, as the area they share divided by the area
-    they cover together.
+    How much of this piece's own outline lay along an edge the camera saw.
 
-    One is an exact fit. A low value says the outline the camera measured is not the
-    shape of any piece, which on a reflective table is what happens when a piece's own
-    reflection is taken in along with it.
+    One is a perfect fit. A low value says no placement of this piece follows what is
+    actually in the picture.
     """
 
 
@@ -71,7 +77,11 @@ class MatchedPiece:
 @dataclass(frozen=True)
 class PieceMatcher:
     """
-    Recognises a measured outline as one of the pieces this set contains.
+    Recognises the piece the edges around one spot on the table belong to.
+
+    The search runs twice: once coarsely and forgivingly, to find where the piece lies
+    even when the spot it was seeded from is centimetres off, and once finely around
+    that placement, to settle its position and its turn.
     """
 
     candidates: Tuple[KnownPiece, ...] = KNOWN_PIECES
@@ -84,60 +94,91 @@ class PieceMatcher:
     How far a measured colour may sit from a piece's own before that piece is ruled out.
     """
 
-    minimum_overlap: float = 0.6
+    minimum_agreement: float = 0.62
     """
-    How much of the two outlines must coincide before a piece is reported at all.
+    How much of a piece's outline must lie along a seen edge before it is reported at
+    all.
 
-    A cleanly seen piece reaches at least 0.94, and the widest an outline of the wrong
-    shape was measured to reach is 0.52; this sits between them, low enough that a piece
-    read together with its own reflection in the table still comes through at 0.68.
+    On the real table a correctly recognised piece reaches between 0.63 and 0.86, while
+    the best any *other* piece of the same colour reaches on the same spot is 0.62; this
+    sits at that boundary, so a piece is refused rather than reported as its neighbour.
+    """
+
+    search_radius: float = 0.024
+    """
+    How far, in metres, a piece may be found from the spot it was seeded at.
+
+    A piece seen together with its own reflection is seeded from the middle of the two,
+    which on this table is up to fifteen millimetres off.
+    """
+
+    coarse_step: float = 0.003
+    """
+    How far apart, in metres, the placements of the first search stand.
+    """
+
+    step: float = 0.001
+    """
+    How far apart, in metres, the placements of the second search stand, matching the
+    rectified image's own resolution.
+    """
+
+    coarse_angle_step: float = math.radians(6.0)
+    """
+    How finely a piece is turned in the first search, in radians.
     """
 
     angle_step: float = math.radians(2.0)
     """
-    How finely a piece is turned while looking for its best fit, in radians.
+    How finely a piece is turned in the second search, in radians.
 
     Two degrees moves the far corner of the largest piece here by under a millimetre, so
-    a finer sweep would be answering below the resolution the outline was measured at.
+    a finer sweep would be answering below the resolution the edges were found at.
     """
 
-    resolution: float = 0.001
+    coarse_reach: float = 0.008
     """
-    Edge length, in metres, of the pixels the two outlines are compared over, matching
-    the rectified image the measured one came from.
+    How far, in metres, an edge may lie from an outline and still count in the first
+    search.
+
+    Wide on purpose: the first search only has to find which placement to look around,
+    and a reach narrower than the step it walks in would step over the answer.
+    """
+
+    reach: float = 0.003
+    """
+    How far, in metres, an edge may lie from an outline and still count in the second
+    search.
+    """
+
+    outline_spacing: float = 0.002
+    """
+    How far apart, in metres, the points an outline is compared to the picture at stand.
     """
 
     def match(
         self,
-        outline: np.ndarray,
-        center: Tuple[float, float],
+        edges: EdgeDistances,
+        seed: Tuple[float, float],
         hue: Optional[int],
     ) -> Optional[MatchedPiece]:
         """
-        Recognise a measured outline.
+        Recognise the piece standing around one spot.
 
-        :param outline: The outline as ``(n, 2)`` world-frame ``(x, y)`` points.
-        :param center: The world-frame ``(x, y)`` the outline is centred on, which each
-            candidate is laid over.
-        :param hue: The colour the outline was measured to be, or None where it had no
+        :param edges: The edges seen in the plane the piece's top face stands on.
+        :param seed: The world-frame ``(x, y)`` to search around.
+        :param hue: The colour that spot was measured to be, or None where it had no
             colour to read.
-        :return: The best fit, or None if no known piece covers the outline well enough.
+        :return: The best fit, or None if no known piece follows the edges well enough.
         """
         candidates = [piece for piece in self.candidates if self._could_be(piece, hue)]
         if not candidates:
             return None
-        measured = np.asarray(outline, dtype=float).reshape(-1, 2) - np.asarray(
-            center, dtype=float
-        )
-        extent = max(
-            [float(np.abs(measured).max())] + [piece.radius for piece in candidates]
-        )
-        drawn_measurement = self._draw(measured, extent)
         best = max(
-            (self._best_turn(piece, drawn_measurement, extent) for piece in candidates),
-            key=lambda fit: fit.overlap,
+            (self._fit(piece, edges, seed) for piece in candidates),
+            key=lambda fit: fit.outline_agreement,
         )
-        if best.overlap < self.minimum_overlap:
+        if best.outline_agreement < self.minimum_agreement:
             return None
         return best
 
@@ -152,67 +193,122 @@ class PieceMatcher:
             return True
         return hue_distance(hue, piece.hue) <= self.hue_tolerance
 
-    def _best_turn(
-        self, piece: KnownPiece, drawn_measurement: np.ndarray, extent: float
+    def _fit(
+        self, piece: KnownPiece, edges: EdgeDistances, seed: Tuple[float, float]
     ) -> MatchedPiece:
         """
-        Turn one piece until it covers a measured outline as well as it can.
+        Place and turn one piece until its outline follows the edges as closely as it
+        can.
 
-        :param piece: The piece to lay over the outline.
-        :param drawn_measurement: The measured outline, already drawn.
-        :param extent: Half the width, in metres, of the square both are drawn in.
-        :return: The best fit this piece reaches.
+        :param piece: The piece to lay over the edges.
+        :param edges: The edges seen in the plane its top face stands on.
+        :param seed: The world-frame ``(x, y)`` to search around.
+        :return: The best placement this piece reaches.
         """
-        return max(
-            (
-                MatchedPiece(
-                    piece=piece,
-                    yaw=angle,
-                    overlap=self._overlap(
-                        drawn_measurement,
-                        self._draw(piece.turned_outline(angle), extent),
-                    ),
-                )
-                for angle in self._turns_of(piece)
-            ),
-            key=lambda fit: fit.overlap,
+        coarse = self._sweep(
+            piece,
+            edges,
+            seed,
+            self._turns_of(piece, self.coarse_angle_step),
+            self.search_radius,
+            self.coarse_step,
+            self.coarse_reach,
+        )
+        return self._sweep(
+            piece,
+            edges,
+            coarse.center,
+            self._turns_around(piece, coarse.yaw),
+            self.coarse_step,
+            self.step,
+            self.reach,
         )
 
-    def _turns_of(self, piece: KnownPiece) -> List[float]:
+    def _sweep(
+        self,
+        piece: KnownPiece,
+        edges: EdgeDistances,
+        center: Tuple[float, float],
+        angles: Sequence[float],
+        radius: float,
+        step: float,
+        reach: float,
+    ) -> MatchedPiece:
+        """
+        Try one piece at every placement of a grid of positions and turns.
+
+        :param piece: The piece to place.
+        :param edges: The edges seen in the plane its top face stands on.
+        :param center: The world-frame ``(x, y)`` the grid is centred on.
+        :param angles: The turns to try, in radians.
+        :param radius: How far, in metres, the grid reaches from its centre.
+        :param step: How far apart, in metres, the grid's positions stand.
+        :param reach: How far an edge may lie from the outline and still count.
+        :return: The best placement.
+        """
+        walk = np.arange(-radius, radius + step / 2, step)
+        positions = np.stack(np.meshgrid(walk, walk, indexing="ij"), axis=-1).reshape(
+            -1, 2
+        ) + np.asarray(center, dtype=float)
+        return max(
+            (
+                self._best_position(piece, edges, positions, angle, reach)
+                for angle in angles
+            ),
+            key=lambda fit: fit.outline_agreement,
+        )
+
+    def _best_position(
+        self,
+        piece: KnownPiece,
+        edges: EdgeDistances,
+        positions: np.ndarray,
+        angle: float,
+        reach: float,
+    ) -> MatchedPiece:
+        """
+        Where a piece turned to one angle follows the edges best.
+
+        :param piece: The piece to place.
+        :param edges: The edges seen in the plane its top face stands on.
+        :param positions: The world-frame ``(n, 2)`` positions to try it at.
+        :param angle: The turn to try it at, in radians.
+        :param reach: How far an edge may lie from the outline and still count.
+        :return: The best of those positions.
+        """
+        outline = points_along(piece.turned_outline(angle), self.outline_spacing)
+        agreements = edges.agreement(outline[None, :, :] + positions[:, None, :], reach)
+        best = int(np.argmax(agreements))
+        return MatchedPiece(
+            piece=piece,
+            center=(float(positions[best][0]), float(positions[best][1])),
+            yaw=piece.smallest_equivalent_turn(angle),
+            outline_agreement=float(agreements[best]),
+        )
+
+    @staticmethod
+    def _turns_of(piece: KnownPiece, step: float) -> List[float]:
         """
         The turns a piece is worth trying, which span one of its rotation periods about
         zero and so hold every orientation it can be told apart in.
 
         :param piece: The piece to turn.
+        :param step: How finely to turn it, in radians.
         """
         if piece.rotation_period is None:
             return [0.0]
-        steps = int(piece.rotation_period / 2 / self.angle_step)
-        return list(np.arange(-steps, steps + 1) * self.angle_step)
+        steps = int(piece.rotation_period / 2 / step)
+        return list(np.arange(-steps, steps + 1) * step)
 
-    def _draw(self, outline: np.ndarray, extent: float) -> np.ndarray:
+    def _turns_around(self, piece: KnownPiece, angle: float) -> List[float]:
         """
-        Draw an outline centred on the origin, filled in.
+        The turns worth trying either side of one the coarse search settled on, which
+        reach a full coarse step in both directions.
 
-        :param outline: The outline as ``(n, 2)`` ``(x, y)`` points in metres.
-        :param extent: Half the width of the square to draw it in, in metres.
-        :return: The filled outline, one inside it and zero elsewhere.
+        :param piece: The piece to turn.
+        :param angle: The turn to search around, in radians.
         """
-        side = int(round(2 * extent / self.resolution)) + 1
-        canvas = np.zeros((side, side), dtype=np.uint8)
-        pixels = np.round((outline + extent) / self.resolution).astype(np.int32)
-        cv2.fillPoly(canvas, [pixels.reshape(-1, 1, 2)], 1)
-        return canvas
-
-    @staticmethod
-    def _overlap(one: np.ndarray, other: np.ndarray) -> float:
-        """
-        How much of two drawn outlines coincide.
-
-        :param one: The first outline, drawn.
-        :param other: The second, drawn the same size.
-        :return: The area they share divided by the area they cover together.
-        """
-        shared = int(np.count_nonzero(one & other))
-        covered = int(np.count_nonzero(one | other))
-        return shared / covered if covered else 0.0
+        if piece.rotation_period is None:
+            return [0.0]
+        steps = int(round(self.coarse_angle_step / self.angle_step))
+        return list(angle + np.arange(-steps, steps + 1) * self.angle_step)
