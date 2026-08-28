@@ -14,6 +14,7 @@ from typing_extensions import TYPE_CHECKING, Type, Any, List, Tuple, Optional
 from krrood.exceptions import DataclassException
 
 if TYPE_CHECKING:
+    from krrood.entity_query_language.backends import QueryBackend
     from krrood.entity_query_language.query.query import (
         Query,
     )
@@ -23,6 +24,10 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.core.base_expressions import (
         SymbolicExpression,
         Selectable,
+    )
+    from krrood.entity_query_language.core.mapped_variable import (
+        Attribute,
+        MappedVariable,
     )
     from krrood.entity_query_language.core.variable import Variable
     from krrood.entity_query_language.query.match import (
@@ -242,6 +247,156 @@ class NoConditionsProvided(UsageError):
 
     def suggest_correction(self) -> str:
         return ""
+
+
+@dataclass
+class AmbiguousQueryAttribute(UsageError):
+    """
+    Raised when a condition takes an attribute from a query that selects several
+    variables, leaving the attribute without a single subject.
+
+    For further details, see the section on writing queries and `where` clauses in
+    :doc:`/krrood/doc/eql/writing_queries`.
+    """
+
+    query: Query
+    """
+    The query the attribute was taken from.
+    """
+
+    attribute: SymbolicExpression
+    """
+    The attribute chain rooted at that query.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.attribute._name_} takes an attribute from the query {self.query}, which "
+            f"selects {len(self.query._selected_variables_)} variables, so the attribute has no "
+            f"single subject."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Take the attribute from the variable it belongs to, e.g. `body.name` instead of "
+            "`query.name`, or index the query by that variable, e.g. `query[body].name`."
+        )
+
+
+@dataclass
+class NotNumberLikeFieldError(UsageError):
+    """
+    Raised when accessing a field expected to be number-like (see
+    :meth:`~krrood.entity_query_language.core.mapped_variable.Attribute.number_like_field`),
+    but it does not exist or resolves to a non-numeric type.
+    """
+
+    attribute: Attribute
+    """
+    The attribute that was accessed.
+    """
+
+    resolved_type: Optional[Type]
+    """
+    The attribute's resolved type, or None if it does not exist at all.
+    """
+
+    def error_message(self) -> str:
+        if self.resolved_type is None:
+            return f"{self.attribute} does not exist."
+        return f"{self.attribute} is {self.resolved_type}, not number-like."
+
+    def suggest_correction(self) -> str:
+        return f"give the queried type a number-valued '{self.attribute._attribute_name_}' field."
+
+
+@dataclass
+class MultipleValuesAlongAccessPath(UsageError):
+    """
+    Raised when a chain is followed from a value outside query evaluation and a step maps
+    that value to several, leaving the rest of the chain without one value to follow.
+    """
+
+    chain: MappedVariable
+    """
+    The chain that was being followed.
+    """
+
+    step: MappedVariable
+    """
+    The step along it that reaches more than one value.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.chain._name_} passes through {self.step._name_}, which reaches one "
+            f"value per element rather than a single one, so the rest of the access "
+            f"path has no one value to follow."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Follow a chain whose every step maps one value to one value, or aggregate "
+            "the collection instead of flattening it."
+        )
+
+
+@dataclass
+class UnselectedQueryVariable(UsageError):
+    """
+    Raised when a query over several variables is indexed by a variable it does not
+    select, so the index names nothing in the rows the query yields.
+
+    For further details, see the section on writing queries and `where` clauses in
+    :doc:`/krrood/doc/eql/writing_queries`.
+    """
+
+    query: Query
+    """
+    The query that was indexed.
+    """
+
+    key: Any
+    """
+    What the query was indexed by.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The query {self.query} was indexed by {self.key}, which is not one of the "
+            f"variables it selects, so its rows hold nothing under that key."
+        )
+
+    def suggest_correction(self) -> str:
+        selected = ", ".join(
+            variable._name_ for variable in self.query._selected_variables_
+        )
+        return f"Index the query by one of the variables it selects: {selected}."
+
+
+@dataclass
+class ReadOnlyMapping(UsageError):
+    """
+    Raised when a value is written back through a chain whose step computes or picks its
+    value instead of naming where that value is kept.
+    """
+
+    mapping: MappedVariable
+    """
+    The step the value would have been written through.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.mapping._name_} does not name where its value is kept, so a value "
+            f"cannot be written through it."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Write through a step that names where the value is kept: an attribute, or "
+            "an index by the key it is stored under."
+        )
 
 
 @dataclass
@@ -780,6 +935,36 @@ class SelectiveBackendCannotResolveEllipsisMatch(DataclassException):
 
 
 @dataclass
+class BackendCannotEvaluateCause(DataclassException):
+    """
+    Raised when a match with a :class:`~krrood.entity_query_language.operators.causal.Cause`
+    (``cause``) intervention is evaluated with a backend that has no notion of a
+    causal graph to search over, and that backend was configured (via
+    ``raise_on_unresolvable_cause=True``) to fail loudly instead of warning and treating
+    the intervention as an ordinary unspecified field.
+    """
+
+    match: Match
+    """
+    The match that has a ``Cause`` attribute.
+    """
+
+    backend_type: Type[QueryBackend]
+    """
+    The type of the backend that cannot evaluate the intervention causally.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.match} contains a cause intervention, which {self.backend_type.__name__} "
+            f"cannot evaluate causally: it has no notion of a causal graph to intervene on."
+        )
+
+    def suggest_correction(self) -> str:
+        return "Evaluate with a ProbabilisticBackend backed by a CausalCircuit-aware model registry."
+
+
+@dataclass
 class CalledMatchMultipleTimes(DataclassException):
     """
     Exception raised when a match expression is called multiple times.
@@ -817,6 +1002,87 @@ class UnderspecifiedStatementInfeasibleForEntityQueryLanguageGeneration(
         return (
             "if you're looking for more flexible generations, try ProbabilisticBackend."
         )
+
+
+@dataclass
+class CausesEffectRequiresEqualityComparator(UsageError):
+    """
+    Raised when a :func:`~krrood.entity_query_language.query.match.Match.causes_effect`
+    condition is not an equality comparator (or a conjunction of equality comparators).
+
+    A causal effect must be expressed as ``attribute == value`` (or several such
+    comparisons ANDed together), the same restriction Pearl's atomic point-intervention
+    ``do(X=x)`` already implies: you can ask what causes an attribute to equal a value,
+    not what causes it to satisfy an inequality or an arbitrary relation to another
+    attribute.
+    """
+
+    condition: SymbolicExpression
+    """
+    The condition that is not an equality comparator or conjunction thereof.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"causes_effect(...) requires an equality comparator (attribute == value) "
+            f"or a conjunction of equality comparators, got {self.condition}."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Compare an attribute against a literal value with `==`, e.g. "
+            "`match.causes_effect(match.variable.status == SUCCESS)`, combining "
+            "several such comparisons with `and_` if needed."
+        )
+
+
+@dataclass
+class NoCausesEffectConditionForCause(DataclassException):
+    """
+    Raised when a :class:`~krrood.entity_query_language.operators.causal.Cause` (``cause``)
+    is present in a match but no
+    :meth:`~krrood.entity_query_language.query.match.Match.causes_effect` condition
+    declares which variable it should optimize for.
+    """
+
+    expression: Query
+    """
+    The query that has a ``Cause`` but no declared effect.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.expression} has a cause intervention but no causes_effect(...) "
+            f"condition, so there is nothing to search for the best intervention region "
+            f"against."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Add a causes_effect(...) condition declaring the effect, e.g. "
+            "`match.causes_effect(match.variable.status == SUCCESS)`."
+        )
+
+
+@dataclass
+class NoCauseVariablesForRanking(DataclassException):
+    """
+    Raised when
+    :meth:`~krrood.entity_query_language.backends.ProbabilisticBackend.rank_causes` is
+    called on a match with no :class:`~krrood.entity_query_language.operators.causal.Cause`
+    (``cause``) fields to rank.
+    """
+
+    expression: Query
+    """
+    The query that has no ``Cause`` fields.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.expression} has no cause fields, so there is nothing to rank."
+
+    def suggest_correction(self) -> str:
+        return "Mark at least one field with cause before calling rank_causes()."
 
 
 @dataclass

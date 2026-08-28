@@ -23,7 +23,7 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     Point3,
     Pose2D,
 )
-from semantic_digital_twin.world_description.geometry import BoundingBox
+from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 from semantic_digital_twin.world_description.world_entity import (
     Region,
     SemanticAnnotation,
@@ -93,7 +93,7 @@ class DetectAction(ActionDescription):
                 self.robot.root
             ).bounding_box
             if self.region
-            else BoundingBox(
+            else VolumetricBoundingBox(
                 origin=HomogeneousTransformationMatrix(reference_frame=self.robot.root),
                 min_x=-1,
                 min_y=-1,
