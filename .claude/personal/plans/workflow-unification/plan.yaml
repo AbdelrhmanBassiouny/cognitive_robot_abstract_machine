@@ -4541,5 +4541,35 @@ items:
     title: "Localise a red candidate to the branches that caused it"
     branch: null
     track: stack-tooling
-    depends_on: []
+    depends_on:
+      - integration-branch-ci-verdict
     status: not_started
+    notes: >
+      Split out of integration-branch-ci-verdict on 2026-08-29 rather than folded into it.
+      Part D put the publishing verdict on the candidate's own ci.yml run; what it did not
+      build is what happens when that verdict comes back red for a reason the local suite
+      cannot see. block-branch localises by re-assembling the tips in order and re-running
+      the configured suite - the four tooling directories - so it reaches a break between
+      two branches whose tooling code disagrees and reaches nothing in the docker matrix,
+      where test_each_lib and its fifteen siblings live.
+
+      Most of that gap closed with the red-tip exclusion of the same day, and the remainder
+      is narrower than it was. A candidate can now go red for two reasons: a tip whose
+      checks had not finished when the build was assembled and have since failed, which the
+      next rebuild leaves out by itself; or a genuine break only the matrix sees, where two
+      branches each pass their own full run, merge cleanly, and fail a matrix job together.
+      Only the second needs this item, and only the second is a break in the sense the
+      workflow means.
+
+      Localising it means re-running the matrix rather than a suite: push each prefix of the
+      merge order as its own branch, dispatch a run for each, and read the conclusions -
+      against roughly twenty minutes a run and sixteen jobs apiece. The waiting, the
+      concurrency, the credential and what a partial answer means are all different from
+      _run_tests. Measure the cheaper variant first: re-run only the failing job per prefix
+      rather than the whole matrix, which ci.yml's per-library job names make expressible.
+
+      Not folded into #154, tested rather than judged: it edits integration.py for
+      subcommand wiring, and strip that and a whole dispatched-run localisation subsystem
+      remains. It does not replace locate-failure either - the local suite answers before a
+      build is pushed and caught the #154-against-#158 break hours before any candidate
+      existed, where this answers after a candidate has run.

@@ -10486,3 +10486,99 @@ and caught the #154-against-#158 break hours before any candidate existed; this 
 after a candidate has run, for the failures the local suite is structurally blind to. Two
 mechanisms for two different moments, which is what the 2026-08-28 boundary already
 settled when it kept `--test`.
+
+## Update 2026-08-29 (first unattended run): the build was carrying a branch that was already red
+
+The scheduled pipeline's first run reached a verdict and the verdict was `failed`, on
+`test_each_lib (krrood)`. Diagnosing it found a selection defect rather than an
+integration break, and the defect had been there since `select_for_build` was written.
+
+### What the candidate's red actually was
+
+The failing job passed 2265 tests and reported one collection error, whose traceback sits
+some five hundred lines above the summary:
+
+```
+_____ ERROR collecting test/krrood_test/test_eql_rdr/test_serialization.py _____
+    from krrood.entity_query_language.rdr.backward_inference import what_do_we_know_about
+E   ImportError: cannot import name 'what_do_we_know_about'
+```
+
+`what_do_we_know_about` is defined on `D-ui-splice-fix`, `D-ui-rendering`, `D-ui`,
+`D-store`, `D-deco`, `D-deco-rehome-handoff` and `D-core-engine` - a different sub-stack.
+It is on neither `main` nor `D-core-serialization`'s own chain, so that branch's test
+imports a symbol nothing beneath it defines. **PR #66 is red on its own pull request, at
+the same commit the build merged**, and has been all along.
+
+So the build carried a branch that could not pass, and the candidate then reported a
+failure that said nothing about the combination. Reported on #66, where the fix is; not
+fixed from here, because it is a single-branch defect that integration did not cause and
+which branch of that stack should carry the test is a design call about it.
+
+### The rule, and why it does not re-open a question already settled
+
+`select_for_build` read draft state, the chain, and blocking labels, and never asked
+whether a branch's own checks pass. A build is therefore guaranteed red whenever any
+carried tip is red alone - and worse, that red is indistinguishable at the candidate from
+two branches breaking each other, which is the one thing the candidate exists to report.
+
+This item's own notes of 2026-08-10 record dropping a CI gate, and the reasoning still
+holds exactly as written: *restacking rewrites heads, CI re-runs, every restacked branch
+reads pending, and a green filter yields a near-empty build.* That is an argument against
+**requiring green**, and it does not reach **excluding a known failure**: pending is not
+failed, so there is no deadlock to walk into. The rule reads only a finished failure, and
+`ChecksVerdict.RUNNING` is carried exactly as before.
+
+It is self-limiting for the same reason, which is worth stating because it is what makes
+the rule safe rather than blunt. A restacked branch's head is rewritten, so its checks
+read `running` at the moment the build is assembled and it is carried. Only a branch the
+restack did not move *and* which is finished-red is left out - and a flaky red costs one
+build cycle, cleared by the next push or re-run.
+
+### The field this reads had been dead since it was declared
+
+`Branch.ci` is declared on `main`, documented as the head's latest conclusion, read by
+`load_board` and copied onto `Branch` by `build_stack` - and never populated, because
+`BoardExport._pull_request` sets it from `record.get("ci")` against a payload carrying no
+such key. #139's own review flagged it and nothing fixed it. Giving it a producer *is* the
+fix, and it is better than the parameter the first attempt threaded through: `tips_of` and
+`select_for_build` both decide from it, so a parameter handed to one and not the other
+merges a branch the report says was left out. Reading one field cannot disagree with
+itself.
+
+The read happens in `stack_to_build`, after the restack has moved the branches it is
+about, and against the **branch** rather than a commit - `GET /commits/{ref}/check-runs`
+takes a branch name, so it answers for whatever the branch points at now without first
+resolving a head that a restack has just changed.
+
+`CandidateChecks` and `CandidateVerdict` became `ReportedChecks` and `ChecksVerdict` with
+it, since they now describe the checks on a branch as well as on a candidate's head.
+
+### Measured on the real board rather than asserted
+
+59 open pull requests: 28 `passed`, 23 `failed`, 5 `running`, 3 `absent`. The failures
+concentrate in `coraplex` (17), `experiments` (12) and `giskardpy` (9), which is the
+signature of branches far behind `main` rather than of one broken library - and every one
+of those is a branch a restack will move, after which it reads `running` and is carried.
+Four fail `test_claude_dev_tooling`, and those four are each their own defect rather than
+a shared cause: #194's is a document assertion its own diff broke, #154's is a `git clone`
+object-copy failure in `test_plan_item_mode.py` that does not reproduce locally in five
+runs and is in a file #154 does not touch.
+
+Four mutations checked, each caught by exactly the test naming its rule: never reading
+red, treating `running` as red, annotating before the restack rather than after, and
+reading the checks of something other than the branch. 753 tests pass across the four
+directories CI runs, from 746.
+
+### Worth carrying
+
+**A build that carries a branch which cannot pass produces a verdict about nothing.** The
+candidate mechanism was sound and its first real answer was still useless, because
+selection let in an input that determined the output. The general form: a gate is only as
+good as what it is allowed to judge, so the question *what may reach this gate* is part of
+the gate's design rather than a separate concern.
+
+And the narrower one: **a recorded reason for not doing something is a reason against the
+thing it names, not against everything nearby.** "No CI gate" had stood since 2026-08-10
+and reads as settled; it argues against requiring green and says nothing about excluding
+red, and re-reading what it actually claimed is what made this available.
