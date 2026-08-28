@@ -4296,6 +4296,19 @@ items:
       gated on #154 landing decides whether the candidate is opened by a workflow holding the PAT or
       by a session, and building either before that is answered builds the wrong one.
 
+      Rebuild cadence answered 2026-08-28 by the developer: a scheduled Action. The candidate is
+      opened by a workflow holding `INTEGRATION_REFRESH_TOKEN` rather than by a session, which is
+      what the token was provisioned and probed for on 2026-08-23. That unblocks the rest of Part D
+      and fixes its shape: `open-candidate` and the verdict read are workflow steps, not session
+      commands, so `maintenance_github.py`'s Actions and check-run reads have a caller with a real
+      credential and the removal of the local `--test` surface has somewhere to land. Note this is a
+      timer on deterministic automation rather than a scheduled LLM check, so it sits inside
+      `routine-cutover`'s endgame rather than against the no-scheduled-checks rule. Also settled the
+      same day: #154 stays out of draft. The convention is to re-draft after every push, and here it
+      is overridden deliberately - a draft is excluded from every integration build, so re-drafting
+      would drop the branch that carries this work out of the process it exists to serve. Review
+      state is carried by the pull request being open and unmerged instead.
+
   - id: always-read-upstream-reviews
     title: "Read upstream review threads whether or not the fork pull request is labelled"
     branch: claude/plan-item-kickoff-workflow-y2xfva
