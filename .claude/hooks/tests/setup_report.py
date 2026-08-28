@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 
 
 class CheckStatus(StrEnum):
@@ -23,6 +23,18 @@ class CheckStatus(StrEnum):
     OK = "ok"
     NEEDS_SETUP = "needs-setup"
     INFORMATIONAL = "info"
+
+
+class ExitCode(IntEnum):
+    """
+    The status a setup checker exits with: its verdict on the clone as a whole.
+
+    Both checkers set it by the same rule, so a run needs setup exactly when one of its
+    rows does.
+    """
+
+    SET_UP = 0
+    NEEDS_SETUP = 1
 
 
 @dataclass
@@ -48,9 +60,9 @@ class SetupReport:
     One parsed run of a setup checker: what it reported, and how it exited.
     """
 
-    exit_code: int
+    exit_code: ExitCode
     """
-    The script's exit code: 0 when nothing needs setup, 1 otherwise.
+    The script's verdict on the clone as a whole.
     """
 
     results: dict[StrEnum, CheckResult]
@@ -76,4 +88,4 @@ class SetupReport:
         for line in process.stdout.splitlines():
             check, status, detail = line.split("\t")
             results[checks(check)] = CheckResult(CheckStatus(status), detail)
-        return cls(process.returncode, results)
+        return cls(ExitCode(process.returncode), results)

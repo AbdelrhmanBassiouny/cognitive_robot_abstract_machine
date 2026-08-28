@@ -523,16 +523,10 @@ class ScratchRepository:
         :param branch: The branch to resolve.
         :return: The commit hash, or ``None`` if the branch isn't on the remote at all.
         """
-        result = subprocess.run(
-            ["git", "ls-remote", str(remote), branch],
-            cwd=self.project_root,
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, result.stderr
-        if not result.stdout.strip():
+        listing = self.run_git("ls-remote", str(remote), branch).stdout
+        if not listing.strip():
             return None
-        return result.stdout.split()[0]
+        return listing.split()[0]
 
     def notes_branch_commit(self) -> str | None:
         """

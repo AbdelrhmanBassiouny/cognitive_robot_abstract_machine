@@ -16,7 +16,7 @@ from pathlib import Path
 import pytest
 
 from scratch_repository import ScratchRepository, initialize_bare_repository
-from setup_report import CheckStatus, SetupReport
+from setup_report import CheckStatus, ExitCode, SetupReport
 
 # The files check-stack-setup.sh's `stack_tooling_files` check requires, relative to the
 # project root. Literals rather than values read from resolve-personal-notes-config.sh,
@@ -213,7 +213,7 @@ def test_reports_no_work_needed_when_everything_is_in_place(
 ):
     report = run_check_stack_setup(stack_repository)
 
-    assert report.exit_code == 0
+    assert report.exit_code == ExitCode.SET_UP
     assert [
         check
         for check, result in report.results.items()
@@ -240,7 +240,7 @@ def test_reports_which_stack_tooling_files_are_missing(
     result = report.results[StackSetupCheck.STACK_TOOLING_FILES]
     assert result.status == CheckStatus.NEEDS_SETUP
     assert ".claude/stack/stack.toml" in result.detail
-    assert report.exit_code == 1
+    assert report.exit_code == ExitCode.NEEDS_SETUP
 
 
 def test_requires_the_maintenance_instructions_rather_than_the_retired_routine_document(
@@ -402,4 +402,4 @@ def test_reports_a_board_that_is_not_gitignored(stack_repository: ScratchReposit
     result = report.results[StackSetupCheck.BOARD_IGNORED]
     assert result.status == CheckStatus.NEEDS_SETUP
     assert BOARD_PATH in result.detail
-    assert report.exit_code == 1
+    assert report.exit_code == ExitCode.NEEDS_SETUP
