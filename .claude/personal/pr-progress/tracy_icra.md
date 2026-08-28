@@ -129,14 +129,86 @@ another mid-identifier). Those hunks were reverted and the two needed lines
 re-applied by hand. Check the diff after running it on a file you are only
 touching lightly.
 
+### Body boxes, the rectified window, and the depth's real limit (commit `318e8f322`)
+The drawn box covered only the footprint, so a piece's top face fell outside it.
+`MontessoriDetection.top_height` now names a detection's own top, and the overlay
+boxes the outline drawn at both the resting surface and that top - exactly the
+silhouette an upright prism casts, so the box covers the piece by construction.
+
+That needed a height, and **the depth image on this table has none to give**.
+Measured on a real frame: the piece tops read *further* than the table beside
+them (rect prism top 0.961 m vs table 0.951 m; cube top 0.959 vs table 0.938),
+so every piece came out zero tall. The board's 80 mm lid does resolve (0.988 vs
+1.051), so it is a resolution limit on 30 mm objects, not a broken stream. The
+depth-derived table plane fits `z = -0.039x - 0.005y + 0.905` with a 9 mm
+residual - tilted about 2 degrees against the world horizontal.
+
+So `_measure_height` now falls back to `LoosePieceDetector.piece_height`, the
+same 0.03 it already assumes to cancel the parallax, whenever depth cannot
+answer. A piece's pose then sits at table + 15 mm, which is exactly where the
+Tracy demo rests the same piece (`table_top_z + CUBE_EDGE/2` = 0.895).
+
+Viewer gained a third window, the rectified table with the detections on it.
+`scale_to_fit` takes a height bound too, since that view is portrait (1000x1200
+px at 1 mm, drawn 450x540). One `DetectionOverlay` serves both windows through
+a `DetectionView` (`CameraView`, `RectifiedView`); `_on_color` no longer flashes
+the bare frame before the annotated one.
+
+### Position check against the Tracy demo (asked for, done)
+Compared on a real captured frame. The only ground truth independent of where
+things physically stand is the board's own hole layout, taken relative to the
+detected board centre:
+
+    cylinder   modelled (-0.022,-0.087)  detected (-0.017,-0.080)   8.2 mm
+    cylinder   modelled (-0.017,+0.091)  detected (-0.012,+0.082)  10.8 mm
+    cube       modelled (+0.020,-0.087)  detected (+0.017,-0.081)   6.8 mm
+    triangle   modelled (+0.013,-0.000)  detected (+0.011,-0.001)   1.6 mm
+    rectangle  modelled (-0.027,+0.000)  detected (-0.021,+0.001)   6.0 mm
+    disk       modelled (+0.025,+0.091)  detected (+0.022,+0.079)  12.6 mm
+
+Mean 7.7 mm, worst 12.6 mm; the residual is a systematic ~9% shrink of the
+detected layout, not a shift. Not a plane-height error - undoing it would need a
+lid *below* the table. Left unexplained.
+
+Board and pieces do **not** stand where the demo's hardcoded layout puts them:
+board detected at (0.804, 0.105) against `BOARD_POSITION_TRACY` (0.85, 0.0); the
+piece row runs along x ~0.575 spaced 0.10 in y, against `SHAPE_ROW_X` 0.55 and
+`SHAPE_ROW_SPACING` 0.15. The scene has simply been re-laid out since; z now
+agrees exactly.
+
+### Why every loose piece reads `cylinder` - diagnosed, not fixed
+Root cause found, and it is the segmentation, not the classifier. The brushed
+steel table throws a **diffuse coloured reflection** of each piece toward the
+camera nadir, and `SurfaceColors.surface_mask` keeps it: measured on the yellow
+rectangular prism, body saturation 100-145 / value 150-235, its halo 30-60 /
+100-140, bare table 15-22 / 90-99. The halo of a saturated piece overlaps the
+*body* of a pale one (cube body reads 33-64), so no global saturation floor
+separates them. The specular highlight also washes the lit face of the pale
+cyan pieces out to near-white, which the saturation floor then drops.
+
+Consequences on a real frame (truth in brackets): rect prism 52x53 mm [20x40],
+triangle 40x57 [37x32], cube 32x33 [30x30], cylinder 22x30 [28x28]. Even the
+geometrically-good cube fills only 0.81 of its enclosing rectangle, under
+`CrossSectionClassifier.circle_fill_ratio` 0.87, so it reads as a circle.
+
+Tried and rejected: every combination of saturation floor 45/60/80 with value
+floor 60/120/140/160 (best, 45/140, still misses the cube); Otsu on saturation
+or value within each blob (over-erodes the pale pieces); and a three-plane
+silhouette agreement adding the mirror plane at `table - piece_height`, which is
+exact for a *sharp* reflection but the real one is a diffuse streak far larger
+than the 11 mm mirror displacement. A real fix means changing how the pieces are
+segmented; not attempted without agreeing it first.
+
 ### Next / open
 - `decode_color_image` and `decode_depth_image` (the raw-message decoders) now
   have no production caller and are only used by tests. AGENTS.md says to consult
   the developer before removing them - waiting on that decision.
-- The pipeline labels every loose piece `cylinder` on the real table, including
-  the cube and the triangular prism, while the board's holes come out right. The
-  overlay makes this plainly visible now. Not investigated - it is the
-  classifier's behaviour on real data, not anything from this work.
+- The piece segmentation above. The measurements are in the scratchpad scripts
+  (`segment_trials.py`, `three_plane.py`, `compare_demo.py`) against a captured
+  frame; recapture with `capture_frame.py` if the scene moves.
+- A depth reading of +1 mm still counts as measured, so the white ball on the
+  table is reported 14 mm lower than a nominal piece. A noise floor would be a
+  tuned number, so it was left alone.
 - No pull request opened. This work folds into `tracy_icra`, which already
   carries a colleague's commits and tracks their fork, so a PR for it would be
   proposing their work too. Left for the user to decide.
