@@ -4330,6 +4330,43 @@ items:
       live inside a robotics package is not collected here and its branch stays blocked, which is
       the safe direction. 706 tests pass across the four directories CI runs, from 705.
 
+      Restack-then-build wired up and run on 2026-08-28, on the developer's point that a rebuild
+      should depend on restacking first and can use the labels stacking writes. Half of it existed:
+      `build --restack` already restacked, refreshed remotes and built. What did not is that
+      `select_for_build` read draft state and the chain and never looked at a label, so a branch a
+      pass had withheld went into the build anyway - and was then reported as colliding with
+      whichever sibling it met there rather than as the branch whose own conflict was already
+      recorded. It now leaves out any branch carrying one of `Configuration.blocking_labels` and
+      anything standing on one, reported as `blocked` rather than `unreviewed`, which would send an
+      author to review a branch they had already reviewed. `BuildSelection.unreviewed` and
+      `IntegrationReport.unreviewed` become `left_out`, since the field now holds both reasons.
+
+      The half that made it worth doing at all is the ordering. The stack was read before
+      `restack()` ran and the same object was built from, so the labels that pass had just written
+      were invisible - a write computed from a snapshot a later step in the same pass invalidates,
+      which is the shape recorded against the 2026-08-05 promotion incident. `stack_to_build` reads
+      it again afterwards. Four mutations checked, each caught by the test naming its rule; 715
+      tests pass, from 706.
+
+      The run is the evidence. `fast-forward` moved fork `main` 43 commits onto `cram2/main`, which
+      conflicted this branch for real - the `needs-resolution` label on it was correct rather than
+      stale - resolved in `pytest.ini`, additive on both sides. The next restack cleared the label,
+      the build carried this branch, and the suite failed: `#158`'s pinned copy could not import
+      `exceptions`, because this branch introduces `.claude/shared/` and the pin copied one
+      directory flat. Two branches, both green alone, merging with no conflict, broken together -
+      the exact class this design exists for, found on the first restacked build rather than by
+      anyone reading a diff. Fixed on `#158` rather than here, since the under-specified pin is its
+      own; the rebuilt branch is green with both in it.
+
+      `integration` is published at `933161a263`: 0 behind `main`, 194 ahead, carrying
+      `integration.py`, `.claude/shared/` and `integration-checks.yml` for the first time - so the
+      default branch a fresh session clones is current with upstream and carries the tooling. Four
+      tips merged, five skipped on ordinary textual collisions with this branch's `.claude/shared/`
+      extraction (`build_dashboard.py`, `plan_item_bootstrap.py`, `conftest.py`), which is
+      whoever-lands-second-adapts rather than a semantic break, and sixteen left out as blocked.
+      Worth carrying for Part D: the local `--test` verdict is what caught the break, so it stays
+      until the CI verdict replaces it rather than beside it.
+
   - id: always-read-upstream-reviews
     title: "Read upstream review threads whether or not the fork pull request is labelled"
     branch: claude/plan-item-kickoff-workflow-y2xfva
