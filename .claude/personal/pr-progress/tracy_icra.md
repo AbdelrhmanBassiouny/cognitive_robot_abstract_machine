@@ -257,26 +257,77 @@ cannot see 30 mm objects on this table. A stereo depth camera on a mirror either
 drops out or matches the reflection, which lands *behind* the surface - which is
 exactly the negative heights above. Scripts: `point_cloud_trial.py`.
 
+### Edge fitting on the bare table (commit `4b74460f8`)
+The mat is gone for good - the user asked for the software fix instead. A piece is
+now recognised by fitting the known pieces to the *edges* of the view rectified
+onto the plane a piece's top face stands on, where that face lies at exactly the
+piece's own footprint, undistorted and sharply bounded. The reflection has no
+sharp boundary anywhere, so it no longer decides anything.
+
+- `perception/edges.py`: `EdgeDistances` - Canny (30/90 on a 3px-blurred grey)
+  plus a distance transform, in metres, with `agreement(outline, reach)` scoring
+  the share of an outline lying within `reach` of an edge.
+- `piece_matcher.py` rewritten: `match(edges, seed, hue)` walks and turns each
+  hue-admissible piece over the view, coarse (3 mm / 6 deg, reach 8 mm) then fine
+  (1 mm / 2 deg, reach 3 mm). `MatchedPiece` now carries `center`, so the fit also
+  settles *where* the piece is. `minimum_agreement = 0.62`.
+- `pipeline.py`: pose and outline come from the fit; a contour touching the edge
+  of the region is passed over as only partly seen.
+- `detections.py`: `outline_overlap` -> `outline_agreement`.
+- Renderer: a piece's lit top face over its shaded sides (`PIECE_SIDE_BRIGHTNESS`
+  150), and `reflection_spread`, a piece-coloured smear with no edge, tuned so the
+  rendered outlines inflate exactly as the real ones do (15 mm -> 45x53 for a
+  30 mm piece, against 47x51 measured).
+
+Measured, bare steel (`frame.npz`): 4/4 correct, 0 wrong, agreements 0.69-0.86,
+where the area fit managed 2/4. Positions move 4-13 mm onto the piece itself.
+With the mat (`frame2`) 3/3 of what segmentation finds. With a hand in the shot
+(`frame3`) 3/4 - the piece the hand touches misreads. 0.29-0.35 s per frame all
+in, against 2.4-3.2 s for the brute-force search the coarse pass replaced.
+
+Watch out: a perfectly placed fit scores ~0.79-0.89, not ~1, because a Canny edge
+in a 1 mm picture sits about a pixel off the line that drew it. The threshold is
+relative to that, so raising the resolution would need it re-measured.
+
+Also gone: a beige jar at the table's far edge that was fitting a triangular
+prism at 0.74. Its blob runs off the region boundary, and the new rule refuses
+anything only partly in view. That rule separates it from every real piece in all
+three captured frames.
+
+### The view is cut down to the workspace (commit `1a1d578c4`)
+`WorkspaceBox` (region + `minimum_height` / `maximum_height`) projects its eight
+corners into the camera and `clip()` crops a colour or depth image to their hull,
+blacking out the rest; `RgbdFrame.project` is the world-to-pixel it needs.
+`MontessoriPerceptionPipeline.headroom` (0.15) sets the ceiling and `workspace`
+builds the box. The node's colour *and* depth windows now show it - and the bare
+unclipped images only while the camera cannot be placed in the world, which also
+fixed a flash of the bare depth image on every frame.
+
+Note the box is bigger than the table region at the table plane, on purpose: the
+hull covers the region at both heights, so something tall standing at the edge of
+the region is still shown whole.
+
 ### Next / open
-- The two yellow pieces on bare steel. Their outlines are still inflated by the
-  diffuse reflection (52x53 mm for a 20x40 piece), so the fit refuses them. The
-  mat fixes this; edge-based fitting (chamfer against a distance transform of the
-  rectified edge map) would fix it without one, since the reflection is blurry
-  and the piece's edges are sharp.
+- The x/y bounds of `TRACY_WORKSPACE` (x 0.35-1.35, y -0.45..0.75) still reach
+  past the pieces and take in the clutter at the table's far edge (a jar, a spray
+  bottle, a beige disk, all at y < -0.1). Tightening them is the user's call - the
+  numbers describe their table, not ours.
 - The pale cyan pieces are under-segmented on the mat (cube read 18x29 mm for a
-  30x30, cylinder missed). Their lit faces wash out towards white.
+  30x30, cylinder missed). Their lit faces wash out towards white. Colour only
+  seeds the fit now, so this costs a piece only when it seeds nothing at all.
 - The *hole* classifier degraded in the later lighting (frame3 read five of six
   holes as triangular_prism). Untouched by this work - it uses the old
   threshold-based `CrossSectionClassifier`. Worth pointing the same fit at it.
 - `decode_color_image` and `decode_depth_image` (the raw-message decoders) now
   have no production caller and are only used by tests. AGENTS.md says to consult
   the developer before removing them - waiting on that decision.
-- The piece segmentation above. The measurements are in the scratchpad scripts
-  (`segment_trials.py`, `three_plane.py`, `compare_demo.py`) against a captured
-  frame; recapture with `capture_frame.py` if the scene moves.
 - A depth reading of +1 mm still counts as measured, so the white ball on the
   table is reported 14 mm lower than a nominal piece. A noise floor would be a
   tuned number, so it was left alone.
+- Scratchpad measurements for this round: `blobs.py`, `sweep.py`, `coarse.py`,
+  `engine.py` / `engine2.py`, `chamfer_show.py`, `edges_look.py`, `final_check.py`
+  against `frame.npz` (bare steel), `frame2.npz` (mat), `frame3.npz` (hand in
+  shot); recapture with `capture_frame.py` if the scene moves.
 - No pull request opened. This work folds into `tracy_icra`, which already
   carries a colleague's commits and tracks their fork, so a PR for it would be
   proposing their work too. Left for the user to decide.
