@@ -9954,3 +9954,43 @@ this work out of the process the work exists to serve. What the convention prote
 developer reviews before anything is final — is carried here by the pull request being open and
 unmerged instead. Recorded rather than done silently, since a session leaving its own pull
 request un-drafted is otherwise the exact thing that convention exists to catch.
+
+## Update 2026-08-28 (first run): a job that installs light dependencies cannot collect from the root
+
+The targeted job `integration-branch-ci-verdict` added went red on its first real run, and
+the cause is a property of the job's own design rather than a slip in it. It collected
+`-m integration_conflict .` from the repository root, and pytest loads every `conftest.py`
+under what it collects — `test/conftest.py` imports `numpy`, which a runner carrying only
+`pytest` plus the four plan-dashboard requirements does not have. Exit 4, during
+collection, before a single reproduction was reached.
+
+Fixed in `db134d33`: the job collects the four test directories `ci.yml`'s tooling job
+names, which is exactly the tree those dependencies cover. Nothing else in the repository
+is importable on that runner, so nothing else was ever collectible.
+
+**The test reads the rule off the other job rather than listing it again**, and the reason
+is the rule itself: what makes the two trees the same is that both jobs install
+`PLAN_DASHBOARD_REQUIREMENTS_FILE` and nothing else, so the sibling job is found *by that
+install* rather than by its name. It survives `bastler-package` renaming
+`test_claude_dev_tooling` to `test_bastler`, and fails the moment one job's collectible
+tree changes without the other's — which is precisely when both need editing together.
+Mutation-checked: reverting to the root fails exactly that test out of 706.
+
+**It also turns a limit recorded at kickoff from theoretical into concrete.** That kickoff
+noted "a reproduction test that lives inside a robotics package and needs the docker matrix
+would not be collectible there". It now genuinely is not, and the consequence is the safe
+one: no outcome is recorded for that branch, `fixed_branches` does not name it, and its
+block stays. A reproduction that cannot be run never clears anything — which is the same
+rule the skipped-and-errored case already had.
+
+Verified locally as the healthy-tree case rather than only in the harness: 706 collected,
+all deselected, exit 5, an empty document written, and `clear-fixed-breaks` reading that
+document back and clearing nothing at exit 0. All three of the statuses the job's `case`
+accepts are therefore reachable and mean what the comment beside them says.
+
+Worth carrying: **a lightweight CI job's collection root is part of its dependency
+contract, not a detail of how it is invoked.** The job installed correctly, was scoped
+correctly, and named its selection correctly; what it got wrong was assuming it could walk
+a tree it had not installed. Any job that installs a subset of the repository's
+dependencies has to collect a matching subset of its tree, and the honest way to say which
+subset is to read it off whatever else installs the same thing.
