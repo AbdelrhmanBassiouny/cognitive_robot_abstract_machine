@@ -285,3 +285,85 @@ looking*. They share no code, but they meet at the backend: once perception is
 a query backend, a question typed into that console can be answered by the
 robot going and looking, rather than only by reading what it already recorded.
 Worth revisiting once `perception-backend` lands.
+
+## `demo-catches-up-with-main`: the merge, and the one conflict
+
+Run 2026-08-28. Measured at the time of the merge rather than when the plan
+was written: `main` was **277** commits ahead of `tracy_icra` (the plan's
+earlier figure of 234 was four days stale), `tracy_icra` 28 ahead of `main`,
+merge base `1646dd355` from 2026-08-19. The conflict was where the plan
+predicted, in exactly one file —
+`semantic_digital_twin/src/semantic_digital_twin/adapters/multi_sim.py` — but
+it was **not** the trivial one the plan expected. Eight hunks, and both sides
+had genuinely reworked the same MuJoCo sync methods:
+
+- `main` had extracted `_read_connections_from_qpos` and
+  `_write_connections_to_qpos` out of `_sim_to_world`/`_on_state_change`, and
+  put the whole pull under `World._world_lock` — with a recorded rationale
+  about a writer thread landing mid-pull and having its write silently lost.
+- `tracy_icra` had, independently, wrapped those same loops inline in
+  `_model_lock` plus `renderer.lock()`, and added the
+  `physically_simulated_dofs` behaviour: a qvel readback so a stall detector
+  sees real physical settling, and a `ctrl`-setpoint path
+  (`_integrate_desired_position`) so a controller pushing against a contact
+  builds up servo force instead of chasing the measured stall position.
+
+**Resolved as a union, taking `main`'s structure.** `main`'s extraction
+subsumes the inline `_model_lock` loops, so `_sim_to_world` and
+`_on_state_change` are `main`'s. What `main`'s helpers did *not* have is
+`renderer.lock()`, which guards against a non-headless viewer's own native
+rendering thread; that is carried into both helpers, with the reason recorded
+there. Every `physically_simulated_dofs` behaviour is kept in full, renamed
+onto `main`'s `qpos_address` parameter (`main` had spelled out `qpos_adr` in
+the same round). `njmax` and `_thickened_mesh_paths` in `_start_build` were
+independent additions from either side; both kept.
+
+Relative to `main`'s copy of the file the resolution adds 272 lines and drops
+14, and each of those 14 is accounted for: the two `_model_lock`-only `with`
+statements that gained `renderer.lock()`, and the two lines of the thin
+`_write_1dof_to_qpos` that the `physically_simulated_dofs` version replaces.
+
+**The merge also drops the tracked `ormatic_interface.py` files this branch
+still carried.** `main` had already untracked them, which `AGENTS.md` requires
+— they are generated, and a tracked copy is what used to make branch switches
+fail. Taking `main`'s side here is the point of the merge, not a side effect
+of it.
+
+**The conflict was not the whole merge.** Three call sites in files that exist
+only on this branch were left calling code `main` had removed or moved. None of
+them conflicted, because `main` never had those files to change — which is
+exactly why a clean `git merge` is not evidence a branch this old still runs:
+
+- `pickup_demo_real.py` called `VizMarkerPublisher.with_tf_publisher()`, removed
+  on `main`; the publisher now builds its own `TFPublisher` in `__post_init__`.
+- `insert_shape_action.py` imported `translate_free_space_to_where_condition`
+  and `navigation_map_at_target`, both moved onto `PlanarGraphOfBoundingBoxes`.
+  `main` migrated `sage10k_actions.py` the same way in the commit that moved
+  them, so that migration is the exemplar this one follows.
+- The same file passed a `Point3` to a planar graph's `node_of_point`, which
+  binds `Point2` — the stale query-point call site that commit `1a6d4206` fixed
+  in `sage10k_actions.py` and could not fix here.
+
+They were found by resolving every name the branch's own files import against
+the merged tree, not by reading the diff. Worth repeating on the next merge:
+the textual conflict is the part `git` can see, and it was the smaller half.
+
+
+**What could and could not be verified, and why.** The repository's own test
+suite does not run in a Claude Code container: `semantic_digital_twin`'s
+conftest regenerates the ORM interfaces on collection, that generation imports
+`giskardpy`, and `giskardpy` needs a ROS 2 installation that is not there. It
+fails identically on unmodified `origin/main` in the same container, so this is
+the environment and not the merge — but it does mean *no* test ran. What was
+done instead: the whole tree byte-compiles under Python 3.12 (the version the
+sources need, for `type X[T] = ...`); every name every file the branch touches
+imports from workspace source resolves against the merged tree, which is what
+found the three broken call sites; and each of the 14 lines the resolution drops
+relative to `main`'s copy of `multi_sim.py` is individually accounted for.
+
+That is real verification, and it is still not a test run. The `multi_sim.py`
+sync path in particular is threading code whose failure mode is a write lost
+under contention, which no unit test in that module exercises anyway. The merge
+is proven by the demo running on the real robot — which is
+`demo-runs-on-grounded-perception`'s job, and one more reason to get there by
+3 September.

@@ -291,8 +291,13 @@ items:
     pull_request_number: null
     track: demo-grounding
     depends_on: []
-    status: not_started
+    status: done
+    session: https://claude.ai/code/session_01FMKabzWhaJpTERyAaSc7Kh
     notes: >-
+      Done 2026-08-28, pushed to origin/tracy_icra as fb0d0e41 (the merge) and
+      ece5eb74 (three branch-only call sites main had broken without
+      conflicting). main was 277 commits ahead by the time it ran, not the 234
+      measured when the plan was written. No pull request, as planned.
       Do this first and do it now. main is 234 commits ahead of tracy_icra and
       their merge base is 2026-08-19; a trial merge today conflicts in exactly
       one file, semantic_digital_twin/adapters/multi_sim.py, which is a
