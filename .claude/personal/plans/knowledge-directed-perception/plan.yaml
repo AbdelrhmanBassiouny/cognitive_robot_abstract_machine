@@ -17,6 +17,11 @@ description: >
   every item merges into that branch as soon as it works, without waiting for
   its own pull request to land on main, and each wave has a demo item that says
   what has to be true on the real robot before the wave counts as finished.
+
+  The deadline is 2026-09-15, thirteen working days from 2026-08-28. That is
+  less than the full scope needs, so every item is to be built in the narrowest
+  form that demonstrates its claim - see roadmap.md's budget section for what
+  narrows and what must not be dropped.
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 201
 
@@ -119,6 +124,11 @@ items:
     depends_on: []
     status: not_started
     notes: >-
+      Everything that depends on this is *stacked* on its branch, not waiting
+      for it to merge - the same way every item of montessori-eql-stack is
+      based on an unmerged parent. Nothing in this plan blocks on review, so
+      this item costs the demo nothing and can land whenever review allows,
+      after the deadline included.
       experiments/src/experiments/montessori/perception/ and its tests exist
       only on tracy_icra, which also carries seventeen unrelated commits
       (Franka demos, Mujoco tuning, stacking). This item cuts a branch off main
@@ -201,7 +211,10 @@ items:
       exception alongside SelectiveBackendCannotResolveEllipsisMatch. Also
       gives the backend its own opening_directive so a query answered by
       looking verbalizes as "Look for ..." rather than "Find ...", which needs
-      one Directive member in krrood. PerceivedObjects, the domain that runs
+      one Directive member in krrood. Narrowed for the deadline: support
+      exactly the condition forms the demo writes - the selected type and
+      is_supported_by - push those down, filter the rest as residuals, and
+      raise on anything else. A general compiler is not what the claim needs. PerceivedObjects, the domain that runs
       the whole pipeline on iteration and yields everything, is retired by it:
       a query then runs only what it asked for.
 
@@ -243,7 +256,7 @@ items:
     branch: perception_expectations_from_events
     pull_request_number: null
     track: events
-    depends_on: [choose-detection-method]
+    depends_on: [perception-backend]
     status: not_started
     notes: >-
       Segmind already emits SupportEvent, LossOfSupportEvent, PickUpEvent,
@@ -261,7 +274,8 @@ items:
     pull_request_number: null
     track: executors
     depends_on: [choose-detection-method]
-    status: not_started
+    status: deferred
+    blockers: ["Deferred past the 2026-09-15 deadline: nothing depends on it and no demo item needs it."]
     notes: >-
       One adapter implementing the detector interface over a RoboKudo analysis
       engine, so the rule tree can choose a learned detector (RoboKudo ships
@@ -282,8 +296,9 @@ items:
       Do this first and do it now. main is 234 commits ahead of tracy_icra and
       their merge base is 2026-08-19; a trial merge today conflicts in exactly
       one file, semantic_digital_twin/adapters/multi_sim.py, which is a
-      colleague's Mujoco work and unrelated to perception. Every day this is
-      left the merge gets more expensive, and every later item in this plan is
+      colleague's Mujoco work and unrelated to perception. With the deadline on
+      2026-09-15 there is no slack to spend on a merge that grows daily, and
+      every day this is left it grows, and every later item in this plan is
       developed off main and has to reach this branch. No pull request: this
       merges into tracy_icra, which is not proposed anywhere.
 
@@ -328,6 +343,8 @@ items:
       piece, Segmind's LossOfSupportEvent takes the table out of the search,
       the insertion's declared effect points perception at the board's lid, and
       when the insertion fails perception finds the piece somewhere the plan
-      did not expect and says so. Recovery follows from that report. If the
+      did not expect and says so. Recovery follows from that report.
+      Narrowed for the deadline: report the violated expectation, and let
+      recovery be the plan re-asking rather than a policy of its own. If the
       deadline forces a cut, this is the item to protect and robokudo-detector
       is the one to drop.

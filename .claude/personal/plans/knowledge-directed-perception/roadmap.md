@@ -202,6 +202,62 @@ more expensive while it waits.
 paper is written around — and drop `robokudo-detector`, which nothing else
 depends on and no demo item needs.
 
+## The budget: 2026-09-15
+
+Thirteen working days from 2026-08-28 (Fri 28th, then two full weeks, then the
+14th and 15th). **That is less than the full scope needs, and pretending
+otherwise would be the most expensive mistake this plan could make.** If the
+paper is written in the same window, code has to stop around the 8th or 9th,
+which halves it again.
+
+**The cut comes from depth, not from pillars.** Every item here is load-bearing
+for the claim — knowledge reaching perception is the whole argument, so dropping
+the events, the rule tree or the backend does not shorten the paper, it removes
+it. What shortens is building each one in the narrowest form that demonstrates
+its claim:
+
+- `perception-backend` — support exactly the condition forms the demo writes
+  (the selected type, `is_supported_by`); push those down, keep the rest as
+  residual filters, raise on anything else. A general query compiler is not
+  what the claim needs.
+- `choose-detection-method` — two rules *is* the demonstration: the steel table
+  choosing the edge fit, the board's lid choosing the colour blob. The tree's
+  generality is what makes a third rule cheap; it does not need proving up
+  front.
+- `expectations-from-events` — report the violated expectation. Let recovery be
+  the plan re-asking, not a policy of its own.
+
+`robokudo-detector` is `deferred` outright, past the deadline.
+
+**Two things bought schedule rather than costing it:**
+
+- `expectations-from-events` was re-pointed from `choose-detection-method` to
+  `perception-backend`. Arming an expectation is a search-space constraint —
+  "look at the lid, not the table" — which is the backend's pushdown; choosing
+  *how* to look is independent of it. So wave 3 and the method-selection track
+  now run in parallel instead of in series, which is where the schedule was
+  tightest.
+- `depends_on` in this plan means **stacked on**, never **waiting for a merge**.
+  Every item of `montessori-eql-stack` is based on an unmerged parent and this
+  works the same way, so `montessori-perception-on-main` costs the demo nothing
+  and can land whenever review allows — after the deadline included.
+
+**Suggested order, with the first demonstrable state early:**
+
+| when | what | state reached |
+|---|---|---|
+| 28 Aug | `demo-catches-up-with-main`, `montessori-perception-on-main` | mechanical, both cheap today |
+| 31 Aug – 2 Sep | wave 1's three items; `surface-finish-annotation` alongside | |
+| 3 Sep | `demo-runs-on-grounded-perception` | **the demo looks right on the real robot** |
+| 4 – 8 Sep | `perception-backend`, then `choose-detection-method` and `expectations-from-events` in parallel | |
+| 9 Sep | `demo-asks-by-query` | **the central claim is demonstrable** |
+| 10 – 11 Sep | `demo-detects-and-recovers-a-failed-insert` | **the end-to-end story runs** |
+| 12 – 15 Sep | results, figures, writing, and the slack every one of the above will need | |
+
+Getting to a demonstrable state on the 3rd matters more than the order looks:
+from there on, every later item improves a demo that already runs, so a day
+lost late costs a feature rather than the deliverable.
+
 ## Sequencing decisions
 
 - **The perception package lands on `main` first** (`montessori-perception-on-main`).
