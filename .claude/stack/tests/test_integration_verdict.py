@@ -23,8 +23,8 @@ from integration import IntegrationExitCode, ReportKey
 from test_maintenance import make_configuration
 
 from integration_verdict import (
-    CandidateChecks,
-    CandidateVerdict,
+    ReportedChecks,
+    ChecksVerdict,
     CheckRunConclusion,
     CheckRunField,
     CheckRunStatus,
@@ -33,7 +33,7 @@ from integration_verdict import (
     candidate_description,
     candidate_title,
     open_candidate,
-    read_verdict,
+    read_checks,
 )
 
 A_BUILD_BRANCH = "integration-20260828-212654"
@@ -91,6 +91,9 @@ class RecordingCandidates(CandidatePullRequests):
     closed: list[int] = field(default_factory=list)
     """Every pull request closed on it."""
 
+    read_references: list[str] = field(default_factory=list)
+    """Every commit or branch whose checks were read from it."""
+
     def open_pull_request(self, title: str, head: str, base: str, body: str) -> int:
         """
         :param title: The pull request's title.
@@ -106,11 +109,12 @@ class RecordingCandidates(CandidatePullRequests):
         """:param number: The pull request closed."""
         self.closed.append(number)
 
-    def check_runs(self, head: str) -> list[CheckRunRecord]:
+    def check_runs(self, reference: str) -> list[CheckRunRecord]:
         """
-        :param head: The commit read.
+        :param reference: The commit or branch read.
         :return: The checks this stand-in was given.
         """
+        self.read_references.append(reference)
         return self.checks
 
 
@@ -122,9 +126,9 @@ def test_every_check_passing_is_the_only_thing_that_publishes_a_build():
     A build replaces the branch a developer works from, so the one state that moves the
     pointer is every check finished and none of them failed.
     """
-    checks = CandidateChecks.of([a_check(), a_check(name="test_each_lib")])
+    checks = ReportedChecks.of([a_check(), a_check(name="test_each_lib")])
 
-    assert checks.verdict is CandidateVerdict.PASSED
+    assert checks.verdict is ChecksVerdict.PASSED
     assert checks.failed == ()
 
 
@@ -133,11 +137,11 @@ def test_a_check_still_running_is_not_a_verdict():
     Publishing on a partial pass would move the pointer to a build the matrix had not
     finished judging.
     """
-    checks = CandidateChecks.of(
+    checks = ReportedChecks.of(
         [a_check(), a_check(name="slow", status="in_progress", conclusion=None)]
     )
 
-    assert checks.verdict is CandidateVerdict.RUNNING
+    assert checks.verdict is ChecksVerdict.RUNNING
 
 
 def test_a_failure_is_answered_without_waiting_for_the_rest():
@@ -145,14 +149,14 @@ def test_a_failure_is_answered_without_waiting_for_the_rest():
     The build is not publishable either way, and waiting out a matrix to say so costs
     the time the candidate exists to save.
     """
-    checks = CandidateChecks.of(
+    checks = ReportedChecks.of(
         [
             a_check(name="broke", conclusion="failure"),
             a_check(name="slow", status="in_progress", conclusion=None),
         ]
     )
 
-    assert checks.verdict is CandidateVerdict.FAILED
+    assert checks.verdict is ChecksVerdict.FAILED
 
 
 def test_a_failure_names_the_checks_that_failed():
@@ -160,7 +164,7 @@ def test_a_failure_names_the_checks_that_failed():
     "The candidate is red" is not actionable; which job went red is where a reader
     starts.
     """
-    checks = CandidateChecks.of(
+    checks = ReportedChecks.of(
         [
             a_check(),
             a_check(name="test_each_lib (coraplex)", conclusion="failure"),
@@ -181,9 +185,9 @@ def test_a_check_that_declined_to_judge_does_not_hold_a_build_back(conclusion: s
     treating either as a failure would hold every build behind a job that declined to
     run.
     """
-    checks = CandidateChecks.of([a_check(conclusion=conclusion)])
+    checks = ReportedChecks.of([a_check(conclusion=conclusion)])
 
-    assert checks.verdict is CandidateVerdict.PASSED
+    assert checks.verdict is ChecksVerdict.PASSED
 
 
 def test_no_check_at_all_is_told_apart_from_one_still_running():
@@ -192,7 +196,7 @@ def test_no_check_at_all_is_told_apart_from_one_still_running():
     opened by a credential whose pushes start no workflow run sits here forever rather
     than turning red, and a caller that read it as "running" would wait forever with it.
     """
-    assert CandidateChecks.of([]).verdict is CandidateVerdict.ABSENT
+    assert ReportedChecks.of([]).verdict is ChecksVerdict.ABSENT
 
 
 # %% the candidate itself
@@ -239,7 +243,8 @@ def test_the_verdict_is_read_against_the_build_s_own_head():
     fork = RecordingCandidates(checks=[a_check()])
     candidate = open_candidate(fork, A_BUILD_BRANCH, THE_BASE, A_HEAD)
 
-    assert read_verdict(fork, candidate).verdict is CandidateVerdict.PASSED
+    assert read_checks(fork, candidate.head).verdict is ChecksVerdict.PASSED
+    assert fork.read_references == [A_HEAD]
 
 
 # %% what a run of it reports
@@ -252,14 +257,14 @@ def test_the_report_names_the_failures_and_whether_anything_was_published():
     """
     fork = RecordingCandidates()
     candidate = open_candidate(fork, A_BUILD_BRANCH, THE_BASE, A_HEAD)
-    checks = CandidateChecks.of([a_check(name="broke", conclusion="failure")])
+    checks = ReportedChecks.of([a_check(name="broke", conclusion="failure")])
 
     document = VerdictReport(
         candidate=candidate, checks=checks, published=False
     ).as_json()
 
     assert document == {
-        VerdictReportKey.VERDICT: str(CandidateVerdict.FAILED),
+        VerdictReportKey.VERDICT: str(ChecksVerdict.FAILED),
         VerdictReportKey.CANDIDATE: fork.number,
         VerdictReportKey.BUILD_BRANCH: A_BUILD_BRANCH,
         VerdictReportKey.HEAD: A_HEAD,
@@ -274,14 +279,14 @@ def test_the_report_names_the_failures_and_whether_anything_was_published():
 @pytest.mark.parametrize(
     "verdict,expected",
     [
-        (CandidateVerdict.PASSED, IntegrationExitCode.SUCCESS),
-        (CandidateVerdict.FAILED, IntegrationExitCode.CANDIDATE_FAILED),
-        (CandidateVerdict.RUNNING, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
-        (CandidateVerdict.ABSENT, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
+        (ChecksVerdict.PASSED, IntegrationExitCode.SUCCESS),
+        (ChecksVerdict.FAILED, IntegrationExitCode.CANDIDATE_FAILED),
+        (ChecksVerdict.RUNNING, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
+        (ChecksVerdict.ABSENT, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
     ],
 )
 def test_each_verdict_leaves_the_status_a_caller_acts_on(
-    verdict: CandidateVerdict, expected: IntegrationExitCode
+    verdict: ChecksVerdict, expected: IntegrationExitCode
 ):
     """
     A scheduled run reads the status rather than the document, so a verdict that mapped
@@ -299,7 +304,7 @@ def test_every_verdict_is_mapped_to_a_status():
     silently take whichever branch happens to be last rather than one chosen for it.
     """
     assert {
-        integration._verdict_exit_code(verdict) for verdict in CandidateVerdict
+        integration._verdict_exit_code(verdict) for verdict in ChecksVerdict
     } <= set(IntegrationExitCode)
 
 

@@ -587,7 +587,10 @@ class PullRequest:
     """Labels currently on the PR."""
 
     ci: str | None = None
-    """Latest CI conclusion on the PR head: ``success`` / ``failure`` / ``pending`` / None."""
+    """What the checks on this PR's head amount to, as an
+    ``integration_verdict.ChecksVerdict`` value, or None where nothing has read them.
+
+    Named rather than imported, since that module reads this one."""
 
     session: str | None = None
     """URL of the Claude session working this PR, parsed from the PR body (None if none)."""
@@ -616,7 +619,8 @@ class Branch:
     """Labels carried by the PR."""
 
     ci: str | None = None
-    """Latest CI conclusion on the PR head."""
+    """What the checks on this branch's head amount to, as an
+    ``integration_verdict.ChecksVerdict`` value, or None where nothing has read them."""
 
     session: str | None = None
     """URL of the Claude session working this PR, if any."""

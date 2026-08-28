@@ -120,8 +120,8 @@ class CandidatePullRequests(ABC):
         """:param number: The pull request to close without merging."""
 
     @abstractmethod
-    def check_runs(self, head: str) -> list[CheckRunRecord]:
-        """:param head: The commit to read the checks of.
+    def check_runs(self, reference: str) -> list[CheckRunRecord]:
+        """:param reference: The commit or branch to read the checks of.
         :return: Every check run reported against it."""
 
 
@@ -268,14 +268,17 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests):
         """
         self._call("PATCH", f"/pulls/{number}", {"state": "closed"})
 
-    def check_runs(self, head: str) -> list[CheckRunRecord]:
+    def check_runs(self, reference: str) -> list[CheckRunRecord]:
         """
-        Read every check run a commit has collected.
+        Read every check run reported against a commit or a branch.
 
-        :param head: The commit to read.
+        A branch answers with the checks on whatever it points at now, which is what
+        lets a branch's own state be asked for without first resolving its head.
+
+        :param reference: The commit or branch to read.
         :return: The check runs, which may be none while the first is still queueing.
         """
-        answered = self._call("GET", f"/commits/{head}/check-runs?per_page=100")
+        answered = self._call("GET", f"/commits/{reference}/check-runs?per_page=100")
         return list(answered["check_runs"])
 
     def _call(

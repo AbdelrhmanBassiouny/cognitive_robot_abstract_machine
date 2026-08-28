@@ -7,11 +7,12 @@ repository involved.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import pytest
 
 from stack import BranchStatus, Stack
+from integration_verdict import ChecksVerdict
 
 import integration
 from integration import (
@@ -25,6 +26,7 @@ from integration import (
 
 from integration_fixtures import (
     create_blocked_branch,
+    create_red_branch,
     create_branch_object,
     create_report,
     create_stack_object,
@@ -38,9 +40,32 @@ BLOCKING_LABEL = make_configuration().needs_resolution_label
 One of the labels that withholds a branch, read from the configuration that names them.
 """
 
-A_FORK = object()
+
+@dataclass
+class ForkReportingChecks:
+    """
+    A fork stand-in answering every branch's checks with the same verdict.
+    """
+
+    runs: list[dict[str, str]] = field(default_factory=list)
+    """What every check-run read answers with; none at all reads as nothing reported."""
+
+    read_branches: list[str] = field(default_factory=list)
+    """Every branch whose checks were read from it."""
+
+    def check_runs(self, reference: str) -> list[dict[str, str]]:
+        """
+        :param reference: The commit or branch read.
+        :return: The checks this stand-in was given.
+        """
+        self.read_branches.append(reference)
+        return self.runs
+
+
+A_FORK = ForkReportingChecks()
 """
-Stands in for the fork, which the stack reader is handed and this stand-in ignores.
+Stands in for the fork, whose pull requests the stack reader ignores and whose checks
+answer that none has been reported.
 """
 
 # %% which branches a build is made of
@@ -376,3 +401,120 @@ def test_a_build_that_does_not_restack_reads_the_stack_once():
 
     assert stack_to_build(run, A_FORK, restack_first=False) is only
     assert run.reads == 1
+
+
+# %% the branches their own checks have already failed
+
+
+def test_a_branch_whose_own_checks_failed_is_left_out():
+    """
+    Its red is not the build's, and carrying it makes the candidate red for a reason no
+    reader can tell apart from two branches breaking each other - which is the one thing
+    the candidate exists to report.
+    """
+    red = create_branch_object("red", 1, checks=ChecksVerdict.FAILED)
+
+    selection = select_for_build(create_stack_object([red]))
+
+    assert selection.integrated == ()
+    assert [absent.branch for absent in selection.left_out] == [red.name]
+
+
+def test_a_branch_its_own_checks_failed_says_so_rather_than_naming_a_label():
+    """
+    Nobody labelled it, so "blocked" would send its author looking for a label to
+    remove. The status names the checks, which is what has to go green to let it back in.
+    """
+    red = create_branch_object("red", 1, checks=ChecksVerdict.FAILED)
+
+    left_out = select_for_build(create_stack_object([red])).left_out
+
+    assert left_out[0].status is TipStatus.CHECKS_FAILED
+    assert not left_out[0].is_integrated
+    assert left_out[0].attributed_to is None
+
+
+def test_a_branch_standing_on_a_red_one_is_left_out_naming_it():
+    """
+    A tip contains its whole stack, so carrying one that stands on a red branch carries
+    the red branch's commits under another name - and its author, whose own checks pass,
+    is told nothing they can act on unless it names the one below.
+    """
+    beneath = create_branch_object("beneath", 1, checks=ChecksVerdict.FAILED)
+    above = create_branch_object("above", 2, parent=beneath.name)
+
+    left_out = select_for_build(create_stack_object([beneath, above])).left_out
+
+    assert {absent.branch: absent.attributed_to for absent in left_out} == {
+        beneath.name: None,
+        above.name: beneath.name,
+    }
+    assert {absent.status for absent in left_out} == {TipStatus.CHECKS_FAILED}
+
+
+def test_a_branch_whose_checks_have_not_finished_is_still_carried():
+    """
+    A restack rewrites every stale tip's head, so every branch it moved reads as running
+    for the next several minutes. Requiring green would empty the build each time one
+    ran; only a finished failure is evidence of anything.
+    """
+    running = create_branch_object("running", 1, checks=ChecksVerdict.RUNNING)
+
+    selection = select_for_build(create_stack_object([running]))
+
+    assert [branch.name for branch in selection.integrated] == [running.name]
+
+
+def test_leaving_a_red_branch_out_is_not_a_failed_build():
+    """
+    Its checks failing is a fact about that branch, so the build that declined to carry
+    it did its job - exactly as one that excluded a draft did.
+    """
+    status = exit_code_for(
+        create_report(
+            tips=(create_tip("carried", TipStatus.MERGED),),
+            left_out=(create_red_branch("red"),),
+        )
+    )
+
+    assert status is IntegrationExitCode.SUCCESS
+
+
+def test_the_stack_a_build_is_made_from_carries_each_branch_s_own_checks():
+    """
+    The rule is worth nothing if nothing fills the field it reads. Read against the
+    branch rather than a commit, so it answers for whatever a restack left it pointing at.
+    """
+    red = create_branch_object("red", 1)
+    fork = ForkReportingChecks(
+        runs=[{"name": "test_each_lib", "status": "completed", "conclusion": "failure"}]
+    )
+    run = RunReadingStacksInTurn([create_stack_object([red])])
+
+    built_from = stack_to_build(run, fork, restack_first=False)
+
+    assert fork.read_branches == [red.name]
+    assert select_for_build(built_from).integrated == ()
+    assert built_from.branches[0].ci == str(ChecksVerdict.FAILED)
+
+
+def test_a_restacked_branch_s_checks_are_read_after_the_restack_moved_it(monkeypatch):
+    """
+    A restack rewrites a stale tip's head, so checks read before it belong to a commit
+    the build will not contain - and the branch would be judged on somebody else's run.
+    """
+    restacks: list[object] = []
+    reads_after_restacks: list[int] = []
+    annotate = integration.branches_annotated_with_their_own_checks
+    monkeypatch.setattr(integration, "restack", lambda *arguments: restacks.append(1))
+    monkeypatch.setattr(
+        integration,
+        "branches_annotated_with_their_own_checks",
+        lambda stack, fork: reads_after_restacks.append(len(restacks))
+        or annotate(stack, fork),
+    )
+    run = RunReadingStacksInTurn([create_stack_object([])])
+
+    stack_to_build(run, A_FORK, restack_first=True)
+
+    assert reads_after_restacks == [1]

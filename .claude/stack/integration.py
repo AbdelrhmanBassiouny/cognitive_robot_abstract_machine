@@ -76,6 +76,7 @@ from maintenance_git_commands import (  # noqa: E402
     MaintenanceGitCommandRunner,
 )
 from maintenance_github import (  # noqa: E402
+    CandidatePullRequests,
     ForkPullRequests,
     GitHubCredentialUnavailableError,
     GitHubRepository,
@@ -93,9 +94,9 @@ from integration_reproduction import (  # noqa: E402
 )
 from integration_verdict import (  # noqa: E402
     Candidate,
-    CandidateVerdict,
+    ChecksVerdict,
     open_candidate,
-    read_verdict,
+    read_checks,
 )
 
 POINTER_BRANCH = "integration"
@@ -289,6 +290,11 @@ class TipStatus(StrEnum):
     build never tried to merge it. Carrying it would put a known conflict or a known
     break into the branch this workflow exists to build from."""
 
+    CHECKS_FAILED = TipStatusSpecification("checks-failed", integrated=False)
+    """Its own checks failed, or something beneath it failed its own, so the build never
+    tried to merge it. Reported apart from :attr:`BLOCKED` because nobody labelled it:
+    what lets it back in is its checks going green, not a label coming off."""
+
 
 class ResolutionAuthor(StrEnum):
     """Who wrote a conflict resolution that a later build replays."""
@@ -462,8 +468,15 @@ def select_for_build(stack: Stack) -> BuildSelection:
     contains its whole stack: merging a reviewed branch that stands on a draft would put
     the draft's commits into the build under the reviewed branch's name. So readiness is
     read down the whole chain, and a stack that is draft at its root is left out entire.
+    A label that withholds a branch and a branch whose own checks failed hold their
+    dependents out the same way, and for the same reason.
 
-    :param stack: The derived stack.
+    A branch is read as red only from a *finished* failure, never from want of a pass: a
+    restack rewrites every stale tip's head, so requiring green would empty the build
+    whenever one ran.
+
+    :param stack: The derived stack, its branches carrying whatever
+        :func:`branches_annotated_with_their_own_checks` last read.
     :return: The integrated branches and the ones left out.
     """
     in_the_stack = {branch.name for branch in stack.branches}
@@ -478,12 +491,21 @@ def select_for_build(stack: Stack) -> BuildSelection:
             or stack.has_landed_upstream(branch.parent)
         )
         blocked = stack.is_blocked(branch)
-        if branch.status.is_out_of_draft and not blocked and stands_on_integrated_work:
+        red = branch.ci == ChecksVerdict.FAILED
+        carried = (
+            branch.status.is_out_of_draft
+            and not blocked
+            and not red
+            and stands_on_integrated_work
+        )
+        if carried:
             integrated.append(branch)
             integrated_names.add(branch.name)
             continue
         if blocked:
             reason = (TipStatus.BLOCKED, branch.name)
+        elif red:
+            reason = (TipStatus.CHECKS_FAILED, branch.name)
         elif not branch.status.is_out_of_draft:
             reason = (TipStatus.UNREVIEWED, branch.name)
         else:
@@ -501,6 +523,25 @@ def select_for_build(stack: Stack) -> BuildSelection:
     return BuildSelection(integrated=tuple(integrated), left_out=tuple(left_out))
 
 
+def branches_annotated_with_their_own_checks(
+    stack: Stack, fork: CandidatePullRequests
+) -> Stack:
+    """Read what each branch's own checks say, so a build can decline to carry a red one.
+
+    A branch that is already red alone makes the candidate red for a reason no reader can
+    tell apart from two branches breaking each other - which is the one thing the
+    candidate exists to report. Read against the branch rather than a commit, so it
+    answers for whatever the branch points at after a restack has moved it.
+
+    :param stack: The derived stack.
+    :param fork: The fork to read the checks from.
+    :return: The same stack, its branches carrying the verdict on their own heads.
+    """
+    for branch in stack.branches:
+        branch.ci = str(read_checks(fork, branch.name).verdict)
+    return stack
+
+
 def stack_to_build(
     run: IntegrationRun, fork: GitHubRepository, restack_first: bool
 ) -> Stack:
@@ -514,14 +555,14 @@ def stack_to_build(
     :param run: What this run has resolved.
     :param fork: The fork to read the open pull requests from.
     :param restack_first: Whether to bring stale tips forward before reading.
-    :return: The stack to build from.
+    :return: The stack to build from, annotated with each branch's own checks.
     """
     stack = run.stack(fork)
     if not restack_first:
-        return stack
+        return branches_annotated_with_their_own_checks(stack, fork)
     restack(stack, run.git, fork)
     run.refresh_remotes()
-    return run.stack(fork)
+    return branches_annotated_with_their_own_checks(run.stack(fork), fork)
 
 
 def tips_of(stack: Stack) -> list[Branch]:
@@ -1719,8 +1760,8 @@ class SettleCandidateCommand(IntegrationCommand):
             build_branch=arguments.build,
             head=arguments.head,
         )
-        checks = read_verdict(fork, candidate)
-        published = checks.verdict is CandidateVerdict.PASSED
+        checks = read_checks(fork, candidate.head)
+        published = checks.verdict is ChecksVerdict.PASSED
         if published:
             run.git.run(
                 "push",
@@ -1728,7 +1769,7 @@ class SettleCandidateCommand(IntegrationCommand):
                 run.configuration.fork_remote,
                 f"{candidate.head}:refs/heads/{POINTER_BRANCH}",
             )
-        if checks.verdict is not CandidateVerdict.RUNNING:
+        if checks.verdict is not ChecksVerdict.RUNNING:
             fork.close_pull_request(candidate.number)
         if published:
             run.git.run(
@@ -1770,7 +1811,7 @@ def _verdict_line(candidate: Candidate, checks: Any, published: bool) -> str:
     return f"{candidate.build_branch}\t{checks.verdict}\t{detail}"
 
 
-def _verdict_exit_code(verdict: CandidateVerdict) -> IntegrationExitCode:
+def _verdict_exit_code(verdict: ChecksVerdict) -> IntegrationExitCode:
     """Map a verdict onto the status a caller acts on.
 
     An absent check is answered as still running rather than as a failure: a caller that
@@ -1779,9 +1820,9 @@ def _verdict_exit_code(verdict: CandidateVerdict) -> IntegrationExitCode:
     :param verdict: What the checks amount to.
     :return: The process exit code.
     """
-    if verdict is CandidateVerdict.PASSED:
+    if verdict is ChecksVerdict.PASSED:
         return IntegrationExitCode.SUCCESS
-    if verdict is CandidateVerdict.FAILED:
+    if verdict is ChecksVerdict.FAILED:
         return IntegrationExitCode.CANDIDATE_FAILED
     return IntegrationExitCode.CANDIDATE_STILL_RUNNING
 

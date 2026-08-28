@@ -14,6 +14,7 @@ from pathlib import Path
 
 from stack import Branch, BranchStatus, IntegrationStrategy, PullRequest, Stack
 
+from integration_verdict import ChecksVerdict
 import integration
 from integration import (
     IntegrationReport,
@@ -118,6 +119,7 @@ def create_branch_object(
     parent: str = UPSTREAM_BASE,
     status: BranchStatus = BranchStatus.READY,
     labels: Sequence[str] = (),
+    checks: ChecksVerdict | None = None,
 ) -> Branch:
     """
     :param name: The branch name.
@@ -125,6 +127,7 @@ def create_branch_object(
     :param parent: The branch it sits on, which is its pull request's base.
     :param status: Its lifecycle position, which decides whether a build may carry it.
     :param labels: What its pull request carries, one of which may withhold it.
+    :param checks: What its own checks amount to, or None where nothing has read them.
     :return: A stack node, for the selection tests that need no repository.
     """
     return Branch(
@@ -134,6 +137,7 @@ def create_branch_object(
         status=status,
         strategy=IntegrationStrategy.MERGE,
         labels=list(labels),
+        ci=None if checks is None else str(checks),
     )
 
 
@@ -318,3 +322,19 @@ def two_colliding_tips(checkout: ForkCheckout) -> list[PullRequest]:
         PullRequest(number=1, head=FIRST_TIP, base=UPSTREAM_BASE, draft=False),
         PullRequest(number=2, head=SECOND_TIP, base=UPSTREAM_BASE, draft=False),
     ]
+
+
+def create_red_branch(
+    branch: str, red_ancestor: str | None = None
+) -> PullRequestStackTipOutcome:
+    """
+    :param branch: The branch whose own checks failed.
+    :param red_ancestor: The red branch beneath it, if that is why.
+    :return: One entry of a build's left-out list.
+    """
+    return PullRequestStackTipOutcome(
+        branch=branch,
+        pull_request_number=0,
+        status=integration.TipStatus.CHECKS_FAILED,
+        attributed_to=red_ancestor,
+    )

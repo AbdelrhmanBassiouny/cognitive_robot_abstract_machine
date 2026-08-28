@@ -75,9 +75,9 @@ would hold every build behind a job that declined to run.
 """
 
 
-class CandidateVerdict(StrEnum):
+class ChecksVerdict(StrEnum):
     """
-    What the repository's own checks have said about a candidate so far.
+    What the checks reported against one commit or branch amount to so far.
     """
 
     PASSED = "passed"
@@ -140,16 +140,16 @@ class CheckRun:
 
 
 @dataclass(frozen=True)
-class CandidateChecks:
+class ReportedChecks:
     """
-    Every check reported against one candidate, and what they amount to.
+    Every check reported against one commit or branch, and what they amount to.
     """
 
     runs: tuple[CheckRun, ...]
     """The checks, in the order the API reported them."""
 
     @classmethod
-    def of(cls, records: list[CheckRunRecord]) -> CandidateChecks:
+    def of(cls, records: list[CheckRunRecord]) -> ReportedChecks:
         """
         :param records: The check runs, as the API answers them.
         :return: The checks they make up.
@@ -162,7 +162,7 @@ class CandidateChecks:
         return tuple(run for run in self.runs if run.stands_in_the_way)
 
     @property
-    def verdict(self) -> CandidateVerdict:
+    def verdict(self) -> ChecksVerdict:
         """The verdict so far.
 
         A failure is answered as soon as it is seen rather than once everything has
@@ -172,12 +172,12 @@ class CandidateChecks:
         :return: What the checks amount to.
         """
         if not self.runs:
-            return CandidateVerdict.ABSENT
+            return ChecksVerdict.ABSENT
         if self.failed:
-            return CandidateVerdict.FAILED
+            return ChecksVerdict.FAILED
         if not all(run.has_finished for run in self.runs):
-            return CandidateVerdict.RUNNING
-        return CandidateVerdict.PASSED
+            return ChecksVerdict.RUNNING
+        return ChecksVerdict.PASSED
 
 
 # %% the candidate itself
@@ -247,13 +247,13 @@ def open_candidate(
     return Candidate(number=number, build_branch=build_branch, head=head)
 
 
-def read_verdict(fork: CandidatePullRequests, candidate: Candidate) -> CandidateChecks:
+def read_checks(fork: CandidatePullRequests, reference: str) -> ReportedChecks:
     """
     :param fork: The fork to read.
-    :param candidate: The candidate to read the checks of.
-    :return: What its checks say so far.
+    :param reference: The commit or branch to read the checks reported against.
+    :return: What they say so far.
     """
-    return CandidateChecks.of(fork.check_runs(candidate.head))
+    return ReportedChecks.of(fork.check_runs(reference))
 
 
 # %% what a run of it reports
@@ -292,7 +292,7 @@ class VerdictReport:
     candidate: Candidate
     """The pull request that collected the checks."""
 
-    checks: CandidateChecks
+    checks: ReportedChecks
     """What they said."""
 
     published: bool
