@@ -38,12 +38,29 @@ just observed.
 - Branch cut off `montessori_perception_on_main`; draft PR #205 opened.
 - `plan.yaml` records branch/session/PR and `status: in_progress`; roadmap
   carries both the plan and the outcome section.
-- `d8f30ffb` implements it: new `perception/surfaces.py` with
-  `SupportingSurface.of` / `.of_body`, `MontessoriPerceptionPipeline.of_world`,
-  `build_node` rewired, two new typed exceptions.
-- 9 new tests. `137 passed, 1 skipped` across the four `test_montessori_*`
-  modules vs `128 passed, 1 skipped` on the parent - no regressions.
+- `d8f30ffb1` implements it: new `perception/surfaces.py`,
+  `MontessoriPerceptionPipeline.of_world`, `build_node` rewired, two new typed
+  exceptions.
+- `47c59ca11` answers the first review round (3 threads, all from the author):
+  the class is renamed `SupportingSurface` -> `WorkspaceSurface` because the
+  old name was the digital twin's word for a different thing (`Region`, a
+  world entity); the 9 tests moved to their own
+  `test_montessori_surfaces.py`, leaving `test_montessori_perception.py`
+  byte-identical to the base; and the node-imports test derives both module
+  names from the imported modules.
+- `137 passed, 1 skipped` across the five `test_montessori_*` modules vs
+  `128 passed, 1 skipped` on the parent - no regressions.
 - `scripts/format_docstrings.py` run; PR description rewritten to match.
+
+## Review threads on #205
+
+- Resolved: the `SupportingSurface` naming/duplication thread, and the
+  hardcoded-module-names thread. Both replied to before resolving.
+- **Left open deliberately:** "This is a very big file" on
+  `test_montessori_perception.py`. I only did my half - my tests moved out, so
+  this PR no longer touches the file. Splitting its 1262 pre-existing lines
+  (they came with #202) is offered on the thread as a separate change against
+  `montessori_perception_on_main`, awaiting the developer's call.
 
 ## Outstanding, for the developer
 
