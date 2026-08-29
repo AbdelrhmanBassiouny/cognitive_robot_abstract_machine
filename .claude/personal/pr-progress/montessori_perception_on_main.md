@@ -74,24 +74,34 @@ items, not into this pull request. They became
 `detector-parameters-from-knowledge` and (deferred)
 `tune-detection-rules-against-the-camera`.
 
+### Round two of 2026-08-29: the developer's own pass
+
+He resolved eleven of the thirteen threads himself. The two he left:
+
+- **`hole_geometry.py:185`, "use a dataclass instead of the tuple"** — the
+  `(area, centroid)` pair I had deliberately left as a plain two-value return
+  last round. Now `PolygonMeasurement`, built by `PolygonMeasurement.of`
+  (`33fe5a798`), with the shoelace formula's first direct tests.
+- **`_SHAPE_COLORS`, "Is this file actually used in the tracy_icra demo? if not
+  then I do not care about it for now."** — it is:
+  `tracy_experiments/montessori/world.py` imports twenty-four names from
+  `experiments/montessori/world.py`, `_SHAPE_COLORS` among them, and
+  `TracyMontessoriWorld` is what both `montessori_demo_real.py` and
+  `montessori_demo_mujoco.py` build. So the change was made (`7363d2c26`):
+  `KnownPiece.color` answers what colour a piece is from its measured hue, and
+  the scene asks.
+
+**Cube and cylinder are now both cyan, and the two prisms both amber** — the
+real set's colours, so two pairs share one each. Shape is what separates them
+on the table and now in RViz. Only hue was ever measured, so the twin draws its
+pure form; the assumption is stated on `KnownPiece.color`.
+
+**147 passed, 1 skipped.** No review thread is open on the pull request.
+
 ### Next
 
-- `surfaces-from-world` stacks on this branch and should delete this branch's
-  two thinnest dependencies, `BOARD_SCALE` and `table_top_z`. Partly done there
-  already: `node.py` imports neither, but `pipeline.py` still reads
-  `BOARD_SCALE` for `BoardDetector.board_footprint`.
-- Seven review threads are deliberately left open for the developer, each
-  replied to with where its ask went. One of them, `_SHAPE_COLORS` in
-  `world.py`, has a small change waiting on his answer: whether the simulated
-  world should render the real set's colours now, or wait for the knowledge to
-  move onto the pieces.
-
-### Watch out for
-
-- The ORM path is unexercised: the repository conftest regenerates the ORM
-  interfaces on collection, which imports `giskardpy` and needs ROS 2. Tests are
-  run with `--noconftest` and the workspace on `PYTHONPATH`; the same failure
-  reproduces on unmodified `main` in this container.
-- `node.py` cannot be tested here at all — it imports `rclpy`, which no
-  environment in this workspace has, so no test covers `scene_check_period`.
-- CI was green on all 23 checks before this round's push.
+- `surfaces-from-world` still needs to delete `pipeline.py`'s last read of
+  `BOARD_SCALE` (for `BoardDetector.board_footprint`); `node.py` imports
+  neither scene constant already.
+- `detector-parameters-from-knowledge` now has a second reason to move the
+  piece hues onto the objects: the twin reads them too, not only the detector.
