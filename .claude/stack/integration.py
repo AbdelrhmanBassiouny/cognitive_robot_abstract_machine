@@ -39,7 +39,8 @@ import subprocess
 import sys
 import tempfile
 from abc import abstractmethod
-from collections.abc import Sequence
+from contextlib import contextmanager
+from collections.abc import Iterator, Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import IntEnum, StrEnum
@@ -92,6 +93,9 @@ from integration_reproduction import (  # noqa: E402
     ReproductionRun,
     clear_fixed_breaks,
 )
+from integration_localisation import (  # noqa: E402
+    Probe,
+)
 from integration_verdict import (  # noqa: E402
     Candidate,
     ChecksVerdict,
@@ -108,6 +112,14 @@ stores refs as files, so ``refs/heads/integration/<timestamp>`` cannot exist whi
 """
 
 BUILD_NAME_FORMAT = "%Y%m%d-%H%M%S"
+
+PROBE_BRANCH_PREFIX = f"{POINTER_BRANCH}-probe-"
+"""
+Opens the name of every tree a localisation publishes for CI to judge.
+
+Its own prefix rather than a build's, so a probe is never mistaken for one: a build is
+what the pointer moves to, and a probe exists to answer one question and be deleted.
+"""
 """How a build's moment is spelled in its branch name."""
 
 RERERE_SETTINGS = (
@@ -1118,6 +1130,128 @@ class FailureLocation:
         """:param build: The assembly to run the suite against.
         :return: Whether it passed."""
         return _run_tests(self.test_command, build.git.working_directory)
+
+
+@dataclass(frozen=True)
+class ProbeAssembly:
+    """The trees a localisation asks CI about, assembled and published one per question.
+
+    Sibling of :class:`FailureLocation`: both add tips in the build's own order to find
+    which one turns the tests, and they differ only in what runs them. That one runs the
+    configured suite here and reads the answer immediately; this publishes each tree for a
+    dispatched run to judge, because a matrix job is the only thing that runs a library's
+    own tests and it runs nowhere but CI.
+
+    Each tree is pushed straight from a detached head, so no local branch is left behind
+    for a question that has been answered.
+    """
+
+    stack: Stack
+    """The derived stack, whose tips these are prefixes of."""
+
+    git: MaintenanceGitCommandRunner
+    """The runner naming the checkout to add the worktree to."""
+
+    provenance: ResolutionProvenance
+    """Who wrote each recorded resolution, for a merge that replays one."""
+
+    named_at: datetime
+    """The moment the round's branches are named after."""
+
+    def branch_name(self, ordinal: int) -> str:
+        """:param ordinal: Which probe of the round this is.
+        :return: The branch its tree is published under, unique per probe and per round."""
+        return (
+            f"{PROBE_BRANCH_PREFIX}{self.named_at.strftime(BUILD_NAME_FORMAT)}"
+            f"-{ordinal}"
+        )
+
+    def prefixes(self) -> tuple[Probe, ...]:
+        """Publish every prefix of the merge order, one tip at a time.
+
+        :return: One probe per tip that reached a build, in merge order.
+        """
+        tips = tips_of(self.stack)
+        with self._assembling() as build:
+            build.start_unnamed()
+            probes: list[Probe] = []
+            included: list[str] = []
+            for tip in tips:
+                if not build.merge(tip, included).is_integrated:
+                    continue
+                included.append(tip.name)
+                probes.append(self._publish(build, tip, len(probes)))
+            return tuple(probes)
+
+    def pairings(self, suspect: str, earlier: Sequence[str]) -> tuple[Probe, ...]:
+        """Publish the suspect paired with each earlier tip on its own.
+
+        Which earlier tip the suspect fails against alone is a different question from
+        which prefix turned the tests, and only a tree holding just those two answers it.
+
+        :param suspect: The tip whose arrival turned the library's tests.
+        :param earlier: The tips that were in the build when it did, in merge order.
+        :return: One probe per pairing that assembled.
+        """
+        by_name = {tip.name: tip for tip in tips_of(self.stack)}
+        with self._assembling() as build:
+            probes = []
+            for name in earlier:
+                build.start_unnamed()
+                if not build.merge(by_name[name], []).is_integrated:
+                    continue
+                if not build.merge(by_name[suspect], [name]).is_integrated:
+                    continue
+                probes.append(self._publish(build, by_name[name], len(probes)))
+            return tuple(probes)
+
+    def take_down(self, probes: Sequence[Probe]) -> None:
+        """Delete the trees a concluded round published.
+
+        A localisation runs whenever a candidate goes red, so trees left behind accumulate
+        - and a run outlives the branch it ran on, so there is nothing in one to read once
+        the search has answered.
+
+        :param probes: The round's probes.
+        """
+        for probe in probes:
+            self.git.attempt(
+                "push", "--delete", self.stack.configuration.fork_remote, probe.branch
+            )
+
+    @contextmanager
+    def _assembling(self) -> Iterator[IntegrationBuild]:
+        """:return: A build in a worktree of its own, so the invoking checkout keeps its
+        own files while trees are assembled."""
+        with (
+            DetachedCheckout.of(self.git),
+            RestackWorktree.added_to(self.git) as assembling,
+        ):
+            yield IntegrationBuild(
+                git=dataclasses.replace(
+                    assembling, configuration_overrides=RERERE_SETTINGS
+                ),
+                configuration=self.stack.configuration,
+                provenance=self.provenance,
+            )
+
+    def _publish(
+        self, build: IntegrationBuild, tip: Branch, ordinal: int
+    ) -> Probe:
+        """:param build: The assembly whose current head is the tree to publish.
+        :param tip: The tip this probe is about.
+        :param ordinal: Which probe of the round this is.
+        :return: The probe, once its tree is on the fork."""
+        branch = self.branch_name(ordinal)
+        build.git.run(
+            "push",
+            "--force",
+            self.stack.configuration.fork_remote,
+            f"HEAD:refs/heads/{branch}",
+        )
+        return Probe(
+            branch=branch, tip=tip.name, pull_request_number=tip.pull_request_number
+        )
 
 
 def _run_tests(command: str | None, working_directory: Path) -> bool | None:

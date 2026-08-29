@@ -30,6 +30,11 @@ CheckRunRecord = Mapping[str, Any]
 One check run as the REST API answers it, before any field is read.
 """
 
+WorkflowRunRecord = Mapping[str, Any]
+"""
+One workflow run as the REST API answers it, before any field is read.
+"""
+
 
 @dataclass
 class GitHubCredentialUnavailableError(RuntimeError):
@@ -126,6 +131,32 @@ class CandidatePullRequests(ABC):
 
 
 @dataclass(frozen=True)
+class DispatchedWorkflowRuns(ABC):
+    """
+    Starting a workflow run, and reading how the ones already started turned out.
+
+    Declared apart from both pull-request surfaces because nothing that maintains the
+    stack or judges a candidate starts a run of its own: a localisation dispatches one
+    per assembled tree and reads them back, and a caller handed only this cannot touch a
+    pull request.
+    """
+
+    @abstractmethod
+    def dispatch_workflow(
+        self, workflow: str, reference: str, inputs: Mapping[str, str]
+    ) -> None:
+        """:param workflow: The workflow file to run.
+        :param reference: The reference to run it on, which is the one whose copy of the
+            workflow file runs.
+        :param inputs: What to hand it."""
+
+    @abstractmethod
+    def workflow_runs(self, workflow: str) -> list[WorkflowRunRecord]:
+        """:param workflow: The workflow file to read the runs of.
+        :return: Its runs, newest first."""
+
+
+@dataclass(frozen=True)
 class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
     """
     Everything a pass does to the fork's pull requests.
@@ -162,7 +193,7 @@ class GitHubRequestFailed(ExternalCallFailed):
 
 
 @dataclass(frozen=True)
-class GitHubRepository(ForkPullRequests, CandidatePullRequests):
+class GitHubRepository(ForkPullRequests, CandidatePullRequests, DispatchedWorkflowRuns):
     """
     Every pull-request call this executor makes, against one repository.
 
@@ -281,6 +312,44 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests):
         answered = self._call("GET", f"/commits/{reference}/check-runs?per_page=100")
         return list(answered["check_runs"])
 
+    def dispatch_workflow(
+        self, workflow: str, reference: str, inputs: Mapping[str, str]
+    ) -> None:
+        """
+        Start a run of one workflow.
+
+        The reference decides which copy of the workflow file runs, so it is the one
+        carrying the pipeline rather than the tree under test - what to run over is an
+        input instead.
+
+        :param workflow: The workflow file to run.
+        :param reference: The reference to run it on.
+        :param inputs: What to hand it.
+        """
+        self._call(
+            "POST",
+            f"/actions/workflows/{workflow}/dispatches",
+            {"ref": reference, "inputs": dict(inputs)},
+        )
+
+    def workflow_runs(self, workflow: str) -> list[WorkflowRunRecord]:
+        """
+        Read the runs of one workflow, newest first.
+
+        Answered for the workflow rather than for a reference, because every run a
+        localisation starts shares the reference it dispatched them on - what tells them
+        apart is the name each carries.
+
+        :param workflow: The workflow file to read the runs of.
+        :return: Its runs.
+        """
+        answered = self._call(
+            "GET",
+            f"/actions/workflows/{workflow}/runs"
+            "?per_page=100&event=workflow_dispatch",
+        )
+        return list(answered["workflow_runs"])
+
     def _call(
         self, method: str, path: str, payload: Mapping[str, Any] | None = None
     ) -> Any:
@@ -290,7 +359,8 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests):
         :param method: The HTTP method.
         :param path: The path below the repository, starting with a slash.
         :param payload: The JSON body, absent for a read.
-        :return: The decoded response.
+        :return: The decoded response, or ``None`` where there is no body - a dispatch
+            is accepted with 204 and nothing to read.
         :raises GitHubRequestFailed: If the API answers with an error status.
         """
         request = urllib.request.Request(
@@ -305,7 +375,8 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests):
         )
         try:
             with urllib.request.urlopen(request) as response:
-                return json.loads(response.read())
+                body = response.read()
+                return json.loads(body) if body else None
         except urllib.error.HTTPError as refused:
             raise GitHubRequestFailed(
                 status=refused.code,
