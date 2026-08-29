@@ -644,7 +644,7 @@
           <div class="item-head">
             <h4 class="item-title">{{ item.title }}</h4>
             <div class="item-badges">
-              <span class="badge status-badge status-{{ item.status.value }}">{{ item.status.display_label }}</span>
+              <span class="badge status-badge status-{{ item.status.value }}">{{ item.status | status_label }}</span>
               <span class="badge live-badge live-{{ item.live_state.value }}">{{ item.live_state.display_label }}</span>
             </div>
           </div>
@@ -739,7 +739,7 @@
         <h3>Status</h3>
         <div class="summary-strip">
           {% for status in item_statuses %}
-          <div class="stat"><span class="stat-num">{{ status_counts[status] }}</span><span class="stat-label">{{ status.display_label }}</span></div>
+          <div class="stat"><span class="stat-num">{{ status_counts[status] }}</span><span class="stat-label">{{ status | status_label }}</span></div>
           {% endfor %}
         </div>
         <label class="done-toggle">
