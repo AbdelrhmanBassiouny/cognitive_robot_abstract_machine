@@ -141,6 +141,12 @@ items:
       202", and the file exists on no branch but this one, so this item owns it. #205 has no work of
       its own left; it is that thread that keeps it open.
 
+      Done as 00721be7: the 1262 lines became six modules, one per subject, with every section moved
+      verbatim and the four shared fixtures registered from dataset/montessori_scene_fixtures.py.
+      Two review threads opened on 2026-08-29 are still unanswered on #202 itself - an empty
+      __init__.py and a timedelta on node.py:134 - and belong to this item rather than to
+      surfaces-from-world.
+
   - id: surfaces-from-world
     title: "Take the workspace from the table the robot knows about, not from a constant"
     branch: perception_surfaces_from_world
