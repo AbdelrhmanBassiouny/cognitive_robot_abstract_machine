@@ -123,7 +123,7 @@ items:
     track: package-landing
     depends_on: []
     status: in_progress
-    session: https://claude.ai/code/session_01FMKabzWhaJpTERyAaSc7Kh
+    session: https://claude.ai/code/session_01Pk12hDbP8k2C16ZQWvcroA
     notes: >
       Everything that depends on this is *stacked* on its branch, not waiting for it to merge - the
       same way every item of montessori-eql-stack is based on an unmerged parent. Nothing in this
@@ -153,6 +153,14 @@ items:
       at line 134. Nothing else on the pull request is holding it: 23 of 23 checks pass,
       mergeable_state is clean, and it carries cram2-link-sent rather than in-review, so no upstream
       pull request exists to have collected review of its own.
+
+      Resolved 2026-08-29: the four review threads asking for a change to this branch are done and
+      pushed as bb37390d (the exception module), 3348e353 (named parts of a hole footprint),
+      be8b8514 (the empty package __init__) and a9204f5e (the node's own scene check period), and
+      142 tests pass where 140 did. The other nine threads became the plan items
+      detector-parameters-from-knowledge and tune-detection-rules-against-the-camera; seven of them
+      are left open on the pull request deliberately, since each schedules a move rather than making
+      one. The pull request stays out of draft for the reason already recorded.
 
   - id: surfaces-from-world
     title: "Take the workspace from the table the robot knows about, not from a constant"
