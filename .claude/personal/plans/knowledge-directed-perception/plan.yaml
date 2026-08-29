@@ -124,6 +124,26 @@ items:
     depends_on: []
     status: in_progress
     session: https://claude.ai/code/session_01FMKabzWhaJpTERyAaSc7Kh
+    blockers:
+      - >-
+          Four unresolved review threads on #202 ask for a change to this branch, and all four are
+          this item's: the package docstring on perception/__init__.py, the 0.05 poll interval
+          written inline in wait_for_scene (node.py:374), the meaning-carrying tuples on
+          HoleFootprint (hole_geometry.py:82), and NoMatchingHoleError living in semantics.py
+          instead of an exceptions module (semantics.py:276). CI is green on all 23 checks and
+          mergeable_state is clean, so the review threads are the whole of what keeps this open.
+      - >-
+          Nine further unresolved review threads on #202 are one ask, not nine: the detection
+          parameters hard-coded on the detectors (segmentation thresholds, hole and piece size
+          ranges, the outline-agreement threshold, the piece height, the board footprint, the hue
+          tolerance and the piece hues, the hole-marker thickness and the mesh classification
+          thresholds) belong to the objects, surfaces and environment the robot knows about, and
+          should be concluded by a ripple-down rule tree over their properties. The developer
+          directed them into plan items rather than into this pull request -"Check the plan items
+          for the knowledge guided perception plan, and see where this modification or feature
+          should be, in a new plan item or in an existing plan item. Because I guess this PR here is
+          for combatibility with main" - so what this item owes them is a placement, not a code
+          change.
     notes: >
       Everything that depends on this is *stacked* on its branch, not waiting for it to merge - the
       same way every item of montessori-eql-stack is based on an unmerged parent. Nothing in this
@@ -146,6 +166,13 @@ items:
       Two review threads opened on 2026-08-29 are still unanswered on #202 itself - an empty
       __init__.py and a timedelta on node.py:134 - and belong to this item rather than to
       surfaces-from-world.
+
+      The recorded count of open review threads was wrong until 2026-08-29: the note said two ("an
+      empty __init__.py and a timedelta on node.py:134") when there are thirteen, and the node.py
+      comment is at line 374 about the 0.05 second poll interval in wait_for_scene, not a timedelta
+      at line 134. Nothing else on the pull request is holding it: 23 of 23 checks pass,
+      mergeable_state is clean, and it carries cram2-link-sent rather than in-review, so no upstream
+      pull request exists to have collected review of its own.
 
   - id: surfaces-from-world
     title: "Take the workspace from the table the robot knows about, not from a constant"
