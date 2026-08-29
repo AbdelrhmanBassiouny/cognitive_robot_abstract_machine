@@ -322,6 +322,83 @@ The scheduled job that rebuilds the branch and publishes a green build.
 """
 
 
+def refresh_workflow_triggers() -> dict:
+    """The events the scheduled job answers to.
+
+    Read under ``True`` rather than ``"on"`` because YAML reads a bare ``on`` key as the
+    boolean, which is why this is a named helper rather than an index at each caller.
+
+    :return: The workflow's trigger block.
+    """
+    return yaml.safe_load(REFRESH_WORKFLOW.read_text())[True]
+
+
+def refresh_job() -> dict:
+    """
+    :return: The job that rebuilds the branch.
+    """
+    return yaml.safe_load(REFRESH_WORKFLOW.read_text())["jobs"]["refresh"]
+
+
+def test_a_pull_request_becoming_reviewable_rebuilds_the_branch():
+    """
+    Leaving draft is what makes a branch integrable, so it is the moment a rebuild is
+    worth doing - waiting for the next scheduled run serves the stale branch for up to
+    six hours after the work became available.
+    """
+    assert "ready_for_review" in refresh_workflow_triggers()["pull_request"]["types"]
+
+
+def checkout_reference() -> str:
+    """
+    :return: The reference the job checks the tooling out at.
+    """
+    checkout = next(
+        step
+        for step in refresh_job()["steps"]
+        if "actions/checkout" in step.get("uses", "")
+    )
+    return checkout["with"]["ref"]
+
+
+def test_the_checkout_reference_is_one_expression_rather_than_several_lines():
+    """
+    A folded YAML scalar folds only the lines level with its first one; a continuation
+    indented further keeps its newline, which parses cleanly and leaves a line break
+    inside a ``${{ }}`` expression for GitHub to reject at run time.
+    """
+    assert "\n" not in checkout_reference()
+
+
+def test_a_pull_request_rebuild_reads_the_tooling_from_the_default_branch():
+    """
+    A ``pull_request`` run checks out that pull request's merge reference by default, so
+    an unguarded checkout would run whatever ``integration.py`` the triggering branch
+    happens to carry, against a token that can write. The rebuild is never about the
+    branch that triggered it.
+    """
+    assert "github.event.repository.default_branch" in checkout_reference()
+
+
+def test_every_other_rebuild_reads_the_tooling_from_the_reference_it_was_started_on():
+    """
+    Pinning every trigger to the default branch would mean a change to the pipeline could
+    only ever run once it was already published there - and publishing is what the
+    pipeline does, so a change that broke publishing could not be fixed by running the
+    fix. Dispatching a reference is how a change is tried before it lands.
+    """
+    assert checkout_reference().endswith("github.ref }}")
+
+
+def test_a_pull_request_from_a_fork_does_not_start_a_rebuild():
+    """
+    A fork's pull request is handed no secret, so the run could only fail on a token it
+    has not got - and fail on somebody else's pull request, where the failure reads as
+    theirs. Not running says the same thing without the noise.
+    """
+    assert "head.repo.full_name == github.repository" in refresh_job()["if"]
+
+
 def refresh_job_script() -> str:
     """Every shell the scheduled job runs, with its comments taken out.
 

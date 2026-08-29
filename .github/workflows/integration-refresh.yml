@@ -25,9 +25,20 @@ on:
     # moved, and the branches move on a working day's rhythm rather than an hourly one.
     - cron: "0 5,11,17,23 * * *"
   workflow_dispatch:
+  pull_request:
+    # Leaving draft is what makes a branch integrable at all, so it is the moment the
+    # build is worth redoing rather than one to wait out: until the next scheduled run
+    # the branch serves work that is ready and not in it.
+    #
+    # No recursion: a candidate is opened ready rather than as a draft, and this event
+    # fires only when an existing draft is converted.
+    types: [ready_for_review]
 
 concurrency:
   # Two rebuilds at once would race for the same branch and open two candidates for it.
+  # A burst of branches leaving draft together collapses instead: GitHub holds one run
+  # and one pending, and each new arrival replaces the pending one, so the work is done
+  # once over all of them rather than once each.
   group: integration-refresh
   cancel-in-progress: false
 
@@ -37,11 +48,31 @@ permissions:
 jobs:
   refresh:
     name: Rebuild the integration branch and publish it if it is green
+    # A fork's pull request is handed no secret, so the run could only fail on a token
+    # it has not got - and fail on somebody else's pull request, where it reads as their
+    # failure. Not running says the same thing without the noise.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
         with:
+          # A `pull_request` run checks out that pull request's merge reference, so
+          # taking the reference the run was started on would run whatever
+          # integration.py the triggering branch carries, against a token that can
+          # write. The rebuild is never about the branch that triggered it.
+          #
+          # Every other trigger keeps that reference, and it is what makes a change to
+          # this pipeline testable: publishing to the default branch is what the
+          # pipeline does, so pinning there too would leave a change that broke
+          # publishing unable to be fixed by running the fix. A schedule starts on the
+          # default branch anyway; a dispatch starts wherever it was asked to.
+          ref: >-
+            ${{ github.event_name == 'pull_request'
+            && github.event.repository.default_branch
+            || github.ref }}
           fetch-depth: 0
           token: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
 
