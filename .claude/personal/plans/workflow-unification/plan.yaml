@@ -894,8 +894,14 @@ items:
     pull_request_number: 111
     track: dashboards
     depends_on: [stack-tooling-on-main, bastler-package]
-    status: in_progress
+    status: blocked
     session: https://claude.ai/code/session_014KoJeaTUxyECZZpfWiVmvr
+    blockers:
+      - >-
+          stacked-pr-maintenance: Fork PR #111 (branch `claude/shared-pr-state-chips`) still
+          conflicts against its base `main` as of the 2026-08-29 stacked-pr-maintenance pass. It
+          carries the `needs-resolution` label and a routine comment on the PR; this pass did not
+          attempt a fresh merge because it was already withheld from a previous pass.
     notes: >
       Extract one PR-state fetch/compute module (CI rollup, LOC vs base, mergeable probe,
       session-link parse) shared by stack.py and plan-dashboard's pr-data fetching; add
