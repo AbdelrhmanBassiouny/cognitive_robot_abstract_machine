@@ -34,6 +34,7 @@ from build_dashboard import (
     PullRequestRecord,
     PullRequestsByRepository,
     PullRequestState,
+    RefreshDashboardAction,
     StackedItem,
     Track,
     UnknownDependency,
@@ -1364,6 +1365,27 @@ def test_action_is_reconsider_for_a_deferred_item():
     assert action.command == "/plan-item-resolve test-plan a"
 
 
+# %% DashboardRenderer - dashboard refresh button
+
+
+def test_refresh_action_command_reruns_the_dashboard_for_this_plan():
+    action = RefreshDashboardAction(label="Refresh", plan_id="test-plan")
+    assert action.command == "/plan-dashboard test-plan"
+
+
+def test_render_shows_a_refresh_button_carrying_the_dashboard_command():
+    renderer = make_renderer([item("a", ItemStatus.NOT_STARTED)])
+    output, _ = renderer.render()
+    assert 'data-action-command="/plan-dashboard test-plan"' in output
+    assert "Refresh" in output
+
+
+def test_render_shows_the_refresh_button_even_when_no_item_is_actionable():
+    renderer = make_renderer([item("a", ItemStatus.DONE)])
+    output, _ = renderer.render()
+    assert 'data-action-command="/plan-dashboard test-plan"' in output
+
+
 # %% DashboardRenderer - dependency stacking / wrap-around
 
 
@@ -1732,7 +1754,7 @@ def test_render_omits_action_button_for_a_done_item():
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
     output, _ = renderer.render()
-    assert 'data-action-command="' not in output
+    assert 'data-action-command="/plan-item' not in output
 
 
 def test_render_hides_done_items_by_default_with_a_sidebar_toggle():
