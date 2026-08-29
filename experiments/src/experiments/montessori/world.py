@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import trimesh
-from typing_extensions import List, Optional, Tuple, Type
+from typing_extensions import Dict, List, Optional, Tuple, Type
 
 from experiments.montessori.hole_geometry import (
     HOLE_MARKER_THICKNESS,
@@ -23,6 +23,7 @@ from experiments.montessori.hole_geometry import (
     cut_board_mesh,
     detect_hole_footprints,
 )
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import (
     MONTESSORI_SHAPE_CLASSES,
     MontessoriShapeCategory,
@@ -155,17 +156,18 @@ DEFAULT_ROBOT_STANDOFF_DISTANCE = 0.6
 Default distance the spawned robot stands in front of the Montessori table's near edge.
 """
 
-_SHAPE_COLORS = {
-    MontessoriShapeCategory.CUBE: Color.RED(),
-    MontessoriShapeCategory.CYLINDER: Color.BLUE(),
+_SHAPE_COLORS: Dict[MontessoriShapeCategory, Color] = {
     MontessoriShapeCategory.DISK: Color.YELLOW(),
     MontessoriShapeCategory.SPHERE: Color.MAGENTA(),
-    MontessoriShapeCategory.TRIANGULAR_PRISM: Color.GREEN(),
-    MontessoriShapeCategory.RECTANGULAR_PRISM: Color.ORANGE(),
-}
+} | {category: piece.color for category, piece in KNOWN_PIECE_BY_CATEGORY.items()}
 """
 The color used to render a loose shape and the hole it fits through, keyed by their
 shared :class:`~experiments.montessori.semantics.MontessoriShapeCategory`.
+
+Every category the physical set contains is drawn in the colour measured off the real
+piece (see :class:`~experiments.montessori.pieces.KnownPiece`), so the simulated scene
+and the camera are looking at the same thing. The disk and the sphere, which this set
+has none of, keep a colour of their own.
 """
 
 

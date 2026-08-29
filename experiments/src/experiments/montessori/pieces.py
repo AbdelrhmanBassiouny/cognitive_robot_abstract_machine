@@ -14,6 +14,7 @@ no sense in reporting that it was turned by more.
 
 from __future__ import annotations
 
+import colorsys
 import math
 from dataclasses import dataclass
 
@@ -21,6 +22,7 @@ import numpy as np
 from typing_extensions import Dict, Optional, Tuple
 
 from experiments.montessori.semantics import MontessoriShapeCategory
+from semantic_digital_twin.world_description.geometry import Color
 
 # %% measured dimensions
 
@@ -221,6 +223,18 @@ class KnownPiece:
     An orientation is only ever reported within half of this either way, since a larger
     turn is indistinguishable from a smaller one.
     """
+
+    @property
+    def color(self) -> Color:
+        """
+        The colour to draw this piece in.
+
+        Only :attr:`hue` was measured off the piece, so this is that hue at full
+        saturation and brightness -- the pure form of the colour it wears, rather than
+        the shade any one photograph of it happened to catch.
+        """
+        red, green, blue = colorsys.hsv_to_rgb(self.hue / HUE_RANGE, 1.0, 1.0)
+        return Color(red, green, blue)
 
     @property
     def radius(self) -> float:
