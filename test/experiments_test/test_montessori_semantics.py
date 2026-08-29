@@ -2,6 +2,7 @@ import math
 
 import pytest
 
+from experiments.montessori.exceptions import NoMatchingHoleError
 from experiments.montessori.semantics import (
     CubeShape,
     CylinderShape,
@@ -188,6 +189,25 @@ def test_hole_for_returns_the_smallest_hole_a_shape_actually_fits_through(world)
 
     assert board.hole_for(small_shape) is small_hole
     assert board.hole_for(large_shape) is large_hole
+
+
+def test_hole_for_raises_when_the_board_has_no_hole_of_the_shapes_category(world):
+    with world.modify_world():
+        board = ShapeSortingBoard.create_with_new_body_in_world(
+            name="board", world=world, scale=Scale(0.3, 0.3, 0.1)
+        )
+        hole = ShapeSortingHole.create_with_new_region_in_world(
+            name="circular_hole",
+            world=world,
+            scale=Scale(0.04, 0.04, 0.001),
+        )
+        hole.shape_category = MontessoriShapeCategory.CYLINDER
+        board.add(hole)
+
+        cube = _shape_with_cross_section(world, "cube", CubeShape, 0.03)
+
+    with pytest.raises(NoMatchingHoleError):
+        board.hole_for(cube)
 
 
 def test_shape_sorting_hole_stores_its_shape_category(world):

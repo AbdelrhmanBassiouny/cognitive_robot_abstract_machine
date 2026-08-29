@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 import trimesh
-from typing_extensions import List, Optional, Tuple, Type
+from typing_extensions import Dict, List, Optional, Tuple, Type
 
 from experiments.montessori.hole_geometry import (
     HOLE_MARKER_THICKNESS,
@@ -23,6 +23,7 @@ from experiments.montessori.hole_geometry import (
     cut_board_mesh,
     detect_hole_footprints,
 )
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import (
     MONTESSORI_SHAPE_CLASSES,
     MontessoriShapeCategory,
@@ -155,17 +156,18 @@ DEFAULT_ROBOT_STANDOFF_DISTANCE = 0.6
 Default distance the spawned robot stands in front of the Montessori table's near edge.
 """
 
-_SHAPE_COLORS = {
-    MontessoriShapeCategory.CUBE: Color.RED(),
-    MontessoriShapeCategory.CYLINDER: Color.BLUE(),
+_SHAPE_COLORS: Dict[MontessoriShapeCategory, Color] = {
     MontessoriShapeCategory.DISK: Color.YELLOW(),
     MontessoriShapeCategory.SPHERE: Color.MAGENTA(),
-    MontessoriShapeCategory.TRIANGULAR_PRISM: Color.GREEN(),
-    MontessoriShapeCategory.RECTANGULAR_PRISM: Color.ORANGE(),
-}
+} | {category: piece.color for category, piece in KNOWN_PIECE_BY_CATEGORY.items()}
 """
 The color used to render a loose shape and the hole it fits through, keyed by their
 shared :class:`~experiments.montessori.semantics.MontessoriShapeCategory`.
+
+Every category the physical set contains is drawn in the colour measured off the real
+piece (see :class:`~experiments.montessori.pieces.KnownPiece`), so the simulated scene
+and the camera are looking at the same thing. The disk and the sphere, which this set
+has none of, keep a colour of their own.
 """
 
 
@@ -206,8 +208,8 @@ def _hole_spec_from_footprint(footprint: HoleFootprint, key: str) -> _HoleSpec:
     surface, and pair it with a semantic key.
     """
     position = Point3(
-        BOARD_POSITION.x + footprint.center[0],
-        BOARD_POSITION.y + footprint.center[1],
+        BOARD_POSITION.x + footprint.center.x,
+        BOARD_POSITION.y + footprint.center.y,
         BOARD_POSITION.z + BOARD_SCALE.z / 2 - HOLE_MARKER_THICKNESS / 2,
     )
     return _HoleSpec(key, footprint.category, position, footprint)
@@ -277,12 +279,13 @@ def _footprint_bounds(footprint: HoleFootprint) -> Tuple[float, float, float, fl
     :param footprint: The hole to compute bounds for.
     :return: ``(min_x, max_x, min_y, max_y)``.
     """
-    boundary = np.asarray(footprint.boundary)
+    boundary_x = [point.x for point in footprint.boundary]
+    boundary_y = [point.y for point in footprint.boundary]
     return (
-        float(footprint.center[0] + boundary[:, 0].min()),
-        float(footprint.center[0] + boundary[:, 0].max()),
-        float(footprint.center[1] + boundary[:, 1].min()),
-        float(footprint.center[1] + boundary[:, 1].max()),
+        footprint.center.x + min(boundary_x),
+        footprint.center.x + max(boundary_x),
+        footprint.center.y + min(boundary_y),
+        footprint.center.y + max(boundary_y),
     )
 
 
@@ -657,11 +660,10 @@ def _landing_region(
         bounding box plus :data:`LANDING_REGION_XY_MARGIN` on every side.
     :param height: This region's extent along z; see :func:`_landing_region_height`.
     """
-    size_x, size_y = footprint.size
     box = Box(
         scale=Scale(
-            size_x + 2 * LANDING_REGION_XY_MARGIN,
-            size_y + 2 * LANDING_REGION_XY_MARGIN,
+            footprint.size.x + 2 * LANDING_REGION_XY_MARGIN,
+            footprint.size.y + 2 * LANDING_REGION_XY_MARGIN,
             height,
         )
     )
@@ -715,7 +717,7 @@ def _shape_body(
             # own footprint edge scales down to (rather than the fixed 0.03 every other
             # footprint-derived category uses) makes all three of its edges equal --
             # an actual cube, not a flat square tile.
-            cube_edge = footprint.size[0] * SHAPE_FOOTPRINT_CLEARANCE_SCALE
+            cube_edge = footprint.size.x * SHAPE_FOOTPRINT_CLEARANCE_SCALE
             shape = _footprint_shape_mesh(footprint, thickness=cube_edge, color=color)
         case MontessoriShapeCategory.CYLINDER:
             shape = _footprint_shape_mesh(footprint, thickness=0.03, color=color)

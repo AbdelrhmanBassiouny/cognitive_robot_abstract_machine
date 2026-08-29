@@ -65,7 +65,7 @@ def test_pipeline_recognises_the_shape_of_the_widest_holes(
     expected = {
         footprint.category
         for footprint in renderer.hole_footprints()
-        if min(footprint.size) > 0.02
+        if min(footprint.size.x, footprint.size.y) > 0.02
     }
 
     assert expected <= {hole.category for hole in scene.holes}
@@ -103,7 +103,7 @@ def test_pipeline_cancels_the_parallax_that_stretches_a_piece(
     )
 
     assert nearest.footprint.length == pytest.approx(
-        max(true_footprint.size), abs=0.008
+        max(true_footprint.size.x, true_footprint.size.y), abs=0.008
     )
 
 

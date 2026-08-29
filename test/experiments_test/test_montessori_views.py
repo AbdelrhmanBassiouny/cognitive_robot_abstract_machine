@@ -76,7 +76,7 @@ def test_a_hole_lands_at_its_own_world_position_in_the_rectified_lid(
         renderer.render([]), renderer.lid_height
     )
     [widest] = sorted(
-        renderer.hole_footprints(), key=lambda hole: -hole.size[0] * hole.size[1]
+        renderer.hole_footprints(), key=lambda hole: -hole.size.x * hole.size.y
     )[:1]
     expected_x, expected_y = renderer.hole_center(widest)
 

@@ -128,6 +128,11 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
     resolution frame twice is not worth doing at camera rate.
     """
 
+    scene_check_period: float = 0.05
+    """
+    How long :meth:`wait_for_scene` waits between two checks for a result, in seconds.
+    """
+
     markers: Optional[DetectionMarkerPublisher] = None
     """
     Draws the detections into rviz, or None to publish nothing.
@@ -360,7 +365,7 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
             with self._lock:
                 if self._scene is not None:
                     return self._scene
-            time.sleep(0.05)
+            time.sleep(self.scene_check_period)
         raise NoSceneAvailable(timeout_seconds, self._missing_inputs())
 
 

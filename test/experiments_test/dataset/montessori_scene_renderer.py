@@ -219,7 +219,7 @@ class MontessoriSceneRenderer:
 
         :param footprint: The hole, positioned relative to the board's own centre.
         """
-        return (self.board_x + footprint.center[0], self.board_y + footprint.center[1])
+        return (self.board_x + footprint.center.x, self.board_y + footprint.center.y)
 
     def render(self, pieces: Sequence[PlacedPiece]) -> RgbdFrame:
         """
@@ -261,7 +261,10 @@ class MontessoriSceneRenderer:
             center = self.hole_center(footprint)
             self._fill(
                 canvas,
-                [(center[0] + x, center[1] + y) for x, y in footprint.boundary],
+                [
+                    (center[0] + point.x, center[1] + point.y)
+                    for point in footprint.boundary
+                ],
                 self.lid_height,
                 HOLE_COLOR,
             )
@@ -278,8 +281,8 @@ class MontessoriSceneRenderer:
         margin = 0.02
         return [
             (
-                footprint.center[0] + sign_x * (footprint.size[0] / 2 + margin),
-                footprint.center[1] + sign_y * (footprint.size[1] / 2 + margin),
+                footprint.center.x + sign_x * (footprint.size.x / 2 + margin),
+                footprint.center.y + sign_y * (footprint.size.y / 2 + margin),
             )
             for footprint in footprints
             for sign_x, sign_y in ((-1, -1), (1, -1), (1, 1), (-1, 1))
