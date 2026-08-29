@@ -482,8 +482,9 @@ items:
   - id: threshold-connective
     title: "A threshold connective: at least k of n, with Or and And as its ends"
     branch: null
+    pull_request_number: null
     track: disjunction-safety
-    depends_on: []
+    depends_on: [disjunction-range-restriction]
     status: not_started
     notes: >
       GOAL: an n-ary threshold connective in core_logical_operators.py - "at least k of these n
