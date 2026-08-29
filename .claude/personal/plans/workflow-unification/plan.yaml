@@ -962,7 +962,16 @@ items:
     depends_on: [setup-personal-notes-pr101, stack-tooling-on-main]
     status: in_progress
     pull_request_number: 185
-    session: https://claude.ai/code/session_01723FcMWYnpQHrq4fdxxs8j
+    session: https://claude.ai/code/session_01GE3r3XXEJpr9DUUk78Y2sT
+    blockers:
+      - >-
+          Review thread of 2026-08-29 on `bastler/package_layout.py`
+          (https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/185#discussion_r3887623955),
+          unanswered: the user rejects declaring which callers install nothing, and asks instead
+          that the requirements be installed automatically - at session start while it stays cheap,
+          safely, with any failure caught and reported so the remaining steps still run, and
+          documented in the README. It reverses the recorded 2026-08-23 decision that a `pip
+          install` inside the SessionStart hook was deliberately not taken.
     notes: >
       Move the existing Python (.claude/stack/stack.py, build_dashboard.py + siblings,
       plan_manifest_tools.py) into the package PR 3 created, with all their tests moved to the
@@ -1003,209 +1012,222 @@ items:
       user's surname Bassiouny, and the German word for a tinkerer), superseding the
       development_tooling name settled 2026-07-30; this item was dev-tooling-python-package. Two
       structural changes. First, this item now creates the package itself, branched off main,
-      instead of inheriting the one #111 carries - the depends_on entry for shared-pr-state-chips
-      is dropped and the dependency inverted: #111 rebases onto this branch and folds its
-      development_tooling modules (pr_state, personal_notes, test/development_tooling_test) in
-      under the bastler name. Second, the "sequence it last in the upstream wave" constraint in
-      the first paragraph is reversed: this lands first. The cost is measured, not guessed - every
-      open tooling pull request except #155 touches Python this item moves (git diff against the
-      merge base per branch, 2026-08-20: #154 41 files, #151 28, #110 16, #162 10, #111 8, #107 7,
-      #158 4, #135 3, #146 3, #184/#150/#149/#157/#160 2, #156 1) - and accepted: each merges main
-      across the move and re-applies its delta in the package, the resolution pattern #111 already
+      instead of inheriting the one #111 carries - the depends_on entry for shared-pr-state-chips is
+      dropped and the dependency inverted: #111 rebases onto this branch and folds its
+      development_tooling modules (pr_state, personal_notes, test/development_tooling_test) in under
+      the bastler name. Second, the "sequence it last in the upstream wave" constraint in the first
+      paragraph is reversed: this lands first. The cost is measured, not guessed - every open
+      tooling pull request except #155 touches Python this item moves (git diff against the merge
+      base per branch, 2026-08-20: #154 41 files, #151 28, #110 16, #162 10, #111 8, #107 7, #158 4,
+      #135 3, #146 3, #184/#150/#149/#157/#160 2, #156 1) - and accepted: each merges main across
+      the move and re-applies its delta in the package, the resolution pattern #111 already
       exercised 2026-08-05, with the maintenance pass's needs-resolution flow reporting each
-      conflict to its owner. A pull request already through review may instead land just before
-      the migration's own final merge-main, which folds it in on the migration side - cheaper,
-      and the user decides per pull request at merge time. Scope at creation is everything Python
-      already on main: .claude/stack/ (stack.py, the maintenance modules, class_property.py,
-      tests), .claude/skills/plan-dashboard/ (the seven modules plus tests), and .claude/hooks/
-      (plan_item_bootstrap.py, plan_manifest_tools.py, plan_updates_since_support.py, tests),
-      with the tests under test/bastler_test/ and the test_claude_dev_tooling CI job repointed
-      and renamed test_bastler. The duplication carriers recorded on this item and its siblings
-      are unified in the move rather than after it: run_git three times (#135, #143, stack.py's
+      conflict to its owner. A pull request already through review may instead land just before the
+      migration's own final merge-main, which folds it in on the migration side - cheaper, and the
+      user decides per pull request at merge time. Scope at creation is everything Python already on
+      main: .claude/stack/ (stack.py, the maintenance modules, class_property.py, tests),
+      .claude/skills/plan-dashboard/ (the seven modules plus tests), and .claude/hooks/
+      (plan_item_bootstrap.py, plan_manifest_tools.py, plan_updates_since_support.py, tests), with
+      the tests under test/bastler_test/ and the test_claude_dev_tooling CI job repointed and
+      renamed test_bastler. The duplication carriers recorded on this item and its siblings are
+      unified in the move rather than after it: run_git three times (#135, #143, stack.py's
       deliberately-opposite _git stays distinct), the command-class base plus classproperty twice
       (#139, #151), ItemStatus, and the personal-notes precedence rules' second Python copy. The
       GitHub backend rule stays with bastler-github-api-unification, which keeps its own item.
-      Boundaries unchanged from decisions 8 and 12: SKILL.md files, settings.json and the bash
-      entry points stay in .claude/ as thin wrappers; zero-install survives (importable from the
-      repo root, pyproject for optional install); the SessionStart-reachable tier stays
-      stdlib-only.
+      Boundaries unchanged from decisions 8 and 12: SKILL.md files, settings.json and the bash entry
+      points stay in .claude/ as thin wrappers; zero-install survives (importable from the repo
+      root, pyproject for optional install); the SessionStart-reachable tier stays stdlib-only.
 
       Resolved 2026-08-23 (session https://claude.ai/code/session_01Hgt7hWYnT9ZMK6AgusPwkk). Two
-      things were wrong and the manifest recorded neither: a merge conflict that had left this
-      pull request needs-resolution and skipped by every maintenance pass since 2026-08-22, and a
+      things were wrong and the manifest recorded neither: a merge conflict that had left this pull
+      request needs-resolution and skipped by every maintenance pass since 2026-08-22, and a
       34-thread review round, all the user's, none of them answered. Fifth item on this plan where
       the pull request was the more accurate source.
 
       The merge was three modules rather than three conflicts. main gained Python under .claude/
       after this branch was cut - check_scope_overlap.py with #135, record_dashboard_url.py with
       #150, upstream_reviews.py with #146 - so resolving only the reported conflicts would have
-      produced a branch that merges and then fails its own "no .py remains under .claude/"
-      contract. All three moved into the package, with three consequences: upstream_reviews.py was
-      a fourth carrier of the sys.path hackery this migration deletes (it inserted .claude/stack/
-      to import stack.py's Repository, in production rather than a conftest); the two gh stubs
-      recognized disjoint invocations and became one; and .claude/upstream_reviews/tests/ was in
-      no CI job at all on main, so folding it into test/bastler_test/ runs it in test_bastler for
-      the first time.
+      produced a branch that merges and then fails its own "no .py remains under .claude/" contract.
+      All three moved into the package, with three consequences: upstream_reviews.py was a fourth
+      carrier of the sys.path hackery this migration deletes (it inserted .claude/stack/ to import
+      stack.py's Repository, in production rather than a conftest); the two gh stubs recognized
+      disjoint invocations and became one; and .claude/upstream_reviews/tests/ was in no CI job at
+      all on main, so folding it into test/bastler_test/ runs it in test_bastler for the first time.
 
       The review round grouped into four asks and all four are done. The package carries its own
-      metadata now - author, maintainer, license, urls, keywords, classifiers, an empty
-      __init__.py with the content in bastler/README.md, and the repository's own version
-      mechanism (root VERSION through scripts/sync_version.py and bastler/_version.py) rather than
-      a literal; the "never published" claim is deleted from both files, with publishing and the
-      agent-provider plugins left to their own item. bastler/package_layout.py holds what the
-      package declares about itself and test_package_contract.py only checks it, with one test
-      holding the declared module set equal to the directory's actual contents.
-      test/bastler_test/constants.py holds the paths that have no import to derive them from, as
-      ToolingDirectory and PersonalNotesPath, while every module name and path is read off the
-      import instead. test/bastler_test/script_runner.py is the
-      ScriptRunner/PythonModuleRunner/BashScriptRunner hierarchy, with the environment variation
-      collapsed into one removed_variable_prefixes field, used by six call sites.
+      metadata now - author, maintainer, license, urls, keywords, classifiers, an empty __init__.py
+      with the content in bastler/README.md, and the repository's own version mechanism (root
+      VERSION through scripts/sync_version.py and bastler/_version.py) rather than a literal; the
+      "never published" claim is deleted from both files, with publishing and the agent-provider
+      plugins left to their own item. bastler/package_layout.py holds what the package declares
+      about itself and test_package_contract.py only checks it, with one test holding the declared
+      module set equal to the directory's actual contents. test/bastler_test/constants.py holds the
+      paths that have no import to derive them from, as ToolingDirectory and PersonalNotesPath,
+      while every module name and path is read off the import instead.
+      test/bastler_test/script_runner.py is the ScriptRunner/PythonModuleRunner/BashScriptRunner
+      hierarchy, with the environment variation collapsed into one removed_variable_prefixes field,
+      used by six call sites.
 
       The dependency tier's stated justification was wrong and measuring it is what fixed it. It
       claimed a hook may import only the standard library because a hook runs where nothing is
-      installed; session-start.sh in fact invokes no module of this package at all - it is bash
-      plus one stdlib-only heredoc inside check-setup.sh - so the framing protected a caller that
-      does not exist. What a tier answers is whether an entry point runs on a checkout where
-      nothing has been installed or needs pip install -r bastler/requirements.txt first.
-      Auto-detection and auto-installation already exist one layer up (check-setup.sh reports,
-      /setup-personal-notes installs); putting a pip install inside the SessionStart hook was
-      deliberately not done, because it writes to a contributor's environment unasked on every
-      fresh container and can fail where a report cannot.
+      installed; session-start.sh in fact invokes no module of this package at all - it is bash plus
+      one stdlib-only heredoc inside check-setup.sh - so the framing protected a caller that does
+      not exist. What a tier answers is whether an entry point runs on a checkout where nothing has
+      been installed or needs pip install -r bastler/requirements.txt first. Auto-detection and
+      auto-installation already exist one layer up (check-setup.sh reports, /setup-personal-notes
+      installs); putting a pip install inside the SessionStart hook was deliberately not done,
+      because it writes to a contributor's environment unasked on every fresh container and can fail
+      where a report cannot.
 
       One ask cannot be done and the measurement is the answer: monkeypatch.setattr takes the
       attribute name as a string by its own signature, so "RESTACK_STEPS" cannot be derived from
       importing RESTACK_STEPS. It is already guarded, since setattr raises when the attribute does
       not exist.
 
-      616 tests pass, against 536 before this session. check-setup.sh exits 0 with every row ok
-      and all thirteen entry points answer --help. Four commits: the merge, the metadata and
+      616 tests pass, against 536 before this session. check-setup.sh exits 0 with every row ok and
+      all thirteen entry points answer --help. Four commits: the merge, the metadata and
       declaration, the constants and runner, the fixture moves. Still a draft.
 
       The run_git seam is now reachable for the first time, since check_scope_overlap.py landed on
-      main with #135 and both halves of that pair are finally in one importable tree - but
-      unifying it stays bastler-notes-core-python's by name, per decision 12. #151's Subcommand is
-      still unlanded, so the command-class pair remains half-visible.
+      main with #135 and both halves of that pair are finally in one importable tree - but unifying
+      it stays bastler-notes-core-python's by name, per decision 12. #151's Subcommand is still
+      unlanded, so the command-class pair remains half-visible.
 
-      Correction to the tier finding above, measured after the user asked whether the tiers
-      are needed at all once a hook can install. The earlier paragraph is true of
-      session-start.sh and draws too broad a conclusion from it: the standard-library tier
-      does have a live caller, and it is a workflow rather than a hook.
-      .github/workflows/upstream-reviews.yml runs python3 -m bastler.upstream_reviews on a
-      bare ubuntu-latest with actions/setup-python and no pip install step at all, and that
-      module imports bastler.stack - so both must stay standard-library-only or #146's whole
-      read breaks. Verified by importing each with yaml, jinja2, markdown and nh3 made
-      unimportable. The session-invoked entry points (stack, maintenance, check_scope_overlap,
-      plan_updates_since_support) are the same case one step weaker: a fresh container has
-      nothing installed, which is why check-setup.sh reports dashboard_dependencies
-      needs-setup on essentially every one.
+      Correction to the tier finding above, measured after the user asked whether the tiers are
+      needed at all once a hook can install. The earlier paragraph is true of session-start.sh and
+      draws too broad a conclusion from it: the standard-library tier does have a live caller, and
+      it is a workflow rather than a hook. .github/workflows/upstream-reviews.yml runs python3 -m
+      bastler.upstream_reviews on a bare ubuntu-latest with actions/setup-python and no pip install
+      step at all, and that module imports bastler.stack - so both must stay standard-library-only
+      or #146's whole read breaks. Verified by importing each with yaml, jinja2, markdown and nh3
+      made unimportable. The session-invoked entry points (stack, maintenance, check_scope_overlap,
+      plan_updates_since_support) are the same case one step weaker: a fresh container has nothing
+      installed, which is why check-setup.sh reports dashboard_dependencies needs-setup on
+      essentially every one.
 
       So installing during a hook does not dissolve the tier - it would have to be installing
-      everywhere, and adding a pip install step to a runner in order to serve a stdlib-only
-      script is strictly worse than the script staying stdlib-only.
+      everywhere, and adding a pip install step to a runner in order to serve a stdlib-only script
+      is strictly worse than the script staying stdlib-only.
 
       Three members of package_layout.py were dead, though, and are deleted (d13afaf8b):
-      REQUIREMENTS_FILE had no reader, since the shell resolves BASTLER_REQUIREMENTS_FILE
-      itself and pyproject reads the file through setuptools' dynamic table; MODULES_BY_NAME
-      and PackageModule.path had none either. 616 tests still pass.
+      REQUIREMENTS_FILE had no reader, since the shell resolves BASTLER_REQUIREMENTS_FILE itself and
+      pyproject reads the file through setuptools' dynamic table; MODULES_BY_NAME and
+      PackageModule.path had none either. 616 tests still pass.
 
-      Re-scoped again the same day, on the user's three objections: the hand-added module
-      list, having to be careful with tiers, and the fact that bastler is meant to import
-      krrood eventually anyway. The first two are answered by deriving rather than declaring
-      (a62a79525). The modules come from the directory, the entry points from each module's
-      own __main__ block read by ast, and the requirements' import names from requirements.txt
-      through importlib.metadata.packages_distributions - which is what maps PyYAML to yaml,
-      the one part of it no file states. So 29 hand-written entries, the DependencyTier enum
-      and the tier table are all gone, and a module added later is discovered, checked and
-      held to the default with nothing written down.
+      Re-scoped again the same day, on the user's three objections: the hand-added module list,
+      having to be careful with tiers, and the fact that bastler is meant to import krrood
+      eventually anyway. The first two are answered by deriving rather than declaring (a62a79525).
+      The modules come from the directory, the entry points from each module's own __main__ block
+      read by ast, and the requirements' import names from requirements.txt through
+      importlib.metadata.packages_distributions - which is what maps PyYAML to yaml, the one part of
+      it no file states. So 29 hand-written entries, the DependencyTier enum and the tier table are
+      all gone, and a module added later is discovered, checked and held to the default with nothing
+      written down.
 
       What stays declared is one flat set, MODULES_THAT_MAY_NEED_THE_REQUIREMENTS, plus one
-      UninstalledInvocation naming the caller that runs a module with nothing installed. The
-      default inverts: a module imports on the standard library unless named, rather than
-      every module being classified into a tier. Both are held in both directions - a module
-      that starts needing a requirement fails until it is named, one named that no longer
-      needs one fails until it is removed, and a caller that gains an install step or stops
-      invoking its module fails too.
+      UninstalledInvocation naming the caller that runs a module with nothing installed. The default
+      inverts: a module imports on the standard library unless named, rather than every module being
+      classified into a tier. Both are held in both directions - a module that starts needing a
+      requirement fails until it is named, one named that no longer needs one fails until it is
+      removed, and a caller that gains an install step or stops invoking its module fails too.
 
       That reverse check found a wrong declaration on its first run: record_dashboard_url was
-      PLAN_MANIFEST and imports only the standard library, because it parses the cache with a
-      regex. The old tier test could not see it by construction - it only ever checked that a
-      module stayed within its tier, never that it needed it. So the shape that is cheaper to
-      maintain also caught something the more elaborate one could not.
+      PLAN_MANIFEST and imports only the standard library, because it parses the cache with a regex.
+      The old tier test could not see it by construction - it only ever checked that a module stayed
+      within its tier, never that it needed it. So the shape that is cheaper to maintain also caught
+      something the more elaborate one could not.
 
-      Coverage was checked rather than assumed, and the first attempt lost some: parametrizing
-      only over the declared caller took the suite from 616 to 592, because 21 modules stopped
-      being checked at all. The exception set restored it - the standard-library check
-      parametrizes over every discovered module outside the set. 621 tests pass, five
-      mutations checked, each caught by exactly the test that names it.
+      Coverage was checked rather than assumed, and the first attempt lost some: parametrizing only
+      over the declared caller took the suite from 616 to 592, because 21 modules stopped being
+      checked at all. The exception set restored it - the standard-library check parametrizes over
+      every discovered module outside the set. 621 tests pass, five mutations checked, each caught
+      by exactly the test that names it.
 
       The user's third point is a decision this item does not act on and the plan now records:
-      bastler is to depend on krrood, to cut duplication rather than mirror its idioms. That
-      makes decision 12's version-1 independence a stage rather than a permanent state - it
-      stays right for this pull request, and the krrood adoption is wanted rather than
-      hypothetical. It also decides the endgame for what is left declared here: once bastler
-      imports krrood the standard-library default is no longer reachable, so the exception set
-      inverts into a short list of what still has to run light, and the UninstalledInvocation
-      entries are what say which those are. Nothing about the derivation changes, which is why
-      it was worth doing first.
+      bastler is to depend on krrood, to cut duplication rather than mirror its idioms. That makes
+      decision 12's version-1 independence a stage rather than a permanent state - it stays right
+      for this pull request, and the krrood adoption is wanted rather than hypothetical. It also
+      decides the endgame for what is left declared here: once bastler imports krrood the
+      standard-library default is no longer reachable, so the exception set inverts into a short
+      list of what still has to run light, and the UninstalledInvocation entries are what say which
+      those are. Nothing about the derivation changes, which is why it was worth doing first.
 
-      Inverted again the same day (b45903ffc), on the user's objection to naming the modules
-      that may import something: name the ones that must not, if anything has to be named at
-      all. Taken one step further, because the must-not set is derivable. What is declared is
-      UNINSTALLED_INVOCATIONS, five callers that run a module of this package with nothing
-      installed - the Actions workflow plus four session-side callers, each with the reason
-      its own file is checked against - and modules_that_must_not_import_third_party()
-      computes the rest as the import closure of what those callers reach. Five declarations
-      cover seventeen modules and no module is named anywhere.
-      MODULES_THAT_MAY_NEED_THE_REQUIREMENTS is deleted.
+      Inverted again the same day (b45903ffc), on the user's objection to naming the modules that
+      may import something: name the ones that must not, if anything has to be named at all. Taken
+      one step further, because the must-not set is derivable. What is declared is
+      UNINSTALLED_INVOCATIONS, five callers that run a module of this package with nothing installed
+      - the Actions workflow plus four session-side callers, each with the reason its own file is
+      checked against - and modules_that_must_not_import_third_party() computes the rest as the
+      import closure of what those callers reach. Five declarations cover seventeen modules and no
+      module is named anywhere. MODULES_THAT_MAY_NEED_THE_REQUIREMENTS is deleted.
 
-      The default inverts with it, and this is the part that makes the previous shape wrong
-      rather than merely longer: a module reached by an uninstalled caller must import on the
-      standard library, and a module reached by none may import whatever it likes, because
-      nothing runs it before an install. The 21-module check the exception set restored was
-      over-constraining without a caller behind it - plan_model, record_dashboard_url,
-      _version and package_layout are held to nothing now, correctly.
+      The default inverts with it, and this is the part that makes the previous shape wrong rather
+      than merely longer: a module reached by an uninstalled caller must import on the standard
+      library, and a module reached by none may import whatever it likes, because nothing runs it
+      before an install. The 21-module check the exception set restored was over-constraining
+      without a caller behind it - plan_model, record_dashboard_url, _version and package_layout are
+      held to nothing now, correctly.
 
-      Four mutations, each caught by exactly the test that names it: a module deep in the
-      closure growing an import (three failures - maintenance, maintenance_commands,
-      maintenance_report), a caller gaining a pip step, a caller ceasing to invoke its module,
-      and a constrained module reaching an unconstrained one. The last found a real gap in the
-      derivation: _sibling_imports_of read node.module for from bastler.x import y and missed
-      from bastler import x, where the module name is in the alias. Both forms are read now.
+      Four mutations, each caught by exactly the test that names it: a module deep in the closure
+      growing an import (three failures - maintenance, maintenance_commands, maintenance_report), a
+      caller gaining a pip step, a caller ceasing to invoke its module, and a constrained module
+      reaching an unconstrained one. The last found a real gap in the derivation:
+      _sibling_imports_of read node.module for from bastler.x import y and missed from bastler
+      import x, where the module name is in the alias. Both forms are read now.
 
-      One process failure worth carrying, since it is the second instance in two days of the
-      same shape. Deleting the exception set with a slice from one anchor to the next also
-      deleted
-      test_every_uninstalled_caller_still_invokes_its_module_and_still_installs_nothing, which
-      sat between them - and the suite stayed green at 66, so nothing flagged it. It surfaced
-      only because a mutation that had been caught an hour earlier stopped being caught. A
-      green run after a deletion says nothing about what the deletion took with it; the check
-      is the mutation that used to fail, or the test count.
-
+      One process failure worth carrying, since it is the second instance in two days of the same
+      shape. Deleting the exception set with a slice from one anchor to the next also deleted
+      test_every_uninstalled_caller_still_invokes_its_module_and_still_installs_nothing, which sat
+      between them - and the suite stayed green at 66, so nothing flagged it. It surfaced only
+      because a mutation that had been caught an hour earlier stopped being caught. A green run
+      after a deletion says nothing about what the deletion took with it; the check is the mutation
+      that used to fail, or the test count.
 
       Resolved again 2026-08-28 (session https://claude.ai/code/session_01723FcMWYnpQHrq4fdxxs8j).
       The pull request had been needs-resolution and skipped by every maintenance pass since
-      2026-08-22, reported four times; CI was green on its head, so the merge conflict was the
-      whole blocker. The 2026-08-23 lesson repeated exactly: git named two conflicting files and
-      could not name the one that mattered, plan_item_mode.py, which landed on main with #149
-      after the last merge along with plan-item-modes.toml. Left there, the branch's own "no .py
-      remains under .claude/" contract fails. Both move into bastler/, the test with them.
+      2026-08-22, reported four times; CI was green on its head, so the merge conflict was the whole
+      blocker. The 2026-08-23 lesson repeated exactly: git named two conflicting files and could not
+      name the one that mattered, plan_item_mode.py, which landed on main with #149 after the last
+      merge along with plan-item-modes.toml. Left there, the branch's own "no .py remains under
+      .claude/" contract fails. Both move into bastler/, the test with them.
 
       plan_item_mode reads its committed defaults from the package directory, named off its own
-      __file__ rather than written down, and pyproject carries the file as package data - checked
-      in a built wheel rather than assumed. The two documents that invoke it, execution-modes.md
-      and plan-item-mode/SKILL.md, join UNINSTALLED_INVOCATIONS, so the closure holds the module
-      to the standard library without naming it; the prose spelling of the module in the skill
-      had to go for that entry to bite, since names_of matches anywhere in the caller's file and
-      a mention satisfied it as readily as the invocation. Four mutations checked, each caught by
-      exactly the test that names it. 642 tests pass, from 617.
+      __file__ rather than written down, and pyproject carries the file as package data - checked in
+      a built wheel rather than assumed. The two documents that invoke it, execution-modes.md and
+      plan-item-mode/SKILL.md, join UNINSTALLED_INVOCATIONS, so the closure holds the module to the
+      standard library without naming it; the prose spelling of the module in the skill had to go
+      for that entry to bite, since names_of matches anywhere in the caller's file and a mention
+      satisfied it as readily as the invocation. Four mutations checked, each caught by exactly the
+      test that names it. 642 tests pass, from 617.
 
       Two things flagged rather than done. main has retired every workspace member's
       requirements.txt for static [project] dependencies (4b4cfdf4) and guards it with
-      test/version_test/test_dependency_declarations.py, which reads [tool.uv.workspace] members
-      - bastler is not one, so nothing fails, but this package's requirements.txt is now the last
-      in the repository and whether it follows is the user's call, not a merge's. And ten of the
-      2026-08-23 round's 34 threads are still open on purpose, each answered differently or
-      waiting on the user; nothing here resolves them.
+      test/version_test/test_dependency_declarations.py, which reads [tool.uv.workspace] members -
+      bastler is not one, so nothing fails, but this package's requirements.txt is now the last in
+      the repository and whether it follows is the user's call, not a merge's. And ten of the
+      2026-08-23 round's 34 threads are still open on purpose, each answered differently or waiting
+      on the user; nothing here resolves them.
+
+      Resolve of 2026-08-29 found the pull request itself healthy and one review thread open on it.
+      CI is green on 56d4f829 (all 23 checks, `test_bastler` among them), `mergeable_state` is
+      `clean`, and no label remains on it - the `needs-resolution` of the four maintenance reports
+      was cleared by the 2026-08-28 merge. So neither a conflict nor a red check is what this item
+      is waiting on, and the earlier note's count of the 2026-08-23 round is out of date: 32 of its
+      34 threads are resolved, and the two still open are the two answered differently on purpose
+      (the `RESTACK_STEPS` name that `monkeypatch.setattr` takes as a string, and the surviving
+      `status_label` assertion offered for deletion).
+
+      What is open is one thread posted 2026-08-29 on `bastler/package_layout.py`, and it reverses a
+      decision this branch already recorded twice. `UNINSTALLED_INVOCATIONS` and the import closure
+      derived from it exist because a caller runs a module before anything is installed; the user's
+      answer is that nothing should run before an install - the requirements are installed
+      automatically for anyone who has run or is running the setup, at session start while that
+      stays cheap, with the installation wrapped so a failure is reported and the remaining steps
+      still run, and the behaviour stated in the README. The 2026-08-23 entries argued the opposite
+      ("a hook that fails is worse than one that reports", "adding a `pip install` step to an
+      Actions runner in order to serve a script that needs nothing is strictly worse"); the first
+      objection is answered by the caught-and-reported requirement, and the second is the one part
+      of the constraint an auto-install at session start cannot reach.
   - id: bastler-notes-core-python
     branch: null
     title: "Bash→Python 1: notes-core modules (config, git seam, writer, markers)"
