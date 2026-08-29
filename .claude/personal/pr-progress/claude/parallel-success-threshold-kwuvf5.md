@@ -22,12 +22,16 @@ name is taken.
 the giskardpy/coraplex unification. Both plans saved, both tracking issues
 commented, both dashboards republished.
 
-**Flagged for the user, not yet resolved.** `eql-existential-semantics`'
-roadmap carries a 2026-08-03 decision: *"Counting quantifiers are out of
-scope. Do not generalize `exists` into it."* The new item is a connective
-and does not touch `exists`, so it does not contradict that decision - but
-it sits next to it, and the user may want the decision restated or the item
-moved.
+**Resolved.** `eql-existential-semantics`' roadmap carried a 2026-08-03
+decision: *"Counting quantifiers are out of scope. Do not generalize
+`exists` into it."* The new item is a connective and does not touch
+`exists`, so it never contradicted that - but it sat next to it, which left
+a future reader to re-derive the distinction. User chose (2026-08-29) to
+restate rather than move the item: the decision rules on `exists` and calls
+counting *a different operator*, and this item is that operator built
+separately, as the decision implies. The bullet was amended in place (not
+reversed), the item's own section gained the reverse pointer, #137 has the
+record, and the dashboard is republished.
 
 **Next.** Nothing on this branch. The item starts with
 `/plan-item-kickoff eql-existential-semantics threshold-connective`, once
