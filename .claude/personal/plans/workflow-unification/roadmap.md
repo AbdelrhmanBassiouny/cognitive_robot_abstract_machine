@@ -10783,3 +10783,105 @@ than reasoning from the URL names:
 test the document has to pass.** Every check so far had been "does the step do what it
 says"; this one was "can the step answer what a newcomer will actually ask", and the answer
 was no for a step that had already survived a review round and a live-services pass.
+
+## Update 2026-08-29 (kickoff): `red-candidate-localisation` opens as #211, and the prefix cannot carry the workflow that tests it
+
+`/plan-item-kickoff workflow-unification red-candidate-localisation`, session
+https://claude.ai/code/session_0138w5mqzbkyMPtotF7PD59Z, execution mode `auto`. Branched off #154's
+head (`claude/plan-item-kickoff-workflow-ixbvxl`), bootstrapped before any implementation.
+
+### State checked rather than inherited
+
+`check_dependency_readiness.py` reports `integration-branch-ci-verdict` as `open_ready`, and #154 is
+`mergeable_state: clean` against `main` with no `needs-resolution` label - better than the state
+#191's kickoff recorded five days earlier, and better than the four repeated conflict reports of
+2026-08-28. Nothing about this item is waiting on that branch.
+
+`check_scope_overlap.py` against `origin/main` was run rather than eyeballed. The new module and the
+new workflow are absent from the base *and* from every branch in flight, #185's included: the
+bastler move carries `maintenance_*.py` and `stack.py` into the package but not `integration*.py`,
+which are unlanded on #154 and therefore still under `.claude/stack/` on both branches. Shared with
+#154 are `integration.py`, `maintenance_github.py` and `integration-refresh.yml`; strip those edits
+and the localisation subsystem stands alone, which is the answer the item's own notes recorded and
+this re-confirms against live state.
+
+### The boundary between the two localisations, made precise
+
+The item asks for the failures the local suite cannot see. Reading `ci.yml` says exactly which those
+are, and the split is cleaner than "matrix versus suite":
+
+- a failed check naming a library (`test_each_lib (<lib>)`) is one only the docker matrix runs, and
+  is this item's;
+- `test_claude_dev_tooling` runs the same four directories `block-branch` re-runs locally, so it is
+  already localised - faster, and before a build is pushed;
+- `check_generated_orm_interfaces_are_untracked` is a property of a tree rather than of a
+  combination, so no prefix scan says anything about it.
+
+So the command keeps only the failing checks that name a library, and says plainly when none does
+rather than probing something it cannot answer. That is the same "two mechanisms for two different
+moments" the 2026-08-28 boundary settled when it kept `--test`.
+
+### The load-bearing constraint, which inverts the obvious design
+
+The obvious shape is to push each prefix and dispatch the probe workflow *on that prefix*. It does
+not work, and the reason is structural rather than incidental: a prefix is assembled from the
+**upstream base** plus some tips, and `workflow_dispatch` runs the workflow file that the dispatched
+ref carries. The empty prefix is bare upstream `main`, which carries no probe workflow, and no
+prefix carries one until this work lands upstream. The design would only start working at the
+moment it stopped being needed.
+
+So the probe is dispatched on the default branch - which carries the pipeline, exactly as the
+scheduled rebuild does - and the tree to test is handed to it as an *input*. That requires one
+optional `ref` input on `ci_reusable.yml`, defaulting to today's behaviour, so the reusable job can
+check out a tree other than the one it was started on. Reusing that file is what keeps sixty lines
+of real container setup from being duplicated.
+
+It is the same lesson as `integration-refresh.yml`'s checkout pin, from the other direction: there
+the triggering branch's code must *not* run; here the tested branch's code must not decide what runs
+over it either.
+
+### Correlating a dispatch with its run
+
+`POST /actions/workflows/{file}/dispatches` answers 204 with no run identifier, and a probe dispatched
+on the default branch cannot be found by `head_branch` the way one dispatched on its own prefix could.
+The run is named after the tree it tests (`run-name` interpolating the input), so the reader matches
+on `display_title`. That is one more constant a workflow retypes because it cannot import one, which
+by this roadmap's own 2026-08-28 rule is exactly where a contract test is worth writing.
+
+A run does not exist the instant a dispatch is accepted, so a probe with no run yet reads as still
+running rather than as `ABSENT`. `ABSENT` keeps its meaning - the state that means something is
+*wrong* rather than slow - and the caller's own timeout is what catches a dispatch that never
+produced a run.
+
+### One command, two rounds, and why the narrowing is not deferred
+
+`locate-candidate-failure` is one repeatable decision driven by a state document, the way
+`settle-candidate` is one read: the waiting stays with the caller, and each invocation can be read on
+its own. The document carries which round is in flight, so the same call starts the prefixes, then
+starts the narrowing, then reports.
+
+Both rounds are dispatched in parallel within the round, which is what makes a linear scan the right
+shape rather than a bisection: every prefix is independent, so N probes cost one run's wall clock
+rather than N, and a bisection would spend log N *sequential* rounds to save runners nobody is short
+of. It also keeps the guarantee the local search has - each prefix is genuinely tested, with no
+monotonicity assumed.
+
+The narrowing round is built rather than deferred, because deferring it would make the report lie.
+`IntegrationTestFailure.breaks_against` is `None` only when *no single earlier tip reproduces the
+failure alone*, and the comment says so in those words; a localisation that never looked would write
+`None` and state something it had not checked.
+
+### Reusing the finding rather than the mechanism
+
+What a CI localisation finds is the same *kind* of thing a local one finds, so it produces the same
+`IntegrationTestFailure` and blocks the branch through the same
+`block_the_branch_that_causes_it`. The branch's owner gets the same comment naming the same partner,
+and there is one place that decides what happens to a branch that breaks another.
+
+### The limit this kickoff does not pretend to close
+
+A `workflow_dispatch` workflow is only dispatchable once it is on the repository's default branch,
+which here is `integration`. So the end-to-end live run is gated on a build carrying this branch -
+the same bootstrap Part D needed on 2026-08-28, and stated here rather than discovered later.
+Everything below that is verified in the harness against a fake client and a scratch repository, as
+the rest of this tooling is.
