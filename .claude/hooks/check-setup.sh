@@ -171,39 +171,25 @@ fi
 
 # %% plan-dashboard dependencies
 
-# Derived from the package's requirements.txt itself rather than a second
-# hand-written list
-# of import names, which would silently go stale the moment that file changes.
-# Distribution names are what requirements.txt states, so they're what gets
-# looked up - no pyyaml/yaml-style mapping to maintain anywhere.
+# Reported rather than installed here: this script is read-only, and running
+# it must never change the answer it gives. ./session-start.sh installs them
+# (see install_requirements in ./resolve-personal-notes-config.sh), so on a
+# clone whose notes branch resolves, this row reports what that run just did.
+#
+# The lookup itself is missing_requirements, beside that installer, so both
+# read the same requirements.txt the same way. What stays here is the two
+# reasons it can answer nothing, because they are this script's rows to word.
 if ! command -v python3 > /dev/null 2>&1; then
   report dashboard_dependencies needs-setup "python3 is not on PATH, so the plan-dashboard modules cannot run at all"
 elif [ ! -f "${BASTLER_REQUIREMENTS_FILE}" ]; then
   report dashboard_dependencies needs-setup "cannot check: ${BASTLER_REQUIREMENTS_FILE} is missing"
 else
-  MISSING_DEPENDENCIES="$(python3 - "${BASTLER_REQUIREMENTS_FILE}" <<'PYTHON'
-import re
-import sys
-from importlib.metadata import PackageNotFoundError, distribution
-
-missing = []
-for line in open(sys.argv[1], encoding="utf-8"):
-    requirement = line.split("#", 1)[0].strip()
-    if not requirement:
-        continue
-    name = re.split(r"[<>=!~;\[ ]", requirement, maxsplit=1)[0]
-    try:
-        distribution(name)
-    except PackageNotFoundError:
-        missing.append(name)
-print(" ".join(missing))
-PYTHON
-)"
-  if [ -z "${MISSING_DEPENDENCIES}" ]; then
+  MISSING_REQUIREMENTS="$(missing_requirements)"
+  if [ -z "${MISSING_REQUIREMENTS}" ]; then
     report dashboard_dependencies ok "every requirement in ${BASTLER_REQUIREMENTS_FILE} is installed"
   else
     report dashboard_dependencies needs-setup \
-      "not installed:${MISSING_DEPENDENCIES// / } - run: pip install -r ${BASTLER_REQUIREMENTS_FILE}"
+      "not installed:${MISSING_REQUIREMENTS// / } - run: pip install -r ${BASTLER_REQUIREMENTS_FILE}"
   fi
 fi
 

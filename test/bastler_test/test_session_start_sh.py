@@ -1,9 +1,11 @@
 """
 Integration tests for session-start.sh's summary report.
 
-Cover the two guards the report exists for: naming which situation a branch with no plan
-item is actually in, and surfacing check-setup.sh's verdict rather than leaving it to be
-remembered. Both stay invisible to anyone who uses neither plans nor personal notes.
+Cover the three guards the report exists for: naming which situation a branch with no
+plan item is actually in, surfacing check-setup.sh's verdict rather than leaving it to be
+remembered, and installing the package's requirements so nothing downstream has to run
+without them. All three stay invisible to anyone who uses neither plans nor personal
+notes.
 
 Run against a scratch project root with a local bare repository standing in for the
 personal-notes remote - no network access or real personal-notes branch involved.
@@ -11,8 +13,10 @@ personal-notes remote - no network access or real personal-notes branch involved
 
 from __future__ import annotations
 
+import os
 import subprocess
 from collections.abc import Mapping
+from pathlib import Path
 
 import pytest
 
@@ -22,6 +26,7 @@ from .constants import (
     WORK_BRANCH,
     PersonalNotesPath,
 )
+from .executable_stubs import ExecutableStubDirectory, path_hiding_executable
 from .scratch_repository import SCRATCH_IDENTITY, ScratchRepository
 from .session_start_summary import SummaryMessage, summary_message, summary_value
 
@@ -81,19 +86,22 @@ def session_start_repository(
 
 
 def run_session_start(
-    repository: ScratchRepository,
+    repository: ScratchRepository, **environment_overrides: str
 ) -> subprocess.CompletedProcess[str]:
     """
     Run the scratch layout's session-start.sh.
 
     :param repository: A fixture-built scratch repository.
+    :param environment_overrides: Variables to set for this run.
     :return: The finished subprocess.
     """
-    return repository.run_hook_script("session-start.sh")
+    return repository.run_hook_script("session-start.sh", **environment_overrides)
 
 
 def publish_and_run(
-    repository: ScratchRepository, notes_branch_files: Mapping[str, str] | None = None
+    repository: ScratchRepository,
+    notes_branch_files: Mapping[str, str] | None = None,
+    **environment_overrides: str,
 ) -> subprocess.CompletedProcess[str]:
     """
     Publish everything a set up notes branch carries, plus *notes_branch_files*, then
@@ -107,6 +115,7 @@ def publish_and_run(
     :param repository: The fixture-built scratch repository.
     :param notes_branch_files: Extra file contents, keyed by path relative to the
         project root.
+    :param environment_overrides: Variables to set for the hook's run.
     :return: The finished session-start.sh process.
     """
     repository.publish_notes_branch(
@@ -116,7 +125,7 @@ def publish_and_run(
             **(notes_branch_files or {}),
         }
     )
-    return run_session_start(repository)
+    return run_session_start(repository, **environment_overrides)
 
 
 # %% someone who uses neither plans nor personal notes
@@ -317,6 +326,141 @@ def test_a_failing_setup_check_does_not_fail_the_hook(
     result = publish_and_run(session_start_repository)
 
     assert result.returncode == 0, result.stderr
+    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+
+
+# %% the requirements line
+
+
+REQUIREMENTS_FILE = "bastler/requirements.txt"
+"""
+Where the scratch clone carries its requirements, as the summary line names it.
+"""
+
+UNINSTALLABLE_REQUIREMENT = "bastler-no-such-distribution"
+"""
+A distribution nothing can have installed, so the run has something to install.
+
+Its own name says why it is here, which matters because a real name that happened to be
+installed on the machine running the suite would make the test pass without exercising
+anything.
+"""
+
+
+def require_the_uninstallable(repository: ScratchRepository) -> None:
+    """
+    Leave the scratch clone needing a requirement that is certainly not installed.
+
+    :param repository: The fixture-built scratch repository.
+    """
+    repository.write(REQUIREMENTS_FILE, f"{UNINSTALLABLE_REQUIREMENT}>=1\n")
+    repository.commit_everything("require something that is not installed")
+
+
+def test_installs_nothing_when_every_requirement_is_already_installed(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    The common case, and the one that decides whether installing on every start is
+    affordable: nothing is missing, so no installer runs at all.
+    """
+    stub_bin.install("pip")
+    call_log = tmp_path / "pip-calls"
+
+    result = publish_and_run(
+        session_start_repository,
+        PATH=stub_bin.ahead_of(os.environ.get("PATH", "")),
+        STUB_PIP_CALL_LOG=str(call_log),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "requirements") == summary_message(
+        SummaryMessage.REQUIREMENTS_ALREADY_INSTALLED, REQUIREMENTS_FILE
+    )
+    assert not call_log.exists()
+
+
+def test_installs_what_is_missing(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    A missing requirement is installed without anyone being asked, and the run says so.
+    """
+    require_the_uninstallable(session_start_repository)
+    stub_bin.install("pip")
+    call_log = tmp_path / "pip-calls"
+
+    result = publish_and_run(
+        session_start_repository,
+        PATH=stub_bin.ahead_of(os.environ.get("PATH", "")),
+        STUB_PIP_CALL_LOG=str(call_log),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "requirements") == summary_message(
+        SummaryMessage.REQUIREMENTS_INSTALLED,
+        UNINSTALLABLE_REQUIREMENT,
+        REQUIREMENTS_FILE,
+    )
+    assert call_log.read_text().splitlines() == [
+        f"install --requirement {REQUIREMENTS_FILE}"
+    ]
+
+
+def test_reports_a_failed_install_and_finishes_the_run(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    A failing install is reported and the rest of the run still happens.
+
+    The guard the whole design turns on: an install that dies inside the hook takes
+    everything after it down with it, and a session then starts with no notes, no plan
+    and no explanation.
+    """
+    require_the_uninstallable(session_start_repository)
+    stub_bin.install("pip")
+
+    result = publish_and_run(
+        session_start_repository,
+        PATH=stub_bin.ahead_of(os.environ.get("PATH", "")),
+        STUB_PIP_STATUS="1",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "requirements").startswith(
+        summary_message(
+            SummaryMessage.REQUIREMENTS_INSTALL_FAILED,
+            UNINSTALLABLE_REQUIREMENT,
+            REQUIREMENTS_FILE,
+            "",
+        ).split(" - ")[0]
+    )
+    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert summary_value(result.stdout, "personal notes") != ""
+
+
+def test_reports_a_missing_installer_without_failing(
+    session_start_repository: ScratchRepository,
+    tmp_path: Path,
+):
+    """
+    No installer on PATH at all is the same case as one that fails: reported, and the
+    run finishes.
+    """
+    require_the_uninstallable(session_start_repository)
+
+    result = publish_and_run(
+        session_start_repository, PATH=path_hiding_executable("pip", tmp_path)
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert UNINSTALLABLE_REQUIREMENT in summary_value(result.stdout, "requirements")
     assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
 
 

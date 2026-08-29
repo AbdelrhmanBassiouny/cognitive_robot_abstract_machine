@@ -94,6 +94,26 @@ class SummaryMessage(StrEnum):
     The heading above the indented rows naming each check that needs setup.
     """
 
+    REQUIREMENTS_NOT_CHECKED = "requirements_line_not_checked"
+    """
+    Nothing could be looked up, because python3 or the requirements file is missing.
+    """
+
+    REQUIREMENTS_ALREADY_INSTALLED = "requirements_line_already_installed"
+    """
+    Every requirement was already installed, so nothing was installed.
+    """
+
+    REQUIREMENTS_INSTALLED = "requirements_line_installed"
+    """
+    What was missing has just been installed.
+    """
+
+    REQUIREMENTS_INSTALL_FAILED = "requirements_line_install_failed"
+    """
+    The install did not work, and the run carried on regardless.
+    """
+
 
 def summary_value(output: str, label: str) -> str:
     """

@@ -1,13 +1,12 @@
 """
 The contract :mod:`bastler` has to keep: everything importable from the repository root
 with no install, every module importable on its own, every entry point reachable through
-``python3 -m``, every module a caller runs without installing anything importing on the
-standard library alone, and nothing left behind under ``.claude/``.
+``python3 -m``, every workflow that runs a module installing its requirements first, and
+nothing left behind under ``.claude/``.
 
-:mod:`bastler.package_layout` discovers the modules, the entry points and the requirements
-from the package itself, so nothing here is a second list of them. The one thing it
-declares - which callers install nothing - is checked here against those callers' own
-files.
+:mod:`bastler.package_layout` discovers the modules and the entry points from the package
+itself, so nothing here is a second list of them, and the workflows are read from the
+directory holding them rather than named.
 """
 
 from __future__ import annotations
@@ -25,13 +24,9 @@ from .script_runner import ScriptRunner
 from bastler.package_layout import (
     PACKAGE_DIRECTORY,
     REPOSITORY_ROOT,
-    UNINSTALLED_INVOCATIONS,
     PackageModule,
-    UninstalledInvocation,
     command_line_entry_points,
-    modules_that_must_not_import_third_party,
     package_modules,
-    third_party_import_names,
 )
 
 CLAUDE_DIRECTORY = REPOSITORY_ROOT / ".claude"
@@ -41,11 +36,12 @@ The directory the migration emptied of Python.
 Its SKILL.md files, settings.json and bash entry points stay; not one ``.py`` file does.
 """
 
-IMPORT_WITH_MODULES_UNAVAILABLE_SCRIPT = (
-    Path(__file__).parent / "dataset" / "import_with_modules_unavailable.py"
-)
+WORKFLOWS_DIRECTORY = REPOSITORY_ROOT / ".github" / "workflows"
 """
-The helper that imports one module with a named set of top-level modules unimportable.
+Where this repository's Actions workflows live.
+
+Read as a directory rather than named one by one, so a workflow added later is checked
+without anyone recording that it exists.
 """
 
 
@@ -172,69 +168,43 @@ def test_every_entry_point_answers_help_through_the_module_runner(
     assert result.returncode == 0, result.stderr
 
 
-# %% what a caller runs before anything is installed
+# %% what a workflow runs, and what it installs first
 
 
-@pytest.mark.parametrize(
-    "module",
-    modules_that_must_not_import_third_party(),
-    ids=lambda module: module.name,
-)
-def test_every_module_a_caller_reaches_uninstalled_imports_on_the_standard_library(
-    module: PackageModule,
-):
+def workflows_that_run_a_module() -> tuple[tuple[Path, PackageModule], ...]:
     """
-    A module some caller reaches before installing anything imports with this package's
-    requirements made unimportable.
+    Every Actions workflow that runs a module of this package, paired with that module.
 
-    Which modules those are is computed from the callers rather than named, so a module
-    that becomes reachable from one is checked without anyone declaring it. The
-    requirements stay installed - what is under test is what the module reaches, not what
-    the machine running the suite happens to hold.
+    Discovered from the workflow directory and the package itself rather than declared:
+    an Actions runner is the one caller no session hook reaches, so a workflow added
+    later has to be found rather than remembered.
+
+    :return: Each workflow's path and the module it runs, in path then name order.
     """
-    result = run_from_repository_root(
-        str(IMPORT_WITH_MODULES_UNAVAILABLE_SCRIPT),
-        "--unavailable",
-        ",".join(sorted(third_party_import_names())),
-        module.import_path,
+    return tuple(
+        (workflow_path, module)
+        for workflow_path in sorted(WORKFLOWS_DIRECTORY.glob("*.yml"))
+        for module in package_modules()
+        if any(name in workflow_path.read_text() for name in names_of(module))
     )
 
-    assert result.returncode == 0, result.stderr
 
-
-@pytest.mark.parametrize(
-    "invocation", UNINSTALLED_INVOCATIONS, ids=lambda invocation: invocation.module_name
-)
-def test_every_module_a_caller_runs_uninstalled_is_reached_by_the_closure(
-    invocation: UninstalledInvocation,
-):
+def test_every_workflow_that_runs_a_module_installs_the_requirements_first():
     """
-    Every declared caller's own module is inside the set derived from those callers.
+    A runner starts with nothing installed and no hook runs on it, so a workflow that
+    invokes a module installs this package's requirements itself.
 
-    Cheap, and it catches the closure being computed from something other than the
-    declarations - which would leave entries here silently unchecked.
+    The emptiness assertion is the scan's own coverage: a discovery that finds no
+    workflow checks nothing, and a parametrization over it would pass while doing so.
     """
-    assert invocation.module in modules_that_must_not_import_third_party()
+    running = workflows_that_run_a_module()
 
-
-@pytest.mark.parametrize(
-    "invocation", UNINSTALLED_INVOCATIONS, ids=lambda invocation: invocation.caller
-)
-def test_every_uninstalled_caller_still_invokes_its_module_and_still_installs_nothing(
-    invocation: UninstalledInvocation,
-):
-    """
-    Each declaration is held to its caller's own file, from both sides.
-
-    Without this an entry outlives what it describes: a caller that gains an install step
-    keeps a constraint it no longer needs, and one that stops invoking the module keeps a
-    constraint about nothing - and since the closure is computed from these entries, a
-    stale one quietly widens or narrows what gets checked at all.
-    """
-    caller_source = invocation.caller_path.read_text()
-
-    assert any(name in caller_source for name in names_of(invocation.module))
-    assert not installs_the_requirements(caller_source)
+    assert running != ()
+    assert [
+        workflow_path.name
+        for workflow_path, _ in running
+        if not installs_the_requirements(workflow_path.read_text())
+    ] == []
 
 
 # %% nothing is left behind

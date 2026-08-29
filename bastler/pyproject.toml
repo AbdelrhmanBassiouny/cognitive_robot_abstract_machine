@@ -31,8 +31,8 @@ classifiers = [
     "Topic :: Utilities",
 ]
 
-# Nothing is required to import the standard-library tier - see package_layout.py for
-# which modules that is. What the tiers above it need is the `rendering` extra below.
+# Empty rather than listing requirements.txt: several modules import nothing outside
+# the standard library, and what the rest need is the `rendering` extra below.
 dependencies = []
 dynamic = ["version", "optional-dependencies"]
 

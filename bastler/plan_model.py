@@ -1,8 +1,9 @@
 """
 The parts of a plan's data model that more than one tool has to agree on.
 
-Everything here is deliberately stdlib-only: a hook reads it, and so does the dashboard
-build, which imports jinja2 and markdown of its own. The dependency runs one way only.
+Nothing here imports anything the tools reading it do not already have: the dashboard
+build imports jinja2 and markdown of its own, and the bootstrap tool imports neither.
+The dependency runs one way only.
 """
 
 from __future__ import annotations

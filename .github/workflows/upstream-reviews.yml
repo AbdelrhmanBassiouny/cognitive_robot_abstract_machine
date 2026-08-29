@@ -8,6 +8,9 @@ name: Upstream reviews
 #
 # Runs unchanged in any fork - the upstream comes from bastler/stack.toml
 # and the fork owner from the runner's own context, so no repository is named here.
+#
+# A runner starts with nothing installed and no session hook runs on it, so this job
+# installs the package's requirements itself before invoking a module.
 
 on:
   workflow_dispatch:
@@ -40,6 +43,12 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
+      - name: Install the bastler requirements
+        run: |
+          set -euo pipefail
+          source .claude/hooks/resolve-personal-notes-config.sh
+          pip install --requirement "${BASTLER_REQUIREMENTS_FILE}"
 
       - name: Read upstream review threads
         env:

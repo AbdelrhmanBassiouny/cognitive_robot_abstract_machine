@@ -14,8 +14,8 @@ class classproperty:
     ``property`` answers only on instances, and chaining ``classmethod`` with it was
     removed in Python 3.13, so a value that belongs to the class rather than to any
     instance needs a descriptor of its own. Written in this repository rather than taken
-    from ``krrood`` because the stack tooling is reachable from ``SessionStart`` and
-    depends on the standard library alone.
+    from ``krrood`` because this package's first version is deliberately independent of
+    it, which is the boundary decision 12 records for this tooling.
 
     An abstract accessor answers with the descriptor instead of calling it, which is what
     lets :class:`abc.ABCMeta` still see it as abstract on a subclass that supplied

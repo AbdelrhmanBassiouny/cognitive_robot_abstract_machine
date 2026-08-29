@@ -4,7 +4,8 @@ plan's directory since a baseline commit and prints tracking-issue comments newe
 that commit's timestamp.
 
 Run against the shared ScratchRepository fixture (see conftest.py/scratch_repository.py)
-and stubbed `gh`/`curl` executables standing in for the two GitHub backends - no network
+and stubbed `gh`/`curl` executables standing in for the two GitHub backends (see
+executable_stubs.py) - no network
 access, no real personal-notes branch, no real GitHub credentials.
 """
 
@@ -21,7 +22,11 @@ import pytest
 from .constants import ToolingDirectory
 from .script_runner import BashScriptRunner
 
-from .constants import DATASET_DIRECTORY, STUBS_DIRECTORY
+from .constants import DATASET_DIRECTORY
+from .executable_stubs import (
+    ExecutableStubDirectory,
+    path_hiding_executable,
+)
 
 from bastler.plan_updates_since_support import (
     NO_CHANGES_MESSAGE,
@@ -112,70 +117,6 @@ def scratch_repo(scratch_repository: ScratchRepository) -> ScratchRepository:
     )
     scratch_repository.resolve_notes_remote_to()
     return scratch_repository
-
-
-@pytest.fixture
-def stub_bin(tmp_path: Path) -> Path:
-    """
-    An empty directory meant to be placed first on a test subprocess's PATH, into which
-    a test installs whichever of the stubbed `gh`/`curl` it needs via
-    :func:`install_stub`.
-
-    :param tmp_path: pytest's per-test temporary directory.
-    :return: The stub directory.
-    """
-    directory = tmp_path / "stub-bin"
-    directory.mkdir()
-    return directory
-
-
-def install_stub(stub_bin: Path, executable_name: str) -> None:
-    """
-    Copy the stub backing *executable_name* (from ``stubs/<executable_name>.sh``) into
-    *stub_bin*, executable.
-
-    :param stub_bin: The directory built by the stub_bin fixture.
-    :param executable_name:``"gh"`` or ``"curl"``.
-    """
-    source = STUBS_DIRECTORY / f"{executable_name}.sh"
-    destination = stub_bin / executable_name
-    shutil.copy(source, destination)
-    destination.chmod(0o755)
-
-
-def path_hiding_executable(executable_name: str, mirror_parent: Path) -> str:
-    """
-    Build a ``PATH`` string equivalent to the current one but with *executable_name*
-    unfindable through it.
-
-    Mirrors (via symlinks) any directory that provides *executable_name* into a copy
-    missing just that one file, rather than dropping the whole directory from `PATH` -
-    the directory providing it (typically ``/usr/bin``) also provides ``bash``, ``git``
-    and ``python3``, which the script under test still needs to run at all.
-
-    :param executable_name: The executable to hide, e.g. ``"gh"``.
-    :param mirror_parent: Where to create mirror directories.
-    :return: The adjusted ``PATH`` string.
-    """
-    entries = []
-    mirror_index = 0
-    for entry in os.environ.get("PATH", "").split(os.pathsep):
-        directory = Path(entry)
-        if not directory.is_dir() or not (directory / executable_name).exists():
-            entries.append(entry)
-            continue
-        mirror = mirror_parent / f"hide-{executable_name}-{mirror_index}"
-        mirror_index += 1
-        mirror.mkdir()
-        for item in directory.iterdir():
-            if item.name == executable_name:
-                continue
-            try:
-                (mirror / item.name).symlink_to(item)
-            except OSError:
-                continue
-        entries.append(str(mirror))
-    return os.pathsep.join(entries)
 
 
 def write_plan_commit(
@@ -394,9 +335,9 @@ def test_tracking_issue_without_default_repository_fails_clearly(
 
 
 def test_prints_tracking_issue_comments_via_the_gh_backend(
-    scratch_repo: ScratchRepository, stub_bin: Path, tmp_path: Path
+    scratch_repo: ScratchRepository, stub_bin: ExecutableStubDirectory, tmp_path: Path
 ):
-    install_stub(stub_bin, "gh")
+    stub_bin.install("gh")
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
@@ -412,7 +353,7 @@ def test_prints_tracking_issue_comments_via_the_gh_backend(
         PlanUpdatesSinceOption.SINCE,
         sha,
         env={
-            "PATH": f"{stub_bin}{os.pathsep}{os.environ.get('PATH', '')}",
+            "PATH": stub_bin.ahead_of(os.environ.get("PATH", "")),
             "STUB_GH_ISSUE_COMMENTS_JSON": comments_json,
             "STUB_GH_CALL_LOG": str(call_log),
         },
@@ -429,9 +370,9 @@ def test_prints_tracking_issue_comments_via_the_gh_backend(
 
 
 def test_prints_tracking_issue_comments_via_the_curl_fallback(
-    scratch_repo: ScratchRepository, stub_bin: Path, tmp_path: Path
+    scratch_repo: ScratchRepository, stub_bin: ExecutableStubDirectory, tmp_path: Path
 ):
-    install_stub(stub_bin, "curl")
+    stub_bin.install("curl")
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
@@ -448,7 +389,7 @@ def test_prints_tracking_issue_comments_via_the_curl_fallback(
         PlanUpdatesSinceOption.SINCE,
         sha,
         env={
-            "PATH": f"{stub_bin}{os.pathsep}{hidden_gh_path}",
+            "PATH": stub_bin.ahead_of(hidden_gh_path),
             "GH_TOKEN": "a-token",
             "STUB_CURL_ISSUE_COMMENTS_JSON": comments_json,
             "STUB_CURL_CALL_LOG": str(call_log),

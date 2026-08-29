@@ -407,8 +407,8 @@ class BootstrapError(Exception, ABC):
 
     Subclasses hold the context that explains the refusal as typed fields and compose it
     into the message at construction, so no call site formats one. Mirrors ``krrood``'s
-    ``DataclassException`` idiom in a stdlib-only base, which is the boundary decision 12
-    records for this tooling.
+    ``DataclassException`` idiom rather than importing it, which is the boundary decision
+    12 records for this tooling.
     """
 
     exit_code: ClassVar[ExitCode] = ExitCode.SUCCESS

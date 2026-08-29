@@ -39,17 +39,29 @@ root, and a module's imports of its siblings stop resolving. The shell entry poi
 `.claude/hooks/` and the skills that call them all use `python3 -m "${SOME_MODULE}"`, with
 the module named once in `.claude/hooks/resolve-personal-notes-config.sh`.
 
-## What needs what installed
+## The requirements install themselves
 
-`bastler/package_layout.py` declares, per module, how much of the dependency stack it
-reaches. Two things read it: `pip install -r bastler/requirements.txt` installs what the
-top tier needs, and `test/bastler_test/test_package_contract.py` checks each module really
-does import within the tier it claims.
+**Every session start installs whatever of `bastler/requirements.txt` this clone is
+missing, without asking.** `.claude/hooks/session-start.sh` does it, so no module ever has
+to work around a dependency that is not there, and nobody has to notice a missing one and
+run `pip` by hand.
 
-The point is not that any caller is forbidden to install something - `check-setup.sh`
-reports a missing requirement and `/setup-personal-notes` installs it. It is that a caller
-can tell, without running anything, which entry points work on a checkout where nothing
-has been installed yet and which need the rendering extra first.
+Three things bound it, and they are worth knowing because it writes to your Python
+environment:
+
+- **Only for someone who has already set the tooling up.** The hook stops before this
+  point when it cannot reach your personal-notes branch, so a clone that has never run
+  `/setup-personal-notes` installs nothing at all.
+- **Only what is missing.** The usual start looks the requirements up and runs no
+  installer, which is what makes doing it every time affordable.
+- **Never fatal.** No `pip`, no network, or an externally managed environment that refuses
+  the write: the summary's `requirements:` line says so and the rest of the run carries on.
+  Install them yourself with `pip install -r bastler/requirements.txt` when that happens.
+
+An Actions runner reaches no session hook, so a workflow that runs a module installs the
+requirements in a step of its own -
+`test/bastler_test/test_package_contract.py` finds every such workflow and checks that it
+does.
 
 ## What stays outside the package
 

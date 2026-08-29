@@ -110,3 +110,39 @@ setup_line_needs_setup() {
   local needs_setup_count="$1"
   printf '%s check(s) need setup - run /setup-personal-notes:' "${needs_setup_count}"
 }
+
+# %% the requirements line
+
+# requirements_line_not_checked: nothing could be looked up - python3 or the
+# requirements file is missing. Which of the two is check-setup.sh's row to
+# word, and the setup line carries it, so this one does not say it twice.
+requirements_line_not_checked() {
+  printf 'not checked - the setup line below says why'
+}
+
+# requirements_line_already_installed: every requirement was already there, so
+# nothing was installed.
+requirements_line_already_installed() {
+  local requirements_file="$1"
+  printf 'already installed (%s)' "${requirements_file}"
+}
+
+# requirements_line_installed: what this run installed, which is only ever
+# what was missing.
+requirements_line_installed() {
+  local installed="$1"
+  local requirements_file="$2"
+  printf 'installed %s from %s' "${installed}" "${requirements_file}"
+}
+
+# requirements_line_install_failed: the install did not work. Reported rather
+# than fatal, and carrying what the installer itself said, because a hook that
+# dies here takes everything after it down with it - the whole point is that
+# the rest of the run continues.
+requirements_line_install_failed() {
+  local missing="$1"
+  local requirements_file="$2"
+  local reason="$3"
+  printf 'could not install %s - %s - run: pip install -r %s' \
+    "${missing}" "${reason}" "${requirements_file}"
+}

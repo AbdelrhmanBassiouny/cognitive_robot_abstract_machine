@@ -47,6 +47,10 @@ To do the same by hand:
 
 `check-setup.sh` prints one row per check and exits non-zero if anything still needs doing.
 
+Every session start also installs whatever of `bastler/requirements.txt` is missing, for a clone
+whose personal-notes branch resolves — reported on its `requirements:` line, never fatal, and
+described in `bastler/README.md`.
+
 Every session start prints its own summary, so none of the three things below has to be
 remembered. Its `setup:` line runs `check-setup.sh` and names any check that still needs setup;
 its `plan:` line distinguishes *no plans are tracked here* from *plans exist and no item tracks

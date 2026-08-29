@@ -22,6 +22,7 @@ import pytest  # noqa: E402
 
 from bastler.stack import BOARD_PATH  # noqa: E402
 
+from .executable_stubs import ExecutableStubDirectory  # noqa: E402
 from .scratch_repository import ScratchRepository  # noqa: E402
 from .upstream_reviews_replay import RecordedResponse, ReplayingClient  # noqa: E402
 
@@ -56,6 +57,18 @@ def scratch_repository(tmp_path: Path) -> ScratchRepository:
     :return: The scratch repository.
     """
     return ScratchRepository.create(tmp_path)
+
+
+@pytest.fixture
+def stub_bin(tmp_path: Path) -> ExecutableStubDirectory:
+    """
+    An empty directory meant to be placed first on a test subprocess's PATH, into which
+    a test installs whichever stubbed executable it needs.
+
+    :param tmp_path: pytest's per-test temporary directory.
+    :return: The stub directory.
+    """
+    return ExecutableStubDirectory.create(tmp_path)
 
 
 @pytest.fixture

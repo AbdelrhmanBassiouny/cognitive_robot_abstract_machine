@@ -346,7 +346,9 @@ CHECK_SCOPE_OVERLAP_MODULE="bastler.check_scope_overlap"
 # pull request has collected, run by the upstream-reviews Action.
 UPSTREAM_REVIEWS_MODULE="bastler.upstream_reviews"
 # requirements.txt: the PyYAML/Jinja2/markdown dependencies the rendering
-# modules need - installed by both CI and a session running them directly.
+# modules need - installed by CI, by an Actions workflow running a module, and
+# by ./session-start.sh on every session start (see install_requirements
+# below).
 BASTLER_REQUIREMENTS_FILE="${BASTLER_PACKAGE_DIRECTORY}/requirements.txt"
 # stack.toml: the committed defaults stack.py's load_configuration layers a
 # personal-notes .claude/personal/stack.toml override on top of.
@@ -526,6 +528,50 @@ tracked_plan_count() {
   plan_branch_index_exists || { printf '0\n'; return 0; }
   git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
     | awk -F'\t' 'NF >= 2 { seen[$2] = 1 } END { print length(seen) }'
+}
+
+# %% the package's own requirements
+
+# missing_requirements: prints the distributions BASTLER_REQUIREMENTS_FILE
+# names that are not installed, space separated, and nothing at all when every
+# one of them is. Returns 1 without printing when the file or python3 is
+# missing, which is a caller's problem to word rather than this function's.
+#
+# Read from requirements.txt itself rather than from a second hand-written
+# list, which would go stale the moment that file changes. Distribution names
+# are what the file states, so they are what gets looked up - no
+# PyYAML/yaml-style mapping to maintain anywhere.
+missing_requirements() {
+  command -v python3 > /dev/null 2>&1 || return 1
+  [ -f "${BASTLER_REQUIREMENTS_FILE}" ] || return 1
+  python3 - "${BASTLER_REQUIREMENTS_FILE}" <<'PYTHON'
+import re
+import sys
+from importlib.metadata import PackageNotFoundError, distribution
+
+missing = []
+for line in open(sys.argv[1], encoding="utf-8"):
+    requirement = line.split("#", 1)[0].strip()
+    if not requirement:
+        continue
+    name = re.split(r"[<>=!~;\[ ]", requirement, maxsplit=1)[0]
+    try:
+        distribution(name)
+    except PackageNotFoundError:
+        missing.append(name)
+print(" ".join(missing))
+PYTHON
+}
+
+# install_requirements: installs everything BASTLER_REQUIREMENTS_FILE names,
+# leaving pip's own output (both streams) in REQUIREMENTS_INSTALL_OUTPUT for a
+# caller to report, and returning pip's exit status.
+#
+# Installs from the file rather than by name so the version constraints come
+# with it; pip skips whatever is already satisfied, so the caller decides
+# whether it is worth running at all rather than this function guessing.
+install_requirements() {
+  REQUIREMENTS_INSTALL_OUTPUT="$(pip install --requirement "${BASTLER_REQUIREMENTS_FILE}" 2>&1)"
 }
 
 # PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit
