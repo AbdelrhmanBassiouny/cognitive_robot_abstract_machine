@@ -55,10 +55,12 @@ class ProbabilisticQuery(Evaluable, ABC):
     ``distribution_of``, ``probability_of`` -- rather than selecting or generating
     rows/instances.
 
-    This is a probabilistic operation, not a data selection, so none of these ever
-    resolve natively or under any backend other than
+    This is a probabilistic operation, not a data selection, so by default none of
+    these resolve natively or under any backend other than
     :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`, which
     dispatches to :meth:`_resolve_` for whichever subclass it is given.
+    :class:`Probability` is the one exception -- see its own
+    :meth:`~Probability._evaluate_natively_`.
     """
 
     def _evaluate_natively_(self) -> Iterator:
@@ -84,14 +86,25 @@ class Probability(ProbabilisticQuery):
     ranges, ...) -- it is translated into a
     {py:class}`~random_events.product_algebra.Event` the same way.
 
+    Unlike :class:`Distribution`, this one resolves two ways: exactly, in closed form
+    via :meth:`_resolve_`, under a
+    :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`; or, under
+    any other backend, natively via :meth:`_evaluate_natively_` -- a probability is
+    definitionally the fraction of a domain's rows the condition holds for, so that's
+    counted directly, the same way any other EQL query counts matching rows. The
+    native path needs an enumerable domain (e.g. ``x = variable(MyClass, domain=...)``
+    ) to count over; the closed-form path needs a fitted model instead. Whichever
+    ``.evaluate(backend=...)``/``.first(backend=...)`` is given decides which one
+    runs.
+
     ``ConditionType`` also allows a bare ``bool`` (``probability_of(True)``); a plain
     Python ``bool`` carries no attribute/chain, so it's wrapped in a
     :class:`~krrood.entity_query_language.core.variable.Literal` on construction, the
     same normalization ``and_``/``or_``/``not_`` already apply to a bare-bool operand
     -- this keeps ``condition`` always a real EQL expression, so it verbalizes (*"the
     probability that True"*) with no special-casing needed downstream. It still won't
-    *evaluate*, though: a content-free condition names no class, so there is no model
-    to resolve it against --
+    *evaluate*, though, either way: a content-free condition names no class, so there
+    is neither a model to resolve it against nor a domain to count rows over --
     :class:`~krrood.parametrization.exceptions.JointQueryAcrossClassesNotSupported`
     (empty ``owner_classes``) is raised at resolution time, same as any other
     condition that references no attributes.
@@ -105,6 +118,46 @@ class Probability(ProbabilisticQuery):
     def __post_init__(self):
         if not isinstance(self.condition, SymbolicExpression):
             self.condition = Literal(_value_=self.condition)
+
+    def _evaluate_natively_(self) -> Iterator[float]:
+        """
+        Fallback for every backend other than
+        :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`: a
+        probability is, definitionally, the fraction of a domain's rows that satisfy
+        the condition -- counted the same way any other EQL query counts matching
+        rows, via ``entity(count(root)).where(condition)`` (see
+        ``test_eql/test_core/test_aggregations.py::test_count`` for the same pattern),
+        so this reuses whatever backend support ``count``/``.where()`` already have,
+        rather than reimplementing counting itself. Unlike
+        :meth:`_resolve_`'s exact, closed-form answer, this is only as good as the
+        variable's domain (all of it must be enumerable) -- it's the estimate
+        :meth:`_resolve_` computes exactly instead, when a
+        :class:`~krrood.entity_query_language.backends.ProbabilisticBackend` is used.
+
+        :raises JointQueryAcrossClassesNotSupported: If the condition references
+            attributes reached from more than one ``variable(...)`` root, or none.
+        """
+        from krrood.entity_query_language.factories import count, entity
+        from krrood.parametrization.exceptions import (
+            JointQueryAcrossClassesNotSupported,
+        )
+        from krrood.parametrization.random_events_translator import (
+            WhereExpressionToRandomEventTranslator,
+        )
+
+        referenced_attributes = WhereExpressionToRandomEventTranslator(
+            self.condition
+        ).variables.keys()
+        roots = {attribute._chain_root_ for attribute in referenced_attributes}
+        if len(roots) != 1:
+            raise JointQueryAcrossClassesNotSupported(
+                {root._type_ for root in roots}
+            )
+        [root_variable] = roots
+
+        matching_count = entity(count(root_variable)).where(self.condition).first()
+        total_count = entity(count(root_variable)).first()
+        yield matching_count / total_count
 
     def _resolve_(self, model_registry: ModelRegistry) -> float:
         from krrood.parametrization.parameterizer import ConditionParameters

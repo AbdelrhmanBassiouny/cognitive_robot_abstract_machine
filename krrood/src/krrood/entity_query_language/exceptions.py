@@ -942,13 +942,16 @@ class BackendCannotEvaluateProbabilisticQuery(DataclassException):
     """
     Raised when a
     :class:`~krrood.entity_query_language.operators.probabilistic_queries.ProbabilisticQuery`
-    (``distribution_of(...)``, ``probability_of(...)``) is evaluated natively or with
-    any backend other than
+    is evaluated with any backend other than
     :class:`~krrood.entity_query_language.backends.ProbabilisticBackend`.
 
     Querying a probabilistic model directly is a probabilistic operation, not a data
-    selection: it has no native/SQL evaluation strategy, unlike every other query
-    construct in this package.
+    selection, so most of these have no native/SQL evaluation strategy at all --
+    unlike every other query construct in this package. The one exception is
+    :class:`~krrood.entity_query_language.operators.probabilistic_queries.Probability`
+    (``probability_of(...)``), which *does* evaluate natively (counting matching rows
+    over an enumerable domain) and never raises this; ``distribution_of(...)`` still
+    does, unconditionally.
     """
 
     expression: ProbabilisticQuery
