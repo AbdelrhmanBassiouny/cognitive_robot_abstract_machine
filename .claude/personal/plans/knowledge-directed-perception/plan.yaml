@@ -147,7 +147,7 @@ items:
     pull_request_number: 205
     track: surfaces
     depends_on: [montessori-perception-on-main]
-    status: blocked
+    status: in_progress
     session: https://claude.ai/code/session_011NPnTyfe9ZfBPvv13CVZcM
     blockers:
       - >-

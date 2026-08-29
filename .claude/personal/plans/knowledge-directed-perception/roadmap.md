@@ -555,3 +555,49 @@ requirement arrives with this item rather than being deferred into it.
 `supporting_surface` was `None` on every world in this workspace as predicted,
 so the fallback is the path that runs; the declared-region path is covered by a
 test that places a `Region` in its own world.
+
+### `surfaces-from-world`: what was actually stalling it, and where the fix belonged
+
+Resolved 2026-08-29 in `auto` mode. **The item's own branch had nothing wrong with it.**
+#205 was green on all 23 checks, `mergeable_state: clean`, its dependency #202 `open_ready`,
+and two of its three review threads already answered and resolved. What kept it open was the
+third: "This is a very big file" on `test_montessori_perception.py`, which the developer
+answered at 18:38 with **"ok it should be done on 202"**.
+
+So the work the item was waiting on was not the item's. The mechanical scope check settles
+it the same way the developer did: `git ls-tree main -- test/experiments_test/test_montessori_perception.py`
+is empty, so the file exists on no branch but `montessori_perception_on_main`, and whichever
+pull request introduces a file owns changes to it. Splitting it on #205 would have put
+base-branch work in the child.
+
+**Done as `00721be7` on `montessori_perception_on_main`**, merged into #205 by `d6673b48`.
+The 1262 lines became six modules, one per subject - camera decoding, the viewer, footprints,
+the views (rectification, workspace clip, overlay), piece matching, and the pipeline and its
+queries. Every one of the fourteen `# %%` sections moved verbatim and all 77 test functions
+were accounted for, both verified mechanically rather than by eye, and the six modules run the
+same `91 passed` the one file ran.
+
+**The four fixtures three modules share** - `renderer`, `placed_pieces`, `pipeline`, `scene` -
+moved to `test/experiments_test/dataset/montessori_scene_fixtures.py`, beside the renderer they
+build on, and are registered with `pytest_plugins = [montessori_scene_fixtures.__name__]`. Not
+imported by name, which would put `scene` and `pipeline` in module scope where every test's own
+parameter of that name shadows them; and not a `conftest.py`, because the one in
+`test/experiments_test/` imports `giskardpy`, so the local runs use `--noconftest` and would
+never load it. That constraint is worth remembering: in this container a `conftest.py` is not
+available to hold anything shared.
+
+**#202 was left out of draft**, against the standing convention of re-drafting after every push.
+Its own section above records that it was opened ready deliberately, because
+`is_ready_to_unblock_dependents()` refuses to let a dependent stack on an open draft - so
+re-drafting it would have shown `surfaces-from-world` and `perception-backend` as blocked, which
+is the exact state that decision exists to avoid. The specific recorded decision about this pull
+request wins over the general rule; one click reverses it either way.
+
+**Still open, and not this session's to settle:** whether `WorkspaceSurface.of_body` should pick
+the widest horizontal face or the highest one. Raised on #205 at review time and unanswered. The
+two rules disagree only for a body whose widest shape is not its top, and the existing rule was
+chosen against a real URDF that cannot be inspected from a container.
+
+**Worth repeating:** the item's recorded `blockers` were empty while it sat waiting, and the
+cause was a single review comment nobody had turned into state. What the resolve did before
+touching any code was write that down.
