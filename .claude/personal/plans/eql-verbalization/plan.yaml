@@ -71,10 +71,21 @@ items:
     pull_request_number: 33
     track: framework-migration
     depends_on: [p1-surface-verification, p2-operand-naming, p3-concrete-subclass-expansion]
-    status: in_progress
+    status: blocked
     blockers:
-      - "Awaiting two review decisions, both replied to and left open on #33: type-level display noun for 'a Point3' -> 'a point' (P2 shipped the opposite precedence to roadmap decision 1), and whether to widen the IK chain so Reachable/BlockingBodies can take Pose."
-      - "sdt ormatic_interface.py needs regenerating where ROS is installed - ignored_base_classes drops 10 predicate DAOs, but a ROS-less local run also drops every ROS-derived DAO. CI regenerates before tests, so the suite is unaffected."
+      - >-
+          Awaiting two review decisions, both replied to and left open on #33: type-level display
+          noun for 'a Point3' -> 'a point' (P2 shipped the opposite precedence to roadmap decision
+          1), and whether to widen the IK chain so Reachable/BlockingBodies can take Pose.
+      - >-
+          sdt ormatic_interface.py needs regenerating where ROS is installed - ignored_base_classes
+          drops 10 predicate DAOs, but a ROS-less local run also drops every ROS-derived DAO. CI
+          regenerates before tests, so the suite is unaffected.
+      - >-
+          stacked-pr-maintenance: Fork PR #33 (branch `eql-symbolic-function-sdt`) still conflicts
+          against its base `main` as of the 2026-08-29 stacked-pr-maintenance pass. It carries the
+          `needs-resolution` label and a routine comment on the PR; this pass did not attempt a
+          fresh merge because it was already withheld from a previous pass.
     notes: >
       2026-07-30: merged main (605 commits), dropping the duplicated
       surface-verification framework; rebuilt the snapshot on the generated-results
