@@ -26,22 +26,32 @@ import yaml
 import plan_item_bootstrap
 from plan_item_bootstrap import (
     BLOCK_STYLED_KEYS,
+    ITEM_FIELD_INDENT,
+    MANIFEST_LINE_WIDTH,
     PLANS_DIRECTORY,
+    SEQUENCE_ENTRY_INDENT,
     CreatedPullRequest,
     ExitCode,
     HookScript,
     ItemRecordRequest,
     ItemStatus,
+    ItemUpdateRequest,
     KeySpecification,
     ManifestKey,
     PlanDocument,
     PullRequestRequest,
+    Subcommand,
     UnknownItemError,
     UnknownPlanError,
     ValueStyle,
     WorkOpenRequest,
+    block_branch,
+    check_item,
     open_work,
     record_item,
+    resolve_branch,
+    unblock_branch,
+    update_item,
 )
 from scratch_repository import WORK_BRANCH, ScratchRepository
 
@@ -69,6 +79,18 @@ NEW_ITEM = "a-brand-new-item"
 An item the fixture plan does not track, for the entry-creating path.
 """
 
+SECOND_ITEM = "a-second-item"
+"""
+The fixture item that follows the one under test, for asserting a write left the items
+after it untouched.
+"""
+
+WORK_REMOTE = "origin"
+"""
+The remote :meth:`ScratchRepository.add_work_remote` registers, and the one the module's
+own operations default to.
+"""
+
 NEW_BRANCH = "claude/a-new-branch"
 """
 The branch opening the work publishes.
@@ -77,6 +99,31 @@ The branch opening the work publishes.
 SESSION_URL = "https://example.invalid/session_first"
 """
 The session recorded on an item whose work was opened.
+"""
+
+SECOND_ITEM_BRANCH = next(
+    item[ManifestKey.BRANCH.key]
+    for item in yaml.safe_load(PLAN_MANIFEST)[ManifestKey.ITEMS.key]
+    if item[ManifestKey.IDENTIFIER.key] == SECOND_ITEM
+)
+"""
+The branch the fixture's underway item rides on, read from the fixture rather than
+restated beside it.
+"""
+
+OWNER = "a-maintenance-pass"
+"""
+The automated caller whose blockers are its own to write and to clear.
+"""
+
+CONFLICT_REASON = "conflicts with its base in a_file.py"
+"""
+Why that caller blocked the item.
+"""
+
+HAND_WRITTEN_BLOCKER = "waiting on a decision nobody automated"
+"""
+A blocker no automated caller owns, which none of them may touch.
 """
 
 
@@ -226,6 +273,103 @@ def record_request(repository: ScratchRepository, **overrides: object):
     )
     defaults.update(overrides)
     return ItemRecordRequest(**defaults)
+
+
+def update_request(**overrides: object) -> ItemUpdateRequest:
+    """
+    Build an update request, overriding only what a test cares about.
+
+    :param overrides: Fields to replace on the default request.
+    :return: The request.
+    """
+    defaults = dict(
+        plan_identifier=PLAN_IDENTIFIER,
+        item_identifier=EXISTING_ITEM,
+        values_by_key={},
+    )
+    defaults.update(overrides)
+    return ItemUpdateRequest(**defaults)
+
+
+def published_item(repository: ScratchRepository) -> dict[str, object]:
+    """
+    The item under test as YAML actually parses it off the notes branch.
+
+    Parsing rather than matching text is what catches a write that leaves the manifest
+    valid but means something other than it says.
+
+    :param repository: The scratch repository whose notes remote to read.
+    :return: The item's parsed mapping.
+    """
+    manifest = yaml.safe_load(
+        published_plan(repository)[PlanDocument.MANIFEST],
+    )
+    return next(
+        item
+        for item in manifest[ManifestKey.ITEMS.key]
+        if item[ManifestKey.IDENTIFIER.key] == EXISTING_ITEM
+    )
+
+
+def entry_wrapping_across(unbreakable: str) -> str:
+    """
+    A blocker long enough that wrapping has to break somewhere inside *unbreakable*.
+
+    Positioned from the writer's own wrap column rather than from a hand-tuned literal,
+    so this keeps reproducing the hazard if that column ever moves.
+
+    :param unbreakable: The token that has to survive the wrap intact.
+    :return: The blocker's text.
+    """
+    body_width = MANIFEST_LINE_WIDTH - len(SEQUENCE_ENTRY_INDENT + ITEM_FIELD_INDENT)
+    lead = "word "
+    return (
+        lead * ((body_width - len(unbreakable) // 2) // len(lead))
+        + unbreakable
+        + " and there is more text after it."
+    )
+
+
+def published_items(repository: ScratchRepository) -> dict[str, dict[str, object]]:
+    """
+    Every item as YAML actually parses it off the notes branch, keyed by id.
+
+    :param repository: The scratch repository whose notes remote to read.
+    :return: Each item's parsed mapping.
+    """
+    manifest = yaml.safe_load(published_plan(repository)[PlanDocument.MANIFEST])
+    return {
+        item[ManifestKey.IDENTIFIER.key]: item
+        for item in manifest[ManifestKey.ITEMS.key]
+    }
+
+
+def publish_the_branch_index(repository: ScratchRepository) -> None:
+    """
+    Make the generated branch index exist, by running the save path that writes it.
+
+    Only ``save-plan.sh`` writes that index, so a test needing one asks for a real save
+    rather than assembling a second copy of its format beside it.
+
+    :param repository: The scratch repository to save within.
+    """
+    update_item(update_request(), project_root=repository.project_root)
+
+
+def put_both_items_on_one_branch(repository: ScratchRepository) -> None:
+    """
+    Move the fixture's unstarted item onto the branch its underway one already rides on.
+
+    Two items on one branch is ordinary - a plan can split what one branch does into
+    more than one tracked item - so every operation keyed on a branch has to answer for
+    all of them.
+
+    :param repository: The scratch repository to save within.
+    """
+    update_item(
+        update_request(values_by_key={ManifestKey.BRANCH: SECOND_ITEM_BRANCH}),
+        project_root=repository.project_root,
+    )
 
 
 def open_request(**overrides: object) -> WorkOpenRequest:
@@ -542,6 +686,567 @@ def test_a_supplied_pull_request_number_adopts_the_branch_its_caller_published(
     assert result.pull_request_number == 57
 
 
+# %% updating an item's recorded fields
+
+
+def test_writing_a_note_replaces_the_folded_block_rather_than_its_first_line(
+    bootstrap_repository: ScratchRepository,
+):
+    update_item(
+        update_request(values_by_key={ManifestKey.NOTES: "What this run found."}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert published_item(bootstrap_repository)[ManifestKey.NOTES.key] == (
+        "What this run found.\n"
+    )
+
+
+def test_appending_to_a_note_keeps_the_recorded_paragraphs_apart(
+    bootstrap_repository: ScratchRepository,
+):
+    """
+    The recorded note comes back with one newline between paragraphs where the file a
+    caller writes uses a blank line, so appending must restore the blank lines or the
+    whole note collapses into a single paragraph.
+    """
+    update_item(
+        update_request(values_by_key={ManifestKey.NOTES: "The first.\n\nThe second."}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    update_item(
+        update_request(notes_to_append="The third.\n"),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert published_item(bootstrap_repository)[ManifestKey.NOTES.key] == (
+        "The first.\nThe second.\nThe third.\n"
+    )
+
+
+def test_appending_to_an_item_carrying_no_note_records_only_the_addition(
+    bootstrap_repository: ScratchRepository,
+):
+    update_item(
+        update_request(
+            item_identifier=SECOND_ITEM, notes_to_append="The only paragraph.\n"
+        ),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    published = yaml.safe_load(
+        published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
+    )
+    written = next(
+        item
+        for item in published[ManifestKey.ITEMS.key]
+        if item[ManifestKey.IDENTIFIER.key] == SECOND_ITEM
+    )
+    assert written[ManifestKey.NOTES.key] == "The only paragraph.\n"
+
+
+def test_replacing_a_note_and_extending_it_cannot_be_asked_for_at_once(
+    bootstrap_repository: ScratchRepository,
+):
+    note = bootstrap_repository.write("note.md", "Replaces it.\n")
+    addition = bootstrap_repository.write("addition.md", "Extends it.\n")
+
+    result = run_bootstrap(
+        bootstrap_repository,
+        "update",
+        "--plan",
+        PLAN_IDENTIFIER,
+        "--item",
+        EXISTING_ITEM,
+        "--notes",
+        str(note),
+        "--append-notes",
+        str(addition),
+    )
+
+    assert result.returncode != 0
+    assert "--append-notes" in result.stderr
+
+
+def test_writing_a_note_leaves_the_other_items_byte_identical(
+    bootstrap_repository: ScratchRepository,
+):
+    update_item(
+        update_request(values_by_key={ManifestKey.NOTES: "What this run found."}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    published = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
+    second_item_start = published.index(
+        f"- {ManifestKey.IDENTIFIER.key}: {SECOND_ITEM}"
+    )
+    original_start = PLAN_MANIFEST.index(
+        f"- {ManifestKey.IDENTIFIER.key}: {SECOND_ITEM}"
+    )
+    assert published[second_item_start:] == PLAN_MANIFEST[original_start:]
+
+
+def test_writing_blockers_renders_them_as_a_sequence(
+    bootstrap_repository: ScratchRepository,
+):
+    blockers = [
+        "A short one.",
+        "A blocker long enough that it has to fold over more than a single line of "
+        "the manifest, which is what the sequence rendering has to get right.",
+    ]
+    update_item(
+        update_request(values_by_key={ManifestKey.BLOCKERS: blockers}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert published_item(bootstrap_repository)[ManifestKey.BLOCKERS.key] == blockers
+
+
+@pytest.mark.parametrize(
+    "unbreakable",
+    [
+        "claude/workflow-unification-setup-jgvs53",
+        "https://example.invalid/a/single/path/segment/long/enough/that/it/cannot/fit/"
+        "on/one/body/line/of/the/manifest/at/all",
+    ],
+    ids=["hyphenated-branch", "url-longer-than-a-line"],
+)
+def test_a_folded_entry_parses_back_as_the_text_it_was_given(
+    bootstrap_repository: ScratchRepository, unbreakable: str
+):
+    """
+    A line break inside a folded scalar comes back as a space, so wrapping is only
+    lossless while it happens between words - a branch name or a URL broken across two
+    lines returns with a space inside it, still valid and no longer the same string.
+    """
+    blocker = entry_wrapping_across(unbreakable)
+
+    update_item(
+        update_request(values_by_key={ManifestKey.BLOCKERS: [blocker]}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert published_item(bootstrap_repository)[ManifestKey.BLOCKERS.key] == [blocker]
+
+
+def test_an_emptied_sequence_is_written_as_a_list_rather_than_as_nothing(
+    bootstrap_repository: ScratchRepository,
+):
+    """
+    A bare ``blockers:`` parses as null, not as an empty list, so clearing the last
+    entry would leave the item carrying a value its own schema rejects.
+    """
+    update_item(
+        update_request(values_by_key={ManifestKey.BLOCKERS: ["Something."]}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    update_item(
+        update_request(values_by_key={ManifestKey.BLOCKERS: []}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert published_item(bootstrap_repository)[ManifestKey.BLOCKERS.key] == []
+
+
+def test_updating_sets_every_plain_field_it_is_given(
+    bootstrap_repository: ScratchRepository,
+):
+    update_item(
+        update_request(
+            values_by_key={
+                ManifestKey.STATUS: ItemStatus.BLOCKED,
+                ManifestKey.BRANCH: NEW_BRANCH,
+                ManifestKey.PULL_REQUEST_NUMBER: 57,
+                ManifestKey.SESSION: SESSION_URL,
+            }
+        ),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    item = published_item(bootstrap_repository)
+    assert item[ManifestKey.STATUS.key] == ItemStatus.BLOCKED.value
+    assert item[ManifestKey.BRANCH.key] == NEW_BRANCH
+    assert item[ManifestKey.PULL_REQUEST_NUMBER.key] == 57
+    assert item[ManifestKey.SESSION.key] == SESSION_URL
+
+
+def test_updating_needs_no_roadmap_section(bootstrap_repository: ScratchRepository):
+    update_item(
+        update_request(values_by_key={ManifestKey.STATUS: ItemStatus.BLOCKED}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    published = published_plan(bootstrap_repository)
+    assert published[PlanDocument.ROADMAP] == PLAN_ROADMAP
+
+
+def test_updating_an_unknown_item_is_refused(bootstrap_repository: ScratchRepository):
+    with pytest.raises(UnknownItemError) as refusal:
+        update_item(
+            update_request(
+                item_identifier=NEW_ITEM,
+                values_by_key={ManifestKey.STATUS: ItemStatus.BLOCKED},
+            ),
+            project_root=bootstrap_repository.project_root,
+        )
+
+    assert refusal.value.exit_code is ExitCode.UNKNOWN_ITEM
+    assert published_plan(bootstrap_repository)[PlanDocument.MANIFEST] == PLAN_MANIFEST
+
+
+def test_updating_hands_the_dashboard_republish_back(
+    bootstrap_repository: ScratchRepository,
+):
+    report = update_item(
+        update_request(values_by_key={ManifestKey.STATUS: ItemStatus.BLOCKED}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert report.dashboard_command == f"/plan-dashboard {PLAN_IDENTIFIER}"
+
+
+# %% checking what the manifest claims against local git
+
+
+def test_a_recorded_branch_that_was_never_published_is_reported_stale(
+    bootstrap_repository: ScratchRepository,
+):
+    update_item(
+        update_request(values_by_key={ManifestKey.BRANCH: NEW_BRANCH}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    report = check_item(
+        PLAN_IDENTIFIER, EXISTING_ITEM, project_root=bootstrap_repository.project_root
+    )
+
+    assert [finding.manifest_key for finding in report.findings] == [ManifestKey.BRANCH]
+    assert report.findings[0].recorded == NEW_BRANCH
+    assert report.exit_code is ExitCode.MANIFEST_IS_STALE
+
+
+def test_an_item_recording_a_published_branch_reports_nothing_stale(
+    bootstrap_repository: ScratchRepository,
+):
+    bootstrap_repository.run_git("checkout", "-b", NEW_BRANCH)
+    bootstrap_repository.run_git("push", "--quiet", WORK_REMOTE, NEW_BRANCH)
+    update_item(
+        update_request(
+            values_by_key={
+                ManifestKey.BRANCH: NEW_BRANCH,
+                ManifestKey.STATUS: ItemStatus.IN_PROGRESS,
+                ManifestKey.SESSION: SESSION_URL,
+                ManifestKey.PULL_REQUEST_NUMBER: 57,
+            }
+        ),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    report = check_item(
+        PLAN_IDENTIFIER, EXISTING_ITEM, project_root=bootstrap_repository.project_root
+    )
+
+    assert report.findings == []
+    assert report.exit_code is ExitCode.SUCCESS
+
+
+def test_a_published_branch_with_no_session_recorded_is_reported_stale(
+    bootstrap_repository: ScratchRepository,
+):
+    bootstrap_repository.run_git("checkout", "-b", NEW_BRANCH)
+    bootstrap_repository.run_git("push", "--quiet", WORK_REMOTE, NEW_BRANCH)
+    update_item(
+        update_request(
+            values_by_key={
+                ManifestKey.BRANCH: NEW_BRANCH,
+                ManifestKey.STATUS: ItemStatus.IN_PROGRESS,
+            }
+        ),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    report = check_item(
+        PLAN_IDENTIFIER, EXISTING_ITEM, project_root=bootstrap_repository.project_root
+    )
+
+    assert ManifestKey.SESSION in [finding.manifest_key for finding in report.findings]
+
+
+def test_a_branch_exists_while_the_item_is_still_not_started(
+    bootstrap_repository: ScratchRepository,
+):
+    bootstrap_repository.run_git("checkout", "-b", NEW_BRANCH)
+    bootstrap_repository.run_git("push", "--quiet", WORK_REMOTE, NEW_BRANCH)
+    update_item(
+        update_request(values_by_key={ManifestKey.BRANCH: NEW_BRANCH}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    report = check_item(
+        PLAN_IDENTIFIER, EXISTING_ITEM, project_root=bootstrap_repository.project_root
+    )
+
+    status_finding = next(
+        finding
+        for finding in report.findings
+        if finding.manifest_key is ManifestKey.STATUS
+    )
+    assert status_finding.recorded == ItemStatus.NOT_STARTED.value
+
+
+def test_checking_an_unknown_item_is_refused(bootstrap_repository: ScratchRepository):
+    with pytest.raises(UnknownItemError) as refusal:
+        check_item(
+            PLAN_IDENTIFIER, NEW_ITEM, project_root=bootstrap_repository.project_root
+        )
+
+    assert refusal.value.exit_code is ExitCode.UNKNOWN_ITEM
+
+
+# %% resolving a branch to the items it carries
+
+
+def test_resolving_a_branch_names_the_plan_that_tracks_it(
+    bootstrap_repository: ScratchRepository,
+):
+    publish_the_branch_index(bootstrap_repository)
+
+    resolution = resolve_branch(
+        SECOND_ITEM_BRANCH, project_root=bootstrap_repository.project_root
+    )
+
+    assert resolution.plan_identifier == PLAN_IDENTIFIER
+    assert [item.item_identifier for item in resolution.items] == [SECOND_ITEM]
+
+
+def test_resolving_reports_the_status_and_blockers_each_item_records(
+    bootstrap_repository: ScratchRepository,
+):
+    publish_the_branch_index(bootstrap_repository)
+
+    resolution = resolve_branch(
+        SECOND_ITEM_BRANCH, project_root=bootstrap_repository.project_root
+    )
+
+    assert resolution.items[0].status is ItemStatus.IN_PROGRESS
+    assert resolution.items[0].blockers == []
+
+
+def test_resolving_a_branch_two_items_ride_on_answers_with_both(
+    bootstrap_repository: ScratchRepository,
+):
+    put_both_items_on_one_branch(bootstrap_repository)
+
+    resolution = resolve_branch(
+        SECOND_ITEM_BRANCH, project_root=bootstrap_repository.project_root
+    )
+
+    assert sorted(item.item_identifier for item in resolution.items) == sorted(
+        [EXISTING_ITEM, SECOND_ITEM]
+    )
+
+
+def test_a_branch_no_plan_claims_is_reported_rather_than_refused(
+    bootstrap_repository: ScratchRepository,
+):
+    publish_the_branch_index(bootstrap_repository)
+
+    resolution = resolve_branch(
+        "claude/belongs-to-nothing", project_root=bootstrap_repository.project_root
+    )
+
+    assert resolution.plan_identifier is None
+    assert resolution.items == []
+    assert resolution.exit_code is ExitCode.BRANCH_TRACKS_NO_ITEM
+
+
+# %% owning a blocker on every item a branch carries
+
+
+def test_blocking_a_branch_blocks_every_item_it_carries(
+    bootstrap_repository: ScratchRepository,
+):
+    put_both_items_on_one_branch(bootstrap_repository)
+
+    block_branch(
+        SECOND_ITEM_BRANCH,
+        owner=OWNER,
+        reason=CONFLICT_REASON,
+        project_root=bootstrap_repository.project_root,
+    )
+
+    for item in published_items(bootstrap_repository).values():
+        assert item[ManifestKey.STATUS.key] == ItemStatus.BLOCKED.value
+        assert item[ManifestKey.BLOCKERS.key] == [f"{OWNER}: {CONFLICT_REASON}"]
+
+
+def test_blocking_keeps_a_blocker_somebody_else_wrote(
+    bootstrap_repository: ScratchRepository,
+):
+    publish_the_branch_index(bootstrap_repository)
+    update_item(
+        update_request(
+            item_identifier=SECOND_ITEM,
+            values_by_key={ManifestKey.BLOCKERS: [HAND_WRITTEN_BLOCKER]},
+        ),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    block_branch(
+        SECOND_ITEM_BRANCH,
+        owner=OWNER,
+        reason=CONFLICT_REASON,
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert published_items(bootstrap_repository)[SECOND_ITEM][
+        ManifestKey.BLOCKERS.key
+    ] == [HAND_WRITTEN_BLOCKER, f"{OWNER}: {CONFLICT_REASON}"]
+
+
+def test_blocking_a_second_time_replaces_its_own_blocker_rather_than_repeating_it(
+    bootstrap_repository: ScratchRepository,
+):
+    publish_the_branch_index(bootstrap_repository)
+    block_branch(
+        SECOND_ITEM_BRANCH,
+        owner=OWNER,
+        reason=CONFLICT_REASON,
+        project_root=bootstrap_repository.project_root,
+    )
+
+    block_branch(
+        SECOND_ITEM_BRANCH,
+        owner=OWNER,
+        reason="a different file conflicts now",
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert published_items(bootstrap_repository)[SECOND_ITEM][
+        ManifestKey.BLOCKERS.key
+    ] == [f"{OWNER}: a different file conflicts now"]
+
+
+def test_unblocking_removes_only_the_blocker_it_owns(
+    bootstrap_repository: ScratchRepository,
+):
+    publish_the_branch_index(bootstrap_repository)
+    update_item(
+        update_request(
+            item_identifier=SECOND_ITEM,
+            values_by_key={ManifestKey.BLOCKERS: [HAND_WRITTEN_BLOCKER]},
+        ),
+        project_root=bootstrap_repository.project_root,
+    )
+    block_branch(
+        SECOND_ITEM_BRANCH,
+        owner=OWNER,
+        reason=CONFLICT_REASON,
+        project_root=bootstrap_repository.project_root,
+    )
+
+    unblock_branch(
+        SECOND_ITEM_BRANCH,
+        owner=OWNER,
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert published_items(bootstrap_repository)[SECOND_ITEM][
+        ManifestKey.BLOCKERS.key
+    ] == [HAND_WRITTEN_BLOCKER]
+
+
+def test_an_item_still_carrying_somebody_elses_blocker_stays_blocked(
+    bootstrap_repository: ScratchRepository,
+):
+    publish_the_branch_index(bootstrap_repository)
+    update_item(
+        update_request(
+            item_identifier=SECOND_ITEM,
+            values_by_key={ManifestKey.BLOCKERS: [HAND_WRITTEN_BLOCKER]},
+        ),
+        project_root=bootstrap_repository.project_root,
+    )
+    block_branch(
+        SECOND_ITEM_BRANCH,
+        owner=OWNER,
+        reason=CONFLICT_REASON,
+        project_root=bootstrap_repository.project_root,
+    )
+
+    unblock_branch(
+        SECOND_ITEM_BRANCH,
+        owner=OWNER,
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert (
+        published_items(bootstrap_repository)[SECOND_ITEM][ManifestKey.STATUS.key]
+        == ItemStatus.BLOCKED.value
+    )
+
+
+def test_clearing_the_last_blocker_returns_the_item_to_in_progress(
+    bootstrap_repository: ScratchRepository,
+):
+    publish_the_branch_index(bootstrap_repository)
+    block_branch(
+        SECOND_ITEM_BRANCH,
+        owner=OWNER,
+        reason=CONFLICT_REASON,
+        project_root=bootstrap_repository.project_root,
+    )
+
+    unblock_branch(
+        SECOND_ITEM_BRANCH,
+        owner=OWNER,
+        project_root=bootstrap_repository.project_root,
+    )
+
+    item = published_items(bootstrap_repository)[SECOND_ITEM]
+    assert item[ManifestKey.STATUS.key] == ItemStatus.IN_PROGRESS.value
+    assert item[ManifestKey.BLOCKERS.key] == []
+
+
+def test_withdrawing_a_blocker_an_item_never_carried_leaves_it_alone(
+    bootstrap_repository: ScratchRepository,
+):
+    """
+    A pass withdraws its blocker from every branch it finds clean, most of which it
+    never blocked - writing each of those an empty list would spread noise across the
+    whole manifest one run at a time.
+    """
+    publish_the_branch_index(bootstrap_repository)
+    before = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
+
+    report = unblock_branch(
+        SECOND_ITEM_BRANCH,
+        owner=OWNER,
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert [item.item_identifier for item in report.items] == [SECOND_ITEM]
+    assert published_plan(bootstrap_repository)[PlanDocument.MANIFEST] == before
+
+
+def test_unblocking_a_branch_no_plan_claims_writes_nothing(
+    bootstrap_repository: ScratchRepository,
+):
+    publish_the_branch_index(bootstrap_repository)
+    before = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
+
+    report = unblock_branch(
+        "claude/belongs-to-nothing",
+        owner=OWNER,
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert report.exit_code is ExitCode.BRANCH_TRACKS_NO_ITEM
+    assert published_plan(bootstrap_repository)[PlanDocument.MANIFEST] == before
+
+
 # %% the vocabulary the manifest is written in
 
 
@@ -727,6 +1432,56 @@ def test_the_record_subcommand_reports_status_and_exit_code_first(
     assert report["exit_code"] == 0
 
 
+def test_the_update_subcommand_writes_a_note_from_a_file(
+    bootstrap_repository: ScratchRepository,
+):
+    note = bootstrap_repository.write("note.md", "What the run found.\n")
+
+    result = run_bootstrap(
+        bootstrap_repository,
+        "update",
+        "--plan",
+        PLAN_IDENTIFIER,
+        "--item",
+        EXISTING_ITEM,
+        "--status",
+        ItemStatus.BLOCKED.value,
+        "--notes",
+        str(note),
+    )
+
+    assert result.returncode == 0, result.stderr
+    item = published_item(bootstrap_repository)
+    assert item[ManifestKey.NOTES.key] == "What the run found.\n"
+    assert item[ManifestKey.STATUS.key] == ItemStatus.BLOCKED.value
+
+
+def test_the_check_subcommand_exits_stale_and_names_the_field(
+    bootstrap_repository: ScratchRepository,
+):
+    update_item(
+        update_request(values_by_key={ManifestKey.BRANCH: NEW_BRANCH}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    result = run_bootstrap(
+        bootstrap_repository,
+        "check",
+        "--plan",
+        PLAN_IDENTIFIER,
+        "--item",
+        EXISTING_ITEM,
+    )
+
+    assert result.returncode == ExitCode.MANIFEST_IS_STALE
+    report = json.loads(result.stdout)
+    assert list(report)[:2] == ["status", "exit_code"]
+    assert report["status"] == ExitCode.MANIFEST_IS_STALE.name_for_a_caller
+    assert [finding["field"] for finding in report["findings"]] == [
+        ManifestKey.BRANCH.key
+    ]
+
+
 def test_the_command_line_names_the_status_it_failed_with(
     bootstrap_repository: ScratchRepository,
 ):
@@ -749,3 +1504,190 @@ def test_the_dashboard_republish_is_handed_back_rather_than_attempted(
 
     report = json.loads(result.stdout)
     assert report["dashboard_command"] == f"/plan-dashboard {PLAN_IDENTIFIER}"
+
+
+def test_the_resolve_subcommand_names_the_plan_and_items_a_branch_carries(
+    bootstrap_repository: ScratchRepository,
+):
+    publish_the_branch_index(bootstrap_repository)
+
+    result = run_bootstrap(
+        bootstrap_repository, "resolve", "--branch", SECOND_ITEM_BRANCH
+    )
+
+    assert result.returncode == ExitCode.SUCCESS
+    report = json.loads(result.stdout)
+    assert list(report)[:2] == ["status", "exit_code"]
+    assert report["plan"] == PLAN_IDENTIFIER
+    assert [item["item"] for item in report["items"]] == [SECOND_ITEM]
+
+
+def test_the_block_subcommand_exits_on_a_branch_that_belongs_to_no_plan(
+    bootstrap_repository: ScratchRepository,
+):
+    publish_the_branch_index(bootstrap_repository)
+    reason = bootstrap_repository.write("reasons/conflict.md", CONFLICT_REASON)
+
+    result = run_bootstrap(
+        bootstrap_repository,
+        "block",
+        "--branch",
+        "claude/belongs-to-nothing",
+        "--owner",
+        OWNER,
+        "--reason",
+        str(reason),
+    )
+
+    assert result.returncode == ExitCode.BRANCH_TRACKS_NO_ITEM
+    assert json.loads(result.stdout)["plan"] is None
+
+
+# %% the operations the command line offers
+
+
+def test_every_operation_is_reachable_by_the_word_it_names():
+    """
+    A command is registered under its own :attr:`Subcommand.invoked_as`, so the parser
+    cannot offer a word that reaches a different operation.
+    """
+    assert {
+        word: type(subcommand).__name__
+        for word, subcommand in plan_item_bootstrap.SUBCOMMANDS.items()
+    } == {
+        "record": "RecordSubcommand",
+        "update": "UpdateSubcommand",
+        "resolve": "ResolveSubcommand",
+        "block": "BlockSubcommand",
+        "unblock": "UnblockSubcommand",
+        "check": "CheckSubcommand",
+        "open": "OpenSubcommand",
+    }
+
+
+def test_a_command_that_names_no_word_of_its_own_cannot_be_built():
+    """
+    The name and description are abstract, so a subclass that supplies neither is
+    refused when :data:`SUBCOMMANDS` instantiates it - as the module is imported, rather
+    than when someone tries to invoke it.
+    """
+
+    class NamelessSubcommand(Subcommand):
+        def declare_arguments(self, parser):
+            """
+            Take no flags.
+
+            :param parser: The subparser that would declare them.
+            """
+
+        def run(self, arguments, project_root):
+            """
+            Do nothing.
+
+            :param arguments: The parsed command line.
+            :param project_root: The repository to run within.
+            """
+
+    with pytest.raises(TypeError) as refusal:
+        NamelessSubcommand()
+
+    assert "invoked_as" in str(refusal.value)
+
+
+def test_the_parser_takes_each_registered_word(
+    bootstrap_repository: ScratchRepository,
+):
+    """
+    The parser is built from the commands themselves, so a word the registry answers for
+    is a word the command line accepts - one list rather than two that can disagree.
+    """
+    refusals = {
+        word: run_bootstrap(bootstrap_repository, word, "--help").returncode
+        for word in plan_item_bootstrap.SUBCOMMANDS
+    }
+
+    assert refusals == {word: 0 for word in plan_item_bootstrap.SUBCOMMANDS}
+
+
+# %% seeing what a written note actually became
+
+
+def test_a_written_note_reports_how_many_paragraphs_it_became(
+    bootstrap_repository: ScratchRepository,
+):
+    """
+    A file's paragraphs are whatever its blank lines say they are, so a caller who meant
+    several and wrote none can only find out from the report.
+    """
+    report = update_item(
+        update_request(values_by_key={ManifestKey.NOTES: "One.\n\nTwo.\n\nThree."}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert report.note_paragraphs == 3
+
+
+def test_an_addition_wrapped_without_blank_lines_counts_as_the_one_paragraph_it_is(
+    bootstrap_repository: ScratchRepository,
+):
+    """
+    The case that caught this session: continuously wrapped prose is one paragraph
+    however many lines it occupies, and the report is the only place that says so
+    before the dashboard shows it. The fixture item already carries a note, so an
+    addition meant as two paragraphs and written as one leaves two, not three.
+    """
+    report = update_item(
+        update_request(
+            notes_to_append="Meant as two paragraphs\nbut wrapped without a blank line."
+        ),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert report.note_paragraphs == 2
+
+
+def test_a_write_that_sets_no_note_reports_no_paragraph_count(
+    bootstrap_repository: ScratchRepository,
+):
+    report = update_item(
+        update_request(values_by_key={ManifestKey.STATUS: ItemStatus.BLOCKED}),
+        project_root=bootstrap_repository.project_root,
+    )
+
+    assert report.note_paragraphs is None
+
+
+# %% a word its author wrapped, rather than one they hyphenated
+
+
+def test_a_word_wrapped_at_its_hyphen_is_written_whole():
+    """
+    A hyphen at the end of a hard-wrapped line is where the author broke a word they
+    wrote whole, so closing it up is what keeps the value the one they wrote. This is
+    the case that put ``blank- line`` into the live manifest.
+    """
+    written = plan_item_bootstrap.fold(
+        "the paragraphs have to be blank-\nline separated", ""
+    )
+
+    assert "blank-line separated" in written
+    assert "blank- line" not in written
+
+
+def test_a_suspended_hyphen_typed_on_one_line_keeps_its_space():
+    """
+    ``network- and credential-free`` is correct English and must survive being written.
+    """
+    written = plan_item_bootstrap.fold("all network- and credential-free tests", "")
+
+    assert "network- and credential-free" in written
+
+
+def test_a_paragraph_break_still_separates_paragraphs_after_a_hyphen():
+    """
+    Closing up a wrapped break must not swallow a blank line that follows a hyphen.
+    """
+    assert plan_item_bootstrap.paragraphs_of("ends in a-\n\nnew paragraph") == [
+        "ends in a-",
+        "new paragraph",
+    ]

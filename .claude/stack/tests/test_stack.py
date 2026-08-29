@@ -25,6 +25,7 @@ from stack import (
     BranchStatus,
     Configuration,
     ContradictoryLabelWriteError,
+    DefaultLabel,
     ExitCode,
     ForkRemoteNotFoundError,
     LabelWrite,
@@ -66,9 +67,10 @@ The tool under test, invoked as a subprocess wherever an exit status is the asse
 
 def make_configuration(upstream_setup_command: str | None = None) -> Configuration:
     return Configuration(
-        in_review_label="in-review",
-        rebase_label="rebase",
-        needs_resolution_label="needs-resolution",
+        in_review_label=DefaultLabel.IN_REVIEW,
+        rebase_label=DefaultLabel.REBASE,
+        needs_resolution_label=DefaultLabel.NEEDS_RESOLUTION,
+        integration_conflict_label=DefaultLabel.INTEGRATION_CONFLICT,
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
@@ -113,7 +115,11 @@ def test_drafted_is_draft():
 
 def test_in_review_derived_from_label():
     stack = build(
-        [PullRequest(3, "feature", "main", draft=False, labels=["in-review"])]
+        [
+            PullRequest(
+                3, "feature", "main", draft=False, labels=[DefaultLabel.IN_REVIEW]
+            )
+        ]
     )
     assert stack.branches[0].status == BranchStatus.IN_REVIEW
 
@@ -126,7 +132,9 @@ def test_merged_derived_from_predicate_not_labels():
 
 
 def test_rebase_label_sets_strategy():
-    stack = build([PullRequest(1, "f", "main", draft=True, labels=["rebase"])])
+    stack = build(
+        [PullRequest(1, "f", "main", draft=True, labels=[DefaultLabel.REBASE])]
+    )
     assert stack.branches[0].strategy == IntegrationStrategy.REBASE
     stack = build([PullRequest(1, "f", "main", draft=True, labels=[])])
     assert stack.branches[0].strategy == IntegrationStrategy.MERGE
@@ -172,7 +180,7 @@ def test_child_promotable_once_parent_reaches_review():
     # its own parent the moment the parent has reached in-review - it does not have to
     # wait for the parent to fully merge.
     prs = [
-        PullRequest(1, "parent", "main", draft=False, labels=["in-review"]),
+        PullRequest(1, "parent", "main", draft=False, labels=[DefaultLabel.IN_REVIEW]),
         PullRequest(2, "child", "parent", draft=False),
     ]
     assert next_to_promote(build(prs)).name == "child"
@@ -203,7 +211,9 @@ def test_promotion_order_withholds_a_branch_delegated_for_conflict_resolution():
     # a branch the routine delegated (needs-resolution) is stuck mid-restack, so it must
     # not be promoted even though it is otherwise ready and unblocked.
     prs = [
-        PullRequest(1, "stuck", "main", draft=False, labels=["needs-resolution"]),
+        PullRequest(
+            1, "stuck", "main", draft=False, labels=[DefaultLabel.NEEDS_RESOLUTION]
+        ),
         PullRequest(2, "fine", "main", draft=False),
     ]
     names = [b.name for b in promotion_order(build(prs))]
@@ -233,7 +243,7 @@ def test_ci_and_session_carried_onto_branch():
 def test_restack_plan_excludes_merged_only():
     prs = [
         PullRequest(1, "landed", "main", draft=False),
-        PullRequest(2, "review", "main", draft=False, labels=["in-review"]),
+        PullRequest(2, "review", "main", draft=False, labels=[DefaultLabel.IN_REVIEW]),
         PullRequest(3, "wip", "review", draft=True),
     ]
     plan = restack_plan(build(prs, merged={"landed"}))
@@ -243,7 +253,9 @@ def test_restack_plan_excludes_merged_only():
 
 
 def test_restack_plan_carries_parent_and_strategy():
-    prs = [PullRequest(2, "wip", "base-branch", draft=True, labels=["rebase"])]
+    prs = [
+        PullRequest(2, "wip", "base-branch", draft=True, labels=[DefaultLabel.REBASE])
+    ]
     plan = restack_plan(build(prs))
     assert plan == [{"branch": "wip", "parent": "base-branch", "strategy": "rebase"}]
 
@@ -556,6 +568,22 @@ def test_a_remote_that_names_no_repository_is_ignored():
 # %% the configuration the shell tooling reads
 
 
+def test_every_default_label_is_spelled_the_way_a_fork_creates_it():
+    """
+    The one place the label's wire spelling is pinned.
+
+    Everything else - the defaults, the committed configuration, the tests - now reads the member, so a renamed value would
+    change them all together and no test would notice; but the label a pass writes has to
+    match the one a fork's owner created by hand, and GitHub does not create a missing one.
+    """
+    assert {label.name: str(label) for label in DefaultLabel} == {
+        "IN_REVIEW": "in-review",
+        "REBASE": "rebase",
+        "NEEDS_RESOLUTION": "needs-resolution",
+        "INTEGRATION_CONFLICT": "integration-conflict",
+    }
+
+
 def test_every_setting_is_printed_under_its_own_field_name(capsys):
     """
     Callers read one setting by name out of this output, so a key that is not a field name
@@ -566,9 +594,10 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
     printed = dict(line.split("\t") for line in capsys.readouterr().out.splitlines())
 
     assert printed == {
-        "in_review_label": "in-review",
-        "rebase_label": "rebase",
-        "needs_resolution_label": "needs-resolution",
+        "in_review_label": DefaultLabel.IN_REVIEW,
+        "rebase_label": DefaultLabel.REBASE,
+        "needs_resolution_label": DefaultLabel.NEEDS_RESOLUTION,
+        "integration_conflict_label": DefaultLabel.INTEGRATION_CONFLICT,
         "fork_repository": "a-fork-owner/a-fork",
         "fork_remote": "origin",
         "upstream_repository": "an-upstream-owner/a-project",
@@ -631,8 +660,8 @@ def a_deep_stack_beside_an_independent_branch(
             name,
             parent,
             draft=name not in approved,
-            labels=(["in-review"] if name in promoted else [])
-            + (["needs-resolution"] if name in withheld else []),
+            labels=([DefaultLabel.IN_REVIEW] if name in promoted else [])
+            + ([DefaultLabel.NEEDS_RESOLUTION] if name in withheld else []),
         )
         for number, (name, parent) in enumerate([*deep, *aside], start=1)
     ]

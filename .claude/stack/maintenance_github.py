@@ -22,8 +22,13 @@ from typing import Any
 
 from maintenance_board import PullRequestRecord
 from maintenance_constants import CREDENTIAL_VARIABLES, GITHUB_API_ROOT
-from maintenance_errors import ExternalCallFailed
+from exceptions import ExternalCallFailed
 from stack import Repository
+
+CheckRunRecord = Mapping[str, Any]
+"""
+One check run as the REST API answers it, before any field is read.
+"""
 
 
 @dataclass
@@ -93,6 +98,34 @@ class PullRequestWriter(ABC):
 
 
 @dataclass(frozen=True)
+class CandidatePullRequests(ABC):
+    """
+    Opening a pull request only so a build gets a run, and reading what that run said.
+
+    Declared apart from the reads and writes a maintenance pass makes, because nothing
+    that maintains the stack does any of this: a candidate exists to be judged and closed
+    unmerged, and a pass handed this interface could open one by mistake.
+    """
+
+    @abstractmethod
+    def open_pull_request(self, title: str, head: str, base: str, body: str) -> int:
+        """:param title: The pull request's title.
+        :param head: The branch to be judged.
+        :param base: The branch it is opened against.
+        :param body: The description.
+        :return: The new pull request's number."""
+
+    @abstractmethod
+    def close_pull_request(self, number: int) -> None:
+        """:param number: The pull request to close without merging."""
+
+    @abstractmethod
+    def check_runs(self, reference: str) -> list[CheckRunRecord]:
+        """:param reference: The commit or branch to read the checks of.
+        :return: Every check run reported against it."""
+
+
+@dataclass(frozen=True)
 class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
     """
     Everything a pass does to the fork's pull requests.
@@ -129,7 +162,7 @@ class GitHubRequestFailed(ExternalCallFailed):
 
 
 @dataclass(frozen=True)
-class GitHubRepository(ForkPullRequests):
+class GitHubRepository(ForkPullRequests, CandidatePullRequests):
     """
     Every pull-request call this executor makes, against one repository.
 
@@ -211,6 +244,42 @@ class GitHubRepository(ForkPullRequests):
         :param body: The new description.
         """
         self._call("PATCH", f"/pulls/{number}", {"body": body})
+
+    def open_pull_request(self, title: str, head: str, base: str, body: str) -> int:
+        """
+        Open a pull request, so that something judges the branch it names.
+
+        :param title: The pull request's title.
+        :param head: The branch to be judged.
+        :param base: The branch it is opened against.
+        :param body: The description.
+        :return: The new pull request's number.
+        """
+        opened = self._call(
+            "POST", "/pulls", {"title": title, "head": head, "base": base, "body": body}
+        )
+        return int(opened["number"])
+
+    def close_pull_request(self, number: int) -> None:
+        """
+        Close a pull request without merging it.
+
+        :param number: The pull request to close.
+        """
+        self._call("PATCH", f"/pulls/{number}", {"state": "closed"})
+
+    def check_runs(self, reference: str) -> list[CheckRunRecord]:
+        """
+        Read every check run reported against a commit or a branch.
+
+        A branch answers with the checks on whatever it points at now, which is what
+        lets a branch's own state be asked for without first resolving its head.
+
+        :param reference: The commit or branch to read.
+        :return: The check runs, which may be none while the first is still queueing.
+        """
+        answered = self._call("GET", f"/commits/{reference}/check-runs?per_page=100")
+        return list(answered["check_runs"])
 
     def _call(
         self, method: str, path: str, payload: Mapping[str, Any] | None = None
