@@ -1242,4 +1242,3 @@ three database test files run here: 52 passed, the one failure being the known
 its association table) belong in the production `experiments` ORM interface at all, and
 whether this fix deserves its own bug-fix PR instead of riding #168 — it touches
 `results_database.py`, which the voice-questions work otherwise leaves alone.
-
