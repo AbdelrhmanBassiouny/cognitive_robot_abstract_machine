@@ -1,42 +1,45 @@
-## Fix: the scheduled Integration refresh closed its own candidate
+## Review round on #211: the git layer, the API address book, and the split
 
-**Status**: implemented, committed and pushed as `59380858` on
-`claude/plan-item-kickoff-workflow-unification-wg4w4x` (PR #211, still a draft).
-Folded into #211 rather than opened as its own branch, since the files it changes
-exist only on #154 and #211.
+**Status**: done and pushed. `d444a773` on #211 (the round), `3dafcf86` on #154 (the
+`integration.py` split it asked for), `2d50158c` merging the split back into #211.
+Both descriptions updated; manifest, roadmap and dashboard all current.
+#211 is still a draft; #154 stays out of draft by the recorded decision - a draft is
+excluded from every integration build.
 
-### Cause
-`settle-candidate` closed the candidate on any verdict that was not RUNNING, and
-ABSENT is what a candidate opened two seconds ago looks like - GitHub creates a
-pull request's run a moment after the request is opened. The first reading closed
-it, no run was ever created, every later reading found the same absence, and
-`_verdict_exit_code` answered ABSENT as still-running so the loop waited out the
-hour. Candidates 209, 212, 213: no run of ci.yml or integration-checks.yml at all.
-204 was closed after three seconds instead of two, its runs were created one second
-later, and it is the only build this pipeline has judged. `mergeable_state: dirty`
-on the closed three is not a conflict - the merge is clean locally.
+### The seven threads
+Five resolved, two left open on purpose.
 
-### What was changed
-1. `ChecksVerdict.has_settled` - the close and the exit status now read one property,
-   so they cannot disagree about ABSENT again.
-2. `RefreshPipeline` gives an absent check a warm-up (5 readings) instead of the whole
-   schedule, then stops with `CANDIDATE_UNCHECKED` (17). `_ask_repeatedly` is the one
-   loop both waits are built from.
-3. Found while fixing: a candidate left open would be merged into the next build -
-   it is out of draft, unblocked and not red, which is everything `select_for_build`
-   asks. Measured, not assumed. The stack is `work_in_flight` now: every open pull
-   request except one opened against the branch the build would replace.
+- **no explanation / no abbreviations / no union** - `BranchRefspec` became
+  `BranchPublication`, `publishing` (a factory forwarding its arguments) deleted,
+  `under_its_own_name` added for the ten callers that publish a branch as itself.
+- **`gitcommandrunner?`** - the fixture used `remote_reference`, which already existed,
+  and `BRANCH_REFERENCE_PREFIX`. Left open: I asked whether `ls-tree` should go on the
+  shared runner for one test caller.
+- **hard-coded path** - `ApiResource` and `HttpMethod`, plus `_page`.
+- **the `GitCommand` discussion** - answered with measurements, no change, left open.
+- **the 400-line rule** ("ok do it on 154") - done, resolved.
 
-839 tests across the four CI directories, from 835. Four new tests, each written first.
+### What the round found that nobody asked for
+Removing the union failed 27 tests: `push_refspec` on the base and `push` on the
+subclass were one git command under two names with incompatible signatures. One `push`
+now, taking `ProposedPush`, which moved to `.claude/shared/` carrying a
+`BranchPublication`, with the lease on it as `as_arguments`. `configure` and
+`set_configuration` had byte-identical bodies.
 
-### Done besides the code
-PR #211's description carries a section on this round; the `workflow-unification`
-manifest and roadmap have it under `red-candidate-localisation`; the dashboard was
-republished.
+`page_size` is a field and two GitHub reads spelled `per_page=100` past it. There was
+no test module for `GitHubRepository` at all, so `test_maintenance_github.py` pins all
+eleven addresses at a page size deliberately not the default - which is what makes that
+mutation fail; the first version used 100 on both sides and passed it.
 
-### Outstanding - the user's call
-The schedule runs the pipeline copy on the fork's default branch, which is
-`integration`, and that only updates when a build publishes. So the fix reaches the
-schedule by a `workflow_dispatch` of Integration refresh on this branch, or by a hand
-push to `integration`. Neither was done: a dispatch is a real rebuild that publishes
-on green.
+851 tests across the four CI directories, from 839. #154: 759, from 758.
+
+### Outstanding
+- The two open threads are the user's to close: the `GitCommand` seam (recommended to
+  `bastler-notes-core-python`, which owns `git_interface.py` and has four callers
+  waiting) and the `ls-tree` question.
+- `integration_reproduction.py` is 419 lines - #154's, predates this, and the only file
+  in `.claude/stack/` still over 400. Offered on the thread, not done.
+- Unchanged from the previous round: the candidate-close fix reaches the schedule only
+  when a build publishes, since the schedule runs the copy on `integration`. A
+  `workflow_dispatch` on this branch or a hand push to `integration` is what does it,
+  and a dispatch is a real rebuild that publishes on green - so neither was done.
