@@ -82,6 +82,12 @@ items:
       otherwise session-start.sh stops finding items by branch and
       /plan-dashboard mints duplicate pages for the new ids. Every item carrying
       an open pull request keeps its number across the move.
+      Second reason, measured 2026-08-29: at 15,447 source lines this plan's
+      dashboard renders to a 1.26 MB, 12,194-line artifact, and the Artifact
+      tool refuses a publish over another session's newer version until that
+      version has been read in full - 16 reads, against roughly 2 for a plan at
+      the budget. The split is what makes republishing affordable; the gate
+      itself is harness-side and cannot be narrowed to a diff from here.
 
   - id: split-rdr-refactor
     title: "Split rdr-refactor into plans under the budget"
