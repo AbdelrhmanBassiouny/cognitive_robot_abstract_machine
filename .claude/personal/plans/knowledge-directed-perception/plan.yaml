@@ -271,6 +271,24 @@ items:
       robot knows rather than a branch somebody wrote. Touches only
       semantic_digital_twin, so it can start off main immediately.
 
+      Built 2026-08-29 as 80100bd4 on #216: SurfaceFinish (matte / glossy / mirror) beside
+      Color and Texture, and Shape.finish carrying it, optional so that None means the finish
+      has not been stated rather than that it is matte. Adding it forced Shape's own
+      constructor arguments to be read once by Shape.arguments_from_json instead of a fourth
+      time in each of Sphere, Cylinder and Box, and Mesh.from_trimesh to carry a finish, which
+      is the only appearance property a mesh has no other carrier for. 45 tests pass in
+      test_shape.py against 25 on the parent, the whole semantic_digital_twin suite's failing
+      and erroring set is unchanged, and the regenerated ORM maps the field as
+      Mapped[Optional[SurfaceFinish]] on PolymorphicEnumType.
+
+      The developer took #216 out of draft on 2026-08-29, which ends the building session's
+      work on it: CI was green on 21 of 23 checks with the other two still running and none
+      red, and the pull request now waits on review rather than on this plan. Two decisions
+      are recorded rather than left implicit, both in roadmap.md: no adapter infers a finish
+      from MuJoCo specular/shininess/reflectance, and a derived supporting-surface Region does
+      not inherit its body's finish - detect-per-supporting-surface has to declare it on the
+      region it builds.
+
   - id: choose-detection-method
     title: "Choose the detector by rule from the target and the surface"
     branch: perception_choose_detection_method
