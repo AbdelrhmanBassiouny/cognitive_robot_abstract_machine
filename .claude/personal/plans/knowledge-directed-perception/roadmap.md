@@ -601,3 +601,90 @@ chosen against a real URDF that cannot be inspected from a container.
 **Worth repeating:** the item's recorded `blockers` were empty while it sat waiting, and the
 cause was a single review comment nobody had turned into state. What the resolve did before
 touching any code was write that down.
+
+## `surface-finish-annotation`: where finish belongs, and what it deliberately does not reach
+
+Kicked off 2026-08-29 in `auto` mode, as pull request #216 off `main`. `depends_on` is
+empty and `check_dependency_readiness.py` returns `[]`, so nothing was waited on. The
+mechanical scope check (`check_scope_overlap.py`, base `origin/main`, against both
+in-flight branches) reports `paths_absent_from_base: []` and no shared path with either
+`montessori_perception_on_main` or `perception_surfaces_from_world` — those two live
+entirely in `experiments/`, this lives entirely in `semantic_digital_twin/`. Genuinely
+separate work, exactly as the sequencing section predicted.
+
+### The property goes where colour already is
+
+The item's own premise settles the placement: "the digital twin models a surface's colour
+but not its finish". Colour is `Shape.color`, and `Shape.texture` is already an *optional*
+appearance property sitting beside it — so finish is the third field on `Shape`, in
+`world_description/geometry.py`, and `Texture` is the precedent to copy in every respect
+(optional, documented on the field, round-tripped, tested by serialization).
+
+This also happens to be the placement the consumer can actually read. `Body.visual` /
+`Body.collision` and `Region.area` are all `ShapeCollection`s of `Shape`, so both routes
+`WorkspaceSurface` takes in `surfaces-from-world` — the declared `supporting_surface`
+region, and the fallback pick of the body's widest horizontal collision shape — end at a
+`Shape`. The fallback is the path that actually runs today, and it is the one where the
+finish is read off the very shape whose scale and origin that item already reads.
+
+### `None` is not `MATTE`
+
+`finish` defaults to `None`, meaning *not stated*, rather than to a member. If every
+unannotated surface read as matte, `choose-detection-method`'s "a matte contrasting
+surface selects the cheaper colour blob" rule would fire on the steel table the moment
+someone forgot to annotate it — a silently wrong dispatch rather than a visible gap.
+`Optional` is also what `texture` does on the same class for the same reason.
+
+### One read of `Shape`'s own fields, not four
+
+`Sphere`, `Cylinder` and `Box` each re-read `origin`, `color` and `texture` in their own
+`_from_json`; `Mesh` re-reads `origin` and `scale`. Adding a fourth field would have
+written the same line a fourth time in each. So the fields `Shape` itself declares are
+read once, by `Shape.arguments_from_json`, and each primitive's `_from_json` supplies only
+its own geometry. The refactor is caused by this change rather than bundled with it: it is
+the DRY-compliant way to add the field, and the parametrized round-trip tests over all
+three primitives are what hold it.
+
+### `Mesh` carries the finish, but still not the colour or the texture
+
+`Mesh._from_json` goes through `from_trimesh`, which reconstructs the shape from the
+exported file and has never restored `color` or `texture`. That is deliberate for both:
+a mesh's colour lives in its vertex colours, and its texture in its trimesh visual — the
+field on `Shape` is documented as not applying to meshes. Finish has no such carrier.
+Leaving it out would mean a mesh-modelled table — which a real URDF is more likely to give
+than a primitive — loses the annotation on every round trip. So `from_trimesh` gains a
+`finish` parameter and `Mesh._from_json` passes it through. Colour and texture are left
+exactly as they were; fixing those is not this item's claim.
+
+### Deliberately out of scope, both recorded rather than silently skipped
+
+- **No adapter infers a finish.** A MuJoCo material carries `specular`, `shininess` and
+  `reflectance`, and the MJCF adapter already reads that material for `Color` and
+  `Texture`. Mapping three continuous numbers onto three finishes means choosing
+  thresholds, and `AGENTS.md` forbids inventing numbers whose rationale nobody can state.
+  The finish is declared by whoever builds the world, which is where Tracy's table is
+  described anyway.
+- **A derived supporting-surface `Region` does not inherit its body's finish.**
+  `calculate_supporting_surface` builds the region from `self.root.combined_mesh` — every
+  collision shape at once — so there is no single shape to take a finish from, and a body
+  whose shapes disagree would need a merge rule nothing asks for yet. `surfaces-from-world`
+  already recorded that `supporting_surface` is `None` on every world in this workspace and
+  that nothing calls `calculate_supporting_surface`, so propagating it would be an invented
+  rule on a path that does not run. **Worth knowing for `detect-per-supporting-surface`:**
+  when it populates `supporting_surface`, the finish has to be declared on the region it
+  builds, or read from the body's shapes at that point.
+
+### Verification
+
+Tests first, in `test/semantic_digital_twin_test/test_geometry/test_shape.py`, asserting
+against the `SurfaceFinish` member rather than against a string copy of it, and
+parametrized across `Box`, `Sphere`, `Cylinder` and `Mesh` so the shared-read refactor is
+covered on every shape it touches.
+
+Run with `--noconftest` and the workspace on `PYTHONPATH`, for the reason #202 and #205
+both recorded: this repository's conftest regenerates the ORM interfaces on collection,
+which imports `giskardpy` and needs a ROS 2 installation the container lacks, and that
+failure reproduces on unmodified `main`. `ormatic` maps `Enum` through
+`PolymorphicEnumType`, so the generated ORM interface is expected to take the new field
+without a source change — whether the regeneration can actually run in this container is
+reported with the result rather than assumed.
