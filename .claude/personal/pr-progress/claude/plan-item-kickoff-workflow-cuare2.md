@@ -1,47 +1,56 @@
 # bastler-package (#185) — `claude/plan-item-kickoff-workflow-cuare2`
 
 Plan `workflow-unification`, track `bastler`, wave `upstream`. Draft PR #185, based on
-`main`. Session https://claude.ai/code/session_01723FcMWYnpQHrq4fdxxs8j.
+`main`. Session https://claude.ai/code/session_01GE3r3XXEJpr9DUUk78Y2sT.
 
 ## Why this session was here
 
-`/plan-item-resolve workflow-unification bastler-package`. The pull request was `dirty`,
-labelled `needs-resolution`, and had been skipped by four maintenance passes since
-2026-08-22. CI was green on the head commit, so the merge conflict was the whole blocker.
+`/plan-item-resolve workflow-unification bastler-package`. Unlike the two before it,
+nothing about the pull request was broken: `mergeable_state` clean, all 23 checks green,
+no label left on it. The one open thread was posted the same day, on
+`bastler/package_layout.py`, and asks for the opposite of what this branch had recorded
+twice — install the requirements automatically rather than declare who runs without them.
 
 ## The plan, as settled
 
-1. Merge `origin/main`, then run `git ls-tree -r origin/main --name-only .claude/` against
-   the merged tree — the 2026-08-23 lesson, since a conflict report cannot name a file a
-   moved directory makes dangerous. It found `plan_item_mode.py` and `plan-item-modes.toml`,
-   landed with #149, which git had not reported.
-2. Fold both into `bastler/`, defaults resolved beside the module, `pyproject` package-data.
-3. Repoint every caller at `python3 -m`, and add the two skill documents to
-   `UNINSTALLED_INVOCATIONS` so the closure constrains the module.
-4. Convert the incoming test to the package's own conventions (`PythonModuleRunner`,
-   `constants.py`, `Location`).
-5. Verify by mutation, not by a green suite.
+1. `session-start.sh` installs whatever of `bastler/requirements.txt` is missing, gated on
+   the notes-branch fetch it already exits on, reporting a failure and finishing the run.
+2. Delete `UNINSTALLED_INVOCATIONS`, the derived closure, `third_party_import_names()` and
+   the unavailable-import harness, with the 32 test cases derived from them.
+3. Ask about the seventh caller before deciding it — an Actions runner reaches no hook.
+4. Tests first, then five mutations; verify the install for real, not only against a stub.
 
 ## Done
 
-- All of the above, in one merge commit `56d4f829`, pushed.
-- 642 tests pass (617 before). Four mutations checked, each caught by its own test —
-  including one that only failed *after* a prose mention of the module was removed from
-  `plan-item-mode/SKILL.md`, because `names_of()` matches anywhere in a caller's file.
-- `check-setup.sh` exits 0; all fourteen entry points answer `--help`; the built wheel
-  carries `plan-item-modes.toml`.
-- PR description updated; manifest `notes`/`session` and `roadmap.md` saved (`94240ab5`).
+- All of the above, in `cb4d789a3`, pushed. The user chose adding a `pip` step to
+  `upstream-reviews.yml` and deleting the mechanism outright, over keeping a one-entry
+  version — recorded in `roadmap.md` because it reverses the 2026-08-23 entry.
+- What replaces the guarantee names nothing: a test reads `.github/workflows/*.yml`, finds
+  every workflow running a module, and holds each to installing the requirements first.
+- The lookup moved beside the installer as `missing_requirements`, so `check-setup.sh` and
+  `session-start.sh` stop carrying two copies of the same heredoc. `executable_stubs.py`
+  holds the stub directory and PATH-hiding helper, now that two suites need them.
+- Three docstrings that justified being stdlib-only by a caller the 2026-08-23 round had
+  already disproved now give decision 12's krrood independence instead.
+- 615 tests pass, from 642 — 32 deleted cases, 5 new, arithmetic stated. Five mutations,
+  each caught by the test that names it. `nh3` uninstalled for real and put back by one
+  hook run, which also proves the ordering against `check-setup.sh`.
+- PR description rewritten; review thread replied to and resolved; `roadmap.md`, `notes`
+  and `blockers` saved.
 
 ## Next
 
-- Nothing outstanding on this branch. CI is re-running on `56d4f829`; the
-  `needs-resolution` label clears itself once a pass sees the branch merge cleanly.
+- Nothing outstanding on this branch. CI will re-run on `cb4d789a3`.
+- **A defect in #151's tool, found while using it**: `plan_item_bootstrap update` has no
+  way to clear a `blockers` list — `--blockers <empty file>` writes one empty blocker. The
+  manifest was corrected by hand. #151 is blocked and unlanded, so this is a note for
+  whoever resumes it, not work for this branch.
 - **For the user, not for a session to decide**: `main` retired every workspace member's
   `requirements.txt` for static `[project] dependencies` (`4b4cfdf4`). `bastler` is not a
   workspace member so nothing fails, but its `requirements.txt` is now the last in the
-  repository and four things read it. Whether it follows is a review call.
-- Ten of the 2026-08-23 round's 34 review threads stay open on purpose (answered
-  differently, or waiting on the user). Not this session's to resolve.
+  repository, and a session start is now one more thing that reads it.
+- Two of the 2026-08-23 round's threads stay open on purpose (the `RESTACK_STEPS` name
+  `monkeypatch.setattr` takes as a string, and the surviving `status_label` assertion).
 - Landing order, not dependencies: #198 fixes a bug this branch carries verbatim at
-  `bastler/stack.py:823`; #203 adds `.claude/setup_steps.py`, which is the same
+  `bastler/stack.py`; #203 adds `.claude/setup_steps.py`, the same
   new-`.py`-under-`.claude/` problem a third time.
