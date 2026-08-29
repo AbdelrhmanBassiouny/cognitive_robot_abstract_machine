@@ -11076,3 +11076,102 @@ which is the thing that is broken, so the fix reaches the schedule either by a
 `workflow_dispatch` on this branch or by a hand push to `integration`. Neither has been
 done, and a dispatch is a real rebuild that publishes on green, so it is the user's call
 rather than this session's.
+
+## Update 2026-08-29 (resolved): the requirements install themselves, and the declaration that priced them goes
+
+`/plan-item-resolve workflow-unification bastler-package`, session
+https://claude.ai/code/session_01GE3r3XXEJpr9DUUk78Y2sT. Nothing was wrong with the pull
+request this time - `mergeable_state` clean, all 23 checks green, no label left on it, the
+2026-08-22 `needs-resolution` cleared by the previous session's merge. What was open was
+one review thread posted the same day, and it reverses a decision this branch had recorded
+twice.
+
+### The reversal, in the user's terms
+
+Their comment: *"I do not think we need this, we should install the requirements
+automatically if the user uses bastler and has run the setup or is running it, if he
+doesn't then we do not install, and the installation should be done safely where any
+failure is caught and reported instead of a silent failure that stops during the hook
+without knowing what happened, and then after catching continue the rest of the steps
+normally."*
+
+The 2026-08-23 entries argued the opposite twice - *"a hook that fails is worse than one
+that reports"*, and the tier's own justification. The first objection is answered by the
+requirement they attached to the ask: a caught-and-reported failure is not a hook that
+fails. The second is what the whole mechanism rested on, and it does not survive an
+install that always runs.
+
+So `session-start.sh` installs whatever of `bastler/requirements.txt` is missing, and
+`UNINSTALLED_INVOCATIONS`, `modules_that_must_not_import_third_party()`,
+`third_party_import_names()` and the unavailable-import harness are deleted with the 32
+test cases derived from them. `package_layout.py` now writes nothing down at all.
+
+### The gate was already in the file
+
+*"If he doesn't [have the setup] then we do not install"* needed no new check.
+`session-start.sh`'s second statement is `fetch_personal_notes_branch || exit 0`, so
+everything after it already runs only for someone whose notes branch resolves - which is
+the same audience the notes, the plan and the git identity serve. A clone that never ran
+`/setup-personal-notes` installs nothing because it never reaches the line.
+
+Placed before the setup verdict, for the ordering reason CLAUDE.local.md and the git
+identity are already placed that way: `check-setup.sh`'s `dashboard_dependencies` row then
+reports what this run installed rather than the absence it was about to fix. Proven live
+rather than argued - `nh3` was uninstalled for real, and one run both installed it and
+reported `ok`.
+
+### The seventh caller is the one an install-at-session-start cannot reach
+
+Six of the seven entries were sessions. The seventh,
+`.github/workflows/upstream-reviews.yml`, runs `python3 -m bastler.upstream_reviews` on a
+bare runner where no hook of ours ever runs - the case the 2026-08-23 correction was
+written about, and the one the comment did not mention.
+
+Put to the user rather than decided here, with the alternatives measured: add a `pip` step
+and delete the mechanism; derive the caller from the workflow files and keep the closure;
+or keep a one-entry version of the declaration. **They chose the first**, which reverses
+2026-08-23's *"adding a `pip install` step to an Actions runner in order to serve a script
+that needs nothing is strictly worse"* - recorded here rather than quietly dropped, since
+that entry is otherwise still on this page arguing the other way.
+
+The guarantee survives without the machinery, and without naming anything:
+`test_package_contract.py` reads `.github/workflows/*.yml`, finds every workflow running a
+module of this package, and holds each to installing the requirements first. It is derived
+the same way the deleted closure was; what it is not is the closure, and it does not hold
+any module to the standard library.
+
+### Generalizable: a justification outlives the thing that justified it
+
+Three docstrings - `class_property.py`, `plan_item_bootstrap.py`, `plan_model.py` - still
+said a module was standard-library-only *because a hook reads it*, or *because the stack
+tooling is reachable from SessionStart*. The 2026-08-23 measurement had already found that
+false for `session-start.sh`, and the correction went into `package_layout.py` and this
+roadmap while the three docstrings kept the retired reason. Each now gives the one that
+does hold: decision 12's deliberate independence from `krrood`.
+
+Worth carrying because the earlier round is what makes it visible. A finding recorded in
+the module that prompted it does not reach the modules that repeated its claim, and grep
+for the *claim* is what finds those - the same shape as 2026-08-23's *"grep for the module,
+not for the callers you expect"*.
+
+### Counts and mutations
+
+615 tests, from 642: 32 cases went with the three deleted parametrizations (18 modules in
+the closure, and 7 entries twice) and 5 are new. The arithmetic is stated because this
+branch has twice had a parametrization narrow silently under a green run - the count is
+the check, not the colour.
+
+Five mutations, each caught by exactly the test that names it: the hook not installing
+what is missing; a failed install becoming fatal; the hook installing when nothing is
+missing; the workflow losing its install step; and the summary dropping its
+`requirements:` line.
+
+### One process failure, mine, worth recording
+
+Restoring two mutations with `git checkout -- <path>` reverted the *working-tree* changes
+this session had made to those files, not just the mutation - the shared
+`missing_requirements`/`install_requirements` functions and the workflow's install step
+both vanished, and the next two mutation runs reported failures that were the missing
+edits rather than the mutation. Caught because the failures did not match the mutation
+under test. A mutation is restored from a copy taken before it, never from HEAD, whenever
+the file is one the session has already edited.
