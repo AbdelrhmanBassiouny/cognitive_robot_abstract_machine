@@ -155,6 +155,7 @@ jobs:
           READ
 
       - name: Publish the build once its checks pass
+        id: verdict
         env:
           GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
         run: |
@@ -170,8 +171,53 @@ jobs:
             status=$?
             set -e
             # 13 is the checks not having finished; anything else is a verdict.
-            if [ $status -ne 13 ]; then exit $status; fi
+            if [ $status -ne 13 ]; then break; fi
             sleep 60
           done
-          echo "::error::the candidate's checks had not finished after an hour"
-          exit 1
+          if [ $status -eq 13 ]; then
+            echo "::error::the candidate's checks had not finished after an hour"
+            exit 1
+          fi
+          # Recorded rather than exited on, so a red verdict still reaches the step that
+          # localises it. The run is failed at the end instead.
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+
+      # A red candidate names a failing check and nothing else, and the suite the build
+      # already ran cannot reproduce a matrix job's failure - it runs the tooling
+      # directories, and test_each_lib runs a library's own tests. Re-running that
+      # library over each prefix of the merge order is what names the tip whose arrival
+      # turned it, so the branch gets blocked and the next build is assembled without it.
+      # Without this the same red repeats every rebuild with nobody told which pair to
+      # look at.
+      - name: Localise a red candidate to the branch that caused it
+        if: steps.verdict.outputs.status == '14'
+        env:
+          GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
+          # A probe is dispatched on a reference carrying this pipeline rather than on the
+          # tree under test, which carries no workflow of its own - so it is the same
+          # reference this job checked the tooling out at, as a branch name because that
+          # is what a dispatch takes.
+          PIPELINE_REFERENCE: >-
+            ${{ github.event_name == 'pull_request'
+            && github.event.repository.default_branch
+            || github.ref_name }}
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          for _ in $(seq 180); do
+            set +e
+            python "${STACK_DIRECTORY}/integration.py" locate-candidate-failure \
+              --head "${{ steps.candidate.outputs.head }}" \
+              --state "${RUNNER_TEMP}/localisation.json" \
+              --dispatch-on "${PIPELINE_REFERENCE}" --json
+            status=$?
+            set -e
+            # 15 is a round of probes still running. Anything else is an answer,
+            # including 16 - nothing that failed names a library, so there is nothing
+            # here to re-run and the local search has already said what it can.
+            if [ $status -ne 15 ]; then break; fi
+            sleep 60
+          done
+
+      - name: Fail the run on a build that was not published
+        if: steps.verdict.outputs.status != '0'
+        run: exit ${{ steps.verdict.outputs.status }}

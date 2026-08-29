@@ -94,7 +94,14 @@ from integration_reproduction import (  # noqa: E402
     clear_fixed_breaks,
 )
 from integration_localisation import (  # noqa: E402
+    Localisation,
+    LocalisationKey,
+    LocalisationStage,
+    LocalisationStep,
+    PROBE_WORKFLOW_FILE,
     Probe,
+    dispatch,
+    library_a_candidate_failed_on,
 )
 from integration_verdict import (  # noqa: E402
     Candidate,
@@ -1158,12 +1165,21 @@ class ProbeAssembly:
     named_at: datetime
     """The moment the round's branches are named after."""
 
-    def branch_name(self, ordinal: int) -> str:
-        """:param ordinal: Which probe of the round this is.
-        :return: The branch its tree is published under, unique per probe and per round."""
+    def branch_name(self, stage: LocalisationStage, ordinal: int) -> str:
+        """Name one probe's tree.
+
+        The round is in the name as well as the moment, because the two rounds of one
+        search are opened by calls that can land in the same second - and a second round
+        reusing a first round's name would be answered by the run that judged a different
+        tree.
+
+        :param stage: Which round the probe belongs to.
+        :param ordinal: Which probe of the round it is.
+        :return: The branch its tree is published under.
+        """
         return (
             f"{PROBE_BRANCH_PREFIX}{self.named_at.strftime(BUILD_NAME_FORMAT)}"
-            f"-{ordinal}"
+            f"-{stage}-{ordinal}"
         )
 
     def prefixes(self) -> tuple[Probe, ...]:
@@ -1180,7 +1196,9 @@ class ProbeAssembly:
                 if not build.merge(tip, included).is_integrated:
                     continue
                 included.append(tip.name)
-                probes.append(self._publish(build, tip, len(probes)))
+                probes.append(
+                    self._publish(build, tip, LocalisationStage.PREFIXES, len(probes))
+                )
             return tuple(probes)
 
     def pairings(self, suspect: str, earlier: Sequence[str]) -> tuple[Probe, ...]:
@@ -1202,7 +1220,11 @@ class ProbeAssembly:
                     continue
                 if not build.merge(by_name[suspect], [name]).is_integrated:
                     continue
-                probes.append(self._publish(build, by_name[name], len(probes)))
+                probes.append(
+                    self._publish(
+                        build, by_name[name], LocalisationStage.NARROWING, len(probes)
+                    )
+                )
             return tuple(probes)
 
     def take_down(self, probes: Sequence[Probe]) -> None:
@@ -1236,13 +1258,18 @@ class ProbeAssembly:
             )
 
     def _publish(
-        self, build: IntegrationBuild, tip: Branch, ordinal: int
+        self,
+        build: IntegrationBuild,
+        tip: Branch,
+        stage: LocalisationStage,
+        ordinal: int,
     ) -> Probe:
         """:param build: The assembly whose current head is the tree to publish.
         :param tip: The tip this probe is about.
-        :param ordinal: Which probe of the round this is.
+        :param stage: Which round the probe belongs to.
+        :param ordinal: Which probe of the round it is.
         :return: The probe, once its tree is on the fork."""
-        branch = self.branch_name(ordinal)
+        branch = self.branch_name(stage, ordinal)
         build.git.run(
             "push",
             "--force",
@@ -1400,6 +1427,18 @@ class IntegrationExitCode(IntEnum):
     CANDIDATE_FAILED = 14
     """The candidate's checks failed, so the build is not one to hand anybody. The
     branches it was made of are where the failure is."""
+
+    PROBES_STILL_RUNNING = 15
+    """A localisation's probes have not all answered, so the round cannot be read yet.
+    Its own status rather than a failure, for the same reason a candidate's is: the
+    caller asks again, and one that read this as an answer would act on a round nothing
+    had judged."""
+
+    NO_LIBRARY_CHECK_FAILED = 16
+    """Nothing the candidate failed on names a library, so re-running one localises
+    nothing. Said plainly rather than probed anyway: a tooling check is already localised
+    by the local search, faster and before a build is pushed, and a check that is a
+    property of one tree is not about a combination at all."""
 
     @property
     def name_for_a_caller(self) -> str:
@@ -1959,6 +1998,209 @@ def _verdict_exit_code(verdict: ChecksVerdict) -> IntegrationExitCode:
     if verdict is ChecksVerdict.FAILED:
         return IntegrationExitCode.CANDIDATE_FAILED
     return IntegrationExitCode.CANDIDATE_STILL_RUNNING
+
+
+@dataclass(frozen=True)
+class LocateCandidateFailureCommand(IntegrationCommand):
+    """Finds which tip's arrival turned the library a candidate went red on."""
+
+    @property
+    def invoked_as(self) -> str:
+        """The name it is invoked by on the command line."""
+        return "locate-candidate-failure"
+
+    @property
+    def description(self) -> str:
+        """What it does, as ``--help`` puts it."""
+        return "find which tip turned the library a candidate's checks failed on"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare this command's flags on."""
+        parser.add_argument(
+            "--head", required=True, help="the commit the candidate's checks are on"
+        )
+        parser.add_argument(
+            "--state",
+            required=True,
+            type=Path,
+            help="where the search in flight is kept between calls",
+        )
+        parser.add_argument(
+            "--dispatch-on",
+            default=POINTER_BRANCH,
+            help=(
+                "the reference carrying this pipeline, which is what a dispatch runs the "
+                "probe workflow from"
+            ),
+        )
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """Take the search one step, and say what it wants next.
+
+        Read once rather than waited on, the same way a candidate is settled: the state
+        lives in the document rather than in the process, so a caller that wants to wait
+        asks again and every invocation is a decision that can be read on its own.
+
+        :param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        fork = run.fork()
+        run.refresh_remotes()
+        assembly = ProbeAssembly(
+            stack=run.stack(fork),
+            git=run.git,
+            provenance=ResolutionProvenance.read(run.provenance_path()),
+            named_at=datetime.now(timezone.utc),
+        )
+        if not arguments.state.exists():
+            return self._start(run, fork, assembly, arguments)
+        localisation = Localisation.from_json(
+            json.loads(arguments.state.read_text())
+        ).answered_by(fork.workflow_runs(PROBE_WORKFLOW_FILE))
+        return self._continue(run, fork, assembly, localisation, arguments)
+
+    def _start(
+        self,
+        run: IntegrationRun,
+        fork: GitHubRepository,
+        assembly: ProbeAssembly,
+        arguments: argparse.Namespace,
+    ) -> IntegrationExitCode:
+        """Open the prefix round, or say the candidate's red is not this search's.
+
+        :param run: What this run has resolved.
+        :param fork: The fork to read the candidate's checks from and dispatch on.
+        :param assembly: The assembly that publishes the trees.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        library = library_a_candidate_failed_on(read_checks(fork, arguments.head))
+        if library is None:
+            self._print(arguments, None, IntegrationExitCode.NO_LIBRARY_CHECK_FAILED)
+            return IntegrationExitCode.NO_LIBRARY_CHECK_FAILED
+        localisation = Localisation(
+            library=library,
+            stage=LocalisationStage.PREFIXES,
+            probes=assembly.prefixes(),
+        )
+        dispatch(fork, arguments.dispatch_on, library, localisation.probes)
+        return self._wait(arguments, localisation)
+
+    def _continue(
+        self,
+        run: IntegrationRun,
+        fork: GitHubRepository,
+        assembly: ProbeAssembly,
+        localisation: Localisation,
+        arguments: argparse.Namespace,
+    ) -> IntegrationExitCode:
+        """Act on what the round in flight now says.
+
+        :param run: What this run has resolved.
+        :param fork: The fork to dispatch on and report to.
+        :param assembly: The assembly that publishes and takes down the trees.
+        :param localisation: The round, with every probe's run read.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        if localisation.next_step is LocalisationStep.WAIT:
+            return self._wait(arguments, localisation)
+        if localisation.next_step is LocalisationStep.NARROW:
+            suspect = localisation.localised_suspect
+            assembly.take_down(localisation.probes)
+            narrowing = Localisation(
+                library=localisation.library,
+                stage=LocalisationStage.NARROWING,
+                probes=assembly.pairings(suspect.branch, suspect.already_included),
+                suspect=suspect,
+            )
+            dispatch(fork, arguments.dispatch_on, narrowing.library, narrowing.probes)
+            return self._wait(arguments, narrowing)
+        return self._conclude(run, fork, assembly, localisation, arguments)
+
+    def _conclude(
+        self,
+        run: IntegrationRun,
+        fork: GitHubRepository,
+        assembly: ProbeAssembly,
+        localisation: Localisation,
+        arguments: argparse.Namespace,
+    ) -> IntegrationExitCode:
+        """Report what the search found, and block the branch when it found one.
+
+        The finding is an :class:`IntegrationTestFailure` like any other, so a failure
+        localised through CI is reported to its branch's owner in the same words as one
+        localised locally, and held out of promotion by the same label.
+
+        :param run: What this run has resolved.
+        :param fork: The fork to report to.
+        :param assembly: The assembly whose trees are finished with.
+        :param localisation: The concluded search.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        assembly.take_down(localisation.probes)
+        arguments.state.unlink(missing_ok=True)
+        suspect = localisation.localised_suspect
+        if suspect is None:
+            self._print(arguments, localisation, IntegrationExitCode.SUCCESS)
+            return IntegrationExitCode.SUCCESS
+        failure = IntegrationTestFailure(
+            culprit=suspect.branch,
+            culprit_pull_request_number=suspect.pull_request_number,
+            already_included=suspect.already_included,
+            breaks_against=localisation.breaks_against,
+        )
+        blocked = failure.block_the_branch_that_causes_it(run.configuration, fork)
+        self._print(arguments, localisation, IntegrationExitCode.TESTS_FAILED, blocked)
+        return IntegrationExitCode.TESTS_FAILED
+
+    def _wait(
+        self, arguments: argparse.Namespace, localisation: Localisation
+    ) -> IntegrationExitCode:
+        """Keep the search for the call that reads it next.
+
+        :param arguments: The parsed command line.
+        :param localisation: The round in flight.
+        :return: The process exit code.
+        """
+        arguments.state.write_text(json.dumps(localisation.as_json(), indent=2))
+        self._print(arguments, localisation, IntegrationExitCode.PROBES_STILL_RUNNING)
+        return IntegrationExitCode.PROBES_STILL_RUNNING
+
+    @staticmethod
+    def _print(
+        arguments: argparse.Namespace,
+        localisation: Localisation | None,
+        status: IntegrationExitCode,
+        blocked: BlockedBranchReport | None = None,
+    ) -> None:
+        """:param arguments: The parsed command line.
+        :param localisation: The search so far, where there is one.
+        :param status: What this call leaves its caller with.
+        :param blocked: What blocking the branch wrote, where anything was."""
+        document = {
+            ReportKey.STATUS: status.name_for_a_caller,
+            ReportKey.EXIT_CODE: int(status),
+            **({} if localisation is None else localisation.as_json()),
+            ReportKey.BREAKS_AGAINST: (
+                None if localisation is None else localisation.breaks_against
+            ),
+        }
+        if not arguments.json:
+            print(f"{status.name_for_a_caller}\t{document.get(LocalisationKey.STAGE)}")
+            return
+        if blocked is not None:
+            document[ReportKey.BLOCKED] = blocked.blocked
+        print(json.dumps(document, indent=2))
 
 
 @dataclass(frozen=True)

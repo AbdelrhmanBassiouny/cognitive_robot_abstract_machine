@@ -41,7 +41,8 @@ and what keeps this readable in a repository that has never dispatched it.
 
 PROBE_RUN_NAME_PREFIX = "Integration probe over "
 """
-Opens the name a probe's run carries, so a reader can tell one probe's run from another's.
+Opens the name a probe's run carries, so a reader can tell one probe's run from
+another's.
 
 Every probe of one localisation is dispatched on the same reference - the one carrying
 the pipeline - so the reference cannot tell them apart and the name has to.
@@ -51,8 +52,8 @@ MATRIX_CHECK_PATTERN = re.compile(r"\(([^)]+)\)")
 """
 Finds the library a matrix job's check name is for.
 
-The matrix names each job ``test_each_lib (<lib>)``, optionally suffixed with the reusable
-job's own name; the library is what the parentheses hold.
+The matrix names each job ``test_each_lib (<lib>)``, optionally suffixed with the
+reusable job's own name; the library is what the parentheses hold.
 """
 
 
@@ -62,10 +63,14 @@ class ProbeWorkflowInput(StrEnum):
     """
 
     BUILD = "build"
-    """The assembled prefix to check out and test."""
+    """
+    The assembled prefix to check out and test.
+    """
 
     LIBRARY = "library"
-    """Which library's tests to run over it."""
+    """
+    Which library's tests to run over it.
+    """
 
 
 class LibraryUnderTest(StrEnum):
@@ -78,44 +83,69 @@ class LibraryUnderTest(StrEnum):
     """
 
     GISKARDPY = "giskardpy"
-    """The motion-planning library."""
+    """
+    The motion-planning library.
+    """
 
     KRROOD = "krrood"
-    """The knowledge-representation library."""
+    """
+    The knowledge-representation library.
+    """
 
     SEMANTIC_DIGITAL_TWIN = "semantic_digital_twin"
-    """The world-model library."""
+    """
+    The world-model library.
+    """
 
     CORAPLEX = "coraplex"
-    """The task-representation library."""
+    """
+    The task-representation library.
+    """
 
     RANDOM_EVENTS = "random_events"
-    """The event-algebra library."""
+    """
+    The event-algebra library.
+    """
 
     PROBABILISTIC_MODEL = "probabilistic_model"
-    """The probabilistic-model library."""
+    """
+    The probabilistic-model library.
+    """
 
     PHYSICS_SIMULATORS = "physics_simulators"
-    """The simulator adapters."""
+    """
+    The simulator adapters.
+    """
 
     ROBOKUDO = "robokudo"
-    """The perception library."""
+    """
+    The perception library.
+    """
 
     SEGMIND = "segmind"
-    """The segmentation library."""
+    """
+    The segmentation library.
+    """
 
     EXPERIMENTS = "experiments"
-    """The experiment harnesses."""
+    """
+    The experiment harnesses.
+    """
 
     VERSION = "version"
-    """The version-consistency checks."""
+    """
+    The version-consistency checks.
+    """
 
     COGNITIVE_ROBOT_ABSTRACT_MACHINE = "cognitive_robot_abstract_machine"
-    """The umbrella package."""
+    """
+    The umbrella package.
+    """
 
     @classmethod
     def named_by(cls, check: str) -> LibraryUnderTest | None:
-        """Read which library a failing check is about.
+        """
+        Read which library a failing check is about.
 
         :param check: The check's name, as the API reports it.
         :return: The library it runs, or ``None`` when it names none - which is the
@@ -131,7 +161,8 @@ class LibraryUnderTest(StrEnum):
 
 
 def probe_run_name(build_branch: str) -> str:
-    """Name a probe's run after the tree it tests.
+    """
+    Name a probe's run after the tree it tests.
 
     :param build_branch: The assembled prefix under test.
     :return: The name its run carries, which is how it is found again.
@@ -144,24 +175,33 @@ def probe_run_name(build_branch: str) -> str:
 
 @dataclass(frozen=True)
 class Probe:
-    """One assembled tree, and what the run judging it says so far."""
+    """
+    One assembled tree, and what the run judging it says so far.
+    """
 
     branch: str
-    """The tree, published under a name of its own so its run can be found again."""
+    """
+    The tree, published under a name of its own so its run can be found again.
+    """
 
     tip: str
     """The tip this probe is about - the one whose arrival it adds in a prefix round, or
     the earlier one it pairs the suspect with while narrowing."""
 
     pull_request_number: int
-    """The fork pull request publishing that tip."""
+    """
+    The fork pull request publishing that tip.
+    """
 
     verdict: ChecksVerdict = ChecksVerdict.ABSENT
-    """What its run amounts to, starting from before one has appeared."""
+    """
+    What its run amounts to, starting from before one has appeared.
+    """
 
     @property
     def has_answered(self) -> bool:
-        """A probe whose run has not appeared yet is waited for rather than acted on: a
+        """
+        A probe whose run has not appeared yet is waited for rather than acted on: a
         dispatch is accepted before its run object exists, so absence is the ordinary
         first answer. What catches one that never appears is the caller's own timeout.
 
@@ -201,35 +241,50 @@ class ProbeKey(StrEnum):
     """
 
     BRANCH = "branch"
-    """The tree it published."""
+    """
+    The tree it published.
+    """
 
     TIP = "tip"
-    """The tip it is about."""
+    """
+    The tip it is about.
+    """
 
     PULL_REQUEST_NUMBER = "pull_request_number"
-    """The fork pull request publishing that tip."""
+    """
+    The fork pull request publishing that tip.
+    """
 
     VERDICT = "verdict"
-    """What its run says."""
+    """
+    What its run says.
+    """
 
 
 @dataclass(frozen=True)
 class TipUnderSuspicion:
-    """The tip a prefix round localised, and what was in the build when it arrived.
+    """
+    The tip a prefix round localised, and what was in the build when it arrived.
 
     Carries exactly what an :class:`~integration.IntegrationTestFailure` is built from,
-    so a localisation done this way and one done locally produce the same finding and are
-    acted on through the same path.
+    so a localisation done this way and one done locally produce the same finding and
+    are acted on through the same path.
     """
 
     branch: str
-    """The tip whose arrival turned the library's tests."""
+    """
+    The tip whose arrival turned the library's tests.
+    """
 
     pull_request_number: int
-    """The fork pull request publishing it."""
+    """
+    The fork pull request publishing it.
+    """
 
     already_included: tuple[str, ...]
-    """What was in the build when it turned, in merge order."""
+    """
+    What was in the build when it turned, in merge order.
+    """
 
     def as_json(self) -> dict[str, Any]:
         """:return: The suspect, keyed the way the state document holds it."""
@@ -256,13 +311,19 @@ class SuspectKey(StrEnum):
     """
 
     BRANCH = "branch"
-    """The tip itself."""
+    """
+    The tip itself.
+    """
 
     PULL_REQUEST_NUMBER = "pull_request_number"
-    """The fork pull request publishing it."""
+    """
+    The fork pull request publishing it.
+    """
 
     ALREADY_INCLUDED = "already_included"
-    """What was in the build when it arrived."""
+    """
+    What was in the build when it arrived.
+    """
 
 
 # %% the search, and what it does next
@@ -274,11 +335,15 @@ class LocalisationStage(StrEnum):
     """
 
     PREFIXES = "prefixes"
-    """Adding the tips one at a time, to find whose arrival turns the library's tests."""
+    """
+    Adding the tips one at a time, to find whose arrival turns the library's tests.
+    """
 
     NARROWING = "narrowing"
-    """Pairing the tip that turned them with each earlier one, to find which it fails
-    against alone."""
+    """
+    Pairing the tip that turned them with each earlier one, to find which it fails
+    against alone.
+    """
 
 
 class LocalisationStep(StrEnum):
@@ -287,18 +352,25 @@ class LocalisationStep(StrEnum):
     """
 
     WAIT = "wait"
-    """A probe has not answered yet, so nothing can be read from the round."""
+    """
+    A probe has not answered yet, so nothing can be read from the round.
+    """
 
     NARROW = "narrow"
-    """A prefix round localised a tip with earlier ones to try it against."""
+    """
+    A prefix round localised a tip with earlier ones to try it against.
+    """
 
     CONCLUDE = "conclude"
-    """There is nothing left to dispatch, so what the search found is what it found."""
+    """
+    There is nothing left to dispatch, so what the search found is what it found.
+    """
 
 
 @dataclass(frozen=True)
 class Localisation:
-    """One search in flight, as the document a repeatable call reads and rewrites.
+    """
+    One search in flight, as the document a repeatable call reads and rewrites.
 
     The state is the document rather than the process, so the waiting stays with the
     caller and every invocation is one decision that can be read on its own - the same
@@ -306,16 +378,21 @@ class Localisation:
     """
 
     library: LibraryUnderTest
-    """Whose tests the probes run."""
-
+    """
+    Whose tests the probes run.
+    """
     stage: LocalisationStage
-    """Which round the probes belong to."""
-
+    """
+    Which round the probes belong to.
+    """
     probes: tuple[Probe, ...]
-    """The round's probes, in merge order."""
-
+    """
+    The round's probes, in merge order.
+    """
     suspect: TipUnderSuspicion | None = None
-    """The tip the prefix round localised, once it has."""
+    """
+    The tip the prefix round localised, once it has.
+    """
 
     def as_json(self) -> dict[str, Any]:
         """:return: This search, keyed the way the document holds it."""
@@ -330,7 +407,8 @@ class Localisation:
 
     @classmethod
     def from_json(cls, document: Mapping[str, Any]) -> Localisation:
-        """Read a search back out of the document a previous call wrote.
+        """
+        Read a search back out of the document a previous call wrote.
 
         :param document: The search, as :meth:`as_json` wrote it.
         :return: The search it describes.
@@ -346,8 +424,9 @@ class Localisation:
         )
 
     def answered_by(self, runs: Sequence[WorkflowRunRecord]) -> Localisation:
-        """Read every probe's run, so the round is judged on one reading rather than on
-        one per probe taken at different moments.
+        """
+        Read every probe's run, so the round is judged on one reading rather than on one
+        per probe taken at different moments.
 
         :param runs: The probe workflow's runs, as the API answers them.
         :return: The same search with each probe's verdict as those runs report it.
@@ -374,7 +453,8 @@ class Localisation:
 
     @property
     def localised_suspect(self) -> TipUnderSuspicion | None:
-        """The tip a prefix round blames, read off the first prefix that failed.
+        """
+        The tip a prefix round blames, read off the first prefix that failed.
 
         The tips before it were in a build that passed, so the one that turned the
         library's tests is the one that arrived - the same rule the local search follows
@@ -397,7 +477,8 @@ class Localisation:
 
     @property
     def breaks_against(self) -> str | None:
-        """The one earlier tip the suspect fails against on its own.
+        """
+        The one earlier tip the suspect fails against on its own.
 
         Asked most-recent-first, the same way a merge conflict's partner is: that is the
         tip whose commits the failing one just met. ``None`` is a positive claim - that
@@ -421,17 +502,22 @@ class WorkflowRunField(StrEnum):
     """
 
     NAME = "display_title"
-    """What the run is called, which is its ``run-name`` evaluated."""
-
+    """
+    What the run is called, which is its ``run-name`` evaluated.
+    """
     STATUS = "status"
-    """Whether it has finished."""
-
+    """
+    Whether it has finished.
+    """
     CONCLUSION = "conclusion"
-    """How it finished, absent until it has."""
+    """
+    How it finished, absent until it has.
+    """
 
 
 def verdict_of(runs: Sequence[WorkflowRunRecord], build_branch: str) -> ChecksVerdict:
-    """Read what the run judging one tree says so far.
+    """
+    Read what the run judging one tree says so far.
 
     Found by the name it carries rather than by the reference it ran on: every probe of
     one localisation is dispatched on the same reference - the one carrying the pipeline
@@ -460,20 +546,26 @@ def verdict_of(runs: Sequence[WorkflowRunRecord], build_branch: str) -> ChecksVe
 
 class LocalisationKey(StrEnum):
     """
-    The field names a search is held under in the document that carries it between calls.
+    The field names a search is held under in the document that carries it between
+    calls.
     """
 
     LIBRARY = "library"
-    """Whose tests the probes run."""
-
+    """
+    Whose tests the probes run.
+    """
     STAGE = "stage"
-    """Which round the probes belong to."""
-
+    """
+    Which round the probes belong to.
+    """
     PROBES = "probes"
-    """The round's probes, in merge order."""
-
+    """
+    The round's probes, in merge order.
+    """
     SUSPECT = "suspect"
-    """The tip the prefix round localised, once it has."""
+    """
+    The tip the prefix round localised, once it has.
+    """
 
 
 def dispatch(
@@ -482,7 +574,8 @@ def dispatch(
     library: LibraryUnderTest,
     probes: Sequence[Probe],
 ) -> None:
-    """Start a run for every probe of one round, at once.
+    """
+    Start a run for every probe of one round, at once.
 
     The probes are independent, so a round costs one run's wall clock rather than one per
     tip - which is what makes a linear scan the right shape here, where a bisection would
@@ -504,3 +597,24 @@ def dispatch(
                 ProbeWorkflowInput.LIBRARY: str(library),
             },
         )
+
+
+def library_a_candidate_failed_on(
+    checks: ReportedChecks,
+) -> LibraryUnderTest | None:
+    """
+    Read which library a candidate's red is about, where it is about one at all.
+
+    The first failing check that names one, in the order the API reported them: a
+    candidate can fail several matrix jobs at once, and localising the first is what
+    tells anybody which pair of branches to look at - the rest of the matrix reruns on the
+    branch that gets blocked for it.
+
+    :param checks: What the candidate's checks said.
+    :return: The library to re-run, or ``None`` when nothing that failed names one.
+    """
+    for run in checks.failed:
+        library = LibraryUnderTest.named_by(run.name)
+        if library is not None:
+            return library
+    return None

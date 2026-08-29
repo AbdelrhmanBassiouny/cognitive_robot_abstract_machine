@@ -9,6 +9,8 @@ of the merge order instead.
 
 from __future__ import annotations
 
+import argparse
+import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,8 +22,9 @@ from stack import PullRequest
 
 from maintenance_github import DispatchedWorkflowRuns, WorkflowRunRecord
 
-from integration import ProbeAssembly, ResolutionProvenance
-from integration_verdict import ChecksVerdict
+import integration
+from integration import IntegrationExitCode, ProbeAssembly, ResolutionProvenance
+from integration_verdict import CheckRunField, ChecksVerdict
 
 from integration_localisation import (
     PROBE_RUN_NAME_PREFIX,
@@ -41,14 +44,20 @@ from integration_localisation import (
 
 from test_maintenance import (
     ForkCheckout,
+    RecordingPullRequests,
     UPSTREAM_BASE,
     a_stack,
     fork_checkout,  # noqa: F401  (imported so pytest finds the fixture by name)
+    make_configuration,
 )
 
 from integration_fixtures import FIRST_TIP, INNOCENT_TIP, SECOND_TIP, THIRD_TIP
 
-WORKFLOW_DIRECTORY = Path(__file__).parent.parent.parent.parent / ".github" / "workflows"
+from test_integration_verdict import refresh_job, refresh_job_script
+
+WORKFLOW_DIRECTORY = (
+    Path(__file__).parent.parent.parent.parent / ".github" / "workflows"
+)
 """
 Where this repository's workflows live, from this test module's own location.
 """
@@ -78,7 +87,8 @@ def workflow(path: Path) -> dict:
 
 
 def triggers(path: Path) -> dict:
-    """The events a workflow answers to.
+    """
+    The events a workflow answers to.
 
     Read under ``True`` rather than ``"on"`` because YAML reads a bare ``on`` key as the
     boolean.
@@ -135,8 +145,9 @@ def test_the_reusable_job_checks_out_the_reference_it_is_given():
 
 def test_the_reusable_job_still_runs_over_its_own_reference_when_given_none():
     """
-    Every existing caller passes no reference and must keep checking out the tree its own
-    run started on, which is what an empty default leaves ``actions/checkout`` doing.
+    Every existing caller passes no reference and must keep checking out the tree its
+    own run started on, which is what an empty default leaves ``actions/checkout``
+    doing.
     """
     declared = triggers(REUSABLE_WORKFLOW)["workflow_call"]["inputs"]["ref"]
 
@@ -169,12 +180,16 @@ def test_a_probe_run_is_named_after_the_tree_it_tests():
 
 def test_the_reader_and_the_workflow_agree_on_how_a_run_is_named():
     """
-    A workflow cannot import a constant, so its ``run-name`` is the one place this prefix
-    is spelled a second time. Spelled differently, every probe reads as one whose run has
-    not appeared, and a localisation waits out its whole timeout finding nothing.
+    A workflow cannot import a constant, so its ``run-name`` is the one place this
+    prefix is spelled a second time.
+
+    Spelled differently, every probe reads as one whose run has not appeared, and a
+    localisation waits out its whole timeout finding nothing.
     """
     assert workflow(PROBE_WORKFLOW)["run-name"].startswith(PROBE_RUN_NAME_PREFIX)
-    assert probe_run_name(A_PREFIX_BRANCH) == f"{PROBE_RUN_NAME_PREFIX}{A_PREFIX_BRANCH}"
+    assert (
+        probe_run_name(A_PREFIX_BRANCH) == f"{PROBE_RUN_NAME_PREFIX}{A_PREFIX_BRANCH}"
+    )
 
 
 # %% which failing checks this can answer about
@@ -190,8 +205,8 @@ def test_the_reader_and_the_workflow_agree_on_how_a_run_is_named():
 )
 def test_a_failing_matrix_check_names_the_library_to_re_run(check: str, library: str):
     """
-    The matrix names each job for the library it runs, which is what makes re-running one
-    of them expressible at all.
+    The matrix names each job for the library it runs, which is what makes re-running
+    one of them expressible at all.
     """
     assert LibraryUnderTest.named_by(check) == LibraryUnderTest(library)
 
@@ -205,10 +220,11 @@ def test_a_failing_check_that_names_no_library_is_not_this_search_s_to_answer(
 ):
     """
     Both are real failures and neither is localised by re-running a library.
-    ``test_claude_dev_tooling`` runs the same directories the local search re-runs, so it
-    is already localised, faster, and before a build is pushed; the untracked-interfaces
-    check is a property of one tree rather than of a combination, so no prefix scan says
-    anything about it.
+
+    ``test_claude_dev_tooling`` runs the same directories the local search re-runs, so
+    it is already localised, faster, and before a build is pushed; the untracked-
+    interfaces check is a property of one tree rather than of a combination, so no
+    prefix scan says anything about it.
     """
     assert LibraryUnderTest.named_by(check) is None
 
@@ -219,7 +235,9 @@ def test_every_library_the_matrix_runs_is_one_this_can_ask_about():
     naming no library at all - silently answered as "nothing to localise" rather than
     as the gap it is.
     """
-    matrix = workflow(WORKFLOW_DIRECTORY / "ci.yml")["jobs"]["test_each_lib"]["strategy"]
+    matrix = workflow(WORKFLOW_DIRECTORY / "ci.yml")["jobs"]["test_each_lib"][
+        "strategy"
+    ]
 
     assert {entry["lib"] for entry in matrix["matrix"]["include"]} == {
         str(library) for library in LibraryUnderTest
@@ -266,9 +284,10 @@ def create_localisation(
 
 def test_a_probe_whose_run_has_not_appeared_yet_is_waited_for():
     """
-    A dispatch is accepted before its run object exists, so no run at all is the ordinary
-    first answer rather than a sign anything is wrong. What catches a dispatch that never
-    produced one is the caller's own timeout.
+    A dispatch is accepted before its run object exists, so no run at all is the
+    ordinary first answer rather than a sign anything is wrong.
+
+    What catches a dispatch that never produced one is the caller's own timeout.
     """
     localisation = create_localisation((create_probe(verdict=ChecksVerdict.ABSENT),))
 
@@ -278,7 +297,8 @@ def test_a_probe_whose_run_has_not_appeared_yet_is_waited_for():
 def test_one_probe_still_running_holds_the_whole_round():
     """
     A round's answer is which of its probes failed, and reading that from a partial set
-    would name whichever finished first rather than whichever is earliest in merge order.
+    would name whichever finished first rather than whichever is earliest in merge
+    order.
     """
     localisation = create_localisation(
         (
@@ -411,10 +431,14 @@ class RecordingWorkflowRuns(DispatchedWorkflowRuns):
     """
 
     runs: list[WorkflowRunRecord] = field(default_factory=list)
-    """What it answers a run read with."""
+    """
+    What it answers a run read with.
+    """
 
     dispatched: list[dict] = field(default_factory=list)
-    """Every dispatch made on it."""
+    """
+    Every dispatch made on it.
+    """
 
     def dispatch_workflow(self, workflow, reference, inputs) -> None:
         """
@@ -454,9 +478,9 @@ def a_run(
 
 def test_a_probe_reads_the_run_named_after_its_own_tree():
     """
-    Every probe of one localisation is dispatched on the same reference, so a reader that
-    took the newest run, or the one on that reference, would answer every probe with
-    whichever finished last.
+    Every probe of one localisation is dispatched on the same reference, so a reader
+    that took the newest run, or the one on that reference, would answer every probe
+    with whichever finished last.
     """
     probe = create_probe(tip=SECOND_TIP)
     other = create_probe(tip=FIRST_TIP)
@@ -661,3 +685,319 @@ def test_the_trees_a_search_published_are_taken_down_when_it_concludes(
         for probe in probes
         if fork_checkout.run_git("ls-remote", "origin", f"refs/heads/{probe.branch}")
     ] == []
+
+
+# %% the command that takes the search one step
+
+
+@dataclass(frozen=True)
+class RecordingFork(RecordingPullRequests, DispatchedWorkflowRuns):
+    """
+    A fork stand-in that answers a candidate's checks, a probe's runs, and the writes
+    blocking a branch makes.
+    """
+
+    checks: list = field(default_factory=list)
+    """
+    What it answers a check-run read with.
+    """
+
+    runs: list[WorkflowRunRecord] = field(default_factory=list)
+    """
+    What it answers a workflow-run read with.
+    """
+
+    dispatched: list[dict] = field(default_factory=list)
+    """
+    Every dispatch made on it.
+    """
+
+    def check_runs(self, reference: str) -> list:
+        """
+        :param reference: The commit read.
+        :return: The candidate's checks.
+        """
+        return self.checks
+
+    def dispatch_workflow(self, workflow, reference, inputs) -> None:
+        """
+        :param workflow: The workflow file run.
+        :param reference: The reference it was run on.
+        :param inputs: What it was handed.
+        """
+        self.dispatched.append(
+            {"workflow": workflow, "reference": reference, "inputs": dict(inputs)}
+        )
+
+    def workflow_runs(self, workflow: str) -> list[WorkflowRunRecord]:
+        """
+        :param workflow: The workflow file read.
+        :return: The runs this stand-in was given.
+        """
+        return self.runs
+
+
+@dataclass(frozen=True)
+class LocalisingRun:
+    """
+    An :class:`~integration.IntegrationRun` stand-in wired to the scratch fork.
+    """
+
+    checkout: ForkCheckout
+    """
+    The checkout the trees are assembled and published from.
+    """
+
+    pull_requests: list[PullRequest]
+    """
+    The board entries the stack is derived from.
+    """
+
+    fork_answers: RecordingFork
+    """
+    The fork it hands out.
+    """
+
+    @property
+    def configuration(self):
+        """:return: The resolved configuration."""
+        return make_configuration()
+
+    @property
+    def git(self):
+        """:return: The runner naming the checkout."""
+        return self.checkout.git
+
+    def fork(self) -> RecordingFork:
+        """:return: The fork."""
+        return self.fork_answers
+
+    def stack(self, fork):
+        """
+        :param fork: Ignored; the board is the one the test arranged.
+        :return: The derived stack.
+        """
+        return a_stack(self.checkout, self.pull_requests)
+
+    def refresh_remotes(self) -> None:
+        """
+        Nothing to refresh: the scratch fork's remotes are already current.
+        """
+
+    def provenance_path(self) -> Path:
+        """:return: A path carrying no recorded resolutions."""
+        return self.checkout.project_root / "no-provenance.json"
+
+
+def locate(
+    run: LocalisingRun, state: Path, head: str = "a-head"
+) -> IntegrationExitCode:
+    """
+    Take one step of a localisation against the scratch fork.
+
+    :param run: The run to take it in.
+    :param state: Where the search in flight is kept.
+    :param head: The commit the candidate's checks are on.
+    :return: The status the step left.
+    """
+    return integration.LocateCandidateFailureCommand().run(
+        run,
+        argparse.Namespace(
+            head=head, state=state, dispatch_on="integration", json=True
+        ),
+    )
+
+
+def a_failing_check(name: str):
+    """
+    :param name: The check's name.
+    :return: One finished, failed check run.
+    """
+    return {
+        CheckRunField.NAME: name,
+        CheckRunField.STATUS: "completed",
+        CheckRunField.CONCLUSION: "failure",
+    }
+
+
+def test_a_candidate_whose_failures_name_no_library_is_answered_rather_than_probed(
+    fork_checkout: ForkCheckout, tmp_path: Path
+):
+    """
+    A tooling check is already localised by the local search - faster, and before a build
+    is pushed - and a check that is a property of one tree is not about a combination at
+    all. Probing either would spend a round of matrix runs to say nothing.
+    """
+    fork = RecordingFork(checks=[a_failing_check("test_claude_dev_tooling")])
+    run = LocalisingRun(fork_checkout, three_tips(fork_checkout), fork)
+
+    status = locate(run, tmp_path / "state.json")
+
+    assert status is IntegrationExitCode.NO_LIBRARY_CHECK_FAILED
+    assert fork.dispatched == []
+    assert not (tmp_path / "state.json").exists()
+
+
+def test_the_first_call_publishes_the_prefixes_and_leaves_the_search_to_be_read_back(
+    fork_checkout: ForkCheckout, tmp_path: Path
+):
+    """
+    A dispatch is only the start of a probe, so the first call has nothing to conclude
+    from - it leaves the round in the document a later call picks up, and a status saying
+    to ask again.
+    """
+    fork = RecordingFork(checks=[a_failing_check("test_each_lib (krrood)")])
+    run = LocalisingRun(fork_checkout, three_tips(fork_checkout), fork)
+    state = tmp_path / "state.json"
+
+    status = locate(run, state)
+
+    assert status is IntegrationExitCode.PROBES_STILL_RUNNING
+    assert len(fork.dispatched) == 3
+    assert Localisation.from_json(json.loads(state.read_text())).library is (
+        LibraryUnderTest.KRROOD
+    )
+
+
+def test_a_prefix_round_that_answers_opens_the_narrowing_round(
+    fork_checkout: ForkCheckout, tmp_path: Path
+):
+    """
+    Which earlier tip the suspect fails against alone is what the report claims when it
+    names one - and claims the absence of when it names none, so the round that settles
+    it is opened rather than skipped.
+    """
+    fork = RecordingFork(checks=[a_failing_check("test_each_lib (krrood)")])
+    run = LocalisingRun(fork_checkout, three_tips(fork_checkout), fork)
+    state = tmp_path / "state.json"
+    locate(run, state)
+    published = Localisation.from_json(json.loads(state.read_text())).probes
+    fork.runs.extend(
+        [
+            a_run(published[0].branch),
+            a_run(published[1].branch, conclusion="failure"),
+            a_run(published[2].branch, conclusion="failure"),
+        ]
+    )
+    fork.dispatched.clear()
+
+    status = locate(run, state)
+
+    assert status is IntegrationExitCode.PROBES_STILL_RUNNING
+    assert Localisation.from_json(json.loads(state.read_text())).stage is (
+        LocalisationStage.NARROWING
+    )
+    assert len(fork.dispatched) == 1
+
+
+def test_a_concluded_search_blocks_the_branch_in_the_same_words_a_local_one_does(
+    fork_checkout: ForkCheckout, tmp_path: Path
+):
+    """
+    What a localisation finds is the same kind of thing either way, so it produces the.
+
+    same finding, reports it to the same pull request, and holds the branch out of
+    promotion with the same label - there is one place that decides what happens to a
+    branch that breaks another.
+    """
+    fork = RecordingFork(checks=[a_failing_check("test_each_lib (krrood)")])
+    run = LocalisingRun(fork_checkout, three_tips(fork_checkout), fork)
+    state = tmp_path / "state.json"
+    locate(run, state)
+    published = Localisation.from_json(json.loads(state.read_text())).probes
+    fork.runs.extend(
+        [
+            a_run(published[0].branch),
+            a_run(published[1].branch, conclusion="failure"),
+            a_run(published[2].branch, conclusion="failure"),
+        ]
+    )
+    locate(run, state)
+    narrowing = Localisation.from_json(json.loads(state.read_text())).probes
+    fork.runs.append(a_run(narrowing[0].branch, conclusion="failure"))
+
+    status = locate(run, state)
+
+    assert status is IntegrationExitCode.TESTS_FAILED
+    assert fork.comments[0].body.startswith(integration.FAILURE_COMMENT_PREFIX)
+    assert SECOND_TIP in fork.comments[0].body and FIRST_TIP in fork.comments[0].body
+    assert not state.exists()
+
+
+def test_the_two_rounds_of_one_search_never_publish_under_the_same_name(
+    fork_checkout: ForkCheckout,
+):
+    """
+    Both rounds are opened by calls that can land in the same second, and a narrowing.
+
+    probe reusing a prefix probe's name would be answered by the run that judged a
+    different tree - the search would read its own stale answer as this round's.
+    """
+    assembly = assemble(fork_checkout, three_tips(fork_checkout))
+
+    assert assembly.branch_name(LocalisationStage.PREFIXES, 0) != assembly.branch_name(
+        LocalisationStage.NARROWING, 0
+    )
+
+
+# %% the scheduled job that reaches for it
+
+
+def localisation_step() -> dict:
+    """
+    :return: The rebuild step that localises a red candidate.
+    """
+    return next(
+        step
+        for step in refresh_job()["steps"]
+        if integration.LocateCandidateFailureCommand().invoked_as in step.get("run", "")
+    )
+
+
+def test_a_red_candidate_is_localised_rather_than_left_naming_a_check():
+    """
+    Without this the same red repeats on every rebuild with nobody told which pair of
+    branches to look at - the candidate names a failing job, and a job name is not a
+    branch.
+    """
+    assert (
+        integration.LocateCandidateFailureCommand().invoked_as in refresh_job_script()
+    )
+
+
+def test_only_a_candidate_that_failed_is_localised():
+    """
+    Read from the step's own condition rather than from its shell, because that is where
+    it is decided: a search costs a round of matrix runs per prefix, so spending one on a
+    build that published, or on one still waiting, is a real cost for no answer.
+    """
+    assert str(int(IntegrationExitCode.CANDIDATE_FAILED)) in localisation_step()["if"]
+
+
+def test_the_scheduled_job_keeps_asking_while_a_round_is_still_running():
+    """
+    Read as a number in shell, so spelled differently the loop stops after its first
+    round - dispatching the prefixes and never reading what they said.
+    """
+    assert str(int(IntegrationExitCode.PROBES_STILL_RUNNING)) in refresh_job_script()
+
+
+def test_the_probes_are_dispatched_on_the_reference_the_tooling_was_read_from():
+    """
+    A dispatch runs the workflow file the dispatched reference carries, and the tree under
+    test carries none - so the reference has to be one holding this pipeline, which is the
+    same one the job checked the tooling out at.
+    """
+    assert (
+        "github.event.repository.default_branch"
+        in localisation_step()["env"]["PIPELINE_REFERENCE"]
+    )
+
+
+def test_the_dispatch_reference_is_one_expression_rather_than_several_lines():
+    """
+    A folded YAML scalar folds only the lines level with its first one; a continuation
+    indented further keeps its newline, which parses cleanly and leaves a line break
+    inside a ``${{ }}`` expression for GitHub to reject at run time.
+    """
+    assert "\n" not in localisation_step()["env"]["PIPELINE_REFERENCE"]
