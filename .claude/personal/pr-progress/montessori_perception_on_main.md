@@ -42,17 +42,56 @@ notes, a session marking its own pull request ready to unblock a dependent is
 not the signal that its job on that pull request has ended, so re-draft after
 any future push as usual.
 
+### Round of 2026-08-29: the test split, and the review
+
+`00721be7` split `test_montessori_perception.py` (1262 lines) into six modules,
+one per subject, with the four shared fixtures moved to
+`dataset/montessori_scene_fixtures.py` and registered through `pytest_plugins`.
+That work was `surfaces-from-world`'s review comment, placed here by the
+developer because the file arrives with this branch.
+
+The developer then reviewed the branch itself: thirteen threads. Four asked for
+a change here, and each is one commit:
+
+- `bb37390d` — `NoMatchingHoleError` moves to
+  `experiments/montessori/exceptions.py`. Its raise had no test; writing one
+  found that both existing board tests pass a `PrefixedName` where
+  `create_with_new_body_in_world` takes a `str`, which double-wraps the name and
+  makes the error's own message raise `TypeError`. The new test passes a plain
+  string; the existing tests were left alone.
+- `3348e353` — `HoleFootprint`'s centre, size and boundary points become
+  `PlanarPoint` / `PlanarSize`. `semantic_digital_twin`'s `Point2` was
+  considered and rejected: it is a casadi symbolic point with a reference
+  frame, and these are plain metres in the mesh's local frame.
+- `be8b8514` — the perception package's `__init__.py` is empty.
+- `a9204f5e` — the node's poll interval is `scene_check_period`, a field.
+
+**142 passed, 1 skipped**, against 140 before.
+
+The other nine threads are one ask — the detectors' numbers are knowledge about
+the pieces, surfaces and lighting — and the developer directed them into plan
+items, not into this pull request. They became
+`detector-parameters-from-knowledge` and (deferred)
+`tune-detection-rules-against-the-camera`.
+
 ### Next
-- `surfaces-from-world` stacks on this branch. When it runs, it should
-  *delete* this branch's two thinnest dependencies: `BOARD_SCALE` from
-  `montessori/world.py` and `table_top_z` from `tracy_experiments/equipment.py`
-  are precisely what it replaces with world-derived values. That deletion is a
-  checkable outcome of that item, not incidental cleanup.
+
+- `surfaces-from-world` stacks on this branch and should delete this branch's
+  two thinnest dependencies, `BOARD_SCALE` and `table_top_z`. Partly done there
+  already: `node.py` imports neither, but `pipeline.py` still reads
+  `BOARD_SCALE` for `BoardDetector.board_footprint`.
+- Seven review threads are deliberately left open for the developer, each
+  replied to with where its ask went. One of them, `_SHAPE_COLORS` in
+  `world.py`, has a small change waiting on his answer: whether the simulated
+  world should render the real set's colours now, or wait for the knowledge to
+  move onto the pieces.
 
 ### Watch out for
-- The ORM path is unexercised. The repository conftest regenerates the ORM
-  interfaces on collection, which imports `giskardpy` and needs ROS 2; the
-  tests above were run with `--noconftest` and the workspace on `PYTHONPATH`.
-  The same failure reproduces on unmodified `main` in this container.
-- CI has not been seen yet — the branch was pushed and the pull request opened
-  in the same turn.
+
+- The ORM path is unexercised: the repository conftest regenerates the ORM
+  interfaces on collection, which imports `giskardpy` and needs ROS 2. Tests are
+  run with `--noconftest` and the workspace on `PYTHONPATH`; the same failure
+  reproduces on unmodified `main` in this container.
+- `node.py` cannot be tested here at all — it imports `rclpy`, which no
+  environment in this workspace has, so no test covers `scene_check_period`.
+- CI was green on all 23 checks before this round's push.
