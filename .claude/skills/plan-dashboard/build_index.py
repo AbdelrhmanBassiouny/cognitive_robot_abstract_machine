@@ -30,6 +30,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "shared"))
+
 from render_common import create_template_environment, sanitize_http_url
 
 
