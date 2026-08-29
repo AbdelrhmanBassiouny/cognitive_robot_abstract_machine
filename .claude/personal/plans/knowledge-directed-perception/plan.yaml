@@ -124,19 +124,22 @@ items:
     depends_on: []
     status: in_progress
     session: https://claude.ai/code/session_01FMKabzWhaJpTERyAaSc7Kh
-    notes: >-
-      Everything that depends on this is *stacked* on its branch, not waiting
-      for it to merge - the same way every item of montessori-eql-stack is
-      based on an unmerged parent. Nothing in this plan blocks on review, so
-      this item costs the demo nothing and can land whenever review allows,
-      after the deadline included.
-      experiments/src/experiments/montessori/perception/ and its tests exist
-      only on tracy_icra, which also carries seventeen unrelated commits
-      (Franka demos, Mujoco tuning, stacking). This item cuts a branch off main
-      carrying the perception package alone - sorinar329's original node commit
-      75258debd plus the seven that follow it - so the rest of the plan stacks
-      on reviewable ground instead of on a branch whose upstream points at a
-      colleague's fork. tracy_icra itself is left alone.
+    notes: >
+      Everything that depends on this is *stacked* on its branch, not waiting for it to merge - the
+      same way every item of montessori-eql-stack is based on an unmerged parent. Nothing in this
+      plan blocks on review, so this item costs the demo nothing and can land whenever review
+      allows, after the deadline included. experiments/src/experiments/montessori/perception/ and
+      its tests exist only on tracy_icra, which also carries seventeen unrelated commits (Franka
+      demos, Mujoco tuning, stacking). This item cuts a branch off main carrying the perception
+      package alone - sorinar329's original node commit 75258debd plus the seven that follow it - so
+      the rest of the plan stacks on reviewable ground instead of on a branch whose upstream points
+      at a colleague's fork. tracy_icra itself is left alone.
+
+      Review on #205 assigned this item a second piece of work on 2026-08-29: splitting
+      test/experiments_test/test_montessori_perception.py, which arrives with this branch at 1262
+      lines. The developer answered the "very big file" thread on #205 with "ok it should be done on
+      202", and the file exists on no branch but this one, so this item owns it. #205 has no work of
+      its own left; it is that thread that keeps it open.
 
   - id: surfaces-from-world
     title: "Take the workspace from the table the robot knows about, not from a constant"
