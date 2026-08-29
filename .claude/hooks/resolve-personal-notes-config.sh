@@ -338,6 +338,10 @@ STACK_DIRECTORY=".claude/stack"
 # stack.py: read-only stacked-PR status tool (status/check/next/restack-plan)
 # - see its own module docstring and STACK_DIRECTORY/README.md.
 STACK_SCRIPT="${STACK_DIRECTORY}/stack.py"
+# integration.py: builds the personal integration branch - the upstream base with
+# every in-flight stack tip merged on top, regenerated from scratch on demand - and
+# reports which tips it could not fit. See its own module docstring.
+INTEGRATION_SCRIPT="${STACK_DIRECTORY}/integration.py"
 # stack.toml: the committed defaults stack.py's load_configuration layers a
 # personal-notes .claude/personal/stack.toml override on top of.
 STACK_CONFIG_FILE="${STACK_DIRECTORY}/stack.toml"
@@ -359,6 +363,17 @@ DEPENDENCY_READINESS_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/dependency-readiness.
 # every plan-*/SKILL.md that assembles pr_data.json, instead of each
 # restating the GitHub API calls involved.
 PULL_REQUEST_DATA_FETCHING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/pr-data-fetching.md"
+# manifest-staleness.md: the shared "write the manifest and republish the
+# dashboard first, at every transition that makes a recorded field stale"
+# rule, referenced by every skill that can change what a plan records
+# instead of each restating it.
+MANIFEST_STALENESS_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/manifest-staleness.md"
+# MAINTENANCE_BLOCKER_OWNER: the name the stacked-PR maintenance pass writes
+# its own blockers under, so that pass replaces and clears its own entries
+# and never one a person wrote. Named here rather than in either the rule
+# document or the skill, since the writer and the clearer have to agree on
+# it exactly - see plan_item_bootstrap.py's block/unblock operations.
+MAINTENANCE_BLOCKER_OWNER="stacked-pr-maintenance"
 # write-personal-notes-file.sh: generic commit-and-push-one-file-to-the
 # personal-notes-branch helper, used by refresh_dashboard.sh (the manifest
 # auto-sync correction) and plan-dashboard/SKILL.md (the dashboard-URL

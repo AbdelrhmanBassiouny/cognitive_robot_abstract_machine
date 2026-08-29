@@ -113,6 +113,35 @@ was never really a separate item. The same goes when two items turn out to have
 built the same thing, which that document's purpose comparison is there to
 catch.
 
+### Record what you found, before drafting
+
+Everything gathered above is exactly what the item's own `blockers` and `notes`
+should already have said and did not — that is why this skill was needed. Write
+it down now rather than after the resolution, following
+`${MANIFEST_STALENESS_DOCUMENT}`:
+
+```bash
+source .claude/hooks/resolve-personal-notes-config.sh
+python3 "${PLAN_ITEM_BOOTSTRAP_SCRIPT}" update \
+    --plan <plan-id> --item <item-id> \
+    [--status <status>] [--blockers <file> ...] \
+    [--notes <file> | --append-notes <file>]
+```
+
+Set `status` when what you found contradicts it — `blocked` when something outside
+the item has to move first, `deferred` when it was parked deliberately. Record the
+real blocker in `blockers`: the failing check by name, the unanswered review
+thread, the dependency that regressed. Leave `notes` for a conclusion that changes
+what the item *means*, not a summary of this run — and add to an existing note with
+`--append-notes` rather than rewriting it.
+
+Then republish: `/plan-dashboard <plan-id>`. An item that has been stalled for days
+while the manifest calls it healthy is the failure this step exists to end, and it
+is not fixed by resolving the item — only by recording what was true before the
+resolution starts.
+
+### Draft the resolution
+
 Draft a concrete plan to resolve the item: what's actually wrong (cite the
 specific failing check, review comment, unresolved upstream review thread,
 blocker text, or regressed dependency that's the real cause — never a vague
