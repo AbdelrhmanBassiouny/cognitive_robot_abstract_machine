@@ -1,83 +1,42 @@
-# red-candidate-localisation — PR #211 (draft), on #154
+## Fix: the scheduled Integration refresh closed its own candidate
 
-Plan item `red-candidate-localisation` of `workflow-unification`, `stack-tooling`
-track. Branch `claude/plan-item-kickoff-workflow-unification-wg4w4x`, based on
-`claude/plan-item-kickoff-workflow-ixbvxl` (#154). Kickoff in `auto` mode,
-session https://claude.ai/code/session_0138w5mqzbkyMPtotF7PD59Z.
+**Status**: implemented, committed and pushed as `59380858` on
+`claude/plan-item-kickoff-workflow-unification-wg4w4x` (PR #211, still a draft).
+Folded into #211 rather than opened as its own branch, since the files it changes
+exist only on #154 and #211.
 
-## What it does
+### Cause
+`settle-candidate` closed the candidate on any verdict that was not RUNNING, and
+ABSENT is what a candidate opened two seconds ago looks like - GitHub creates a
+pull request's run a moment after the request is opened. The first reading closed
+it, no run was ever created, every later reading found the same absence, and
+`_verdict_exit_code` answered ABSENT as still-running so the loop waited out the
+hour. Candidates 209, 212, 213: no run of ci.yml or integration-checks.yml at all.
+204 was closed after three seconds instead of two, its runs were created one second
+later, and it is the only build this pipeline has judged. `mergeable_state: dirty`
+on the closed three is not a conflict - the merge is clean locally.
 
-A candidate red on a matrix job names a failing check and nothing else.
-`block-branch` cannot localise it — it re-runs the four tooling directories, and
-`test_each_lib (<lib>)` lives in the docker matrix. This re-runs the failing
-library's own job over each prefix of the merge order and reports which tip's
-arrival turned it, as the same `IntegrationTestFailure` the local search
-produces.
+### What was changed
+1. `ChecksVerdict.has_settled` - the close and the exit status now read one property,
+   so they cannot disagree about ABSENT again.
+2. `RefreshPipeline` gives an absent check a warm-up (5 readings) instead of the whole
+   schedule, then stops with `CANDIDATE_UNCHECKED` (17). `_ask_repeatedly` is the one
+   loop both waits are built from.
+3. Found while fixing: a candidate left open would be merged into the next build -
+   it is out of draft, unblocked and not red, which is everything `select_for_build`
+   asks. Measured, not assumed. The stack is `work_in_flight` now: every open pull
+   request except one opened against the branch the build would replace.
 
-## Built
+839 tests across the four CI directories, from 835. Four new tests, each written first.
 
-All six kickoff steps, then the review round of 2026-08-29 (15 comments,
-`e8932eb40` + `0b1d33f5f`). Thirteen threads resolved, two open.
+### Done besides the code
+PR #211's description carries a section on this round; the `workflow-unification`
+manifest and roadmap have it under `red-candidate-localisation`; the dashboard was
+republished.
 
-The round is one complaint — structure over strings, parse once, keep the logic
-where something can run it — and it produced three modules:
-
-- **`workflow_document.py`** parses a workflow once into named things, so no
-  reader indexes into a mapping under keys it spells itself. `WorkflowFile`,
-  `TriggerEvent`, `Action`; a step is found by the action it uses rather than by
-  `<action>@<version>`.
-- **`matrix_libraries.py`** derives the libraries from the matrix job, found by
-  fanning out over a matrix rather than by name. The static list matched `ci.yml`
-  and was held by nothing.
-- **`integration_pipeline.py`** takes the rebuild out of YAML. Every decision was
-  about an exit status and none could run outside a runner; the workflow drops
-  223 lines to ~107 and calls one command.
-
-Plus `BranchRefspec`/`push_refspec` (and `--force-with-lease` in place of
-`--force`), `DispatchField`, a `match` over `LocalisationStep`, `Probe` →
-`DispatchedProbe`, `IntegrationExitCode` in its own module, and every
-dict-returning report in `.claude/stack/` on `to_json`.
-
-## Found while building
-
-- **The parser caught its own hazard while being written.** A trigger block is
-  under `True`, not `"on"` — YAML reads a bare `on` key as the boolean. The first
-  version raised `KeyError` on `ci_reusable.yml`. Scattered across fifteen
-  readers that failure is silent: each would answer "no triggers".
-- **A folded YAML scalar keeps a more-indented continuation verbatim.** The
-  `env:` expression parsed into a string with newlines inside the expression
-  delimiters while the assertion about it passed. Printing the parsed value found
-  it.
-- **The two rounds could collide on a probe branch name.** The name carries its
-  round now.
-- **A contract test over a workflow has to search the right executable surface.**
-  Status `14` lives in the step's `if:`, not its shell.
-- **A marker search has to match the marker, not a mention of it.** Writing this
-  note, a substring search for the PR-progress marker matched the conventions
-  paragraph that *describes* it, seventy lines earlier, so the block landed in
-  the middle of the prose and `save-pr-progress.sh` reported "already up to date"
-  — correctly, since the real section was untouched. Anchor on the whole line.
-
-## Verified
-
-835 tests pass across the four directories CI runs, from 758. CI green on
-`test_claude_dev_tooling` at head `0b1d33f5f`. Mutations checked, each caught by
-exactly the test naming its rule.
-
-## Open on purpose
-
-- **The 400-line rule.** Everything this round creates obeys it and the 1008-line
-  test module is five — but `integration.py` is 2482 lines and this round adds
-  484. It was 2064 before this branch, so the split is #154's and already has its
-  own thread. Offered, not done.
-- **Two of three constants stayed plain**, each naming one thing with one reader.
-
-## Known limit
-
-The end-to-end live run is gated on a build carrying this branch — a
-`workflow_dispatch` workflow is only dispatchable once it is on the default
-branch. Same bootstrap Part D needed on 2026-08-28. Stated, not closed.
-
-## Next
-
-Nothing outstanding on the branch. Awaiting review.
+### Outstanding - the user's call
+The schedule runs the pipeline copy on the fork's default branch, which is
+`integration`, and that only updates when a build publishes. So the fix reaches the
+schedule by a `workflow_dispatch` of Integration refresh on this branch, or by a hand
+push to `integration`. Neither was done: a dispatch is a real rebuild that publishes
+on green.
