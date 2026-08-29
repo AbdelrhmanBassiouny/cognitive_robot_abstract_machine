@@ -39,12 +39,14 @@ root, and a module's imports of its siblings stop resolving. The shell entry poi
 `.claude/hooks/` and the skills that call them all use `python3 -m "${SOME_MODULE}"`, with
 the module named once in `.claude/hooks/resolve-personal-notes-config.sh`.
 
-## The requirements install themselves
+## The dependencies install themselves
 
-**Every session start installs whatever of `bastler/requirements.txt` this clone is
-missing, without asking.** `.claude/hooks/session-start.sh` does it, so no module ever has
-to work around a dependency that is not there, and nobody has to notice a missing one and
-run `pip` by hand.
+**Every session start installs whatever of this package's declared dependencies your
+clone is missing, without asking.** They are declared once, in `bastler/pyproject.toml`'s
+`[project] dependencies`, the way every package in this repository declares them, and
+`bastler.dependencies` is what reads that list back. `.claude/hooks/session-start.sh` does
+the installing, so no module ever has to work around a dependency that is not there, and
+nobody has to notice a missing one and run `pip` by hand.
 
 Three things bound it, and they are worth knowing because it writes to your Python
 environment:
@@ -52,14 +54,14 @@ environment:
 - **Only for someone who has already set the tooling up.** The hook stops before this
   point when it cannot reach your personal-notes branch, so a clone that has never run
   `/setup-personal-notes` installs nothing at all.
-- **Only what is missing.** The usual start looks the requirements up and runs no
+- **Only what is missing.** The usual start looks the declaration up and runs no
   installer, which is what makes doing it every time affordable.
 - **Never fatal.** No `pip`, no network, or an externally managed environment that refuses
-  the write: the summary's `requirements:` line says so and the rest of the run carries on.
-  Install them yourself with `pip install -r bastler/requirements.txt` when that happens.
+  the write: the summary's `dependencies:` line says so, naming what to install, and the
+  rest of the run carries on. `pip install ./bastler` installs them all when that happens.
 
 An Actions runner reaches no session hook, so a workflow that runs a module installs the
-requirements in a step of its own -
+dependencies in a step of its own -
 `test/bastler_test/test_package_contract.py` finds every such workflow and checks that it
 does.
 

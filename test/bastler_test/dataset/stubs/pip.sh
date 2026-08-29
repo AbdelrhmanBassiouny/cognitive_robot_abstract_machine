@@ -6,8 +6,8 @@ set -uo pipefail
 # them. Copied into place as an executable named `pip`, earlier on PATH than
 # the real one; see the stub_bin fixture in conftest.py.
 #
-# Recognizes only `install --requirement <file>`, the one invocation
-# install_requirements makes:
+# Recognizes only `install <specifier>...`, the one invocation
+# install_dependencies makes:
 #   STUB_PIP_CALL_LOG - file the invocation is appended to
 #   STUB_PIP_STATUS   - exit status to report, default 0
 #
@@ -18,16 +18,17 @@ if [ -n "${STUB_PIP_CALL_LOG:-}" ]; then
   printf '%s\n' "$*" >> "${STUB_PIP_CALL_LOG}"
 fi
 
-if [ "${1:-}" != "install" ] || [ "${2:-}" != "--requirement" ] || [ -z "${3:-}" ]; then
+if [ "${1:-}" != "install" ] || [ -z "${2:-}" ]; then
   echo "pip stub: unrecognized invocation: $*" >&2
   exit 64
 fi
 
+shift
 STATUS="${STUB_PIP_STATUS:-0}"
 if [ "${STATUS}" = "0" ]; then
-  echo "Successfully installed everything in $3"
+  echo "Successfully installed $*"
   exit 0
 fi
 
-echo "ERROR: could not install from $3" >&2
+echo "ERROR: could not install $*" >&2
 exit "${STATUS}"

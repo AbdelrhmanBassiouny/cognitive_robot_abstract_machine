@@ -86,9 +86,10 @@ class SetupPrerequisiteFile(StrEnum):
     The refresh entry point the plan-dashboard skill runs.
     """
 
-    DASHBOARD_REQUIREMENTS = "bastler/requirements.txt"
+    PACKAGE_METADATA = "bastler/pyproject.toml"
     """
-    The requirements file check-setup.sh also derives the dependency check from.
+    The package's own metadata, which is where its dependencies are declared and so what
+    check-setup.sh derives the dependency check from.
     """
 
     PLAN_SCHEMA = ".claude/skills/plan-dashboard/plan-schema.md"

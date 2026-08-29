@@ -5,7 +5,7 @@ Which modules exist and which of them answer as a command line are both read fro
 package itself - the directory, and each module's own source. Nothing about the package
 is written down here.
 
-No module is held to the standard library: the requirements are installed before anything
+No module is held to the standard library: the dependencies are installed before anything
 runs one. A session gets them from ``session-start.sh``, which installs whatever is
 missing on every start, and an Actions workflow installs them in a step of its own.
 """

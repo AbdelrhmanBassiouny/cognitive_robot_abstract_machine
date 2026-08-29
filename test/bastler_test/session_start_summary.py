@@ -94,22 +94,22 @@ class SummaryMessage(StrEnum):
     The heading above the indented rows naming each check that needs setup.
     """
 
-    REQUIREMENTS_NOT_CHECKED = "requirements_line_not_checked"
+    DEPENDENCIES_NOT_CHECKED = "dependencies_line_not_checked"
     """
-    Nothing could be looked up, because python3 or the requirements file is missing.
-    """
-
-    REQUIREMENTS_ALREADY_INSTALLED = "requirements_line_already_installed"
-    """
-    Every requirement was already installed, so nothing was installed.
+    Nothing could be looked up, because python3 or the package metadata is missing.
     """
 
-    REQUIREMENTS_INSTALLED = "requirements_line_installed"
+    DEPENDENCIES_ALREADY_INSTALLED = "dependencies_line_already_installed"
+    """
+    Every declared dependency was already installed, so nothing was installed.
+    """
+
+    DEPENDENCIES_INSTALLED = "dependencies_line_installed"
     """
     What was missing has just been installed.
     """
 
-    REQUIREMENTS_INSTALL_FAILED = "requirements_line_install_failed"
+    DEPENDENCIES_INSTALL_FAILED = "dependencies_line_install_failed"
     """
     The install did not work, and the run carried on regardless.
     """

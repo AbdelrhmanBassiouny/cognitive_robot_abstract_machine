@@ -119,13 +119,12 @@ set -euo pipefail
 # keeps it, and global config is never touched. See ./save-git-identity.sh to
 # record one, and ./README.md for the two cases a hook cannot reach.
 #
-# Requirements: the package's own dependencies are installed on every start,
-# for anyone whose notes branch resolved - the same audience everything else
-# here serves. Only what is missing gets installed, so the usual run costs an
-# import check and nothing more, and a failure is reported rather than allowed
-# to end the run. See install_requirements in
-# ./resolve-personal-notes-config.sh, and bastler/README.md, which tells a
-# reader this happens.
+# Dependencies: the package's own are installed on every start, for anyone
+# whose notes branch resolved - the same audience everything else here serves.
+# Only what is missing gets installed, so the usual run costs an import check
+# and nothing more, and a failure is reported rather than allowed to end the
+# run. See install_dependencies in ./resolve-personal-notes-config.sh, and
+# bastler/README.md, which tells a reader this happens.
 #
 # Setup: the summary also carries ./check-setup.sh's verdict, naming any
 # check that still needs setup. It is reported rather than left to be run on
@@ -198,7 +197,7 @@ WROTE_ANYTHING=0
 # session to describe secondhand, in its own prose, what the hook did.
 SUMMARY_NOTES="not found"
 SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
-# SUMMARY_PLAN, SUMMARY_GIT_IDENTITY, SUMMARY_REQUIREMENTS and SUMMARY_SETUP
+# SUMMARY_PLAN, SUMMARY_GIT_IDENTITY, SUMMARY_DEPENDENCIES and SUMMARY_SETUP
 # get no default on purpose: every path below assigns one, so `set -u` turns a
 # path that forgets into a loud failure rather than the silently uninformative
 # report this hook used to print.
@@ -411,15 +410,15 @@ if git cat-file -e "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
   fi
 fi
 
-# Requirements: install whatever of the package's own dependencies this clone
-# is missing, so nothing downstream has to run without them. Reached only
-# after the notes branch resolved above, which is the signal that this is
-# somebody who has run the setup - a clone that never did installs nothing.
+# Dependencies: install whatever of the package's own this clone is missing,
+# so nothing downstream has to run without them. Reached only after the notes
+# branch resolved above, which is the signal that this is somebody who has run
+# the setup - a clone that never did installs nothing.
 #
 # Run before the setup check below, so check-setup.sh's dashboard_dependencies
-# row reports on the requirements this run has just installed rather than on
-# the absence it was about to fix - the same ordering, for the same reason, as
-# CLAUDE.local.md and the git identity.
+# row reports on what this run has just installed rather than on the absence it
+# was about to fix - the same ordering, for the same reason, as CLAUDE.local.md
+# and the git identity.
 #
 # Only when something is actually missing: the common case then costs one
 # import check and no installer at all, which is what makes doing this on
@@ -429,17 +428,17 @@ fi
 # externally managed environment reports here and the run carries on: a hook
 # that dies at this point takes the notes, the plan and the setup verdict with
 # it, and says nothing about why.
-if ! MISSING_REQUIREMENTS="$(missing_requirements)"; then
-  SUMMARY_REQUIREMENTS="$(requirements_line_not_checked)"
-elif [ -z "${MISSING_REQUIREMENTS}" ]; then
-  SUMMARY_REQUIREMENTS="$(requirements_line_already_installed "${BASTLER_REQUIREMENTS_FILE}")"
-elif install_requirements; then
-  SUMMARY_REQUIREMENTS="$(requirements_line_installed \
-    "${MISSING_REQUIREMENTS}" "${BASTLER_REQUIREMENTS_FILE}")"
+if ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
+  SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)"
+elif [ -z "${MISSING_DEPENDENCIES}" ]; then
+  SUMMARY_DEPENDENCIES="$(dependencies_line_already_installed "${BASTLER_PYPROJECT_FILE}")"
+elif install_dependencies "${MISSING_DEPENDENCIES}"; then
+  SUMMARY_DEPENDENCIES="$(dependencies_line_installed \
+    "${MISSING_DEPENDENCIES}" "${BASTLER_PYPROJECT_FILE}")"
 else
-  SUMMARY_REQUIREMENTS="$(requirements_line_install_failed \
-    "${MISSING_REQUIREMENTS}" "${BASTLER_REQUIREMENTS_FILE}" \
-    "$(printf '%s' "${REQUIREMENTS_INSTALL_OUTPUT}" | tail -1)")"
+  SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
+    "${MISSING_DEPENDENCIES}" \
+    "$(printf '%s' "${DEPENDENCY_INSTALL_OUTPUT}" | tail -1)")"
 fi
 
 # Setup verdict, from ./check-setup.sh - the single read-only source of truth
@@ -483,7 +482,7 @@ session-start.sh summary:
   PR progress:     ${SUMMARY_PROGRESS}
   plan:            ${SUMMARY_PLAN}
   git identity:    ${SUMMARY_GIT_IDENTITY}
-  requirements:    ${SUMMARY_REQUIREMENTS}
+  dependencies:    ${SUMMARY_DEPENDENCIES}
   setup:           ${SUMMARY_SETUP}
   plan state SHA:  $(git rev-parse FETCH_HEAD) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY

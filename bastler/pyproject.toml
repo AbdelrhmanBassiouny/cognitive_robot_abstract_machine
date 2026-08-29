@@ -31,10 +31,16 @@ classifiers = [
     "Topic :: Utilities",
 ]
 
-# Empty rather than listing requirements.txt: several modules import nothing outside
-# the standard library, and what the rest need is the `rendering` extra below.
-dependencies = []
-dynamic = ["version", "optional-dependencies"]
+# Stated here and nowhere else, as every package in this repository states them: a
+# session start, an Actions workflow and `pip install ./bastler` all install from this
+# one list. `bastler.dependencies` is what reads it.
+dependencies = [
+    "pyyaml>=6",
+    "jinja2>=3",
+    "markdown>=3",
+    "nh3>=0.2",
+]
+dynamic = ["version"]
 
 [project.urls]
 "Source" = "https://github.com/cram2/cognitive_robot_abstract_machine"
@@ -46,11 +52,6 @@ dynamic = ["version", "optional-dependencies"]
 # uses, so one bump moves all of them together.
 version = {attr = "bastler._version.__version__"}
 
-[tool.setuptools.dynamic.optional-dependencies]
-# Read from requirements.txt rather than restated here, so the list a `pip install -r`
-# installs and the list this package declares cannot drift apart.
-rendering = { file = ["requirements.txt"] }
-
 [tool.setuptools]
 packages = ["bastler"]
 
@@ -59,15 +60,15 @@ packages = ["bastler"]
 # stack.py and plan_item_mode.py find their committed defaults beside themselves, and
 # upstream_reviews.py finds its GraphQL documents as `Path(__file__).parent / "queries"`.
 # An install that left them out would import and then fail at the first render, the first
-# configuration read, or the first query. requirements.txt is here because the extra
-# above is read from it.
+# configuration read, or the first query. pyproject.toml is here because
+# `bastler.dependencies` reads the declaration out of it at runtime.
 [tool.setuptools.package-data]
 bastler = [
     "templates/*.html",
     "queries/*.graphql",
     "stack.toml",
     "plan-item-modes.toml",
-    "requirements.txt",
+    "pyproject.toml",
 ]
 
 [tool.setuptools.package-dir]

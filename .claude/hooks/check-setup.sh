@@ -86,7 +86,7 @@ MISSING_TOOLING=""
 for tooling_path in \
     "${BASTLER_PACKAGE_DIRECTORY}/__init__.py" \
     "${REFRESH_DASHBOARD_SCRIPT}" \
-    "${BASTLER_REQUIREMENTS_FILE}" \
+    "${BASTLER_PYPROJECT_FILE}" \
     "${PLAN_SCHEMA_DOCUMENT}"; do
   [ -f "${tooling_path}" ] || MISSING_TOOLING="${MISSING_TOOLING} ${tooling_path}"
 done
@@ -94,7 +94,7 @@ if [ -n "${MISSING_TOOLING}" ]; then
   report tooling_files needs-setup \
     "this checkout is missing:${MISSING_TOOLING} - merge the plan-dashboard tooling into your fork's default branch first"
 else
-  report tooling_files ok "the bastler package, its requirements, the refresh entry point and the schema reference are all present"
+  report tooling_files ok "the bastler package, its metadata, the refresh entry point and the schema reference are all present"
 fi
 
 # %% session-start wiring
@@ -173,23 +173,23 @@ fi
 
 # Reported rather than installed here: this script is read-only, and running
 # it must never change the answer it gives. ./session-start.sh installs them
-# (see install_requirements in ./resolve-personal-notes-config.sh), so on a
+# (see install_dependencies in ./resolve-personal-notes-config.sh), so on a
 # clone whose notes branch resolves, this row reports what that run just did.
 #
-# The lookup itself is missing_requirements, beside that installer, so both
-# read the same requirements.txt the same way. What stays here is the two
-# reasons it can answer nothing, because they are this script's rows to word.
+# The lookup itself is missing_dependencies, beside that installer, so both
+# read the same declaration the same way. What stays here is the two reasons
+# it can answer nothing, because they are this script's rows to word.
 if ! command -v python3 > /dev/null 2>&1; then
   report dashboard_dependencies needs-setup "python3 is not on PATH, so the plan-dashboard modules cannot run at all"
-elif [ ! -f "${BASTLER_REQUIREMENTS_FILE}" ]; then
-  report dashboard_dependencies needs-setup "cannot check: ${BASTLER_REQUIREMENTS_FILE} is missing"
+elif [ ! -f "${BASTLER_PYPROJECT_FILE}" ]; then
+  report dashboard_dependencies needs-setup "cannot check: ${BASTLER_PYPROJECT_FILE} is missing"
 else
-  MISSING_REQUIREMENTS="$(missing_requirements)"
-  if [ -z "${MISSING_REQUIREMENTS}" ]; then
-    report dashboard_dependencies ok "every requirement in ${BASTLER_REQUIREMENTS_FILE} is installed"
+  MISSING_DEPENDENCIES="$(missing_dependencies)"
+  if [ -z "${MISSING_DEPENDENCIES}" ]; then
+    report dashboard_dependencies ok "every dependency ${BASTLER_PYPROJECT_FILE} declares is installed"
   else
     report dashboard_dependencies needs-setup \
-      "not installed:${MISSING_REQUIREMENTS// / } - run: pip install -r ${BASTLER_REQUIREMENTS_FILE}"
+      "not installed:${MISSING_DEPENDENCIES// / } - run: pip install ${MISSING_DEPENDENCIES}"
   fi
 fi
 

@@ -74,7 +74,7 @@ jobs:
           python-version: '3.12'
       - run: |
           source .claude/hooks/resolve-personal-notes-config.sh
-          pip install pytest -r "${BASTLER_REQUIREMENTS_FILE}"
+          pip install pytest "./${BASTLER_PACKAGE_DIRECTORY}"
       # --confcutdir stops pytest walking up to the repository-root
       # test/conftest.py, which imports the robotics stack this job
       # deliberately does not install.

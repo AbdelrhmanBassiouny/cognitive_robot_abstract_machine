@@ -44,11 +44,11 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: Install the bastler requirements
+      - name: Install the bastler dependencies
         run: |
           set -euo pipefail
           source .claude/hooks/resolve-personal-notes-config.sh
-          pip install --requirement "${BASTLER_REQUIREMENTS_FILE}"
+          pip install "./${BASTLER_PACKAGE_DIRECTORY}"
 
       - name: Read upstream review threads
         env:

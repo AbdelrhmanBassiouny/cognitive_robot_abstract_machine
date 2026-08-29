@@ -25,7 +25,7 @@ set -euo pipefail
 # so the calling skill has everything step 4's report needs from one place.
 #
 # Requires PyYAML, Jinja2, and the markdown package - see the package's own
-# requirements.txt, next to the modules that need them.
+# pyproject.toml, which declares them next to the modules that need them.
 
 # Locating resolve-personal-notes-config.sh is the one irreducible hardcoded
 # path here: it's the file that defines every other shared path constant

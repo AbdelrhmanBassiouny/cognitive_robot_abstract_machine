@@ -3,7 +3,7 @@ Integration tests for session-start.sh's summary report.
 
 Cover the three guards the report exists for: naming which situation a branch with no
 plan item is actually in, surfacing check-setup.sh's verdict rather than leaving it to be
-remembered, and installing the package's requirements so nothing downstream has to run
+remembered, and installing the package's dependencies so nothing downstream has to run
 without them. All three stay invisible to anyone who uses neither plans nor personal
 notes.
 
@@ -79,6 +79,7 @@ def session_start_repository(
         "session-start.sh",
         "check-setup.sh",
     )
+    scratch_repository.install_package()
     scratch_repository.write_setup_prerequisites()
     scratch_repository.commit_everything("initial commit")
     scratch_repository.resolve_notes_remote_to()
@@ -329,35 +330,38 @@ def test_a_failing_setup_check_does_not_fail_the_hook(
     assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
 
 
-# %% the requirements line
+# %% the dependencies line
 
 
-REQUIREMENTS_FILE = "bastler/requirements.txt"
+DECLARATION_FILE = "bastler/pyproject.toml"
 """
-Where the scratch clone carries its requirements, as the summary line names it.
+Where the scratch clone declares its dependencies, as the summary line names it.
 """
 
-UNINSTALLABLE_REQUIREMENT = "bastler-no-such-distribution"
+UNINSTALLABLE_REQUIREMENT = "bastler-no-such-distribution>=1"
 """
 A distribution nothing can have installed, so the run has something to install.
 
 Its own name says why it is here, which matters because a real name that happened to be
 installed on the machine running the suite would make the test pass without exercising
-anything.
+anything. The version bound is part of it: what the summary names and what the installer
+is handed is the specifier, not the bare name.
 """
 
 
 def require_the_uninstallable(repository: ScratchRepository) -> None:
     """
-    Leave the scratch clone needing a requirement that is certainly not installed.
+    Leave the scratch clone declaring a dependency that is certainly not installed.
 
     :param repository: The fixture-built scratch repository.
     """
-    repository.write(REQUIREMENTS_FILE, f"{UNINSTALLABLE_REQUIREMENT}>=1\n")
-    repository.commit_everything("require something that is not installed")
+    repository.write(
+        DECLARATION_FILE, f'[project]\ndependencies = ["{UNINSTALLABLE_REQUIREMENT}"]\n'
+    )
+    repository.commit_everything("declare something that is not installed")
 
 
-def test_installs_nothing_when_every_requirement_is_already_installed(
+def test_installs_nothing_when_every_dependency_is_already_installed(
     session_start_repository: ScratchRepository,
     stub_bin: ExecutableStubDirectory,
     tmp_path: Path,
@@ -376,8 +380,8 @@ def test_installs_nothing_when_every_requirement_is_already_installed(
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "requirements") == summary_message(
-        SummaryMessage.REQUIREMENTS_ALREADY_INSTALLED, REQUIREMENTS_FILE
+    assert summary_value(result.stdout, "dependencies") == summary_message(
+        SummaryMessage.DEPENDENCIES_ALREADY_INSTALLED, DECLARATION_FILE
     )
     assert not call_log.exists()
 
@@ -401,14 +405,12 @@ def test_installs_what_is_missing(
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "requirements") == summary_message(
-        SummaryMessage.REQUIREMENTS_INSTALLED,
+    assert summary_value(result.stdout, "dependencies") == summary_message(
+        SummaryMessage.DEPENDENCIES_INSTALLED,
         UNINSTALLABLE_REQUIREMENT,
-        REQUIREMENTS_FILE,
+        DECLARATION_FILE,
     )
-    assert call_log.read_text().splitlines() == [
-        f"install --requirement {REQUIREMENTS_FILE}"
-    ]
+    assert call_log.read_text().splitlines() == [f"install {UNINSTALLABLE_REQUIREMENT}"]
 
 
 def test_reports_a_failed_install_and_finishes_the_run(
@@ -433,16 +435,34 @@ def test_reports_a_failed_install_and_finishes_the_run(
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "requirements").startswith(
+    assert summary_value(result.stdout, "dependencies").startswith(
         summary_message(
-            SummaryMessage.REQUIREMENTS_INSTALL_FAILED,
+            SummaryMessage.DEPENDENCIES_INSTALL_FAILED,
             UNINSTALLABLE_REQUIREMENT,
-            REQUIREMENTS_FILE,
             "",
         ).split(" - ")[0]
     )
     assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
     assert summary_value(result.stdout, "personal notes") != ""
+
+
+def test_reports_that_it_could_not_check_when_the_declaration_will_not_parse(
+    session_start_repository: ScratchRepository,
+):
+    """
+    A declaration that cannot be read is reported as such rather than as an environment
+    with nothing missing - which is what an empty answer means, and would install
+    nothing while saying everything was already there.
+    """
+    session_start_repository.write(DECLARATION_FILE, "this is not toml\n")
+    session_start_repository.commit_everything("break the declaration")
+
+    result = publish_and_run(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "dependencies") == summary_message(
+        SummaryMessage.DEPENDENCIES_NOT_CHECKED
+    )
 
 
 def test_reports_a_missing_installer_without_failing(
@@ -460,7 +480,7 @@ def test_reports_a_missing_installer_without_failing(
     )
 
     assert result.returncode == 0, result.stderr
-    assert UNINSTALLABLE_REQUIREMENT in summary_value(result.stdout, "requirements")
+    assert UNINSTALLABLE_REQUIREMENT in summary_value(result.stdout, "dependencies")
     assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
 
 

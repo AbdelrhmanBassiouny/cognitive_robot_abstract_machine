@@ -74,8 +74,14 @@ if ! command -v python3 > /dev/null 2>&1; then
   echo "python3 is required to parse/validate plan manifests and regenerate the branch index." >&2
   exit 1
 fi
-if ! python3 -c "import yaml" > /dev/null 2>&1; then
-  echo "python3's PyYAML module is required (pip install pyyaml)." >&2
+# Asked through the package's own declaration rather than by importing one
+# name here, so this script carries no Python of its own and no second opinion
+# about what the tooling needs. A session start installs these; a checkout
+# where that never ran reaches this message instead of a traceback.
+MISSING_DEPENDENCIES="$(missing_dependencies)" || MISSING_DEPENDENCIES=""
+if [ -n "${MISSING_DEPENDENCIES}" ]; then
+  echo "The bastler package's dependencies are not installed: ${MISSING_DEPENDENCIES}" >&2
+  echo "Run: pip install ${MISSING_DEPENDENCIES}" >&2
   exit 1
 fi
 

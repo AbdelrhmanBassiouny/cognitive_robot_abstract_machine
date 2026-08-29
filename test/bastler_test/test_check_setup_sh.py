@@ -128,6 +128,7 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
     scratch_repository.install_hook_scripts(
         "resolve-personal-notes-config.sh", "check-setup.sh"
     )
+    scratch_repository.install_package()
 
     scratch_repository.write_setup_prerequisites()
     scratch_repository.write("CLAUDE.local.md", "notes\n")
@@ -378,12 +379,12 @@ def test_reports_a_claude_local_md_that_is_not_gitignored(
 # %% plan-dashboard dependencies
 
 
-def test_reports_dashboard_requirements_that_are_not_installed(
+def test_reports_declared_dependencies_that_are_not_installed(
     check_setup_repository: ScratchRepository,
 ):
     check_setup_repository.write(
-        SetupPrerequisiteFile.DASHBOARD_REQUIREMENTS,
-        "pytest>=1\nno-such-distribution-exists>=2  # a comment\n",
+        SetupPrerequisiteFile.PACKAGE_METADATA,
+        '[project]\ndependencies = ["pytest>=1", "no-such-distribution-exists>=2"]\n',
     )
 
     report = run_check_setup(check_setup_repository)

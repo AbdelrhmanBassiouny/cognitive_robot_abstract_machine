@@ -18,7 +18,7 @@ files, not just prose. You can render them yourself with no GitHub access at
 all:
 
 ```bash
-pip install -r bastler/requirements.txt
+pip install ./bastler
 python3 -m bastler.build_dashboard \
   --plan .claude/skills/plan-dashboard/example/plan.yaml \
   --roadmap .claude/skills/plan-dashboard/example/roadmap.md \

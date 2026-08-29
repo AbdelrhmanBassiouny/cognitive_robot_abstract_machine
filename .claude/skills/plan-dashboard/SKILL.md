@@ -37,7 +37,7 @@ alone can't tell you *why* an item is blocked, deferred, or still open.
 ## 0. Check the setup is in place, and offer it if not
 
 Every step below reads the personal-notes branch and runs scripts that need
-`${BASTLER_REQUIREMENTS_FILE}` installed — neither of which a user who
+the dependencies `${BASTLER_PYPROJECT_FILE}` declares — neither of which a user who
 hasn't done the one-time setup has. Follow
 `.claude/skills/setup-personal-notes/prerequisite-check.md` before step 1: run
 the check, and if it reports anything missing, offer `/setup-personal-notes`
@@ -54,7 +54,7 @@ remote/branch precedence (`git config claude.personalNotesRemote` → env var
 into `NOTES_REMOTE`/`NOTES_BRANCH`, and defines every other script/hook path
 this document references below (`BUILD_INDEX_MODULE`,
 `REFRESH_DASHBOARD_SCRIPT`, `WRITE_PERSONAL_NOTES_FILE_SCRIPT`,
-`BASTLER_REQUIREMENTS_FILE`, ...) — read that file if you need the
+`BASTLER_PYPROJECT_FILE`, ...) — read that file if you need the
 precise logic or the full list of what it defines. Every bash block in this
 document assumes it's already been sourced once per session:
 
@@ -175,7 +175,7 @@ its stderr says exactly what's wrong (which field, which value). Report
 that to the user instead of trying to patch around it yourself; a broken
 manifest is something they need to know about, not paper over. Requires
 PyYAML, Jinja2, and the `markdown` package —
-`pip install -r "${BASTLER_REQUIREMENTS_FILE}"` if any are missing.
+`pip install "./${BASTLER_PACKAGE_DIRECTORY}"` if any are missing.
 
 On success it prints one merged JSON summary on stdout: `sync_manifest_status.py`'s
 own `{"corrected": [...]}` plus `build_dashboard.py`'s status counts, drift

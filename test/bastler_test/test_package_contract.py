@@ -1,7 +1,7 @@
 """
 The contract :mod:`bastler` has to keep: everything importable from the repository root
 with no install, every module importable on its own, every entry point reachable through
-``python3 -m``, every workflow that runs a module installing its requirements first, and
+``python3 -m``, every workflow that runs a module installing its dependencies first, and
 nothing left behind under ``.claude/``.
 
 :mod:`bastler.package_layout` discovers the modules and the entry points from the package
@@ -86,12 +86,12 @@ MODULE_VARIABLE = re.compile(r'^([A-Z_]+)="(bastler\.[a-z_]+)"', re.MULTILINE)
 One ``NAME="bastler.module"`` assignment in the shell configuration.
 """
 
-REQUIREMENTS_INSTALL = re.compile(
-    r"(pip install|uv pip install|uv sync)[^\n]*"
-    r"(BASTLER_REQUIREMENTS_FILE|bastler/requirements\.txt)"
+DEPENDENCY_INSTALL = re.compile(
+    r"(pip install|uv pip install|uv sync)[^\n]*" r"(BASTLER_PACKAGE_DIRECTORY|bastler)"
 )
 """
-A step that installs this package's requirements, however the caller spells the file.
+A step that installs this package, and with it the dependencies its metadata declares,
+however the caller spells the directory.
 """
 
 
@@ -111,12 +111,12 @@ def names_of(module: PackageModule) -> frozenset[str]:
     }
 
 
-def installs_the_requirements(caller_source: str) -> bool:
+def installs_the_dependencies(caller_source: str) -> bool:
     """
     :param caller_source: A caller's own file.
-    :return: Whether it installs this package's requirements before running anything.
+    :return: Whether it installs this package's dependencies before running anything.
     """
-    return REQUIREMENTS_INSTALL.search(caller_source) is not None
+    return DEPENDENCY_INSTALL.search(caller_source) is not None
 
 
 # %% the package exists and is reachable with no install
@@ -189,10 +189,10 @@ def workflows_that_run_a_module() -> tuple[tuple[Path, PackageModule], ...]:
     )
 
 
-def test_every_workflow_that_runs_a_module_installs_the_requirements_first():
+def test_every_workflow_that_runs_a_module_installs_the_dependencies_first():
     """
     A runner starts with nothing installed and no hook runs on it, so a workflow that
-    invokes a module installs this package's requirements itself.
+    invokes a module installs this package's dependencies itself.
 
     The emptiness assertion is the scan's own coverage: a discovery that finds no
     workflow checks nothing, and a parametrization over it would pass while doing so.
@@ -203,7 +203,7 @@ def test_every_workflow_that_runs_a_module_installs_the_requirements_first():
     assert [
         workflow_path.name
         for workflow_path, _ in running
-        if not installs_the_requirements(workflow_path.read_text())
+        if not installs_the_dependencies(workflow_path.read_text())
     ] == []
 
 

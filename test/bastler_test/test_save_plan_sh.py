@@ -62,6 +62,35 @@ def run_save_plan(
     )
 
 
+# %% the dependencies it needs before it can read a manifest
+
+
+UNINSTALLABLE_REQUIREMENT = "bastler-no-such-distribution>=1"
+"""
+A distribution nothing can have installed, so the refusal cannot pass by accident.
+"""
+
+
+def test_refuses_when_a_declared_dependency_is_not_installed(
+    save_plan_repository: ScratchRepository,
+):
+    """
+    The declaration answers this rather than an import of one name, so the refusal names
+    everything the tooling is short of and what to run - not a traceback from whichever
+    module happens to be imported first.
+    """
+    save_plan_repository.write(
+        "bastler/pyproject.toml",
+        f'[project]\ndependencies = ["{UNINSTALLABLE_REQUIREMENT}"]\n',
+    )
+
+    result = run_save_plan(save_plan_repository, "test-plan")
+
+    assert result.returncode == 1
+    assert UNINSTALLABLE_REQUIREMENT in result.stderr
+    assert f"pip install {UNINSTALLABLE_REQUIREMENT}" in result.stderr
+
+
 # %% --manifest/--roadmap pairing
 
 

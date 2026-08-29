@@ -345,11 +345,14 @@ CHECK_SCOPE_OVERLAP_MODULE="bastler.check_scope_overlap"
 # upstream_reviews: reports the review threads a fork branch's upstream
 # pull request has collected, run by the upstream-reviews Action.
 UPSTREAM_REVIEWS_MODULE="bastler.upstream_reviews"
-# requirements.txt: the PyYAML/Jinja2/markdown dependencies the rendering
-# modules need - installed by CI, by an Actions workflow running a module, and
-# by ./session-start.sh on every session start (see install_requirements
-# below).
-BASTLER_REQUIREMENTS_FILE="${BASTLER_PACKAGE_DIRECTORY}/requirements.txt"
+# dependencies: prints the package's declared dependencies this environment
+# does not have - what missing_dependencies below calls.
+BASTLER_DEPENDENCIES_MODULE="bastler.dependencies"
+# pyproject.toml: the package's own metadata, and the one place its
+# PyYAML/Jinja2/markdown/nh3 dependencies are declared - installed by CI, by an
+# Actions workflow running a module, and by ./session-start.sh on every session
+# start (see install_dependencies below).
+BASTLER_PYPROJECT_FILE="${BASTLER_PACKAGE_DIRECTORY}/pyproject.toml"
 # stack.toml: the committed defaults stack.py's load_configuration layers a
 # personal-notes .claude/personal/stack.toml override on top of.
 STACK_CONFIG_FILE="${BASTLER_PACKAGE_DIRECTORY}/stack.toml"
@@ -530,48 +533,41 @@ tracked_plan_count() {
     | awk -F'\t' 'NF >= 2 { seen[$2] = 1 } END { print length(seen) }'
 }
 
-# %% the package's own requirements
+# %% the package's own dependencies
 
-# missing_requirements: prints the distributions BASTLER_REQUIREMENTS_FILE
-# names that are not installed, space separated, and nothing at all when every
-# one of them is. Returns 1 without printing when the file or python3 is
-# missing, which is a caller's problem to word rather than this function's.
+# missing_dependencies: prints the requirement specifiers
+# BASTLER_PYPROJECT_FILE declares that are not installed, space separated, and
+# nothing at all when every one of them is. Returns 1 without printing when the
+# file or python3 is missing, which is a caller's problem to word rather than
+# this function's.
 #
-# Read from requirements.txt itself rather than from a second hand-written
-# list, which would go stale the moment that file changes. Distribution names
-# are what the file states, so they are what gets looked up - no
-# PyYAML/yaml-style mapping to maintain anywhere.
-missing_requirements() {
+# The reading is BASTLER_DEPENDENCIES_MODULE's rather than a snippet written
+# out here: it parses a declaration, and parsing embedded in a shell string is
+# code nothing can run on its own or test.
+missing_dependencies() {
   command -v python3 > /dev/null 2>&1 || return 1
-  [ -f "${BASTLER_REQUIREMENTS_FILE}" ] || return 1
-  python3 - "${BASTLER_REQUIREMENTS_FILE}" <<'PYTHON'
-import re
-import sys
-from importlib.metadata import PackageNotFoundError, distribution
-
-missing = []
-for line in open(sys.argv[1], encoding="utf-8"):
-    requirement = line.split("#", 1)[0].strip()
-    if not requirement:
-        continue
-    name = re.split(r"[<>=!~;\[ ]", requirement, maxsplit=1)[0]
-    try:
-        distribution(name)
-    except PackageNotFoundError:
-        missing.append(name)
-print(" ".join(missing))
-PYTHON
+  [ -f "${BASTLER_PYPROJECT_FILE}" ] || return 1
+  local missing
+  # Its failure is reported rather than echoed, since an empty answer is what
+  # a caller reads as "nothing to install".
+  missing="$(python3 -m "${BASTLER_DEPENDENCIES_MODULE}")" || return 1
+  # Unquoted so the module's one-specifier-per-line output is word split and
+  # printed back as one space separated line.
+  # shellcheck disable=SC2086
+  echo ${missing}
 }
 
-# install_requirements: installs everything BASTLER_REQUIREMENTS_FILE names,
-# leaving pip's own output (both streams) in REQUIREMENTS_INSTALL_OUTPUT for a
-# caller to report, and returning pip's exit status.
+# install_dependencies: installs the specifiers named in $1, leaving pip's own
+# output (both streams) in DEPENDENCY_INSTALL_OUTPUT for a caller to report,
+# and returning pip's exit status.
 #
-# Installs from the file rather than by name so the version constraints come
-# with it; pip skips whatever is already satisfied, so the caller decides
-# whether it is worth running at all rather than this function guessing.
-install_requirements() {
-  REQUIREMENTS_INSTALL_OUTPUT="$(pip install --requirement "${BASTLER_REQUIREMENTS_FILE}" 2>&1)"
+# The specifiers rather than the package itself: installing ./bastler would put
+# a second copy of these modules in site-packages beside the clone's own, and
+# the clone's copy is what the zero-install contract says a caller imports.
+install_dependencies() {
+  local specifiers="$1"
+  # shellcheck disable=SC2086 # each specifier is its own argument to pip.
+  DEPENDENCY_INSTALL_OUTPUT="$(pip install ${specifiers} 2>&1)"
 }
 
 # PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit
