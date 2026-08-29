@@ -570,6 +570,18 @@ items:
   - d-core-single-class
   status: in_progress
   session: https://claude.ai/code/session_015bucsUoPW3ktQ1NnTZbbVx
+  blockers:
+  - 'Two review threads opened 2026-08-29T10:28-10:30Z on pull request #210 are unanswered, and
+    postdate the notes below. backend.py:36 asks whether a dataclass already exists for the
+    GroundTruth callable; backend.py:92 asks why RDRBackend inherits from none of the QueryBackend
+    bases, the omission the pull request body flags as deliberate.'
+  - 'CI check test_each_lib (semantic_digital_twin) fails on
+    test_multi_sim.py::test_world_sim_state_sync, a physics-settling assertion this pull request''s
+    two krrood/rdr files cannot reach. It is not this branch''s work. #190 added pytest-rerunfailures
+    to the dev extra on main (merged 2026-08-24) so that test''s @pytest.mark.flaky reruns instead of
+    failing outright, but D-core-backend and every branch from D-core-support up is 342 commits behind
+    main and still lacks it, leaving the mark inert. A steward cascade clears it; nothing inside this
+    pull request does.'
   notes: >-
     backend.py + its test; infer/fill split, typed ModelKey, key_from_attribute -> helpers.py. New
     stack tip. 2026-08-29: landed as commit 8cb490de1 on draft PR #210, kicked off and implemented
