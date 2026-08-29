@@ -11,10 +11,12 @@ from random_events.interval import closed
 from random_events.variable import Continuous
 
 from krrood.entity_query_language.backends import ProbabilisticBackend
-from krrood.entity_query_language.exceptions import ProbabilityConditionNotVerbalizable
 from krrood.entity_query_language.factories import average, probability_of, variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
-from krrood.parametrization.exceptions import RelationalCircuitRegistryRequiresMatch
+from krrood.parametrization.exceptions import (
+    JointQueryAcrossClassesNotSupported,
+    RelationalCircuitRegistryRequiresMatch,
+)
 from krrood.parametrization.model_registries import DictRegistry, RelationalCircuitRegistry
 
 
@@ -74,9 +76,20 @@ def test_average_distinct_falls_through_to_native_evaluation():
         average(x.arm.battery, distinct=True).first(backend=backend)
 
 
-def test_probability_of_bool_condition_raises_clear_error_on_verbalization():
-    with pytest.raises(ProbabilityConditionNotVerbalizable):
-        verbalize_expression(probability_of(True))
+def test_probability_of_bool_condition_verbalizes_but_does_not_evaluate():
+    """
+    probability_of(True)'s condition is normalized to a Literal on construction (the
+    same normalization and_/or_/not_ already apply to a bare-bool operand), so it
+    verbalizes cleanly like any other condition -- but it still can't evaluate: a
+    content-free condition names no class, so there is no model to resolve it against.
+    """
+    text = verbalize_expression(probability_of(True))
+    assert text == "the probability that True"
+
+    circuit, _ = _build_robot_circuit()
+    backend = ProbabilisticBackend(model_registry=DictRegistry({Robot: circuit}))
+    with pytest.raises(JointQueryAcrossClassesNotSupported):
+        probability_of(True).first(backend=backend)
 
 
 def test_relational_circuit_registry_rejects_non_match_parameters():

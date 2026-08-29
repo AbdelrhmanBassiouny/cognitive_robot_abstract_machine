@@ -23,6 +23,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing_extensions import Any, Iterator, Tuple, TYPE_CHECKING
 
+from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+from krrood.entity_query_language.core.variable import Literal
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.exceptions import (
     BackendCannotEvaluateProbabilisticQuery,
@@ -81,12 +83,28 @@ class Probability(ProbabilisticQuery):
     condition already accepts (comparators combined with ``and_``/``or_``/``not_``,
     ranges, ...) -- it is translated into a
     {py:class}`~random_events.product_algebra.Event` the same way.
+
+    ``ConditionType`` also allows a bare ``bool`` (``probability_of(True)``); a plain
+    Python ``bool`` carries no attribute/chain, so it's wrapped in a
+    :class:`~krrood.entity_query_language.core.variable.Literal` on construction, the
+    same normalization ``and_``/``or_``/``not_`` already apply to a bare-bool operand
+    -- this keeps ``condition`` always a real EQL expression, so it verbalizes (*"the
+    probability that True"*) with no special-casing needed downstream. It still won't
+    *evaluate*, though: a content-free condition names no class, so there is no model
+    to resolve it against --
+    :class:`~krrood.parametrization.exceptions.JointQueryAcrossClassesNotSupported`
+    (empty ``owner_classes``) is raised at resolution time, same as any other
+    condition that references no attributes.
     """
 
     condition: ConditionType
     """
     The condition to compute the probability of.
     """
+
+    def __post_init__(self):
+        if not isinstance(self.condition, SymbolicExpression):
+            self.condition = Literal(_value_=self.condition)
 
     def _resolve_(self, model_registry: ModelRegistry) -> float:
         from krrood.parametrization.parameterizer import ConditionParameters

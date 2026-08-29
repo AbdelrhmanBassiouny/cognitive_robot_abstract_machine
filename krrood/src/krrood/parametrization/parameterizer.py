@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import itertools
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import EnumType
 from functools import cached_property
@@ -55,8 +56,64 @@ if TYPE_CHECKING:
     from probabilistic_model.probabilistic_model import ProbabilisticModel
 
 
+class ModelQueryParameters(ABC):
+    """
+    Shared interface between EQL constructs and ``ProbabilisticModel``: whatever a
+    :class:`~krrood.parametrization.model_registries.ModelRegistry` needs to resolve a
+    model, regardless of which EQL construct is asking. Three constructs each build
+    their own parameters this way -- :class:`UnderspecifiedParameters` for a ``Match``
+    (``distribution_of(...)`` too, which wraps one), :class:`SelectedAttributesParameters`
+    for a bare attribute selection (``average(...)``), and :class:`ConditionParameters`
+    for a bare condition (``probability_of(...)``) -- so a registry can type against
+    this one interface instead of a union of the three.
+    """
+
+    @property
+    @abstractmethod
+    def variables(self) -> dict[str, random_events.variable.Variable]:
+        """
+        :return: A dictionary that maps variable names to the random events variables
+            this query references.
+        """
+
+    @property
+    @abstractmethod
+    def queried_class(self) -> Type:
+        """
+        :return: The single class this query's model must be resolved for.
+        :raises JointQueryAcrossClassesNotSupported: If the query references
+            attributes reached from more than one owner class.
+        """
+
+    @staticmethod
+    def _single_owner_class(attributes: Iterable[Attribute]) -> Type:
+        """
+        Shared ``queried_class`` implementation for the two subclasses
+        (:class:`SelectedAttributesParameters`, :class:`ConditionParameters`) that
+        resolve their class from a plain collection of attributes rather than a
+        ``Match``'s own selected variable.
+
+        :param attributes: The attributes a subclass's ``queried_class`` was given.
+        :return: The single class every attribute is reached from -- the class of each
+            attribute chain's root ``variable(...)``, not its immediate parent (so a
+            multi-hop chain like ``x.arm.battery`` resolves to ``x``'s class, matching
+            what every :class:`ModelRegistry
+            <krrood.parametrization.model_registries.ModelRegistry>` is keyed on, not
+            ``Arm``).
+        :raises JointQueryAcrossClassesNotSupported: If the attributes are reached from
+            more than one owner class -- every :class:`ModelRegistry
+            <krrood.parametrization.model_registries.ModelRegistry>` resolves a single
+            model per class, so a query joining several classes' models is not
+            supported.
+        """
+        owner_classes = {attribute._chain_root_._type_ for attribute in attributes}
+        if len(owner_classes) != 1:
+            raise JointQueryAcrossClassesNotSupported(owner_classes)
+        return owner_classes.pop()
+
+
 @dataclass
-class UnderspecifiedParameters:
+class UnderspecifiedParameters(ModelQueryParameters):
     """
     A class that extracts all necessary information from a
     {py:class}`~krrood.entity_query_language.query.match.Match` and binds it together.
@@ -660,28 +717,8 @@ class UnderspecifiedParameters:
             return type_
 
 
-def _single_owner_class(attributes: Iterable[Attribute]) -> Type:
-    """
-    :param attributes: The attributes a probabilistic query (``distribution_of(...)``,
-        ``probability_of(...)``, ``average(...)``) was given.
-    :return: The single class every attribute is reached from -- the class of each
-        attribute chain's root ``variable(...)``, not its immediate parent (so a
-        multi-hop chain like ``x.arm.battery`` resolves to ``x``'s class, matching what
-        every :class:`ModelRegistry <krrood.parametrization.model_registries.ModelRegistry>`
-        is keyed on, not ``Arm``).
-    :raises JointQueryAcrossClassesNotSupported: If the attributes are reached from
-        more than one owner class -- every :class:`ModelRegistry
-        <krrood.parametrization.model_registries.ModelRegistry>` resolves a single
-        model per class, so a query joining several classes' models is not supported.
-    """
-    owner_classes = {attribute._chain_root_._type_ for attribute in attributes}
-    if len(owner_classes) != 1:
-        raise JointQueryAcrossClassesNotSupported(owner_classes)
-    return owner_classes.pop()
-
-
 @dataclass
-class SelectedAttributesParameters:
+class SelectedAttributesParameters(ModelQueryParameters):
     """
     A class that extracts all necessary information from a bare selection of
     attributes and binds it together.
@@ -707,7 +744,7 @@ class SelectedAttributesParameters:
         :raises JointQueryAcrossClassesNotSupported: If the selected attributes are
             reached from more than one owner class.
         """
-        return _single_owner_class(self.attributes)
+        return self._single_owner_class(self.attributes)
 
     @cached_property
     def variables(self) -> dict[str, random_events.variable.Variable]:
@@ -724,12 +761,11 @@ class SelectedAttributesParameters:
 
 
 @dataclass
-class ConditionParameters:
+class ConditionParameters(ModelQueryParameters):
     """
     A class that extracts all necessary information from a condition expression given
     to {py:class}`~krrood.entity_query_language.operators.probabilistic_queries.Probability`
-    or {py:class}`~krrood.entity_query_language.operators.probabilistic_queries.Truncated`
-    and binds it together, reusing the same
+    (``probability_of(...)``) and binds it together, reusing the same
     :class:`~krrood.parametrization.random_events_translator.WhereExpressionToRandomEventTranslator`
     a ``Match``'s ``where`` conditions are already translated with.
     """
@@ -765,4 +801,4 @@ class ConditionParameters:
         :raises JointQueryAcrossClassesNotSupported: If the condition constrains
             attributes reached from more than one owner class.
         """
-        return _single_owner_class(self._translator.variables.keys())
+        return self._single_owner_class(self._translator.variables.keys())

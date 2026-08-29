@@ -1,12 +1,11 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing_extensions import Type, Dict, Union
+from typing_extensions import Type, Dict
 
 from krrood.parametrization.exceptions import RelationalCircuitRegistryRequiresMatch
 from krrood.parametrization.parameterizer import (
+    ModelQueryParameters,
     UnderspecifiedParameters,
-    SelectedAttributesParameters,
-    ConditionParameters,
 )
 from krrood.utils import get_class_and_attribute_name
 from probabilistic_model.probabilistic_circuit.causal.causal_circuit import (
@@ -18,19 +17,6 @@ from probabilistic_model.probabilistic_circuit.relational.rspn import (
 from probabilistic_model.probabilistic_circuit.rx.helper import fully_factorized
 from probabilistic_model.probabilistic_model import ProbabilisticModel
 
-ModelResolutionParameters = Union[
-    UnderspecifiedParameters,
-    SelectedAttributesParameters,
-    ConditionParameters,
-]
-"""
-Whatever a :class:`ModelRegistry` needs to resolve a model: a full
-:class:`~krrood.parametrization.parameterizer.UnderspecifiedParameters` (for a
-``Match`` or a ``distribution(...)``, which wraps one), or one of the lighter parameter
-classes for the other probabilistic query constructs (``moment``, ``probability``) --
-all of them expose ``.variables`` and ``.queried_class``.
-"""
-
 
 @dataclass
 class ModelRegistry(ABC):
@@ -40,7 +26,7 @@ class ModelRegistry(ABC):
     """
 
     @abstractmethod
-    def get_model(self, parameters: ModelResolutionParameters) -> ProbabilisticModel:
+    def get_model(self, parameters: ModelQueryParameters) -> ProbabilisticModel:
         """
         :param parameters: The parameters to get a model for.
         :return: A probabilistic model that can be used to generate answers for the given expression.
@@ -53,7 +39,7 @@ class FullyFactorizedRegistry(ModelRegistry):
     A registry that always returns a fully factorized model.
     """
 
-    def get_model(self, parameters: ModelResolutionParameters) -> ProbabilisticModel:
+    def get_model(self, parameters: ModelQueryParameters) -> ProbabilisticModel:
         return fully_factorized(parameters.variables.values())
 
 
@@ -68,7 +54,7 @@ class DictRegistry(ModelRegistry):
     A dictionary that maps classes to probabilistic models.
     """
 
-    def get_model(self, parameters: ModelResolutionParameters) -> ProbabilisticModel:
+    def get_model(self, parameters: ModelQueryParameters) -> ProbabilisticModel:
         return self.models[parameters.queried_class]
 
 
@@ -92,7 +78,7 @@ class RelationalCircuitRegistry(ModelRegistry):
     The trained relational probabilistic circuit to ground.
     """
 
-    def get_model(self, parameters: ModelResolutionParameters) -> ProbabilisticModel:
+    def get_model(self, parameters: ModelQueryParameters) -> ProbabilisticModel:
         if not isinstance(parameters, UnderspecifiedParameters):
             raise RelationalCircuitRegistryRequiresMatch(parameters)
         grounded = self.relational_probabilistic_circuit.ground(parameters.statement)
@@ -124,5 +110,5 @@ class CausalCircuitRegistry(ModelRegistry):
     A dictionary that maps classes to pre-built causal circuits.
     """
 
-    def get_model(self, parameters: ModelResolutionParameters) -> ProbabilisticModel:
+    def get_model(self, parameters: ModelQueryParameters) -> ProbabilisticModel:
         return self.circuits[parameters.queried_class]

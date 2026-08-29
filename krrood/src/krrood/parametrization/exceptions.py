@@ -139,7 +139,9 @@ class MultipleEffectVariablesNotSupported(DataclassException):
 class JointQueryAcrossClassesNotSupported(DataclassException):
     """
     Raised when a probabilistic query (``probability_of(...)``, ``average(...)``)
-    references attributes of more than one EQL class, e.g. ``average(x.A)`` combined
+    doesn't reference attributes of exactly one EQL class -- either none at all, e.g.
+    ``probability_of(True)`` (a content-free condition names no class, so there is no
+    model to resolve it against), or more than one, e.g. ``average(x.A)`` combined
     with attributes of a second class in the same call, for
     ``x = variable(ClassOne)`` and ``y = variable(ClassTwo)``.
 
@@ -147,16 +149,22 @@ class JointQueryAcrossClassesNotSupported(DataclassException):
     always for one class by construction.
 
     Every :class:`~krrood.parametrization.model_registries.ModelRegistry` resolves a
-    single model per class, so there is no established way to ground a query spanning
-    two different classes' models yet.
+    single model per class, so there is no established way to ground a query
+    referencing zero, or more than one, classes' models yet.
     """
 
     owner_classes: Set[Type]
     """
-    The distinct owner classes found among the query's referenced attributes.
+    The distinct owner classes found among the query's referenced attributes -- empty
+    when it referenced none at all.
     """
 
     def error_message(self) -> str:
+        if not self.owner_classes:
+            return (
+                "The query referenced no class-bound attributes at all, so there is "
+                "no model to resolve it against."
+            )
         names = ", ".join(sorted(cls.__name__ for cls in self.owner_classes))
         return (
             f"The query referenced attributes owned by {len(self.owner_classes)} "

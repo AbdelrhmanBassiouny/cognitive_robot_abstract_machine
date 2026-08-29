@@ -8,7 +8,6 @@ if TYPE_CHECKING:
     from krrood.entity_query_language.verbalization.vocabulary.english import Directive
 
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
-from krrood.entity_query_language.exceptions import ProbabilityConditionNotVerbalizable
 from krrood.entity_query_language.operators.probabilistic_queries import (
     Distribution,
     Probability,
@@ -66,17 +65,14 @@ class EQLVerbalizer:
         # everything inside it (selection, values, conditions) is scanned/folded through its
         # resolved query expression. Distribution/Probability are Evaluable-only (not
         # SymbolicExpression), so the referring-expression scan needs the SymbolicExpression they
-        # actually wrap instead -- the underlying match's resolved query, or the condition.
+        # actually wrap instead -- the underlying match's resolved query, or the condition
+        # (Probability.__post_init__ already normalizes a bare bool into a Literal, so
+        # .condition is always a real SymbolicExpression here).
         if isinstance(expression, Match):
             scan_target = expression.expression
         elif isinstance(expression, Distribution):
             scan_target = expression.match.expression
         elif isinstance(expression, Probability):
-            if not isinstance(expression.condition, SymbolicExpression):
-                # a bare bool (legal per ConditionType) carries no attribute/chain to
-                # scan for referring expressions -- fail clearly here rather than
-                # crashing later on a plain value with no _all_expressions_
-                raise ProbabilityConditionNotVerbalizable(expression)
             scan_target = expression.condition
         else:
             scan_target = expression
