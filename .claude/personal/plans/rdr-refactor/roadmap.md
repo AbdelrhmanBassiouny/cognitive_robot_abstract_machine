@@ -2919,3 +2919,24 @@ runs the next steward pass should start from that rather than from the stack ord
   the fix; the venv was rebuilt to its original resolution instead. `test_backends.py` still
   cannot be collected here for the `jpt` gap §29 recorded, so it is excluded on both sides of the
   sweep rather than silently absent from one.
+
+### Closed (2026-08-29)
+
+The developer marked #210 **ready for review** at 20:53:57Z, which under the standing convention
+ends this session's job on it. `draft: false`, 3 files / +630 on head `e70fd6ff6`. The two threads
+stand as this round left them: `backend.py:92` resolved with its reply, `backend.py:36` answered
+and open, since three options are on it and the choice is the developer's.
+
+**One reading corrected, and it reverses §31's finding.** This round reported CI as "probably just
+early", on §17's precedent that a `total_count: 0` taken minutes after a push means nothing. Twenty
+minutes later `e70fd6ff6` had still queued **nothing** and `mergeable_state` read `unknown` — the
+exact signature §29 and §30 recorded for #98 and #159. So §31's conclusion, that what is wedged on
+those two is *each pull request's own merge ref* because a branch opened fresh off #159 got a
+working one, does not survive that branch's **second** push: #210 queued 21 jobs on its first push
+and nothing on its second. The remedy §31 named as untried — closing the wedged pull request and
+opening a new one for the same branch — now has a third candidate, and whoever tries it should note
+that a fresh pull request buys one push, not a working ref.
+
+Both outstanding items are the stack's or the developer's rather than this branch's, and both are
+recorded in the item's `blockers`: the `GroundTruth` question, and `test_each_lib
+(semantic_digital_twin)`, which only the cascade clears. No subscription and no check-in were armed.

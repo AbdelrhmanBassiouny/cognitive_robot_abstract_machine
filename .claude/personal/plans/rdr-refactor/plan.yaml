@@ -607,6 +607,18 @@ items:
     #98 have queued nothing since 2026-08-12/13, so the wedge is those pull requests' own merge
     refs rather than the stack or the base.
 
+    2026-08-29 (closed): the developer marked #210 ready for review at 20:53:57Z, which under the
+    standing convention ends this session's job on it. draft false, 3 files / +630 on head
+    e70fd6ff6, and the two review threads stand as this round left them - backend.py:92 resolved
+    with its reply, backend.py:36 answered and open as the developer's. Neither outstanding item is
+    this branch's to fix, and both are recorded as blockers above: the GroundTruth question, and
+    test_each_lib (semantic_digital_twin), which only a steward cascade clears. One reading
+    corrected from earlier in the round: CI had queued nothing on e70fd6ff6 twenty minutes after the
+    push and mergeable_state read unknown, which is the signature sections 29 and 30 recorded for
+    #98 and #159 rather than section 17's too-early sample - so section 31's finding, that a branch
+    opened fresh off #159 keeps a working merge ref, does not survive that branch's own second push.
+    No subscription and no check-in were armed.
+
     2026-08-29 (resolve): the round above was reported finished at 10:38Z while the developer had
     opened two review threads at 10:28-10:30Z, so its notes were stale as written - the eighth
     instance of this plan's staleness class. RDRBackend now inherits QueryBackend (e70fd6ff6), which
