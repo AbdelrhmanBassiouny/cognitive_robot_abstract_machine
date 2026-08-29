@@ -1,56 +1,56 @@
 # bastler-package (#185) — `claude/plan-item-kickoff-workflow-cuare2`
 
 Plan `workflow-unification`, track `bastler`, wave `upstream`. Draft PR #185, based on
-`main`. Session https://claude.ai/code/session_01GE3r3XXEJpr9DUUk78Y2sT.
+`main`. Session https://claude.ai/code/session_014kmiZegiD2Q8w2eese2L2L.
 
 ## Why this session was here
 
-`/plan-item-resolve workflow-unification bastler-package`. Unlike the two before it,
-nothing about the pull request was broken: `mergeable_state` clean, all 23 checks green,
-no label left on it. The one open thread was posted the same day, on
-`bastler/package_layout.py`, and asks for the opposite of what this branch had recorded
-twice — install the requirements automatically rather than declare who runs without them.
+`/plan-item-resolve workflow-unification bastler-package`, in `auto` mode. Nothing about
+the pull request was broken — 22 of 23 checks green with `test_each_lib (coraplex)` still
+running, no label, both dependencies merged. What was open was two review threads posted
+at 21:25 and 21:26, four minutes before the previous session's own push landed, and
+neither had been answered.
 
 ## The plan, as settled
 
-1. `session-start.sh` installs whatever of `bastler/requirements.txt` is missing, gated on
-   the notes-branch fetch it already exits on, reporting a failure and finishing the run.
-2. Delete `UNINSTALLED_INVOCATIONS`, the derived closure, `third_party_import_names()` and
-   the unavailable-import harness, with the 32 test cases derived from them.
-3. Ask about the seventh caller before deciding it — an Actions runner reaches no hook.
-4. Tests first, then five mutations; verify the install for real, not only against a stub.
+1. Delete `bastler/requirements.txt`; declare the four distributions statically in
+   `bastler/pyproject.toml`'s `[project] dependencies`, and drop the `rendering` extra
+   that existed only because `dependencies` was empty.
+2. Move the `missing_requirements` heredoc out of the shell into `bastler/dependencies.py`,
+   reached through a `BASTLER_DEPENDENCIES_MODULE` shell name like every other module —
+   and grep the whole tooling shell for the *pattern*, not just the line commented on.
+3. Repoint every reader: the session start and its summary line, `check-setup.sh`, the two
+   workflows, the skills, and the docs.
+4. Tests first, then mutations; verify the install live rather than only against a stub.
 
 ## Done
 
-- All of the above, in `cb4d789a3`, pushed. The user chose adding a `pip` step to
-  `upstream-reviews.yml` and deleting the mechanism outright, over keeping a one-entry
-  version — recorded in `roadmap.md` because it reverses the 2026-08-23 entry.
-- What replaces the guarantee names nothing: a test reads `.github/workflows/*.yml`, finds
-  every workflow running a module, and holds each to installing the requirements first.
-- The lookup moved beside the installer as `missing_requirements`, so `check-setup.sh` and
-  `session-start.sh` stop carrying two copies of the same heredoc. `executable_stubs.py`
-  holds the stub directory and PATH-hiding helper, now that two suites need them.
-- Three docstrings that justified being stdlib-only by a caller the 2026-08-23 round had
-  already disproved now give decision 12's krrood independence instead.
-- 615 tests pass, from 642 — 32 deleted cases, 5 new, arithmetic stated. Five mutations,
-  each caught by the test that names it. `nh3` uninstalled for real and put back by one
-  hook run, which also proves the ordering against `check-setup.sh`.
-- PR description rewritten; review thread replied to and resolved; `roadmap.md`, `notes`
-  and `blockers` saved.
+- All of the above, in `7730b5177`, pushed. Both threads replied to and resolved.
+- The two installers diverge on purpose: a session start installs the missing specifiers
+  (installing `./bastler` would put a second copy of these modules beside the clone's own,
+  which the zero-install contract forbids), and the two Actions workflows install
+  `./bastler` itself, since a runner has no such contract.
+- The grep for embedded Python found a second hit — `save-plan.sh`'s
+  `python3 -c "import yaml"` — which now asks the same module and names everything the
+  tooling is short of. No bash entry point carries Python of its own any more.
+- Writing the call out exposed a defect the heredoc could not have had: `echo $(python3 …)`
+  reports `echo`'s exit status, so a module that dies reads as "nothing to install". Hence
+  the `|| return 1`, a `dependencies: not checked` case, and the test that fails without it.
+- 632 tests pass, from 615. Six mutations, each caught by exactly the test that names it,
+  each restored from a copy taken before it rather than from `HEAD`.
+- `nh3` uninstalled for real and put back by one session start, which also reported
+  `setup: ok` in the same run; the built wheel carries its four `Requires-Dist` lines.
+- PR description rewritten; `plan.yaml` (`blockers` cleared, `notes` appended) and
+  `roadmap.md` saved; dashboard republished.
 
-## Next
+## Outstanding
 
-- Nothing outstanding on this branch. CI will re-run on `cb4d789a3`.
-- **A defect in #151's tool, found while using it**: `plan_item_bootstrap update` has no
-  way to clear a `blockers` list — `--blockers <empty file>` writes one empty blocker. The
-  manifest was corrected by hand. #151 is blocked and unlanded, so this is a note for
-  whoever resumes it, not work for this branch.
-- **For the user, not for a session to decide**: `main` retired every workspace member's
-  `requirements.txt` for static `[project] dependencies` (`4b4cfdf4`). `bastler` is not a
-  workspace member so nothing fails, but its `requirements.txt` is now the last in the
-  repository, and a session start is now one more thing that reads it.
-- Two of the 2026-08-23 round's threads stay open on purpose (the `RESTACK_STEPS` name
-  `monkeypatch.setattr` takes as a string, and the surviving `status_label` assertion).
-- Landing order, not dependencies: #198 fixes a bug this branch carries verbatim at
-  `bastler/stack.py`; #203 adds `.claude/setup_steps.py`, the same
-  new-`.py`-under-`.claude/` problem a third time.
+- `test_each_lib (coraplex)` was still running on the previous head when this session
+  started; CI on `7730b5177` has not been read.
+- Two threads from the 2026-08-23 round stay open on purpose: the `RESTACK_STEPS` name
+  `monkeypatch.setattr` takes as a string, and the surviving `status_label` assertion
+  offered for deletion.
+- #198 fixes a bug this branch carries verbatim at `bastler/stack.py`, and #203 adds
+  `.claude/setup_steps.py`. Whichever lands first, the other merges across it — and the
+  `git ls-tree` check against the merged tree is what catches a module `main` gained that
+  no conflict report can name.
