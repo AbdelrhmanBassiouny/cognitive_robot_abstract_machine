@@ -119,7 +119,7 @@ class ReproductionOutcome:
     @classmethod
     def from_json(cls, document: dict[str, Any]) -> ReproductionOutcome:
         """
-        :param document: One reproduction's object, as :meth:`as_document` wrote it.
+        :param document: One reproduction's object, as :meth:`to_json` wrote it.
         :return: The outcome it describes.
         """
         return cls(
@@ -128,7 +128,7 @@ class ReproductionOutcome:
             passed=document[ReproductionReportKey.PASSED],
         )
 
-    def as_document(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """:return: This outcome, keyed the way a reader parses it."""
         return {
             ReproductionReportKey.BRANCH: self.branch,
@@ -215,7 +215,7 @@ class ReproductionRun:
         return json.dumps(
             {
                 ReproductionReportKey.REPRODUCTIONS: [
-                    outcome.as_document() for outcome in self.outcomes
+                    outcome.to_json() for outcome in self.outcomes
                 ]
             },
             indent=2,

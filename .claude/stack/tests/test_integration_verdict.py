@@ -262,7 +262,7 @@ def test_the_report_names_the_failures_and_whether_anything_was_published():
 
     document = VerdictReport(
         candidate=candidate, checks=checks, published=False
-    ).as_json()
+    ).to_json()
 
     assert document == {
         VerdictReportKey.VERDICT: str(ChecksVerdict.FAILED),

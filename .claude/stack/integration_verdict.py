@@ -298,7 +298,7 @@ class VerdictReport:
     published: bool
     """Whether the base branch was moved to this build."""
 
-    def as_json(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """:return: This verdict, keyed the way a reader parses it."""
         return {
             VerdictReportKey.VERDICT: str(self.checks.verdict),
