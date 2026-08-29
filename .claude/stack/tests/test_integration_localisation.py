@@ -922,6 +922,11 @@ def test_a_concluded_search_blocks_the_branch_in_the_same_words_a_local_one_does
     assert fork.comments[0].body.startswith(integration.FAILURE_COMMENT_PREFIX)
     assert SECOND_TIP in fork.comments[0].body and FIRST_TIP in fork.comments[0].body
     assert not state.exists()
+    assert [
+        probe.branch
+        for probe in published + narrowing
+        if fork_checkout.run_git("ls-remote", "origin", f"refs/heads/{probe.branch}")
+    ] == []
 
 
 def test_the_two_rounds_of_one_search_never_publish_under_the_same_name(
