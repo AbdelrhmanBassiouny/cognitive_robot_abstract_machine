@@ -298,6 +298,54 @@ items:
       blob, which works there and is faster; a target with no geometric model
       selects a learned detector. This is where perception measurably gets better as
       the robot knows more, and it is the item the paper's claim rests on.
+      The developer noted on 2026-08-29 that krrood's ripple-down rules are not usable
+      yet and expects them to become so through the RDR/EQL refactor's integration
+      build; this item cannot start before they are, which is the schedule risk to
+      watch on the 4-8 September window.
+
+  - id: detector-parameters-from-knowledge
+    title: "Take the detectors' numbers from the objects and the surfaces they look at"
+    branch: perception_parameters_from_knowledge
+    pull_request_number: null
+    track: method-selection
+    depends_on: [choose-detection-method]
+    status: not_started
+    notes: >-
+      Raised by the developer across nine review threads on #202, which are one ask: the
+      numbers the detectors carry - the saturation and darkness a pixel needs to belong to
+      an object, the areas a hole and a piece may cover, how much of an outline must lie
+      along a seen edge, how tall a loose piece stands, how large the board's lid is, how
+      far a measured hue may sit from a piece's own, the hue of each piece, the hole
+      marker's thickness and the mesh classification thresholds - are knowledge about the
+      pieces, the surfaces and the lighting, not properties of the detector that reads
+      them. They move onto the objects and surfaces in the digital twin, and a ripple-down
+      rule tree over those properties concludes them for a run, the way
+      choose-detection-method's tree already concludes which detector runs. The same move
+      covers the chain of ifs that accepts or rejects a contour (pipeline.py:619), which
+      the developer asked to become an inspectable rule tree rather than a hand-written
+      condition. Depends on krrood's ripple-down rules being usable, which the developer
+      expects from the RDR/EQL refactor's integration build.
+
+  - id: tune-detection-rules-against-the-camera
+    title: "Conclude a detection rule while watching the camera, with its numbers on sliders"
+    branch: perception_interactive_rule_tuning
+    pull_request_number: null
+    track: method-selection
+    depends_on: [detector-parameters-from-knowledge]
+    status: deferred
+    blockers:
+      - >-
+          Deferred past the 2026-09-15 deadline: no demo item needs it, and it is tooling
+          for authoring rules rather than a piece of the claim. The first thing to drop
+          after robokudo-detector.
+    notes: >-
+      The developer's own suggestion on #202: an interactive presenter for the ripple-down
+      rules' ConclusionHelper, showing the live camera feed beside the parameters it would
+      conclude on sliders or dropdowns, so the expert sees what a value does to the
+      detection before committing it as a rule. Needs the parameters to be rule-concluded
+      first, which is detector-parameters-from-knowledge, and it touches krrood's expert
+      interface as much as perception - so where the presenter itself lands is a question
+      for the RDR/EQL refactor plan when this starts.
 
   - id: expectations-from-events
     title: "Expect what the action promised, and report the difference as a failure"

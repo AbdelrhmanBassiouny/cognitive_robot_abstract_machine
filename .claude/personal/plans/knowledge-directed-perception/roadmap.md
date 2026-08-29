@@ -688,3 +688,64 @@ failure reproduces on unmodified `main`. `ormatic` maps `Enum` through
 `PolymorphicEnumType`, so the generated ORM interface is expected to take the new field
 without a source change — whether the regeneration can actually run in this container is
 reported with the result rather than assumed.
+
+## `montessori-perception-on-main`: the review round of 2026-08-29, and where it went
+
+Resolved 2026-08-29 in `auto` mode. **Nothing was wrong with the branch.** #202 was green
+on all 23 checks, `mergeable_state: clean`, and carries `cram2-link-sent` rather than
+`in-review`, so there is no upstream pull request holding review of its own. What kept it
+open was thirteen unresolved review threads, of which the item's own `blockers` recorded
+none and its `notes` described two — wrongly, at that: the note named "a timedelta on
+node.py:134" for what is a hard-coded 0.05 second poll interval at line 374. That is the
+second time on this plan that the cause of a stall was a review comment nobody had turned
+into state.
+
+**The thirteen are four asks and one ask.** Four are local to this branch and were done
+here:
+
+- `NoMatchingHoleError` moved out of `semantics.py` into `experiments/montessori/exceptions.py`,
+  beside the perception package's own `exceptions.py` (`bb37390d`). Writing the test for
+  the raise found that no test had ever reached it, and that the two existing tests build
+  their board with `name=PrefixedName(...)` where the API takes a `str`, which double-wraps
+  the name and makes the error's own message raise `TypeError`. The new test passes a plain
+  string, as the production code does; the existing tests were left alone, since they never
+  format the name.
+- `HoleFootprint`'s centre, bounding-box size and boundary points became `PlanarPoint` and
+  `PlanarSize` instead of bare pairs (`3348e353`), so no reader has to remember that index
+  0 is x. `semantic_digital_twin`'s own `Point2` was considered and not used: it is a
+  casadi symbolic point carrying a reference frame, and these are plain metres in the
+  board mesh's local frame, several hundred to a hole.
+- The perception package's `__init__.py` is empty (`be8b8514`), like every other one under
+  `experiments`.
+- The node's poll interval is a field with 0.05 as its default (`a9204f5e`), beside the
+  `minimum_period` the pipeline runs at. `node.py` imports `rclpy`, which no environment
+  in this workspace has, so it has no tests here and this change is covered by nothing but
+  the compile.
+
+The other nine are one ask, and the developer placed it himself: *"Check the plan items
+for the knowledge guided perception plan, and see where this modification or feature
+should be, in a new plan item or in an existing plan item. Because I guess this PR here is
+for combatibility with main."* The numbers the detectors carry are knowledge about the
+pieces, the surfaces and the lighting, and belong on those objects with a rule tree
+concluding them — which is `choose-detection-method`'s mechanism applied to the detector's
+parameters rather than to the choice of detector. That is now
+**`detector-parameters-from-knowledge`**, and the developer's interactive-presenter
+suggestion is **`tune-detection-rules-against-the-camera`**, deferred past the deadline
+alongside `robokudo-detector`.
+
+They are new items rather than folded into `choose-detection-method` because substantial
+work remains once the overlapping edits are removed: moving the parameters onto the twin's
+objects and surfaces stands on its own, and doing it inside the item the paper's claim
+rests on would put that item's delivery behind it. The scope check says the same thing
+from the other side — every file this touches is introduced by #202 itself, so path
+overlap alone would fold the whole plan into one item.
+
+**A schedule risk this round surfaced.** The developer said krrood's ripple-down rules are
+not usable yet and expects them to become so through the RDR/EQL refactor's integration
+build. `choose-detection-method` is planned for 4–8 September and cannot start before
+they are, and `detector-parameters-from-knowledge` now sits behind it. Recorded on both
+items rather than only here.
+
+**#202 stays out of draft**, for the reason its own section already records: a dependent
+cannot stack on an open draft, and re-drafting it would show `surfaces-from-world` and
+`perception-backend` as blocked.
