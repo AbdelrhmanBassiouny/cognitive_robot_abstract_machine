@@ -33,6 +33,15 @@ roadmap lines while gaining zero items** — narrative accreting onto entries th
 already existed. A rule policed per new item cannot see that, which is why the
 budget counts lines in both files rather than items alone.
 
+A second cost, measured 2026-08-29. An oversized plan also makes its own
+published dashboard expensive to *re*publish. 88% of `workflow-unification`'s
+1.26 MB artifact is plan content — 62% the embedded `roadmap.md`, 26% item
+notes — so page size tracks plan size almost directly. When another session has
+published since, the `Artifact` tool refuses the publish until the live version
+has been read in full: 16 reads at today's size, ~2 at the budget. That gate is
+harness-side, so nothing in this repository can narrow it to a diff; shrinking
+the plan is the only lever there is.
+
 ## Decisions
 
 **1. Hard refusal, not a growth-only gate.** (user, 2026-08-28) A save leaving a
