@@ -1254,6 +1254,55 @@ items:
       for its expected callers. And the two threads of the 2026-08-23 round that are still open are
       open on purpose - the `RESTACK_STEPS` name `monkeypatch.setattr` takes as a string, and the
       surviving `status_label` assertion offered for deletion; nothing here resolves either.
+
+      Resolved 2026-08-29 (session https://claude.ai/code/session_014kmiZegiD2Q8w2eese2L2L). The
+      pull request itself was healthy again - 22 of 23 checks green with `test_each_lib (coraplex)`
+      still running, no label, both dependencies merged - and what was open was two review threads
+      posted at 21:25 and 21:26, after the previous session's own push. Neither had been answered.
+      Both are done in `7730b5177`, and they are one change because the first decides what the
+      second reads.
+
+      `bastler/requirements.txt` is deleted and the four distributions are declared in
+      `bastler/pyproject.toml`'s `[project] dependencies`. This is the call the 2026-08-28 entry
+      flagged and left to the user - `main` had retired every other requirements file for static
+      declarations at `4b4cfdf4`, and this package's was the last one in the repository. The
+      `rendering` extra goes with it: it existed only because `dependencies` was empty under the
+      tier reasoning, and was itself resolved dynamically from the file now deleted.
+
+      The two installers diverge on purpose, and the zero-install contract is the reason. A session
+      start installs the missing *specifiers*, because `pip install ./bastler` would leave a second
+      copy of these modules in site-packages beside the clone's own and the clone's copy is what a
+      caller is meant to import. An Actions runner has no such contract, so `upstream-reviews.yml`
+      and the `test_bastler` job install `./bastler` itself. `bastler` stays out of
+      `[tool.uv.workspace] members`, so `test_dependency_declarations.py` still does not reach it -
+      membership would put the package in the default `uv sync`, which decision 12 rules out - and
+      `test_dependencies.py` holds the static-declaration property directly instead.
+
+      `bastler/dependencies.py` is the heredoc, moved. The whole tooling shell was grepped for
+      embedded Python rather than only the line commented on: two hits, and both are gone.
+      `save-plan.sh`'s `python3 -c "import yaml"` asks the same module now, and its refusal names
+      everything the tooling is short of rather than the one import it guessed at. No bash entry
+      point carries Python of its own any more.
+
+      Writing the call out is what exposed a defect the heredoc had hidden: an empty answer means
+      *nothing to install*, so a module that dies must be reported rather than echoed. The first
+      version of the shell function was `echo $(python3 -m ...)`, whose exit status is `echo`'s -
+      and a scratch clone without the module reported `already installed`. Hence the `|| return 1`,
+      a `dependencies: not checked` case for a declaration that will not parse, and the test that
+      fails without it.
+
+      The summary line and its functions are `dependencies:` rather than `requirements:`, since what
+      they report is the package's declared dependencies and "requirements" named a file that no
+      longer exists.
+
+      632 tests pass, from 615. Six mutations checked, each caught by exactly the test that names
+      it, each restored from a copy taken before it per the 2026-08-29 process note. Verified live
+      by uninstalling `nh3` and watching one session start put it back and still report `setup: ok`
+      in the same run, and by building the wheel and reading its four `Requires-Dist` lines.
+
+      The two threads of the 2026-08-23 round that are still open are still open on purpose - the
+      `RESTACK_STEPS` name `monkeypatch.setattr` takes as a string, and the surviving `status_label`
+      assertion offered for deletion; nothing here resolves either.
   - id: bastler-notes-core-python
     branch: null
     title: "Bash→Python 1: notes-core modules (config, git seam, writer, markers)"
