@@ -964,14 +964,7 @@ items:
     pull_request_number: 185
     session: https://claude.ai/code/session_01GE3r3XXEJpr9DUUk78Y2sT
     blockers:
-      - >-
-          Review thread of 2026-08-29 on `bastler/package_layout.py`
-          (https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/185#discussion_r3887623955),
-          unanswered: the user rejects declaring which callers install nothing, and asks instead
-          that the requirements be installed automatically - at session start while it stays cheap,
-          safely, with any failure caught and reported so the remaining steps still run, and
-          documented in the README. It reverses the recorded 2026-08-23 decision that a `pip
-          install` inside the SessionStart hook was deliberately not taken.
+      - ""
     notes: >
       Move the existing Python (.claude/stack/stack.py, build_dashboard.py + siblings,
       plan_manifest_tools.py) into the package PR 3 created, with all their tests moved to the
@@ -1228,6 +1221,33 @@ items:
       Actions runner in order to serve a script that needs nothing is strictly worse"); the first
       objection is answered by the caught-and-reported requirement, and the second is the one part
       of the constraint an auto-install at session start cannot reach.
+
+      Resolved 2026-08-29 (session https://claude.ai/code/session_01GE3r3XXEJpr9DUUk78Y2sT). The
+      thread above is answered and resolved in cb4d789a3. `session-start.sh` installs whatever of
+      `bastler/requirements.txt` is missing on every start, gated on the notes-branch fetch the hook
+      already exits on - so a clone that never ran the setup installs nothing - reporting a failure
+      on a new `requirements:` summary line and finishing the run regardless.
+      `UNINSTALLED_INVOCATIONS`, `modules_that_must_not_import_third_party()`,
+      `third_party_import_names()` and the unavailable-import harness are deleted;
+      `package_layout.py` writes nothing down at all now.
+
+      The seventh caller was put to the user rather than decided, since an install at session start
+      cannot reach an Actions runner. They chose adding a `pip` step to
+      `.github/workflows/upstream-reviews.yml` and deleting the mechanism outright, over deriving
+      the caller or keeping one entry - which reverses the 2026-08-23 entry against installing on a
+      runner. What replaces it names nothing: a test reads `.github/workflows/*.yml`, finds every
+      workflow running a module, and holds each to installing the requirements first.
+
+      615 tests pass, from 642 - 32 cases went with the deleted parametrizations and 5 are new. Five
+      mutations checked, each caught by exactly the test that names it, and the install verified for
+      real by uninstalling `nh3` and watching one run put it back and report `ok`.
+
+      Two things carried rather than done. The three stdlib-only docstrings this change corrected
+      (`class_property.py`, `plan_item_bootstrap.py`, `plan_model.py`) had kept a justification the
+      2026-08-23 round already knew was false, which is the reason to grep for a claim rather than
+      for its expected callers. And the two threads of the 2026-08-23 round that are still open are
+      open on purpose - the `RESTACK_STEPS` name `monkeypatch.setattr` takes as a string, and the
+      surviving `status_label` assertion offered for deletion; nothing here resolves either.
   - id: bastler-notes-core-python
     branch: null
     title: "Bash→Python 1: notes-core modules (config, git seam, writer, markers)"
