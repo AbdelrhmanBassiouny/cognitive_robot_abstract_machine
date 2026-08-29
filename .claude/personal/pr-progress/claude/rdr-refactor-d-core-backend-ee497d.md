@@ -11,7 +11,10 @@ that plan's `roadmap.md`.
 `QueryIsNotAMatch` refuses an expression with no `...` to complete. Three tests,
 each mutation-checked. `test_eql_rdr` 261 → 264 with zero baseline ids lost.
 
-**Outstanding, both recorded as the item's blockers:**
+**Finished 2026-08-29**: the developer marked #210 ready for review at 20:53:57Z,
+which ends this session's job on it. Nothing armed, nothing subscribed.
+
+**Outstanding, neither this branch's to fix, both recorded as the item's blockers:**
 
 1. The `backend.py:36` `GroundTruth` thread is answered and left open — three
    options are on it and the choice is the developer's.
