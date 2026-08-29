@@ -34,6 +34,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import json
+import os
 import shlex
 import subprocess
 import sys
@@ -43,7 +44,7 @@ from contextlib import contextmanager
 from collections.abc import Iterator, Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from enum import IntEnum, StrEnum
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -51,7 +52,11 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 
 from command_line import Command, commands_of  # noqa: E402
 from exceptions import GitCommandFailed  # noqa: E402
-from git_commands import GitSetting  # noqa: E402
+from git_commands import (  # noqa: E402
+    DETACHED_HEAD,
+    BranchRefspec,
+    GitSetting,
+)
 from stack import (  # noqa: E402
     AmbiguousForkRemoteError,
     Branch,
@@ -98,17 +103,36 @@ from integration_localisation import (  # noqa: E402
     LocalisationKey,
     LocalisationStage,
     LocalisationStep,
-    PROBE_WORKFLOW_FILE,
-    Probe,
+)
+from integration_probes import (  # noqa: E402
+    DispatchedProbe,
     dispatch,
     library_a_candidate_failed_on,
 )
+from workflow_document import WorkflowFile  # noqa: E402
+from integration_exit_codes import IntegrationExitCode  # noqa: E402
+from integration_pipeline import RefreshPipeline  # noqa: E402
 from integration_verdict import (  # noqa: E402
     Candidate,
     ChecksVerdict,
     open_candidate,
     read_checks,
 )
+
+ACTOR_VARIABLE = "GITHUB_ACTOR"
+"""
+Who a runner is acting as, which is who a rebuild's own merge commits are authored as.
+"""
+
+ACTOR_EMAIL_SUFFIX = "@users.noreply.github.com"
+"""
+The address GitHub gives an actor that has published none of its own.
+"""
+
+LOCALISATION_STATE_FILE = "integration-localisation.json"
+"""
+What a rebuild calls the document its localisation keeps between calls.
+"""
 
 POINTER_BRANCH = "integration"
 """The branch a developer checks out, moved to each build that finishes.
@@ -1182,7 +1206,7 @@ class ProbeAssembly:
             f"-{stage}-{ordinal}"
         )
 
-    def prefixes(self) -> tuple[Probe, ...]:
+    def prefixes(self) -> tuple[DispatchedProbe, ...]:
         """Publish every prefix of the merge order, one tip at a time.
 
         :return: One probe per tip that reached a build, in merge order.
@@ -1190,7 +1214,7 @@ class ProbeAssembly:
         tips = tips_of(self.stack)
         with self._assembling() as build:
             build.start_unnamed()
-            probes: list[Probe] = []
+            probes: list[DispatchedProbe] = []
             included: list[str] = []
             for tip in tips:
                 if not build.merge(tip, included).is_integrated:
@@ -1201,7 +1225,9 @@ class ProbeAssembly:
                 )
             return tuple(probes)
 
-    def pairings(self, suspect: str, earlier: Sequence[str]) -> tuple[Probe, ...]:
+    def pairings(
+        self, suspect: str, earlier: Sequence[str]
+    ) -> tuple[DispatchedProbe, ...]:
         """Publish the suspect paired with each earlier tip on its own.
 
         Which earlier tip the suspect fails against alone is a different question from
@@ -1227,7 +1253,7 @@ class ProbeAssembly:
                 )
             return tuple(probes)
 
-    def take_down(self, probes: Sequence[Probe]) -> None:
+    def take_down(self, probes: Sequence[DispatchedProbe]) -> None:
         """Delete the trees a concluded round published.
 
         A localisation runs whenever a candidate goes red, so trees left behind accumulate
@@ -1237,9 +1263,7 @@ class ProbeAssembly:
         :param probes: The round's probes.
         """
         for probe in probes:
-            self.git.attempt(
-                "push", "--delete", self.stack.configuration.fork_remote, probe.branch
-            )
+            self.git.delete_branch(self.stack.configuration.fork_remote, probe.branch)
 
     @contextmanager
     def _assembling(self) -> Iterator[IntegrationBuild]:
@@ -1263,20 +1287,19 @@ class ProbeAssembly:
         tip: Branch,
         stage: LocalisationStage,
         ordinal: int,
-    ) -> Probe:
+    ) -> DispatchedProbe:
         """:param build: The assembly whose current head is the tree to publish.
         :param tip: The tip this probe is about.
         :param stage: Which round the probe belongs to.
         :param ordinal: Which probe of the round it is.
         :return: The probe, once its tree is on the fork."""
         branch = self.branch_name(stage, ordinal)
-        build.git.run(
-            "push",
-            "--force",
+        build.git.push_refspec(
             self.stack.configuration.fork_remote,
-            f"HEAD:refs/heads/{branch}",
-        )
-        return Probe(
+            BranchRefspec.publishing(DETACHED_HEAD, branch),
+            with_lease=True,
+        ).raise_if_failed()
+        return DispatchedProbe(
             branch=branch, tip=tip.name, pull_request_number=tip.pull_request_number
         )
 
@@ -1376,80 +1399,6 @@ class IntegrationReport:
             if outcome.status is TipStatus.REPLAYED
             and outcome.resolved_by is ResolutionAuthor.SKILL
         )
-
-
-class IntegrationExitCode(IntEnum):
-    """What this builder's exit status tells a caller.
-
-    The first six match :class:`maintenance.MaintenanceExitCode` value for value and
-    meaning, so a caller acting on both tools' statuses never has to remember which
-    produced one.
-    """
-
-    SUCCESS = 0
-    """Every tip is in the branch, and the suite passed or was not asked for."""
-
-    USAGE = 2
-    """No such command, or the wrong arguments."""
-
-    REMOTES_UNRESOLVED = 4
-    """The fork could not be identified from this checkout's remotes."""
-
-    GIT_COMMAND_FAILED = 6
-    """A git command the build depended on failed; nothing further was attempted."""
-
-    CREDENTIAL_UNAVAILABLE = 8
-    """No GitHub token is set, so the fork's open pull requests cannot be read."""
-
-    GITHUB_REQUEST_FAILED = 9
-    """The API refused a call this build depends on; its status and reason are on
-    stderr."""
-
-    TIP_LEFT_OUT = 10
-    """The branch was built, but at least one tip is missing from it - a collision, or a
-    merge that refused before it began. The build is still usable; it is not whole."""
-
-    TESTS_FAILED = 11
-    """The branch was built and the suite failed on it. This is what catches the
-    failure per-branch checks structurally cannot: two branches that each pass
-    alone, merge cleanly, and break together."""
-
-    SUSPECT_REPLAY = 12
-    """The suite failed on a branch carrying a machine-written resolution, replayed
-    without review. Distinct from an ordinary red suite because the answer differs:
-    report and stop, since re-resolving into the same failure is how a build thrashes."""
-
-    CANDIDATE_STILL_RUNNING = 13
-    """The candidate's checks have not finished, so there is nothing to act on yet. Its
-    own status rather than a failure: a caller waiting for a verdict asks again, and one
-    that read this as red would throw away a build nothing had judged."""
-
-    CANDIDATE_FAILED = 14
-    """The candidate's checks failed, so the build is not one to hand anybody. The
-    branches it was made of are where the failure is."""
-
-    PROBES_STILL_RUNNING = 15
-    """A localisation's probes have not all answered, so the round cannot be read yet.
-    Its own status rather than a failure, for the same reason a candidate's is: the
-    caller asks again, and one that read this as an answer would act on a round nothing
-    had judged."""
-
-    NO_LIBRARY_CHECK_FAILED = 16
-    """Nothing the candidate failed on names a library, so re-running one localises
-    nothing. Said plainly rather than probed anyway: a tooling check is already localised
-    by the local search, faster and before a build is pushed, and a check that is a
-    property of one tree is not about a combination at all."""
-
-    @property
-    def name_for_a_caller(self) -> str:
-        """What this status means, in words rather than as a number to be looked up.
-
-        Derived from the member itself, so a status can never end up carrying a name
-        belonging to a different one.
-
-        :return: The status's name, in the form a caller reads or matches on.
-        """
-        return self.name.lower().replace("_", "-")
 
 
 def exit_code_for(report: IntegrationReport) -> IntegrationExitCode:
@@ -2064,7 +2013,7 @@ class LocateCandidateFailureCommand(IntegrationCommand):
             return self._start(run, fork, assembly, arguments)
         localisation = Localisation.from_json(
             json.loads(arguments.state.read_text())
-        ).answered_by(fork.workflow_runs(PROBE_WORKFLOW_FILE))
+        ).answered_by(fork.workflow_runs(str(WorkflowFile.INTEGRATION_PROBE)))
         return self._continue(run, fork, assembly, localisation, arguments)
 
     def _start(
@@ -2111,20 +2060,40 @@ class LocateCandidateFailureCommand(IntegrationCommand):
         :param arguments: The parsed command line.
         :return: The process exit code.
         """
-        if localisation.next_step is LocalisationStep.WAIT:
-            return self._wait(arguments, localisation)
-        if localisation.next_step is LocalisationStep.NARROW:
-            suspect = localisation.localised_suspect
-            assembly.take_down(localisation.probes)
-            narrowing = Localisation(
-                library=localisation.library,
-                stage=LocalisationStage.NARROWING,
-                probes=assembly.pairings(suspect.branch, suspect.already_included),
-                suspect=suspect,
-            )
-            dispatch(fork, arguments.dispatch_on, narrowing.library, narrowing.probes)
-            return self._wait(arguments, narrowing)
-        return self._conclude(run, fork, assembly, localisation, arguments)
+        match localisation.next_step:
+            case LocalisationStep.WAIT:
+                return self._wait(arguments, localisation)
+            case LocalisationStep.NARROW:
+                return self._narrow(fork, assembly, localisation, arguments)
+            case LocalisationStep.CONCLUDE:
+                return self._conclude(run, fork, assembly, localisation, arguments)
+
+    def _narrow(
+        self,
+        fork: GitHubRepository,
+        assembly: ProbeAssembly,
+        localisation: Localisation,
+        arguments: argparse.Namespace,
+    ) -> IntegrationExitCode:
+        """Open the round that asks which earlier tip the suspect fails against alone.
+
+        :param fork: The fork to dispatch on.
+        :param assembly: The assembly that takes the answered round down and publishes
+            the next.
+        :param localisation: The prefix round, which has localised a suspect.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        suspect = localisation.localised_suspect
+        assembly.take_down(localisation.probes)
+        narrowing = Localisation(
+            library=localisation.library,
+            stage=LocalisationStage.NARROWING,
+            probes=assembly.pairings(suspect.branch, suspect.already_included),
+            suspect=suspect,
+        )
+        dispatch(fork, arguments.dispatch_on, narrowing.library, narrowing.probes)
+        return self._wait(arguments, narrowing)
 
     def _conclude(
         self,
@@ -2172,7 +2141,7 @@ class LocateCandidateFailureCommand(IntegrationCommand):
         :param localisation: The round in flight.
         :return: The process exit code.
         """
-        arguments.state.write_text(json.dumps(localisation.as_json(), indent=2))
+        arguments.state.write_text(json.dumps(localisation.to_json(), indent=2))
         self._print(arguments, localisation, IntegrationExitCode.PROBES_STILL_RUNNING)
         return IntegrationExitCode.PROBES_STILL_RUNNING
 
@@ -2190,7 +2159,7 @@ class LocateCandidateFailureCommand(IntegrationCommand):
         document = {
             ReportKey.STATUS: status.name_for_a_caller,
             ReportKey.EXIT_CODE: int(status),
-            **({} if localisation is None else localisation.as_json()),
+            **({} if localisation is None else localisation.to_json()),
             ReportKey.BREAKS_AGAINST: (
                 None if localisation is None else localisation.breaks_against
             ),
@@ -2201,6 +2170,79 @@ class LocateCandidateFailureCommand(IntegrationCommand):
         if blocked is not None:
             document[ReportKey.BLOCKED] = blocked.blocked
         print(json.dumps(document, indent=2))
+
+
+@dataclass(frozen=True)
+class RefreshCommand(IntegrationCommand):
+    """Performs a whole rebuild: prepare, assemble, get it checked, publish or localise."""
+
+    @property
+    def invoked_as(self) -> str:
+        """The name it is invoked by on the command line."""
+        return "refresh"
+
+    @property
+    def description(self) -> str:
+        """What it does, as ``--help`` puts it."""
+        return "rebuild the integration branch and publish it once its checks pass"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare this command's flags on."""
+        parser.add_argument(
+            "--dispatch-on",
+            default=POINTER_BRANCH,
+            help=(
+                "the reference carrying this pipeline, which is what a dispatch runs the "
+                "probe workflow from"
+            ),
+        )
+        parser.add_argument(
+            "--state",
+            type=Path,
+            default=Path(tempfile.gettempdir()) / LOCALISATION_STATE_FILE,
+            help="where a localisation keeps what it has established between calls",
+        )
+        parser.add_argument(
+            "--actor",
+            default=os.environ.get(ACTOR_VARIABLE, ""),
+            help="who the rebuild's own commits are authored as",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """Prepare the checkout, then run the rebuild over it.
+
+        The preparation is what only this command knows about the runner it is on: a
+        fresh checkout has no upstream remote and no identity to commit under, and the
+        rebuild makes merge commits.
+
+        :param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        self._prepare(run, arguments.actor)
+        return RefreshPipeline(
+            dispatch_on=arguments.dispatch_on, state_document=arguments.state
+        ).run()
+
+    @staticmethod
+    def _prepare(run: IntegrationRun, actor: str) -> None:
+        """Give the checkout what a rebuild needs and a fresh clone has not got.
+
+        :param run: What this run has resolved.
+        :param actor: Who the rebuild's own commits are authored as.
+        """
+        setup = run.configuration.upstream_setup_command
+        if setup is not None:
+            # Built by this repository's own configuration, so it is read as the argument
+            # list it is rather than handed to a shell to interpret.
+            run.git.run(*shlex.split(setup)[1:])
+        if actor:
+            run.git.set_configuration(GitSetting(key="user.name", value=actor))
+            run.git.set_configuration(
+                GitSetting(key="user.email", value=f"{actor}{ACTOR_EMAIL_SUFFIX}")
+            )
 
 
 @dataclass(frozen=True)

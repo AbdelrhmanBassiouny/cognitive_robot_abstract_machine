@@ -18,6 +18,7 @@ import yaml
 from maintenance_github import CandidatePullRequests, CheckRunRecord
 
 import integration
+import tool_runner
 from integration import IntegrationExitCode, ReportKey
 
 from test_maintenance import make_configuration
@@ -417,53 +418,17 @@ def refresh_job_script() -> str:
     )
 
 
-@pytest.mark.parametrize(
-    "command",
-    [
-        integration.BuildCommand(),
-        integration.OpenCandidateCommand(),
-        integration.SettleCandidateCommand(),
-    ],
-)
-def test_the_scheduled_job_invokes_each_command_by_the_name_it_answers_to(command):
+def test_the_scheduled_job_hands_the_rebuild_the_reference_to_dispatch_probes_on():
     """
-    A workflow cannot import a constant, so these are the one place each name is spelled
-    a second time - and a name that had drifted would fail the run rather than doing
-    something else, which is the good half; the bad half is a rename nothing catches
-    until the schedule next fires with nobody watching.
-    """
-    assert command.invoked_as in refresh_job_script()
+    What the job still spells is what only a runner knows: which reference this pipeline
+    was read from, since a dispatch runs the workflow file the dispatched reference
+    carries and the tree under test carries none.
 
-
-@pytest.mark.parametrize(
-    "status",
-    [
-        IntegrationExitCode.TIP_LEFT_OUT,
-        IntegrationExitCode.CANDIDATE_STILL_RUNNING,
-    ],
-)
-def test_the_scheduled_job_reads_the_statuses_it_branches_on(
-    status: IntegrationExitCode,
-):
+    Everything else it once spelled - each command's name, the statuses it branched on,
+    the document keys the steps handed each other - moved into ``integration.py refresh``
+    when the procedure did, and is checked there against the definitions themselves.
     """
-    Both are read as numbers in shell, and both mean "not a failure": a tip left out is
-    a collision to triage, and an unfinished check is a verdict not yet given. Reading
-    either as a failure stops the pipeline on a healthy build.
-    """
-    assert str(int(status)) in refresh_job_script()
-
-
-@pytest.mark.parametrize(
-    "key",
-    [ReportKey.BUILD_BRANCH, ReportKey.CANDIDATE, ReportKey.HEAD],
-)
-def test_the_scheduled_job_reads_the_document_keys_the_commands_write(key: str):
-    """
-    The steps hand each other a build branch, a candidate number and a head through the
-    documents the commands print, so a key spelled differently in either place breaks
-    the hand-off - and does it between two steps rather than inside one.
-    """
-    assert str(key) in refresh_job_script()
+    assert "PIPELINE_REFERENCE" in refresh_job_script()
 
 
 @dataclass(frozen=True)
@@ -558,7 +523,7 @@ def test_a_candidate_still_running_is_left_open_and_its_branch_left_alone():
     assert deleted_branches(run) == [] and run.fork_answers.closed == []
 
 
-def test_the_scheduled_job_runs_the_suite_before_it_pushes_anything():
+def test_the_rebuild_runs_the_suite_before_it_pushes_anything():
     """
     The candidate's own checks include this suite, so running it here is duplication -
     on a good build. On a bad one it is what stops a known-broken build being pushed, a
@@ -568,16 +533,4 @@ def test_the_scheduled_job_runs_the_suite_before_it_pushes_anything():
     line's shape, since that is the one edit that would give the duplication back its
     cost without giving back what it buys.
     """
-    assert "--no-test" not in refresh_job_script()
-
-
-def test_a_build_the_suite_turns_red_blocks_the_branch_that_turned_it():
-    """
-    Two branches that each pass alone, merge cleanly and break together are found here
-    or nowhere - no per-branch check can see it. And a break nobody acts on is carried
-    by every later build, so finding it and leaving it is worse than not looking: the
-    same red run repeats every six hours with nothing changed.
-
-    Blocking the branch is what makes the next run build cleanly without it.
-    """
-    assert integration.BlockBranchCommand().invoked_as in refresh_job_script()
+    assert not any("--no-test" in str(flag) for flag in tool_runner.CommandLineFlag)

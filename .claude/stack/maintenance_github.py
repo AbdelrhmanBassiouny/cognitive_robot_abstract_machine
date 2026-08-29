@@ -18,6 +18,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from maintenance_board import PullRequestRecord
@@ -128,6 +129,25 @@ class CandidatePullRequests(ABC):
     def check_runs(self, reference: str) -> list[CheckRunRecord]:
         """:param reference: The commit or branch to read the checks of.
         :return: Every check run reported against it."""
+
+
+class DispatchField(StrEnum):
+    """
+    What a dispatch request is keyed by, which is not what the workflow calls them.
+
+    The reference is ``ref`` here where a run reports it as ``head_branch``, so the two
+    are spelled where each is read rather than shared between them.
+    """
+
+    REFERENCE = "ref"
+    """
+    Which copy of the workflow file to run.
+    """
+
+    INPUTS = "inputs"
+    """
+    What to hand the run, keyed by the workflow's own input names.
+    """
 
 
 @dataclass(frozen=True)
@@ -329,7 +349,10 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests, DispatchedWorkfl
         self._call(
             "POST",
             f"/actions/workflows/{workflow}/dispatches",
-            {"ref": reference, "inputs": dict(inputs)},
+            {
+                DispatchField.REFERENCE: reference,
+                DispatchField.INPUTS: dict(inputs),
+            },
         )
 
     def workflow_runs(self, workflow: str) -> list[WorkflowRunRecord]:

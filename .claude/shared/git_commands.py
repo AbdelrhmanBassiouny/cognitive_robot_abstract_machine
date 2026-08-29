@@ -93,6 +93,51 @@ class GitSetting:
         return ("-c", f"{self.key}={self.value}")
 
 
+DETACHED_HEAD = "HEAD"
+"""
+The commit a checkout is on, which is what a build publishes from: it assembles on a
+detached head so no local branch is left behind for a tree already answered about.
+"""
+
+BRANCH_REFERENCE_PREFIX = "refs/heads/"
+"""
+Where git files a branch, written once because a push has to say it in full.
+
+A destination given as a bare name is resolved against whatever the remote already has,
+so a branch is named the long way round to say which namespace is meant.
+"""
+
+
+@dataclass(frozen=True)
+class BranchRefspec:
+    """
+    What to publish and the branch to publish it as.
+
+    A pair of bare strings joined by a colon says nothing about which half is which, and
+    both halves are strings, so nothing catches them being swapped.
+    """
+
+    source: str
+    """
+    The commit or reference to publish.
+    """
+
+    branch: str
+    """
+    The branch it becomes on the remote.
+    """
+
+    @classmethod
+    def publishing(cls, source: str, branch: str) -> BranchRefspec:
+        """:param source: The commit or reference to publish.
+        :param branch: The branch it becomes on the remote.
+        :return: The refspec saying so."""
+        return cls(source=source, branch=branch)
+
+    def __str__(self) -> str:
+        return f"{self.source}:{BRANCH_REFERENCE_PREFIX}{self.branch}"
+
+
 @dataclass(frozen=True)
 class GitCommandRunner:
     """
@@ -246,6 +291,18 @@ class GitCommandRunner:
         """
         self.run("config", setting.key, setting.value)
 
+    def set_configuration(self, setting: GitSetting) -> None:
+        """
+        Write a setting into this checkout's own configuration.
+
+        Unlike :attr:`configuration_overrides`, which a run passes to each command it
+        makes, this outlives the process - which is what an identity has to do, since the
+        commits are made by the commands a rebuild goes on to run.
+
+        :param setting: What to set.
+        """
+        self.run("config", setting.key, setting.value)
+
     def switch_to(self, branch: str) -> None:
         """
         Check out a branch that already exists, leaving where it points alone.
@@ -318,7 +375,7 @@ class GitCommandRunner:
         return self.attempt("commit", "--no-edit")
 
     def push_refspec(
-        self, remote: str, refspec: str, with_lease: bool = False
+        self, remote: str, refspec: str | BranchRefspec, with_lease: bool = False
     ) -> GitCommandResult:
         """
         Publish a refspec, forcing only where the caller says it is authorised.
@@ -330,7 +387,17 @@ class GitCommandRunner:
         :return: The finished push, whose failure the caller reports rather than forces.
         """
         lease = ["--force-with-lease"] if with_lease else []
-        return self.attempt("push", "--quiet", *lease, remote, refspec)
+        return self.attempt("push", "--quiet", *lease, remote, str(refspec))
+
+    def delete_branch(self, remote: str, branch: str) -> GitCommandResult:
+        """
+        Remove a published branch.
+
+        :param remote: The remote holding it.
+        :param branch: The branch to remove.
+        :return: The finished push, whose failure the caller reports rather than forces.
+        """
+        return self.attempt("push", "--quiet", "--delete", remote, branch)
 
     def contains(self, candidate: str, descendant: str) -> bool:
         """
