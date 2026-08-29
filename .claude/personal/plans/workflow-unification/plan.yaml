@@ -4534,6 +4534,47 @@ items:
       configured tooling suite. Most of that gap closed here - the common case was a tip that was
       already red - and the remainder needs the matrix re-run per prefix rather than a suite.
 
+      The rebuild answers to a branch leaving draft, 2026-08-29, on the developer's request. Leaving
+      draft is what makes a branch integrable at all, so it is the moment the build is worth redoing
+      rather than one to wait out - until then the branch serves work that is ready and not in it,
+      for up to six hours.
+
+      Three things follow from the trigger rather than being separate decisions, and two of them are
+      what a `pull_request` event costs. A fork's pull request is handed no secret, so the run could
+      only fail on a token it has not got, and fail on somebody else's pull request where it reads
+      as their failure; the job does not start for one. A burst of branches leaving draft together
+      collapses through the existing concurrency group rather than opening a candidate each: GitHub
+      holds one run and one pending, and each arrival replaces the pending one. And recursion was
+      ruled out by reading `open_pull_request` rather than reasoning about it - it sends no `draft`
+      key, so a candidate opens ready and the event fires only on a draft being converted.
+
+      The third is the checkout, and getting it wrong in either direction is a real failure. A
+      `pull_request` run checks out that pull request's merge reference, so taking the reference the
+      run was started on would run whatever `integration.py` the triggering branch carries against a
+      token that can write. Pinning every trigger to the default branch instead was the first
+      attempt and is the opposite trap: publishing to that branch is what this pipeline does, so a
+      change that broke publishing could not be fixed by running the fix, and no change could be
+      tried before it landed. The reference is the default branch on a `pull_request` and whatever
+      the run started on otherwise - a schedule starts on the default branch anyway, a dispatch
+      wherever it was asked to.
+
+      That second half is not hypothetical: it is the state this pull request is in.
+      `origin/integration` is three commits behind this branch, missing the red-tip exclusion, so a
+      scheduled run today still carries the branch that made the first unattended candidate red and
+      cannot publish - and a pipeline that cannot publish cannot carry its own fix. The bootstrap is
+      a dispatch on this branch, which the conditional pin is what allows.
+
+      One defect the tests could not have caught by reading and did not: the first conditional was
+      written as a folded scalar whose continuation lines were indented further than its first,
+      which YAML keeps verbatim - so the expression parsed cleanly into a string with newlines
+      inside `${{ }}`, for GitHub to reject at run time. Found by printing the parsed value rather
+      than by the assertion, which passed. It has its own test now.
+
+      758 tests pass across the four directories CI runs, from 753. Four mutations checked, each
+      caught by exactly the test that names its rule - and the first split of the checkout test was
+      over-broad, failing on a mutation whose own half was still correct, so it was narrowed until
+      each fails only for its own reason.
+
   - id: always-read-upstream-reviews
     title: "Read upstream review threads whether or not the fork pull request is labelled"
     branch: claude/plan-item-kickoff-workflow-y2xfva
