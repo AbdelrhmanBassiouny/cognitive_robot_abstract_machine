@@ -11010,3 +11010,69 @@ split settled on #149: `to_json` is what composes the document and what
 `SubclassJSONSerializer` declares, so `as_json` stays free for the text rather than one of
 them becoming `as_json_text`. `report-document-naming` still owns the remaining
 divergences in `.claude/hooks/` and `.claude/skills/`, which this branch does not reach.
+
+## Update 2026-08-29 (evening): every scheduled rebuild closed its own candidate before anything could check it
+
+Session https://claude.ai/code/session_016owc47W6VhsZebSxiR4bQU, from the user asking why
+the latest `Integration refresh` run stopped after an hour. Four runs have fired since the
+pipeline went live and all four ended the same way - `the candidate's checks had not
+finished after an hour`, with every one of the sixty readings answering `"verdict":
+"absent"`. Not one check run was ever reported.
+
+### The premise that was wrong
+
+The design assumed opening the candidate was enough to get it checked, so the settling
+could act on whatever the checks said. It closed the candidate on any verdict that was not
+`RUNNING`:
+
+```python
+if checks.verdict is not CandidateVerdict.RUNNING:
+    fork.close_pull_request(candidate.number)
+```
+
+`ABSENT` is not `RUNNING`, and `ABSENT` is exactly what a candidate opened two seconds ago
+looks like: GitHub creates a pull request's run a moment after the request is opened. The
+first reading therefore closed the pull request, no run was ever created for it, and every
+later reading found the same absence - while `_verdict_exit_code` answered `ABSENT` as
+still-running and kept the loop asking for the full hour. Two readings of one verdict,
+disagreeing about the one value they were written apart for.
+
+The timestamps are the proof. Candidates 209, 212 and 213 were each closed two seconds
+after opening and have no run of `ci.yml` or `integration-checks.yml` at all; 204 was
+closed after three, its runs were created one second later, and it is the only build this
+pipeline has ever judged - it went `running`, then `failed`, and exited 14. The
+`mergeable_state: dirty` those closed candidates report is not a conflict: `git merge-tree
+origin/integration 55ebff49` merges clean.
+
+### What it took to fix, and the second bug underneath
+
+Closing on a settled verdict alone is one line, and both readings come from
+`ChecksVerdict.has_settled` now so they cannot come apart again. The rest followed from
+what an open candidate then means.
+
+A candidate that never collects a check would otherwise sit through the whole schedule to
+end on a message naming the checks as slow, when nothing had started one. `RefreshPipeline`
+gives that a warm-up and then stops with `CANDIDATE_UNCHECKED` (17), which points at the
+trigger or the credential - the things that would explain no run existing.
+
+And a candidate left open is a candidate the *next* rebuild reads off the fork. It is out
+of draft, unblocked and not red, which is everything `select_for_build` asks of a branch,
+so it would have been merged into the following build - the last build inside the next.
+Measured rather than assumed: `select_for_build` over a stack carrying one returns it as
+integrated. The stack a build is assembled from is `work_in_flight` now, every open pull
+request except one opened against the branch the build would replace. That also covers the
+case this pipeline already had - an hour-long timeout leaves a candidate open too.
+
+839 tests across the four directories CI runs, from 835: the settling leaves an unreported
+candidate open, the rebuild stops on one nothing reports a check against, a first reading
+finding nothing is still waited through, and a candidate is not work the next build
+carries.
+
+### The landing hazard this sits behind
+
+The schedule runs the copy of the pipeline on the fork's default branch, and that branch is
+`integration` - the branch this pipeline moves. It only updates when a build publishes,
+which is the thing that is broken, so the fix reaches the schedule either by a
+`workflow_dispatch` on this branch or by a hand push to `integration`. Neither has been
+done, and a dispatch is a real rebuild that publishes on green, so it is the user's call
+rather than this session's.

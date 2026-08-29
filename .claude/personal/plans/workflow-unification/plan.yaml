@@ -4735,3 +4735,29 @@ items:
       into a string with newlines inside `${{ }}`, for GitHub to reject at run time, while
       the assertion about it passed throughout. Found by printing the parsed value; it has
       its own test now.
+
+      Update 2026-08-29 (evening), in `59380858`: the scheduled rebuild had never once
+      reached a verdict, and the cause is on this branch as much as on #154. The settling
+      closed the candidate on any verdict that was not RUNNING, and ABSENT is what a
+      candidate opened two seconds ago looks like - before GitHub has created the run its
+      checks come from. The first reading closed the pull request, no run was created for
+      it, and every later reading found the same absence while the status answered ABSENT
+      as still-running, so all four runs waited out the hour and failed on a message that
+      named the checks as slow. Candidates 209, 212 and 213 have no run of ci.yml or
+      integration-checks.yml at all; 204, closed after three seconds rather than two, had
+      its runs created one second later and is the only build the pipeline has judged.
+
+      Fixed in three parts. Both readings of a verdict come from `ChecksVerdict.has_settled`
+      now, so the close and the exit status cannot disagree about which verdicts are
+      answers. `RefreshPipeline` gives an absent check a warm-up rather than the whole
+      schedule and then stops with `CANDIDATE_UNCHECKED` (17), which points at whatever
+      should have started a run instead of at a matrix. And leaving a candidate open needed
+      the build to stop treating one as work: a candidate is out of draft, unblocked and
+      not red, so one still open when the next rebuild read the fork would have been merged
+      into it - the stack is `work_in_flight` now, every open pull request except one opened
+      against the branch the build would replace. 839 tests, from 835.
+
+      The fix reaches the schedule only when a build publishes, since the schedule runs the
+      copy of the pipeline on the fork's default branch and that is `integration` - the
+      branch this pipeline moves. So it wants either a `workflow_dispatch` on this branch or
+      a hand push to `integration`; neither has been done.
