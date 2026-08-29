@@ -4687,117 +4687,179 @@ items:
     pull_request_number: 211
     session: https://claude.ai/code/session_0138w5mqzbkyMPtotF7PD59Z
     notes: >
-      Split out of integration-branch-ci-verdict on 2026-08-29 rather than folded into it.
-      Part D put the publishing verdict on the candidate's own ci.yml run; what it did not
-      build is what happens when that verdict comes back red for a reason the local suite
-      cannot see. block-branch localises by re-assembling the tips in order and re-running
-      the configured suite - the four tooling directories - so it reaches a break between
-      two branches whose tooling code disagrees and reaches nothing in the docker matrix,
-      where test_each_lib and its fifteen siblings live.
+      Split out of integration-branch-ci-verdict on 2026-08-29 rather than folded into it. Part D
+      put the publishing verdict on the candidate's own ci.yml run; what it did not build is what
+      happens when that verdict comes back red for a reason the local suite cannot see. block-branch
+      localises by re-assembling the tips in order and re-running the configured suite - the four
+      tooling directories - so it reaches a break between two branches whose tooling code disagrees
+      and reaches nothing in the docker matrix, where test_each_lib and its fifteen siblings live.
 
-      Most of that gap closed with the red-tip exclusion of the same day, and the remainder
-      is narrower than it was. A candidate can now go red for two reasons: a tip whose
-      checks had not finished when the build was assembled and have since failed, which the
-      next rebuild leaves out by itself; or a genuine break only the matrix sees, where two
-      branches each pass their own full run, merge cleanly, and fail a matrix job together.
-      Only the second needs this item, and only the second is a break in the sense the
-      workflow means.
+      Most of that gap closed with the red-tip exclusion of the same day, and the remainder is
+      narrower than it was. A candidate can now go red for two reasons: a tip whose checks had not
+      finished when the build was assembled and have since failed, which the next rebuild leaves out
+      by itself; or a genuine break only the matrix sees, where two branches each pass their own
+      full run, merge cleanly, and fail a matrix job together. Only the second needs this item, and
+      only the second is a break in the sense the workflow means.
 
-      Localising it means re-running the matrix rather than a suite: push each prefix of the
-      merge order as its own branch, dispatch a run for each, and read the conclusions -
-      against roughly twenty minutes a run and sixteen jobs apiece. The waiting, the
-      concurrency, the credential and what a partial answer means are all different from
-      _run_tests. Measure the cheaper variant first: re-run only the failing job per prefix
-      rather than the whole matrix, which ci.yml's per-library job names make expressible.
+      Localising it means re-running the matrix rather than a suite: push each prefix of the merge
+      order as its own branch, dispatch a run for each, and read the conclusions - against roughly
+      twenty minutes a run and sixteen jobs apiece. The waiting, the concurrency, the credential and
+      what a partial answer means are all different from _run_tests. Measure the cheaper variant
+      first: re-run only the failing job per prefix rather than the whole matrix, which ci.yml's
+      per-library job names make expressible.
 
-      Not folded into #154, tested rather than judged: it edits integration.py for
-      subcommand wiring, and strip that and a whole dispatched-run localisation subsystem
-      remains. It does not replace locate-failure either - the local suite answers before a
-      build is pushed and caught the #154-against-#158 break hours before any candidate
-      existed, where this answers after a candidate has run.
+      Not folded into #154, tested rather than judged: it edits integration.py for subcommand
+      wiring, and strip that and a whole dispatched-run localisation subsystem remains. It does not
+      replace locate-failure either - the local suite answers before a build is pushed and caught
+      the #154-against-#158 break hours before any candidate existed, where this answers after a
+      candidate has run.
 
-      Review round of 2026-08-29 answered in `e8932eb40` and `0b1d33f5f`. Fifteen
-      comments, and they are one complaint: structure over strings, parse once, keep the
-      logic where something can run it. Thirteen resolved, two left open. 835 tests pass
-      across the four directories CI runs, from 758.
+      Review round of 2026-08-29 answered in `e8932eb40` and `0b1d33f5f`. Fifteen comments, and they
+      are one complaint: structure over strings, parse once, keep the logic where something can run
+      it. Thirteen resolved, two left open. 835 tests pass across the four directories CI runs, from
+      758.
 
-      `workflow_document.py` parses a workflow once into named things - a file, a trigger,
-      a job, a step, the action it uses - so no reader indexes into a mapping under keys it
-      spells itself. `WorkflowFile`, `TriggerEvent` and `Action` are the enums, and a step
-      is found by the action it uses rather than by `<action>@<version>`, so a version bump
-      does not read as a step that vanished. Writing it caught the hazard it exists to
-      prevent: a trigger block is not under `"on"` - YAML reads a bare `on` key as the
-      boolean, so triggers live under `True`, and a reader that forgets concludes the
-      workflow responds to nothing. The first version raised `KeyError: 'on'` on
-      `ci_reusable.yml`.
+      `workflow_document.py` parses a workflow once into named things - a file, a trigger, a job, a
+      step, the action it uses - so no reader indexes into a mapping under keys it spells itself.
+      `WorkflowFile`, `TriggerEvent` and `Action` are the enums, and a step is found by the action
+      it uses rather than by `<action>@<version>`, so a version bump does not read as a step that
+      vanished. Writing it caught the hazard it exists to prevent: a trigger block is not under
+      `"on"` - YAML reads a bare `on` key as the boolean, so triggers live under `True`, and a
+      reader that forgets concludes the workflow responds to nothing. The first version raised
+      `KeyError: 'on'` on `ci_reusable.yml`.
 
-      `matrix_libraries.py` derives the libraries from the matrix job. The twelve-member
-      enum matched `ci.yml` and was held by nothing, so a library added to the matrix would
-      have had its failures answered as naming no library at all - silent, and in the
-      direction that loses a real break. The job is found by fanning out over a matrix
-      rather than by name, so renaming it leaves them readable.
+      `matrix_libraries.py` derives the libraries from the matrix job. The twelve-member enum
+      matched `ci.yml` and was held by nothing, so a library added to the matrix would have had its
+      failures answered as naming no library at all - silent, and in the direction that loses a real
+      break. The job is found by fanning out over a matrix rather than by name, so renaming it
+      leaves them readable.
 
-      `integration_pipeline.py` takes the rebuild out of YAML. Every decision that block
-      made was a decision about an exit status, and written in a job's `run:` those were
-      loops, `if` statements and exit-code literals nothing could run outside a runner - so
-      there was no way to be wrong about an exit code and find out before a scheduled run
-      did the wrong thing silently. The workflow drops 223 lines to ~107 and calls one
-      command; `BASE_NOT_PREPARED` (7) is the one status the composition adds, aligned with
-      the maintenance pass's own. The subcommands are unchanged: `refresh` is a composition
-      over them, so each stays one decision readable on its own and the waiting sits in the
-      composition rather than in any of them.
+      `integration_pipeline.py` takes the rebuild out of YAML. Every decision that block made was a
+      decision about an exit status, and written in a job's `run:` those were loops, `if` statements
+      and exit-code literals nothing could run outside a runner - so there was no way to be wrong
+      about an exit code and find out before a scheduled run did the wrong thing silently. The
+      workflow drops 223 lines to ~107 and calls one command; `BASE_NOT_PREPARED` (7) is the one
+      status the composition adds, aligned with the maintenance pass's own. The subcommands are
+      unchanged: `refresh` is a composition over them, so each stays one decision readable on its
+      own and the waiting sits in the composition rather than in any of them.
 
-      That move deleted four guards that had asserted the shape of the shell, and they are
-      replaced by two stronger ones - every subcommand a rebuild names checked against the
-      live `commands_of` registry, and the three keys the steps hand each other held equal
-      across the two enums that write and read them.
+      That move deleted four guards that had asserted the shape of the shell, and they are replaced
+      by two stronger ones - every subcommand a rebuild names checked against the live `commands_of`
+      registry, and the three keys the steps hand each other held equal across the two enums that
+      write and read them.
 
-      Also: `BranchRefspec` and `push_refspec` replace a hand-built refspec and `--force`
-      with `--force-with-lease`; `DispatchField` names the dispatch payload's keys, spelled
-      apart from `WorkflowRunField` on purpose, since a dispatch is keyed `ref` where the
-      run reports `head_branch`; `_continue` is a `match` over `LocalisationStep` with a
-      `_narrow` method beside `_wait` and `_conclude`; `Probe` became `DispatchedProbe`;
-      `IntegrationExitCode` moved to its own module to break the pipeline-commands cycle.
-      Every dict-returning report in `.claude/stack/` is `to_json` now, taken as the sweep
-      the comment asked for rather than the three methods it sat on - `as_json` is left to
-      the five that return text, which is the split settled on #149.
+      Also: `BranchRefspec` and `push_refspec` replace a hand-built refspec and `--force` with
+      `--force-with-lease`; `DispatchField` names the dispatch payload's keys, spelled apart from
+      `WorkflowRunField` on purpose, since a dispatch is keyed `ref` where the run reports
+      `head_branch`; `_continue` is a `match` over `LocalisationStep` with a `_narrow` method beside
+      `_wait` and `_conclude`; `Probe` became `DispatchedProbe`; `IntegrationExitCode` moved to its
+      own module to break the pipeline-commands cycle. Every dict-returning report in
+      `.claude/stack/` is `to_json` now, taken as the sweep the comment asked for rather than the
+      three methods it sat on - `as_json` is left to the five that return text, which is the split
+      settled on #149.
 
-      Two threads stay open. The 400-line rule: everything this round creates obeys it,
-      production and test alike, and the 1008-line localisation test module is five modules
-      plus shared fixtures - but `integration.py` is 2482 lines and this round adds 484 to
-      it. It was 2064 before this branch, so the split is #154's and already carries its
-      own thread; offered rather than done. And two of the three constants in one thread
-      stayed plain, each naming one thing with one reader.
+      Two threads stay open. The 400-line rule: everything this round creates obeys it, production
+      and test alike, and the 1008-line localisation test module is five modules plus shared
+      fixtures - but `integration.py` is 2482 lines and this round adds 484 to it. It was 2064
+      before this branch, so the split is #154's and already carries its own thread; offered rather
+      than done. And two of the three constants in one thread stayed plain, each naming one thing
+      with one reader.
 
-      One defect the tests could not have caught by reading. The `env:` expression choosing
-      the dispatch reference was written as a folded scalar whose continuation lines were
-      indented further than its first, which YAML keeps verbatim - so it parsed cleanly
-      into a string with newlines inside `${{ }}`, for GitHub to reject at run time, while
-      the assertion about it passed throughout. Found by printing the parsed value; it has
-      its own test now.
+      One defect the tests could not have caught by reading. The `env:` expression choosing the
+      dispatch reference was written as a folded scalar whose continuation lines were indented
+      further than its first, which YAML keeps verbatim - so it parsed cleanly into a string with
+      newlines inside `${{ }}`, for GitHub to reject at run time, while the assertion about it
+      passed throughout. Found by printing the parsed value; it has its own test now.
 
-      Update 2026-08-29 (evening), in `59380858`: the scheduled rebuild had never once
-      reached a verdict, and the cause is on this branch as much as on #154. The settling
-      closed the candidate on any verdict that was not RUNNING, and ABSENT is what a
-      candidate opened two seconds ago looks like - before GitHub has created the run its
-      checks come from. The first reading closed the pull request, no run was created for
-      it, and every later reading found the same absence while the status answered ABSENT
-      as still-running, so all four runs waited out the hour and failed on a message that
-      named the checks as slow. Candidates 209, 212 and 213 have no run of ci.yml or
-      integration-checks.yml at all; 204, closed after three seconds rather than two, had
+      Update 2026-08-29 (evening), in `59380858`: the scheduled rebuild had never once reached a
+      verdict, and the cause is on this branch as much as on #154. The settling closed the candidate
+      on any verdict that was not RUNNING, and ABSENT is what a candidate opened two seconds ago
+      looks like - before GitHub has created the run its checks come from. The first reading closed
+      the pull request, no run was created for it, and every later reading found the same absence
+      while the status answered ABSENT as still-running, so all four runs waited out the hour and
+      failed on a message that named the checks as slow. Candidates 209, 212 and 213 have no run of
+      ci.yml or integration-checks.yml at all; 204, closed after three seconds rather than two, had
       its runs created one second later and is the only build the pipeline has judged.
 
-      Fixed in three parts. Both readings of a verdict come from `ChecksVerdict.has_settled`
-      now, so the close and the exit status cannot disagree about which verdicts are
-      answers. `RefreshPipeline` gives an absent check a warm-up rather than the whole
-      schedule and then stops with `CANDIDATE_UNCHECKED` (17), which points at whatever
-      should have started a run instead of at a matrix. And leaving a candidate open needed
-      the build to stop treating one as work: a candidate is out of draft, unblocked and
-      not red, so one still open when the next rebuild read the fork would have been merged
-      into it - the stack is `work_in_flight` now, every open pull request except one opened
-      against the branch the build would replace. 839 tests, from 835.
+      Fixed in three parts. Both readings of a verdict come from `ChecksVerdict.has_settled` now, so
+      the close and the exit status cannot disagree about which verdicts are answers.
+      `RefreshPipeline` gives an absent check a warm-up rather than the whole schedule and then
+      stops with `CANDIDATE_UNCHECKED` (17), which points at whatever should have started a run
+      instead of at a matrix. And leaving a candidate open needed the build to stop treating one as
+      work: a candidate is out of draft, unblocked and not red, so one still open when the next
+      rebuild read the fork would have been merged into it - the stack is `work_in_flight` now,
+      every open pull request except one opened against the branch the build would replace. 839
+      tests, from 835.
 
-      The fix reaches the schedule only when a build publishes, since the schedule runs the
-      copy of the pipeline on the fork's default branch and that is `integration` - the
-      branch this pipeline moves. So it wants either a `workflow_dispatch` on this branch or
-      a hand push to `integration`; neither has been done.
+      The fix reaches the schedule only when a build publishes, since the schedule runs the copy of
+      the pipeline on the fork's default branch and that is `integration` - the branch this pipeline
+      moves. So it wants either a `workflow_dispatch` on this branch or a hand push to
+      `integration`; neither has been done.
+
+      Review round of 2026-08-29 (evening), answered in `d444a773`, and the `integration.py` split
+      that round asked for, on #154 in `3dafcf86` and merged here in `2d50158c`. Seven threads: five
+      resolved, the `GitCommand` discussion and the `ls-tree` question left open. 851 tests pass
+      across the four directories CI runs, from 839.
+
+      The round's centre is one collision it uncovered. Removing the `str | BranchRefspec` union
+      from `push_refspec` failed 27 tests at once with `MaintenanceGitCommandRunner.push() takes 2
+      positional arguments but 3 were given`: `GitCommandRunner.push_refspec(remote, refspec,
+      with_lease)` and `MaintenanceGitCommandRunner.push(ProposedPush)` were the same git command
+      under two names with incompatible signatures across a class boundary, and the union had been
+      hiding it because nothing passed the new type down that path yet. There is one `push` now, on
+      the runner that runs git, taking the `ProposedPush` that already decides forcing - which moved
+      to `.claude/shared/` carrying a `BranchPublication`, with the lease decided on it as
+      `as_arguments`, the idiom `GitSetting` in the same file already uses. `RestackPush` names the
+      category whose lease comes from the strategy. Three hand-built refspecs and the second
+      spelling of `refs/heads/` went with it, and `configure`/`set_configuration` - byte-identical
+      bodies under two names - became one.
+
+      `BranchRefspec` became `BranchPublication` on the no-abbreviations rule, which `refspec`
+      breaks twice. What settled the replacement is the other rule rather than the unabbreviated
+      form: do not adopt another system's vocabulary, name the thing for what it is here.
+
+      The GitHub client's eleven paths and four verbs are `ApiResource` and `HttpMethod`. That found
+      a real defect: `page_size` is a field, and two reads spelled `per_page=100` straight past it,
+      so changing it would have changed one read of three. There was no test module for
+      `GitHubRepository` at all - on this branch or on `main` - so a wrong path was a 404 at the far
+      end of a runner; `test_maintenance_github.py` pins each address against the call that makes
+      it, at a page size deliberately not the default, which is what makes the mutation for that
+      defect fail. Four mutations checked.
+
+      The split takes `integration.py` from 2064 lines to 133 - the parser, `main` and the dispatch,
+      the shape `maintenance.py` already had - with the rest in thirteen modules along the `# %%`
+      sections the file already carried, every one under 400. Three moves were forced by import
+      cycles rather than chosen: `run_tests` into `integration_suite.py` because both the assembly
+      and the localisation run the suite, `print_failure_location` beside the report it prints, and
+      `StagedConflict` beside its only writer.
+
+      It introduces one new way to lose a command, which is named rather than left: `commands_of`
+      finds a command by its class existing, so something must import each family and the base
+      cannot import what imports it.
+      `test_every_family_of_commands_is_one_the_registry_has_imported` derives the families from the
+      directory - mutation-checked, and before it the only thing that caught a dropped family was
+      the skill test, and only because the skill names those commands by hand.
+
+      This branch's own 484 lines went to the modules holding their kind, plus three new ones:
+      `integration_probe_assembly.py`, `integration_localisation_commands.py` and
+      `integration_pipeline_commands.py`, all covered by that registry test with no edit. One cycle
+      the split alone could not have hit: `IntegrationRun.stack` reads `work_in_flight` while
+      `stack_to_build` takes an `IntegrationRun`, so the annotation is under `TYPE_CHECKING`.
+
+      Formatting improved as a side effect nobody planned: `integration.py` was 68 `docformatter`
+      hunks `scripts/format_docstrings.py` could not converge on, so it declined the whole file on
+      every commit. Ten of the twelve new modules converge.
+
+      The `GitCommand` StrEnum/hierarchy thread is answered with measurements and left open, because
+      the question is owned elsewhere. No git command name is spelled twice for the same operation -
+      `checkout` three times, `push` and four others twice, each a different operation of one
+      command in a method named after it - so an enum would be 16 members with one reader each. And
+      the class-per-command hierarchy is what the method signature already is: `push(self, proposed:
+      ProposedPush)` says what a push takes, enforced at every call site. `--quiet` is the one real
+      repetition at 8, and it is a property of the runner capturing output rather than a per-command
+      choice - on every write, on no read, which also turned up that `merge`, `rebase` and
+      `conclude_merge` accept it and do not get it. The recommendation is that both questions go to
+      `bastler-notes-core-python`, which owns `git_interface.py` by name and has four callers
+      waiting, one of them (`stack.py`'s `_git`) with a deliberately opposite contract; deciding the
+      ergonomics before the raise-versus-answer-nothing question is settled means deciding them
+      twice.
