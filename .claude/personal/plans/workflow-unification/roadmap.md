@@ -10681,3 +10681,75 @@ which one is a design call about `--remote` being the only thing that script is 
 entry made, run again rather than carried forward. And the notes branch had moved by 430 lines on
 this plan between reading it and writing it, so the manifest edit was re-applied onto the fetched
 copy; the anti-stale-save rule caught nothing this time only because it was followed.
+
+## Update 2026-08-29 (trigger): a rebuild answers to a branch leaving draft, and the pin cuts both ways
+
+The developer's request: run the integration refresh whenever a pull request goes from
+draft to ready. Leaving draft is what makes a branch integrable at all, so it is the
+moment the build is worth redoing rather than one to wait out — until then the branch
+every fresh session clones serves work that is ready and not in it, for up to six hours.
+
+### Three things follow from the event rather than being separate decisions
+
+**Recursion was ruled out by reading rather than reasoning.** `open_pull_request` sends no
+`draft` key, so a candidate opens ready and `ready_for_review` fires only on an existing
+draft being converted. Worth checking rather than assuming, since the pipeline's own
+output is a pull request and a self-triggering loop would have been discovered by a
+runaway Actions bill rather than by a test.
+
+**A fork's pull request is handed no secret**, so the run could only fail on a token it
+has not got — and fail on somebody else's pull request, where the failure reads as theirs.
+The job does not start for one.
+
+**A burst collapses rather than multiplying.** The concurrency group was already there for
+a different reason (two rebuilds racing for the same branch), and it covers this for free:
+GitHub holds one run and one pending, and each new arrival replaces the pending one, so
+five branches leaving draft together are served once rather than five times.
+
+### The checkout is wrong in either direction, and the first attempt took one of them
+
+A `pull_request` run checks out that pull request's **merge reference**, so taking the
+reference the run was started on would run whatever `integration.py` the triggering branch
+carries, against a token that can write. The first attempt therefore pinned the checkout to
+the default branch unconditionally — and that is the opposite trap: **publishing to the
+default branch is what this pipeline does**, so a change that broke publishing could not be
+fixed by running the fix, and no change could be tried before it landed there.
+
+That is not hypothetical; it is the state this pull request is in as it is written.
+`origin/integration` is three commits behind #154, missing the red-tip exclusion, so a
+scheduled run today still carries the branch that turned the first unattended candidate red
+and still cannot publish. A pipeline that cannot publish cannot carry its own fix.
+
+So the reference is the default branch on a `pull_request` and whatever the run started on
+otherwise — a schedule starts on the default branch anyway, a dispatch starts wherever it
+was asked to. The bootstrap out of the current state is a dispatch on this branch, which
+the conditional is what allows.
+
+**Generalizable: a guard written against untrusted input has to name the input it distrusts.**
+Pinning "always" and pinning "when the trigger is untrusted" look like the same safety
+property and are not: the first also forbids the trusted case, and the trusted case here was
+the only way to repair the thing being guarded.
+
+### A defect the assertion could not see
+
+The conditional was first written as a folded scalar whose continuation lines were indented
+*further* than its first. YAML folds only the lines level with the opening one and keeps a
+more-indented continuation verbatim — so the expression parsed cleanly into a string with
+newlines inside `${{ }}`, which GitHub would have rejected at run time. The test asserting
+the reference *ended with* `github.ref }}` passed throughout.
+
+Found by printing the parsed value rather than by any assertion, and it has its own test now.
+The general form is one this plan keeps re-meeting from new angles: **a document that parses
+is not a document that means what it looks like**, and for anything embedded in YAML the
+check is the parsed value, not the source text.
+
+### One test was over-broad and was narrowed
+
+The first split of the checkout test asserted both the guard's condition and its
+default-branch arm, so a mutation that pinned unconditionally — under which the
+pull-request behaviour is still correct — failed it. Narrowed until each half fails only
+for its own reason: one asserts the default branch appears, the other that the expression
+falls through to `github.ref`. Four mutations checked in total, each caught by exactly the
+test that names its rule.
+
+758 tests pass across the four directories CI runs, from 753.
