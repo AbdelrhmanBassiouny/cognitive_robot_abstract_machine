@@ -224,7 +224,11 @@ All 2026-08-03, in the creating session:
   what pulled the redundant argument in.
 - **Counting quantifiers are out of scope.** `∃≥n` is a graded/qualified number
   restriction, cannot stop at the first witness, and is `count(...) >= n` — a different
-  operator. Do not generalize `exists` into it.
+  operator. Do not generalize `exists` into it. *(Amended 2026-08-29: this is the
+  quantifier over one variable's bindings, which stays out of scope — `exists` must not
+  be generalized into it. The threshold connective over n named operands
+  (`threshold-connective`, disjunction-safety track) is the separate operator this
+  decision names, built separately as it implies.)*
 
 ## Bibliography
 
@@ -322,6 +326,15 @@ qualified number restriction and the counting logics mean. The two coincide only
 n operands happen to be one formula over a fixed domain. The frameworks want the
 connective; **EQL already implements the quantifier**, as `AtLeast` in
 `query/quantifiers.py`, so that name is taken by the neighbour in the same package.
+
+That distinction is what keeps this item inside the 2026-08-03 decision above rather than
+against it. The decision rules on the quantifier - `exists` must not be generalized into
+`∃≥n` - and names counting as "a different operator"; this item is that different
+operator, built separately. The decision was amended on 2026-08-29 to draw the line
+explicitly, so a reader arriving at either one is not left to re-derive it (user decision,
+same date: restate rather than move the item to a plan of its own, since its
+range-restriction rule is `disjunction-range-restriction`'s with k generalized and belongs
+beside it).
 
 Why this is real work rather than a rename, recorded because each point is a decision the
 item has to make rather than inherit:
