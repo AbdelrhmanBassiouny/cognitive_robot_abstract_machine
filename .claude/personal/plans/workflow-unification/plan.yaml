@@ -963,8 +963,6 @@ items:
     status: in_progress
     pull_request_number: 185
     session: https://claude.ai/code/session_01GE3r3XXEJpr9DUUk78Y2sT
-    blockers:
-      - ""
     notes: >
       Move the existing Python (.claude/stack/stack.py, build_dashboard.py + siblings,
       plan_manifest_tools.py) into the package PR 3 created, with all their tests moved to the
