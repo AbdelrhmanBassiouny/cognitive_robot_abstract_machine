@@ -2810,3 +2810,112 @@ engine tests is exactly the coupling that would make one test's conclusions leak
 `scripts/format_docstrings.py` reproduced the `:return: ``x``` → `:return:``x``` space regression on
 one line — the **ninth** recorded instance (§12, §14, §16, §18, §19, §22, §23, §30). Reverted that
 line by hand, kept everything else, which is the same call every round has made.
+
+## 32. Addendum (2026-08-29) — `d-core-backend` (#210): the backend conforms to `QueryBackend`, and
+the red check is the stack's
+
+A `/plan-item-resolve` session picked up `d-core-backend` hours after §31 pushed it. The branch
+itself was sound: 20 of 21 checks green, `mergeable_state: unstable`, base up to date with #159's
+head, and `d-core-single-class` reporting `open_ready`. What was stalling it was in two places the
+item's `notes` did not record.
+
+### Two review threads, opened while §31 was still reporting itself finished
+
+The developer opened threads on `backend.py:36` at **10:28:34Z** and `backend.py:92` at
+**10:30:19Z**; #210 was last updated at 10:38:22Z. Eighth instance of this plan's staleness class
+(§5, §14, §18, §19, §23, §27, §29) — and §19's own procedural lesson, *re-read the threads
+immediately before reporting a round finished*, is exactly what would have caught it.
+
+### `RDRBackend` now inherits `QueryBackend`, and §31's reason survives intact
+
+`backend.py:92` asks *"Why doesn't that inherit from any of the EQLBackends or abstract ones"*.
+
+§31 recorded conformance as deliberately not done, and its argument was about the two **concrete**
+bases only: `SelectiveBackend.evaluate` raises `SelectiveBackendCannotResolveEllipsisMatch` on
+exactly the queries this backend exists for, and `GenerativeBackend` constructs new instances where
+this completes an attribute on ones that already exist. Both still hold. Neither reaches
+`QueryBackend` itself — the base the thread's *"or abstract ones"* names — which asks for one
+method.
+
+So the contract decision §31 was unwilling to make turns out not to be needed for conformance at
+all, and that is the part worth carrying:
+
+- `QueryBackend.evaluate(expression) -> Iterable[T]` is the whole ABC.
+- `opening_directive` is a `ClassVar` already defaulting to `None`, documented as *"keeps the
+  query-type default"*. `Directive` has only `FIND` and `GENERATE`, neither of which describes
+  completing an attribute — but nothing forces a third one, so the verbalization vocabulary is
+  untouched. The "third kind of backend" question is about naming the performative, not about
+  conforming.
+
+`evaluate` is `fill`'s eager completion: it fits when there is no model yet, sets the inferred
+attribute on every instance the concrete constraints keep, and hands those instances back.
+`an(InsertionAction)(slot=...).evaluate(backend=rdr)` — C1's documented pattern (§17, §31) — now
+works.
+
+**The guard is eager, and that is a decision rather than a detail.** `evaluate` returns
+`iter(self.fill(...))` rather than being a generator, so an expression that is not a `Match` raises
+the new `QueryIsNotAMatch` at the call rather than at first iteration — the same argument the
+`infer`/`fill` split rests on. Narrowing the parameter to `Match` instead was rejected:
+`QueryBackend.evaluate` takes an `Evaluable`, and narrowing a parameter in an override is the
+Liskov violation `AGENTS.md` names.
+
+Three tests, each mutation-checked: yielding `infer`'s bindings instead of the completed instances
+kills two, making `evaluate` lazy kills two, and dropping the guard kills the third. Deliberately
+no `isinstance(RDRBackend(), QueryBackend)` assertion — that restates the `class` statement, which
+is the shape this plan has removed six times under review (§18 ×3, §19 ×2, §23).
+
+### The `GroundTruth` thread is answered and left open
+
+`backend.py:36` asks *"Aren't there dataclasses already for this?"* — checked rather than assumed,
+and one does exist, in the layer this package replaces.
+`ripple_down_rules/datastructures/dataclasses.py`'s `CaseQuery` carries
+`_target: Optional[CallableExpression]`, documented as *"the relational target (the evaluatable
+conclusion of the rule) which is a callable expression that varies with the case"* — the same
+concept. Reusing it would make `entity_query_language/rdr/` import the legacy package this split
+retires, so it is not reused. Inside `rdr/` there is no equivalent:
+`CaseContext.target_conclusion` is a value the engine puts on one case's context, not a supplier
+the backend can call across a filtered domain, and `git grep ground_truth` matches only
+`backend.py` and its two tests.
+
+That leaves whether the alias should become a class, which is a question rather than a defect —
+`AGENTS.md` sanctions a type alias in the same breath as a dedicated class, and a wrapper adds a
+construction step at every call site for no behaviour. Answered on the thread with three options
+and **left open**, per the standing rule.
+
+### The red check is the stack's, and its fix has been on `main` for five days
+
+`test_each_lib (semantic_digital_twin)` fails on `test_multi_sim.py::test_world_sim_state_sync` —
+the physics-settling assertion §24 met on #63 and §25 root-caused. Its `@pytest.mark.flaky` is
+inert here for exactly the reason #190 fixed: `pytest-rerunfailures` is absent from the `dev` extra
+CI installs. **#190 merged to `main` on 2026-08-24** and `main`'s `dev` extra carries the line —
+but `D-core-backend`, and every branch from `D-core-support` up, is **342 commits behind `main`**
+and does not, so CI builds this pull request's merge ref without the plugin and the known-flaky
+test fails outright instead of being rerun.
+
+Two files of `krrood/rdr` cannot reach a physics simulator, so this is not #210's to fix, and it is
+not fixable *inside* #210 either: the remedy is the steward cascade bringing `main` down the stack,
+which is where that one-line `pyproject.toml` change already lives. Porting the line onto the tip
+alone was considered and rejected — it duplicates a landed fix inside a pull request whose subject
+is the RDR backend, and §23/§24 settled twice that placement is decided by whether the person
+reading the diff can make sense of it. Recorded as the item's `blockers` rather than left in the
+chat.
+
+Worth measuring rather than assuming next time: the cascade did **not** stall uniformly. #64, #65
+and #66 are level with `main`; #63 is 220 commits behind; #67, #98, #159 and #210 are 342. Whoever
+runs the next steward pass should start from that rather than from the stack order.
+
+### Also
+
+- `scripts/format_docstrings.py` reproduced the `:return: ``x``` → `:return:``x``` space regression
+  for the **tenth** time (§12, §14, §16, §18, §19, §22, §23, §30, §31), this round on
+  `species_of`'s docstring — a line this change never wrote. Reverted by hand, the rest kept.
+- `test/krrood_test/dataset/ormatic_interface.py` regenerated twice during the sweep and was
+  reverted before staging; the commit was built from an explicit path list, per §23's standing
+  habit. It is still tracked on this branch, which is the hazard `AGENTS.md` names.
+- **A container lesson worth the next session's time.** Installing `mypy`/`black`/`docformatter`
+  mid-round pulled `pandas` *down* from 3.0.5 to 2.3.3, and the repository's **committed**
+  `zoo_dataset_*.pkl` fixtures cannot be unpickled by it — five `test_eql_rdr` modules stopped
+  collecting minutes after passing. The fixtures are tracked files, so regenerating them is not
+  the fix; the venv was rebuilt to its original resolution instead. `test_backends.py` still
+  cannot be collected here for the `jpt` gap §29 recorded, so it is excluded on both sides of the
+  sweep rather than silently absent from one.

@@ -571,17 +571,17 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_015bucsUoPW3ktQ1NnTZbbVx
   blockers:
-  - 'Two review threads opened 2026-08-29T10:28-10:30Z on pull request #210 are unanswered, and
-    postdate the notes below. backend.py:36 asks whether a dataclass already exists for the
-    GroundTruth callable; backend.py:92 asks why RDRBackend inherits from none of the QueryBackend
-    bases, the omission the pull request body flags as deliberate.'
+  - 'The GroundTruth thread on backend.py:36 is answered and deliberately left open. No dataclass in
+    entity_query_language/rdr/ expresses a per-case ground-truth supplier; the only one that does is
+    ripple_down_rules CaseQuery._target, in the package this split retires. Whether the type alias
+    should become a class of its own is the developer''s call, with three options on the thread.'
   - 'CI check test_each_lib (semantic_digital_twin) fails on
     test_multi_sim.py::test_world_sim_state_sync, a physics-settling assertion this pull request''s
-    two krrood/rdr files cannot reach. It is not this branch''s work. #190 added pytest-rerunfailures
-    to the dev extra on main (merged 2026-08-24) so that test''s @pytest.mark.flaky reruns instead of
-    failing outright, but D-core-backend and every branch from D-core-support up is 342 commits behind
-    main and still lacks it, leaving the mark inert. A steward cascade clears it; nothing inside this
-    pull request does.'
+    krrood/rdr files cannot reach. It is not this branch''s work and cannot be fixed inside it. #190
+    added pytest-rerunfailures to the dev extra on main (merged 2026-08-24) so that test''s
+    @pytest.mark.flaky reruns instead of failing outright, but D-core-backend and every branch from
+    D-core-support up is 342 commits behind main and still lacks it, leaving the mark inert. Only a
+    steward cascade clears it.'
   notes: >-
     backend.py + its test; infer/fill split, typed ModelKey, key_from_attribute -> helpers.py. New
     stack tip. 2026-08-29: landed as commit 8cb490de1 on draft PR #210, kicked off and implemented
@@ -606,6 +606,24 @@ items:
     call. CI prediction overturned: this branch queued 21 jobs on its first push while #159 and
     #98 have queued nothing since 2026-08-12/13, so the wedge is those pull requests' own merge
     refs rather than the stack or the base.
+
+    2026-08-29 (resolve): the round above was reported finished at 10:38Z while the developer had
+    opened two review threads at 10:28-10:30Z, so its notes were stale as written - the eighth
+    instance of this plan's staleness class. RDRBackend now inherits QueryBackend (e70fd6ff6), which
+    answers the backend.py:92 thread as asked. Section 31's reason for not conforming was about the
+    two concrete bases and it stands; neither reaches QueryBackend itself, whose whole ABC is
+    evaluate(expression) and whose opening_directive ClassVar already defaults to None, so
+    conforming needed no new Directive member and touched nothing in the verbalization layer. The
+    third-kind-of-backend question turns out to be about naming the performative rather than about
+    conformance. evaluate is fill's eager completion, so a slot=... match evaluated with backend=rdr
+    - the rdr-decision-queries pattern - now works; an expression that is not a Match raises the new
+    QueryIsNotAMatch, eagerly, because evaluate returns an iterator rather than being a generator.
+    Narrowing the parameter to Match instead was rejected as the Liskov violation AGENTS.md names.
+    test_eql_rdr 261 to 264 passed with zero baseline ids lost; test_eql 5 failed / 1161 passed / 3
+    skipped on both sides with byte-identical id lists, all container gaps. Three mutants, none
+    surviving. The backend.py:36 GroundTruth thread is answered and left open, and the one red check
+    is the stack's rather than this branch's - both recorded as blockers above. Still a draft. See
+    roadmap.md section 32.
 - id: rdr-engine-umbrella
   title: RDR/EQL engine umbrella (superseded by the split stack)
   branch: rdr-engine
