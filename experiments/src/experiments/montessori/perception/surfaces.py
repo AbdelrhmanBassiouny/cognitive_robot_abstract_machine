@@ -19,24 +19,35 @@ from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
 
-# %% a surface the scene stands on
+# %% one plane, and the patch of it that is searched
 
 
 @dataclass(frozen=True)
-class SupportingSurface:
+class WorkspaceSurface:
     """
-    A horizontal surface of the scene: how high it lies, and the stretch of it worth
-    looking at.
+    One horizontal plane perception rectifies onto, and the patch of it it searches.
+
+    This is a measurement taken *of* a surface, not the surface itself: the digital twin
+    already models that, as the :class:`Region` a
+    :class:`~semantic_digital_twin.semantic_annotations.mixins.HasSupportingSurface`
+    carries. A region is a world entity with a name, a pose and three-dimensional
+    geometry; this is a plain value derived from one, holding only what rectifying a
+    camera frame needs, and it is never added to a world.
+
+    It is also not a :class:`~experiments.montessori.perception.orthophoto.WorkspaceRegion`
+    with a height bolted on. A region is deliberately height-free because one region is
+    projected onto several planes in turn -- the table, the lid, and the table plus a
+    piece's own height -- so a height belongs to the surface, not to the patch.
     """
 
     region: WorkspaceRegion
     """
-    The stretch of the surface perception looks at.
+    The stretch of the plane perception searches.
     """
 
     height: float
     """
-    Height of the surface above the world frame's origin, in metres.
+    Height of the plane above the world frame's origin, in metres.
     """
 
     @classmethod
@@ -44,7 +55,7 @@ class SupportingSurface:
         cls,
         supporter: HasSupportingSurface,
         reference_frame: KinematicStructureEntity,
-    ) -> SupportingSurface:
+    ) -> WorkspaceSurface:
         """
         The surface something in the world offers to whatever rests on it.
 
@@ -67,7 +78,7 @@ class SupportingSurface:
     @classmethod
     def of_body(
         cls, body: Body, reference_frame: KinematicStructureEntity
-    ) -> SupportingSurface:
+    ) -> WorkspaceSurface:
         """
         The surface a body offers: its widest horizontal face.
 
@@ -86,7 +97,7 @@ class SupportingSurface:
         return cls._of_box(max(boxes, key=lambda box: box.scale.x * box.scale.y))
 
     @classmethod
-    def _of_box(cls, box: VolumetricBoundingBox) -> SupportingSurface:
+    def _of_box(cls, box: VolumetricBoundingBox) -> WorkspaceSurface:
         """
         The surface a box's top face describes.
 

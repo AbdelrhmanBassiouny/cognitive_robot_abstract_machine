@@ -49,7 +49,7 @@ from experiments.montessori.perception.orthophoto import (
     WorkspaceRegion,
 )
 from experiments.montessori.perception.piece_matcher import PieceMatcher
-from experiments.montessori.perception.surfaces import SupportingSurface
+from experiments.montessori.perception.surfaces import WorkspaceSurface
 from experiments.montessori.pieces import HUE_RANGE, HUE_TOLERANCE, PIECE_HUES
 from experiments.montessori.semantics import ShapeSortingBoard
 from experiments.montessori.world import BOARD_SCALE
@@ -813,12 +813,12 @@ class MontessoriPerceptionPipeline:
         :raises SurfaceHasNothingToMeasure: If a surface the scene needs has no shape.
         """
         reference_frame = world.root
-        surface = SupportingSurface.of_body(table, reference_frame)
+        surface = WorkspaceSurface.of_body(table, reference_frame)
         boards = world.get_semantic_annotations_by_type(ShapeSortingBoard)
         if not boards:
             raise BoardMissingFromWorld()
         [board] = boards
-        lid = SupportingSurface.of(board, reference_frame)
+        lid = WorkspaceSurface.of(board, reference_frame)
         return cls(
             region=surface.region,
             table_height=surface.height,
