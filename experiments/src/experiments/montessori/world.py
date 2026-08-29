@@ -206,8 +206,8 @@ def _hole_spec_from_footprint(footprint: HoleFootprint, key: str) -> _HoleSpec:
     surface, and pair it with a semantic key.
     """
     position = Point3(
-        BOARD_POSITION.x + footprint.center[0],
-        BOARD_POSITION.y + footprint.center[1],
+        BOARD_POSITION.x + footprint.center.x,
+        BOARD_POSITION.y + footprint.center.y,
         BOARD_POSITION.z + BOARD_SCALE.z / 2 - HOLE_MARKER_THICKNESS / 2,
     )
     return _HoleSpec(key, footprint.category, position, footprint)
@@ -277,12 +277,13 @@ def _footprint_bounds(footprint: HoleFootprint) -> Tuple[float, float, float, fl
     :param footprint: The hole to compute bounds for.
     :return: ``(min_x, max_x, min_y, max_y)``.
     """
-    boundary = np.asarray(footprint.boundary)
+    boundary_x = [point.x for point in footprint.boundary]
+    boundary_y = [point.y for point in footprint.boundary]
     return (
-        float(footprint.center[0] + boundary[:, 0].min()),
-        float(footprint.center[0] + boundary[:, 0].max()),
-        float(footprint.center[1] + boundary[:, 1].min()),
-        float(footprint.center[1] + boundary[:, 1].max()),
+        footprint.center.x + min(boundary_x),
+        footprint.center.x + max(boundary_x),
+        footprint.center.y + min(boundary_y),
+        footprint.center.y + max(boundary_y),
     )
 
 
@@ -657,11 +658,10 @@ def _landing_region(
         bounding box plus :data:`LANDING_REGION_XY_MARGIN` on every side.
     :param height: This region's extent along z; see :func:`_landing_region_height`.
     """
-    size_x, size_y = footprint.size
     box = Box(
         scale=Scale(
-            size_x + 2 * LANDING_REGION_XY_MARGIN,
-            size_y + 2 * LANDING_REGION_XY_MARGIN,
+            footprint.size.x + 2 * LANDING_REGION_XY_MARGIN,
+            footprint.size.y + 2 * LANDING_REGION_XY_MARGIN,
             height,
         )
     )
@@ -715,7 +715,7 @@ def _shape_body(
             # own footprint edge scales down to (rather than the fixed 0.03 every other
             # footprint-derived category uses) makes all three of its edges equal --
             # an actual cube, not a flat square tile.
-            cube_edge = footprint.size[0] * SHAPE_FOOTPRINT_CLEARANCE_SCALE
+            cube_edge = footprint.size.x * SHAPE_FOOTPRINT_CLEARANCE_SCALE
             shape = _footprint_shape_mesh(footprint, thickness=cube_edge, color=color)
         case MontessoriShapeCategory.CYLINDER:
             shape = _footprint_shape_mesh(footprint, thickness=0.03, color=color)

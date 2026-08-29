@@ -57,6 +57,41 @@ Bounding-box aspect ratio above which a box-shaped hole is classified as rectang
 rather than square.
 """
 
+
+@dataclass(frozen=True)
+class PlanarPoint:
+    """
+    A point on the board mesh's local ``x-y`` plane.
+    """
+
+    x: float
+    """
+    Position along the board mesh's local x-axis, in metres.
+    """
+
+    y: float
+    """
+    Position along the board mesh's local y-axis, in metres.
+    """
+
+
+@dataclass(frozen=True)
+class PlanarSize:
+    """
+    How far something reaches along the board mesh's local ``x`` and ``y`` axes.
+    """
+
+    x: float
+    """
+    Reach along the board mesh's local x-axis, in metres.
+    """
+
+    y: float
+    """
+    Reach along the board mesh's local y-axis, in metres.
+    """
+
+
 @dataclass(frozen=True)
 class HoleFootprint:
     """
@@ -68,18 +103,18 @@ class HoleFootprint:
     The geometric shape of the hole.
     """
 
-    center: Tuple[float, float]
+    center: PlanarPoint
     """
     The hole's center, in the board mesh's local ``(x, y)`` frame.
     """
 
-    size: Tuple[float, float]
+    size: PlanarSize
     """
     The hole's axis-aligned bounding box size, along the board mesh's local ``(x, y)``
     axes.
     """
 
-    boundary: Tuple[Tuple[float, float], ...]
+    boundary: Tuple[PlanarPoint, ...]
     """
     The hole's true cross-section outline: an ordered, closed polygon of ``(x, y)``
     points relative to :attr:`center` (as opposed to its bounding box).
@@ -93,7 +128,9 @@ class HoleFootprint:
 
         :param thickness: Extrusion depth along z.
         """
-        return _extrude_polygon(np.asarray(self.boundary), thickness)
+        return _extrude_polygon(
+            np.asarray([(point.x, point.y) for point in self.boundary]), thickness
+        )
 
 
 def _extrude_polygon(boundary: np.ndarray, thickness: float) -> trimesh.Trimesh:
@@ -138,14 +175,14 @@ def cut_board_mesh(
     cut_depth = board_scale.z * 2
     for footprint in footprints:
         cutter = footprint.extrude(cut_depth)
-        cutter.apply_translation([footprint.center[0], footprint.center[1], 0.0])
+        cutter.apply_translation([footprint.center.x, footprint.center.y, 0.0])
         board = board.difference(cutter, engine=None)
     return board
 
 
 def _polygon_area_and_centroid(
     points_xy: np.ndarray,
-) -> Tuple[float, Tuple[float, float]]:
+) -> Tuple[float, PlanarPoint]:
     """
     Compute a simple polygon's area and centroid with the shoelace formula.
 
@@ -158,7 +195,7 @@ def _polygon_area_and_centroid(
     signed_area = cross.sum() / 2.0
     centroid_x = ((x + x_next) * cross).sum() / (6 * signed_area)
     centroid_y = ((y + y_next) * cross).sum() / (6 * signed_area)
-    return abs(signed_area), (centroid_x, centroid_y)
+    return abs(signed_area), PlanarPoint(float(centroid_x), float(centroid_y))
 
 
 def _classify_hole_shape(
@@ -225,13 +262,13 @@ def detect_hole_footprints() -> List[HoleFootprint]:
         footprints.append(
             HoleFootprint(
                 category=category,
-                center=(float(centroid[0]), float(centroid[1])),
-                size=(float(size_x), float(size_y)),
+                center=centroid,
+                size=PlanarSize(float(size_x), float(size_y)),
                 boundary=tuple(
-                    (float(x - centroid[0]), float(y - centroid[1]))
+                    PlanarPoint(float(x - centroid.x), float(y - centroid.y))
                     for x, y in boundary
                 ),
             )
         )
 
-    return sorted(footprints, key=lambda footprint: footprint.center[1])
+    return sorted(footprints, key=lambda footprint: footprint.center.y)
