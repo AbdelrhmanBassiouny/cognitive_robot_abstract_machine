@@ -16,10 +16,13 @@ import pytest
 
 from typing_extensions import Dict, List
 
-from krrood.entity_query_language.factories import an
+from krrood.entity_query_language.factories import an, entity, variable
 from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
 from krrood.entity_query_language.rdr.backend import ModelKey, RDRBackend
-from krrood.entity_query_language.rdr.exceptions import ExpertRequired
+from krrood.entity_query_language.rdr.exceptions import (
+    ExpertRequired,
+    QueryIsNotAMatch,
+)
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interface import (
     AnswerRequest,
@@ -316,3 +319,42 @@ def test_a_reloaded_model_concludes_what_the_original_did(
     assert [bound[query.variable.species] for bound in reloaded.infer(query)] == [
         bound[query.variable.species] for bound in backend.infer(query)
     ]
+
+
+# %% answering a query through the backend
+
+
+def test_a_query_evaluated_through_the_backend_yields_its_completed_instances(
+    animals: List[Animal],
+):
+    backend = RDRBackend(expert=maximally_specific_expert())
+    query = an(Animal)(milk=True, species=...).from_(animals)
+    backend.fit(query, species_of)
+
+    completed = list(query.evaluate(backend=backend))
+
+    assert completed == [animal for animal in animals if animal.milk]
+    assert {animal.name: animal.species for animal in completed} == {
+        animal.name: species_of(animal) for animal in animals if animal.milk
+    }
+
+
+def test_evaluating_a_query_completes_the_instances_before_it_hands_any_back(
+    animals: List[Animal],
+):
+    backend = RDRBackend(expert=maximally_specific_expert())
+    query = an(Animal)(species=...).from_(animals)
+    backend.fit(query, species_of)
+
+    query.evaluate(backend=backend)
+
+    assert [animal.species for animal in animals] == [
+        species_of(animal) for animal in animals
+    ]
+
+
+def test_a_query_with_no_attribute_to_complete_is_refused(animals: List[Animal]):
+    backend = RDRBackend(expert=maximally_specific_expert())
+
+    with pytest.raises(QueryIsNotAMatch):
+        entity(variable(Animal, animals)).evaluate(backend=backend)

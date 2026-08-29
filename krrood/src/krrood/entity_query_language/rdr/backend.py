@@ -26,9 +26,12 @@ from typing_extensions import (
     Type,
 )
 
+from krrood.entity_query_language.backends import QueryBackend
 from krrood.entity_query_language.core.base_expressions import UnificationDict
 from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.query.match import Match
+from krrood.entity_query_language.rdr.exceptions import QueryIsNotAMatch
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.underspecified import UnderspecifiedMatch
@@ -89,9 +92,13 @@ class InferredCase:
 
 
 @dataclass
-class RDRBackend:
+class RDRBackend(QueryBackend):
     """
     Infers underspecified (``...``) attributes on existing instances via RDR models.
+
+    As a :class:`~krrood.entity_query_language.backends.QueryBackend` it is the oracle a
+    ``...`` delegates to, so an underspecified match can be answered through the ordinary
+    ``query.evaluate(backend=...)`` surface.
     """
 
     expert: Optional[Expert] = None
@@ -104,6 +111,19 @@ class RDRBackend:
     """
     The RDR the backend has learned for each attribute it has been asked about.
     """
+
+    def evaluate(self, expression: Evaluable) -> Iterator[Any]:
+        """
+        Answer an underspecified query by completing its ``...`` attribute, fitting a
+        model first if there is none.
+
+        :param expression: An underspecified ``Match`` carrying a domain.
+        :return: The instances the query kept, each carrying its inferred value.
+        :raises QueryIsNotAMatch: If the expression marks no attribute with ``...``.
+        """
+        if not isinstance(expression, Match):
+            raise QueryIsNotAMatch(expression)
+        return iter(self.fill(expression))
 
     def fit(self, query: Match, ground_truth: Optional[GroundTruth] = None) -> Self:
         """
