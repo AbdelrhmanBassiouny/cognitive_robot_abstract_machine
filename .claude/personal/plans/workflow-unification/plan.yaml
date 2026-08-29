@@ -4626,11 +4626,13 @@ items:
 
   - id: red-candidate-localisation
     title: "Localise a red candidate to the branches that caused it"
-    branch: null
+    branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
     track: stack-tooling
     depends_on:
       - integration-branch-ci-verdict
-    status: not_started
+    status: in_progress
+    pull_request_number: 211
+    session: https://claude.ai/code/session_0138w5mqzbkyMPtotF7PD59Z
     notes: >
       Split out of integration-branch-ci-verdict on 2026-08-29 rather than folded into it.
       Part D put the publishing verdict on the candidate's own ci.yml run; what it did not
