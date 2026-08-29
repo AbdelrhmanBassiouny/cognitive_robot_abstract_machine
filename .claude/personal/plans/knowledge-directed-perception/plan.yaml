@@ -330,7 +330,10 @@ items:
       covers the chain of ifs that accepts or rejects a contour (pipeline.py:619), which
       the developer asked to become an inspectable rule tree rather than a hand-written
       condition. Depends on krrood's ripple-down rules being usable, which the developer
-      expects from the RDR/EQL refactor's integration build.
+      expects from the RDR/EQL refactor's integration build. The piece hues gained a second
+      reader on 2026-08-29: the simulated scene now draws each piece in the colour measured
+      off the real one, so moving the hues onto the objects moves them for the twin as well
+      as for the detector.
 
   - id: tune-detection-rules-against-the-camera
     title: "Conclude a detection rule while watching the camera, with its numbers on sliders"

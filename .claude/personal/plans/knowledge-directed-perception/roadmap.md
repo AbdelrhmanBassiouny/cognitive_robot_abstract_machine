@@ -801,3 +801,33 @@ whenever a generated file sits outside the change being measured.
 What still fails or errors in this container needs ROS 2 (`rclpy`, `geometry_msgs`,
 `visualization_msgs`) or a fixture `--noconftest` skips, and `polytope` and `pydrake` do
 not build here at all.
+
+### `montessori-perception-on-main`: the second review round of 2026-08-29
+
+The developer worked through the thirteen threads himself and resolved eleven, leaving two:
+a new one on `hole_geometry.py:185`, and a question on the `_SHAPE_COLORS` thread — *"Is this
+file actually used in the tracy_icra demo? if not then I do not care about it for now."*
+
+**It is used, including that constant.** `tracy_experiments/montessori/world.py` on
+`tracy_icra` imports twenty-four names from `experiments/montessori/world.py`, `_SHAPE_COLORS`
+among them, and uses it to colour the loose shapes and the hole markers; that module is
+`TracyMontessoriWorld`, which both `montessori_demo_real.py` and `montessori_demo_mujoco.py`
+build their scene from. So the question answered itself into doing the work.
+
+- `33fe5a798` — the shoelace helper's `(area, centroid)` pair becomes `PolygonMeasurement`,
+  built by `PolygonMeasurement.of`, following the `of` constructor `EdgeDistances` and
+  `WorkspaceSurface` already use. It gets the formula's first direct tests; until now it was
+  only ever checked through a detected hole's centre.
+- `7363d2c26` — `KnownPiece.color` answers what colour a piece is, from the hue measured off
+  the real one at full saturation and brightness, and `_SHAPE_COLORS` asks. The cube and the
+  cylinder are cyan and the two prisms amber, as they are on the table, instead of red, blue,
+  green and orange. The disk and the sphere keep a colour of their own, since this set has
+  neither and there is nothing measured to match.
+
+**Two pieces now share a colour in the twin, deliberately.** Cube and cylinder are both cyan,
+the two prisms both amber, because that is what the real set looks like — shape is what tells
+them apart on the table, and now in RViz too. Only the hue was ever measured, so the pure form
+of it is what the twin draws; that assumption is stated on `KnownPiece.color` rather than left
+for a reader to infer.
+
+**147 passed, 1 skipped**, against 142 after the first round.
