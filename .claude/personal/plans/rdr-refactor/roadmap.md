@@ -2674,3 +2674,106 @@ something in a file nobody was looking at.** The standing habit that catches it 
   three branches with the base moving under each in turn, which is §21's remedy applied twice
   more, and neither of the two silent branches produced a run. #67 is the control: it is the
   same stack and it does run.
+
+## 31. Addendum (2026-08-29) — `d-core-backend` bootstrapped: the stack tip, and where #68's
+backend threads land
+
+`/plan-item-kickoff rdr-refactor d-core-backend` ran in `auto` mode. Branch `D-core-backend`
+is cut from `origin/D-core-single-class` and draft **PR #210** is open before any
+implementation, so the manifest never spent the work reading `not_started`. This section is
+the plan itself, recorded because in `auto` mode it is the only record it will ever have.
+
+### The scope check, run rather than assumed
+
+`check_scope_overlap.py --base origin/D-core-single-class` on
+`rdr/backend.py` and `test_eql_rdr/test_rdr_backend.py` reports both paths absent from the
+base and **no** unlanded branch in the stack touching either. Compared by purpose too, per
+the standing rule that a duplicate does not show up as an overlapping path when the two
+branches named the file differently: `git grep RDRBackend` on the base is empty, and the only
+other copy is the closed mega-branch #68 that this split supersedes. So this is real
+stacking — §6's pre-agreed third slice — not a fold into #159.
+
+### #68's eleven `backend.py` threads, and the two answered differently
+
+Nine are applied as asked: `GroundTruth` narrows to the callable alone (a constant label is a
+callable returning it); `ModelKey` becomes a frozen dataclass with `case_type` and
+`attribute_name` instead of a positional `Tuple[Type, str]`; `query` is typed `Match` rather
+than `Any` on every method; `_key` becomes `_key_for`; and every method and parameter the
+threads name gets its docs. `_target_for` disappears rather than gaining the default the
+thread asked about, since the redesign below leaves it nothing to do.
+
+**`fill_in_place` splits, and the split was already decided.** §6 records the review's
+resolution — *"`backend.infer` splits into a pure `infer` (yields `UnificationDict`) and an
+eager `fill`"* — so the thread's "discuss with me" is answered, not reopened. The eagerness of
+`fill` is the part that matters: a lazy generator whose only purpose is a side effect does
+nothing at all until someone iterates it, which is the misuse the two-method split exists to
+prevent.
+
+**`key_from_attribute` does not move to `core/helpers.py`.** The thread's objection is the
+reach into EQL internals (`attribute._child_._type_`) from the RDR layer, and that reach
+already has an EQL-owned accessor: `Attribute._owner_class_` on `main` is exactly
+`self._child_._type_`. What is left after using it is two attribute reads producing the
+registry key, which the sibling thread has just turned into a dataclass — so it belongs on
+that dataclass as `ModelKey.from_attribute`. Moving it to `core/helpers.py` instead would
+make a `core/` module import an `rdr/` dataclass to name its own return type, inverting the
+layering §15 spent a round establishing. Answered differently from the ask, so it is recorded
+here rather than quietly done.
+
+### Two changes the mega-branch's `backend.py` needs because of what landed under it
+
+- **`fit` calls the engine's `fit` once, not `fit_case` per case.** The mega-branch loops
+  `rdr.fit_case(case, target=…)` over the filtered domain. Since #159 (§30) `fit_case` wraps
+  `_saved_when_the_fit_ends`, so that loop writes the whole model once per case — the exact
+  defect §30 removed from the engine, reintroduced one layer up. And `fit(cases, targets)` is
+  convergent while the loop is not, so a rule written for a later case would silently keep a
+  wrong answer for an earlier one. This makes `fit` eager over the filtered domain; `infer`
+  stays lazy, which is the laziness the module's docstring is about.
+- **No sentinel is passed for a missing target.** `UNSET` is gone (§17, §19) and
+  `EQLSingleClassRDR.fit` already reads `targets=None` as *"the expert labels each case"*, so
+  the no-ground-truth path passes `None` rather than a per-case `...`.
+
+### What the ported test keeps, and what a sibling has already made redundant
+
+The mega-branch's `test_underspecified_rdr_integration.py` opens with
+`TestUnderspecifiedMatchAdapter` and `TestFromUnderspecified`. Every one of those seven
+assertions is already on the base — `test_underspecified_match.py` (#64) covers all six
+adapter cases, and `test_from_underspecified_predicts_the_underspecified_attribute` (#159)
+covers the seventh. They are dropped, per §22's rule that a mega-branch file is a starting
+point and the first question is which of its assertions a sibling has since landed.
+
+What lands, as `test_rdr_backend.py`, pytest, over `expert_doubles.py` and `ZooDataset`:
+`infer`'s laziness and its `UnificationDict`s read through the query's own attribute with the
+instances left unmutated; `fill`'s eager mutation; the concrete filter surviving into
+inference; a callable ground truth; the auto-fit path driving the expert's labelling; one
+model per `(case type, attribute)`; a save/load/infer round trip; and `ExpertRequired` where
+the mega-branch asserted `(ValueError, NotImplementedError)` — the exception class rather
+than a tuple of guesses. Each assertion is mutation-checked (§16, §18, §22), and the suite is
+compared as sorted collected ids against the branch point, never as counts (§30).
+
+### Flagged and deliberately not done
+
+- **`RDRBackend` does not implement `QueryBackend`.** §17 records the RDR as *"playing the
+  role `ProbabilisticBackend` plays for a model"*, and C1 (`rdr-decision-queries`) writes
+  `an(InsertionAction)(slot=...).evaluate(backend=rdr)`, which needs it. But neither existing
+  base fits: `SelectiveBackend.evaluate` raises `SelectiveBackendCannotResolveEllipsisMatch`
+  on exactly the queries this backend exists for, and `GenerativeBackend` constructs new
+  instances while this completes an attribute on existing ones. Conforming therefore means
+  deciding whether attribute completion is a third kind of backend — a contract decision #68's
+  review never asked for, and C1's to make when C1 needs it.
+- **§17's `InvalidEllipsis` narrowing now has a concrete call site.** `fill` is the `setattr`
+  that would leave `...` on a case no rule classified, so the reachability probe §17 filed on
+  `no-rule-fired-resolution` is answerable from here. The probe stays on that item.
+- **Expect no CI.** #159 and #98 have queued nothing since 2026-08-12/13 and both read
+  `mergeable_state: unknown` (§29, §30); this branch's base is #159. §21's base-move-then-push
+  remedy is already established as insufficient, so no push should be spent testing it again.
+
+### Also
+
+- `plan_item_bootstrap.py`'s indentation defect, found by §20 and recorded there as belonging
+  to whichever plan owns `.claude/` tooling, is **still unfixed**: `ITEM_FIELD_INDENT` is four
+  spaces and `ITEM_MARKER` is `"  - "`, while this manifest's items sit at column 0 with their
+  fields at two. So `open`/`record` would again write YAML that does not parse. Worked around
+  the same way §20 did — the item patched by hand at the correct indentation, `save-plan.sh
+  --manifest --roadmap` called directly — and said so rather than left silent.
+- Subscribing to tracking issue #94 was refused by the permission classifier again. Seventh
+  recorded instance (§11, §16, §20, §23, §27, §29).
