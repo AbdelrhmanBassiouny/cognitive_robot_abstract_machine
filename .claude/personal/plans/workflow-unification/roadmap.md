@@ -10753,3 +10753,33 @@ falls through to `github.ref`. Four mutations checked in total, each caught by e
 test that names its rule.
 
 758 tests pass across the four directories CI runs, from 753.
+
+### A third finding, from a question rather than a check
+
+The user asked whether any step gives Claude the right to manage pull requests, issues and
+pushes. Step 2 was that step, and it could not answer the question: it said "Give Claude
+access" and named two URLs, so a reader could not tell whether pushing and opening pull
+requests were covered or were a separate grant to go and find.
+
+They are not separate, and the docs say so plainly — a cloud session "can access any
+repository the connecting GitHub account can see", and pushing the branch and creating the
+pull request both happen through that one authorization. The step names what it covers now.
+
+Two things it had wrong beyond vagueness, both found by reading the documentation rather
+than reasoning from the URL names:
+
+- **The organization URL belonged to a different product.** `admin-settings/claude-tag` is
+  where an owner allows repositories for the Claude tag. What gates GitHub sign-in on a
+  Team or Enterprise plan is the connector toggle at `admin-settings/connectors`, and until
+  an owner turns it on the sign-in step "shows 'GitHub access is required for Claude Code
+  on the web' instead of a sign-in button" — so the reader is not looking at a permissions
+  problem they can fix, they are looking at a missing button.
+- **The Claude GitHub App was unmentioned**, which leaves two mistakes available: installing
+  it expecting it to be the access grant, and skipping it and wondering why auto-fix never
+  runs. The docs are explicit — "Either way, sessions can reach the same repositories" — so
+  the step names it as optional, adding auto-fix, granting nothing.
+
+**Generalizable, and the sharper version of the previous entry: the reader's question is a
+test the document has to pass.** Every check so far had been "does the step do what it
+says"; this one was "can the step answer what a newcomer will actually ask", and the answer
+was no for a step that had already survived a review round and a live-services pass.
