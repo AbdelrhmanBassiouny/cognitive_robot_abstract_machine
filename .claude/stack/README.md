@@ -88,6 +88,20 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   It takes `fork=` / `upstream=` arguments, falls back to `configuration`, and asks (or, with
   `--non-interactive`, stops) when neither answers. Its `routine-prompt.md` is the template to
   register when you want the pass to run unattended.
+- **`integration.py`** - builds the branch you *work from* while the review queue lags: the
+  upstream base with every reviewed in-flight stack tip merged on top, regenerated from scratch
+  each time. It writes to no branch and pushes nothing.
+  - `python .claude/stack/integration.py build` - assemble it, then run the suite on the result.
+    `--restack` brings stale tips forward first, which pushes to other people's branches and is
+    why it is opt-in; `--no-test` skips the suite; `--json` emits the whole build as one document.
+  - `python .claude/stack/integration.py locate-failure` - when the branch builds and the suite fails on
+    it, add the tips back one at a time until it turns, and name the pair. A semantic collision
+    leaves no conflict to attribute, so there is nothing else to go on.
+  - `stage-conflict` / `record-resolution` - reproduce one collision, and record what was chosen
+    so later builds replay it instead of skipping the tip again.
+- **`.claude/skills/integration-conflict-triage/SKILL.md`** - what a collision between two
+  in-flight branches *means*, which the build deliberately does not decide. Invocable as
+  `/integration-conflict-triage`.
 
 ## The state machine (your approval gate)
 
@@ -128,6 +142,44 @@ never asks twice. Pass them explicitly to skip resolution entirely:
 
 To run it unattended, register it as a scheduled Routine; the prompt to paste is in
 [`routine-prompt.md`](../skills/stacked-pr-maintenance/routine-prompt.md).
+
+## Working from an integration branch
+
+The loop above gets branches *reviewed*; it does nothing for the fact that you cannot use two
+unlanded features at once. `integration.py build` assembles them into one branch to work from,
+and moves `integration` to whatever it just built:
+
+```bash
+python .claude/stack/integration.py build
+```
+
+It gates nothing. Promotion asks whether one branch is ready for review; integration asks whether
+the branches coexist, and a collision between two of yours is not a reason to hold either back.
+A tip that collides is skipped so the rest still builds, and the report names the **pair** - which
+of the two should change is a judgement, and `/integration-conflict-triage` is where it is made.
+
+**Only branches you have reviewed are integrated.** A pull request stays a draft here until its
+author has read it back, so leaving draft is that review, and a build is made of work that has
+had it. Because a tip contains its whole stack, this is read down the entire chain: a reviewed
+branch standing on a draft is left out with it, and the branch merged for a stack is the last one
+reached before its first draft.
+
+**A branch a label withholds is left out too**, and so is anything standing on it - a branch that
+conflicts with its base or has broken a sibling is exactly what this branch must not be built from.
+The labels are the ones a maintenance pass writes, so run `build --restack` and the pass's own
+verdict decides what the build carries; a build reads the stack again afterwards, since the restack
+is what writes those labels.
+
+Everything left out is named in the report - as `blocked` or `unreviewed`, distinct from a tip the
+build tried to integrate and could not - so a build that integrated nine branches out of nineteen
+says which nine and why, rather than saying so only by omission. Leaving either out is the rule
+working, so it is not a failing build and does not change the exit status.
+
+Two branches can also merge perfectly and still not work together - one removing what another's
+test imports, one adding a dependency another's fixture does not provide. No per-branch check can
+see that, because neither branch is wrong and the failure exists only in a tree neither of them
+is. That is what the `--test` run on the finished branch is for, and `locate-failure` is what turns a red
+suite over a dozen merged tips into a named pair.
 
 ## Rules of hygiene
 
