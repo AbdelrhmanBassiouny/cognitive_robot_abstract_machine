@@ -294,3 +294,63 @@ Consequence recorded on both plans: #192 deliberately refuses to let a match rea
 predicate (`HasType(match, ...)` raises `LiteralConditionError`), because coercing it would
 replace that loud error with the silent every-row answer above. The refusal can be lifted
 once this item closes.
+
+## A threshold connective, raised from the framework rewrite (2026-08-29)
+
+`threshold-connective` was added to the `disjunction-safety` track after noticing that
+giskardpy's `Parallel` and coraplex's parallel nodes already decide success by a count -
+"at least *k* of the children succeeded" - and asking whether that is a generalization of
+`Or` that both could inherit, given that those frameworks' interfaces are to be rewritten
+onto EQL directly.
+
+It is, but it generalizes `And` too, and the framing "a superclass of `Or` with k=1" hides
+that. For a fixed operand list, `>=k(phi_1..phi_n)` is the disjunction over every k-subset
+of the conjunction of that subset: k=1 is `Or`, **k=n is `And`**, k=ceil(n/2) is majority.
+Giskardpy already shows both ends on one dial - `Parallel.minimum_success` defaults to
+`None` meaning *all* nodes must be True, and coraplex's `TryAll` sits at k=1.
+
+In first-order logic it is a *connective*, not a quantifier, and it adds no expressive
+power - the subset expansion is propositional, `C(n,k)` disjuncts, succinctness only. The
+standard reading is a threshold gate / cardinality constraint (`atleast(k, [x_1..x_n])` in
+SAT and CP), and its pseudo-Boolean encoding `k <= sum([phi_i])` is literally the line
+giskardpy's `build_artifacts` already writes. It is monotone and dualizes cleanly:
+`not >=k(phi_1..phi_n)` is `>=(n-k+1)(not phi_1..not phi_n)`.
+
+The neighbouring concept is the counting *quantifier* `exists^{>=k} x. phi(x)` - "at least
+k solutions" - which is also plain FOL for each fixed k, and is what description logic's
+qualified number restriction and the counting logics mean. The two coincide only when the
+n operands happen to be one formula over a fixed domain. The frameworks want the
+connective; **EQL already implements the quantifier**, as `AtLeast` in
+`query/quantifiers.py`, so that name is taken by the neighbour in the same package.
+
+Why this is real work rather than a rename, recorded because each point is a decision the
+item has to make rather than inherit:
+
+- `OR` is a `LogicalBinaryOperator` with `left`/`right`, and `or_(*conditions)` folds an
+  n-ary call into a right-leaning chain through `chained_logic`. "At least 2 of 3" has no
+  binary fold, so `Or` cannot both inherit a threshold parent and keep its shape.
+- EQL operators are not truth-functional gates: `_evaluate__` yields `OperationResult`
+  binding streams with a negation-as-failure fallback, so "at least k succeeded" has to be
+  defined per binding.
+- Range restriction becomes a function of k: for k<n any k-subset can be the witness, so
+  an escaping variable must be restricted in every branch (`rr(>=k)` is the intersection of
+  the branches' `rr`), exactly `disjunction-range-restriction`'s rule generalized. Only
+  k=n relaxes to the union, like `And`. That is why this item depends on it: the general
+  rule cannot be written while its k=1 case is still undefined and its docstring still says
+  "ElseIf".
+- On the consumer side the unification is not free. Giskardpy observations are three-valued
+  (`trinary_logic_or` is Kleene max over True=1, Unknown=0.5, False=0), and **coraplex's
+  `TryAll` is not `Parallel(minimum_success=1)`**: `TryAll` observes
+  `trinary_logic_or(observations)`, which is Unknown while all children are Unknown, whereas
+  `Parallel(minimum_success=1)` observes `1 <= sum(obs == True)` and `obs == True` is a hard
+  comparison, giving False in that same state. A shared superclass has to take a position on
+  Unknown, or carry a failure threshold alongside the success threshold.
+
+Scope split, decided here rather than left to whoever picks the item up: this item owns the
+operator and its semantics only. Re-expressing giskardpy's `Parallel` and coraplex's
+`ParallelNode`/`TryAllNode` on top of it belongs to `eql-performatives` (#108), whose
+`language-nodes-and-bridge` item already owns unifying those combinators with coraplex's
+plan nodes; a cross-plan note was added there so neither plan builds the threshold twice.
+Noted for that item: PR #14 already defines verbalization-only `Parallel` and `TryAll`
+classes in `entity_query_language/performatives.py`, so the names collide and the two
+layers must be kept distinct.

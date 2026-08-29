@@ -478,3 +478,10 @@ items:
 
       LITERATURE: PR #99's own truth-read-count table is the in-repo precedent for both
       the methodology and the presentation format.
+
+  - id: threshold-connective
+    title: "A threshold connective: at least k of n, with Or and And as its ends"
+    branch: null
+    track: disjunction-safety
+    depends_on: []
+    status: not_started
