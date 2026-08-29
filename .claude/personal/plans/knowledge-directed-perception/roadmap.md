@@ -749,3 +749,55 @@ items rather than only here.
 **#202 stays out of draft**, for the reason its own section already records: a dependent
 cannot stack on an open draft, and re-drafting it would show `surfaces-from-world` and
 `perception-backend` as blocked.
+
+### `surface-finish-annotation`: what it actually took, and the one thing the plan had not looked at
+
+Built 2026-08-29 as pull request #216, `80100bd4`. 20 new tests; `45 passed` in
+`test_shape.py` against `25 passed` on the parent.
+
+**Adding the field meant fixing a duplication first.** `Sphere`, `Cylinder` and `Box`
+each re-read `origin`, `color` and `texture` in their own `_from_json`, so a fourth field
+would have written the same line a fourth time in each — exactly what `AGENTS.md` forbids.
+The fields `Shape` itself declares are now read once, by `Shape.arguments_from_json`, and
+each primitive supplies only its own geometry. The parametrized round-trip tests over all
+three primitives are what hold that refactor.
+
+**`Mesh` needed the finish carried explicitly, and the plan had not checked why.**
+`Mesh._from_json` goes through `from_trimesh`, which reconstructs the shape from the
+exported file and has never restored `color` or `texture` — deliberately, since a mesh's
+colour lives in its vertex colours and its texture in its trimesh visual. A finish has no
+such carrier, so leaving it out would have lost the annotation on every round trip for a
+mesh-modelled table, which is what a real URDF is more likely to give than a primitive.
+`from_trimesh` gained a `finish` parameter; colour and texture were left exactly as they
+were, since fixing those is not this item's claim.
+
+**The container could run the tests after all, and the ORM with them.** The two items
+before this one recorded that the suite does not run in a Claude Code container. That was
+true of *this* container too as it arrived — no `trimesh`, no `pytest`, no compiled
+`random_events_lib` — but it was a missing environment rather than an impossible one:
+installing the dependency set, building the vendored `random_events` from source
+(`pip install --no-deps ./random_events`), and copying `urdf_parser_py` in by hand (its
+`setup.py` uses an `install_layout` modern setuptools removed) got the suite running.
+Python 3.12 is required, not 3.11: `krrood`'s class-diagram parser calls
+`make_dataclass(module=...)`, which is 3.12+.
+
+That matters beyond this item, because it means **the ORM path is exercised here for the
+first time in this plan**. `scripts/regenerate_all_orm.py` regenerates
+`semantic_digital_twin`'s interface and maps the new field as
+`finish: Mapped[Optional[SurfaceFinish]] = mapped_column(PolymorphicEnumType,
+nullable=True, ...)`. The script still exits non-zero afterwards, on `giskardpy` —
+`CouldNotResolveType: QPControllerConfig` — which reproduces without this branch and is
+unrelated to it.
+
+**How the whole-suite comparison was made, and one way it can lie.** The first attempt
+compared pass counts across a `git stash` of the source, and read as +92 passes for 20 new
+tests. The cause was that `ormatic_interface.py` is generated and *not* stashed: the
+baseline run was executing against an interface built from the changed source, mapping a
+`SurfaceFinish` its own `geometry.py` no longer had. Regenerating the interface on each
+side and diffing the *names* of the failing and erroring tests rather than their counts
+gives the real answer: the two lists are byte-identical, 160 lines each. Worth repeating
+whenever a generated file sits outside the change being measured.
+
+What still fails or errors in this container needs ROS 2 (`rclpy`, `geometry_msgs`,
+`visualization_msgs`) or a fixture `--noconftest` skips, and `polytope` and `pydrake` do
+not build here at all.
