@@ -268,10 +268,11 @@ items:
   - id: surface-finish-annotation
     title: "Say in the digital twin how a surface takes light"
     branch: sdt_surface_finish_annotation
-    pull_request_number: null
+    pull_request_number: 216
     track: method-selection
     depends_on: []
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_019FYgjdCK7BStm7KdSDyrwY
     notes: >-
       The digital twin models a surface's colour but not its finish, which is
       the property that decides whether colour segmentation works at all: the
