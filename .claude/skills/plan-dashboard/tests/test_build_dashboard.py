@@ -12,6 +12,7 @@ from typing import Any
 import pytest
 import yaml
 
+from render_common import status_label
 from build_dashboard import (
     AVAILABLE_MODELS,
     DashboardRenderer,
@@ -275,8 +276,23 @@ def test_validate_plan_rejects_a_same_track_dependency_cycle():
 
 
 def test_item_status_display_labels():
-    assert ItemStatus.NOT_STARTED.display_label == "Not started"
-    assert ItemStatus.DONE.display_label == "Done"
+    assert status_label(ItemStatus.NOT_STARTED) == "Not started"
+    assert status_label(ItemStatus.DONE) == "Done"
+
+
+def test_every_status_has_a_label_to_render():
+    """
+    The status is shared with the hooks, so one can be added without this page being
+    touched. Every member is labelled here, since an unlabelled one would otherwise
+    reach the template and raise mid-render.
+    """
+    assert {status: status_label(status) for status in ItemStatus} == {
+        ItemStatus.NOT_STARTED: "Not started",
+        ItemStatus.IN_PROGRESS: "In progress",
+        ItemStatus.BLOCKED: "Blocked",
+        ItemStatus.DEFERRED: "Deferred",
+        ItemStatus.DONE: "Done",
+    }
 
 
 def test_live_state_display_labels_including_no_pull_request():

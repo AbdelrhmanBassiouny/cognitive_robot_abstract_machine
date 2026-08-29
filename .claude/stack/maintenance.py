@@ -32,9 +32,12 @@ import argparse
 import sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
+
+from exceptions import GitCommandFailed
 from maintenance_board import MissingPullRequestFieldError
 from maintenance_commands import COMMANDS, MaintenancePass
-from maintenance_git_commands import GitCommandFailed, GitCommandRunner
+from maintenance_git_commands import MaintenanceGitCommandRunner
 from maintenance_github import GitHubCredentialUnavailableError, GitHubRequestFailed
 from maintenance_report import MaintenanceExitCode
 from stack import (
@@ -93,7 +96,7 @@ def _dispatch() -> MaintenanceExitCode:
     try:
         maintenance = MaintenancePass(
             configuration=load_configuration(),
-            git=GitCommandRunner(working_directory=Path.cwd()),
+            git=MaintenanceGitCommandRunner(working_directory=Path.cwd()),
         )
         return requested.run(maintenance, arguments)
     except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
