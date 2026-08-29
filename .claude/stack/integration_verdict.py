@@ -96,6 +96,23 @@ class ChecksVerdict(StrEnum):
     wrong rather than slow: a candidate opened by a credential whose pushes start no
     workflow run sits here forever rather than turning red."""
 
+    @property
+    def has_settled(self) -> bool:
+        """Whether this is the verdict the checks will keep.
+
+        :return: Whether the checks have said everything they are going to.
+        """
+        return self in SETTLED_VERDICTS
+
+
+SETTLED_VERDICTS = frozenset({ChecksVerdict.PASSED, ChecksVerdict.FAILED})
+"""
+The verdicts a candidate is done collecting checks for.
+
+Neither of the other two is: a candidate opened seconds ago has reported nothing yet, so
+reading an absent check as an answer acts on a build nothing has judged.
+"""
+
 
 @dataclass(frozen=True)
 class CheckRun:

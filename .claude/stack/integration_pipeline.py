@@ -22,14 +22,15 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 
 from integration_exit_codes import IntegrationExitCode  # noqa: E402
-from integration_verdict import VerdictReportKey  # noqa: E402
+from integration_verdict import ChecksVerdict, VerdictReportKey  # noqa: E402
 from tool_runner import (  # noqa: E402
     CommandLineFlag,
+    CommandOutcome,
     IntegrationSubcommand,
     MaintenanceSubcommand,
     LOCALISATION_SCHEDULE,
@@ -42,6 +43,17 @@ from tool_runner import (  # noqa: E402
 
 # %% the rebuild
 
+
+CHECKS_WARM_UP_ATTEMPTS = 5
+"""
+How many readings of a candidate may find no check at all before the rebuild stops
+waiting for one.
+
+GitHub creates a pull request's run within seconds of the request being opened, so on
+the verdict schedule's interval this is minutes of nothing having started - long enough
+that a queue is not mistaken for a trigger that never fired, and short enough that one
+that never fired is not waited out for an hour.
+"""
 
 A_BUILD_WAS_ASSEMBLED = frozenset(
     {IntegrationExitCode.SUCCESS, IntegrationExitCode.TIP_LEFT_OUT}
@@ -119,6 +131,11 @@ class RefreshPipeline:
     verdict_schedule: PollingSchedule = VERDICT_SCHEDULE
     """
     How long to wait for the candidate's checks.
+    """
+
+    warm_up_attempts: int = CHECKS_WARM_UP_ATTEMPTS
+    """
+    How many readings may find no check at all before the rebuild gives up on one.
     """
 
     localisation_schedule: PollingSchedule = LOCALISATION_SCHEDULE
@@ -218,29 +235,45 @@ class RefreshPipeline:
         """
         Ask what the candidate's checks say until they have finished saying it.
 
+        A candidate nothing has reported a check against is given a warm-up and then
+        given up on rather than waited out: no run having been created is a different
+        thing from a matrix taking its time, and spending the whole schedule on it ends
+        the rebuild saying the checks were slow when none was ever started.
+
         :param build: The assembled branch under judgement.
         :param candidate: The pull request collecting the checks.
         :return: The verdict's own status.
         """
-        settled = self._until_answered(
-            self.verdict_schedule,
-            IntegrationExitCode.CANDIDATE_STILL_RUNNING,
-            ToolingScript.INTEGRATION,
-            IntegrationSubcommand.SETTLE_CANDIDATE,
-            CommandLineFlag.CANDIDATE,
-            candidate.number,
-            CommandLineFlag.BUILD,
-            build,
-            CommandLineFlag.HEAD,
-            candidate.head,
-            CommandLineFlag.JSON,
-        )
-        if settled is IntegrationExitCode.CANDIDATE_STILL_RUNNING:
-            print(
-                "the candidate's checks had not finished in "
-                f"{self.verdict_schedule.attempts} attempts",
-                file=sys.stderr,
+        settled = IntegrationExitCode.CANDIDATE_STILL_RUNNING
+        for attempt, answer in enumerate(
+            self._ask_repeatedly(
+                self.verdict_schedule,
+                ToolingScript.INTEGRATION,
+                IntegrationSubcommand.SETTLE_CANDIDATE,
+                CommandLineFlag.CANDIDATE,
+                candidate.number,
+                CommandLineFlag.BUILD,
+                build,
+                CommandLineFlag.HEAD,
+                candidate.head,
+                CommandLineFlag.JSON,
             )
+        ):
+            settled = IntegrationExitCode(answer.status)
+            if settled is not IntegrationExitCode.CANDIDATE_STILL_RUNNING:
+                return settled
+            if attempt + 1 >= self.warm_up_attempts and _reported_no_check(answer):
+                print(
+                    "no check has been reported against the candidate in "
+                    f"{self.warm_up_attempts} readings, so nothing is starting one",
+                    file=sys.stderr,
+                )
+                return IntegrationExitCode.CANDIDATE_UNCHECKED
+        print(
+            "the candidate's checks had not finished in "
+            f"{self.verdict_schedule.attempts} attempts",
+            file=sys.stderr,
+        )
         return settled
 
     def _localise(self, candidate: Candidate) -> None:
@@ -287,12 +320,41 @@ class RefreshPipeline:
         :return: The last status it gave.
         """
         status = not_yet
-        for attempt in range(schedule.attempts):
-            status = IntegrationExitCode(
-                self.runner.run(script, subcommand, *arguments).status
-            )
+        for answer in self._ask_repeatedly(schedule, script, subcommand, *arguments):
+            status = IntegrationExitCode(answer.status)
             if status is not not_yet:
                 return status
+        return status
+
+    def _ask_repeatedly(
+        self,
+        schedule: PollingSchedule,
+        script: ToolingScript,
+        subcommand: str,
+        *arguments: str,
+    ) -> Iterator[CommandOutcome]:
+        """
+        Run one command up to the schedule's attempts, and hand back each answer for
+        the caller to judge.
+
+        Nothing is waited out after an answer the caller acts on: the wait happens only
+        when it comes back for another.
+
+        :param schedule: How many times to ask, and how long to leave between.
+        :param script: The entry point to run.
+        :param subcommand: Which of its commands.
+        :param arguments: What to pass it.
+        :return: Each answer in turn.
+        """
+        for attempt in range(schedule.attempts):
+            yield self.runner.run(script, subcommand, *arguments)
             if attempt + 1 < schedule.attempts:
                 self.wait(schedule.interval_seconds)
-        return status
+
+
+def _reported_no_check(answer: CommandOutcome) -> bool:
+    """
+    :param answer: One reading of a candidate's checks.
+    :return: Whether it found no check reported against it at all.
+    """
+    return answer.document().get(VerdictReportKey.VERDICT) == ChecksVerdict.ABSENT

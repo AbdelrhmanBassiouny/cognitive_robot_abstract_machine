@@ -31,7 +31,7 @@ from tool_runner import (
     ToolRunner,
     ToolingScript,
 )
-from integration_verdict import VerdictReportKey
+from integration_verdict import ChecksVerdict, VerdictReportKey
 from workflow_document import Action, TriggerEvent, WorkflowFile
 
 A_BUILD_BRANCH = "integration-20260829-120000"
@@ -52,6 +52,13 @@ The commit the candidate's checks are reported against.
 QUICKLY = PollingSchedule(attempts=3, interval_seconds=0)
 """
 A schedule short enough that a test giving up is a test that finished.
+"""
+
+A_SHORT_WARM_UP = 2
+"""
+How long a test lets a candidate answer nothing at all for, kept under
+:data:`QUICKLY`'s attempts so that giving up on one is told apart from running out of
+them.
 """
 
 
@@ -108,6 +115,13 @@ def a_build(status: IntegrationExitCode = IntegrationExitCode.SUCCESS):
     return answered(status, {VerdictReportKey.BUILD_BRANCH: A_BUILD_BRANCH})
 
 
+def a_settling(verdict: ChecksVerdict, status: IntegrationExitCode) -> CommandOutcome:
+    """:param verdict: What the candidate's checks amounted to.
+    :param status: What reading them exited with.
+    :return: One reading of the candidate's checks."""
+    return answered(status, {VerdictReportKey.VERDICT: str(verdict)})
+
+
 def an_open_candidate() -> CommandOutcome:
     """:return: One candidate's outcome, naming the pull request and the commit."""
     return succeeded(
@@ -131,6 +145,7 @@ def rebuild(*answers: CommandOutcome, tmp_path: Path) -> tuple:
         runner=runner,
         wait=lambda seconds: None,
         verdict_schedule=QUICKLY,
+        warm_up_attempts=A_SHORT_WARM_UP,
         localisation_schedule=QUICKLY,
     ).run()
     return status, runner
@@ -351,3 +366,41 @@ def test_a_localisation_is_told_where_to_dispatch_and_where_to_keep_its_state(
 
     assert str(CommandLineFlag.DISPATCH_ON) in localising
     assert str(tmp_path / "localisation.json") in localising
+
+
+def test_a_candidate_nothing_reports_a_check_against_stops_the_rebuild(tmp_path: Path):
+    """
+    No check having been created is a different thing from a matrix taking its time, and
+    waiting it out spends the whole schedule to end saying the checks were slow - when
+    what a reader has to look at is whatever should have started one.
+    """
+    status, runner = rebuild(
+        succeeded(),
+        a_build(),
+        an_open_candidate(),
+        a_settling(ChecksVerdict.ABSENT, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
+        tmp_path=tmp_path,
+    )
+
+    assert status is IntegrationExitCode.CANDIDATE_UNCHECKED
+    assert runner.subcommands.count(str(IntegrationSubcommand.SETTLE_CANDIDATE)) == (
+        A_SHORT_WARM_UP
+    )
+
+
+def test_a_first_reading_finding_no_check_yet_is_waited_through(tmp_path: Path):
+    """
+    A candidate's run takes a moment to be created, so the first reading finding nothing
+    is what an ordinary rebuild looks like - giving up there would throw away the build
+    that run was about to judge.
+    """
+    status, _ = rebuild(
+        succeeded(),
+        a_build(),
+        an_open_candidate(),
+        a_settling(ChecksVerdict.ABSENT, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
+        succeeded(),
+        tmp_path=tmp_path,
+    )
+
+    assert status is IntegrationExitCode.SUCCESS

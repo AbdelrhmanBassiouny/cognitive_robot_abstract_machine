@@ -41,7 +41,7 @@ import sys
 import tempfile
 from abc import abstractmethod
 from contextlib import contextmanager
-from collections.abc import Iterator, Sequence
+from collections.abc import Iterable, Iterator, Sequence
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from enum import StrEnum
@@ -64,6 +64,7 @@ from stack import (  # noqa: E402
     ConfigurationKey,
     ForkRemoteNotFoundError,
     LabelWrite,
+    PullRequest,
     Stack,
     build_stack,
     load_configuration,
@@ -501,6 +502,24 @@ class BuildSelection:
     Named rather than merely absent: a build that integrates nine branches out of
     nineteen and says so only by omission reads as having covered everything.
     """
+
+
+def work_in_flight(pull_requests: Iterable[PullRequest]) -> list[PullRequest]:
+    """The open pull requests a build is assembled from.
+
+    A candidate is opened against the branch a build would replace, so it is a build
+    being judged rather than work in flight - and it looks to a build like an ordinary
+    reviewed branch, so one still open when the next rebuild reads the fork would be
+    merged into it.
+
+    :param pull_requests: Every open pull request on the fork.
+    :return: The ones that are work.
+    """
+    return [
+        pull_request
+        for pull_request in pull_requests
+        if pull_request.base != POINTER_BRANCH
+    ]
 
 
 def select_for_build(stack: Stack) -> BuildSelection:
@@ -1488,7 +1507,8 @@ class IntegrationRun:
 
         Read rather than loaded from ``board.json``: a build is only as good as its idea
         of what is in flight, and a snapshot left behind by an earlier pass is worse than
-        no snapshot at all.
+        no snapshot at all. What is in flight is :func:`work_in_flight`, which is every
+        open pull request except a candidate.
 
         :param fork: The fork to read the open pull requests from.
         :return: The derived stack.
@@ -1500,7 +1520,7 @@ class IntegrationRun:
         )
         return build_stack(
             self.configuration,
-            list(export.pull_requests),
+            work_in_flight(export.pull_requests),
             lambda name: ancestry.is_ancestor(name, upstream),
         )
 
@@ -1872,6 +1892,10 @@ class SettleCandidateCommand(IntegrationCommand):
         one is kept: its candidate names checks somebody has to look at, and a closed
         pull request whose head is gone cannot be read.
 
+        The candidate itself is closed only once its checks have settled. Closed before
+        they have, it collects none at all - GitHub creates a pull request's run a moment
+        after the request is opened, and none is created for one already closed.
+
         :param run: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code.
@@ -1891,7 +1915,7 @@ class SettleCandidateCommand(IntegrationCommand):
                 run.configuration.fork_remote,
                 f"{candidate.head}:refs/heads/{POINTER_BRANCH}",
             )
-        if checks.verdict is not ChecksVerdict.RUNNING:
+        if checks.verdict.has_settled:
             fork.close_pull_request(candidate.number)
         if published:
             run.git.run(
@@ -1936,17 +1960,19 @@ def _verdict_line(candidate: Candidate, checks: Any, published: bool) -> str:
 def _verdict_exit_code(verdict: ChecksVerdict) -> IntegrationExitCode:
     """Map a verdict onto the status a caller acts on.
 
-    An absent check is answered as still running rather than as a failure: a caller that
-    threw the build away would be discarding one nothing had judged.
+    A verdict that has not settled is answered as still running rather than as a failure:
+    a caller that threw the build away would be discarding one nothing had judged. Read
+    through the same property the candidate is closed on, so the two cannot come to
+    disagree about which verdicts are answers.
 
     :param verdict: What the checks amount to.
     :return: The process exit code.
     """
+    if not verdict.has_settled:
+        return IntegrationExitCode.CANDIDATE_STILL_RUNNING
     if verdict is ChecksVerdict.PASSED:
         return IntegrationExitCode.SUCCESS
-    if verdict is ChecksVerdict.FAILED:
-        return IntegrationExitCode.CANDIDATE_FAILED
-    return IntegrationExitCode.CANDIDATE_STILL_RUNNING
+    return IntegrationExitCode.CANDIDATE_FAILED
 
 
 @dataclass(frozen=True)

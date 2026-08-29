@@ -113,6 +113,15 @@ class IntegrationExitCode(IntEnum):
     property of one tree is not about a combination at all.
     """
 
+    CANDIDATE_UNCHECKED = 17
+    """
+    No check was ever reported against the candidate, so none is coming.
+
+    Told apart from a matrix that is merely slow because what a reader has to look at is
+    different: whatever should have started a run - the trigger, or the credential the
+    candidate was opened with - rather than the checks themselves.
+    """
+
     @property
     def name_for_a_caller(self) -> str:
         """

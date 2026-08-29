@@ -523,6 +523,18 @@ def test_a_candidate_still_running_is_left_open_and_its_branch_left_alone():
     assert deleted_branches(run) == [] and run.fork_answers.closed == []
 
 
+def test_a_candidate_nothing_has_reported_a_check_against_is_left_open():
+    """
+    This is what a candidate opened seconds ago looks like, before GitHub has created
+    the run its checks come from - and closing one then is what stops that run from ever
+    being created, so the candidate collects nothing and every later reading finds the
+    same absence.
+    """
+    run = settle([])
+
+    assert deleted_branches(run) == [] and run.fork_answers.closed == []
+
+
 def test_the_rebuild_runs_the_suite_before_it_pushes_anything():
     """
     The candidate's own checks include this suite, so running it here is duplication -

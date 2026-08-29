@@ -11,17 +11,19 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from stack import BranchStatus, Stack
+from stack import BranchStatus, PullRequest, Stack
 from integration_verdict import ChecksVerdict
 
 import integration
 from integration import (
     IntegrationExitCode,
+    POINTER_BRANCH,
     TipStatus,
     exit_code_for,
     select_for_build,
     stack_to_build,
     tips_of,
+    work_in_flight,
 )
 
 from integration_fixtures import (
@@ -69,6 +71,30 @@ answer that none has been reported.
 """
 
 # %% which branches a build is made of
+
+
+def a_pull_request(number: int, head: str, base: str) -> PullRequest:
+    """:param number: Its number.
+    :param head: The branch it would land.
+    :param base: The branch it is opened against.
+    :return: One open pull request, as the fork answers it."""
+    return PullRequest(
+        number=number, head=head, base=base, draft=False, labels=[], ci="", session=""
+    )
+
+
+def test_a_candidate_is_not_work_the_next_build_carries():
+    """
+    A candidate is out of draft, unblocked and not red, which is everything a build asks
+    of a branch - so one still open when the next rebuild reads the fork would be merged
+    into it, putting the last build inside the next.
+    """
+    work = a_pull_request(1, "a-feature", make_configuration().upstream_base)
+    candidate = a_pull_request(213, "integration-20260829-112642", POINTER_BRANCH)
+
+    carried = work_in_flight([work, candidate])
+
+    assert [pull_request.number for pull_request in carried] == [work.number]
 
 
 def test_only_the_tip_of_a_stack_is_merged():
