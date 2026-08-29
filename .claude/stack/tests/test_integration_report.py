@@ -9,16 +9,11 @@ import json
 
 import pytest
 
-from integration import (
-    FailureLocationReport,
-    IntegrationExitCode,
-    IntegrationReport,
-    PullRequestStackTipOutcome,
-    ReportKey,
-    ResolutionAuthor,
-    TipStatus,
-    exit_code_for,
-)
+from integration_constants import ReportKey
+from integration_exit_codes import IntegrationExitCode
+from integration_failure import FailureLocationReport
+from integration_report import IntegrationReport, exit_code_for
+from integration_tips import PullRequestStackTipOutcome, ResolutionAuthor, TipStatus
 
 from test_maintenance import (
     UPSTREAM_BASE,

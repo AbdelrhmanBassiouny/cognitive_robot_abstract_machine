@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from maintenance_github import ApiResource, GitHubRepository, HttpMethod
+from maintenance_github import GitHubRepository, HttpMethod
 from stack import Repository
 
 A_REPOSITORY = Repository(owner="an-owner", name="a-project")

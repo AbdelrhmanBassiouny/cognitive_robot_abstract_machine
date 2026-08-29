@@ -12,8 +12,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import integration
-from integration import IntegrationExitCode
+import integration_failure
+from integration_exit_codes import IntegrationExitCode
 from integration_localisation import Localisation, LocalisationStage
 
 from test_maintenance import (
@@ -133,7 +133,7 @@ def test_a_concluded_search_blocks_the_branch_in_the_same_words_a_local_one_does
     status = locate(run, state)
 
     assert status is IntegrationExitCode.TESTS_FAILED
-    assert fork.comments[0].body.startswith(integration.FAILURE_COMMENT_PREFIX)
+    assert fork.comments[0].body.startswith(integration_failure.FAILURE_COMMENT_PREFIX)
     assert SECOND_TIP in fork.comments[0].body and FIRST_TIP in fork.comments[0].body
     assert not state.exists()
     assert published(fork_checkout, prefixes + narrowing) == []

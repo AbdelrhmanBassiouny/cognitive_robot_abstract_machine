@@ -8,11 +8,9 @@ from datetime import datetime, timezone
 
 from stack import PullRequest
 
-import integration
-from integration import (
-    TipStatus,
-    build_branch_name,
-)
+import integration_constants
+from integration_selection import build_branch_name
+from integration_tips import TipStatus
 
 from test_maintenance import (
     ForkCheckout,
@@ -46,7 +44,7 @@ def test_a_build_is_named_so_it_can_coexist_with_the_pointer():
     name = build_branch_name(datetime(2026, 8, 10, 12, 0, 0, tzinfo=timezone.utc))
 
     assert name == "integration-20260810-120000"
-    assert not name.startswith(f"{integration.POINTER_BRANCH}/")
+    assert not name.startswith(f"{integration_constants.POINTER_BRANCH}/")
 
 
 def test_the_pointer_moves_to_the_build_that_finished(fork_checkout: ForkCheckout):
@@ -62,7 +60,7 @@ def test_the_pointer_moves_to_the_build_that_finished(fork_checkout: ForkCheckou
     )
 
     assert fork_checkout.git.commit_at(
-        integration.POINTER_BRANCH
+        integration_constants.POINTER_BRANCH
     ) == fork_checkout.git.commit_at(A_BUILD_BRANCH)
 
 

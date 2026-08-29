@@ -11,13 +11,12 @@ from pathlib import Path
 
 from stack import PullRequest
 
+import integration_failure
 import integration
-from integration import (
-    FailureLocationReport,
-    IntegrationExitCode,
-    ReportKey,
-    ResolutionProvenance,
-)
+from integration_constants import ReportKey
+from integration_exit_codes import IntegrationExitCode
+from integration_failure import FailureLocationReport
+from integration_tips import ResolutionProvenance
 
 from test_maintenance import (
     A_LABEL_THIS_TOOL_NEVER_WRITES,
@@ -112,7 +111,7 @@ def locate_break(
     :param test_command: The suite that decides whether a build works.
     :return: What it localised.
     """
-    return integration.FailureLocation(
+    return integration_failure.FailureLocation(
         stack=a_stack(checkout, pull_requests),
         git=checkout.git,
         build_branch=A_BUILD_BRANCH,

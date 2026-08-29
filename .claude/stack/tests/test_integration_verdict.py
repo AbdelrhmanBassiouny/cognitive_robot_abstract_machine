@@ -17,9 +17,9 @@ import yaml
 
 from maintenance_github import CandidatePullRequests, CheckRunRecord
 
-import integration
+import integration_candidate_commands
 import tool_runner
-from integration import IntegrationExitCode, ReportKey
+from integration_exit_codes import IntegrationExitCode
 
 from test_maintenance import make_configuration
 
@@ -296,7 +296,7 @@ def test_each_verdict_leaves_the_status_a_caller_acts_on(
     An absent check is answered as still running: a caller that read it as red would
     discard a build nothing had judged.
     """
-    assert integration._verdict_exit_code(verdict) is expected
+    assert integration_candidate_commands._verdict_exit_code(verdict) is expected
 
 
 def test_every_verdict_is_mapped_to_a_status():
@@ -305,7 +305,8 @@ def test_every_verdict_is_mapped_to_a_status():
     silently take whichever branch happens to be last rather than one chosen for it.
     """
     assert {
-        integration._verdict_exit_code(verdict) for verdict in ChecksVerdict
+        integration_candidate_commands._verdict_exit_code(verdict)
+        for verdict in ChecksVerdict
     } <= set(IntegrationExitCode)
 
 
@@ -452,7 +453,7 @@ class RecordingGit:
 @dataclass(frozen=True)
 class RecordingIntegrationRun:
     """
-    An :class:`~integration.IntegrationRun` stand-in for a settling that touches no
+    An :class:`~integration_run.IntegrationRun` stand-in for a settling that touches no
     repository.
     """
 
@@ -477,7 +478,7 @@ def settle(checks: list[CheckRunRecord]) -> RecordingIntegrationRun:
     :return: The run, carrying what the settling did.
     """
     run = RecordingIntegrationRun(RecordingCandidates(checks=checks))
-    integration.SettleCandidateCommand().run(
+    integration_candidate_commands.SettleCandidateCommand().run(
         run,
         argparse.Namespace(candidate=41, build=A_BUILD_BRANCH, head=A_HEAD, json=True),
     )

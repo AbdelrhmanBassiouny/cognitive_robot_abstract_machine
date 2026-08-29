@@ -7,13 +7,9 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import integration
-from integration import (
-    ReportKey,
-    ResolutionAuthor,
-    ResolutionProvenance,
-    TipStatus,
-)
+import integration_run
+from integration_constants import ReportKey
+from integration_tips import ResolutionAuthor, ResolutionProvenance, TipStatus
 
 from test_maintenance import (
     ForkCheckout,
@@ -110,12 +106,12 @@ def test_provenance_missing_altogether_reads_as_no_claims(tmp_path: Path):
     )
 
 
-def a_run(checkout: ForkCheckout) -> integration.IntegrationRun:
+def a_run(checkout: ForkCheckout) -> integration_run.IntegrationRun:
     """
     :param checkout: The checkout to run in.
     :return: A run wired to the scratch fork, without asking GitHub anything.
     """
-    return integration.IntegrationRun(
+    return integration_run.IntegrationRun(
         configuration=make_configuration(), git=checkout.git
     )
 

@@ -18,8 +18,9 @@ import pytest
 
 from command_line import commands_of
 
-import integration
-from integration import IntegrationCommand
+import integration_constants
+import integration_pipeline_commands
+from integration_run import IntegrationCommand
 from integration_exit_codes import IntegrationExitCode
 from integration_pipeline import A_BUILD_WAS_ASSEMBLED, RefreshPipeline
 from tool_runner import (
@@ -32,7 +33,6 @@ from tool_runner import (
     ToolingScript,
 )
 from integration_verdict import ChecksVerdict, VerdictReportKey
-from workflow_document import Action, TriggerEvent, WorkflowFile
 
 A_BUILD_BRANCH = "integration-20260829-120000"
 """
@@ -172,7 +172,7 @@ def test_the_rebuild_itself_is_one_of_those_commands():
     The workflow calls one thing, so a rebuild that is not a command of the builder is a
     workflow calling something that does not exist.
     """
-    assert integration.RefreshCommand().invoked_as in {
+    assert integration_pipeline_commands.RefreshCommand().invoked_as in {
         command.invoked_as for command in commands_of(IntegrationCommand)
     }
 
@@ -190,7 +190,7 @@ def test_the_rebuild_reads_each_document_by_the_key_the_command_writes(
     the rebuild reads them through the verdict's. Spelled differently in either, the
     hand-off breaks between two commands rather than inside one.
     """
-    assert str(read) in {str(written) for written in integration.ReportKey}
+    assert str(read) in {str(written) for written in integration_constants.ReportKey}
 
 
 # %% what a rebuild does with each answer

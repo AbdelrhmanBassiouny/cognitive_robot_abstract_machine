@@ -9,7 +9,7 @@ nothing can run outside a runner, and so one nothing checks.
 
 from __future__ import annotations
 
-import integration
+import integration_pipeline_commands
 from integration_exit_codes import IntegrationExitCode
 from workflow_document import Action, TriggerEvent, WorkflowFile
 
@@ -34,7 +34,10 @@ def test_the_scheduled_job_calls_the_rebuild_rather_than_restating_it():
     The rebuild is a procedure with tests over it; a job that branched on statuses in
     shell would be the same procedure written where nothing can run it.
     """
-    assert integration.RefreshCommand().invoked_as in refresh_job_script()
+    assert (
+        integration_pipeline_commands.RefreshCommand().invoked_as
+        in refresh_job_script()
+    )
 
 
 def test_the_scheduled_job_branches_on_no_status_of_its_own():

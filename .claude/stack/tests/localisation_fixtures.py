@@ -18,8 +18,10 @@ from stack import PullRequest
 
 from maintenance_github import DispatchedWorkflowRuns, WorkflowRunRecord
 
-import integration
-from integration import IntegrationExitCode, ProbeAssembly, ResolutionProvenance
+import integration_localisation_commands
+from integration_exit_codes import IntegrationExitCode
+from integration_probe_assembly import ProbeAssembly
+from integration_tips import ResolutionProvenance
 from integration_verdict import CheckRunField, ChecksVerdict
 from matrix_libraries import LibraryUnderTest
 from workflow_document import WorkflowFile
@@ -235,7 +237,7 @@ class RecordingFork(RecordingPullRequests, DispatchedWorkflowRuns):
 @dataclass(frozen=True)
 class LocalisingRun:
     """
-    An :class:`~integration.IntegrationRun` stand-in wired to the scratch fork.
+    An :class:`~integration_run.IntegrationRun` stand-in wired to the scratch fork.
     """
 
     checkout: ForkCheckout
@@ -354,7 +356,7 @@ def locate(
     :param head: The commit the candidate's checks are on.
     :return: The status the step left.
     """
-    return integration.LocateCandidateFailureCommand().run(
+    return integration_localisation_commands.LocateCandidateFailureCommand().run(
         run,
         argparse.Namespace(
             head=head, state=state, dispatch_on=THE_PIPELINE_REFERENCE, json=True

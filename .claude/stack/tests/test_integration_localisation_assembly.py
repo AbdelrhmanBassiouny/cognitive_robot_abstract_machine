@@ -9,7 +9,6 @@ what is being checked is what the published trees hold.
 
 from __future__ import annotations
 
-from integration_localisation import LocalisationStage
 from integration_probes import ProbeWorkflowInput, dispatch
 from workflow_document import WorkflowFile
 

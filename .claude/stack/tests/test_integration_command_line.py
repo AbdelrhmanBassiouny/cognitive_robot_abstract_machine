@@ -6,11 +6,11 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from pathlib import Path
 
-import integration
-from integration import (
-    IntegrationExitCode,
-)
+import integration_build_commands
+import integration_commands
+from integration_exit_codes import IntegrationExitCode
 
 from maintenance_constants import CREDENTIAL_VARIABLES
 
@@ -56,7 +56,28 @@ def test_a_command_that_exists_is_reachable_from_the_command_line():
     Commands are found from their own subclasses, so one that exists cannot be left
     unreachable by forgetting to list it.
     """
-    assert integration.BuildCommand() in integration.COMMANDS
+    assert integration_build_commands.BuildCommand() in integration_commands.COMMANDS
+
+
+def test_every_family_of_commands_is_one_the_registry_has_imported():
+    """
+    A subclass is only found once something has imported the module defining it, so a
+    family nothing imports is a set of commands the command line silently does not have.
+    """
+    registry = Path(integration_commands.__file__)
+    families = {
+        module.stem
+        for module in registry.parent.glob("integration_*_commands.py")
+        if module != registry
+    }
+
+    imported = {
+        line.split()[1]
+        for line in registry.read_text().splitlines()
+        if line.startswith("from integration_")
+    }
+
+    assert families <= imported
 
 
 def test_a_missing_credential_is_its_own_exit_status(fork_checkout: ForkCheckout):
