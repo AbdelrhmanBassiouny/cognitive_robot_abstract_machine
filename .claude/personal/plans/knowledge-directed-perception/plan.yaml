@@ -148,29 +148,24 @@ items:
     track: surfaces
     depends_on: [montessori-perception-on-main]
     status: in_progress
-    session: https://claude.ai/code/session_011NPnTyfe9ZfBPvv13CVZcM
+    session: https://claude.ai/code/session_01ScJk8zKUuToafxg38Bcag5
     blockers:
       - >-
-          The only unresolved review thread on #205 cannot be closed from this branch. On 2026-08-29
-          the developer answered the "this is a very big file" thread on
-          test/experiments_test/test_montessori_perception.py with "ok it should be done on 202", so
-          splitting that file's 1262 pre-existing lines is montessori-perception-on-main's work, on
-          branch montessori_perception_on_main. The file does not exist on main, which is what makes
-          #202 its owner.
-      - >-
-          Unanswered question to the developer, raised on #205 at review time:
+          Unanswered question to the developer, raised on #205 at review time and still open:
           WorkspaceSurface.of_body picks the body's widest horizontal face, following table_top_z's
           existing rule, where the highest face is arguably the truer reading of "the surface things
           rest on". The two disagree only for a body whose widest shape is not its top. Not
           settleable from a container, since the rule was chosen against the real URDF.
-    notes: >-
-      Fixes the first fault: the clip shows the floor because TRACY_WORKSPACE
-      (node.py:102) is a hand-written 1.0 x 1.2 m rectangle. table_top_z()
-      already pulls the tabletop's collision shape out of the fetched world for
-      its height and discards scale.x, scale.y and the origin, which are
-      exactly the bounds being guessed. Derives the region and every plane
-      height from the world, and from HasSupportingSurface.supporting_surface
-      where one exists.
+    notes: >
+      Fixes the first fault: the clip shows the floor because TRACY_WORKSPACE (node.py:102) is a
+      hand-written 1.0 x 1.2 m rectangle. table_top_z() already pulls the tabletop's collision shape
+      out of the fetched world for its height and discards scale.x, scale.y and the origin, which
+      are exactly the bounds being guessed. Derives the region and every plane height from the
+      world, and from HasSupportingSurface.supporting_surface where one exists.
+
+      The review round of 2026-08-29 is answered in full. The test-file split it asked for was the
+      developer's call to place on #202, and it landed there as 00721be7, merged into this branch by
+      d6673b48; the widest-face question this branch raised is the one thing still open.
 
   - id: detect-per-supporting-surface
     title: "Look at every supporting surface, not only the table"
