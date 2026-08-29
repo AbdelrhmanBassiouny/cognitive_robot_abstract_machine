@@ -11175,3 +11175,113 @@ both vanished, and the next two mutation runs reported failures that were the mi
 edits rather than the mutation. Caught because the failures did not match the mutation
 under test. A mutation is restored from a copy taken before it, never from HEAD, whenever
 the file is one the session has already edited.
+
+## Update 2026-08-29 (review round on #211): one push, an address book, and the split
+
+Seven threads, all answered; five resolved, two left open. `d444a773` on #211 for the code,
+`3dafcf86` on #154 for the split the round asked for, `2d50158c` merging it back. 851 tests
+pass across the four directories CI runs, from 839.
+
+### Removing a union found a Liskov violation nobody could see
+
+The ask was small — drop `str | BranchRefspec` from `push_refspec`. Doing it failed 27 tests
+at once:
+
+```
+TypeError: MaintenanceGitCommandRunner.push() takes 2 positional arguments but 3 were given
+```
+
+`GitCommandRunner.push_refspec(remote, refspec, with_lease)` and
+`MaintenanceGitCommandRunner.push(ProposedPush)` were **the same git command under two names
+with incompatible signatures across a class boundary** — a subclass narrowing its base's
+method, which Python allows silently and no type checker here was reading. The union had been
+hiding it, because nothing was yet passing the new type down that path.
+
+That is the concrete content of the reviewer's separate complaint that "the git command names
+like `push` are hard coded multiple times", and it is worth separating from the enum question
+they asked alongside it. Measured: no git command name is spelled twice *for the same
+operation* — `checkout` three times, `push`, `commit`, `branch`, `rev-parse` and `config`
+twice, each a different operation of one command in a method named after it. The one genuine
+duplication was `configure`/`set_configuration`, whose bodies were byte-identical.
+
+So there is one `push`, on the runner that runs git, taking the `ProposedPush` that already
+decides forcing. `ProposedPush` moved to `.claude/shared/` carrying a `BranchPublication`
+rather than a hand-built string, and the lease moved onto it as `as_arguments` — the idiom
+`GitSetting` in the same file already had. `RestackPush` stays in `.claude/stack/` and names
+the one thing that needed the stack's own words: the category whose lease comes from the
+integration strategy.
+
+### The naming rule that decided the replacement was not the one invoked
+
+"No abbreviations" on `BranchRefspec` points at `BranchReferenceSpecification`, since
+`refspec` carries two. What actually settled it is `AGENTS.md`'s other rule, which points away
+from git's word entirely: *do not adopt another system's vocabulary as an identifier of ours;
+name the thing for what it is here.* It is what to publish and the branch to publish it as, so
+it is a `BranchPublication`, and `<source>:<destination>` stays in the docstring where a reader
+needs git's shape.
+
+### A field that two readers spelled straight past
+
+`ApiResource` and `HttpMethod` name the GitHub client's eleven addresses and four verbs. The
+defect that fell out is the reason it was worth more than tidying: `page_size` is a *field*,
+and `check_runs` and `workflow_runs` both wrote `per_page=100` past it, so changing the field
+would have changed one read of three.
+
+**There was no test module for `GitHubRepository` at all** — not on this branch, not on `main`
+— so a wrong path was a 404 at the far end of a runner. `test_maintenance_github.py` pins each
+address against the call that makes it, by recording what `_call` is handed.
+
+The first version of it passed the page-size mutation, and why is the reusable part: it
+asserted `_page` against a second spelling of itself, and its expected paths used the default
+100 on both sides. Building the client at a page size that is deliberately **not** the default
+is what makes that mutation fail. Same shape as the report-keys test four rounds earlier —
+*a test that pins a contract must read the artifact the contract is about*, and a helper
+compared against its own output is not that artifact.
+
+### The split, and the one thing it makes newly losable
+
+`integration.py` went from 2064 lines to 133 — the parser, `main` and the dispatch, the shape
+`maintenance.py` already had — with the rest in thirteen modules along the `# %%` sections the
+file already carried. Every one is under 400.
+
+Three moves were forced rather than chosen, each by an import cycle: `run_tests` into
+`integration_suite.py`, because the assembly and the localisation both run the suite;
+`print_failure_location` beside the report it prints rather than beside `print_build`;
+`StagedConflict` beside its only writer.
+
+**What the split makes newly losable is a whole command family.** `commands_of` finds a command
+by its class existing, so something has to import each family, and the base cannot import what
+imports it — which is why `integration_commands.py` is the registry alone.
+`test_every_family_of_commands_is_one_the_registry_has_imported` derives the families from the
+directory and holds them against what the registry imports. Mutation-checked by dropping one:
+before that test the only thing that caught it was the skill test, and only because the skill
+happens to name those commands by hand. A structural refactor is exactly the moment to ask what
+it makes silently droppable, and to write the guard in the same commit.
+
+Formatting improved as a side effect nobody planned: `integration.py` was 68 `docformatter`
+hunks `scripts/format_docstrings.py` cannot converge on, so it declined the whole file on every
+commit. Ten of the twelve new modules converge; the 21 left are in two.
+
+### Two threads left open, and the reason is the same for both
+
+The `GitCommand` StrEnum-or-hierarchy question is answered with measurements and no change,
+because the seam is owned elsewhere. The hierarchy is what the method signature already is —
+`push(self, proposed: ProposedPush)` says what a push takes, enforced at every call site — and
+the enum would be sixteen members with one reader each. `--quiet` is the only real repetition
+at eight, and it is a property of the runner capturing output rather than a per-command choice:
+on every write, on no read. That also turned up an inconsistency nothing depends on today —
+`merge`, `rebase` and `conclude_merge` accept it and do not get it.
+
+The deciding half is the plan rather than the code. `bastler-notes-core-python` owns
+`git_interface.py` **by name** and has four callers waiting, one of them (`stack.py`'s `_git`)
+with a deliberately opposite contract; `bastler-package` moves the file's home. The hard
+question there is not enum-versus-classes but whether one runner can serve a caller that must
+never raise and a caller for whom a silent failure is the bug. Choosing the ergonomics before
+that is settled means choosing them twice, across four call sites instead of one.
+
+### A mistake worth carrying
+
+`git checkout <path>` to undo a mutation discarded every uncommitted change to that file, not
+just the mutation — losing the whole `maintenance_github.py` round, which had to be redone from
+the script that produced it. A mutation is restored from a copy taken immediately before it.
+Recorded independently by the `bastler-package` session the same day, from the same shape.
