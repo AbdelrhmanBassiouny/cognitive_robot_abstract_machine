@@ -1,8 +1,10 @@
+import numpy as np
 import pytest
 
 from experiments.montessori.hole_geometry import (
     PlanarPoint,
     PlanarSize,
+    PolygonMeasurement,
     cut_board_mesh,
     detect_hole_footprints,
 )
@@ -100,3 +102,23 @@ def test_hole_footprint_names_the_parts_of_its_position_and_size():
     assert isinstance(footprint.center, PlanarPoint)
     assert isinstance(footprint.size, PlanarSize)
     assert all(isinstance(point, PlanarPoint) for point in footprint.boundary)
+
+
+def test_polygon_measurement_reads_a_squares_area_and_middle():
+    square = np.array([(0.0, 0.0), (2.0, 0.0), (2.0, 1.0), (0.0, 1.0)])
+
+    measurement = PolygonMeasurement.of(square)
+
+    assert measurement.area == pytest.approx(2.0)
+    assert measurement.centroid == PlanarPoint(pytest.approx(1.0), pytest.approx(0.5))
+
+
+def test_polygon_measurement_balances_a_triangle_at_a_third_of_its_height():
+    triangle = np.array([(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)])
+
+    measurement = PolygonMeasurement.of(triangle)
+
+    assert measurement.area == pytest.approx(0.5)
+    assert measurement.centroid == PlanarPoint(
+        pytest.approx(1 / 3), pytest.approx(1 / 3)
+    )
