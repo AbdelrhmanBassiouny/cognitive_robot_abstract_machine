@@ -11285,3 +11285,85 @@ that is settled means choosing them twice, across four call sites instead of one
 just the mutation — losing the whole `maintenance_github.py` round, which had to be redone from
 the script that produced it. A mutation is restored from a copy taken immediately before it.
 Recorded independently by the `bastler-package` session the same day, from the same shape.
+
+## Update 2026-08-29 (resolved): one declaration in `pyproject.toml`, and the last Python leaves the shell
+
+`/plan-item-resolve workflow-unification bastler-package`, session
+https://claude.ai/code/session_014kmiZegiD2Q8w2eese2L2L. The pull request was healthy - 22
+of 23 checks green with `test_each_lib (coraplex)` still running, no label, both
+dependencies merged. What was open was two review threads posted at 21:25 and 21:26, four
+minutes before the previous session's own push landed, and neither had been answered.
+
+They are one change, because the first decides what the second reads.
+
+### The call that had been flagged and left to the user
+
+`main` retired every workspace member's requirements file for static `[project]
+dependencies` at `4b4cfdf4`, and the 2026-08-28 entry recorded that this package's was
+now the last one in the repository and that whether it followed was the user's call rather
+than a merge's. Their comment made it: *"the repository does not now use requirements.txt
+but actually only pyproject.toml and states dependencies there."*
+
+So `bastler/requirements.txt` is deleted and the four distributions are declared in
+`bastler/pyproject.toml`. The `rendering` extra goes with it rather than being carried
+over: it existed only because `dependencies` was empty under the tier reasoning the
+previous round deleted, and it was itself resolved dynamically *from* the file now gone.
+
+### The two installers diverge, and the zero-install contract is why
+
+A session start installs the missing **specifiers**. `pip install ./bastler` would leave a
+second copy of these modules in `site-packages` beside the clone's own, and the clone's
+copy is what decision 8's zero-install contract says a caller imports. An Actions runner
+has no such contract and is thrown away after the run, so `upstream-reviews.yml` and the
+`test_bastler` job install `./bastler` itself and take the declared dependencies with it.
+
+`bastler` stays out of `[tool.uv.workspace] members`, so `test_dependency_declarations.py`
+still does not reach it - membership would put this package in the default `uv sync`,
+which decision 12 rules out. `test_dependencies.py` holds the static-declaration property
+directly instead, which is the guarantee that test would have provided.
+
+### Grep for the pattern, not for the line commented on
+
+The second comment was on the `python3 - <<'PYTHON'` heredoc in
+`resolve-personal-notes-config.sh`: *"put this in a python script and call it here. Same
+for all such situations."* The whole tooling shell was grepped for embedded Python rather
+than only that line, which found one more: `save-plan.sh`'s `python3 -c "import yaml"`.
+
+Both are gone. `bastler/dependencies.py` reads the declaration and prints what is missing,
+and `save-plan.sh` asks the same module - its refusal now names everything the tooling is
+short of and the command to fix it, rather than the one import it happened to probe. No
+bash entry point carries Python of its own any more.
+
+`.claude/hooks/plan-updates-since.sh` had already made this move for its own snippet and
+said so in a comment. A convention recorded in one file does not reach the next one; the
+grep is what reaches it.
+
+### Writing the call out exposed a defect the heredoc had hidden
+
+The first version of the shell function was `echo $(python3 -m ...)`, whose exit status is
+`echo`'s. A scratch clone without the module reported `already installed` - because an
+empty answer means *nothing to install*, and a module that dies produces exactly that.
+
+The heredoc could not have had this bug, since its failure was the function's own. Moving
+the work out is what created the seam, and the seam is where the reporting has to be
+explicit: `|| return 1`, a `dependencies: not checked` case for a declaration that will
+not parse, and a test that fails without it. **Extracting a computation moves its failure
+mode from "the caller fails" to "the caller reads a value", and the value it reads is
+usually the safe-looking one.**
+
+### Counts and mutations
+
+632 tests, from 615. Six mutations, each caught by exactly the test that names it: the
+module's failure swallowed, `pip` handed the declaration file instead of the specifiers,
+the declaration made dynamic again, a specifier's constraints left on the name looked up,
+the runner losing its install step, and `save-plan.sh` losing its guard. Each was restored
+from a copy taken before it rather than from `HEAD`, per this branch's own process note of
+earlier today.
+
+Verified live rather than argued: `nh3` uninstalled for real, one session start reported
+`installed nh3>=0.2 from bastler/pyproject.toml` and `setup: ok` in the same run, and the
+built wheel carries its four `Requires-Dist` lines and its package data.
+
+The summary line is `dependencies:` rather than `requirements:` now, since what it reports
+is the package's declared dependencies and "requirements" named a file that no longer
+exists.

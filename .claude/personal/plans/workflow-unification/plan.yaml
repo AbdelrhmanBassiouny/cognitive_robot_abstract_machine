@@ -963,14 +963,6 @@ items:
     status: in_progress
     pull_request_number: 185
     session: https://claude.ai/code/session_014kmiZegiD2Q8w2eese2L2L
-    blockers:
-      - >-
-          Two review threads opened 2026-08-29 21:25 and 21:26 on #185, both unanswered: the
-          requirements.txt/pyproject declaration on `.claude/hooks/README.md`, and the embedded
-          Python heredoc on `.claude/hooks/resolve-personal-notes-config.sh`. Nothing else is
-          holding the pull request - 22 of 23 checks green with `test_each_lib (coraplex)` still
-          running, `mergeable_state` clean before it started, no label, and both dependencies
-          merged.
     notes: >
       Move the existing Python (.claude/stack/stack.py, build_dashboard.py + siblings,
       plan_manifest_tools.py) into the package PR 3 created, with all their tests moved to the
