@@ -10794,14 +10794,15 @@ head (`claude/plan-item-kickoff-workflow-ixbvxl`), bootstrapped before any imple
 
 `check_dependency_readiness.py` reports `integration-branch-ci-verdict` as `open_ready`, and #154 is
 `mergeable_state: clean` against `main` with no `needs-resolution` label - better than the state
-#191's kickoff recorded five days earlier, and better than the four repeated conflict reports of
-2026-08-28. Nothing about this item is waiting on that branch.
+recorded at #191's kickoff five days earlier, and better than the four repeated conflict reports
+of 2026-08-28. Nothing about this item is waiting on that branch.
 
 `check_scope_overlap.py` against `origin/main` was run rather than eyeballed. The new module and the
 new workflow are absent from the base *and* from every branch in flight, #185's included: the
 bastler move carries `maintenance_*.py` and `stack.py` into the package but not `integration*.py`,
-which are unlanded on #154 and therefore still under `.claude/stack/` on both branches. Shared with
-#154 are `integration.py`, `maintenance_github.py` and `integration-refresh.yml`; strip those edits
+which are unlanded on #154 and therefore still under `.claude/stack/` on both branches. Shared
+with #154 are `integration.py`, `maintenance_github.py` and `integration-refresh.yml`; strip those
+edits
 and the localisation subsystem stands alone, which is the answer the item's own notes recorded and
 this re-confirms against live state.
 
