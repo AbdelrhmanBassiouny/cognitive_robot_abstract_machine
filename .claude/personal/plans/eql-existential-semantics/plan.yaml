@@ -485,3 +485,68 @@ items:
     track: disjunction-safety
     depends_on: []
     status: not_started
+    notes: >
+      GOAL: an n-ary threshold connective in core_logical_operators.py - "at least k of these n
+      operands hold" - with Or (k=1) and And (k=n) as its two ends, its first-order reading written
+      down, and its range-restriction rule stated as a function of k.
+
+      IT GENERALIZES And AS WELL AS Or, which the original "superclass of Or with k=1" framing
+      hides. >=k(phi_1..phi_n) is the disjunction over every k-subset of that subset's conjunction,
+      so k=1 is Or, k=n is And, k=ceil(n/2) is majority. Giskardpy already has both ends on one
+      dial: Parallel.minimum_success=None means all nodes must be True.
+
+      IT IS A CONNECTIVE, NOT A QUANTIFIER, and adds no expressive power - the subset expansion is
+      propositional, C(n,k) disjuncts, succinctness only. It is the threshold gate / cardinality
+      constraint of SAT and CP (atleast(k, [x_1..x_n])), whose pseudo-Boolean encoding k <=
+      sum([phi_i]) is the line giskardpy's build_artifacts already writes. Monotone, and dualizes:
+      not >=k(phi) is >=(n-k+1)(not phi).
+
+      THE NAME AtLeast IS TAKEN by the neighbouring concept in the same package:
+      query/quantifiers.py's AtLeast is a SingleValueQuantificationConstraint over a query's
+      solution count, i.e. the counting quantifier exists^{>=k}, not this connective. Pick a
+      different name.
+
+      EXPLORE FIRST: (a) the structural decision - OR is a LogicalBinaryOperator with left/right and
+      or_(*conditions) folds to a right-leaning chain via chained_logic, but >=k has no binary fold,
+      so either the parent becomes n-ary and OR becomes its (k=1, n=2) instance (changing OR and
+      chained_logic), or the threshold operator is an n-ary sibling and the inheritance runs the
+      other way. This is the biggest open question and should be settled before any code. (b) The
+      per-binding definition: _evaluate__ yields OperationResult binding streams with a
+      negation-as-failure fallback, not booleans, so "at least k succeeded" means counting true
+      branches per candidate binding. (c) Whether the k-generalized safety check shares a home with
+      disjunction-range-restriction's.
+
+      WHY IT DEPENDS ON disjunction-range-restriction: the safety rule is a function of k -for k<n
+      any k-subset can be the witness, so an escaping variable must be range-restricted in every
+      branch (rr(>=k) = the intersection of the branches' rr), and only k=n relaxes to the union
+      like And. That is exactly that item's rule generalized, and it cannot be written while its k=1
+      case is undefined and OR's docstring still claims "ElseIf" against measured classical-union
+      behaviour.
+
+      TDD: - >=k over n operands agrees with the explicit k-subset disjunction for every k in 1..n
+      on a   small fixture, which pins k=1 to or_ and k=n to and_ against the existing operators
+      rather   than against a retyped literal. - The De Morgan dual holds: not_(>=k(...)) agrees
+      with >=(n-k+1) over the negated operands. - A variable escaping a k<n threshold that is
+      range-restricted in only some branches raises,   with the variable named; a branch-local
+      variable does not raise. - k=n accepts what k<n rejects, which is the one place the rule
+      differs. - Rejects k<1 and k>n at build time with a meaningful custom exception.
+
+      CONSUMER SIDE IS NOT THIS ITEM. Re-expressing giskardpy's Parallel and coraplex's
+      ParallelNode/TryAllNode on the operator belongs to eql-performatives (#108), whose
+      language-nodes-and-bridge item already owns that unification; a cross-plan note was added
+      there. Two constraints this item should leave that work able to meet: (a) coraplex's TryAll is
+      NOT Parallel(minimum_success=1). Giskardpy observations are three-valued (trinary_logic_or is
+      Kleene max over True=1, Unknown=0.5, False=0). TryAll observes trinary_logic_or(observations),
+      which is Unknown while all children are Unknown; Parallel(minimum_success=1) observes 1 <=
+      sum(obs == True) and obs == True is a hard comparison, so the same state gives False. A shared
+      superclass must take a position on Unknown, or carry a failure threshold as well as a success
+      threshold. (b) PR #14 already defines verbalization-only Parallel and TryAll in
+      entity_query_language/performatives.py (Composition.perform() raises), so those names collide
+      with the framework nodes and the two layers must stay distinct.
+
+      LITERATURE: threshold/majority functions and cardinality constraints - Sinz, "Towards an
+      optimal CNF encoding of Boolean cardinality constraints" (CP 2005) for the encodings;
+      pseudo-Boolean constraints generally. For the quantifier side: first-order logic with counting
+      (FOC) and description logic's qualified number restrictions (>=n R.C) - Baader et al., "The
+      Description Logic Handbook". Safe-range calculus as in disjunction-range-restriction's own
+      reading list, since the k<n rule is that rule.
