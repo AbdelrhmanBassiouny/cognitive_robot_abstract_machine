@@ -10886,3 +10886,127 @@ which here is `integration`. So the end-to-end live run is gated on a build carr
 the same bootstrap Part D needed on 2026-08-28, and stated here rather than discovered later.
 Everything below that is verified in the harness against a fake client and a scratch repository, as
 the rest of this tooling is.
+
+## Update 2026-08-29 (review round): fifteen comments, one complaint
+
+Session https://claude.ai/code/session_0138w5mqzbkyMPtotF7PD59Z, on #211. All fifteen
+answered in `e8932eb40` and `0b1d33f5f`; thirteen resolved, two open on purpose. 835 tests
+pass across the four directories CI runs, from 758.
+
+The comments read as fifteen separate asks and are one: **structure over strings, parse
+once, and keep the logic where something can run it.** Answering them separately would
+have produced fifteen small fixes; answering the complaint produced three modules.
+
+### The parser found the hazard it exists to prevent, while it was being written
+
+`workflow_document.py` parses a workflow once into named things - a file, a trigger, a job,
+a step, the action it uses - so a reader asks (`.job(key)`, `.step_using(action)`,
+`.calls`, `.run_name`, `.answers_to(event)`) rather than indexing nested mappings under
+keys it spells itself.
+
+Then, reading `ci_reusable.yml` through the first version: `KeyError: 'on'`. **A workflow's
+trigger block is not under `"on"`** - YAML reads a bare `on` key as the boolean, so the
+triggers live under `True`, and a reader that forgets looks in an empty mapping and
+concludes the workflow responds to nothing. That failure is loud in a parser and silent
+in a caller: fifteen scattered `document["on"]` accesses would each have answered "no
+triggers" rather than raising.
+
+Worth carrying, because it is the argument for the whole round rather than a detail:
+**a nested key access repeated at every reader has no place to be wrong once.** The
+`KeyError` is the parser earning itself before it had a second caller.
+
+A step is found by the action it uses rather than by `<action>@<version>`, so a version
+bump does not read as a step that vanished; `WorkflowStep.runs(action)` owns that
+comparison, and a step no job uses is a `StepNotFoundError` rather than `None`, since
+`None` reads at the call site as a step that uses the action and passes nothing.
+
+### The static library list was worse than a style point
+
+The reviewer asked whether the twelve-member `LibraryUnderTest(StrEnum)` should be found
+dynamically. It matched `ci.yml` on the day it was written and was held by **nothing** - no
+test compared it to the matrix - so a library added to the matrix would have had its
+failures answered as **naming no library at all**, reported as "nothing to localise"
+rather than as the gap it is. Silent, and in the direction that loses a real break.
+
+`matrix_libraries.py` derives them from the matrix job, and the job is found by **fanning
+out over a matrix** rather than by name: what makes it the one is that it runs once per
+entry, so renaming the job leaves the libraries readable where a name written here would
+not. The test is parametrized over the live matrix, so a library added later is covered
+with nobody editing it.
+
+### The rebuild leaves YAML, and what that was really about
+
+The last comment asked whether the `if` conditions, loops and exit-code numbers in
+`integration-refresh.yml` could move into the Python. The tidiness is the smaller half.
+**Every decision that block made was a decision about an exit status** - is 10 still a
+build worth judging, is 13 worth asking again, is 14 the one that gets localised - and
+written in a job's `run:` block none of them could run anywhere but a runner, so nothing
+checked any of them. There was no way to be wrong about an exit code and find out before a
+scheduled 04:00 run did the wrong thing silently.
+
+`integration_pipeline.py` is that procedure. The workflow drops 223 lines to ~107 and its
+last step is one command; the branches are ordinary Python exercised through a `ToolRunner`
+answering with the statuses a real one would. `BASE_NOT_PREPARED` (7) is the one status the
+composition adds, aligned with the maintenance pass's own not-fast-forward status.
+
+Two properties were deliberately preserved rather than spent. The subcommands are
+unchanged - `refresh` is a **composition** over them, so each stays one decision readable
+on its own and the waiting sits in the composition. And what is left in YAML is only what a
+runner can do: check out, install, resolve the token, set the identity, and one `env:`
+expression.
+
+**The move deleted four guards, and this round replaced them rather than noticing later.**
+Four tests had asserted the *shape of the shell* - that the block branched on a particular
+literal - and with the shell gone they assert nothing. What replaced them is stronger than
+what went: every subcommand a rebuild names is checked against the live `commands_of`
+registry, so a name that names nothing is a failing test rather than a usage error at the
+far end of a runner; and the three keys the steps hand each other are held equal across the
+**two different enums** that write and read them, since the writer keys through the
+builder's report and the rebuild reads through the verdict's - spelled differently, the
+hand-off breaks between two commands rather than inside one.
+
+That is the 2026-08-11 rule applied at the moment it bites rather than in hindsight: a
+refactor that removes a duplication removes whatever guard the duplication was providing,
+and the commit that removes it owes the replacement.
+
+### A YAML defect an assertion could not see
+
+The `env:` expression choosing the dispatch reference was first written as a folded scalar
+whose continuation lines were indented *further* than its first. YAML folds only the lines
+level with the opening one and keeps a more-indented continuation **verbatim** - so it
+parsed cleanly into a string with newlines inside `${{ }}`, which GitHub would have
+rejected at run time. The assertion that the reference *ended with* `github.ref }}` passed
+throughout.
+
+Found by printing the parsed value. The general form, which this plan has now met from
+three angles: **a document that parses is not a document that means what it looks like**,
+and for anything embedded in YAML the check is the parsed value rather than the source
+text.
+
+### Two threads left open, and why each
+
+**The 400-line rule.** Everything this round creates obeys it, production and test alike -
+largest is `workflow_document.py` at 379 - and the 1008-line localisation test module is
+five modules plus shared fixtures. But `integration.py` is 2482 lines and this round adds
+484 to it. It was 2064 before this branch, so the file is #154's and already carries an
+open thread asking the same question; the precedent for the fix is on `main`, where
+`maintenance.py` became eleven modules with the command classes in
+`maintenance_commands.py`. Offered rather than done, and the thread stays open because the
+rule as stated is not met and this round made it worse.
+
+**Two of three constants stayed plain.** `PROBE_WORKFLOW_FILE` named one of a family and is
+a `WorkflowFile` member now; `PROBE_RUN_NAME_PREFIX` and `MATRIX_CHECK_PATTERN` each name
+one thing with one reader, where an enum is a lookup with nothing to choose between. What
+was worth an enum is what had alternatives.
+
+### Taken as "all" rather than as the three it sat on
+
+Three comments asked for `to_json`. The third said *all such json serialization*, so the
+sweep went across `.claude/stack/` and renamed the two dict-returners this round did not
+otherwise touch - `integration_verdict.VerdictReport.as_json` and
+`integration_reproduction.ReproductionOutcome.as_document`. Every dict-returner in that
+directory is `to_json` now, and the five `str`-returning ones keep `as_json`, which is the
+split settled on #149: `to_json` is what composes the document and what
+`SubclassJSONSerializer` declares, so `as_json` stays free for the text rather than one of
+them becoming `as_json_text`. `report-document-naming` still owns the remaining
+divergences in `.claude/hooks/` and `.claude/skills/`, which this branch does not reach.

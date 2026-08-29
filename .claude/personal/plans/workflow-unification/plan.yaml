@@ -4675,3 +4675,63 @@ items:
       remains. It does not replace locate-failure either - the local suite answers before a
       build is pushed and caught the #154-against-#158 break hours before any candidate
       existed, where this answers after a candidate has run.
+
+      Review round of 2026-08-29 answered in `e8932eb40` and `0b1d33f5f`. Fifteen
+      comments, and they are one complaint: structure over strings, parse once, keep the
+      logic where something can run it. Thirteen resolved, two left open. 835 tests pass
+      across the four directories CI runs, from 758.
+
+      `workflow_document.py` parses a workflow once into named things - a file, a trigger,
+      a job, a step, the action it uses - so no reader indexes into a mapping under keys it
+      spells itself. `WorkflowFile`, `TriggerEvent` and `Action` are the enums, and a step
+      is found by the action it uses rather than by `<action>@<version>`, so a version bump
+      does not read as a step that vanished. Writing it caught the hazard it exists to
+      prevent: a trigger block is not under `"on"` - YAML reads a bare `on` key as the
+      boolean, so triggers live under `True`, and a reader that forgets concludes the
+      workflow responds to nothing. The first version raised `KeyError: 'on'` on
+      `ci_reusable.yml`.
+
+      `matrix_libraries.py` derives the libraries from the matrix job. The twelve-member
+      enum matched `ci.yml` and was held by nothing, so a library added to the matrix would
+      have had its failures answered as naming no library at all - silent, and in the
+      direction that loses a real break. The job is found by fanning out over a matrix
+      rather than by name, so renaming it leaves them readable.
+
+      `integration_pipeline.py` takes the rebuild out of YAML. Every decision that block
+      made was a decision about an exit status, and written in a job's `run:` those were
+      loops, `if` statements and exit-code literals nothing could run outside a runner - so
+      there was no way to be wrong about an exit code and find out before a scheduled run
+      did the wrong thing silently. The workflow drops 223 lines to ~107 and calls one
+      command; `BASE_NOT_PREPARED` (7) is the one status the composition adds, aligned with
+      the maintenance pass's own. The subcommands are unchanged: `refresh` is a composition
+      over them, so each stays one decision readable on its own and the waiting sits in the
+      composition rather than in any of them.
+
+      That move deleted four guards that had asserted the shape of the shell, and they are
+      replaced by two stronger ones - every subcommand a rebuild names checked against the
+      live `commands_of` registry, and the three keys the steps hand each other held equal
+      across the two enums that write and read them.
+
+      Also: `BranchRefspec` and `push_refspec` replace a hand-built refspec and `--force`
+      with `--force-with-lease`; `DispatchField` names the dispatch payload's keys, spelled
+      apart from `WorkflowRunField` on purpose, since a dispatch is keyed `ref` where the
+      run reports `head_branch`; `_continue` is a `match` over `LocalisationStep` with a
+      `_narrow` method beside `_wait` and `_conclude`; `Probe` became `DispatchedProbe`;
+      `IntegrationExitCode` moved to its own module to break the pipeline-commands cycle.
+      Every dict-returning report in `.claude/stack/` is `to_json` now, taken as the sweep
+      the comment asked for rather than the three methods it sat on - `as_json` is left to
+      the five that return text, which is the split settled on #149.
+
+      Two threads stay open. The 400-line rule: everything this round creates obeys it,
+      production and test alike, and the 1008-line localisation test module is five modules
+      plus shared fixtures - but `integration.py` is 2482 lines and this round adds 484 to
+      it. It was 2064 before this branch, so the split is #154's and already carries its
+      own thread; offered rather than done. And two of the three constants in one thread
+      stayed plain, each naming one thing with one reader.
+
+      One defect the tests could not have caught by reading. The `env:` expression choosing
+      the dispatch reference was written as a folded scalar whose continuation lines were
+      indented further than its first, which YAML keeps verbatim - so it parsed cleanly
+      into a string with newlines inside `${{ }}`, for GitHub to reject at run time, while
+      the assertion about it passed throughout. Found by printing the parsed value; it has
+      its own test now.
