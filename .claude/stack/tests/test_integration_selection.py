@@ -14,15 +14,12 @@ import pytest
 from stack import BranchStatus, Stack
 from integration_verdict import ChecksVerdict
 
+import integration_selection
 import integration
-from integration import (
-    IntegrationExitCode,
-    TipStatus,
-    exit_code_for,
-    select_for_build,
-    stack_to_build,
-    tips_of,
-)
+from integration_exit_codes import IntegrationExitCode
+from integration_report import exit_code_for
+from integration_selection import select_for_build, stack_to_build, tips_of
+from integration_tips import TipStatus
 
 from integration_fixtures import (
     create_blocked_branch,
@@ -330,7 +327,7 @@ def test_leaving_a_blocked_branch_out_is_not_a_failed_build():
 
 @dataclass
 class RunReadingStacksInTurn:
-    """An :class:`~integration.IntegrationRun` stand-in handing out one stack per read.
+    """An :class:`~integration_run.IntegrationRun` stand-in handing out one stack per read.
 
     What it is for is the difference between them: a restack writes labels and moves
     tips, so a second read has to see something the first could not.
@@ -370,7 +367,7 @@ def test_a_build_that_restacks_is_made_from_the_stack_the_restack_left_behind(
         [create_branch_object("a-branch", 1, labels=[BLOCKING_LABEL])]
     )
     run = RunReadingStacksInTurn([before, after])
-    monkeypatch.setattr(integration, "restack", lambda *arguments: None)
+    monkeypatch.setattr(integration_selection, "restack", lambda *arguments: None)
 
     assert stack_to_build(run, A_FORK, restack_first=True) is after
 
@@ -382,7 +379,7 @@ def test_a_build_that_restacks_restacks_before_reading_again(monkeypatch):
     reads_when_restacked: list[int] = []
     run = RunReadingStacksInTurn([create_stack_object([])])
     monkeypatch.setattr(
-        integration,
+        integration_selection,
         "restack",
         lambda *arguments: reads_when_restacked.append(run.reads),
     )
@@ -505,10 +502,12 @@ def test_a_restacked_branch_s_checks_are_read_after_the_restack_moved_it(monkeyp
     """
     restacks: list[object] = []
     reads_after_restacks: list[int] = []
-    annotate = integration.branches_annotated_with_their_own_checks
-    monkeypatch.setattr(integration, "restack", lambda *arguments: restacks.append(1))
+    annotate = integration_selection.branches_annotated_with_their_own_checks
     monkeypatch.setattr(
-        integration,
+        integration_selection, "restack", lambda *arguments: restacks.append(1)
+    )
+    monkeypatch.setattr(
+        integration_selection,
         "branches_annotated_with_their_own_checks",
         lambda stack, fork: reads_after_restacks.append(len(restacks))
         or annotate(stack, fork),

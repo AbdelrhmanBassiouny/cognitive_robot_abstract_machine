@@ -12,14 +12,11 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from integration import (
-    COMMANDS,
-    IntegrationExitCode,
-    LocateFailureCommand,
-    RecordResolutionCommand,
-    ResolutionAuthor,
-    TipStatus,
-)
+from integration_build_commands import LocateFailureCommand
+from integration_commands import COMMANDS
+from integration_exit_codes import IntegrationExitCode
+from integration_resolution_commands import RecordResolutionCommand
+from integration_tips import ResolutionAuthor, TipStatus
 
 from test_maintenance_skill import candidate_forks
 

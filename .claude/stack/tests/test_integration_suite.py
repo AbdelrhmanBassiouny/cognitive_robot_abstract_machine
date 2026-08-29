@@ -11,13 +11,11 @@ import pytest
 
 from stack import PullRequest
 
-import integration
-from integration import (
-    IntegrationExitCode,
-    ResolutionAuthor,
-    ResolutionProvenance,
-    exit_code_for,
-)
+import integration_build_commands
+import integration_suite
+from integration_exit_codes import IntegrationExitCode
+from integration_report import exit_code_for
+from integration_tips import ResolutionAuthor, ResolutionProvenance
 
 from test_maintenance import (
     ForkCheckout,
@@ -101,8 +99,10 @@ def test_a_build_asked_for_a_suite_it_has_no_command_for_is_refused():
         make_configuration(), integration_test_command=""
     )
 
-    with pytest.raises(integration.TestCommandNotConfiguredError):
-        integration.BuildCommand()._test_command(configuration, run_tests=True)
+    with pytest.raises(integration_suite.TestCommandNotConfiguredError):
+        integration_build_commands.BuildCommand()._test_command(
+            configuration, run_tests=True
+        )
 
 
 def test_a_build_that_was_told_not_to_test_needs_no_command():
@@ -114,9 +114,9 @@ def test_a_build_that_was_told_not_to_test_needs_no_command():
         make_configuration(), integration_test_command=""
     )
 
-    assert integration.BuildCommand()._test_command(configuration, run_tests=False) is (
-        None
-    )
+    assert integration_build_commands.BuildCommand()._test_command(
+        configuration, run_tests=False
+    ) is (None)
 
 
 def test_a_failing_suite_over_a_machine_written_replay_is_its_own_status(

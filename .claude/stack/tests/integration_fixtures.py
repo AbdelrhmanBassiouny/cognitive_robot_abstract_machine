@@ -15,15 +15,17 @@ from pathlib import Path
 from stack import Branch, BranchStatus, IntegrationStrategy, PullRequest, Stack
 
 from integration_verdict import ChecksVerdict
+import integration_constants
+import integration_tips
 import integration
-from integration import (
-    IntegrationReport,
-    IntegrationTestFailure,
+from integration_assembly import build_integration
+from integration_failure import IntegrationTestFailure
+from integration_report import IntegrationReport
+from integration_tips import (
     PullRequestStackTipOutcome,
     ResolutionAuthor,
     ResolutionProvenance,
     TipStatus,
-    build_integration,
 )
 
 from test_maintenance import (
@@ -222,7 +224,7 @@ def create_blocked_branch(
     return PullRequestStackTipOutcome(
         branch=branch,
         pull_request_number=0,
-        status=integration.TipStatus.BLOCKED,
+        status=integration_tips.TipStatus.BLOCKED,
         attributed_to=blocked_ancestor,
     )
 
@@ -291,7 +293,7 @@ def a_recorded_resolution(checkout: ForkCheckout) -> None:
 
     :param checkout: The checkout whose rerere cache to seed.
     """
-    for setting in integration.RERERE_SETTINGS:
+    for setting in integration_constants.RERERE_SETTINGS:
         checkout.git.configure(setting)
     checkout.git.checkout("recording", "origin/first-tip")
     conflicting = subprocess.run(
@@ -335,6 +337,6 @@ def create_red_branch(
     return PullRequestStackTipOutcome(
         branch=branch,
         pull_request_number=0,
-        status=integration.TipStatus.CHECKS_FAILED,
+        status=integration_tips.TipStatus.CHECKS_FAILED,
         attributed_to=red_ancestor,
     )

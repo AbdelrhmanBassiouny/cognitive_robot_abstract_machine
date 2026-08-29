@@ -31,8 +31,9 @@ from integration_reproduction import (
     ReproductionRun,
     clear_fixed_breaks,
 )
-import integration
-from integration import ClearFixedBreaksCommand, ReportKey
+import integration_commands
+from integration_candidate_commands import ClearFixedBreaksCommand
+from integration_constants import ReportKey
 from stack import DefaultLabel, LabelWrite
 
 from recorded_break import BREAKING_BRANCH
@@ -592,7 +593,7 @@ def test_the_command_is_reachable_by_the_name_the_targeted_job_invokes_it_by():
     the command rather than left to the workflow to be right about.
     """
     assert CLEAR_FIXED_BREAKS_COMMAND.invoked_as in {
-        command.invoked_as for command in integration.COMMANDS
+        command.invoked_as for command in integration_commands.COMMANDS
     }
 
 
