@@ -31,6 +31,7 @@ from integration_fixtures import (
     UNRELATED_TIP,
     build,
     outcome_for,
+    publishing,
 )
 
 # %% the build branch's own name
@@ -123,7 +124,7 @@ def test_a_conflicting_tip_is_skipped_and_the_build_continues(
     fork_checkout.commit_on(FIRST_TIP, "contested", "what the first tip wrote\n")
     fork_checkout.git.checkout(SECOND_TIP, UPSTREAM_BASE)
     fork_checkout.commit("contested", "what the second tip wrote\n")
-    fork_checkout.git.push_refspec("origin", f"{SECOND_TIP}:{SECOND_TIP}")
+    fork_checkout.git.push(publishing("origin", SECOND_TIP))
     fork_checkout.branch_from(THIRD_TIP, UPSTREAM_BASE)
 
     report = build(
@@ -150,7 +151,7 @@ def test_a_skipped_tip_names_the_tip_it_collided_with(fork_checkout: ForkCheckou
     fork_checkout.commit_on(FIRST_TIP, "contested", "what the first tip wrote\n")
     fork_checkout.git.checkout(SECOND_TIP, UPSTREAM_BASE)
     fork_checkout.commit("contested", "what the second tip wrote\n")
-    fork_checkout.git.push_refspec("origin", f"{SECOND_TIP}:{SECOND_TIP}")
+    fork_checkout.git.push(publishing("origin", SECOND_TIP))
 
     report = build(
         fork_checkout,
@@ -175,10 +176,10 @@ def test_a_tip_conflicting_with_the_base_itself_names_the_base(
     """
     fork_checkout.git.checkout(STALE_TIP, UPSTREAM_BASE)
     fork_checkout.commit("a-file", "what the stale tip wrote\n")
-    fork_checkout.git.push_refspec("origin", f"{STALE_TIP}:{STALE_TIP}")
+    fork_checkout.git.push(publishing("origin", STALE_TIP))
     fork_checkout.git.switch_to(UPSTREAM_BASE)
     fork_checkout.commit("a-file", "what the upstream moved on to\n")
-    fork_checkout.git.push_refspec(UPSTREAM_REMOTE, UPSTREAM_BASE)
+    fork_checkout.git.push(publishing(UPSTREAM_REMOTE, UPSTREAM_BASE))
     fork_checkout.git.fetch(UPSTREAM_REMOTE)
 
     report = build(
@@ -203,7 +204,7 @@ def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
     fork_checkout.git.checkout_orphan(UNRELATED_TIP)
     fork_checkout.git.remove("-rf", ".")
     fork_checkout.commit("its-own-file", "a history sharing no commit\n")
-    fork_checkout.git.push_refspec("origin", f"{UNRELATED_TIP}:{UNRELATED_TIP}")
+    fork_checkout.git.push(publishing("origin", UNRELATED_TIP))
     fork_checkout.git.fetch("origin")
 
     report = build(

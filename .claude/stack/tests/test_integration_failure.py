@@ -39,6 +39,7 @@ from integration_fixtures import (
     ONLY_TIP,
     REMOVES_THE_MODULE,
     create_integration_test_failure,
+    publishing,
 )
 
 # %% localising an integration test failure
@@ -73,8 +74,8 @@ def two_tips_that_break_only_together(checkout: ForkCheckout) -> list[PullReques
     )
     checkout.git.stage("a_module.py", BUILD_CHECK_SCRIPT.name)
     checkout.git.commit("the module both tips are about")
-    checkout.git.push_refspec("origin", UPSTREAM_BASE)
-    checkout.git.push_refspec(UPSTREAM_REMOTE, UPSTREAM_BASE)
+    checkout.git.push(publishing("origin", UPSTREAM_BASE))
+    checkout.git.push(publishing(UPSTREAM_REMOTE, UPSTREAM_BASE))
     checkout.git.fetch(UPSTREAM_REMOTE)
 
     checkout.branch_from(INNOCENT_TIP, UPSTREAM_BASE)
@@ -85,12 +86,12 @@ def two_tips_that_break_only_together(checkout: ForkCheckout) -> list[PullReques
     )
     checkout.git.stage("test_needs_the_module.py")
     checkout.git.commit("a test that needs the module")
-    checkout.git.push_refspec("origin", "needs-the-module:needs-the-module")
+    checkout.git.push(publishing("origin", "needs-the-module"))
 
     checkout.git.checkout(REMOVES_THE_MODULE, UPSTREAM_BASE)
     checkout.git.remove("a_module.py")
     checkout.git.commit("the module goes away")
-    checkout.git.push_refspec("origin", f"{REMOVES_THE_MODULE}:{REMOVES_THE_MODULE}")
+    checkout.git.push(publishing("origin", REMOVES_THE_MODULE))
     checkout.git.fetch("origin")
     checkout.git.switch_to(UPSTREAM_BASE)
     return [

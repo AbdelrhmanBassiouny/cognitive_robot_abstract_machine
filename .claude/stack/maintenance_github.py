@@ -36,6 +36,15 @@ WorkflowRunRecord = Mapping[str, Any]
 One workflow run as the REST API answers it, before any field is read.
 """
 
+DISPATCH_EVENT = "workflow_dispatch"
+"""
+How the API names a run that a dispatch started, which is the only kind read back here.
+
+Spelled here rather than shared with :class:`workflow_document.TriggerEvent`, which names
+the same word as a workflow's own trigger: that module reads YAML, and this one is on the
+path a maintenance pass takes from a checkout where nothing has been installed.
+"""
+
 
 @dataclass
 class GitHubCredentialUnavailableError(RuntimeError):
@@ -150,6 +159,87 @@ class DispatchField(StrEnum):
     """
 
 
+class HttpMethod(StrEnum):
+    """
+    The verbs this client calls the API with.
+    """
+
+    GET = "GET"
+    """
+    Read something.
+    """
+
+    POST = "POST"
+    """
+    Create something, or start something running.
+    """
+
+    PATCH = "PATCH"
+    """
+    Change part of something that already exists.
+    """
+
+    PUT = "PUT"
+    """
+    Replace something that already exists, whole.
+    """
+
+
+class ApiResource(StrEnum):
+    """
+    The addresses below a repository this client calls.
+
+    Written once each, because several are addressed by more than one call: a pull
+    request is read, described and closed, and a workflow is both dispatched and read
+    back.
+    """
+
+    PULL_REQUESTS = "pulls"
+    """
+    Pull requests, whose labels and comments the API files under :attr:`ISSUES` instead.
+    """
+
+    ISSUES = "issues"
+    """
+    Where a pull request's labels and comments live.
+    """
+
+    COMMITS = "commits"
+    """
+    Commits, and what is reported against them.
+    """
+
+    WORKFLOWS = "actions/workflows"
+    """
+    Workflows, which are addressed by file name rather than by number.
+    """
+
+    LABELS = "labels"
+    """
+    The complete label set of one issue.
+    """
+
+    COMMENTS = "comments"
+    """
+    The comments on one issue.
+    """
+
+    CHECK_RUNS = "check-runs"
+    """
+    The checks reported against one commit.
+    """
+
+    DISPATCHES = "dispatches"
+    """
+    Where a run of one workflow is started.
+    """
+
+    RUNS = "runs"
+    """
+    The runs of one workflow.
+    """
+
+
 @dataclass(frozen=True)
 class DispatchedWorkflowRuns(ABC):
     """
@@ -251,15 +341,34 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests, DispatchedWorkfl
                 return cls(repository, token)
         raise GitHubCredentialUnavailableError(CREDENTIAL_VARIABLES)
 
+    @staticmethod
+    def _collection(resource: ApiResource, *below: str | ApiResource) -> str:
+        """
+        :param resource: The collection to address.
+        :param below: What to address below it, member first.
+        :return: The path, below the repository.
+        """
+        return "/".join(("", str(resource), *(str(part) for part in below)))
+
+    def _page(self, page: int, **criteria: str) -> str:
+        """
+        :param page: Which page to ask for, counting from one.
+        :param criteria: What else to narrow the answer by.
+        :return: The query asking for that page at this client's page size.
+        """
+        return urllib.parse.urlencode(
+            {**criteria, "per_page": self.page_size, "page": page}
+        )
+
     def open_pull_requests(self) -> list[PullRequestRecord]:
         """:return: Every open pull request on the repository, oldest page first."""
         collected: list[PullRequestRecord] = []
         page = 1
         while True:
-            query = urllib.parse.urlencode(
-                {"state": "open", "per_page": self.page_size, "page": page}
+            collection = self._collection(ApiResource.PULL_REQUESTS)
+            fetched = self._call(
+                HttpMethod.GET, f"{collection}?{self._page(page, state='open')}"
             )
-            fetched = self._call("GET", f"/pulls?{query}")
             collected.extend(fetched)
             if len(fetched) < self.page_size:
                 return collected
@@ -268,7 +377,9 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests, DispatchedWorkfl
     def pull_request(self, number: int) -> PullRequestRecord:
         """:param number: The pull request to read.
         :return: That pull request."""
-        return self._call("GET", f"/pulls/{number}")
+        return self._call(
+            HttpMethod.GET, self._collection(ApiResource.PULL_REQUESTS, str(number))
+        )
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:
         """
@@ -278,13 +389,21 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests, DispatchedWorkfl
         :param labels: The complete set it must end up with, computed by
             :meth:`stack.LabelWrite.replacing` - this call replaces rather than adds.
         """
-        self._call("PUT", f"/issues/{number}/labels", {"labels": list(labels)})
+        self._call(
+            HttpMethod.PUT,
+            self._collection(ApiResource.ISSUES, str(number), ApiResource.LABELS),
+            {"labels": list(labels)},
+        )
 
     def add_comment(self, number: int, body: str) -> str:
         """:param number: The pull request to comment on.
         :param body: The comment.
         :return: The comment's URL."""
-        created = self._call("POST", f"/issues/{number}/comments", {"body": body})
+        created = self._call(
+            HttpMethod.POST,
+            self._collection(ApiResource.ISSUES, str(number), ApiResource.COMMENTS),
+            {"body": body},
+        )
         return str(created["html_url"])
 
     def set_description(self, number: int, body: str) -> None:
@@ -294,7 +413,11 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests, DispatchedWorkfl
         :param number: The pull request to write.
         :param body: The new description.
         """
-        self._call("PATCH", f"/pulls/{number}", {"body": body})
+        self._call(
+            HttpMethod.PATCH,
+            self._collection(ApiResource.PULL_REQUESTS, str(number)),
+            {"body": body},
+        )
 
     def open_pull_request(self, title: str, head: str, base: str, body: str) -> int:
         """
@@ -307,7 +430,9 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests, DispatchedWorkfl
         :return: The new pull request's number.
         """
         opened = self._call(
-            "POST", "/pulls", {"title": title, "head": head, "base": base, "body": body}
+            HttpMethod.POST,
+            self._collection(ApiResource.PULL_REQUESTS),
+            {"title": title, "head": head, "base": base, "body": body},
         )
         return int(opened["number"])
 
@@ -317,7 +442,11 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests, DispatchedWorkfl
 
         :param number: The pull request to close.
         """
-        self._call("PATCH", f"/pulls/{number}", {"state": "closed"})
+        self._call(
+            HttpMethod.PATCH,
+            self._collection(ApiResource.PULL_REQUESTS, str(number)),
+            {"state": "closed"},
+        )
 
     def check_runs(self, reference: str) -> list[CheckRunRecord]:
         """
@@ -329,7 +458,10 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests, DispatchedWorkfl
         :param reference: The commit or branch to read.
         :return: The check runs, which may be none while the first is still queueing.
         """
-        answered = self._call("GET", f"/commits/{reference}/check-runs?per_page=100")
+        collection = self._collection(
+            ApiResource.COMMITS, reference, ApiResource.CHECK_RUNS
+        )
+        answered = self._call(HttpMethod.GET, f"{collection}?{self._page(1)}")
         return list(answered["check_runs"])
 
     def dispatch_workflow(
@@ -347,8 +479,8 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests, DispatchedWorkfl
         :param inputs: What to hand it.
         """
         self._call(
-            "POST",
-            f"/actions/workflows/{workflow}/dispatches",
+            HttpMethod.POST,
+            self._collection(ApiResource.WORKFLOWS, workflow, ApiResource.DISPATCHES),
             {
                 DispatchField.REFERENCE: reference,
                 DispatchField.INPUTS: dict(inputs),
@@ -366,15 +498,13 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests, DispatchedWorkfl
         :param workflow: The workflow file to read the runs of.
         :return: Its runs.
         """
-        answered = self._call(
-            "GET",
-            f"/actions/workflows/{workflow}/runs"
-            "?per_page=100&event=workflow_dispatch",
-        )
+        collection = self._collection(ApiResource.WORKFLOWS, workflow, ApiResource.RUNS)
+        query = self._page(1, event=DISPATCH_EVENT)
+        answered = self._call(HttpMethod.GET, f"{collection}?{query}")
         return list(answered["workflow_runs"])
 
     def _call(
-        self, method: str, path: str, payload: Mapping[str, Any] | None = None
+        self, method: HttpMethod, path: str, payload: Mapping[str, Any] | None = None
     ) -> Any:
         """
         Make one authenticated API call.

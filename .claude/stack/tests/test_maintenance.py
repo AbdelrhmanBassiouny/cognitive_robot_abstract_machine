@@ -65,7 +65,7 @@ from exceptions import GitCommandFailed
 from maintenance_git_commands import (
     BranchAncestry,
     MaintenanceGitCommandRunner,
-    ProposedPush,
+    RestackPush,
 )
 from maintenance_github import ForkPullRequests
 from maintenance_promotion import (
@@ -675,10 +675,10 @@ def test_only_the_rebase_strategy_authorises_rewriting_published_history():
     """
     configuration = make_configuration()
 
-    merging = ProposedPush.publishing(
+    merging = RestackPush.publishing(
         configuration, "a-branch", IntegrationStrategy.MERGE
     )
-    rebasing = ProposedPush.publishing(
+    rebasing = RestackPush.publishing(
         configuration, "a-branch", IntegrationStrategy.REBASE
     )
 

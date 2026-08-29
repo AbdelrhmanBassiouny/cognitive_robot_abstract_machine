@@ -12,6 +12,7 @@ import subprocess
 from collections.abc import Sequence
 from pathlib import Path
 
+from git_commands import BranchPublication, ProposedPush
 from stack import Branch, BranchStatus, IntegrationStrategy, PullRequest, Stack
 
 from integration_verdict import ChecksVerdict
@@ -111,6 +112,17 @@ named here rather than spelled at the assertion.
 """
 
 # %% the objects a build is described with
+
+
+def publishing(remote: str, branch: str) -> ProposedPush:
+    """
+    :param remote: The remote to publish to.
+    :param branch: The branch to publish under its own name.
+    :return: The push saying so, authorising no rewrite.
+    """
+    return ProposedPush(
+        remote=remote, publication=BranchPublication.under_its_own_name(branch)
+    )
 
 
 def create_branch_object(
@@ -316,7 +328,7 @@ def two_colliding_tips(checkout: ForkCheckout) -> list[PullRequest]:
     checkout.commit_on(FIRST_TIP, "contested", "what the first tip wrote\n")
     checkout.git.checkout(SECOND_TIP, UPSTREAM_BASE)
     checkout.commit("contested", "what the second tip wrote\n")
-    checkout.git.push_refspec("origin", f"{SECOND_TIP}:{SECOND_TIP}")
+    checkout.git.push(publishing("origin", SECOND_TIP))
     checkout.git.fetch("origin")
     return [
         PullRequest(number=1, head=FIRST_TIP, base=UPSTREAM_BASE, draft=False),

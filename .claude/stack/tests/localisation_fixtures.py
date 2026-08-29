@@ -10,8 +10,10 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from collections.abc import Sequence
 from pathlib import Path
 
+from git_commands import BRANCH_REFERENCE_PREFIX
 from stack import PullRequest
 
 from maintenance_github import DispatchedWorkflowRuns, WorkflowRunRecord
@@ -326,7 +328,7 @@ def files_in(checkout: ForkCheckout, branch: str) -> set[str]:
     return set(listed.splitlines())
 
 
-def published(checkout: ForkCheckout, probes) -> list[str]:
+def published(checkout: ForkCheckout, probes: Sequence[DispatchedProbe]) -> list[str]:
     """
     :param checkout: The checkout to read from.
     :param probes: The probes whose trees to look for.
@@ -335,7 +337,9 @@ def published(checkout: ForkCheckout, probes) -> list[str]:
     return [
         probe.branch
         for probe in probes
-        if checkout.run_git("ls-remote", "origin", f"refs/heads/{probe.branch}")
+        if checkout.git.remote_reference(
+            "origin", f"{BRANCH_REFERENCE_PREFIX}{probe.branch}"
+        )
     ]
 
 

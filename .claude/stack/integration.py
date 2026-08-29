@@ -54,7 +54,8 @@ from command_line import Command, commands_of  # noqa: E402
 from exceptions import GitCommandFailed  # noqa: E402
 from git_commands import (  # noqa: E402
     DETACHED_HEAD,
-    BranchRefspec,
+    BranchPublication,
+    ProposedPush,
     GitSetting,
 )
 from stack import (  # noqa: E402
@@ -1313,10 +1314,12 @@ class ProbeAssembly:
         :param ordinal: Which probe of the round it is.
         :return: The probe, once its tree is on the fork."""
         branch = self.branch_name(stage, ordinal)
-        build.git.push_refspec(
-            self.stack.configuration.fork_remote,
-            BranchRefspec.publishing(DETACHED_HEAD, branch),
-            with_lease=True,
+        build.git.push(
+            ProposedPush(
+                remote=self.stack.configuration.fork_remote,
+                publication=BranchPublication(source=DETACHED_HEAD, branch=branch),
+                with_lease=True,
+            )
         ).raise_if_failed()
         return DispatchedProbe(
             branch=branch, tip=tip.name, pull_request_number=tip.pull_request_number
@@ -2265,8 +2268,8 @@ class RefreshCommand(IntegrationCommand):
             # list it is rather than handed to a shell to interpret.
             run.git.run(*shlex.split(setup)[1:])
         if actor:
-            run.git.set_configuration(GitSetting(key="user.name", value=actor))
-            run.git.set_configuration(
+            run.git.configure(GitSetting(key="user.name", value=actor))
+            run.git.configure(
                 GitSetting(key="user.email", value=f"{actor}{ACTOR_EMAIL_SUFFIX}")
             )
 

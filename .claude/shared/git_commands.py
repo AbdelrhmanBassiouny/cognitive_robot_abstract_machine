@@ -109,12 +109,9 @@ so a branch is named the long way round to say which namespace is meant.
 
 
 @dataclass(frozen=True)
-class BranchRefspec:
+class BranchPublication:
     """
     What to publish and the branch to publish it as.
-
-    A pair of bare strings joined by a colon says nothing about which half is which, and
-    both halves are strings, so nothing catches them being swapped.
     """
 
     source: str
@@ -128,14 +125,50 @@ class BranchRefspec:
     """
 
     @classmethod
-    def publishing(cls, source: str, branch: str) -> BranchRefspec:
-        """:param source: The commit or reference to publish.
-        :param branch: The branch it becomes on the remote.
-        :return: The refspec saying so."""
-        return cls(source=source, branch=branch)
+    def under_its_own_name(cls, branch: str) -> BranchPublication:
+        """
+        Publish a branch as itself.
+
+        :param branch: The branch to publish.
+        :return: The publication saying so.
+        """
+        return cls(source=branch, branch=branch)
 
     def __str__(self) -> str:
         return f"{self.source}:{BRANCH_REFERENCE_PREFIX}{self.branch}"
+
+
+@dataclass(frozen=True)
+class ProposedPush:
+    """
+    One publication, and whether it is authorised to overwrite what is published.
+
+    Every push a caller makes is built as one of these, so whether history may be
+    rewritten is decided once rather than at each call.
+    """
+
+    remote: str
+    """
+    The remote to publish to.
+    """
+
+    publication: BranchPublication
+    """
+    What to publish and the branch to publish it as.
+    """
+
+    with_lease: bool = False
+    """
+    Whether published history may be overwritten, and then only if the remote is where
+    this checkout last saw it.
+    """
+
+    def as_arguments(self) -> tuple[str, ...]:
+        """
+        :return: What to hand git, forcing only where this push authorises it.
+        """
+        lease = ("--force-with-lease",) if self.with_lease else ()
+        return (*lease, self.remote, str(self.publication))
 
 
 @dataclass(frozen=True)
@@ -287,19 +320,11 @@ class GitCommandRunner:
         """
         Write a setting into this checkout's own configuration.
 
-        :param setting: The setting to write.
-        """
-        self.run("config", setting.key, setting.value)
-
-    def set_configuration(self, setting: GitSetting) -> None:
-        """
-        Write a setting into this checkout's own configuration.
-
         Unlike :attr:`configuration_overrides`, which a run passes to each command it
         makes, this outlives the process - which is what an identity has to do, since the
         commits are made by the commands a rebuild goes on to run.
 
-        :param setting: What to set.
+        :param setting: The setting to write.
         """
         self.run("config", setting.key, setting.value)
 
@@ -374,20 +399,14 @@ class GitCommandRunner:
         """
         return self.attempt("commit", "--no-edit")
 
-    def push_refspec(
-        self, remote: str, refspec: str | BranchRefspec, with_lease: bool = False
-    ) -> GitCommandResult:
+    def push(self, proposed: ProposedPush) -> GitCommandResult:
         """
-        Publish a refspec, forcing only where the caller says it is authorised.
+        Publish a branch, forcing only where the push itself says it is authorised.
 
-        :param remote: The remote to publish to.
-        :param refspec: What to publish, as ``<source>:<destination>``.
-        :param with_lease: Whether published history may be overwritten, and then only
-            if the remote is where this checkout last saw it.
+        :param proposed: What to publish, and whether a rewrite is authorised.
         :return: The finished push, whose failure the caller reports rather than forces.
         """
-        lease = ["--force-with-lease"] if with_lease else []
-        return self.attempt("push", "--quiet", *lease, remote, str(refspec))
+        return self.attempt("push", "--quiet", *proposed.as_arguments())
 
     def delete_branch(self, remote: str, branch: str) -> GitCommandResult:
         """
