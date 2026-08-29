@@ -2763,9 +2763,14 @@ compared as sorted collected ids against the branch point, never as counts (§30
 - **§17's `InvalidEllipsis` narrowing now has a concrete call site.** `fill` is the `setattr`
   that would leave `...` on a case no rule classified, so the reachability probe §17 filed on
   `no-rule-fired-resolution` is answerable from here. The probe stays on that item.
-- **Expect no CI.** #159 and #98 have queued nothing since 2026-08-12/13 and both read
-  `mergeable_state: unknown` (§29, §30); this branch's base is #159. §21's base-move-then-push
-  remedy is already established as insufficient, so no push should be spent testing it again.
+- **The CI expectation was wrong, and being wrong is the finding.** The plan expected no runs,
+  since #159 and #98 have queued nothing since 2026-08-12/13 and both read `mergeable_state:
+  unknown` (§29, §30). This branch queued **21 jobs on its first push** and reads `unstable`. A
+  branch opened fresh off #159 gets a merge ref built from scratch, and it works — so what is
+  wedged on those two is *each pull request's own merge ref*, not the stack, not the base branch,
+  and not anything a push or a base move on the wedged pull request can rebuild. §14's "genuine,
+  unsolved" narrows accordingly: the remedy nobody has tried is closing the wedged pull request
+  and opening a new one for the same branch.
 
 ### Also
 
@@ -2777,3 +2782,31 @@ compared as sorted collected ids against the branch point, never as counts (§30
   --manifest --roadmap` called directly — and said so rather than left silent.
 - Subscribing to tracking issue #94 was refused by the permission classifier again. Seventh
   recorded instance (§11, §16, §20, §23, §27, §29).
+
+### What landed (`8cb490de1`)
+
+The port ran in the same session that planned it, which is what `auto` mode buys. Two files, 543
+lines, and nothing outside them: `rdr/backend.py` and `test_eql_rdr/test_rdr_backend.py`.
+
+`test_eql_rdr` goes **244 → 261 passed / 0 failed**, compared as sorted collected ids rather than
+counts (§30's habit): **zero baseline ids lost**, and the 17 added are exactly this file's.
+`test_eql` is **1181 passed / 3 skipped / 0 failed**, so nothing outside `rdr/` moved. The 244
+baseline matches #159's own recorded figure, so the container is the good one §18 described rather
+than the bare ones §12/§17 had to reason around.
+
+**Six mutants, none survived**, which is the check §22 argued should be the default rather than the
+exception: a lazy `fill`, a ground truth applied to the wrong case, a per-case `fit_case` loop, an
+`infer` that also writes the attribute, a key built without its attribute name, and a refit on
+every inference each fail exactly the tests that name that behaviour, and nothing else. The
+per-case-loop mutant is the one worth noting — it is the mega-branch's own code, and the only thing
+that catches it is a saver counting how often it was asked to persist the model. Without that test
+the two designs are indistinguishable from the suite, which is how a per-case save would have
+ridden back in one layer above the engine that just removed it.
+
+The test fits six hand-built animals rather than the zoo. That is not a shortcut: the filling tests
+mutate their instances, so each needs its own, and a module-level dataset shared with the other
+engine tests is exactly the coupling that would make one test's conclusions leak into the next.
+
+`scripts/format_docstrings.py` reproduced the `:return: ``x``` → `:return:``x``` space regression on
+one line — the **ninth** recorded instance (§12, §14, §16, §18, §19, §22, §23, §30). Reverted that
+line by hand, kept everything else, which is the same call every round has made.

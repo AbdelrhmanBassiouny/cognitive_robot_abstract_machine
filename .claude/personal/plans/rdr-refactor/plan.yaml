@@ -572,24 +572,28 @@ items:
   session: https://claude.ai/code/session_015bucsUoPW3ktQ1NnTZbbVx
   notes: >-
     backend.py + its test; infer/fill split, typed ModelKey, key_from_attribute -> helpers.py. New
-    stack tip. 2026-08-29: branch D-core-backend cut from D-core-single-class and draft PR #210
-    opened before implementation, in auto mode. Scope check run rather than assumed: git ls-tree
-    origin/D-core-single-class on both paths is empty and no unlanded branch in the stack touches
-    either, so this is real stacking, not a fold into #159. Two of the four recorded changes are
-    settled differently from the note above, with the reasons in roadmap.md section 31. (1)
-    key_from_attribute becomes ModelKey.from_attribute rather than moving to core/helpers.py:
-    Attribute._owner_class_ already exists on main and is exactly the EQL-internals reach the
-    thread objected to, and a core/ module naming an rdr/ dataclass as its return type inverts the
-    layering. Answered differently from the ask, so recorded rather than silently done. (2)
-    RDRBackend.fit calls EQLSingleClassRDR.fit(cases, targets, expert) once instead of the mega-
-    branch's per-case fit_case loop, because fit_case now wraps _saved_when_the_fit_ends (#159,
-    roadmap section 30) so the loop would save once per case, and because fit with targets
-    converges while the loop does not. Flagged and deliberately not done: RDRBackend does not
-    implement QueryBackend, since neither SelectiveBackend (raises on an ellipsis match) nor
-    GenerativeBackend (constructs new instances) fits attribute completion on existing ones, and
-    rdr-decision-queries owns that call. Expect no CI: the base #159 has queued nothing since
-    2026-08-13 and reads mergeable_state unknown, and section 21's base-move-then-push remedy is
-    already known insufficient.
+    stack tip. 2026-08-29: landed as commit 8cb490de1 on draft PR #210, kicked off and implemented
+    in one auto-mode session. Scope check run rather than assumed: git ls-tree origin/D-core-
+    single-class on both paths is empty and no unlanded branch in the stack touches either, so
+    this is real stacking, not a fold into #159. Reasons in roadmap.md section 31. Two of the four
+    recorded changes are settled differently from the note above. (1) key_from_attribute becomes
+    ModelKey.from_attribute rather than moving to core/helpers.py: Attribute._owner_class_ already
+    exists on main and is exactly the EQL-internals reach the thread objected to, and a core/
+    module naming an rdr/ dataclass as its return type inverts the layering. Answered differently
+    from the ask, so recorded rather than silently done. (2) RDRBackend.fit calls
+    EQLSingleClassRDR.fit(cases, targets, expert) once instead of the mega-branch's per-case
+    fit_case loop, because fit_case now wraps _saved_when_the_fit_ends (#159, roadmap section 30)
+    so the loop would save once per case, and because fit with targets converges while the loop
+    does not. Verified: test_eql_rdr 244 -> 261 passed with zero baseline ids lost (sorted id
+    lists, not counts), test_eql 1181 passed / 3 skipped, and six mutants - a lazy fill, a
+    misapplied ground truth, a per-case fit loop, an infer that writes the attribute, a key
+    without its attribute name, a refit on every inference - each fail exactly the tests that name
+    them. Flagged and deliberately not done: RDRBackend does not implement QueryBackend, since
+    neither SelectiveBackend (raises on an ellipsis match) nor GenerativeBackend (constructs new
+    instances) fits attribute completion on existing ones, and rdr-decision-queries owns that
+    call. CI prediction overturned: this branch queued 21 jobs on its first push while #159 and
+    #98 have queued nothing since 2026-08-12/13, so the wedge is those pull requests' own merge
+    refs rather than the stack or the base.
 - id: rdr-engine-umbrella
   title: RDR/EQL engine umbrella (superseded by the split stack)
   branch: rdr-engine
