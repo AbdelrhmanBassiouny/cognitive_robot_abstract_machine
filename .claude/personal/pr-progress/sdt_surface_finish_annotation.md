@@ -1,33 +1,39 @@
-# `surface-finish-annotation` — PR #216 (draft), branch `sdt_surface_finish_annotation`
+# `surface-finish-annotation` — PR #216, branch `sdt_surface_finish_annotation`
 
-Plan item `surface-finish-annotation` of `knowledge-directed-perception`
-(tracking issue #201). Kicked off in `auto` mode; branch is off `main`, no
-dependencies. Full reasoning is in the plan's `roadmap.md` sections of the same
-name — this note is the live state.
+**This session's work on #216 is finished.** The developer took it out of draft on
+2026-08-29, which under `cram-notes.md`'s "When your PR's job ends" rule is the
+signal that the changes were read and accepted. No further commits, no re-drafting,
+no new work on this branch — if more is wanted, it starts in a new session.
 
-## Done — the item's work is built and pushed as `80100bd4`
+Plan item `surface-finish-annotation` of `knowledge-directed-perception` (tracking
+issue #201). Full reasoning is in the plan's `roadmap.md` sections of the same name.
+
+## Shipped as `80100bd4`
 
 1. `SurfaceFinish(StrEnum)` — `MATTE` / `GLOSSY` / `MIRROR` — in
    `semantic_digital_twin/src/semantic_digital_twin/world_description/geometry.py`,
    beside `Color` and `Texture`.
 2. `Shape.finish: Optional[SurfaceFinish] = None`. `None` means *not stated*,
    deliberately distinct from `MATTE`.
-3. `Shape.to_json` writes it; `Shape.arguments_from_json` reads the fields
-   `Shape` itself declares once, so `Sphere` / `Cylinder` / `Box` no longer
-   repeat the `origin` / `color` / `texture` read three times over.
-4. `Mesh.from_trimesh` gained a `finish` parameter and `Mesh._from_json` passes
-   it through — a mesh has no other carrier for one, unlike colour (vertex
-   colours) and texture (trimesh visual), both left unrestored as they were.
-5. Tests first, parametrized over all four shape classes: `45 passed` in
-   `test_shape.py` against `25` on the parent.
-6. ORM regenerated; the field maps as
-   `Mapped[Optional[SurfaceFinish]]` on `PolymorphicEnumType`, nullable.
-7. PR description rewritten to match, and left a draft.
+3. `Shape.arguments_from_json` reads the fields `Shape` itself declares once, so
+   `Sphere` / `Cylinder` / `Box` no longer repeat the `origin` / `color` / `texture`
+   read three times over.
+4. `Mesh.from_trimesh` gained a `finish` parameter — a mesh has no other carrier for
+   one, unlike colour (vertex colours) and texture (trimesh visual).
+5. `45 passed` in `test_shape.py` against `25` on the parent; the whole
+   `semantic_digital_twin` suite's failing/erroring set is unchanged; the ORM maps
+   the field as `Mapped[Optional[SurfaceFinish]]` on `PolymorphicEnumType`.
 
-## Next
+## State at hand-off
 
-- Nothing outstanding on this session's side. CI on #216 has not been read;
-  the branch is green locally on everything this container can run.
+- CI green: 21 of 23 checks passed, including `semantic_digital_twin` and
+  `check_generated_orm_interfaces_are_untracked`. The two still running when this
+  session stopped were `giskardpy` and `coraplex`, neither touched by the change,
+  and nothing was red.
+- Manifest `status` stays `in_progress`, not `done`: the pull request is open and
+  unmerged, and `sync_manifest_status.py` promotes an item to `done` only once
+  GitHub confirms the merge.
+- Nothing armed: no PR subscription, no check-in, no Routine references this branch.
 
 ## Decisions recorded (do not re-litigate)
 
