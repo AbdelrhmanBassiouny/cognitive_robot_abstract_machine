@@ -158,8 +158,21 @@ items:
     depends_on: [plannode-performable]
     status: not_started
     notes: >
-      Phases C and D of the unification. Requires the shared shape functions and the
-      Performable mixin from #15 to exist first.
+      Phases C and D of the unification. Requires the shared shape functions and the Performable
+      mixin from #15 to exist first.
+
+      Cross-plan note (2026-08-29, from eql-existential-semantics #137): when this item re-expresses
+      coraplex's ParallelNode/TryAllNode and giskardpy's Parallel, take the threshold connective
+      from that plan's threshold-connective item rather than building a second success-count
+      mechanism here. Two facts measured while raising it. First, coraplex's TryAll is not
+      Parallel(minimum_success=1): giskardpy observations are three-valued (trinary_logic_or is
+      Kleene max over True=1, Unknown=0.5, False=0), so TryAll observes Unknown while all children
+      are Unknown, whereas Parallel(minimum_success=1) observes 1 <= sum(obs == True) - a hard
+      comparison - and gives False in that same state. The unification has to take a position on
+      Unknown, or carry a failure threshold alongside the success threshold. Second, this plan's own
+      PR #14 already defines verbalization-only Parallel and TryAll in
+      entity_query_language/performatives.py (Composition.perform() raises), so those names collide
+      with the framework nodes and the layers must stay distinct.
 
   - id: demo-migration
     title: "Migrate the demo onto coraplex's combinators"
