@@ -145,7 +145,20 @@ items:
     asked for. Restacked and cascaded. One finding worth keeping: the rename''s claim to update every
     importer was narrower than stated, and CI caught `template_file_creator.py` importing the deleted
     module — a file neither side''s diff touched, so git''s merge never flagged it. That is the failure
-    mode this stack has now hit three times.'
+    mode this stack has now hit three times.
+
+
+    2026-08-30: the generated module''s header changed here (`bb01256df`), because this slice owns `templates/rdr_module.py.jinja`.
+    A review thread on #76 objected that the models say "Do not edit by hand" while the policy is narrower
+    - edits to keep existing rules working when an API or a domain model changes are fine, changing the
+    tree''s structure or adding rules is not - and the developer directed the wording to whichever pull
+    request owns the template. `test_serialization.py` gained the first test of that header, reading the
+    expected text from the template through the module''s own path constants rather than retyping it.
+    Pushed from a `/plan-item-resolve` session on `rdr-interface-and-decorator`''s D-ui item, at the developer''s
+    explicit instruction, rather than by this plan''s own work; #76 carries the matching update to its
+    three `fitted_models/` copies. Not verified by running the suite: the container had no project interpreter
+    and `random_events_lib` is an unbuilt compiled extension there, so the new test needs a run in a real
+    environment.'
 - id: D-core-support
   title: 'RDR engine: observer, rule-tree view, and remaining support modules'
   branch: D-core-support
