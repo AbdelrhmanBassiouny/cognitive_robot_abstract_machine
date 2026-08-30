@@ -28,6 +28,12 @@ name: Plan dashboards
 # same as a session-driven refresh. GITHUB_TOKEN starts no workflow run of its own, so
 # neither that push nor the site branch's can loop back into this workflow.
 #
+# One note on this fork specifically: its default branch is the regenerated integration
+# branch, not main. That costs nothing here - the push trigger and the checkout both
+# name the reviewed branch explicitly (SOURCE_BRANCH below) - except that
+# workflow_dispatch only offers a workflow that is on the default branch, so dispatch
+# becomes available once an integration rebuild carries this file.
+#
 # Runs unchanged in any fork: the repository comes from the runner's own context, its
 # Pages URL from GitHub, and the notes branch from the same configuration every hook
 # resolves it through, so none is named here.
@@ -62,6 +68,14 @@ env:
   # The branch the built site is pushed to and GitHub Pages serves from. It holds the
   # site and nothing else.
   SITE_BRANCH: plan-dashboards-site
+  # The branch the renderer is taken from, which is the reviewed one - stack.toml's
+  # upstream_base, and the branch the push trigger above watches.
+  #
+  # Deliberately not the repository's default branch: this fork's default is the
+  # regenerated integration branch, which is main plus every reviewed-but-unlanded tip.
+  # Building from there would run whichever renderer that build happened to carry, and
+  # a tip it does not carry is a script that is simply absent.
+  SOURCE_BRANCH: main
 
 jobs:
   publish:
@@ -76,10 +90,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          # Always the default branch's scripts, never a pull request's own: a run
+          # Always the reviewed branch's scripts, never a pull request's own: a run
           # triggered by a pull request must publish the site the repository defines,
           # not whatever that branch happens to have changed the renderer into.
-          ref: ${{ github.event.repository.default_branch }}
+          ref: ${{ env.SOURCE_BRANCH }}
           # Full history without the blobs: neither the notes-branch worktree the
           # correction push commits in nor the site branch's own can be pushed from a
           # shallow clone, and a partial clone gets there without paying for a full
