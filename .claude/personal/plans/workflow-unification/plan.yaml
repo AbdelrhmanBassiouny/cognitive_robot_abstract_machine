@@ -857,22 +857,6 @@ items:
     track: stack-tooling
     depends_on: [setup-personal-notes-pr101, stack-tooling-on-main]
     status: in_progress
-    blockers:
-      - >-
-          plan-item-resolve: CI is red on head `044b7016`. The `test_claude_dev_tooling` job
-          fails 7 tests in `.claude/hooks/tests/test_setup_personal_notes_sh.py`, all with
-          `session-start.sh: line 160: .../session-start-messages.sh: No such file or
-          directory`. Merging `main` brought in a `session-start.sh` that sources a companion
-          file this module's `SCRIPTS_UNDER_TEST` list does not install into the scratch layout.
-      - >-
-          plan-item-resolve: 16 unresolved review threads opened 2026-08-30 on fork PR #107,
-          across `stub_executables.py`, `test_create_personal_notes_branch_sh.py`,
-          `test_github_api_sh.py`, `test_setup_personal_notes_sh.py` and
-          `test_stub_executables.py`. One theme: string literals that already have a named
-          definition elsewhere (hook script names, tooling file paths, pull request labels,
-          credential variable names, the executables the stubs replace), inline bash and JSON
-          snippets that AGENTS.md requires to live in files of their own, and raw `git`/
-          `github-api.sh` calls that should go through a structured runner.
     session: https://claude.ai/code/session_01MyxyUN3bsvPsJnb5QuNzxd
     notes: >
       Implemented as draft PR #107 (2026-07-29), based on claude/patch-pr-rheubx rather
@@ -903,6 +887,68 @@ items:
       Cross-note stands but shifts: PR 2 (/setup-stacked-prs) should mirror this
       script/skill split, where the skill keeps only the questions and the un-scriptable
       environment-variable step — not a split reserving the GitHub calls for a session.
+
+      Resolved 2026-08-30 (session https://claude.ai/code/session_01RR4BLkfHBADKRuiTYh2Pv3),
+      clearing both blockers recorded above.
+
+      The review round's sixteen threads are one complaint - a literal naming a fixed thing
+      where a named definition already exists or should - and it is answered by moving and
+      extending the definitions that existed rather than by inventing parallel ones.
+      `.claude/hooks/tooling_files.py` is the one place both production code and the tests
+      resolve a tooling file from: `HookScript` over every script in the directory,
+      `SetupPrerequisiteFile` moved out of the test harness, `ProjectFile` for the paths a
+      clone holds by fixed convention, and `HOOKS_DIRECTORY`/`PLANS_DIRECTORY` out of
+      `plan_item_bootstrap.py`. `github_api.py` names the four shell functions, the labels
+      and the five remote-URL forms, with a `GitHubApiRunner` that makes the calls;
+      `setup_report.py` holds the report vocabulary two modules parse; two inline shell
+      programs and one `settings.json` body became files of their own type.
+
+      The labels are the one place a second statement survives, and it is held rather than
+      trusted: `resolve-personal-notes-config.sh` declares `PULL_REQUEST_LABELS` beside every
+      other shared constant, and a test reads it back through a shell program and asserts the
+      Python enum equals it in order. `build_dashboard.py` still carries a third copy, and
+      importing it here would put jinja2, markdown and nh3 behind every hook test - that
+      unification is `bastler-package`'s, flagged there rather than left silent.
+
+      The CI failure was this branch's own and the review round is what surfaced it: seven
+      tests died on `session-start-messages.sh: No such file or directory` because merging
+      `main` gave `session-start.sh` a companion it sources while each test module named the
+      scripts to install by hand. Adding the name to a fourth hand-written list would have
+      fixed the break and left the next one exactly as reachable, so `install_hook_scripts`
+      reads a script's own dependencies instead - a shell `source` of a quoted path, or, for
+      a hook written in Python, an import of a sibling module read from the syntax tree
+      rather than matched in the text. That second half became necessary the moment
+      `plan_item_bootstrap.py` began importing `tooling_files`, which no caller names.
+
+      `--name`/`--email` (the user's call, offered against two alternatives) is what lets a
+      full run reach exit 0 again now that main's `check-setup.sh` has a `git_identity`
+      check. Both halves are required together and refused before anything is written; given
+      neither, the run finishes everything else and leaves that row to the report rather than
+      guessing what somebody's commits should say - `--remote`'s refusal to guess, with a
+      cheaper failure mode. `SKILL.md` gains the fourth question and reads
+      `git var GIT_AUTHOR_IDENT` first, since in a session that resolves to the agent's
+      identity, which is exactly what recording one fixes.
+
+      576 tests pass across the four directories CI runs, from 555. Six mutations checked,
+      each caught by the test that names its rule - and one that was not, which is the part
+      worth carrying: the test asserting the run *says* how to record an identity passed with
+      that guidance deleted, because `check-setup.sh`'s own `git_identity` row already names
+      both flags. Accidental coverage of somebody else's message. The duplicated guidance is
+      deleted (the script ends by printing that report, which says it better) and the test now
+      asserts what is genuinely this script's: that it finishes the rest of the setup rather
+      than aborting.
+
+      Fifteen threads replied to and resolved. One is answered differently and stays open by
+      the standing rule: whether `GitCommandRunner` should serve every git command everywhere.
+      The raw `subprocess.run(["git", ...])` calls here are gone onto `ScratchRepository`, but
+      that class lives under `.claude/stack/`, so importing it costs a production `sys.path`
+      insert of the kind #185 is deleting the last of - and it carries no `config` or `remote`
+      method. Recorded as a fifth caller waiting on `bastler-notes-core-python`'s
+      `git_interface.py`, where the open question is whether one runner can serve a caller
+      that must never raise and one for which a silent failure is the bug.
+
+      No upstream pull request exists: the branch carries no labels at all, so `cram2` has
+      nothing with this head and `/upstream-reviews` was correctly skipped.
 
   - id: shared-pr-state-chips
     branch: claude/shared-pr-state-chips
@@ -1352,6 +1398,22 @@ items:
       not cover this one: #143's own review accepted the stack.py overlap because the
       contracts were deliberately opposite (_git returns "" where run_git raises), and
       #135's and #143's contracts are not opposite.
+
+      Fifth caller recorded 2026-08-30, from the same review question asked a third time,
+      now on #107: why not use GitCommandRunner for all git commands everywhere. The tests
+      there no longer spell a git command themselves - the raw calls moved onto
+      ScratchRepository, which owns the scratch repository's git and its scrubbed
+      environment - but that class is .claude/stack/maintenance_git_commands.py's, so
+      reaching it from .claude/hooks/tests/ costs a production sys.path insert of the kind
+      #185 is deleting the last of, drags stack.py behind every hook test, and still offers
+      no config or remote method. #203 recorded the same answer two days earlier for
+      setup_steps.py's git_value. So the count is now five (plan_item_bootstrap.py,
+      check_scope_overlap.py, stack.py's deliberately-opposite _git, setup_steps.py,
+      ScratchRepository), three review threads across three pull requests have been answered
+      by pointing here, and the deciding question is unchanged and still this item's: whether
+      one runner can serve a caller for which a silent failure is the bug and a caller that
+      must never raise. Answering it in any of those pull requests settles it in the wrong
+      item, across five call sites instead of one.
   - id: bastler-save-commands-python
     branch: null
     title: "Bash→Python 2: the four notes writers become python -m subcommands"

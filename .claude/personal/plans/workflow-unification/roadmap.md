@@ -11786,3 +11786,98 @@ Deleting them from this session failed: every `git push --delete` and empty-refs
 disconnects with `send-pack: unexpected disconnect while reading sideband packet`, on all seven
 and on retry, while the agent proxy reports no relay failures and ordinary pushes work. Left
 undone and reported rather than worked around.
+
+## Update 2026-08-30 (resolved): #107's sixteen threads were one complaint, and the CI break was its own
+
+`/plan-item-resolve workflow-unification setup-personal-notes-script`, session
+https://claude.ai/code/session_01RR4BLkfHBADKRuiTYh2Pv3, mode `auto`. Both recorded blockers
+cleared in `5dbdfdc94`; 576 tests pass across the four directories CI runs, from 555.
+
+### The round is one rule, sixteen times
+
+Every thread names a literal that names a fixed thing where a named definition already exists
+or should. Answering them individually would have produced sixteen small fixes and a sixteenth
+place to put the next one; answering the rule produced three modules.
+
+`.claude/hooks/tooling_files.py` is the one place both production code and the tests resolve a
+tooling file from, and it is production rather than test-only on purpose - it is the Python half
+of `resolve-personal-notes-config.sh`. `github_api.py` names the four shell functions, the
+labels and the five remote-URL forms, with a runner that makes the calls; `setup_report.py`
+holds the report vocabulary two modules parse.
+
+The one place a second statement survives is the labels, and it is *held* rather than trusted:
+`resolve-personal-notes-config.sh` declares `PULL_REQUEST_LABELS` beside every other shared
+constant, and a test reads it back through a shell program and asserts the Python enum equals it
+in order. `build_dashboard.py` carries a third copy and cannot be imported here - it needs
+jinja2, markdown and nh3, which would then sit behind every hook test - so that unification is
+`bastler-package`'s, flagged there rather than left silent.
+
+### The review found the CI failure, which was this branch's own
+
+Seven tests were red on `session-start-messages.sh: No such file or directory`. Merging `main`
+gave `session-start.sh` a companion it sources, and each test module named the scripts to install
+into the scratch layout **by hand** - so only the module whose list omitted it broke.
+
+Adding the name to a fourth hand-written list would have fixed today's break and left the next
+one exactly as reachable. `install_hook_scripts` reads a script's own dependencies instead: a
+shell `source` of a quoted path, or - for a hook written in Python - an import of a sibling
+module, read from the syntax tree rather than matched in the text so a module named in a string
+or a comment is not mistaken for one that is imported.
+
+**The Python half was not foresight; it was forced.** Moving `HookScript` into `tooling_files.py`
+made `plan_item_bootstrap.py` import a module no caller names, which broke three of its tests
+immediately. The same defect the review round was fixing produced a new instance of itself one
+layer down, and the mechanism is what covers both.
+
+This is the fourth instance of that shape on this plan (#110 recorded three: the
+`write-branch-files.sh` delegation breaking `test_personal_settings_sync.py`, then
+`test_git_identity_sync.py`, then `test_plan_item_mode.py`). **A fix applied three times at three
+call sites is a missing mechanism, not three bugs** - and #110 had already written the mechanism
+for the shell half, which is exactly why only the Python half was left to find.
+
+### The identity flags, and the accidental coverage they exposed
+
+`--name`/`--email` (the user's call, offered against two alternatives) is what lets a full run
+reach exit 0 again now that main's `check-setup.sh` has a `git_identity` check. Both halves are
+required together and refused before anything is written; given neither, the run finishes
+everything else and leaves that row to the report rather than guessing what somebody's commits
+should say - `--remote`'s refusal to guess, with a cheaper failure mode.
+
+Six mutations were checked, five caught by exactly the test naming their rule. The sixth was
+not, and it is the part worth carrying: **the test asserting the run *says* how to record an
+identity passed with that guidance deleted**, because `check-setup.sh`'s own `git_identity` row
+already names `--name` and `--email` in its detail, and the setup script ends by printing that
+report. The assertion had been satisfied by somebody else's message the whole time.
+
+Both halves of the fix follow from that. The duplicated guidance is deleted - the report says it
+better, naming the identity commits carry *today* as well as the command - and the test now
+asserts what is genuinely this script's: that a run given no identity finishes the rest of the
+setup rather than aborting. Mutation-checked by making it abort.
+
+The general form, which this roadmap has now met from three directions: **a test that passes on
+output it did not produce is not testing its subject.** The tell here was cheap and available -
+the assertion matched free text in `result.stdout`, which carries a whole subprocess's output
+including another script's report. Asserting against a parsed field of a named check, rather
+than against the run's whole stdout, is what makes the difference.
+
+### Threads
+
+Fifteen replied to and resolved. One is answered differently and stays open by the standing
+rule: whether `GitCommandRunner` should serve every git command everywhere. The raw
+`subprocess.run(["git", ...])` calls here are gone onto `ScratchRepository`, but that class lives
+under `.claude/stack/`, so importing it costs a production `sys.path` insert of the kind #185 is
+deleting the last of, and it carries no `config` or `remote` method.
+
+That question has now been asked on three pull requests (#154, #203, #107) and answered the same
+way each time by pointing at `bastler-notes-core-python`, which owns `git_interface.py` by name.
+Recorded there as the fifth caller. **Three reviewers arriving independently at the same
+complaint is evidence the seam is real**, and the reason not to build it in any of the three is
+unchanged: the open question - whether one runner can serve a caller for which a silent failure
+is the bug and a caller that must never raise - would then be settled in the wrong item, across
+five call sites instead of one.
+
+### State
+
+No upstream pull request exists: the branch carries no labels at all, so `cram2` has nothing with
+this head and `/upstream-reviews` was correctly skipped. #107 is still a draft, base `main`,
+`mergeable_state: unstable` at push time with CI running.
