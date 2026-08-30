@@ -2966,7 +2966,7 @@ link. #79 and #21 are the other half of the same defect: their bases (`D-ui-spli
 any open fork branch, and #198's parent-placement rule reports them to their owners rather than
 inventing a target. Both are recorded in `blockers`.
 
-**A premise in §the D-ui-rendering entry no longer holds.** That note says #79 "must be
+**A premise in `D-ui-rendering`'s own manifest note no longer holds.** That note says #79 "must be
 re-targeted onto D-core-engine before it can merge". `D-core-engine` (#68) is itself deferred, so
 it is not a base anything can land through. The manifest's `depends_on` for `D-ui-splice-fix`
 names `d-core-backend` (#210), which is the candidate a session picking this up should weigh; the
