@@ -1,45 +1,55 @@
-## Review round on #211: the git layer, the API address book, and the split
+## Why the pipeline had never published a build, and the six fixes for it
 
-**Status**: done and pushed. `d444a773` on #211 (the round), `3dafcf86` on #154 (the
-`integration.py` split it asked for), `2d50158c` merging the split back into #211.
-Both descriptions updated; manifest, roadmap and dashboard all current.
-#211 is still a draft; #154 stays out of draft by the recorded decision - a draft is
-excluded from every integration build.
+**Status**: done and pushed as `8227ef57c` on #211. Manifest, roadmap and dashboard all
+current. #211 and #154 both stay out of draft, on your explicit instruction - a draft is
+excluded from every integration build, which is the process this work serves.
 
-### The seven threads
-Five resolved, two left open on purpose.
+### The four defects, each verified live before it was fixed
 
-- **no explanation / no abbreviations / no union** - `BranchRefspec` became
-  `BranchPublication`, `publishing` (a factory forwarding its arguments) deleted,
-  `under_its_own_name` added for the ten callers that publish a branch as itself.
-- **`gitcommandrunner?`** - the fixture used `remote_reference`, which already existed,
-  and `BRANCH_REFERENCE_PREFIX`. Left open: I asked whether `ls-tree` should go on the
-  shared runner for one test caller.
-- **hard-coded path** - `ApiResource` and `HttpMethod`, plus `_page`.
-- **the `GitCommand` discussion** - answered with measurements, no change, left open.
-- **the 400-line rule** ("ok do it on 154") - done, resolved.
+- **The rebuild's own check judged the branch it ran on.** `ReportedChecks.verdict`
+  returned FAILED for any failed check, so #211's ready-flip fired a rebuild whose own
+  failure attached to #211's head and the red-tip exclusion then left #211 out of the
+  build its flip had triggered. `ChecksAboutTheBuild` reads the job names off the two
+  pipeline workflows and filters them out. Naming the probe's jobs was forced by it: the
+  keys `to-lowercase` and `test` collided with `ci.yml`'s.
+- **The `pull_request` arm could not work.** It pins the checkout to the default branch,
+  correctly, and that branch's `integration.py` predates `refresh`. It asks the pinned
+  copy whether it can rebuild and says so plainly when it cannot, rather than dying on
+  `invalid choice: 'refresh'` in 19 seconds. Kept as a bootstrap rather than reshaped.
+- **The warm-up was one to two orders of magnitude short.** Measured: +19m on #214,
+  +2h47m on #217. The verdict is settled by a later run now - `find-candidate` reads the
+  open candidate off the fork and `refresh` settles it before building anything, so no
+  run waits for its own candidate.
+- **The maintenance pass adopted candidates and restacked them.** `is_a_candidate`
+  recognises one by base *or* title, so the board never carries it. `work_in_flight` is
+  gone with it.
 
-### What the round found that nobody asked for
-Removing the union failed 27 tests: `push_refspec` on the base and `push` on the
-subclass were one git command under two names with incompatible signatures. One `push`
-now, taking `ProposedPush`, which moved to `.claude/shared/` carrying a
-`BranchPublication`, with the lease on it as `as_arguments`. `configure` and
-`set_configuration` had byte-identical bodies.
+### The two new features
 
-`page_size` is a field and two GitHub reads spelled `per_page=100` past it. There was
-no test module for `GitHubRepository` at all, so `test_maintenance_github.py` pins all
-eleven addresses at a page size deliberately not the default - which is what makes that
-mutation fail; the first version used 100 on both sides and passed it.
+- **Recorded passes**, on `refs/integration/passed/*` - reachable with
+  `INTEGRATION_REFRESH_TOKEN`, no personal-notes access, read in one `ls-remote`, pruned
+  in the same push that records. Keyed by build tree hash and by branch head. Only passes
+  are recorded, never failures: a red is cleared by re-running the same commit, and the
+  rule that a red branch re-enters a build by going green would be unreachable if a red
+  were remembered. Seven-day retention, because the container the matrix runs in is
+  rebuilt from the upstream base even when the tree has not changed.
+- **`--plan`**, on `build` and through `refresh`, repeatable or comma-separated, reading
+  `_generated/branch-index.tsv`. A branch the index does not name is reported
+  `no-plan-recorded` rather than silently dropped or forced in. A filtered build never
+  publishes, enforced structurally: its candidate opens against the upstream base, so
+  `find-candidate` cannot see it.
 
-851 tests across the four CI directories, from 839. #154: 759, from 758.
+### Verified against the fork, not only the harness
+26 check runs on #211's head, of which only the two rebuild runs failed. `PlanFilter`
+over the live index: 125 branches, 9 plans, 42 under `rdr-refactor`.
+
+899 tests across the four CI directories, from 851. 32 mutations checked.
 
 ### Outstanding
-- The two open threads are the user's to close: the `GitCommand` seam (recommended to
-  `bastler-notes-core-python`, which owns `git_interface.py` and has four callers
-  waiting) and the `ls-tree` question.
-- `integration_reproduction.py` is 419 lines - #154's, predates this, and the only file
-  in `.claude/stack/` still over 400. Offered on the thread, not done.
-- Unchanged from the previous round: the candidate-close fix reaches the schedule only
-  when a build publishes, since the schedule runs the copy on `integration`. A
-  `workflow_dispatch` on this branch or a hand push to `integration` is what does it,
-  and a dispatch is a real rebuild that publishes on green - so neither was done.
+- **No rebuild was dispatched.** Publishing needs your say-so, and the fixes reach the
+  schedule only through a dispatch on this branch or a hand push to `integration`.
+- **Seven `integration-2026*` build branches remain.** `git push --delete` returns
+  HTTP 403 through the session git proxy - the standing constraint recorded 2026-07-29,
+  not a transfer failure. They need deleting outside the harness.
+- `per-plan-integration-branches` is recorded as deferred under `stack-tooling`,
+  depending on `integration-branch-ci-verdict`, and was deliberately not built.
