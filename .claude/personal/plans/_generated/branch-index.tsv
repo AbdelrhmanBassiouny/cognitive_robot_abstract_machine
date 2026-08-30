@@ -23,6 +23,8 @@ perception_surfaces_from_world	knowledge-directed-perception
 perception_per_supporting_surface	knowledge-directed-perception
 claude/plan-item-kickoff-kdp-z4pv7l	knowledge-directed-perception
 perception_holes_fitted_like_pieces	knowledge-directed-perception
+perception_looked_for_where_expected	knowledge-directed-perception
+perception_competing_explanations	knowledge-directed-perception
 claude/montessori-classes-orm-s7vxu1	knowledge-directed-perception
 perception_eql_backend	knowledge-directed-perception
 sdt_surface_finish_annotation	knowledge-directed-perception
@@ -30,6 +32,7 @@ perception_surface_from_description	knowledge-directed-perception
 perception_choose_detection_method	knowledge-directed-perception
 perception_parameters_from_knowledge	knowledge-directed-perception
 perception_interactive_rule_tuning	knowledge-directed-perception
+segmind_rosbag_player	knowledge-directed-perception
 perception_expectations_from_events	knowledge-directed-perception
 perception_robokudo_detector	knowledge-directed-perception
 tracy_icra	knowledge-directed-perception

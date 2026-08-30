@@ -279,13 +279,37 @@ items:
       against this item.
 
   - id: holes-fitted-like-pieces
-    title: "Read a hole by fitting the known outlines to it, the way a piece is read"
+    title: "Find the board's holes by fitting its whole known layout, not one contour at a time"
     branch: perception_holes_fitted_like_pieces
     pull_request_number: null
     track: surfaces
-    depends_on: [detect-per-supporting-surface]
+    depends_on: [pieces-looked-for-where-expected]
     status: not_started
     notes: >-
+      Measured again on 2026-08-31, and the item's premise changed: the holes are not
+      mislabelled, they are mislocated, so pointing the per-piece fit at each contour in turn
+      would not have fixed them. Placing the board mesh's own six hole footprints at the board
+      pose the detector reports puts them across roughly 180 mm of the lid's length, which is
+      what the board's 282 mm mesh says; the five contours the pipeline currently calls holes sit
+      inside about 90 mm near the board's middle. So they are not the holes at all. Worse, a free
+      per-contour fit is what put them there: a triangular prism template laid anywhere near the
+      board's middle reaches 0.85 to 0.89 agreement in every capture, higher than any genuine
+      piece resting on the lid reaches, and it converges on the same spot each time.
+
+      The fix is to stop giving a hole three degrees of freedom of its own. The layout is rigid
+      and known exactly from the mesh, so the board's holes are found by fitting that one layout
+      over the lid - three degrees of freedom for all six holes together, seeded from the board
+      detection's own pose - and each hole's identity then comes from the model rather than from
+      classifying its contour. A layout fit cannot invent a hole where there is none, cannot put
+      two holes in one place, and cannot land on the drawer fronts below the lid, all of which
+      the per-contour classifier does today. It also settles the board's pose far better than the
+      board detector does, since six outlines constrain it rather than one.
+
+      This depends on pieces-looked-for-where-expected rather than running beside it, because
+      fitting a known model at a believed pose is exactly the evaluator that item builds, and two
+      branches independently writing the same evaluator is the duplication the personal notes
+      already record twice. The original reasoning is kept below.
+
       Raised by the capture benchmark on 2026-08-30, and the largest error it found. The board's
       mesh is cut with six holes - two circles, a square, a triangle, a slot and a disk slit -
       and the pipeline finds five of them in five captures and four in the sixth, calling three
@@ -300,6 +324,97 @@ items:
       test_every_hole_in_the_board_is_found in test_montessori_detection_on_captures.py is the
       test, marked strict expected-to-fail against this item; it asserts against the mesh's own
       footprints rather than a copy of them.
+
+  - id: pieces-looked-for-where-expected
+    title: "Look for a piece where it is expected, not only where a colour blob appears"
+    branch: perception_looked_for_where_expected
+    pull_request_number: null
+    track: surfaces
+    depends_on: [one-detection-per-thing]
+    status: not_started
+    notes: >-
+      The structural change the rest of this plan's perception work needs, and the one that
+      takes the lid-piece failures off the ripple-down rules' critical path.
+
+      Today a piece can only be found where colour segmentation isolated a blob:
+      LoosePieceDetector.detect walks the piece hues, and only a contour that survives the hue
+      mask, the size range and the wholly-within test is ever handed to PieceMatcher.match.
+      Colour is a gate, so a piece wearing the lid's own hue, or touching another piece, is
+      never fitted however plainly its edges are in the picture. That is the whole of
+      test_every_piece_resting_on_the_lid_is_found's four expected failures.
+
+      Measured on 2026-08-31 against the shipped captures: seeding PieceMatcher.match by hand at
+      the places the board detection already reports reaches agreements of 0.62 to 0.89 in
+      captures where the bottom-up pass reports nothing there at all - in non_inserted_objects it
+      reports one detection in the whole scene, and that one is a ghost. The evidence is in the
+      image; the seed is what is missing. One seeded fit over all six candidate pieces costs
+      0.05 s against 0.25 s for a full bottom-up pass, so evaluating a handful of expected places
+      is cheaper than the pass that misses them.
+
+      So detection becomes the evaluation of hypotheses rather than the classification of blobs.
+      A hypothesis says what is expected, where it is believed to be - a region of a named
+      surface and an interval of yaw - and where that belief came from. Its evaluator is the
+      sweep PieceMatcher already performs, with its radius, step, angle set and candidate list
+      read from the belief instead of fixed: a hypothesis naming one piece at a known place
+      searches finely over a few millimetres, one naming an unknown piece anywhere on a surface
+      searches the way the current code does. Colour becomes one source of hypotheses and one
+      piece of evidence for them, never a gate that can suppress one.
+
+      Where the hypotheses come from is what makes this knowledge-guided, and there are three
+      sources, in increasing order of what they need: the scene itself (a colour blob, as today,
+      and the board's own detected holes, which are places a piece can be); the world (a body
+      the twin already places in the workspace); and the object's own history
+      (expectations-from-events, which is where a belief gets a pose and an uncertainty). The
+      first two need nothing this plan has not already built, and they are enough for the four
+      failing captures, which is why this item does not depend on the request language or on the
+      rule tree.
+
+      Every reported detection carries the hypothesis it came from and the evidence that
+      supported it, which is what makes a result explainable rather than merely correct.
+
+      This takes ownership of test_every_piece_resting_on_the_lid_is_found from
+      detector-parameters-from-knowledge. That item is blocked on krrood's ripple-down rules
+      being usable, and the lid failures are a seeding fault rather than a parameter fault, so
+      leaving them there would have put the plan's most visible remaining error behind a
+      dependency it does not have.
+
+  - id: competing-explanations
+    title: "Decide a detection by comparing explanations, not against a fixed threshold"
+    branch: perception_competing_explanations
+    pull_request_number: null
+    track: surfaces
+    depends_on: [pieces-looked-for-where-expected, holes-fitted-like-pieces]
+    status: not_started
+    notes: >-
+      PieceMatcher.minimum_agreement is one number, 0.62, standing for how much of an outline
+      must lie along a seen edge before a piece is reported, and its recorded justification is
+      that a correct piece reaches 0.63 to 0.86 while the best wrong piece of the same colour
+      reaches 0.62. Measured on 2026-08-31, that boundary does not hold anywhere near the board:
+      a triangular prism template reaches 0.85 to 0.89 on the board's own middle in every
+      capture, above every genuine piece detection on the lid in the same captures, which run
+      0.64 to 0.71 for the most part. No single threshold separates them, because agreement
+      measures how well an outline follows *some* edge and says nothing about what put that edge
+      there.
+
+      A two-plane test was tried first and does not work: scoring the same outline in the lid's
+      own rectification as well as in the plane a piece's top stands on separates neither, since
+      both differences fall between +0.30 and +0.62 for holes and pieces alike. Recorded so it is
+      not tried again.
+
+      What does separate them is asking what else could have produced the edges. The board's
+      geometry is known exactly and, once holes-fitted-like-pieces has settled its layout over
+      the picture, every edge the board itself produces can be predicted. A piece is then
+      reported where it explains edges the board alone does not, and two hypotheses claiming one
+      set of edges are settled against each other rather than both passing a threshold. The
+      decision is a comparison of explanations, so it states how much better one explanation must
+      be than the next, which is a statement about how costly a wrong report is - a thing the
+      robot can be told - rather than a tuned constant.
+
+      This is also what makes the plan's central claim measurable: with one candidate and a
+      strong belief, less picture evidence is needed to accept a detection than with six
+      candidates and none, and that is knowledge improving perception in a quantity that can be
+      plotted. one-detection-per-thing's occupancy rule is the same idea applied to place, and
+      the two should share their resolution rather than filtering one after the other.
 
   - id: montessori-classes-in-the-orm
     title: "Map the Montessori package's own classes, which the ORM has never seen"
@@ -366,6 +481,12 @@ items:
       raise on anything else. A general compiler is not what the claim needs. PerceivedObjects, the domain that runs
       the whole pipeline on iteration and yields everything, is retired by it:
       a query then runs only what it asked for.
+
+      Noted 2026-08-31, for whoever carries this further rather than for the branch in flight:
+      SceneRequest carries a type and a surface, and the items added that day need it to carry a
+      believed place as well - the region and yaw interval an object is expected in. That is a
+      third pushed-down condition of the same kind, not a change of shape, so it is recorded
+      here rather than added to a pull request already under review.
 
   - id: surface-finish-annotation
     title: "Say in the digital twin how a surface takes light"
@@ -456,6 +577,17 @@ items:
       build; this item cannot start before they are, which is the schedule risk to
       watch on the 4-8 September window.
 
+      Two corrections from 2026-08-31. The conditions the tree reads are not only standing
+      properties of the surface and the target - what finish it has, whether the target has a
+      geometric model - but also what has lately happened to the target: whether it is believed
+      to be somewhere in particular, how sure that belief is, and what acted on it last. A rule
+      that fires on "the target was released over this hole one action ago" is the same kind of
+      rule as one that fires on "this surface is mirror-finished", and it is the kind the
+      captures actually need. And the planned rule "a matte contrasting surface selects the
+      cheaper colour blob" needs its other justification writing down, since
+      detect-per-supporting-surface already recorded that the edge fit works on the lid too;
+      speed is the honest reason, not capability.
+
   - id: detector-parameters-from-knowledge
     title: "Take the detectors' numbers from the objects and the surfaces they look at"
     branch: perception_parameters_from_knowledge
@@ -482,6 +614,21 @@ items:
       off the real one, so moving the hues onto the objects moves them for the twin as well
       as for the detector.
 
+      Widened on 2026-08-31: the numbers concluded include the ones that say *how to search*,
+      not only the ones that say what a pixel or a contour must look like. How far around a
+      believed place to look, how finely to step and to turn, which pieces are candidates at
+      all, and how much better one explanation must be than the next before it is reported, are
+      all properties of the situation - and a situation where the robot knows which piece it
+      released over which hole warrants a different set from one where it is looking at a table
+      it has never seen. That is what makes the same detector measurably better as the robot
+      knows more, in a quantity that can be plotted, and it is where "a specific parametrization
+      for the situation the query describes" actually lives.
+
+      Ownership of test_every_piece_resting_on_the_lid_is_found moved to
+      pieces-looked-for-where-expected on 2026-08-31: those failures are a seeding fault, not a
+      parameter fault, and this item is blocked on krrood's ripple-down rules while that one is
+      not.
+
   - id: tune-detection-rules-against-the-camera
     title: "Conclude a detection rule while watching the camera, with its numbers on sliders"
     branch: perception_interactive_rule_tuning
@@ -503,12 +650,45 @@ items:
       interface as much as perception - so where the presenter itself lands is a question
       for the RDR/EQL refactor plan when this starts.
 
+  - id: episode-replayed-into-the-world
+    title: "Replay a recorded episode into the world so Segmind can say what happened"
+    branch: segmind_rosbag_player
+    pull_request_number: null
+    track: events
+    depends_on: []
+    status: not_started
+    notes: >-
+      An expectation about where a thing now is comes from what was done to it, and on a
+      recording nothing has been done to anything until the recording is replayed. Segmind
+      already has the extension point: EpisodePlayer -> DataPlayer -> FilePlayer, with
+      CSVEpisodePlayer and JSONPlayer as its two members, and a player supplies exactly one
+      thing - a generator of frames, each frame a set of body poses. A player reading a rosbag's
+      transform tree and joint states is that same member over a different file, and
+      EpisodeSegmenterExecutor then produces the support, pick-up, placing and insertion events
+      over it without changing.
+
+      Touches only segmind, so it can start immediately and off main.
+
+      A constraint measured on 2026-08-31 that decides what this can be asked for. Only one of
+      the six recorded bags carries the robot at all: tracy_pickup_demo holds /tf, /tf_static,
+      /joint_states and both arms' and both grippers' joint states over 150 seconds, 253,000
+      messages. The other five hold nothing but the three camera topics over about 29 seconds
+      each. So a replayed episode gives an event history for the pick-up demo and for anything
+      recorded from now on, and it gives the live demo its history directly, but it cannot supply
+      one for the five scene captures. Those get their expectations from the board and the action
+      model instead - the hole an insertion named is a place in the world, known without any
+      recording - which is why pieces-looked-for-where-expected does not depend on this item.
+
+      Worth recording for whoever runs it: recording /tf and /joint_states alongside the camera
+      in future takes costs nothing and would remove this split entirely.
+
   - id: expectations-from-events
     title: "Expect what the action promised, and report the difference as a failure"
     branch: perception_expectations_from_events
     pull_request_number: null
     track: events
-    depends_on: [perception-backend]
+    depends_on:
+      [perception-backend, pieces-looked-for-where-expected, episode-replayed-into-the-world]
     status: not_started
     notes: >-
       Segmind already emits SupportEvent, LossOfSupportEvent, PickUpEvent,
@@ -519,6 +699,28 @@ items:
       and so the expectation can be armed before the event confirms it. The
       same mechanism gives failure detection: perception looked exactly where
       the action promised, found nothing, and says so.
+
+      Widened on 2026-08-31, at the developer's ask, from an expectation that names a surface to
+      one that carries a pose. Naming the surface is the part the request language can push down,
+      but it is not what the captures need: three of them - stuck_cube_in_hole,
+      disoriented_cube_on_hole and displaced_cube_from_hole - are a cube that an insertion put at
+      a *named hole*, and the hole is a place, known in the world, on a surface the board
+      detection measures every frame. So an expectation is a belief about where an object is: a
+      region it should lie in, an interval of yaw it should be turned through, and the surface it
+      should rest on. That is precisely the hypothesis pieces-looked-for-where-expected evaluates,
+      which is why the two are now linked.
+
+      What the belief is propagated by is the action's own declared effect, confirmed or refuted
+      by the events: released over a hole, an object is believed to be at that hole, turned any
+      way, within the spread a release allows; still grasped, its pose is the gripper's; acted on
+      by nothing, its pose is exactly where it was last seen. The rule that carries the weight is
+      the last one - a belief only decays when something acts on the object - and it is why a
+      history makes this tractable where a single frame does not.
+
+      Failure detection then follows from the belief rather than from a surface: the insertion
+      promised the cube would end up *in* the hole, and it is found resting *on* the lid, turned
+      thirty degrees from where it would have had to be. Reporting which part of the expectation
+      was violated is what a recovery can act on, and it is the paper's end-to-end story.
 
   - id: robokudo-detector
     title: "Answer a request with a RoboKudo analysis engine"

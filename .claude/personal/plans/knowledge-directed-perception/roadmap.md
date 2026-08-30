@@ -1413,3 +1413,140 @@ the whole workspace here.
 branch edits `pipeline.py` and `detections.py`, so it conflicts with that rename the same
 mechanical way #205 and #221 do: take this branch's edit, spell the class
 `RectifiedFootprint`.
+
+## What the three expected failures actually are (2026-08-31)
+
+The developer's ask: the captures the pipeline still gets wrong are not a general-perception
+problem to be solved by a better detector, they are exactly the problem knowledge is supposed
+to solve, and they belong in the paper and the demo rather than in a deferred item. A static
+picture of a cube lying on a wooden lid may well be unreadable; a picture of *the cube the
+robot released over the square hole one action ago* is a different question, and an easier one.
+
+That is right, and measuring it changed three of this plan's items. What follows is what was
+measured, on the six shipped captures, before anything was decided.
+
+### The seed is what is missing, not the evidence
+
+`LoosePieceDetector.detect` walks the piece hues, masks, finds contours, and only a contour
+that survives the mask, the size range and the wholly-within test is ever handed to
+`PieceMatcher.match`. Colour is a gate. A piece wearing the lid's own hue, or touching another
+piece, is never fitted at all - however plainly its edges sit in the picture.
+
+Seeding `PieceMatcher.match` by hand at the places the board detection already reports, with no
+colour at all, reaches agreements of 0.62 to 0.89 in captures where the bottom-up pass reports
+nothing there. `non_inserted_objects` is the extreme: the pipeline reports one detection in the
+whole scene and that one is a ghost on the table, while seeded fits at four places on the board
+return 0.63, 0.66, 0.78 and 0.85. The evidence is in the image.
+
+It is also cheap. One seeded fit, sweeping position and yaw over all six candidate pieces,
+costs 0.05 s; a full bottom-up pass over both surfaces costs 0.25 s. Evaluating a handful of
+places the robot has reason to care about is cheaper than the pass that misses them - which
+disposes of the obvious objection that expectation-driven search is an extra cost.
+
+### A high score is not evidence of a piece
+
+The same measurement carries a warning that shapes the fix. A triangular prism template laid
+near the middle of the board reaches **0.85 to 0.89 in every capture**, converging on the same
+spot each time - and there is no triangular prism there. That is higher than every genuine
+piece resting on the lid reaches in the same captures, which mostly run 0.64 to 0.71.
+
+So `PieceMatcher.minimum_agreement` cannot be tuned into correctness. Its recorded justification
+- a correct piece reaches 0.63 to 0.86 and the best wrong piece of the same colour reaches 0.62
+- was measured on the bare table, and near the board the two ranges are the wrong way round.
+Agreement measures how well an outline follows *some* edge and says nothing about what put that
+edge there. The board is full of sharp edges that a piece template fits.
+
+**A two-plane test was tried and does not work.** Scoring the same outline in the lid's own
+rectification as well as in the plane a piece's top stands on ought, in principle, to separate a
+hole cut in the lid from a piece standing on it. It does not: the difference falls between +0.30
+and +0.62 for holes and pieces alike, in all five captures. Recorded so it is not tried again.
+
+What is left is to ask what else could have produced the edges - which is `competing-explanations`.
+
+### The holes are mislocated, not mislabelled
+
+`holes-fitted-like-pieces` was written as a labelling fault: the classifier calls most of the
+holes triangular prisms, so point the piece fit at them instead. Measuring says otherwise.
+Placing the board mesh's own six hole footprints at the board pose the detector reports spreads
+them over about 180 mm of the lid's length, which is what a 282 mm board says. The five contours
+the pipeline currently calls holes sit inside about 90 mm near the board's middle. They are not
+the holes.
+
+And the previous paragraph explains why: a per-contour free fit will happily put a prism
+anywhere near the board's middle at 0.85. Giving each hole three degrees of freedom of its own
+is the fault. The layout is rigid and known exactly, so fitting it as one model - three degrees
+of freedom for all six holes together, seeded from the board detection - cannot invent a hole,
+cannot put two in one place, and cannot land on the drawer fronts. Each hole's identity then
+comes from the model rather than from classifying its contour, so the labelling fixes itself.
+
+That item was rewritten accordingly, and now depends on `pieces-looked-for-where-expected`
+rather than running beside it: fitting a known model at a believed pose is the evaluator that
+item builds, and two branches independently building the same thing is the duplication these
+notes already record twice.
+
+### Only one bag holds the robot
+
+The developer proposed replaying the robot's motions from the rosbags into the simulated world,
+running Segmind over the replay, and taking each object's history from the events. The machinery
+for that exists and is small - Segmind's `EpisodePlayer` -> `DataPlayer` -> `FilePlayer` takes a
+generator of per-frame body poses, and `CSVEpisodePlayer` and `JSONPlayer` are its two current
+members - so a rosbag player is one more member and `EpisodeSegmenterExecutor` needs no change.
+That is `episode-replayed-into-the-world`, and it touches only Segmind, so it can start now.
+
+**But the recordings do not all support it.** Reading the six bags' metadata: only
+`tracy_pickup_demo` carries the robot - `/tf`, `/tf_static`, `/joint_states`, both arms and both
+grippers, 150 seconds and 253,000 messages. The other five carry nothing but the three camera
+topics over about 29 seconds each. There is no robot motion in them to replay and no transform
+tree to read.
+
+This does not sink the approach, and it is worth being precise about why. The three captures the
+story is really about - `stuck_cube_in_hole`, `disoriented_cube_on_hole`,
+`displaced_cube_from_hole` - are a cube that an insertion put at a *named hole*. A hole is a
+place in the world, given by the board mesh and located every frame by the board detection. So
+the expectation "the cube is at the square hole, turned some way, resting on or in the lid" is
+fully grounded in knowledge the robot already has, with no recording needed at all. The replay
+is what gives the *live* demo its history, and what lets the pick-up demo be measured; the five
+scene captures are answered by the board and the action model.
+
+Recording `/tf` and `/joint_states` alongside the camera in future takes costs nothing and would
+remove the split.
+
+### What changed in the plan
+
+Two new items in the `surfaces` track, one in `events`, and four items widened.
+
+- **`pieces-looked-for-where-expected`** (new). Detection becomes the evaluation of hypotheses
+  rather than the classification of blobs. A hypothesis says what is expected, where it is
+  believed to be - a region of a named surface and an interval of yaw - and where that belief
+  came from; its evaluator is the sweep `PieceMatcher` already performs, with radius, step,
+  angle set and candidate list read from the belief instead of fixed. Colour becomes one source
+  of hypotheses and one piece of evidence, never a gate. Depends on `one-detection-per-thing`
+  and on nothing else, so it is not behind the ripple-down rules.
+- **`competing-explanations`** (new). The decision to report becomes a comparison against the
+  alternatives - the board's own known geometry, another hypothesis, nothing at all - in place
+  of `minimum_agreement`. This is also where the plan's central claim becomes a plottable
+  quantity: with one candidate and a strong belief, less picture evidence is needed than with
+  six candidates and none.
+- **`episode-replayed-into-the-world`** (new). A Segmind `FilePlayer` over a rosbag, with the
+  constraint above recorded on it.
+- **`holes-fitted-like-pieces`** rewritten, as above.
+- **`expectations-from-events`** widened from an expectation that names a surface to one that
+  carries a pose belief, propagated by the action's declared effect and confirmed or refuted by
+  the events. The rule that carries the weight is that a belief only decays when something acts
+  on the object, which is why a history makes tractable what a single frame does not.
+- **`choose-detection-method`** widened: the tree's conditions include what has lately happened
+  to the target, not only standing properties of it and its surface.
+- **`detector-parameters-from-knowledge`** widened: the numbers concluded include the ones that
+  say how to search - how far around a believed place, how finely, which candidates, how much
+  better one explanation must be than the next.
+- **`perception-backend`** gained a note, not a change, since it is under review: `SceneRequest`
+  will need to carry a believed place as well as a type and a surface.
+
+**One ownership move worth flagging.** `test_every_piece_resting_on_the_lid_is_found` belonged
+to `detector-parameters-from-knowledge`, which is blocked on krrood's ripple-down rules being
+usable - the schedule risk already recorded for the 4-8 September window. Those failures are a
+seeding fault, not a parameter fault, so the test moves to `pieces-looked-for-where-expected`,
+which depends on no rule engine. That takes the plan's most visible remaining error off the
+blocked path.
+
+Nothing here is deferred, and the two deferred items are untouched.
