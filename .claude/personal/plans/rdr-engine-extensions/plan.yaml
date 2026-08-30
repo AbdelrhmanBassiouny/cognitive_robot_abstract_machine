@@ -1,0 +1,182 @@
+schema_version: 1
+id: rdr-engine-extensions
+title: Feature layer, multi-tree engines, concept trees, OO integration and TMS
+description: 'Everything the forward architecture puts on top of the single-class engine: named memoized
+  features computed once per case, the MCRDR and GRDR multi-tree engines, concept trees declared as vocabulary
+  with a stratified dependency graph, per-class definition RDRs with candidate generators, JTMS justification
+  recording, and the architecture brief that documents the finished whole.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 94
+waves:
+- id: foundations
+  name: Independent foundations
+  description: Three tracks that need only the core engine and can run in parallel.
+- id: concepts
+  name: Concept trees
+  description: Needs both the feature layer and the multi-tree engines.
+- id: integration
+  name: OO integration and TMS
+  description: Two parallel tracks on top of the concept layer.
+- id: brief
+  name: The architecture brief
+  description: 'Deliberately last: the brief describes the architecture as a finished whole.'
+tracks:
+- id: feature-layer
+  name: Feature layer
+  wave: foundations
+  description: Named, memoized, registry-backed derived features, computed once per case however many
+    rules reference them.
+- id: multi-tree-engines
+  name: MCRDR and GRDR
+  wave: foundations
+  description: Multi-valued conclusions, then the general fixpoint loop with its monotonic-conclusions
+    contract.
+- id: concept-trees
+  name: Concept trees
+  wave: concepts
+  description: Trees declared as vocabulary other trees may reference, with stratified evaluation and
+    cornerstone-regression checks.
+- id: oo-integration
+  name: OO integration
+  wave: integration
+  description: Per-class definition RDRs, candidate generators and taxonomy discriminators.
+- id: justifications
+  name: TMS justifications
+  wave: integration
+  description: Justification recording per conclusion, and retraction propagation over the dependency
+    graph.
+- id: oo-prototypes
+  name: OO prototypes on dead bases
+  wave: integration
+  description: Parked drafts whose bases were closed unmerged; input for the OO integration track to harvest.
+- id: architecture-brief
+  name: The architecture brief
+  wave: brief
+  description: The design document and its bibliography, re-landed.
+items:
+- id: rdr-feature-registry
+  title: Feature layer core, the "poor man's Rete"
+  branch: rdr/feature-registry
+  pull_request_number: null
+  track: feature-layer
+  depends_on: []
+  status: blocked
+  blockers:
+  - Blocked until the Wave-0 stack lands on main.
+  - Stacked on d-core-backend (#210) in the rdr-core-engine plan. Cross-plan, so no dependency chip.
+  notes: Registry + CaseView memoization + EQL name resolution.
+- id: rdr-feature-capture
+  title: KA-time feature capture
+  branch: rdr/feature-capture
+  pull_request_number: null
+  track: feature-layer
+  depends_on:
+  - rdr-feature-registry
+  status: not_started
+  notes: '%feature magic, AST-hash dedup, registry autocomplete.'
+- id: rdr-multi-class
+  title: 'MCRDR port: multi-valued attributes'
+  branch: rdr/multi-class
+  pull_request_number: null
+  track: multi-tree-engines
+  depends_on: []
+  status: blocked
+  blockers:
+  - Blocked until the Wave-0 stack lands on main.
+  - Stacked on d-core-backend (#210) in the rdr-core-engine plan; it lifts the single-valued guard that
+    backend enforces. Cross-plan, so no dependency chip.
+  notes: Lifts the single-valued guard in underspecified.py.
+- id: rdr-general-fixpoint
+  title: GRDR naive fixpoint engine
+  branch: rdr/general-fixpoint
+  pull_request_number: null
+  track: multi-tree-engines
+  depends_on:
+  - rdr-multi-class
+  status: not_started
+  notes: Monotonic-conclusions contract + recorded dependency edges.
+- id: rdr-concept-trees
+  title: NRDR concept layer
+  branch: rdr/concept-trees
+  pull_request_number: null
+  track: concept-trees
+  depends_on:
+  - rdr-feature-registry
+  - rdr-general-fixpoint
+  status: blocked
+  blockers:
+  - Blocked on Track F (rdr/feature-registry) and Track G (rdr/general-fixpoint).
+  notes: 'Concept declaration, explicit DependencyGraph, stratified order, semi-naive firing, cornerstone-regression
+    gate on shared-feature/ concept edits. Likely splits into 2-3 stacked PRs at execution time; this
+    item is the umbrella placeholder.
+
+    '
+- id: rdr-oo-definitions
+  title: 'OO integration: definitions, candidate generators, taxonomy discriminators'
+  branch: rdr/oo-definitions
+  pull_request_number: null
+  track: oo-integration
+  depends_on:
+  - rdr-concept-trees
+  status: blocked
+  blockers:
+  - Blocked on rdr/concept-trees.
+  notes: 'Harvests prototypes #21/#22 (rdr-oo-recognition, rdr-backend-unification), then closes both.'
+- id: rdr-justifications
+  title: TMS (JTMS) justification recording
+  branch: rdr/justifications
+  pull_request_number: null
+  track: justifications
+  depends_on:
+  - rdr-concept-trees
+  status: blocked
+  blockers:
+  - Blocked on eql/truth-unification (single truth source) and rdr/general-fixpoint (dependency graph
+    + blackboard).
+  notes: 'Justification value object + JustificationRecorder(EvaluationObserver) + retraction propagation
+    over the dependency graph.
+
+
+    Also needs eql-truth-unification (#99), now in the eql-core-and-code-generation plan; it has merged,
+    so nothing is waiting on it.'
+- id: rdr-oo-recognition
+  title: 'OO recognition layer: candidate generators + definitions'
+  branch: rdr/oo-recognition
+  pull_request_number: 21
+  track: oo-prototypes
+  depends_on: []
+  status: deferred
+  blockers:
+  - 'stacked-pr-maintenance: Fork PR #21 (branch `rdr/oo-recognition`) is based on `rdr/oo-plan`, whose
+    commits are in neither the upstream base nor any other open fork branch, so the 2026-08-30 stacked-pr-maintenance
+    pass could derive no base to restack onto and handed the branch back to its owner: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/21#issuecomment-5467705500
+
+    First pass that could see the case, which needed the parent-placement rule from the unlanded PR #198
+    (`unfetched-parent-branches`). The item is deferred, so choosing a new base can wait, but the PR cannot
+    reach main on the base it names.'
+  notes: Prototype input for Wave 3's rdr/oo-definitions, then close. Base is stale (rdr/oo-plan), do
+    not merge as-is.
+- id: rdr-backend-unification
+  title: Unify recognition with the query/reasoning backend frontend
+  branch: rdr/backend-unification
+  pull_request_number: 22
+  track: oo-prototypes
+  depends_on:
+  - rdr-oo-recognition
+  status: deferred
+  notes: 'Same disposition as #21: harvested by Wave 3, then closed.'
+- id: rdr-architecture-brief
+  title: Re-land RDR architecture brief and its bibliography as a docs-only page
+  branch: rdr/architecture-brief
+  pull_request_number: null
+  track: architecture-brief
+  depends_on:
+  - rdr-oo-definitions
+  - rdr-justifications
+  status: deferred
+  notes: 'Repositioned 2026-07-24 from S3-docs/wave-0 to the final wave: the doc describes the architecture
+    as a finished whole, so it reads better landed once the engine is actually stable (Wave 3 done) rather
+    than mid-refactor. PR #75 (which re-landed closed PR #20''s content; CI was green, mergeable clean)
+    was closed for now; branch rdr/architecture-brief is kept so the content can be re-landed without
+    redoing the work. depends_on is a best-guess placeholder for "engine stable" (Wave 3''s two tips)
+    — revisit the exact edge when this item is picked up.'

@@ -1,0 +1,125 @@
+schema_version: 1
+id: rdr-explanation
+title: Why-questions on RDR conclusions, and the Montessori demo that narrates them
+description: 'Explaining a conclusion the engine reached: the WhyQuestion/WhyAnswer value objects and
+  the engine''s why() surface, the causal ''because'' vocabulary that verbalizes them, the why(...) query
+  factory, the backend explanation semantics behind decision queries, rendering an explanation for whoever
+  is receiving it, and the shape-sorting demo that narrates its own choices.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 94
+waves:
+- id: why
+  name: Why-questions and their verbalization
+  description: 'Sequential: the answer object, then the causal grammar, then the query surface and the
+    decision-query semantics in parallel.'
+- id: demo
+  name: The Montessori demo
+  description: Deferred until the external montessori_ijcai branch it builds on is ready.
+tracks:
+- id: why-answers
+  name: Why-answers and causal verbalization
+  wave: why
+  description: From a fired conclusion to a sentence explaining it.
+- id: audience-rendering
+  name: Rendering by recipient
+  wave: why
+  description: Natural language for a human, the EQL expression itself for a program.
+- id: montessori-demo
+  name: Shape-sorting demo
+  wave: demo
+  description: Policy RDRs as decision queries, and a narrated demo loop.
+items:
+- id: rdr-why-answer
+  title: 'Why-question core: WhyQuestion/WhyAnswer, EQLSingleClassRDR.why(case)'
+  branch: claude/rdr-why-answer-6fnw2o
+  pull_request_number: 81
+  track: why-answers
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01V2DJMF1C2bQjhLcPo5sFkx
+  notes: 'W1. KNOWN-STALE per-branch progress note: pr-progress/rdr/why-answer.md still says "Not started"
+    even though this PR is real, open, and W2/W3 already build on it — the exact drift class this system
+    exists to catch. This entry reflects the verified live state, not that note.
+
+    '
+  blockers:
+  - Stacked on d-core-backend (#210) in the rdr-core-engine plan; the backend is what the explain path
+    reads through. Cross-plan, so no dependency chip.
+- id: eql-causal-verbalization
+  title: '"because" vocabulary + causal grammar assembler, WhyAnswer.verbalize()'
+  branch: eql/causal-verbalization
+  pull_request_number: 82
+  track: why-answers
+  depends_on:
+  - rdr-why-answer
+  status: in_progress
+  notes: 'W2. Deep in review: 20/22 threads resolved, 2 blocked on PR #83''s boolean-predicate goldens.'
+- id: eql-attribute-predicate-verbalization
+  title: Verbalize boolean-attribute conditions as declarable predicates
+  branch: eql/attribute-predicate-verbalization
+  pull_request_number: 83
+  track: why-answers
+  depends_on: []
+  status: done
+  session: https://claude.ai/code/session_01JCEFrP4eBx2pgmf5FarFLm
+  notes: 'Merged 2026-07-21. Sibling fix, not part of the original wave plan; blocked W2''s last 2 open
+    review threads until it landed. Was open as non-draft (ready for review) before merging — same as
+    several of the S0 stack items (#58/#39/#53/#41/#63-#67), so not unique to this PR; each was presumably
+    marked ready deliberately once stable, per the always-drafts-until-ready personal convention.
+
+    '
+- id: rdr-why-query-surface
+  title: why(...) EQL factory + docs + bibliography
+  branch: rdr/why-query-surface
+  pull_request_number: 84
+  track: why-answers
+  depends_on:
+  - eql-causal-verbalization
+  status: in_progress
+  session: https://claude.ai/code/session_0148J38dvujaob3AYJqfNzwa
+  notes: W3. %why magic deferred until D-ui (#76) lands.
+- id: rdr-decision-queries
+  title: Backend explanation semantics + the decision-query pattern
+  branch: rdr/decision-queries
+  pull_request_number: 85
+  track: why-answers
+  depends_on:
+  - eql-causal-verbalization
+  status: in_progress
+  session: https://claude.ai/code/session_013NepUGgubeWHnLT5TUPLdu
+  notes: C1. Reframed 2026-07-17 (ExplainableChoice protocol dropped as YAGNI). Coordinates with W3 via
+    a shared ExplanationCarrier seam.
+- id: explanation-rendering-by-audience
+  title: 'Explanation rendering by recipient: NL for humans, EQL for programs'
+  branch: null
+  pull_request_number: null
+  track: audience-rendering
+  depends_on:
+  - eql-causal-verbalization
+  status: blocked
+  blockers:
+  - Blocked on W2 (eql-causal-verbalization).
+  notes: 'Separate explanation content from rendering, chosen from the recipient model. Lit: user-tailored
+    NLG (Paris), Reiter & Dale, Grice, Sperber & Wilson.'
+- id: montessori-choice-policies
+  title: 'Demo policy wiring: pick/hole policy RDRs as decision queries'
+  branch: montessori/choice-policies
+  pull_request_number: null
+  track: montessori-demo
+  depends_on:
+  - rdr-decision-queries
+  status: deferred
+  blockers:
+  - Deferred until Tom's montessori_ijcai branch is ready.
+  notes: M1. The generic half (decision-query semantics) already proceeds as C1; only the demo-specific
+    remainder is left here.
+- id: montessori-why-demo
+  title: Narrated demo loop, headless CI mode, README
+  branch: montessori/why-demo
+  pull_request_number: null
+  track: montessori-demo
+  depends_on:
+  - montessori-choice-policies
+  - eql-causal-verbalization
+  status: deferred
+  notes: M2.

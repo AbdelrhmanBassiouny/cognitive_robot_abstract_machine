@@ -1,0 +1,76 @@
+schema_version: 1
+id: test-suite-fixes
+title: Test-suite defects found while landing the RDR stack
+description: 'Repository-wide test-suite work that the RDR stack surfaced but does not own: the rerun
+  plugin a @pytest.mark.flaky marker needs to do anything, the MCRDR test suppressed as flaky when its
+  failure was deterministic and already fixed, and the unittest modules still to convert to pytest.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 94
+waves:
+- id: suite
+  name: The suite itself
+  description: Each item lands on main, independent of the stack.
+tracks:
+- id: flaky-handling
+  name: Flaky markers and skips
+  wave: suite
+  description: Whether a marker reruns anything, and whether a skip's cause was ever reproduced.
+- id: pytest-conversion
+  name: unittest to pytest
+  wave: suite
+  description: The modules still written against unittest.
+items:
+- id: flaky-marker-rerun-plugin
+  title: Install the plugin that makes @pytest.mark.flaky do something
+  branch: claude/flaky-marker-needs-rerun-plugin
+  pull_request_number: 190
+  track: flaky-handling
+  depends_on: []
+  status: done
+  session: https://claude.ai/code/session_01LeZ4Mkr4tfdKjvEcJrz32C
+  notes: 'Merged 2026-08-24. `pytest-rerunfailures` was in no requirements file and not in the `dev` extra
+    CI installs, so pytest treated `@pytest.mark.flaky` as an unknown mark and ran the test exactly once
+    — failing the very run the mark was added to survive. One line in `pyproject.toml`''s `dev` extra.
+    Measured on the pinned pytest 7.4.4: a bare mark needs no rerun count, no `--reruns` and no `pytest.ini`
+    registration; only the dependency was missing. The guard test asserts only that the plugin is loaded,
+    which is the invariant this repository owns — an earlier draft asserting the rerun behaviour was really
+    asserting the plugin''s own fixture-teardown semantics and passed or failed by plugin version.
+
+
+    Checked against upstream before opening rather than after: cram2''s main was at the same commit, its
+    `dev` extra byte-identical, so the defect is upstream''s own and the fix is not a duplicate. A dependency
+    fix on a fork needs that check first.'
+- id: mcrdr-stop-only-flaky-skip
+  title: Extend the flaky-test skip to test_rdr_alchemy's test_fit_mcrdr_stop_only
+  branch: claude/mcrdr-stop-only-flaky-skip
+  pull_request_number: 189
+  track: flaky-handling
+  depends_on: []
+  status: deferred
+  session: https://claude.ai/code/session_01LeZ4Mkr4tfdKjvEcJrz32C
+  notes: 'Closed unmerged 2026-08-22, branch kept. It proposed extending a skip that should never have
+    existed. A 900-run sweep over `PYTHONHASHSEED` — both siblings and the whole class — passed every
+    time, and the real cause was in the history instead: b25353559 (2026-07-15) fixed every `.py` fixture''s
+    answer delimiter, which used double quotes while `experts.py` has always split on single ones, so
+    the loader silently returned one answer instead of eighteen and the run fell through to a live prompt.
+    Reproduced by restoring the pre-fix fixture. The failure was deterministic, and it was fixed five
+    days after the skip went in.
+
+
+    Both skips are gone: main''s own sibling skip was removed on D-core-aid at the developer''s direction.
+    `deferred` rather than `done` because it is the one terminal status the dashboard does not flag as
+    drift against a closed-unmerged pull request. One fact worth keeping: the test consumes exactly all
+    eighteen recorded answers, so any change to `MultiClassRDR`''s interaction count breaks it with an
+    unhelpful cannot-prompt error rather than a useful one.'
+- id: pytest-conversion-sweep
+  title: Convert the remaining unittest modules outside test_eql_rdr to pytest
+  branch: null
+  pull_request_number: null
+  track: pytest-conversion
+  depends_on: []
+  status: not_started
+  notes: 'Every unittest-based module outside test_eql_rdr: test_ripple_down_rules and parts of test_eql.
+    Raised by the #159 review''s "all tests everywhere should be pytest"; the test_eql_rdr half landed
+    on #67 and #98 while they were still unlanded, and this is the rest. Deliberately off main rather
+    than stacked: it touches files the D-core stack does not, so stacking it would add a seventh cascade
+    for nothing. Not started.'

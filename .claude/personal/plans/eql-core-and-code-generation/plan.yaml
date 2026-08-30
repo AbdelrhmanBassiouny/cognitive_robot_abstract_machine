@@ -1,0 +1,94 @@
+schema_version: 1
+id: eql-core-and-code-generation
+title: EQL core semantics and the code-generation extraction
+description: 'The EQL-side foundation the RDR engine is built on: the query class refactor''s spec/product
+  lifecycle, the core semantics prep, the extraction of krrood.code_generation out of the RDR package,
+  the removal of the dead conditions-root parent recovery, and unified OperationResult truth. Every item
+  has merged; the plan is kept as the record of what the layer below the engine already settled.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 94
+waves:
+- id: foundation
+  name: The layer under the engine
+  description: Landed before or alongside the RDR stack's lower half, and depended on by everything above
+    it.
+tracks:
+- id: eql-core
+  name: EQL core semantics
+  wave: foundation
+  description: Query lifecycle, condition roots and truth values in the EQL core.
+- id: code-generation
+  name: The code_generation package
+  wave: foundation
+  description: Source extraction and generation pulled out of ripple_down_rules into a package of its
+    own.
+items:
+- id: query-class-refactor
+  title: 'EQL query refactor: spec/product lifecycle, subquery caching, result-transformer pipeline'
+  branch: query-class-refactor
+  pull_request_number: 5
+  track: eql-core
+  depends_on: []
+  status: done
+  notes: Merged to main.
+- id: eql-core-prep
+  title: EQL core semantics (foundation for the RDR engine)
+  branch: eql-core-prep
+  pull_request_number: 28
+  track: eql-core
+  depends_on:
+  - query-class-refactor
+  status: done
+  notes: Merged to main.
+- id: code-extraction
+  title: Extract source-extraction utilities into krrood.code_generation
+  branch: code-extraction
+  pull_request_number: 58
+  track: code-generation
+  depends_on:
+  - eql-core-prep
+  status: done
+  notes: Merged out-of-band 2026-07-21 (branch pushed directly, then closed by hand; GitHub never set
+    merged_at, so this PR carries a manually-applied 'merged' label instead). Previously open, CI green;
+    picked up an in-review label 2026-07-20.
+- id: code-generation-extract
+  title: Extract code_generation package (generation half)
+  branch: code-generation-extract
+  pull_request_number: 39
+  track: code-generation
+  depends_on:
+  - code-extraction
+  status: done
+- id: conditions-root-drop-dead-parent-recovery
+  title: Drop the dead _last_parent_of_type_ conditions-root recovery
+  branch: conditions-root-drop-dead-parent-recovery
+  pull_request_number: 89
+  track: eql-core
+  depends_on: []
+  status: done
+  notes: 'Side-quest off main, not part of the original wave plan: removes _conditions_root_''s dead fallback
+    (distinct from insert_at''s own live use of the same method name, independently reintroduced by #78
+    for a real bug — the two were verified fully compatible). Unblocks rdr-backward-inference''s (#41)
+    merge conflict once merged; verify the restacking bot cascades the fix through #58/#39/#53/#41 afterward.
+
+    '
+- id: eql-truth-unification
+  title: Unified OperationResult truth
+  branch: claude/eql-truth-unification-refactor-pfux7f
+  pull_request_number: 99
+  track: eql-core
+  depends_on:
+  - eql-core-prep
+  status: done
+  session: https://claude.ai/code/session_01YTSdjBA54dAdBxsCujdjTX
+  notes: '`OperationResult.is_false` is dropped, truth reads from `bindings[operand._id_]`, and `is_condition_false`
+    is gone. Two divergences from the design doc, which predated the code: the invariant needed qualifying,
+    since for entities, aggregators and arithmetic the single binding is the selected value, so a verbatim
+    reading dropped query results whose value was 0 or empty — `TruthValuedExpression` tells truth-binding
+    from value-binding expressions apart, and only truth-recording roots are filtered by truth. And the
+    field was removed outright rather than transitioned through a flag, so a missed call site fails loudly.
+
+
+    Reconciled onto conditions-root-drop-dead-parent-recovery, which merged first and had independently
+    added a `_true_results_()` that filtered on `is_true` unconditionally — the very bug this item exists
+    to fix. The method keeps its name and gains this branch''s guard.'

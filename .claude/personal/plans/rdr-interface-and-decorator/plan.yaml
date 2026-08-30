@@ -1,0 +1,120 @@
+schema_version: 1
+id: rdr-interface-and-decorator
+title: The interactive expert interface and the @rdr decorator
+description: 'What a user of the engine touches: the case-table rendering, the IPython shell and its magics
+  that ask the expert for conditions and conclusions, the @rdr decorator that declares a model, and the
+  file store that holds it. Stacked on the core engine''s tip and merged after it.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 94
+waves:
+- id: surface
+  name: The user-facing surface
+  description: Two stacked chains, rendering then the shell, then the decorator and its store.
+tracks:
+- id: interactive
+  name: Rendering and the interactive shell
+  wave: surface
+  description: Case tables, the IPython interface and its magics.
+- id: decorator
+  name: The decorator and its model store
+  wave: surface
+  description: '@rdr, its template, and the RDRFileStore lifecycle.'
+items:
+- id: D-ui-rendering
+  title: 'RDR engine: case-table rendering + serialization test coverage'
+  branch: D-ui-rendering
+  pull_request_number: 79
+  track: interactive
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01LxKeDwSHK6QQpucBHz3Bhf
+  notes: 'Rebuilt onto `D-core-backend` (#210) on 2026-08-30, which is what unblocked it: its old base
+    `D-ui-splice-fix` (#78, closed unmerged) led nowhere, and the re-target its own note prescribed —
+    `D-core-engine` (#68) — is deferred and leads nowhere either. Rebuilt as a branch reset rather than
+    a merge so #78''s production commit (reintroducing `_last_parent_of_type_`, superseded by #118 and
+    forbidden by dag-facade-hardening''s Wave-1 guard) stays out of #79''s diff; pre-rebuild tip `0a305c68`
+    if it is ever wanted back. `depends_on` now names `d-core-backend`, which is where the branch actually
+    sits.
+
+    Three interfaces had moved under the branch in the six weeks it spent on a dead base and the ported
+    tests were brought up to them; the two `save_path` test classes went with `EQLSingleClassRDR.save_path`
+    itself, their replacement already covered by `test_fit_convergence.py` and `test_serialization.py`.
+    See roadmap.md §34.
+
+    2026-08-30 (later): a fresh `/plan-item-resolve` session picked this item up again and found a review
+    round the rebuild above had drawn minutes after it pushed — 11 threads (missing docstrings and `:param:`/`:return:`
+    docs, missing dataclass field docstrings, four abbreviated names, one box-drawing divider), never
+    recorded here since the previous session had already reported itself finished. Applied and pushed
+    as `8dc1a7c8`: every function/method/field across all eight files this PR adds now has a docstring,
+    the flagged abbreviations (`_val`/`attr` in `case_table.py`, `ser` in `test_case_serializer.py`, `_animal_var`/`_mixed_alt_then_ref_query`
+    in `test_rule_order.py`) are spelled out along with the rest of the same names in the same functions,
+    and the divider is `# %%`. All eleven threads replied to individually (naming the commit) and resolved.
+    `test_eql_rdr` unchanged: 341 passed, 0 failed. Draft was already `true`, so no restore-to-draft was
+    needed. See roadmap.md §35.'
+  blockers:
+  - Stacked on d-core-backend (#210) in the rdr-core-engine plan. depends_on cannot name an item in another
+    plan, so this edge is recorded here instead and carries no dependency chip or automatic readiness.
+- id: D-ui
+  title: 'RDR engine: interactive expert interface (IPython shell, magics, prompt sections/examples)'
+  branch: D-ui
+  pull_request_number: 76
+  track: interactive
+  depends_on:
+  - D-ui-rendering
+  status: in_progress
+  session: https://claude.ai/code/session_018YWbhu99a2SqnWTqS61Nj5
+  notes: '2026-08-23: outstanding work added from the #159 review - **default the progress reporter to
+    IPythonProgressBar here**. The engine keeps NullProgressReporter, which is the only default correct
+    for a caller it knows nothing about; the developer agreed the interactive default belongs in this
+    layer, which is the one that knows there is a shell to draw on. Done 2026-08-30, as part of the same
+    change as the ExpertInterface segregation below - see roadmap.md sections 30 and 36.
+
+    2026-08-30: rebuilt as a branch reset onto the rebuilt `D-ui-rendering` (`5269a778`), so #78''s superseded
+    `_last_parent_of_type_` commit `cfe32ad0` does not survive the restack; pre-rebuild tip `c50d2109`
+    if it is ever wanted back. That commit is why the maintenance pass could not integrate the new base
+    and reported 19 conflicting files. The interactive layer is now on the segregated `ExpertInterface`:
+    `%save` persists through the RDR''s `ModelSaver`, and attaching an RDR to an `IPythonInterface` installs
+    the shell''s progress bar in place of the engine''s null default. Also ported to `AnswerName`/`NamespaceName`,
+    `conclusion_helper`''s presenter/suggester mixins, `...` for `UNSET`, and the validator/backward-inference
+    renames. Two defects fixed with a failing test each: the `%conclusion`/`%conditions` magics no longer
+    rejected invalid answers after `validate()` became a list, and the shipped user guide - which CI executes
+    through `test_eql_documentation.sh` - still called `FunctionInterface(answer_fn=...)`. Every function,
+    method and field across the 21 files this PR adds now carries a docstring. test_eql_rdr: 524 passed,
+    2 skipped (341 on the base, 183 added). See roadmap.md section 36.'
+- id: D-ui-splice-fix
+  title: 'RDR engine: fix rule-tree splice for attributes reused across sibling branches'
+  branch: D-ui-splice-fix
+  pull_request_number: 78
+  track: interactive
+  depends_on: []
+  status: deferred
+  session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
+  notes: 'Closed 2026-07-31 as superseded by #118, which fixed the same rule-tree splice defect at the
+    façade level from the owning rule-tree context, rather than by reintroducing `_last_parent_of_type_`
+    — a symbol main had deleted, and a structural-accessor read dag-facade-hardening''s guard test forbids.
+    Its regression test was not carried over: it lives in `test/krrood_test/test_eql_rdr/`, absent on
+    main, and asserts through `walk_rules`/`classify_case`, so #118 covers the defect DSL-only at the
+    accessor''s own contract level. The test can be re-added against the fixed API once `test_eql_rdr/`
+    lands, and needs no production change to pass. The branch is kept, which is what let D-ui-rendering
+    and D-ui be rebuilt without it.'
+  blockers:
+  - 'Recorded against d-core-backend (#210) in the rdr-core-engine plan, though the item is deferred and
+    its own pull request is closed as superseded by #118.'
+- id: D-store
+  title: 'D-store: RDRFileStore for the @rdr model-file lifecycle'
+  branch: D-store
+  pull_request_number: 80
+  track: decorator
+  depends_on:
+  - D-ui
+  status: in_progress
+  notes: Path resolution + model-file lifecycle; standalone, no decorator dependency.
+- id: D-deco
+  title: 'D-deco: @rdr decorator + RDR file store (final rdr-engine slice)'
+  branch: D-deco
+  pull_request_number: 77
+  track: decorator
+  depends_on:
+  - D-store
+  status: in_progress
+  notes: rdr() factory + RDRWrapper, retargeted from D-ui base to D-store.

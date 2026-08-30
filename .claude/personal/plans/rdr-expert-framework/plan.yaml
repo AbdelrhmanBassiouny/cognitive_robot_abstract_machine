@@ -1,0 +1,56 @@
+schema_version: 1
+id: rdr-expert-framework
+title: Capability-guarded experts and their collaboration
+description: Promote an expert's applicability to a first-class, evaluable EQL guard, so the engine gates
+  delegation on the guard rather than on the expert's type; then let experts cooperate, and let them say
+  why they can or cannot handle a situation.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 94
+waves:
+- id: capabilities
+  name: Capability guards and collaboration
+  description: 'Sequential from the guard: the ensembles and the verbalization both build on it.'
+tracks:
+- id: capability-guards
+  name: Guards, ensembles and their verbalization
+  wave: capabilities
+  description: The guard itself, cooperating experts composed over it, and why-can / why-cannot answers
+    about an expert.
+items:
+- id: expert-capability-guards
+  title: 'Capability-guarded Expert: EQL eligibility guards, resolver-as-expert'
+  branch: null
+  pull_request_number: null
+  track: capability-guards
+  depends_on: []
+  status: blocked
+  blockers:
+  - Blocked until the Wave-0 engine stack lands on main.
+  - Needs d-core-single-class (#159) in the rdr-core-engine plan, whose condition resolver carries the
+    _try_auto_resolve clauses this guard generalizes. Cross-plan, so no dependency chip.
+  notes: 'Abstract Expert declares full question vocabulary; each impl carries an evaluable EQL capability
+    guard. Lit: blackboard activation conditions, Contract-Net, Chain-of-Responsibility.'
+- id: expert-ensembles
+  title: 'Cooperating experts: Hint mode as composition, multi-expert ensembles'
+  branch: null
+  pull_request_number: null
+  track: capability-guards
+  depends_on:
+  - expert-capability-guards
+  status: blocked
+  blockers:
+  - Blocked on expert-capability-guards.
+  notes: 'Multiple experts assisting each other. Lit: mixed-initiative / critiquing systems.'
+- id: expert-capability-verbalization
+  title: 'Verbalize expert capabilities: why-can / why-cannot handle a situation'
+  branch: null
+  pull_request_number: null
+  track: capability-guards
+  depends_on:
+  - expert-capability-guards
+  status: blocked
+  blockers:
+  - Blocked on expert-capability-guards and W1 (rdr-why-answer).
+  - Also needs rdr-why-answer (#81) in the rdr-explanation plan, whose rule-tree explanation machinery
+    this reuses. Cross-plan, so no dependency chip.
+  notes: The guard is EQL, so it is inspectable and verbalizable. Ties to the Why track.

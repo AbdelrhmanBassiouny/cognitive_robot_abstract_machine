@@ -1,0 +1,298 @@
+schema_version: 1
+id: rdr-core-engine
+title: The EQL-native RDR core engine, landed as a split-PR stack
+description: 'The rdr/ package itself, delivered bottom-up as a stack of topic-oriented pull requests:
+  backward inference and condition resolvers, the conclusion helpers, the underspecified adapter, corner-case
+  provenance, the rule-tree unparser, the observer and rule-tree view, the Expert policy split, the single-class
+  inference engine and the underspecified-query backend, plus the runtime behaviour left open when no
+  rule fires.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 94
+waves:
+- id: stack
+  name: The split-PR stack
+  description: One linear chain from ripple-down-rules-refactor to the backend tip, merged bottom-up with
+    a cascade after each landing.
+- id: runtime
+  name: Engine runtime behaviour
+  description: Behaviour the stack deliberately left interim.
+tracks:
+- id: engine-stack
+  name: The stack, bottom-up
+  wave: stack
+  description: Each slice carries one topic of the rdr/ package and its tests.
+- id: superseded-slices
+  name: Superseded slices
+  wave: stack
+  description: The umbrella and the mega-slice the three-way split replaced; kept as branches, not as
+    bases anything can land through.
+- id: engine-runtime
+  name: No-rule-fired handling and provenance
+  wave: runtime
+  description: Warn, ask an expert or use a default conclusion, and record which of the three a conclusion
+    came from.
+items:
+- id: ripple-down-rules-refactor
+  title: ripple_down_rules refactor (reconciled to code_generation)
+  branch: ripple-down-rules-refactor
+  pull_request_number: 53
+  track: engine-stack
+  depends_on: []
+  status: done
+  notes: 'Replaces closed PR #40. Qt/GUI + JSON serialization removed here.
+
+
+    Landed on top of code-generation-extract (#39), now in the eql-core-and-code-generation plan; that
+    dependency has merged, so the edge is recorded here rather than as a cross-plan reference the schema
+    cannot express.'
+- id: rdr-backward-inference
+  title: 'RDR engine: backward inference + condition resolvers'
+  branch: rdr-backward-inference
+  pull_request_number: 41
+  track: engine-stack
+  depends_on:
+  - ripple-down-rules-refactor
+  status: done
+  session: https://claude.ai/code/session_012xQWiZExn9frHtbfm44eR1
+  notes: 'Merged 2026-08-10 as the stack bottom. Four things it settled bind later work. `GuardCondition.negated`
+    stays a polarity flag rather than a `Not()` wrapper, because `not_()` reparents a live rule-tree node;
+    revisit once dag-facade-hardening (#96) lands a non-mutating negation, since `Not()`-wrapping is cleaner
+    at four of six use sites. `rdr/branch_semantics.py` holds per-selector traversal semantics as a `SubClassSafeGeneric`
+    family, kept at the developer''s call over this plan''s own recommendation to collapse it onto the
+    selector classes; that thread is theirs to close. `rdr/utils.py` is deleted and `...` replaces `UNSET`,
+    on the reading that the sentinel means an oracle must supply this value, which is what `CountRange`
+    already reads it as. `rdr/exceptions.py` first exists here.
+
+
+    Two threads are open by design: `query_graph.pdf` is half-answered, since untracking the generated
+    PDFs is a main-level fix nobody has taken; and `parameterizer.py:167` raises `InvalidEllipsis` for
+    a conclusion whose type is outside random_events'' compatible types, whose reachability is filed on
+    no-rule-fired-resolution.'
+- id: backward-inference-rename-completion
+  title: Finish the four backward-inference renames left unfinished on main
+  branch: claude/rdr-refactor-steward-pass-uxewqh
+  pull_request_number: 161
+  track: engine-stack
+  depends_on:
+  - rdr-backward-inference
+  status: done
+  session: https://claude.ai/code/session_01LeZ4Mkr4tfdKjvEcJrz32C
+  notes: 'Off main, like #89: #41''s cascade renamed four things and left readers of the old names behind,
+    which AGENTS.md counts as an unfinished rename. Opened 2026-08-13 covering two of them (ConclusionKnowledge,
+    what_do_we_know_about, 5 readers); widened 2026-08-22 after the #63 review surfaced the other two
+    (TargetKnowledgeResolver -> TargetSufficientConditionsBasedResolver, renamed on main in ed7b3766,
+    and _materialize -> GuardCondition.as_expression). The undercount is the lesson: the missed readers
+    were found by grepping main, not by reading the diff, and two sit in production source where no review
+    of a test-only diff could see them. Scope settled 2026-08-22: keeps backward_inference.py''s and condition_resolver.py''s
+    docstrings plus test_backward_inference.py''s test name; test_condition_resolver.py went to #63 at
+    the developer''s direction, so no file is touched by both. Was untracked in any plan until 2026-08-22
+    - the developer caught that on #63.'
+- id: D-core-aid
+  title: 'RDR engine: ConclusionAid (expert-labelling assistance)'
+  branch: D-core-aid
+  pull_request_number: 63
+  track: engine-stack
+  depends_on:
+  - rdr-backward-inference
+  status: done
+  session: https://claude.ai/code/session_01FAzdUMtdoASWUESoTsfDD6
+  notes: 'Merged, and promoted upstream as cram2 #557. The upstream review settled this item''s substance:
+    `aid.py` became `conclusion_helper.py`, and `ConclusionAid` split into a `ConclusionHelper` base plus
+    `ConclusionSupportPresenter.present()` and `ConclusionSuggester.suggest()` mixins that a helper opts
+    into. Dropping the two no-op defaults is the substance rather than the rename: a consumer now selects
+    the helpers that suggest instead of assuming every helper answers both hooks.
+
+
+    The consumers on #67, #98 and #159 were renamed in the same round rather than left to the cascade,
+    because a merge of this rename into a branch whose imports still say `aid` produces no conflict at
+    all and fails at import instead. LucaKro''s separate review, that the class is used nowhere but the
+    tests, is unanswered and the developer''s; the fact that answers it is that `present()` has no production
+    call site anywhere in the stack while `suggest()` has one.'
+- id: D-core-underspecified
+  title: 'RDR engine: underspecified-match adapter'
+  branch: D-core-underspecified
+  pull_request_number: 64
+  track: engine-stack
+  depends_on:
+  - D-core-aid
+  status: in_progress
+  notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
+    (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-aid (1ad96142); one
+    conflict, an add/add on rdr/exceptions.py between this branch''s underspecified-target exceptions
+    and main''s AmbiguousBranchSemanticsError. Unioned - no class name collides - and given %% section
+    headers.'
+- id: D-core-corner-case
+  title: 'RDR engine: corner-case provenance store'
+  branch: D-core-corner-case
+  pull_request_number: 65
+  track: engine-stack
+  depends_on:
+  - D-core-underspecified
+  status: in_progress
+  notes: '2026-08-12 steward cascade: restacked onto its cascaded base, which now carries main be377fdf
+    (#41 merged 2026-08-10). Full account in roadmap.md section 21. Merged D-core-underspecified (07545624);
+    the same rdr/exceptions.py add/add recurring, this time also carrying CaseNotSerializableError. Unioned
+    again.'
+- id: D-core-serialization
+  title: 'RDR engine: rule-tree unparser (rdr_to_python)'
+  branch: D-core-serialization
+  pull_request_number: 66
+  track: engine-stack
+  depends_on:
+  - D-core-corner-case
+  status: in_progress
+  notes: 'The rule-tree unparser, plus the `type_hints.py` to `object_to_source.py` rename its own review
+    asked for. Restacked and cascaded. One finding worth keeping: the rename''s claim to update every
+    importer was narrower than stated, and CI caught `template_file_creator.py` importing the deleted
+    module — a file neither side''s diff touched, so git''s merge never flagged it. That is the failure
+    mode this stack has now hit three times.'
+- id: D-core-support
+  title: 'RDR engine: observer, rule-tree view, and remaining support modules'
+  branch: D-core-support
+  pull_request_number: 67
+  track: engine-stack
+  depends_on:
+  - D-core-serialization
+  status: in_progress
+  notes: 'Restacked 2026-08-12 out of the six days it spent unmergeable, which was what stopped the whole
+    stack landing. Two resolutions outlive that round: `base_expressions.py` keeps main''s `set_active_root_if_not_set`
+    API at this branch''s own placement, hoisted out of the `owns_an_evaluation_context` branch so it
+    also runs under a pre-installed context; and the conclusion gate reads `if not is_active_root` now
+    that eql-truth-unification deleted `is_condition_false`. It also carries D-core-aid''s helper split,
+    `ZooDataset` in place of the positional `(animals, targets)` load, and its four unittest modules converted
+    to pytest.
+
+
+    One defect is still this branch''s own: it tracks `test/krrood_test/dataset/ormatic_interface.py`,
+    which main and every other branch untracked, so merging into it conflicts modify/delete on a generated
+    file AGENTS.md says must never be tracked.'
+- id: d-core-expert
+  title: 'RDR engine: Expert policy split'
+  branch: D-core-expert
+  pull_request_number: 98
+  track: engine-stack
+  depends_on:
+  - D-core-support
+  status: in_progress
+  session: https://claude.ai/code/session_01Gid5Qw9cbedssFEqojo1SK
+  notes: 'The Expert policy split, and the parameter-object work handed to it from the single-class plan.
+    What it establishes for everything above: `ExpertInterface` carries only the expert Q&A surface, while
+    the RDR holds a `ModelSaver` (in `serialization.py`, beside `save_rdr_with_case`) and a `ProgressReporter`
+    as its own collaborators with Null-Object defaults — which deletes the engine''s `expert.interface.on_save`
+    reach-through. `ConditionResolver.resolve(rdr, context)` takes the RDR under `TYPE_CHECKING` and applies
+    the corner-case gate once for the whole family, so a strategy inherits the precondition rather than
+    restating it. `AnswerName` and `NamespaceName` live together in `rdr/answer_vocabulary.py`, because
+    `AnswerName.example_assignment` is built over `NamespaceName.CASE_VARIABLE` and both must sit below
+    `interface.py` and `exceptions.py` to avoid a circular import.
+
+
+    Outstanding. The interactive layer absorbs the segregation''s cost, reported at comment 5201827158
+    and now carried by the D-ui item in the rdr-interface-and-decorator plan. `test_null_saver_writes_nothing_for_a_fitted_tree`
+    asserts nothing — `tmp_path` is never handed to `NullModelSaver`, and swapping in a genuinely writing
+    saver leaves it passing — reported on the pull request and not fixed. Three of the seven remaining
+    unittest modules in `test_eql_rdr` are this pull request''s, and the options were put to the developer
+    rather than chosen. CI has queued nothing since 82eb69fb (2026-08-12).'
+- id: d-core-single-class
+  title: 'RDR engine: EQLSingleClassRDR core inference engine'
+  branch: D-core-single-class
+  pull_request_number: 159
+  track: engine-stack
+  depends_on:
+  - d-core-expert
+  status: in_progress
+  session: https://claude.ai/code/session_012Fy3CmMRRy1m5DtzVUhP2X
+  notes: 'The `EQLSingleClassRDR` inference engine, ported from the superseded mega-slice. What it settled:
+    a fit saves once on its way out through a `finally`, not once per inserted rule, so a crash keeps
+    the rules it authored — and an empty tree is deliberately not saved, because saving unconditionally
+    let `EmptyRuleTreeError` replace the exception the caller needed to see. `TemporaryModelSaver` is
+    the default. The `SelfReferentialInsertionError` retry loop is reachable rather than dead — an expert
+    answering with `context.trace.firing_anchor` reaches it — so it is kept, and `ConditionsNotInsertable`
+    carries the `answer_name` the re-prompt reads. The convergence check keeps its any-earlier-pass semantics:
+    the oscillation fixture runs {red} to {blue} to {red}, so comparing only against the preceding pass
+    never terminates. `conditions_root` is correct because the engine has exactly one construction path,
+    pinned by reachability rather than by reading `_parent_`.
+
+
+    One real defect found and deliberately not fixed: `fit` without targets never re-checks convergence,
+    so two cases labelled differently but justified by a shared condition end with the first classifying
+    as the second''s label, where the same input with targets raises `RDRDidNotConvergeError`. Three options
+    are on thread r3838361318; the fix changes what a labelling fit costs a human. Seven design threads
+    from the 2026-08-23 review remain open and were not guessed at, among them whether the retry''s gate
+    should key on whether the expert was asked rather than on `resolution_mode`.'
+- id: d-core-backend
+  title: 'RDR engine: underspecified-query RDR backend'
+  branch: D-core-backend
+  pull_request_number: 210
+  track: engine-stack
+  depends_on:
+  - d-core-single-class
+  status: in_progress
+  session: https://claude.ai/code/session_015bucsUoPW3ktQ1NnTZbbVx
+  blockers:
+  - The GroundTruth thread on backend.py:36 is answered and deliberately left open. No dataclass in entity_query_language/rdr/
+    expresses a per-case ground-truth supplier; the only one that does is ripple_down_rules CaseQuery._target,
+    in the package this split retires. Whether the type alias should become a class of its own is the
+    developer's call, with three options on the thread.
+  - 'CI check test_each_lib (semantic_digital_twin) fails on test_multi_sim.py::test_world_sim_state_sync,
+    a physics-settling assertion this pull request''s krrood/rdr files cannot reach. It is not this branch''s
+    work and cannot be fixed inside it. #190 added pytest-rerunfailures to the dev extra on main (merged
+    2026-08-24) so that test''s @pytest.mark.flaky reruns instead of failing outright, but D-core-backend
+    and every branch from D-core-support up is 342 commits behind main and still lacks it, leaving the
+    mark inert. Only a steward cascade clears it.'
+  notes: 'The underspecified-query RDR backend, and the stack tip. `RDRBackend` inherits `QueryBackend`,
+    whose whole ABC is `evaluate(expression)`; neither concrete base fits, since `SelectiveBackend` raises
+    on exactly the ellipsis matches this backend exists for and `GenerativeBackend` constructs new instances
+    where this completes an attribute on existing ones, but neither of those reaches `QueryBackend` itself.
+    `evaluate` is `fill`''s eager completion, so the decision-query pattern `an(InsertionAction)(slot=...).evaluate(backend=rdr)`
+    works; it returns an iterator rather than being a generator, so a non-`Match` expression raises `QueryIsNotAMatch`
+    at the call. Narrowing the parameter to `Match` was rejected as a Liskov violation.
+
+
+    Two decisions taken differently from what a thread asked, recorded rather than done silently: `key_from_attribute`
+    became `ModelKey.from_attribute` rather than moving to `core/helpers.py`, since a `core/` module naming
+    an `rdr/` dataclass as its return type inverts the layering; and `fit` calls the engine''s `fit` once
+    over the filtered domain instead of the mega-slice''s per-case `fit_case` loop, which would both save
+    the whole model per case and lose convergence.'
+- id: D-core-engine
+  title: 'RDR engine: EQLSingleClassRDR core inference engine'
+  branch: D-core-engine
+  pull_request_number: 68
+  track: superseded-slices
+  depends_on:
+  - D-core-support
+  status: deferred
+  notes: 'Superseded by the topic split (d-core-expert -> d-core-single-class -> d-core-backend) after
+    the PR #68 review asked to split the mega-slice. PR #68 closed once the split PRs open.'
+- id: rdr-engine-umbrella
+  title: RDR/EQL engine umbrella (superseded by the split stack)
+  branch: rdr-engine
+  pull_request_number: 38
+  track: superseded-slices
+  depends_on: []
+  status: deferred
+  notes: 'Closed unmerged once the remainder was split into #58..#68 above.
+
+
+    Opened on top of eql-core-prep (#28), now in the eql-core-and-code-generation plan; that dependency
+    has merged.'
+- id: no-rule-fired-resolution
+  title: 'No-rule-fired handling: warn / ask-expert / default-conclusion modes + provenance'
+  branch: null
+  pull_request_number: null
+  track: engine-runtime
+  depends_on:
+  - d-core-single-class
+  status: blocked
+  blockers:
+  - Blocked until the Wave-0 engine stack lands on main.
+  notes: 'Beyond interim classify->UNSET. Conclusion provenance coordinates with Wave-3 JTMS (rdr-justifications).
+    2026-08-09: the sentinel itself is being unified with ... (Ellipsis) -- see rdr-backward-inference
+    and roadmap Sec.17 -- so this item now inherits "no conclusion" being spelled the same way as "generate
+    one". Two consequences it owns. (1) Expert delegation: once ... is the sentinel, an expert typing
+    `conclusion = ...` in the shell is asking the generative backend to supply the value, but make_conclusion_validator
+    (rdr/expert.py:94) currently rejects that as "No rule fired for this case" unless allow_unset. Routing
+    it to a backend instead is a capability the engine does not have, and it belongs here rather than
+    on any D-core slice. (2) The parameterizer narrowing: parameterizer.py:167 raises InvalidEllipsis
+    outside random_events compatible_types, so a non-enumerable conclusion (str/arbitrary class) left
+    unclassified may be unrepresentable as ... -- if reachable, the no-rule-fired modes are where the
+    answer lives.'
