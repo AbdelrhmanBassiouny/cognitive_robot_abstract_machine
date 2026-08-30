@@ -1045,3 +1045,29 @@ because #186's own tests arrive with it.
 The `needs-resolution` label is left in place: the stack tooling clears it itself once
 the branch merges cleanly again, and hand-clearing it would be managing a signal that is
 not this session's.
+
+## 23. 2026-08-30: #192's parent had landed and nothing had noticed
+
+The stacked-pr-maintenance pass of 2026-08-30, run from PR #198's tooling rather than
+main's, reported #192 as needing a reparent: its base
+`claude/match-query-ergonomics-where-rooted-b876wm` (#182, `where-query-rooted-attribute-no-filter`)
+merged upstream on 2026-08-24 and #192 had been sitting on it since.
+
+**Why no earlier pass saw it.** `load_stack()` on main fetches only the *head* branches of
+the open pull requests on the board, so a parent that is no longer an open pull request is
+never fetched; `is_merged` then runs `git merge-base --is-ancestor` through a helper that
+cannot tell exit 128 (the ref does not exist) from exit 1 (not an ancestor), and answers
+"has not landed". That is `workflow-unification`'s `unfetched-parent-branches` (PR #198),
+still unlanded. Two of this repository's plans were losing reparents to it silently; the
+other was `rdr-refactor`'s #64.
+
+**What was done.** #192 is retargeted at `main`. GitHub stack 195 held it together with the
+merged #182, and a stack member's base cannot be changed, so the stack was dissolved first
+(its membership recorded beforehand); it could not be re-created afterwards because a stack
+needs at least two members and #192 was the only open one left. #192 is now a plain pull
+request based on `main`.
+
+It is still `needs-resolution`: it conflicted against its old base before this pass and
+conflicts against `main` after it, and the maintenance pass never resolves a conflict on
+somebody else's branch. The item's blocker was rewritten to name the new base, since the
+one it carried described a parent that no longer exists.
