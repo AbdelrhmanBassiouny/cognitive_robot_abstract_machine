@@ -4350,13 +4350,13 @@ items:
 
   - id: integration-branch-ci-verdict
     title: "Move the integration branch's verdict to CI, with a stable branch and a targeted job"
-    branch: claude/plan-item-kickoff-workflow-ixbvxl
+    branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
     track: stack-tooling
     depends_on:
     - integration-branch
     status: in_progress
-    pull_request_number: 154
-    session: https://claude.ai/code/session_01FWoysReVCQMi9VBY5cVgcP
+    pull_request_number: 211
+    session: https://claude.ai/code/session_017dDTDzd6185o65JFBuFiLm
     notes: >
       Split out of `integration-branch` (#154) on 2026-08-13, on the user's decision, rather than
       folded into it. Part D of that item's own review round: the verdict moves from a local
@@ -4756,6 +4756,79 @@ items:
       over-broad, failing on a mutation whose own half was still correct, so it was narrowed until
       each fails only for its own reason.
 
+
+      Six defects and one deferral, 2026-08-30, on the user's own measurements: the pipeline had
+      published zero builds since going live and each of the four reasons was found rather than
+      guessed.
+
+      **The rebuild's own check was judging branches.** `ReportedChecks.verdict` counted any failed
+      check, and a rebuild triggered by a branch leaving draft attaches its own check to that
+      branch's head. #211's ready-flip fired a rebuild that failed, and the red-tip exclusion then
+      left #211 out of the build its own flip had asked for - confirmed by ancestry, build
+      `integration-20260829-220832` carries #154 and not #211, and by 26 check runs on that head of
+      which the only two failures are the rebuild's. The pipeline's own check names are now read off
+      `integration-refresh.yml` and `integration-probe.yml` rather than retyped, and a test holds
+      them to being shared with no other workflow's - which is what found that the probe's
+      `to-lowercase` and `test` keys collided with `ci.yml`'s, so excluding them by name would have
+      silently ignored a real failure. Both probe jobs are named now.
+
+      **The `pull_request` arm could not work at all.** It pins the checkout to the default branch,
+      correctly - a pull request must not run its own code against a writing token - but that branch
+      is `integration`, whose `integration.py` predates the `refresh` subcommand: run 33277377132
+      died in 19 seconds on `invalid choice: 'refresh'`. The pin stays, because the property it buys
+      is real; what changes is that a published pipeline too old for the rebuild is now an answer
+      rather than a usage error. A `continue-on-error` step asks argparse whether it knows the
+      command and the rebuild is conditioned on it, so the arm no longer attaches a red check to the
+      branch it exists to carry. It is the general case rather than a bootstrap: the default branch
+      is a build output, so it always lags whatever is in flight.
+
+      **The warm-up was one to two orders of magnitude short, and no constant fixes it.** Measured:
+      candidate #214 opened 19:16:38 and got its first check at 19:35:09 (+19m); #217 opened
+      22:09:56 and got one at 00:56:43 (+2h47m). A 90-minute job cannot outwait that, so the verdict
+      moved off the run that opens the candidate entirely. A rebuild now finds whatever an earlier
+      run left (`find-candidate`), settles it, and only then assembles the next build - and stops
+      once it has opened one. `CHECKS_WARM_UP_ATTEMPTS` and the verdict schedule are gone;
+      `CANDIDATE_UNCHECKED` keeps its meaning against a horizon that can carry it, since a candidate
+      still unreported a whole cycle later is a trigger or a credential rather than a queue.
+
+      **The maintenance pass was adopting candidates.** `work_in_flight` kept them out of the build
+      and nothing kept them out of `/stacked-pr-maintenance`: #214 came back carrying
+      `needs-resolution`, a label only that pass writes, and build `integration-20260829-220832`
+      carries `Merge remote-tracking branch 'origin/integration'` even though every build starts at
+      `cram2/main` - so the pass had restacked the build branch onto its base, which is how
+      `integration` would accumulate history across rebuilds and how a candidate's diff became a
+      delta (#214: 18 files). The exclusion moved to `BoardExport.from_api_records`, the one place
+      both readers derive their work from, so no pass has to remember it.
+
+      **What passed is remembered now.** Every rebuild re-ran the full matrix over a branch set that
+      is usually unchanged, four times a day, at about 25 minutes plus a queueing delay measured
+      above in hours. A build is keyed on its git *tree*, because re-assembling the same branches
+      over the same base gives a new commit every time and the same tree every time; a branch on its
+      head commit. Kept as one git reference each under `refs/integration/passed/<kind>/<date>/`,
+      which needs nothing created or merged, cannot lose a concurrent write, is read whole in one
+      `ls-remote`, and carries its own age so pruning needs no object fetch. Only passes are
+      recorded, deliberately: a red is cleared by re-running the same commit, and the rule that a red
+      branch re-enters a build by going green rather than by a label coming off would be unreachable
+      if a red were remembered. A record expires after a week - nothing about the *content* decays,
+      since a changed tree is a different key, but the container image the matrix runs in is rebuilt
+      from `main`. A missing, unreadable or expired record degrades to checking it again.
+
+      **`--plan` carries one plan's tips**, on `build` and on `refresh`, repeatable or comma
+      separated, with a `plans` input on the workflow so a dispatch can ask for one. The mapping is
+      read from `_generated/branch-index.tsv` through the shell's own `PLAN_BRANCH_INDEX_PATH`
+      rather than a path restated here; verified live, 125 branches across 9 plans. A branch the
+      index names no plan for is reported as `no-plan-recorded` rather than dropped or carried, and
+      one of another plan as `another-plan`, because those mean different things to a reader. The
+      constraint that decided the shape: a filtered build must never be published, so its candidate
+      is opened against the upstream base instead of the pointer branch - the base is what makes a
+      candidate the one the cycle settles, so nothing has to remember a flag - and the board
+      recognises a candidate by its title as well, so a filtered one is still invisible to
+      maintenance.
+
+      Per-plan integration branches were proposed the same day and recorded as
+      `per-plan-integration-branches` rather than built; the scope check and the reasoning are on
+      that item. 899 tests pass across the four directories CI runs, from 851. Housekeeping: the
+      seven accumulated `integration-2026*` build branches were all left by closed candidates.
   - id: always-read-upstream-reviews
     title: "Read upstream review threads whether or not the fork pull request is labelled"
     branch: claude/plan-item-kickoff-workflow-y2xfva
@@ -4804,6 +4877,68 @@ items:
     pull_request_number: 206
     session: https://claude.ai/code/session_0112C4kGpRE6uLmi5Lwkghx2
     notes: 'Raised 2026-08-28 while refreshing the rdr-refactor dashboard. A published dashboard is a snapshot of the moment it was rendered and nothing on the page can republish it, so getting a current one meant recalling both the skill name and the plan''s id from outside the page that needs them. The masthead now carries a Refresh button copying "/plan-dashboard <plan-id>", with a hint beside it so the button is not read as an in-page reload. The item action buttons and this one are the same affordance - a button whose click copies a slash command - so they share one CopyableCommand base (label plus command, the two things the markup reads) and one copy_command_button macro rather than a second copy of the markup and the clipboard handler; RefreshDashboardAction is ItemAction''s page-level sibling. Scope-checked against main: build_dashboard.py, templates/dashboard.html and the tests are all on main, so this is new work on landed code, based off main. Of the open dashboards-track pull requests, none touches the masthead or the action-button macro. Landing order rather than a dependency: #185 moves build_dashboard.py and templates/dashboard.html into the bastler package verbatim, so whichever of the two lands second carries the other''s change through the merge it already needs. One existing test changed rather than a behaviour: test_render_omits_action_button_for_a_done_item asserted no data-action-command appeared anywhere on the page, as a proxy for the done item''s own card having no button; a page-level button legitimately introduces one, so the assertion narrows to /plan-item commands - the behaviour the test names. 246 tests pass in the plan-dashboard suite, from 243; 568 across the four directories CI runs. Deliberately not done: example/screenshots/dashboard-overview.png predates the button, and re-rendering it headlessly would leave it visually inconsistent with the two screenshots beside it.'
+
+  - id: per-plan-integration-branches
+    title: "One integration branch per plan, and a complete branch built from their last green builds"
+    track: stack-tooling
+    depends_on:
+      - integration-branch-ci-verdict
+    status: deferred
+    notes: >
+      Proposed by the user 2026-08-30 and recorded without being built, on the same day
+      `integration-branch-ci-verdict` fixed the four defects that had kept the pipeline from ever
+      publishing a build. The shape: one integration branch per plan, plus a complete branch merging
+      them. What follows is settled by measurement rather than by argument, and the deferral is the
+      only part that is a judgement.
+
+      The scope check was run rather than eyeballed. `check_scope_overlap.py --base origin/main` over
+      `integration_selection.py`, `integration_assembly.py`, `integration_pass_record.py`,
+      `integration_plans.py`, `integration_candidate_commands.py` and `integration-refresh.yml`
+      reports every one of them absent from `main` and shared with #154 and #211, so both are
+      candidate owners by the mechanical test. Strip those edits and what remains is nine build
+      branches, nine candidate cycles, a complete branch with a build rule of its own and per-plan
+      cleanup - substantial and standing alone by a wide margin, so this is a new item rather than
+      work folded into either. `bastler-package` shares no path: it carries `maintenance_*.py` and
+      `stack.py` into the package and not `integration*.py`.
+
+      The partition is real. 9 plans, 125 indexed branches, 63 open pull requests; every sampled
+      open-pull-request head has a plan, and stacks stay inside one - the `68 -> 81 -> 82 -> 84/85`
+      chain looks cross-domain (`eql/causal-verbalization` on an rdr branch) and is filed entirely
+      under `rdr-refactor`.
+
+      It saves no CI on its own. The complete branch's tree changes whenever any sub-build changes,
+      so one branch moving still forces a full check at the top: one matrix run today becomes two.
+      The saving people expect from it is the pass record built on 2026-08-30 under
+      `integration-branch-ci-verdict`, which needs no new branches at all.
+
+      The complete check cannot be waived. Six of the nine plans - `rdr-refactor`,
+      `montessori-eql-stack`, `eql-verbalization`, `eql-performatives`, `dag-facade-hardening`,
+      `match-query-ergonomics` - all edit `krrood`, and `test_each_lib` exists because these
+      packages import each other. Only `workflow-unification` (`.claude/`-only) is separable.
+
+      What it does buy is one free level of attribution - a red sub-build is an intra-plan break,
+      all-green-sub-builds-but-red-complete is a cross-plan one, which halves
+      `locate-candidate-failure`'s search - and graceful degradation.
+
+      Graceful degradation only in a form other than the one proposed. Merging current tips leaves
+      one red area blocking everyone. The complete branch is built from **each plan's last
+      known-green sub-build** instead, so a broken plan contributes its previous good state and
+      nothing else is held hostage. That composes with the pass record (`refs/integration/passed/`,
+      keyed on the build's tree) rather than needing a mechanism of its own, and it is the version
+      worth having.
+
+      Per-plan branches do not change what a session clones: the fork has one default branch, so
+      they are opt-in checkouts.
+
+      Deferred, and the reason is sequencing rather than doubt. The pipeline has published zero
+      builds. Nine sub-branches, nine candidates per cycle, nine times the stale-branch cleanup and
+      2026-08-30's adoption defect multiplied by nine is how you end up unable to tell which layer is
+      broken. Revisit once one green cycle has run and its real cost is known.
+
+      Reachable before then without any of it: `integration.py build --plan <id>` and `refresh --plan
+      <id>`, built 2026-08-30, carry one plan's tips through the ordinary build and candidate. That
+      answers "does this plan hold together on its own" - which is most of what the topology was
+      wanted for - with no extra branch and nothing that can publish.
 
   - id: red-candidate-localisation
     title: "Localise a red candidate to the branches that caused it"

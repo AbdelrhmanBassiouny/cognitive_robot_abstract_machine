@@ -11635,3 +11635,154 @@ stays open for the user.
 labels. Importing it from the hook tests would put `jinja2`/`markdown`/`nh3` behind every
 hook test run, and `bastler-package` is already chartered to give this Python one home.
 Recorded here rather than fixed.
+
+## Update 2026-08-30 (resolved): four reasons a build never published, and two things it now remembers
+
+Session https://claude.ai/code/session_017dDTDzd6185o65JFBuFiLm, on `#211`, at the user's
+explicit authorisation to push to a pull request they had already marked ready. The four
+defects were theirs, measured on 2026-08-29/30 rather than derived here; what this session
+added was verifying each against the live fork before relying on it, then fixing them.
+
+### The pipeline was excluding branches with its own failures
+
+`ReportedChecks.verdict` returned `FAILED` for any failed check, with no filter on the name.
+A rebuild triggered by `ready_for_review` runs *on the branch that flipped*, so its check
+lands on that branch's head — and the red-tip exclusion built on 2026-08-29 then reads it as
+the branch being unfit. #211's own ready-flip is the case: 26 check runs on its head, 24
+green, and the only two failures both named `Rebuild the integration branch and publish it if
+it is green`. So the branch was left out of the build its own flip had asked for.
+
+**The fix could not be a name typed here.** The names are the workflows' own, so they are read
+off `integration-refresh.yml` and `integration-probe.yml`. Writing the test that holds them to
+being unique across this repository's workflows is what found the real hazard: the probe's job
+keys `to-lowercase` and `test` are shared with `ci.yml` and `ci_reusable.yml`, so an
+exclusion by name would have silently ignored a genuine `to-lowercase` failure — and a failed
+`to-lowercase` skips the whole matrix, whose skipped conclusions already read as passing. Both
+probe jobs are named distinctively now, and the test is what keeps them so.
+
+### A pin that is right, on a branch that is always behind
+
+The `pull_request` arm checks out the default branch so that no pull request's own code runs
+against a writing token. That is correct and stays. But the default branch here is
+`integration`, which is a *build output*: it moves only when a build publishes. So it lags
+every change in flight, and on 2026-08-29 it lagged far enough that run 33277377132 died in 19
+seconds on `invalid choice: 'refresh'`.
+
+Read as a bootstrap this is temporary; read as what it is, it is permanent — the pin will
+always run a pipeline older than the one being developed. So the arm asks argparse whether the
+published pipeline knows the command (`refresh --help`, in a `continue-on-error` step) and
+conditions the rebuild on the answer, with a step that says so when it does not. **A run that
+cannot do the thing it was asked for must answer, not fail**: failing attached a red check to
+the branch the rebuild exists to carry, which is the first defect again from the other end.
+
+### The verdict had to leave the run that opened the candidate
+
+Measured: #214 opened 19:16:38, first check 19:35:09 (+19m); #217 opened 22:09:56, first check
+00:56:43 (+2h47m). A 90-minute job cannot outwait the second, so **raising
+`CHECKS_WARM_UP_ATTEMPTS` was never the fix** — no value of it is both large enough to be
+right and small enough to fit in a job.
+
+A rebuild now asks `find-candidate` what is already being judged, settles that, and only then
+assembles the next build; having opened one, it stops. Success stops meaning "a build was
+published" and starts meaning "this run did its part", because the checks a run opens a
+candidate for begin long after the run is over, and a pipeline whose every run is red hides the
+runs that matter. `CANDIDATE_UNCHECKED` keeps its meaning and gains a horizon that can carry
+it: a candidate the *next* run still finds unreported is a trigger or a credential, which is
+the diagnosis the old five-reading warm-up was reaching for over minutes.
+
+### The exclusion was in the build and not in the board
+
+`work_in_flight` kept candidates out of builds; nothing kept them out of
+`/stacked-pr-maintenance`. Two independent traces: #214 came back carrying `needs-resolution`,
+which only that pass writes, and build `integration-20260829-220832` contains `Merge
+remote-tracking branch 'origin/integration'` although every build starts at `cram2/main`. The
+pass had restacked a build branch onto the branch it exists to replace — which is how
+`integration` accumulates history across rebuilds, the one property the design rejects, and how
+a candidate's diff becomes a delta rather than a whole build.
+
+The rule moved to `BoardExport.from_api_records`, which is the single point both the build and
+the maintenance pass derive their work from. **A rule two readers need is not a rule each
+reader applies.**
+
+### What it now remembers, and what it deliberately does not
+
+Every rebuild re-ran the full matrix over a branch set that is usually unchanged, four times a
+day. Two levels are recorded: an assembled build by its git **tree**, because re-assembling the
+same branches over the same base produces a different commit every time and the same tree every
+time — so keying on the commit answers "never seen before" about a build byte-for-byte
+identical to the published one; and a branch by its head commit, which is what feeds the red-tip
+exclusion.
+
+Kept as one git reference each under `refs/integration/passed/<kind>/<date>/<key>`. Nothing has
+to be created or merged to write one, two runs cannot lose each other's, the whole set reads in
+a single `ls-remote`, and the day is in the *name* so ages come out of that same call with no
+object fetched. `INTEGRATION_REFRESH_TOKEN`'s Contents write covers it; no personal-notes
+access is involved.
+
+**Only passes are recorded, and that is a decision rather than an omission.** A failure is
+cleared by re-running the same commit — a flake, a runner that died, a base image rebuilt — and
+the rule this branch established on 2026-08-29 is that a red branch re-enters a build by its
+checks going green rather than by a label coming off. A remembered red makes that unreachable.
+A pass has no such asymmetry.
+
+Retention is a week, and the reasoning is worth stating because the obvious reasoning is wrong.
+Nothing about the *content* decays: a key is a tree or a commit, so any change to what was
+checked produces a different key and the record simply does not apply. What decays is the
+environment — the container image the matrix runs in is rebuilt from the upstream base. A
+missing, unreadable or expired record degrades to checking it again, never to assuming a pass.
+
+### `--plan`, and the constraint that shaped it
+
+`build --plan <id>` and `refresh --plan <id>` carry one plan's tips, repeatable or comma
+separated, with a `plans` dispatch input so it is reachable from where a person starts a
+rebuild. The mapping comes from `_generated/branch-index.tsv` on the personal-notes branch,
+read through the shell's own `PLAN_BRANCH_INDEX_PATH` and `fetch_personal_notes_branch` rather
+than a path restated in Python — one bash call for the whole index rather than the per-branch
+lookup, which over sixty branches would be sixty fetches. Verified against the real branch: 125
+branches, 9 plans, 42 of them `rdr-refactor`. An unfiltered build never reads it at all.
+
+A branch the index names no plan for is reported as `no-plan-recorded` and one of another plan
+as `another-plan`, because a filter working and a gap in the index are different things to
+whoever reads the build.
+
+**The load-bearing constraint is that a filtered build must never be published**, since it is
+deliberately not the whole of what is in flight. Rather than a flag every later step has to
+remember, the *base* decides it: what makes a candidate the one the rebuild settles is being
+opened against the branch a build publishes to, so a filtered candidate is opened against the
+upstream base and `find-candidate` cannot see it. That in turn needed the board to recognise a
+candidate by its title as well as by its base, since a candidate based where every ordinary
+branch is based would otherwise be restacked by a maintenance pass — the fourth defect again,
+in a shape the fix for it did not cover.
+
+### Recorded, not built
+
+Per-plan integration branches are `per-plan-integration-branches`, deferred. The scope check
+was run (`check_scope_overlap.py --base origin/main` over the six paths it would touch: all
+absent from `main`, all shared with #154 and #211, none with `bastler-package`), and the
+judgement is that stripping those edits still leaves nine build branches, nine candidate cycles
+and a complete branch with a build rule of its own — a new item rather than work folded in.
+Everything settled about it is on that item, including the one substantive change to the
+proposal: the complete branch is built from each plan's **last known-green sub-build** rather
+than from current tips, so a broken plan contributes its previous good state instead of
+blocking everyone.
+
+Deferred because the pipeline has published zero builds. Nine of everything, including
+2026-08-30's adoption defect, is how you end up unable to tell which layer is broken.
+
+### Counts
+
+899 tests pass across the four directories CI runs, from 851. Two new modules
+(`integration_pass_record.py`, `integration_plans.py`) and two new test modules. Thirty-two
+mutations checked, each caught by the test naming its rule; two tests were narrowed after a
+mutation caught them for a reason that was not their own — one reading `runner.invoked[-1]`
+where it meant "the settle", and one asserting over every invocation where it meant "the build
+and its candidate".
+
+### Housekeeping, and the one thing that could not be done
+
+The seven accumulated `integration-2026*` build branches (the user counted five on 2026-08-29;
+two more have since been left by candidates #215 and #217) all belong to closed candidates.
+Deleting them from this session failed: every `git push --delete` and empty-refspec push
+disconnects with `send-pack: unexpected disconnect while reading sideband packet`, on all seven
+and on retry, while the agent proxy reports no relay failures and ordinary pushes work. Left
+undone and reported rather than worked around.
