@@ -331,7 +331,7 @@ items:
     branch: perception_eql_backend
     pull_request_number: 222
     track: request-language
-    depends_on: [surfaces-from-world]
+    depends_on: [surfaces-from-world, detect-per-supporting-surface]
     status: in_progress
     session: https://claude.ai/code/session_01QSZsdFk85VPf9iDz8Ldqij
     notes: >-
