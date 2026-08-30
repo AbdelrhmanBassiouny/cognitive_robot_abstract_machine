@@ -1052,3 +1052,109 @@ one: main's `PickUpAction.object_designator` became a `HasRootBody` and reads th
 body off it, so `insert_shape_action.py` passing `montessori_shape.root` raised
 `AttributeError`. Fixed by passing the piece. That took the branch from seven
 failures to five, and the remaining five are the ORM gap above.
+
+## `perception-backend`: the front door, and what the search is actually told
+
+Kicked off 2026-08-30 in `auto` mode, as pull request #222 off
+`perception_per_supporting_surface` (#221).
+
+### It is based on #221, not on #205, and the roadmap already said so
+
+The manifest recorded `depends_on: [surfaces-from-world]`, which would have based this
+on #205. That is wrong, and #221's own section above is where it was already settled:
+"Every detection records the surface supporting it, by the name the world knows that
+surface by. `perception-backend` pushes `is_supported_by` down into the search, so what
+a detection answers about its own support has to name a world entity rather than a plane
+height." `MontessoriShapeDetection.supporting_surface` exists on #221 and on no earlier
+branch, and it is exactly what the supporting-surface pushdown compiles against. So the
+dependency was recorded in prose and never in the manifest; `depends_on` now names both.
+
+### The open question the plan left, answered
+
+`PerceptionBackend` subclasses `SelectiveBackend`, which is the answer the roadmap
+guessed at ("it selects what is really there rather than inventing it, so probably
+yes"). Nothing about a camera makes it generative: it reports what is in front of it and
+cannot fill in an attribute nobody can see. Subclassing also inherits the ellipsis guard
+for free -- a match with an `...` attribute is refused with the same message a database
+backend refuses it with, which is the correct answer for a camera too.
+
+### What the search is told, and what is checked afterwards
+
+The compiled form of a query is a `SceneRequest`: the detection type asked for, and the
+supporting surface asked about, both `None`-able. It carries what a *look* can act on
+and nothing else.
+
+- **Pushed down**: the selected variable's own type, and a condition of the form
+  `<selection>.supporting_surface == <name>`. The pipeline searches one surface instead
+  of every surface, and runs the piece detector only when pieces were asked for.
+- **Residual**: every other condition over the selected variable. The backend puts the
+  detections that came back into the variable's domain and evaluates the expression
+  natively, so the entity query language itself does the filtering. Nothing is dropped,
+  and nothing needs reimplementing.
+- **Neither**: a condition mentioning a variable that is not the one being selected.
+  Perception cannot fetch that variable and filtering cannot invent it, so it raises
+  `BackendCannotResolveCondition`.
+
+**Correctness never depends on the pushdown being honoured.** The pushed-down conditions
+stay in the `where` clause, so native evaluation re-checks them over whatever the source
+returned. A source that ignores the narrowing gives the same answers, more slowly. That
+is what makes the pushdown an optimisation rather than a second, parallel implementation
+of the query's semantics that could disagree with the first.
+
+### The exception goes in krrood, not in the perception package
+
+`BackendCannotResolveCondition` is a statement about the backend protocol -- this backend
+translates a query into another engine's plan, and this condition has no place in that
+plan -- not a statement about cameras. Any selective backend that translates faces it;
+`SQLAlchemyBackend` would face it the moment a condition reached past what SQL can
+express. So it sits in `krrood.entity_query_language.exceptions`, beside
+`SelectiveBackendCannotResolveEllipsisMatch`, which the item's own note asked for. krrood
+gains no dependency on `experiments` from it.
+
+### `Directive.LOOK_FOR`
+
+One member, `KeyWord("Look for")`, beside `FIND` and `GENERATE`. krrood's own test for it
+uses a mimic backend in `test/krrood_test/dataset` rather than importing the perception
+backend, since `krrood` must stay self-contained.
+
+### The node keeps serving its newest look, deliberately
+
+`MontessoriPerceptionNode` runs the pipeline continuously for rviz and answers a query
+from the newest result, which its own docstring records as a decision: "a result that is
+one frame old beats blocking a plan on a fresh capture". A request cannot narrow a look
+that has already been taken, so the node ignores the narrowing and the residual filter
+does the work -- which is exactly the case the paragraph above exists to make safe.
+
+The pushdown is honoured by `MontessoriPerceptionPipeline.detect`, which is where a look
+is actually taken. **Worth knowing for `expectations-from-events`:** arming an
+expectation ("after `Placing(piece, lid)` search the lid") reaches the pipeline through
+the request, so if that item wants the *live node* to look narrowly rather than to filter
+its newest full look, that is a change to the node's decision above and its own call to
+make.
+
+### `PerceivedObjects` is retired
+
+The item's note asks for it and the plan's "why perception is a backend, not a parser"
+section explains it: a domain that runs the whole pipeline on iteration and yields
+everything is the opposite of a query running only what it asked for. Its four tests move
+to the backend, written the way `test_selective_query_multiple_backends` writes a
+SQLAlchemy query -- a variable with no domain, `an(entity(variable).where(...))`, and the
+backend supplying the data. That is the point of the item in one line: the same query
+text, answered by recall or by looking, depending only on which backend it is handed.
+
+### Verification
+
+Tests first, at three levels, so each failure names its own cause:
+
+- The compiler, on its own: a query with a supporting-surface condition compiles to a
+  `SceneRequest` naming that surface and that type; a query with another condition
+  compiles to one that narrows nothing; a query over a second variable raises.
+- The pipeline, on its own: `searched_surfaces` given a request naming the lid returns
+  the lid's search alone.
+- End to end over the rendered scene fixture: the four retired `PerceivedObjects` tests,
+  rewritten against the backend, plus a residual condition returning the right subset.
+
+Run with `--noconftest` and the workspace on `PYTHONPATH` where the ORM regeneration is
+not wanted, following #202, #205, #216 and #221; #216 and #221 both recorded that the
+suite does run in a container once its dependency set is installed, so the full run is
+attempted rather than assumed impossible.
