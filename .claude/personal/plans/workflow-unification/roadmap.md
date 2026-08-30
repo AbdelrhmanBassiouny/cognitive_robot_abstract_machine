@@ -11562,3 +11562,76 @@ And the smaller one, which cost a wasted write this session: `save-pr-progress.s
 `--file`, it reads `CLAUDE.local.md`'s marked section. Passing one is accepted silently and
 ignored, and the run then reports *no changes to save* - which reads as success. The tell was
 the no-op on a note that had definitely changed.
+
+## Update 2026-08-30 (resolve): #107 stalled on a merge-induced CI break and a 16-thread review round
+
+`/plan-item-resolve workflow-unification setup-personal-notes-script`. The item read
+`in_progress` with no blockers and a note whose last line still described the 2026-08-05
+stub-file union, while two things had it stopped. Both are recorded on the item now, which
+is the part that should not have waited for this run.
+
+### The red job is the one that covers this branch
+
+`test_claude_dev_tooling` fails 7 tests, every one in `test_setup_personal_notes_sh.py`,
+every one with the same line:
+
+```
+.claude/hooks/session-start.sh: line 160: .../.claude/hooks/session-start-messages.sh: No such file or directory
+```
+
+Not a robotics-runner failure like the three this pull request already reported and stood
+down from - this is the job whose green the branch's own comment thread promised to act
+on. The cause is the `main` merge in `044b7016`: `main`'s `session-start.sh` sources a
+companion `session-start-messages.sh`, and this module's `SCRIPTS_UNDER_TEST` list names
+the scripts to copy into the scratch layout by hand, so the companion was never copied.
+`test_session_start_sh.py`, `test_git_identity_sync.py` and `test_personal_settings_sync.py`
+each name it in their own lists, which is why only this module broke.
+
+**A restated list of dependencies is the defect, not the missing entry.** Adding the file
+name to a fourth list fixes today's break and leaves the next one exactly as reachable, so
+`install_hook_scripts` now installs what each named script sources, derived by reading the
+script rather than restated beside it.
+
+### The review round: one complaint, sixteen times
+
+Every thread is the same rule from `AGENTS.md` - a literal that names a fixed thing, where
+a named definition already exists or should. Grouped by what they asked for:
+
+- **Names that already have an enum somewhere else.** `HookScript` was in
+  `plan_item_bootstrap.py`, naming only the three scripts that module drives;
+  `SetupPrerequisiteFile` was in `scratch_repository.py`. Both move to
+  `.claude/hooks/tooling_files.py`, `HookScript` extended to every hook script, so
+  production code and tests read the same names - the "one place where everyone can import
+  them" the review asked for.
+- **Pull request labels.** `merged`/`bug`/`in-review` were spelled as literals in the tests
+  and declared again as a bash array inside `setup-personal-notes.sh`. The array moves to
+  `resolve-personal-notes-config.sh` beside every other shared constant, and a
+  `PullRequestLabel` StrEnum is checked against it by a test, the same
+  render-from-the-definition discipline `session_start_summary.py` already uses for
+  `session-start.sh`'s wording.
+- **Raw calls that should go through a runner.** `github-api.sh`'s four functions were
+  spelled as shell strings inside f-strings; `GitHubApiCall` plus a `GitHubApiRunner` now
+  name and make them. The `has_upstream` helper's raw `subprocess.run(["git", ...])` moves
+  onto `ScratchRepository`, which already owns the scratch repository's git.
+- **Inline snippets.** The bash program under test in
+  `test_create_personal_notes_branch_sh.py` and the `.claude/settings.json` body in
+  `test_setup_personal_notes_sh.py` become real files of their own type, read in.
+- **GitHub URL forms.** The five remote-URL spellings the parser is checked against were
+  five f-strings; `GitHubRemoteUrl` states each format once.
+
+### Answered differently, and left open
+
+The `GitCommandRunner` thread asks why that class is not used for every git command
+everywhere. It is `.claude/stack/maintenance_git_commands.py`'s, written for the
+maintenance pass, and the 2026-08-29 round on #211 already recorded that its home is
+moving: `bastler-notes-core-python` owns `git_interface.py` by name with four callers
+waiting, and the open question there is whether one runner can serve a caller that must
+never raise and one for which a silent failure is the bug. Reaching across `.claude/stack/`
+from `.claude/hooks/tests/` to answer that here would settle it in the wrong item. So the
+scratch repository's own git methods absorb the raw calls in these tests, and the thread
+stays open for the user.
+
+`build_dashboard.py` keeps its own `PullRequestLabel`, a third statement of the same three
+labels. Importing it from the hook tests would put `jinja2`/`markdown`/`nh3` behind every
+hook test run, and `bastler-package` is already chartered to give this Python one home.
+Recorded here rather than fixed.

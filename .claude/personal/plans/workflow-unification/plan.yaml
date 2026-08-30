@@ -857,6 +857,22 @@ items:
     track: stack-tooling
     depends_on: [setup-personal-notes-pr101, stack-tooling-on-main]
     status: in_progress
+    blockers:
+      - >-
+          plan-item-resolve: CI is red on head `044b7016`. The `test_claude_dev_tooling` job
+          fails 7 tests in `.claude/hooks/tests/test_setup_personal_notes_sh.py`, all with
+          `session-start.sh: line 160: .../session-start-messages.sh: No such file or
+          directory`. Merging `main` brought in a `session-start.sh` that sources a companion
+          file this module's `SCRIPTS_UNDER_TEST` list does not install into the scratch layout.
+      - >-
+          plan-item-resolve: 16 unresolved review threads opened 2026-08-30 on fork PR #107,
+          across `stub_executables.py`, `test_create_personal_notes_branch_sh.py`,
+          `test_github_api_sh.py`, `test_setup_personal_notes_sh.py` and
+          `test_stub_executables.py`. One theme: string literals that already have a named
+          definition elsewhere (hook script names, tooling file paths, pull request labels,
+          credential variable names, the executables the stubs replace), inline bash and JSON
+          snippets that AGENTS.md requires to live in files of their own, and raw `git`/
+          `github-api.sh` calls that should go through a structured runner.
     session: https://claude.ai/code/session_01MyxyUN3bsvPsJnb5QuNzxd
     notes: >
       Implemented as draft PR #107 (2026-07-29), based on claude/patch-pr-rheubx rather
