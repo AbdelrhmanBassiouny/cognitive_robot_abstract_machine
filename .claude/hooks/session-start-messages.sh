@@ -110,3 +110,100 @@ setup_line_needs_setup() {
   local needs_setup_count="$1"
   printf '%s check(s) need setup - run /setup-personal-notes:' "${needs_setup_count}"
 }
+
+# %% the default branch line
+
+# default_branch_line_not_synced: the script that does the syncing is not in
+# this checkout, so there is no outcome to report rather than a clean one.
+default_branch_line_not_synced() {
+  local fast_forward_script="$1"
+  printf 'not synced - %s is not in this checkout' "${fast_forward_script}"
+}
+
+
+# default_branch_line_not_configured: nothing in this checkout names the
+# upstream repository the fork tracks, so there is no branch to catch up with.
+default_branch_line_not_configured() {
+  local stack_config_file="$1"
+  printf 'not synced - %s is not in this checkout, so no upstream repository is named' \
+    "${stack_config_file}"
+}
+
+# default_branch_line_upstream_unresolved: the configuration is there but this
+# checkout's remotes do not resolve to a fork and an upstream, in the words the
+# resolution itself refused with.
+default_branch_line_upstream_unresolved() {
+  local reason="$1"
+  printf 'not synced - %s' "${reason}"
+}
+
+# default_branch_line_upstream_unreachable: the upstream is named but could not
+# be fetched, so how stale this clone is stays unknown.
+default_branch_line_upstream_unreachable() {
+  local base_branch="$1"
+  local upstream_repository="$2"
+  printf "'%s' left as it is - %s is unreachable" \
+    "${base_branch}" "${upstream_repository}"
+}
+
+# default_branch_line_current: the base every session starts from already
+# carries the upstream's tip.
+default_branch_line_current() {
+  local base_branch="$1"
+  local upstream_repository="$2"
+  printf "'%s' already matches %s" "${base_branch}" "${upstream_repository}"
+}
+
+# default_branch_line_fast_forwarded: the base was behind and has been brought
+# up to the upstream's tip in this clone.
+default_branch_line_fast_forwarded() {
+  local base_branch="$1"
+  local commit_count="$2"
+  local upstream_repository="$3"
+  printf "'%s' fast-forwarded %s commit(s) to %s" \
+    "${base_branch}" "${commit_count}" "${upstream_repository}"
+}
+
+# default_branch_line_diverged: the base carries commits the upstream does not,
+# which a fast-forward cannot reconcile and a force push must never resolve.
+default_branch_line_diverged() {
+  local base_branch="$1"
+  local upstream_repository="$2"
+  printf "'%s' has commits %s does not - left as it is, nothing force-pushed" \
+    "${base_branch}" "${upstream_repository}"
+}
+
+# default_branch_line_local_update_refused: the base is checked out and the
+# working tree would lose changes, so git refused to move it.
+default_branch_line_local_update_refused() {
+  local base_branch="$1"
+  local upstream_repository="$2"
+  printf "'%s' is behind %s but is checked out with changes git will not overwrite - left as it is" \
+    "${base_branch}" "${upstream_repository}"
+}
+
+# %% the rows under the default branch line
+
+# default_branch_row_fork_pushed: the fork was behind too and now is not, so
+# the clone the next session is cut from starts fresh.
+default_branch_row_fork_pushed() {
+  local fork_remote="$1"
+  printf "pushed it to '%s', which was behind" "${fork_remote}"
+}
+
+# default_branch_row_fork_push_failed: this clone moved but the fork did not,
+# which is what silently makes every later clone stale.
+default_branch_row_fork_push_failed() {
+  local fork_remote="$1"
+  printf "pushing it to '%s' was refused - the fork is still behind, so the next clone starts stale" \
+    "${fork_remote}"
+}
+
+# default_branch_row_current_branch_behind: the work this session has to do
+# before planning against a base the fast-forward has moved out from under it.
+default_branch_row_current_branch_behind() {
+  local base_branch="$1"
+  local commit_count="$2"
+  printf "this branch is %s commit(s) behind '%s' - merge or rebase it before planning on a stale base" \
+    "${commit_count}" "${base_branch}"
+}

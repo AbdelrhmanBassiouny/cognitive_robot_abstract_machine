@@ -160,6 +160,30 @@ name other than `origin`, with no configuration at all.
 Reads use the fallback; `create-personal-notes-branch.sh` never creates there. `save-personal-notes.sh`
 writes back to whichever remote actually served the notes, and the header always names it.
 
+## Starting from a fresh base
+
+Sessions are cut from your fork's default branch. When that branch has drifted behind the upstream
+it is forked from, every session in that clone plans, reviews and implements against a stale base —
+and nothing looks wrong from inside the clone, because the clone is perfectly consistent with
+itself. By the time a rebase surfaces the drift, the work is already written against the old base.
+
+So every `session-start.sh` run first brings that branch level, via
+[`fast-forward-default-branch.sh`](./fast-forward-default-branch.sh): it fetches the upstream's base
+branch, fast-forwards this clone's copy of it, and pushes the result to your fork, whose default
+branch is what the *next* session gets cloned from. The summary's `default branch` line says what it
+did, and an indented row under it says how far behind the checked-out branch now is.
+
+Which repository is the upstream comes from `python .claude/stack/stack.py configuration` — the same
+resolution the stacked-PR tooling runs on, layering a personal `.claude/personal/stack.toml` over
+[`stack.toml`](../stack/stack.toml)'s committed defaults. Nothing here names a repository, so it
+works unchanged on a fork of anything, and there is one place to correct if the upstream moves.
+
+Run it by hand to catch a long-running session's clone up mid-session:
+
+```bash
+.claude/hooks/fast-forward-default-branch.sh
+```
+
 ## Plan dashboards (multi-PR initiatives)
 
 When one PR's progress note isn't enough — a stacked refactor, a multi-wave programme, anything
@@ -213,6 +237,13 @@ Any other label is preserved but not interpreted.
 
 ## Safety
 
+- Catching the default branch up is fast-forward only, in every step: a default branch carrying
+  commits the upstream does not is reported and left alone, and nothing is ever force-pushed. Only
+  that one branch is touched — your checked-out branch is never merged or rebased for you, only
+  measured against it.
+- A base that cannot be synced never stops a session: no configuration, unresolvable remotes, an
+  unreachable upstream, a diverged or pinned-down branch and a rejected push are each reported and
+  exit cleanly.
 - Does nothing until you create the notes branch: `git fetch` finds nothing, so `CLAUDE.local.md` is
   never written.
 - Never merges and never checks anything out — the hook and `plan-updates-since.sh` only read the

@@ -6,6 +6,11 @@ The hooks' Python scripts are single-file scripts, not an installed package - so
 directory is added to ``sys.path`` here rather than requiring an ``__init__.py``/
 packaging setup just for tests. Mirrors
 ``.claude/skills/plan-dashboard/tests/conftest.py``.
+
+The stacked-PR tooling's directory is added for the same reason: one hook resolves the
+upstream repository through it, so its tests reach for that directory's git runner
+rather than hand-rolling a third one. ``.claude/stack/tests/conftest.py`` already adds
+this directory in the other direction.
 """
 
 import sys
@@ -13,7 +18,9 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent))
+HOOKS_DIRECTORY = Path(__file__).parent.parent
+sys.path.insert(0, str(HOOKS_DIRECTORY))
+sys.path.insert(0, str(HOOKS_DIRECTORY.parent / "stack"))
 
 from scratch_repository import ScratchRepository  # noqa: E402
 
