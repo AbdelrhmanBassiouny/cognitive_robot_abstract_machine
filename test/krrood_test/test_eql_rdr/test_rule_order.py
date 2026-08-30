@@ -24,9 +24,7 @@ from krrood.entity_query_language.rules.conclusion import Add
 
 from .animal import Animal, Species
 
-# ---------------------------------------------------------------------------
-# Helpers — build minimal rule trees without going through the full RDR fit loop
-# ---------------------------------------------------------------------------
+# %% building rule trees without a fit loop
 
 
 def _animal_var():
@@ -129,9 +127,7 @@ def _mixed_alt_then_ref_query():
     return query, animal
 
 
-# ---------------------------------------------------------------------------
-# Test 1: Single rule
-# ---------------------------------------------------------------------------
+# %% a tree of one rule
 
 
 def test_single_rule_returns_list_of_length_one():
@@ -153,9 +149,7 @@ def test_single_rule_contains_the_condition_node():
     assert result[0]._id_ == root._id_
 
 
-# ---------------------------------------------------------------------------
-# Test 2: All alternatives — insertion order preserved
-# ---------------------------------------------------------------------------
+# %% a tree of alternatives only
 
 
 def test_all_alternatives_returns_three_nodes():
@@ -193,9 +187,7 @@ def test_all_alternatives_emission_order_matches_insertion_order():
     assert emission_ids == display_ids
 
 
-# ---------------------------------------------------------------------------
-# Test 3: All refinements — insertion order preserved (no reversal)
-# ---------------------------------------------------------------------------
+# %% a tree of refinements only
 
 
 def test_all_refinements_returns_three_nodes():
@@ -223,9 +215,7 @@ def test_all_refinements_emission_order_matches_insertion_order():
     assert emission_ids == display_ids
 
 
-# ---------------------------------------------------------------------------
-# Test 4: Mixed tree — the key divergence case
-# ---------------------------------------------------------------------------
+# %% alternatives and refinements in one tree
 
 
 def test_mixed_tree_returns_three_nodes():
@@ -286,9 +276,7 @@ def test_mixed_tree_emission_order_differs_from_display_order():
     assert emission_ids != display_ids
 
 
-# ---------------------------------------------------------------------------
-# Test 5: Emission order == serialization order (integration guard)
-# ---------------------------------------------------------------------------
+# %% emission order is the order the serializer writes
 
 
 def _build_mixed_rdr() -> EQLSingleClassRDR:

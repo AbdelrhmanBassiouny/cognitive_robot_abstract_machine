@@ -12,9 +12,7 @@ from krrood.entity_query_language.rdr.case_table import render_cases_side_by_sid
 
 from .animal import Animal, Species
 
-# ---------------------------------------------------------------------------
-# Minimal case fixtures — PatternName: DistinctFieldAnimal
-# ---------------------------------------------------------------------------
+# %% the cases the table is rendered from
 
 
 @dataclasses.dataclass
@@ -35,9 +33,7 @@ _NEW_CASE = DistinctFieldAnimal(name="eagle", has_wings=True, leg_count=2)
 _CORNER_CASE = DistinctFieldAnimal(name="badger", has_wings=False, leg_count=8)
 
 
-# ---------------------------------------------------------------------------
-# Test 1 — custom new_label appears in the output
-# ---------------------------------------------------------------------------
+# %% the labels the caller supplies
 
 
 def test_render_cases_side_by_side_contains_new_label():
@@ -54,11 +50,6 @@ def test_render_cases_side_by_side_contains_new_label():
     assert "My New Case" in result
 
 
-# ---------------------------------------------------------------------------
-# Test 2 — custom corner_label appears in the output
-# ---------------------------------------------------------------------------
-
-
 def test_render_cases_side_by_side_contains_corner_label():
     """
     ``render_cases_side_by_side`` emits the ``corner_label`` string in its output.
@@ -73,9 +64,7 @@ def test_render_cases_side_by_side_contains_corner_label():
     assert "My Corner Case" in result
 
 
-# ---------------------------------------------------------------------------
-# Test 3 — field values unique to each case both appear
-# ---------------------------------------------------------------------------
+# %% every case's own values reach the table
 
 
 def test_render_cases_side_by_side_contains_both_case_values():
@@ -116,9 +105,7 @@ def test_render_cases_side_by_side_keeps_values_intact_on_a_narrow_terminal(
     assert "badger" in result
 
 
-# ---------------------------------------------------------------------------
-# Test 4 — default labels ("New case" / "Corner case") appear when omitted
-# ---------------------------------------------------------------------------
+# %% the labels used when the caller supplies none
 
 
 def test_render_cases_side_by_side_default_labels():

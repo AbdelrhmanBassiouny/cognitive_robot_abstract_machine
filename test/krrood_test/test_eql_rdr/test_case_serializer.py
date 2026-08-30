@@ -22,9 +22,7 @@ from krrood.entity_query_language.factories import variable
 
 from .animal import Animal, Species
 
-# ---------------------------------------------------------------------------
-# Inline dataclass fixtures (pattern-named, never collected by pytest)
-# ---------------------------------------------------------------------------
+# %% case dataclasses the serializer is exercised against
 
 
 @dataclass
@@ -94,9 +92,7 @@ class BadFieldCase:
     payload: set  # type: ignore[type-arg]
 
 
-# ---------------------------------------------------------------------------
-# Shared serializer instance (stateless — safe to reuse across tests)
-# ---------------------------------------------------------------------------
+# %% the shared serializer instance
 
 
 @pytest.fixture(scope="module")
@@ -110,9 +106,7 @@ def ser() -> AsdictCaseSerializer:
     return AsdictCaseSerializer()
 
 
-# ---------------------------------------------------------------------------
-# AsdictCaseSerializer.to_source — happy paths
-# ---------------------------------------------------------------------------
+# %% to_source: the cases it can render
 
 
 def test_flat_dataclass_to_source_is_eval_able(ser):
@@ -232,9 +226,7 @@ def test_nested_dataclass_referenced_types_includes_inner_type(ser):
     assert Limb in case_source.referenced_types
 
 
-# ---------------------------------------------------------------------------
-# AsdictCaseSerializer.to_source — error path
-# ---------------------------------------------------------------------------
+# %% to_source: the case it refuses
 
 
 def test_non_serializable_field_raises_case_not_serializable_error(ser):
@@ -252,9 +244,7 @@ def test_non_serializable_field_raises_case_not_serializable_error(ser):
         ser.to_source(case)
 
 
-# ---------------------------------------------------------------------------
-# AsdictCaseSerializer.from_data — reconstruction
-# ---------------------------------------------------------------------------
+# %% from_data: reconstructing a case
 
 
 def test_from_data_reconstructs_flat_dataclass(ser):
@@ -289,9 +279,7 @@ def test_from_data_reconstructs_nested_dataclass(ser):
     assert isinstance(reconstructed.limb, Limb)
 
 
-# ---------------------------------------------------------------------------
-# Pluggable serializer on CornerCaseStore
-# ---------------------------------------------------------------------------
+# %% the store's serializer is substitutable
 
 
 def _make_condition_node():

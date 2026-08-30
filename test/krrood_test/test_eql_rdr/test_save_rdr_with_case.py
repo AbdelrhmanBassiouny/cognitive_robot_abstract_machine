@@ -1,5 +1,5 @@
 """
-Tests for ``save_path`` on ``EQLSingleClassRDR`` and ``save_rdr_with_case``.
+Tests for ``save_rdr_with_case`` and the Python it writes.
 """
 
 from __future__ import annotations
@@ -8,10 +8,6 @@ import os
 import tempfile
 import unittest
 from dataclasses import dataclass
-from typing import ClassVar
-from unittest.mock import patch
-
-import pytest
 
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.function_case import FunctionCase
@@ -24,14 +20,11 @@ from krrood.entity_query_language.rdr.serialization import (
     walk_rules_in_emission_order,
 )
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
-from krrood.entity_query_language.rdr.utils import UNSET
 
 from .animal import Animal, Species
 from .zoo_loader import load_zoo_animals
 
-# ---------------------------------------------------------------------------
-# Shared test data (loaded once, reused by all tests in this module).
-# ---------------------------------------------------------------------------
+# %% the zoo data and the fitted trees built from it
 
 animals, targets = load_zoo_animals()
 
@@ -51,7 +44,7 @@ def _scripted_expert(rules) -> Expert:
     def answer(context, requests):
         return {"conditions": rules[context.target_conclusion](context.case_variable)}
 
-    return Expert(interface=FunctionInterface(answer_fn=answer))
+    return Expert(interface=FunctionInterface(answer_function=answer))
 
 
 def _build_one_rule_rdr() -> EQLSingleClassRDR:
@@ -80,9 +73,7 @@ def _build_two_rule_rdr() -> EQLSingleClassRDR:
     return rdr
 
 
-# ---------------------------------------------------------------------------
-# Minimal synthetic FunctionCase subclass (does NOT need @rdr, not yet implemented).
-# ---------------------------------------------------------------------------
+# %% a FunctionCase subclass written by hand rather than by @rdr
 
 
 def _score_func(x: int, y: int) -> float:
@@ -106,111 +97,7 @@ class SyntheticFunctionCase(FunctionCase):
 SyntheticFunctionCase.function = _score_func
 
 
-# ---------------------------------------------------------------------------
-# Step A — ``save_path`` field and auto-save on ``fit_case``
-# ---------------------------------------------------------------------------
-
-
-@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
-class TestSavePathFieldDefault(unittest.TestCase):
-    """
-    save_path=None (the default): fit_case must not write any file.
-    """
-
-    def test_save_path_default_is_none(self):
-        """
-        EQLSingleClassRDR must default save_path to None.
-        """
-        rdr = EQLSingleClassRDR(Animal, "species")
-        self.assertIsNone(rdr.save_path)
-
-    def test_fit_case_does_not_write_file_when_save_path_is_none(self):
-        """
-        No file is created when save_path is None, even after fit_case.
-        """
-        with tempfile.TemporaryDirectory() as d:
-            # Spy on save_rdr_with_case: it must never be called.
-            with patch(
-                "krrood.entity_query_language.rdr.single_class.save_rdr_with_case"
-            ) as mock_save:
-                rdr = EQLSingleClassRDR(Animal, "species")
-                expert = _scripted_expert({Species.mammal: lambda v: v.milk == True})
-                rdr.fit_case(first(Species.mammal), Species.mammal, expert)
-                mock_save.assert_not_called()
-
-
-@unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
-class TestSavePathFieldPresent(unittest.TestCase):
-    """
-    save_path=<path>: fit_case writes a file at that path.
-    """
-
-    def test_file_is_created_after_first_fit_case(self):
-        """
-        After fit_case, a non-empty file must exist at save_path.
-        """
-        with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "model.py")
-            rdr = EQLSingleClassRDR(Animal, "species", save_path=path)
-            expert = _scripted_expert({Species.mammal: lambda v: v.milk == True})
-            rdr.fit_case(first(Species.mammal), Species.mammal, expert)
-            self.assertTrue(os.path.exists(path))
-
-    def test_file_content_is_non_empty_after_first_fit_case(self):
-        """
-        The file written by save_path must not be empty.
-        """
-        with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "model.py")
-            rdr = EQLSingleClassRDR(Animal, "species", save_path=path)
-            expert = _scripted_expert({Species.mammal: lambda v: v.milk == True})
-            rdr.fit_case(first(Species.mammal), Species.mammal, expert)
-            with open(path) as f:
-                content = f.read()
-            self.assertGreater(len(content.strip()), 0)
-
-    def test_save_called_twice_for_two_fit_case_calls(self):
-        """
-        save_rdr_with_case must be invoked once per _insert_rule, i.e. twice for two new
-        rules.
-        """
-        with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "model.py")
-            with patch(
-                "krrood.entity_query_language.rdr.single_class.save_rdr_with_case"
-            ) as mock_save:
-                rdr = EQLSingleClassRDR(Animal, "species", save_path=path)
-                expert = _scripted_expert(
-                    {
-                        Species.mammal: lambda v: v.milk == True,
-                        Species.bird: lambda v: v.feathers == True,
-                    }
-                )
-                rdr.fit_case(first(Species.mammal), Species.mammal, expert)
-                rdr.fit_case(first(Species.bird), Species.bird, expert)
-                self.assertEqual(mock_save.call_count, 2)
-
-    def test_save_not_called_when_case_already_correct(self):
-        """
-        fit_case on an already-correct case must not trigger a second write.
-        """
-        with tempfile.TemporaryDirectory() as d:
-            path = os.path.join(d, "model.py")
-            with patch(
-                "krrood.entity_query_language.rdr.single_class.save_rdr_with_case"
-            ) as mock_save:
-                rdr = EQLSingleClassRDR(Animal, "species", save_path=path)
-                expert = _scripted_expert({Species.mammal: lambda v: v.milk == True})
-                rdr.fit_case(first(Species.mammal), Species.mammal, expert)
-                count_after_first = mock_save.call_count
-                # Fit the same case again — it is already correct, no new rule inserted.
-                rdr.fit_case(first(Species.mammal), Species.mammal, expert)
-                self.assertEqual(mock_save.call_count, count_after_first)
-
-
-# ---------------------------------------------------------------------------
-# Step B — ``save_rdr_with_case`` function
-# ---------------------------------------------------------------------------
+# %% what save_rdr_with_case writes
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
@@ -234,15 +121,15 @@ class TestSaveRdrWithCaseRoundtrip(unittest.TestCase):
 
     def test_loaded_rdr_unclassified_case_returns_unset(self):
         """
-        load_rdr of save_rdr_with_case returns UNSET for a case not covered by the
-        rules.
+        load_rdr of save_rdr_with_case leaves a case the rules do not cover
+        undetermined.
         """
         rdr = _build_one_rule_rdr()
         with tempfile.TemporaryDirectory() as d:
             path = os.path.join(d, "model.py")
             save_rdr_with_case(rdr, path)
             loaded = load_rdr(path)
-        self.assertIs(loaded.classify(first(Species.bird)), UNSET)
+        self.assertIs(loaded.classify(first(Species.bird)), ...)
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
@@ -381,9 +268,7 @@ class TestSaveRdrWithCaseNonFunctionCaseFallback(unittest.TestCase):
         self.assertEqual(loaded.classify(first(Species.mammal)), Species.mammal)
 
 
-# ---------------------------------------------------------------------------
-# Step B — ``rdr_to_python`` with ``case_type_is_local=True``
-# ---------------------------------------------------------------------------
+# %% rdr_to_python and a case type local to the file
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")

@@ -19,9 +19,7 @@ from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 from .animal import Animal, Species
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+# %% the rule trees and cases these tests record against
 
 
 @dataclass
@@ -96,9 +94,7 @@ class SpySerializer(CaseSerializer):
         return data
 
 
-# ---------------------------------------------------------------------------
-# Test 1 — record and retrieve by node id
-# ---------------------------------------------------------------------------
+# %% recording a case and reading it back
 
 
 def test_record_and_get_by_node_id():
@@ -114,9 +110,7 @@ def test_record_and_get_by_node_id():
     assert store.get(node._id_) is case
 
 
-# ---------------------------------------------------------------------------
-# Test 2 — get returns None for an unknown UUID
-# ---------------------------------------------------------------------------
+# %% reading a case the store does not hold
 
 
 def test_get_none_for_missing_node_id():
@@ -130,11 +124,6 @@ def test_get_none_for_missing_node_id():
     assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Test 3 — get returns None for None input
-# ---------------------------------------------------------------------------
-
-
 def test_get_none_for_none_input():
     """
     ``get(None)`` returns ``None`` without raising.
@@ -146,9 +135,7 @@ def test_get_none_for_none_input():
     assert result is None
 
 
-# ---------------------------------------------------------------------------
-# Test 4 — to_ordered_sources only includes nodes that have recorded cases
-# ---------------------------------------------------------------------------
+# %% to_ordered_sources: which nodes it emits
 
 
 def test_to_ordered_sources_only_includes_recorded_nodes():
@@ -175,9 +162,7 @@ def test_to_ordered_sources_only_includes_recorded_nodes():
     assert 1 not in result
 
 
-# ---------------------------------------------------------------------------
-# Test 5 — to_ordered_sources passes the recorded case instance to emit
-# ---------------------------------------------------------------------------
+# %% to_ordered_sources: what it hands the serializer
 
 
 def test_to_ordered_sources_calls_emit_with_the_case():
@@ -199,9 +184,7 @@ def test_to_ordered_sources_calls_emit_with_the_case():
     assert spy.received[0] is sentinel_case
 
 
-# ---------------------------------------------------------------------------
-# Test 6 — from_ordered_cases round-trip
-# ---------------------------------------------------------------------------
+# %% from_ordered_cases: the round trip
 
 
 def test_from_ordered_cases_roundtrip():
@@ -220,9 +203,7 @@ def test_from_ordered_cases_roundtrip():
     assert store.get(n1._id_) is case_b
 
 
-# ---------------------------------------------------------------------------
-# Test 7 — from_ordered_cases skips indices not present in the dict
-# ---------------------------------------------------------------------------
+# %% from_ordered_cases: a gap in the emitted order
 
 
 def test_from_ordered_cases_skips_missing_indices():
@@ -242,9 +223,7 @@ def test_from_ordered_cases_skips_missing_indices():
     assert store.get(n2._id_) is None
 
 
-# ---------------------------------------------------------------------------
-# Test 8 — recording a second case for the same node overwrites the first
-# ---------------------------------------------------------------------------
+# %% recording twice for one node
 
 
 def test_record_overwrites_previous_entry():

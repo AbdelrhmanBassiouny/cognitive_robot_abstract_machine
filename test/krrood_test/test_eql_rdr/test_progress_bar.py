@@ -16,11 +16,11 @@ import pytest
 from krrood.entity_query_language.rdr.progress import (
     IPythonProgressBar,
     ProgressReporter,
+    RecordedCall,
     SpyProgressReporter,
 )
 
-
-# -- ABC contract ----------------------------------------------------------
+# %% the ProgressReporter contract
 
 
 class TestProgressReporterProtocol:
@@ -47,7 +47,7 @@ class TestProgressReporterProtocol:
             MissingMethods()
 
 
-# -- IPythonProgressBar (tqdm wrapper) ------------------------------------
+# %% IPythonProgressBar over tqdm
 
 
 class TestIPythonProgressBar:
@@ -195,61 +195,61 @@ class TestIPythonProgressBar:
         bar.finish()
 
 
-# -- SpyProgressReporter (test double) -----------------------------------
+# %% SpyProgressReporter's recording
 
 
 class TestSpyProgressReporter:
     """
     Tests for the SpyProgressReporter test double.
 
-    Each test verifies that the correct (method_name, args, kwargs) tuple is appended to
+    Each test verifies that the correct :class:`RecordedCall` is appended to
     ``self.events``.
     """
 
     def test_spy_records_start(self) -> None:
         """
-        Start(total, description) records (\"start\", (total,), {\"description\": ...}).
+        Start(total, description) records the total and the description it was given.
         """
         spy = SpyProgressReporter()
         spy.start(5, "fitting")
 
-        assert spy.events == [("start", (5,), {"description": "fitting"})]
+        assert spy.events == [RecordedCall("start", (5,), {"description": "fitting"})]
 
     def test_spy_records_update_default(self) -> None:
         """
-        Update() records (\"update\", (1,), {}).
+        Update() records a step of one.
         """
         spy = SpyProgressReporter()
         spy.update()
 
-        assert spy.events == [("update", (1,), {})]
+        assert spy.events == [RecordedCall("update", (1,), {})]
 
     def test_spy_records_update_with_n(self) -> None:
         """
-        Update(3) records (\"update\", (3,), {}).
+        Update(n) records the step size it was given.
         """
         spy = SpyProgressReporter()
         spy.update(3)
 
-        assert spy.events == [("update", (3,), {})]
+        assert spy.events == [RecordedCall("update", (3,), {})]
 
     def test_spy_records_reset(self) -> None:
         """
-        Reset(total) records (\"reset\", (total,), {}).
+        Reset(total) records the new total.
         """
         spy = SpyProgressReporter()
         spy.reset(8)
 
-        assert spy.events == [("reset", (8,), {})]
+        assert spy.events == [RecordedCall("reset", (8,), {})]
 
     def test_spy_records_finish(self) -> None:
         """
-        Finish() records (\"finish\", (), {}).
+        Finish() records a call with no arguments.
         """
         spy = SpyProgressReporter()
         spy.finish()
 
-        assert spy.events == [("finish", (), {})]
+        assert spy.events == [RecordedCall("finish", (), {})]
 
     def test_spy_accumulates_events(self) -> None:
         """
@@ -262,8 +262,8 @@ class TestSpyProgressReporter:
         spy.finish()
 
         assert spy.events == [
-            ("start", (5,), {"description": ""}),
-            ("update", (1,), {}),
-            ("reset", (3,), {}),
-            ("finish", (), {}),
+            RecordedCall("start", (5,), {"description": ""}),
+            RecordedCall("update", (1,), {}),
+            RecordedCall("reset", (3,), {}),
+            RecordedCall("finish", (), {}),
         ]
