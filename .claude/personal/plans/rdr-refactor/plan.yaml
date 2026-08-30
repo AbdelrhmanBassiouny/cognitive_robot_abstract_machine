@@ -750,11 +750,35 @@ items:
   - D-ui-rendering
   status: in_progress
   session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
+  blockers:
+  - >-
+    stacked-pr-maintenance: the 2026-08-30 pass could not integrate the rebuilt
+    `D-ui-rendering` into this branch — 19 files conflict, because #76 still merges #79''s
+    pre-rebuild tip `0a305c68` — so it left the branch untouched and labelled it
+    `needs-resolution`:
+    https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/76#issuecomment-5468074724
+  - >-
+    The interactive layer still calls the `ExpertInterface` members #98 moved away
+    (`on_save`, `save()`, `make_progress_reporter()`), so the restack is not a base change
+    alone: `interactive.py` and `magics.py` have to be brought onto `ModelSaver`/
+    `ProgressReporter` before this branch can build on the current stack.
   notes: '2026-08-23: outstanding work added from the #159 review - **default the progress reporter to IPythonProgressBar here**. The engine keeps NullProgressReporter, which is the only default correct for a caller it knows nothing about; the developer agreed the interactive default belongs in this layer, which is the one that knows there is a shell to draw on. This also matches roadmap section 11''s original reasoning for segregating ExpertInterface: the interactive layer constructs both the reporter and the Q&A surface and hands them in. Not started. See roadmap.md section 30.
 
     2026-08-30: this branch still sits on `D-ui-rendering`''s pre-rebuild tip `0a305c68` and so
     still carries #78''s superseded `_last_parent_of_type_` commit. It needs the same restack #79
-    just had — onto the rebuilt `D-ui-rendering` — and the splice commit must not survive it.'
+    just had — onto the rebuilt `D-ui-rendering` — and the splice commit must not survive it.
+
+    2026-08-30 (later): a `/plan-item-resolve` session gathered the state the two notes above
+    never carried. #76 has had no new head since 2026-07-19 (`c50d2109`), so its all-green CI is
+    six weeks old and was measured on the dead base; the 2026-08-30 maintenance pass tried to
+    merge the rebuilt `D-ui-rendering` in, hit conflicts in 19 files, skipped the branch and
+    labelled it `needs-resolution`. #98''s comment 5201827158 (2026-08-06) is the other half of
+    the work and had never been recorded here: the `ExpertInterface` segregation moved `on_save`/
+    `save()` to `ModelSaver` and `make_progress_reporter()` to a `ProgressReporter` the RDR holds,
+    which breaks four call sites on this branch (`interactive.py` 231/335/440, `magics.py`
+    171-175). The rdr package has also gained `answer_vocabulary.py`, `branch_semantics.py`,
+    `conclusion_helper.py` and `guard_condition.py` and lost `aid.py`/`utils.py` since this branch
+    was last built. See roadmap.md §36.'
 - id: D-store
   title: 'D-store: RDRFileStore for the @rdr model-file lifecycle'
   branch: D-store
