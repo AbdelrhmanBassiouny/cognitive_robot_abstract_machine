@@ -37,19 +37,25 @@ therefore runs against a probe that builds the experiments class diagram with th
 (`scratchpad/experiments_diagram_probe.py`, plus `giskardpy_generate_orm_without_ros.py`
 to get giskardpy's interface built at all). Scratch harnesses, not repository changes.
 
-## Done
+## Done — the item is built, `08a6513e3`
 
-- Branch cut off #202, bootstrap commit pushed, draft PR #223 opened.
-- Manifest: `branch`, `session`, `pull_request_number`, `status: in_progress`.
-- Roadmap section recorded.
+- Branch cut off #202, draft PR #223 opened, manifest and roadmap recorded.
+- Three tests written first; all three failed on the parent, each for its own reason.
+- `experiments/montessori/__init__.py` added; `Footprint` → `RectifiedFootprint` across
+  `footprint.py`, `detections.py`, `pipeline.py` and `test_montessori_footprint.py`.
+- Probe rebuilt: one `RectifiedFootprintDAO`, the interface imports, and `get_dao_class`
+  resolves `CubeShapeDAO`, `MontessoriShapeDAO`, `ShapeSortingBoardDAO`,
+  `ShapeSortingHoleDAO`.
+- `145 passed, 1 skipped` across the eleven `test_montessori_*` modules, against
+  `142 passed, 1 skipped` on the parent — the three added and nothing else.
+- PR description updated to match; dashboard republished; tracking issue told.
 
 ## Next
 
-- Write the three tests; watch them fail for their own reasons.
-- Add the `__init__.py`; rename to `RectifiedFootprint`.
-- Re-run the probe: interface writes, imports, `get_dao_class(CubeShape)` resolves.
-- Run the Montessori test modules with `--noconftest`.
-- Republish the dashboard; note the #205/#221 conflict hazard.
+- Nothing on this branch. It is a draft awaiting review.
+- When #205 or #221 rebases, the rename conflicts in `pipeline.py`/`footprint.py`:
+  take their edit, spell the class `RectifiedFootprint`.
+- The DAO test runs for real only in CI, where the conftest builds the interface.
 
 ## Watch out
 
