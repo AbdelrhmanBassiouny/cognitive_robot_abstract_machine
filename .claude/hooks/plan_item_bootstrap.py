@@ -84,7 +84,9 @@ the document never has to decode an integer back into a meaning.
    one-field edit into an unreadable diff across the whole file. Every key, filename and
    status this module writes is named once in :class:`ManifestKey`, :class:`PlanDocument`
    and :class:`ItemStatus`, and every line is rendered by the key that owns it, so no
-   caller - tests included - writes a second copy of a manifest line by hand.
+   caller - tests included - writes a second copy of a manifest line by hand. The depth
+   a line is written at comes from the manifest being edited, through
+   :class:`ItemIndentation`, since YAML admits more than one and plans use both.
 """
 
 from __future__ import annotations
@@ -133,24 +135,15 @@ Mirrors ``PLANS_DIR`` in ``resolve-personal-notes-config.sh``, which is the shel
 the same tooling; a test holds the two equal so the mirror cannot drift.
 """
 
-ITEM_FIELD_INDENT = "    "
-"""
-The indentation ``plan.yaml`` item fields carry, one level inside the list marker.
-"""
-
 ITEM_MARKER = "  - "
 """
-What opens an item block, the list marker its first field sits behind.
+What opens an item block in a manifest that tracks no item yet to copy the depth from.
 """
 
-BLOCK_BODY_INDENT = "      "
+INDENTATION_STEP = "  "
 """
-The indentation a block-styled value's body carries, one level inside its own key.
-"""
-
-SEQUENCE_ENTRY_INDENT = "      "
-"""
-The indentation a sequence entry's dash carries, one level inside its own key.
+One level of YAML indentation, which is what separates a key from the lines its own
+value occupies beneath it.
 """
 
 MANIFEST_LINE_WIDTH = 100
@@ -215,7 +208,7 @@ def fold(text: str, indent: str) -> str:
     return "\n\n".join(paragraphs) + "\n"
 
 
-def render_sequence_entry(entry: str) -> str:
+def render_sequence_entry(entry: str, indentation: ItemIndentation) -> str:
     """
     One entry of a sequence-styled value, newline-terminated.
 
@@ -228,13 +221,14 @@ def render_sequence_entry(entry: str) -> str:
     manifests ends in a newline.
 
     :param entry: The entry's text.
+    :param indentation: The depth the item this entry belongs to is written at.
     :return: The entry's lines.
     """
-    quoted = f'{SEQUENCE_ENTRY_INDENT}- "{entry}"'
+    quoted = f'{indentation.nested}- "{entry}"'
     if "\n" not in entry and len(quoted) <= MANIFEST_LINE_WIDTH and '"' not in entry:
         return f"{quoted}\n"
-    body = fold(entry, SEQUENCE_ENTRY_INDENT + ITEM_FIELD_INDENT)
-    return f"{SEQUENCE_ENTRY_INDENT}- >-\n{body}"
+    body = fold(entry, indentation.nested + indentation.body)
+    return f"{indentation.nested}- >-\n{body}"
 
 
 # %% the vocabulary a plan manifest is written in
@@ -445,7 +439,12 @@ class ManifestKey(KeySpecification, Enum):
     The manifest's top-level list of items.
     """
 
-    def render(self, value: str | Sequence[str], opening_the_item: bool = False) -> str:
+    def render(
+        self,
+        value: str | Sequence[str],
+        indentation: ItemIndentation,
+        opening_the_item: bool = False,
+    ) -> str:
         """
         The manifest text setting this key to *value*, newline-terminated.
 
@@ -454,18 +453,21 @@ class ManifestKey(KeySpecification, Enum):
         rather than a single one.
 
         :param value: The value to write - a sequence only for a sequence-styled key.
+        :param indentation: The depth the manifest being written writes its items at.
         :param opening_the_item: Whether this is the item block's first line, which
             carries the list marker instead of the key indent.
         :return: The rendered text.
         """
-        prefix = ITEM_MARKER if opening_the_item else ITEM_FIELD_INDENT
+        prefix = indentation.marker if opening_the_item else indentation.body
         if self.style is ValueStyle.SEQUENCE:
             if not value:
                 return f"{prefix}{self.key}: []\n"
-            entries = "".join(render_sequence_entry(entry) for entry in value)
+            entries = "".join(
+                render_sequence_entry(entry, indentation) for entry in value
+            )
             return f"{prefix}{self.key}:\n{entries}"
         if self.style is ValueStyle.BLOCK:
-            return f"{prefix}{self.key}: >\n{fold(str(value), BLOCK_BODY_INDENT)}"
+            return f"{prefix}{self.key}: >\n{fold(str(value), indentation.nested)}"
         written = f'"{value}"' if self.style is ValueStyle.DOUBLE_QUOTED else value
         return f"{prefix}{self.key}: {written}\n"
 
@@ -488,9 +490,11 @@ rather than listed a second time.
 """
 
 
-ITEM_START_PATTERN = re.compile(rf"^\s*- {re.escape(ManifestKey.IDENTIFIER.key)}:")
+
+ITEM_START_PATTERN = re.compile(rf"^(\s*-\s+){re.escape(ManifestKey.IDENTIFIER.key)}:")
 """
-Matches the first line of an item block, which is always its ``id``.
+Matches the first line of an item block, which is always its ``id``, capturing the
+marker that opens it.
 
 Same anchor ``sync_manifest_status.py`` uses to find item boundaries in raw text.
 """
@@ -507,6 +511,65 @@ BLOCK_VALUE_PATTERN = re.compile(
 Matches a key whose value may run over the following lines, derived from
 :data:`BLOCK_STYLED_KEYS` rather than listing those keys a second time.
 """
+
+
+@dataclass(frozen=True)
+class ItemIndentation:
+    """
+    The whitespace one manifest writes its item blocks at.
+
+    YAML writes a block sequence either indented under its key or flush with it, and
+    plans are written both ways, so an edit reads the depth off the manifest it is
+    editing. Lines written at any other depth do not parse.
+    """
+
+    marker: str
+    """
+    What opens an item block: the leading whitespace, the ``-``, and the spaces before
+    the item's first key.
+    """
+
+    @property
+    def body(self) -> str:
+        """
+        What every line of the block after its first begins with, which is the column
+        the first key sits at behind the marker.
+        """
+        return " " * len(self.marker)
+
+    @property
+    def nested(self) -> str:
+        """
+        What a line of a value written beneath its own key begins with - a sequence
+        entry's dash, or a folded scalar's body.
+        """
+        return self.body + INDENTATION_STEP
+
+    @classmethod
+    def of_item(cls, item_line: str) -> ItemIndentation:
+        """
+        Read the indentation off an item block's own first line.
+
+        :param item_line: The block's first line, as :func:`locate_item_block` finds it.
+        :return: The indentation that block is written at.
+        """
+        return cls(marker=ITEM_START_PATTERN.match(item_line).group(1))
+
+    @classmethod
+    def of_manifest(cls, manifest_text: str) -> ItemIndentation:
+        """
+        Read the indentation off the manifest's first item, since one manifest writes
+        every item alike.
+
+        :param manifest_text: The manifest's raw text.
+        :return: The indentation its items are written at, or :data:`ITEM_MARKER`'s when
+            it tracks no item yet to copy.
+        """
+        for line in manifest_text.split("\n"):
+            opened = ITEM_START_PATTERN.match(line)
+            if opened:
+                return cls(marker=opened.group(1))
+        return cls(marker=ITEM_MARKER)
 
 
 class ExitCode(IntEnum):
@@ -563,6 +626,16 @@ class ExitCode(IntEnum):
 
     A finding rather than a failure - every pull request is supposed to belong to a
     plan, so a caller acting on the status alone reports it instead of guessing.
+    """
+
+    PLAN_SAVE_FAILED = 11
+    """
+    ``save-plan.sh`` reported an error; its own output says why.
+    """
+
+    PLAN_NOT_WRITTEN = 12
+    """
+    The save reported success, but the notes branch does not carry the edit.
     """
 
     @property
@@ -907,6 +980,68 @@ class NotesBranchUnavailableError(BootstrapError):
         return f"Run {HOOKS_DIRECTORY}/create-personal-notes-branch.sh first."
 
 
+@dataclass
+class PlanSaveFailedError(BootstrapError):
+    """
+    Raised when ``save-plan.sh`` reports an error, carrying what it said.
+    """
+
+    exit_code: ClassVar[ExitCode] = ExitCode.PLAN_SAVE_FAILED
+
+    plan_identifier: str
+    """
+    The plan whose save failed.
+    """
+
+    detail: str
+    """
+    What the script wrote before exiting.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{HookScript.SAVE_PLAN.value} refused to save plan "
+            f"'{self.plan_identifier}':\n{self.detail}"
+        )
+
+    def suggest_correction(self) -> str:
+        return "Nothing was written, so the plan is as it was before the run."
+
+
+@dataclass
+class PlanNotWrittenError(BootstrapError):
+    """
+    Raised when a save that reported success left the notes branch without the edit, so
+    a report of success would be no evidence that anything landed.
+    """
+
+    exit_code: ClassVar[ExitCode] = ExitCode.PLAN_NOT_WRITTEN
+
+    plan_identifier: str
+    """
+    The plan that was meant to be written.
+    """
+
+    documents: tuple[PlanDocument, ...]
+    """
+    The documents the notes branch does not carry the edit to.
+    """
+
+    def error_message(self) -> str:
+        missing = ", ".join(document.value for document in self.documents)
+        return (
+            f"{HookScript.SAVE_PLAN.value} reported success, but plan "
+            f"'{self.plan_identifier}' on the personal-notes branch does not carry "
+            f"the edit to {missing}"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Read the plan off the notes branch before editing it again - another "
+            "write may have landed in between."
+        )
+
+
 # %% the plan on the personal-notes branch
 
 
@@ -1070,12 +1205,18 @@ class PlanDocuments:
 
     def save(self, manifest_text: str, roadmap_text: str, project_root: Path) -> None:
         """
-        Push an edited manifest and roadmap through ``save-plan.sh``.
+        Push an edited manifest and roadmap through ``save-plan.sh``, then read the
+        notes branch back to confirm they landed.
+
+        Both halves are what makes a report of success mean anything: the script's own
+        output explains a refusal instead of being swallowed, and the branch, rather
+        than the exit status, decides whether the edit is there.
 
         :param manifest_text: The full manifest to write.
         :param roadmap_text: The full roadmap to write.
         :param project_root: The repository to run the script from.
-        :raises subprocess.CalledProcessError: If the script reports an error.
+        :raises PlanSaveFailedError: If the script reports an error.
+        :raises PlanNotWrittenError: If the branch does not carry the edit afterwards.
         """
         with tempfile.TemporaryDirectory() as scratch_directory:
             scratch = Path(scratch_directory)
@@ -1085,7 +1226,7 @@ class PlanDocuments:
             }
             for document, content in written.items():
                 (scratch / document.value).write_text(content)
-            subprocess.run(
+            saving = subprocess.run(
                 [
                     "bash",
                     HookScript.SAVE_PLAN.path,
@@ -1098,7 +1239,38 @@ class PlanDocuments:
                 cwd=project_root,
                 capture_output=True,
                 text=True,
-                check=True,
+            )
+        if saving.returncode != 0:
+            raise PlanSaveFailedError(
+                plan_identifier=self.plan_identifier,
+                detail=(saving.stderr or saving.stdout).strip(),
+            )
+        self.confirm_written(written, project_root)
+
+    def confirm_written(
+        self, written: dict[PlanDocument, str], project_root: Path
+    ) -> None:
+        """
+        Check that the notes branch carries what was just saved.
+
+        :param written: The content each document was saved with.
+        :param project_root: The repository to read within.
+        :raises PlanNotWrittenError: If a document on the branch differs from what was
+            saved.
+        """
+        landed = PlanDocuments.load(self.plan_identifier, project_root)
+        on_the_branch = {
+            PlanDocument.MANIFEST: landed.manifest_text,
+            PlanDocument.ROADMAP: landed.roadmap_text,
+        }
+        unwritten = tuple(
+            document
+            for document, content in written.items()
+            if on_the_branch[document].strip() != content.strip()
+        )
+        if unwritten:
+            raise PlanNotWrittenError(
+                plan_identifier=self.plan_identifier, documents=unwritten
             )
 
 
@@ -1177,8 +1349,9 @@ def apply_item_fields(
     """
     lines = manifest_text.split("\n")
     start, end = locate_item_block(lines, plan_identifier, item_identifier)
+    indentation = ItemIndentation.of_item(lines[start])
     for manifest_key, value in values_by_key.items():
-        rendered = manifest_key.render(value).rstrip("\n").split("\n")
+        rendered = manifest_key.render(value, indentation).rstrip("\n").split("\n")
         existing = next(
             (
                 index
@@ -1260,11 +1433,12 @@ def last_populated_line(manifest_lines: list[str], start: int, end: int) -> int:
     )
 
 
-def render_new_item(request: ItemRecordRequest) -> str:
+def render_new_item(request: ItemRecordRequest, indentation: ItemIndentation) -> str:
     """
     Render a brand-new item block, in the field order ``plan-schema.md`` documents.
 
     :param request: The item to record.
+    :param indentation: The depth the manifest it is appended to writes its items at.
     :raises IncompleteNewItemError: If a field a new entry cannot omit is missing.
     :return: The block's text, newline-terminated.
     """
@@ -1284,8 +1458,10 @@ def render_new_item(request: ItemRecordRequest) -> str:
         ManifestKey.STATUS: request.status.value,
     }
     return ManifestKey.IDENTIFIER.render(
-        request.item_identifier, opening_the_item=True
-    ) + "".join(manifest_key.render(value) for manifest_key, value in body.items())
+        request.item_identifier, indentation, opening_the_item=True
+    ) + "".join(
+        manifest_key.render(value, indentation) for manifest_key, value in body.items()
+    )
 
 
 def append_item(manifest_text: str, block: str) -> str:
@@ -1434,7 +1610,12 @@ def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapRepo
     created_item = not documents.has_item(request.item_identifier)
 
     if created_item:
-        manifest_text = append_item(documents.manifest_text, render_new_item(request))
+        manifest_text = append_item(
+            documents.manifest_text,
+            render_new_item(
+                request, ItemIndentation.of_manifest(documents.manifest_text)
+            ),
+        )
     else:
         manifest_text = apply_item_fields(
             documents.manifest_text,

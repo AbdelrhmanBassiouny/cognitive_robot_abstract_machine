@@ -26,13 +26,12 @@ import yaml
 import plan_item_bootstrap
 from plan_item_bootstrap import (
     BLOCK_STYLED_KEYS,
-    ITEM_FIELD_INDENT,
     MANIFEST_LINE_WIDTH,
     PLANS_DIRECTORY,
-    SEQUENCE_ENTRY_INDENT,
     CreatedPullRequest,
     ExitCode,
     HookScript,
+    ItemIndentation,
     ItemRecordRequest,
     ItemStatus,
     ItemUpdateRequest,
@@ -45,6 +44,7 @@ from plan_item_bootstrap import (
     UnknownPlanError,
     ValueStyle,
     WorkOpenRequest,
+    apply_item_fields,
     block_branch,
     check_item,
     open_work,
@@ -62,6 +62,17 @@ PLAN_IDENTIFIER = "test-plan"
 PLAN_MANIFEST = (FIXTURES_DIRECTORY / "bootstrap-plan.yaml").read_text()
 """
 The manifest every test starts from.
+"""
+
+INDENTLESS_PLAN_MANIFEST = (
+    FIXTURES_DIRECTORY / "bootstrap-plan-indentless-items.yaml"
+).read_text()
+"""
+The same plan with its sequences written indentless - each item's ``-`` flush with the
+``items:`` key it belongs to, and its fields one level in.
+
+YAML admits both this and the indented form :data:`PLAN_MANIFEST` uses, and real plans
+are written both ways, so an edit has to take the depth from the manifest it is editing.
 """
 
 PLAN_ROADMAP = (FIXTURES_DIRECTORY / "bootstrap-roadmap.md").read_text()
@@ -147,6 +158,17 @@ HAND_WRITTEN_BLOCKER = "waiting on a decision nobody automated"
 A blocker no automated caller owns, which none of them may touch.
 """
 
+PULL_REQUEST_NUMBER = 143
+"""
+The pull request opening the work creates.
+"""
+
+PLAN_INDENTATION = ItemIndentation.of_manifest(PLAN_MANIFEST)
+"""
+The depth :data:`PLAN_MANIFEST` writes its items at, which every line asserted against
+it has to carry.
+"""
+
 
 def manifest_line(manifest_key: ManifestKey, value: str) -> str:
     """
@@ -156,7 +178,36 @@ def manifest_line(manifest_key: ManifestKey, value: str) -> str:
     :param value: The value it carries.
     :return: The rendered line.
     """
-    return manifest_key.render(value)
+    return manifest_key.render(value, PLAN_INDENTATION)
+
+
+def opened_item_fields() -> dict[ManifestKey, str]:
+    """
+    The fields opening an item's work writes onto it, as the manifest spells them.
+
+    :return: The value written to each key.
+    """
+    return {
+        ManifestKey.BRANCH: NEW_BRANCH,
+        ManifestKey.PULL_REQUEST_NUMBER: str(PULL_REQUEST_NUMBER),
+        ManifestKey.SESSION: SESSION_URL,
+        ManifestKey.STATUS: ItemStatus.IN_PROGRESS.value,
+    }
+
+
+def item_named(manifest_text: str, item_identifier: str) -> dict[str, object]:
+    """
+    One item as a YAML reader sees it, which is how every consumer of a manifest reads
+    it.
+
+    :param manifest_text: The manifest to parse.
+    :param item_identifier: The item's id.
+    :return: The item's parsed mapping.
+    """
+    items = yaml.safe_load(manifest_text)[ManifestKey.ITEMS.key]
+    return next(
+        item for item in items if item[ManifestKey.IDENTIFIER.key] == item_identifier
+    )
 
 
 # %% fixtures
@@ -209,13 +260,15 @@ class RefusingPullRequestOpener:
         raise plan_item_bootstrap.PullRequestRefusedError(detail="422 refused")
 
 
-@pytest.fixture
-def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchRepository:
+def repository_with_plan(
+    scratch_repository: ScratchRepository, manifest: str
+) -> ScratchRepository:
     """
-    A scratch repository carrying the hook scripts this module drives, with a plan
-    already published on its notes branch.
+    Install the hook scripts this module drives and publish *manifest* as the plan they
+    edit.
 
     :param scratch_repository: The initialized scratch repository and notes remote.
+    :param manifest: The plan manifest to publish.
     :return: The same repository, ready to bootstrap an item in.
     """
     scratch_repository.install_hook_scripts(
@@ -228,9 +281,7 @@ def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     scratch_repository.commit_everything("initial commit")
     scratch_repository.publish_notes_branch(
         {
-            PlanDocument.MANIFEST.path_within_notes_branch(PLAN_IDENTIFIER): (
-                PLAN_MANIFEST
-            ),
+            PlanDocument.MANIFEST.path_within_notes_branch(PLAN_IDENTIFIER): manifest,
             PlanDocument.ROADMAP.path_within_notes_branch(PLAN_IDENTIFIER): (
                 PLAN_ROADMAP
             ),
@@ -242,37 +293,27 @@ def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchReposi
 
 
 @pytest.fixture
+def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchRepository:
+    """
+    A scratch repository with a plan whose items are written indented under ``items:``.
+
+    :param scratch_repository: The initialized scratch repository and notes remote.
+    :return: The repository, ready to bootstrap an item in.
+    """
+    return repository_with_plan(scratch_repository, PLAN_MANIFEST)
+
+
+@pytest.fixture
 def indentless_plan_repository(
     scratch_repository: ScratchRepository,
 ) -> ScratchRepository:
     """
-    The same scratch repository, publishing the plan in the style a real manifest is
-    written in rather than the indented fixture.
+    A scratch repository with a plan whose items are written flush with ``items:``.
 
     :param scratch_repository: The initialized scratch repository and notes remote.
-    :return: The same repository, ready to write to that plan.
+    :return: The repository, ready to bootstrap an item in.
     """
-    scratch_repository.install_hook_scripts(
-        HookScript.CONFIGURATION.value,
-        HookScript.SAVE_PLAN.value,
-        "plan_manifest_tools.py",
-        HookScript.PLAN_ITEM_BOOTSTRAP.value,
-    )
-    scratch_repository.write("README.md", "scratch repo\n")
-    scratch_repository.commit_everything("initial commit")
-    scratch_repository.publish_notes_branch(
-        {
-            PlanDocument.MANIFEST.path_within_notes_branch(PLAN_IDENTIFIER): (
-                INDENTLESS_PLAN_MANIFEST
-            ),
-            PlanDocument.ROADMAP.path_within_notes_branch(PLAN_IDENTIFIER): (
-                PLAN_ROADMAP
-            ),
-        }
-    )
-    scratch_repository.resolve_notes_remote_to()
-    scratch_repository.add_work_remote()
-    return scratch_repository
+    return repository_with_plan(scratch_repository, INDENTLESS_PLAN_MANIFEST)
 
 
 def published_plan(repository: ScratchRepository) -> dict[PlanDocument, str]:
@@ -376,7 +417,9 @@ def entry_wrapping_across(unbreakable: str) -> str:
     :param unbreakable: The token that has to survive the wrap intact.
     :return: The blocker's text.
     """
-    body_width = MANIFEST_LINE_WIDTH - len(SEQUENCE_ENTRY_INDENT + ITEM_FIELD_INDENT)
+    body_width = MANIFEST_LINE_WIDTH - len(
+        PLAN_INDENTATION.nested + PLAN_INDENTATION.body
+    )
     lead = "word "
     return (
         lead * ((body_width - len(unbreakable) // 2) // len(lead))
@@ -516,7 +559,7 @@ def test_recording_a_new_item_appends_it_to_the_manifest(
     manifest = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
     assert manifest.startswith(PLAN_MANIFEST)
     assert manifest.endswith(
-        ManifestKey.IDENTIFIER.render(NEW_ITEM, opening_the_item=True)
+        ManifestKey.IDENTIFIER.render(NEW_ITEM, PLAN_INDENTATION, opening_the_item=True)
         + manifest_line(ManifestKey.TITLE, "A brand new item")
         + manifest_line(ManifestKey.BRANCH, "null")
         + manifest_line(ManifestKey.TRACK, "a-track")
@@ -1373,6 +1416,128 @@ def test_unblocking_a_branch_no_plan_claims_writes_nothing(
 
     assert report.exit_code is ExitCode.BRANCH_TRACKS_NO_ITEM
     assert published_plan(bootstrap_repository)[PlanDocument.MANIFEST] == before
+# %% plans whose items are written indentless
+
+
+def test_patching_an_item_written_indentless_reads_back_the_fields_it_wrote():
+    """
+    A patch that writes its lines at a depth the item does not use produces YAML that no
+    longer parses, so the values are read back rather than the lines matched.
+    """
+    patched = apply_item_fields(
+        INDENTLESS_PLAN_MANIFEST, PLAN_IDENTIFIER, EXISTING_ITEM, opened_item_fields()
+    )
+
+    item = item_named(patched, EXISTING_ITEM)
+    assert item[ManifestKey.BRANCH.key] == NEW_BRANCH
+    assert item[ManifestKey.PULL_REQUEST_NUMBER.key] == PULL_REQUEST_NUMBER
+    assert item[ManifestKey.SESSION.key] == SESSION_URL
+    assert item[ManifestKey.STATUS.key] == ItemStatus.IN_PROGRESS
+
+
+def test_patching_an_item_written_indentless_leaves_the_other_items_alone():
+    patched = apply_item_fields(
+        INDENTLESS_PLAN_MANIFEST, PLAN_IDENTIFIER, EXISTING_ITEM, opened_item_fields()
+    )
+
+    untouched = "a-second-item"
+    assert item_named(patched, untouched) == item_named(
+        INDENTLESS_PLAN_MANIFEST, untouched
+    )
+
+
+def test_opening_an_item_written_indentless_publishes_the_fields_it_wrote(
+    indentless_plan_repository: ScratchRepository,
+):
+    open_work(
+        open_request(),
+        project_root=indentless_plan_repository.project_root,
+        pull_request_opener=RecordingPullRequestOpener(number=PULL_REQUEST_NUMBER),
+    )
+
+    manifest = published_plan(indentless_plan_repository)[PlanDocument.MANIFEST]
+    item = item_named(manifest, EXISTING_ITEM)
+    assert item[ManifestKey.BRANCH.key] == NEW_BRANCH
+    assert item[ManifestKey.PULL_REQUEST_NUMBER.key] == PULL_REQUEST_NUMBER
+    assert item[ManifestKey.SESSION.key] == SESSION_URL
+    assert item[ManifestKey.STATUS.key] == ItemStatus.IN_PROGRESS
+
+
+def test_recording_a_new_item_in_an_indentless_plan_publishes_it(
+    indentless_plan_repository: ScratchRepository,
+):
+    record_item(
+        record_request(
+            indentless_plan_repository,
+            item_identifier=NEW_ITEM,
+            title="A brand new item",
+            track="a-track",
+            status=ItemStatus.NOT_STARTED,
+        ),
+        project_root=indentless_plan_repository.project_root,
+    )
+
+    manifest = published_plan(indentless_plan_repository)[PlanDocument.MANIFEST]
+    item = item_named(manifest, NEW_ITEM)
+    assert item[ManifestKey.TITLE.key] == "A brand new item"
+    assert item[ManifestKey.TRACK.key] == "a-track"
+    assert item[ManifestKey.STATUS.key] == ItemStatus.NOT_STARTED
+
+
+# %% a save that does not land
+
+
+REFUSED_SAVE_MESSAGE = "the notes branch would not take it"
+"""
+What the stubbed save script complains about, for asserting it reaches the caller.
+"""
+
+
+def stub_save_plan(repository: ScratchRepository, body: str) -> None:
+    """
+    Replace the installed save script with one that does *body* instead of saving.
+
+    :param repository: The scratch repository whose script to replace.
+    :param body: The bash the stub runs.
+    """
+    repository.write(HookScript.SAVE_PLAN.path, f"#!/bin/bash\n{body}\n")
+
+
+def test_a_save_the_script_refuses_reports_what_the_script_said(
+    bootstrap_repository: ScratchRepository,
+):
+    """
+    A swallowed traceback leaves the caller with nothing to act on, which is how a
+    manifest this tool corrupted stayed unexplained.
+    """
+    stub_save_plan(bootstrap_repository, f'echo "{REFUSED_SAVE_MESSAGE}" >&2\nexit 1')
+
+    with pytest.raises(plan_item_bootstrap.PlanSaveFailedError) as refusal:
+        record_item(
+            record_request(bootstrap_repository),
+            project_root=bootstrap_repository.project_root,
+        )
+
+    assert REFUSED_SAVE_MESSAGE in refusal.value.detail
+    assert REFUSED_SAVE_MESSAGE in str(refusal.value)
+
+
+def test_a_save_that_writes_nothing_is_not_reported_as_success(
+    bootstrap_repository: ScratchRepository,
+):
+    """
+    Reporting success for a write nobody checked makes the report worthless as evidence,
+    so what the notes branch carries afterwards is what decides it.
+    """
+    stub_save_plan(bootstrap_repository, "exit 0")
+
+    with pytest.raises(plan_item_bootstrap.PlanNotWrittenError) as refusal:
+        record_item(
+            record_request(bootstrap_repository),
+            project_root=bootstrap_repository.project_root,
+        )
+
+    assert refusal.value.documents == (PlanDocument.MANIFEST, PlanDocument.ROADMAP)
 
 
 # %% the vocabulary the manifest is written in
@@ -1389,15 +1554,29 @@ def test_a_rendered_field_line_matches_how_a_real_manifest_writes_it():
     assert manifest_line(ManifestKey.TRACK, "a-track") in PLAN_MANIFEST
 
 
+def test_a_line_is_rendered_at_the_depth_the_manifest_it_edits_uses():
+    """
+    The depth is the manifest's to state, not this module's, so the same key renders
+    differently for a plan whose items are written flush with ``items:``.
+    """
+    indentation = ItemIndentation.of_manifest(INDENTLESS_PLAN_MANIFEST)
+
+    assert (
+        ManifestKey.STATUS.render(ItemStatus.NOT_STARTED.value, indentation)
+        in INDENTLESS_PLAN_MANIFEST
+    )
+    assert indentation != PLAN_INDENTATION
+
+
 def test_a_key_quotes_its_own_value_when_its_style_says_to():
     """
     Quoting is the key's to decide, so no caller has to know that a title is prose and a
     track is a bare identifier.
     """
-    assert ManifestKey.TITLE.render("A brand new item").endswith(
+    assert ManifestKey.TITLE.render("A brand new item", PLAN_INDENTATION).endswith(
         ': "A brand new item"\n'
     )
-    assert ManifestKey.TRACK.render("a-track").endswith(": a-track\n")
+    assert ManifestKey.TRACK.render("a-track", PLAN_INDENTATION).endswith(": a-track\n")
     assert ManifestKey.TITLE.style is ValueStyle.DOUBLE_QUOTED
     assert ManifestKey.TRACK.style is ValueStyle.PLAIN
 
@@ -1437,7 +1616,7 @@ def test_a_rendered_scalar_reads_back_as_the_value_it_was_given(
     Rendering is only correct if it round-trips: what a key writes has to parse back as
     what the caller handed it, whatever the value contains.
     """
-    written = yaml.safe_load(manifest_key.render(hostile_value))
+    written = yaml.safe_load(manifest_key.render(hostile_value, PLAN_INDENTATION))
 
     assert written[manifest_key.key] == hostile_value
 
@@ -1528,6 +1707,8 @@ def test_each_refusal_carries_its_own_exit_code():
             ExitCode.PULL_REQUEST_DETAILS_MISSING
         ),
         plan_item_bootstrap.PullRequestRefusedError: ExitCode.PULL_REQUEST_REFUSED,
+        plan_item_bootstrap.PlanSaveFailedError: ExitCode.PLAN_SAVE_FAILED,
+        plan_item_bootstrap.PlanNotWrittenError: ExitCode.PLAN_NOT_WRITTEN,
     }
     assert {error: error.exit_code for error in codes} == codes
 
