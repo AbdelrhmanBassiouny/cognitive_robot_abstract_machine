@@ -27,7 +27,7 @@ items:
   track: interactive
   depends_on: []
   status: in_progress
-  session: https://claude.ai/code/session_01W5rkhDr2xdFuFVExi6bXb4
+  session: https://claude.ai/code/session_01LxKeDwSHK6QQpucBHz3Bhf
   notes: 'Rebuilt onto `D-core-backend` (#210) on 2026-08-30, which is what unblocked it: its old base
     `D-ui-splice-fix` (#78, closed unmerged) led nowhere, and the re-target its own note prescribed —
     `D-core-engine` (#68) — is deferred and leads nowhere either. Rebuilt as a branch reset rather than
@@ -50,15 +50,7 @@ items:
     in `test_rule_order.py`) are spelled out along with the rest of the same names in the same functions,
     and the divider is `# %%`. All eleven threads replied to individually (naming the commit) and resolved.
     `test_eql_rdr` unchanged: 341 passed, 0 failed. Draft was already `true`, so no restore-to-draft was
-    needed. See roadmap.md §35.
-
-
-    2026-08-30 (resolve): `case_table.py` gained `CaseColumnLabel` (`5a84033eb`), the `StrEnum` behind
-    `render_cases_side_by_side`''s `new_label`/`corner_label` defaults. The ask was raised on #76 and
-    the reviewer directed it here, since the file is this slice''s. `test_case_table_side_by_side.py`
-    asserts against the members instead of retyping the strings, and #76 reads them too. Collected set
-    unchanged (341); of those, 262 passed and 79 skipped under the --noconftest run this container allowed,
-    identical before and after.'
+    needed. See roadmap.md §35.'
   blockers:
   - Stacked on d-core-backend (#210) in the rdr-core-engine plan. depends_on cannot name an item in another
     plan, so this edge is recorded here instead and carries no dependency chip or automatic readiness.
@@ -118,32 +110,20 @@ items:
 
     Both dependencies read ready and the head is current: #76''s base sha is #79''s head sha, so there
     is no restack owed here. The pull request is out of draft, and nothing in the record says a session
-    marked it so, which is why it was left ready rather than restored to draft.
-
-
-    2026-08-30 (resolve): the two threads the reviewer answered at 21.55Z/21.56Z are worked. The side-by-side
-    labels became `CaseColumnLabel` in `case_table.py` on `D-ui-rendering` where he directed them (`5a84033eb`),
-    and this branch merged that tip and put `test_ipython_side_by_side.py` onto the members (`783546029`);
-    that thread is replied to and resolved. `rdr/__init__.py` is out of #76''s diff for real now - the
-    round''s own reply had claimed it was, but the PR-wide `format_docstrings.py` sweep had reflowed the
-    base''s one-line module docstring into three, so the file stayed modified; the formatter reproduces
-    that every time it runs over the file, so the sweep has to skip it. The generated-model header is
-    the one thread still open, and deliberately - `templates/rdr_module.py.jinja` belongs to #66 (`D-core-serialization`),
-    open and unmerged, so by the reviewer''s own rule it changes there, five branches down and in another
-    plan. Replied with the proposed wording and left open pending the developer''s word on whether this
-    session pushes to #66. See roadmap.md sections 7 to 9.'
+    marked it so, which is why it was left ready rather than restored to draft.'
   blockers:
   - CI has never run on this branch - the pull request reports zero check runs on any head it has had
-    - so every figure recorded for it is a local measurement. This session could not close that gap either,
-    because the container has no project interpreter provisioned; the suite ran with --noconftest against
-    the packages the rdr modules import (415 passed, 119 skipped of 534 collected, identical before and
-    after the change) and the conftest-dependent tests were not exercised.
-  - 'One review thread stays open by choice - the generated model''s "Do not edit by hand" header. The
-    reviewer''s answer was to change it in the pull request that owns the template if that one is unmerged,
-    and the owner is #66 (D-core-serialization), open and unmerged, five branches below this one and in
-    the rdr-core-engine plan. Needs the developer''s word on whether a D-ui session pushes to #66, and
-    the wording will not reach this pull request''s three fitted_models copies until the branches in between
-    restack.'
+    - so every figure recorded for it, the 532 above included, is a local measurement.
+  - 'Two of #76''s review threads are unresolved and both carry a developer answer posted at 21:55Z/21:56Z
+    on 2026-08-30, after the session that applied the round reported itself finished at 21:26Z - the seventh
+    instance of that staleness class on this plan. Thread r3889815677, on the generated model''s "Do not
+    edit by hand" header, answers "edit it in the pull request that owns it if it is not merged yet, otherwise
+    do it here" - the owner is #66 (D-core-serialization), which is open and unmerged, so the change belongs
+    there and not on #76. Thread r3889859180, on making the side-by-side column labels a StrEnum, answers
+    "ok do it in pr 79" - the defaults live in case_table.py, which is D-ui-rendering''s file.'
+  - 'krrood/src/krrood/entity_query_language/rdr/__init__.py is still in #76''s diff - a docformatter
+    reflow of the base''s one-line module docstring into three lines - although the reply that resolved
+    the "empty this file" thread stated the pull request no longer touches the file at all.'
 - id: D-ui-splice-fix
   title: 'RDR engine: fix rule-tree splice for attributes reused across sibling branches'
   branch: D-ui-splice-fix
