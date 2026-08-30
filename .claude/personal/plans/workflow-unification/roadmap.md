@@ -11379,15 +11379,19 @@ was working out what "now" actually forced.
 The item depended on `shared-pr-state-chips` (#111), which carries a `build_site.py` at
 exactly the path this needed one at. Stacking on it is what the plan says to do, and it
 would have been wrong here for a reason that has nothing to do with impatience: a
-workflow's `pull_request` triggers fire from the *base* branch's copy of the workflow
-file, never from the pull request's own. So the feature is inert until it is on `main`.
-Stacking on a branch that has been conflict-blocked since the 2026-08-29 maintenance
-pass would have parked the whole thing behind an unrelated merge conflict, and the
-Action would still not have run once.
+workflow only publishes for *every* plan once it is on `main`. A copy living on a
+stacked branch runs on that branch's own pull request events and nothing else, and
+`workflow_dispatch` does not exist at all until the file is on the default branch. So
+stacking behind a branch conflict-blocked since the 2026-08-29 maintenance pass would
+have parked the whole feature there.
 
-**A dependency between two branches is a dependency between two *landings*. When the
-thing being built only works from the default branch, "stacked on" and "not shipped" are
-the same state.**
+I first wrote that claim down more strongly and wrongly - that `pull_request` triggers
+fire only from the base branch's copy of the file - and the first run refuted it within
+a minute by running from this branch's copy. **A mechanism you assert in a commit
+message an hour before the system demonstrates otherwise is one you should have checked,
+especially when the weaker true version supports the same decision.**
+
+**A dependency between two branches is a dependency between two *landings*.**
 
 ### The duplicate was chosen, not missed
 
@@ -11404,6 +11408,29 @@ richer version (its chips, its `development_tooling` modules), and this branch's
 either lands, is a different object from one you find afterwards.** The rule that says
 fold rather than sequence still holds; what it cannot decide is the case where folding
 means shipping nothing.
+
+### The first run rejected the deployment route, not the triggers
+
+The workflow ran the moment the pull request opened, and failed in one second before its
+first step: *Branch `refs/pull/218/merge` is not allowed to deploy to github-pages due
+to environment protection rules.* The `github-pages` environment only accepts
+deployments from the default branch, so `actions/deploy-pages` can never run from a pull
+request - which is this workflow's main trigger. Not this PR's problem: every run on
+that trigger, forever, would have failed the same way. No setting reachable from
+`GITHUB_TOKEN` relaxes it either (the environments API needs repository administration,
+which `GITHUB_TOKEN` cannot be granted).
+
+So the site is pushed to a branch of its own that Pages serves from, and `pages_site.py`
+points Pages there through the API. That also turned out better on its own terms: the
+site URL now comes from GitHub's Pages configuration rather than from `configure-pages`'
+output, which covers a custom domain and an owner-root repository - neither of which a
+formula over the repository name reaches.
+
+**A permission that is attached to a deployment *environment* rather than to a token
+cannot be probed by reading the workflow, only by running it.** The design was sound in
+every respect a test could reach and wrong in the one respect only GitHub could answer,
+which is the argument for opening the pull request early rather than for reviewing
+harder.
 
 ### Two things the build taught that no amount of reading would have
 
@@ -11438,6 +11465,7 @@ rather than in a commit message.
 
 ### Counts
 
-34 new tests; the plan-dashboard suite is 277, from 243. 558 across the four directories
-CI runs, from 531. The scratch notes remote is a bare repository and the GitHub side is a
-fake, so no test reaches the network.
+50 new tests; the plan-dashboard suite is 293, from 243. The scratch notes remote is a
+bare repository and the GitHub side is a fake, so no test reaches the network. The
+rejected environment deployment is pinned out by a test of its own, so the route the
+first run refuted cannot come back unnoticed.
