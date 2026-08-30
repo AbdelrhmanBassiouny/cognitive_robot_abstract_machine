@@ -449,16 +449,24 @@ items:
   depends_on:
   - integration-branch
   blockers:
-  - 'The live pipeline is deadlocked, and the cause is the candidate''s base rather than anything slow.
-    Candidate #220 has no `refs/pull/220/merge` at all - the fetch answers `couldn''t find remote ref`,
-    where an ordinary pull request''s succeeds - so GitHub created no run for it and none ever will. It
-    cannot compute the merge because the build conflicts with `integration` in five files: both descend
-    from `main`, but `integration` is the 2026-08-28 build merging these branches at their state then
-    while the build merges them at their state now, and two independent merges of the same work over one
-    base collide. The rebuild then reads an unjudgeable candidate, stops at `candidate-unchecked` (17),
-    and never reaches the step that would have replaced it - the same shape as the rule this plan already
-    records about a label that makes later passes skip the branch it marks. Confirmed by opening the same
-    build against `main` as #224: the merge reference exists and 23 checks started within twenty seconds.'
+  - 'Publishing is unsafe before a guard exists, which is a bigger finding than the deadlock it was
+    found under. The build assembled on 2026-08-30 carries nine branches and neither #154 nor #211, so
+    it contains no `integration.py` and no `integration-refresh.yml` - the whole pipeline is unlanded
+    work living on those two branches. `integration` is the fork''s default branch and the one a
+    schedule registers from, so force-updating it onto such a build deletes the scheduled workflow and
+    every mechanism that could publish a later one. The automation would remove itself with nothing
+    left to restore it. Verified rather than inferred: the build was checked green against `main` as
+    #224, 23 checks, and its tree has no pipeline in it.'
+  - 'The pipeline branches are left out because #211 conflicts with #160''s branch
+    (`claude/plan-item-bootstrap-yaml-indent-y8qs0m`) in `plan_item_bootstrap.py` and its test - the
+    duplication this plan already resolved on paper by folding #160 into #151''s branch. The build
+    carries #160 first and skips #211, and #211 is the tip of the stack holding #154, so both go. Until
+    that fold happens every build drops the pipeline.'
+  - 'The candidate''s base makes it unjudgeable. #220 had no `refs/pull/220/merge` at all and no checks
+    after eleven hours, because a build conflicts with `integration` - itself an older build of the same
+    branches. Both candidates are closed now; the rebuild is unwedged but must not be allowed to publish
+    until the guard above exists, and today the only thing preventing it is that candidates cannot be
+    judged at all.'
   notes: 'Part D of `integration-branch`''s review round: the verdict moves from a local test run to real CI.
 
     Folded back onto that item''s branch after being split out, so it has no pull request of its own - the
@@ -659,7 +667,27 @@ items:
 
     rather than stops on - without the second, an outage long enough to let `integration` drift wedges it
 
-    again with no way out.'
+    again with no way out.
+
+    **The verification run of 2026-08-30 confirmed the base diagnosis and found something worse behind
+
+    it.** Opened against `main`, the same build had its merge reference within seconds and 23 checks
+
+    within twenty, all green - where the candidate against `integration` had neither in eleven hours. But
+
+    the build carries no pipeline: nine branches, and neither of the two the pipeline lives on, because
+
+    #211 conflicts with #160''s branch over `plan_item_bootstrap.py`. **Publishing it would have deleted
+
+    the automation** - `integration` is the default branch a schedule registers from, so a build with no
+
+    `integration-refresh.yml` in it takes the scheduled workflow down and leaves nothing able to publish a
+
+    later build. Nothing was published. The order the remaining work has to happen in follows from that: a
+
+    guard against publishing a build that would remove the pipeline comes *before* making candidates
+
+    judgeable, because the first checkable green build is otherwise the one that ends the pipeline.'
 - id: red-candidate-localisation
   title: Localise a red candidate to the branches that caused it
   branch: claude/plan-item-kickoff-workflow-unification-wg4w4x

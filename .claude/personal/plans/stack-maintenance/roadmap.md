@@ -95,6 +95,13 @@ and re-applies its delta.
   *keeps* a thing rather than what drops it: a build branch is kept while a pull request is still
   open against it, which covers both the candidate judging it and a filtered build somebody is
   working from, and it needs no knowledge of how the run that made it ended.
+- **A pipeline that publishes to the branch it runs from can delete itself, and nothing in the design
+  said it could not.** The pipeline lives only on two unlanded branches, so any build that leaves them
+  out has no `integration-refresh.yml` in it - and publishing moves the fork's *default* branch, which
+  is where a schedule registers from. One green build assembled without those two branches would take
+  the scheduled workflow down and leave nothing able to publish a later one. The guard belongs before
+  every other fix here: the first candidate that can actually be judged is otherwise the one that ends
+  the automation.
 - **What a thing is opened *against* is part of whether it can be measured at all.** The candidate's
   base was chosen to carry meaning - `find-candidate` tells a full build from a `--plan` one by it -
   and that made it a base nobody could check against. A discriminator and a merge target are two jobs,
@@ -168,6 +175,10 @@ and re-applies its delta.
 - **rerere replays a textually matching resolution automatically**, so a skill-authored one that is
   semantically wrong is reapplied unreviewed on every later build. Provenance is recorded and replays
   are never silent.
+- **Every build so far omits the pipeline itself.** #211 conflicts with #160's branch over
+  `plan_item_bootstrap.py`, so the build skips it - and it is the tip of the stack carrying #154, where
+  `integration.py` and the refresh workflow live. Measured on the 2026-08-30 build: nine branches
+  carried, neither of those two, no pipeline in the tree. Folding #160 is what clears it.
 - **A candidate opened against the branch it replaces stops being checkable once that branch falls
   behind.** `integration` is itself an older build of the same branches, so a new build conflicts with
   it, GitHub computes no merge reference, and a `pull_request` run - which checks that reference out -
