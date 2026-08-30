@@ -157,3 +157,19 @@ naming a fixed thing where a named definition belongs - and the base's own round
 definitions to name it with (`.claude/hooks/tooling_files.py`, and `RepositoryLabel` in
 `tests/github_api.py`). Applying the round before merging the base would have built a second copy of
 exactly the thing the reviewer was asking not to have two of.
+
+Both were cleared the same day. What the pass added to what this plan already knew:
+
+- **Fifth occurrence of the duplicated-mechanism shape, and the first where both copies were whole
+  subsystems.** The four before it were a fix applied at three call sites; this time each branch had
+  built the same "install the siblings a script runs" mechanism, independently, in the same week. The
+  tell is that neither conflict marker said so - the merge conflicted on four files and the duplication
+  was in none of them.
+- **A retyped copy of a value the run under test used is worse than a literal**, because both copies
+  move together and the test keeps passing while agreeing with itself. Two turned up: a printed report
+  compared against a dict retyping what the fixture had just set, and a default branch restated beside
+  the script that declares it. Neither would have been found by grepping for hardcoded strings; both
+  were found by asking what each assertion's source of truth is.
+- **The review's rule reached production, where the duplication was worse than in the tests it was
+  raised against**: the GitHub host was written out in two places in `stack.py`. A comment about test
+  literals is worth carrying into the code the tests are about.

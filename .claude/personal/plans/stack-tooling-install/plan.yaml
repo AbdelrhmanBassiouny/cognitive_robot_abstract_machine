@@ -298,6 +298,38 @@ items:
     `test_claude_dev_tooling` is red on the head, which is the base's own five inherited failures, not this
     branch's.
 
+    **Resolved 2026-08-30** (session https://claude.ai/code/session_011CSkHuoVfSeyoTxmD2oMTz), clearing
+    both: the pull request is mergeable against its base again, and all 27 review threads are answered -
+    25 resolved, 2 left open on purpose because they are answered differently from what they asked.
+
+    The merge and the round were one piece of work, which is the finding worth carrying. The round's
+    single rule - a literal naming a fixed thing where a named definition belongs - was answerable only
+    because the base's own round had just created the definitions those literals were copies of
+    (`tooling_files.py`, and `RepositoryLabel`). Applying it first would have built a second copy of
+    exactly what the review objected to having two of.
+
+    The merge found the same shape a fifth time: both branches had independently built the mechanism that
+    installs a hook script's siblings into the scratch layout. The base's survives, being typed by
+    `HookScript` rather than by file name, with this branch's one extra capability folded in - resolving
+    a sibling named through a configuration constant, the only way `setup-stacked-prs.sh` reaches
+    `github-api.sh`.
+
+    Two of the round's finds were not literals but retyped copies of a value the run under test had used:
+    the printed configuration, asserted against a dict retyping what the fixture had just set, and the
+    overlay branch, a second copy of the script's own default. Both read the definition now.
+
+    `Repository` gained `remote_url` and `compare_url` - production, not tests: the GitHub host was
+    written out in the `git remote add` line the tool prints and again in the promotion compare URL.
+
+    The two open threads are both the same question in two places: whether `GitCommandRunner` should serve
+    every caller. In `test_maintenance.py` it could and does, since that module is under `.claude/stack/tests/`;
+    from `.claude/hooks/tests/` it cannot without a production `sys.path` insert, which is
+    `bastler-notes-core-python`'s seam. The third is whether the `git remote add` line `stack.py` prints
+    should come from a command factory, when nothing ever runs it.
+
+    638 tests pass, from 626 - and the five inherited failures are gone, having been the base's own all
+    along. Live label creation is still unverified for the reason that holds across this track.
+
 - id: unfetched-parent-branches
   title: Fetch every parent branch the pass decides about, and refuse to decide from a missing ref
   branch: claude/maintenance-tooling-pinning-gdod18
