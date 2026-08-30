@@ -11432,6 +11432,31 @@ every respect a test could reach and wrong in the one respect only GitHub could 
 which is the argument for opening the pull request early rather than for reviewing
 harder.
 
+### The default branch is not `main` here, and the workflow assumed it was
+
+The checkout named `github.event.repository.default_branch`, meaning "the reviewed
+scripts, not the pull request's". The intent was right and the expression was wrong for
+this fork: its default branch is the regenerated `integration` branch - 172 commits of
+reviewed-but-unlanded work ahead of `main`, carrying no `build_site.py` at all - so the
+job would have been handed a tree with no script to run. Caught by the user reading the
+workflow, not by anything I ran; the earlier `session-branch-base` work in this very
+session had already established that the default is `integration` and deliberately so,
+which makes it a fact I had in hand and did not apply.
+
+It names `SOURCE_BRANCH: main` now, and two tests pin it: that the default-branch
+expression appears nowhere, and that the branch a renderer change is *watched* on is the
+branch that change is then *read from* - watching one and building another would
+republish the site without the change that asked for the rebuild.
+
+**A context expression that names a role (`default_branch`) rather than the thing you
+mean (`main`) is only correct while the role and the thing coincide.** This repository
+is precisely where they do not, and that was already written down.
+
+The knock-on is worth carrying because it is not fixable in the file: `workflow_dispatch`
+only offers a workflow that is on the *default* branch, so dispatch becomes available
+once an integration rebuild carries it. `push` and `pull_request` both name their branch
+and are unaffected.
+
 ### Two things the build taught that no amount of reading would have
 
 `fetch-depth: 0` is in the workflow because a shallow clone genuinely cannot do the job,
@@ -11465,7 +11490,7 @@ rather than in a commit message.
 
 ### Counts
 
-50 new tests; the plan-dashboard suite is 293, from 243. The scratch notes remote is a
+52 new tests; the plan-dashboard suite is 295, from 243. The scratch notes remote is a
 bare repository and the GitHub side is a fake, so no test reaches the network. The
 rejected environment deployment is pinned out by a test of its own, so the route the
 first run refuted cannot come back unnoticed.

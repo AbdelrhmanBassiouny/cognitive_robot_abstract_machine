@@ -1520,8 +1520,15 @@ items:
       deletable in favour of the package.
       Triggers as shipped: pull_request opened/reopened/ready_for_review/
       converted_to_draft/closed, push to main under the renderer's paths, and
-      workflow_dispatch. It checks out the default branch rather than the triggering
-      head, so a branch editing the renderer cannot change what the site publishes.
+      workflow_dispatch. It checks out main - the reviewed branch, named as
+      SOURCE_BRANCH - rather than the triggering head, so a branch editing the renderer
+      cannot change what the site publishes. Deliberately not the repository's default
+      branch, which on this fork is the regenerated integration branch: that is 172
+      commits of unlanded work carrying no build_site.py, so the job would have been
+      handed a tree with no script to run. The knock-on is that workflow_dispatch only
+      offers a workflow on the default branch, so dispatch works once an integration
+      rebuild carries the file; push and pull_request both name their branch and are
+      unaffected.
       The first run refuted the deployment route rather than the triggers: the
       github-pages environment only accepts deployments from the default branch, so
       actions/deploy-pages is rejected before the first step of any pull request run
