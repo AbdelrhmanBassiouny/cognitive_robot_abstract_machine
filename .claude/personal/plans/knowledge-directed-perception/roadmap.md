@@ -962,3 +962,94 @@ installed into a virtual environment, the vendored `random_events` built from so
 `urdf_parser_py` copied in by hand. `mujoco`, `manifold3d`, `platformdirs`, `plyfile`,
 `lxml` and `daqp` were needed beyond #216's list, and the workspace packages go on
 `PYTHONPATH` rather than being installed.
+
+## A capture set, and what it measured (2026-08-30)
+
+Until now the only thing detection could be judged against was a rendered scene
+and three `.npz` frames sitting in a session scratchpad. Six rosbags recorded
+off the real robot on 2026-08-28 changed that, and one look out of each is now
+committed on `montessori-perception-on-main` as a *capture*: the camera's own
+compressed colour payload byte for byte, the depth image registered onto it as a
+millimetre PNG, and a JSON record of the intrinsics and where the camera stood.
+3.0 MB for all six, and a reviewer can open the pictures on GitHub. The rosbags
+themselves — 4.7 GB — are gitignored; nothing in the repository can regenerate
+them and no review can read them.
+
+Two decisions in that are worth keeping.
+
+**The colour file is the payload, not a re-encoding.** The node subscribes to
+`/camera/color/image_raw/compressed`, so JPEG artefacts are what the detectors
+see in production. Storing the payload verbatim means a capture and the live
+stream hand them the same pixels; re-encoding, or storing a lossless PNG, would
+both measure something the robot never sees.
+
+**The captures went on the base of the stack, not the tip.** They are data, and
+every branch cut from `montessori-perception-on-main` inherits them — which is
+the point of committing them at all. The tests that read them could not follow:
+the benchmark needs `supporting_surface`, which only
+`detect-per-supporting-surface` introduces, so it sits at the tip while
+`test_montessori_captures.py` (the file format itself) sits at the base with the
+data.
+
+### What the benchmark says today
+
+Measured over all six, on the merged stack:
+
+- **Every loose piece lying on the bare table is found, with the right
+  category, in all six captures.** That is the edge fit of `4b74460f8` doing
+  exactly what it was written for, on frames it was not tuned against.
+- **A piece standing on the board's lid is reported twice**, once by the lid
+  pass and once by the table pass about 50 mm away. This happens in every
+  capture that has one, so it is the wider shape of `one-detection-per-thing`'s
+  fault: the border boxes were the visible symptom, but the rule "nothing
+  forbids two detections occupying one place" fires whenever anything rests on
+  the lid at all.
+- **Pieces on the lid are lost where they wear its colour or touch each
+  other.** `non_inserted_objects` — three pieces crowded together on the lid —
+  finds none of them, and the board's own box inflates to swallow them. This is
+  `detector-parameters-from-knowledge`'s territory: the hue window and the
+  saturation floors are properties of the pieces and the lighting, not of the
+  detector.
+- **Five of the board's six holes are found, and most are called triangular
+  prisms.** This is the largest error, and it has no item yet, so
+  `holes-fitted-like-pieces` is new. Loose pieces stopped being classified by
+  fill-and-aspect in `4b74460f8`; holes were left on the old
+  `CrossSectionClassifier` because they read correctly *then*. They do not read
+  correctly in this lighting, and holes are the easier case for the same fit —
+  their outlines come exactly from the board mesh, they lie flat in the lid's
+  own plane, and the board detection already says where to look.
+
+Each of the three faults has a strict expected-to-fail test naming the item that
+owns it, so the day one of those items lands the test reports its own marker as
+stale rather than passing quietly. Nothing about the current results is written
+into the tests as an expectation: the truth each capture is measured against is
+what a reader can see in the picture, and the hole count is read from the board
+mesh rather than retyped.
+
+## The ORM has never seen the Montessori package (2026-08-30)
+
+`experiments/src/experiments/montessori/` has no `__init__.py`, on any branch,
+so `pkgutil` does not report it as a subpackage and the ORM generator's package
+walk skips all of it. Nothing under `experiments.montessori` appears in
+`experiments/orm/ormatic_interface.py`. That is the entire cause of the five
+`NoDAOFoundError` failures in `test_montessori_insert_shape_action.py` that
+`tracy_icra` has carried as "the documented empty-ORM state" — regenerating the
+interfaces was never going to fix them, because the classes were never offered
+to the generator.
+
+Adding the file was tried and is not a one-liner, so it became
+`montessori-classes-in-the-orm` rather than a fix folded in here. Behind it:
+`NoSceneAvailable.missing_inputs` was typed `Sequence[str]`, which the generator
+cannot resolve (changed to `List[str]`, which every other field in that module
+already used), and `perception.footprint.Footprint` collides by name with
+`semantic_digital_twin…graph_of_convex_sets.plotting.Footprint`, so the
+generator emits two `FootprintDAO` classes and SQLAlchemy refuses the mapping.
+Resolving that means renaming one of the two, which is an API change across the
+perception package.
+
+Separately, merging main in exposed a genuine call-site break rather than an ORM
+one: main's `PickUpAction.object_designator` became a `HasRootBody` and reads the
+body off it, so `insert_shape_action.py` passing `montessori_shape.root` raised
+`AttributeError`. Fixed by passing the piece. That took the branch from seven
+failures to five, and the remaining five are the ORM gap above.
+

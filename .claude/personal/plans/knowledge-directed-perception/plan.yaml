@@ -169,6 +169,16 @@ items:
       measured off the real ones (7363d2c26): cyan cube and cylinder, amber prisms. 147 tests pass
       where 142 did. No review thread is open on the pull request.
 
+      Gained the capture set on 2026-08-30 (7f053db0b), so every branch cut from this one can
+      measure detection on real camera data: six looks at the real table taken out of the rosbags
+      recorded on 2026-08-28, each three files - the camera's own compressed colour payload byte
+      for byte, the depth image registered onto it as a millimetre PNG, and a JSON record of the
+      intrinsics and where the camera stood. 3.0 MB in all, and a reviewer can open the pictures on
+      GitHub. captures.py reads them, recordings.py reads a rosbag's camera stream, and
+      capture_from_bag.py writes one; CameraTopic moved from node.py to camera.py, since a reader
+      of a recording needs the topic names as much as a subscriber does. The rosbags themselves are
+      gitignored: 4.7 GB that nothing here can regenerate.
+
   - id: surfaces-from-world
     title: "Take the workspace from the table the robot knows about, not from a constant"
     branch: perception_surfaces_from_world
@@ -226,6 +236,20 @@ items:
       surface-finish-annotation's prediction, so the finish question that raised does not arise
       yet. detect costs 0.35 s per frame against 0.23 s, inside the node's 0.5 s period.
 
+      Measured against the real camera on 2026-08-30 (8da0e84e9), on the six captures #202 now
+      carries. Every loose piece lying on the bare table is found with the right category in all
+      six - the thing this branch was built for. Three faults show, each with a strict
+      expected-to-fail test naming the item that owns it, so the day that item lands the mark
+      reports itself stale: a piece standing on the lid is reported a second time on the table
+      (one-detection-per-thing), pieces on the lid are lost where they wear its colour or touch
+      one another (detector-parameters-from-knowledge), and five of the board's six holes are
+      found with most called triangular prisms (holes-fitted-like-pieces, new).
+
+      The branch also gained watch_bag, which is the node with a recording in place of the camera
+      and the robot, and SceneWindows, so a replay and a live run draw the same three windows
+      rather than two copies of the drawing. The test that plays the pick-up demo through it is
+      skipped wherever the recordings are not on disk, which is every run but a developer's own.
+
   - id: one-detection-per-thing
     title: "One physical thing, one detection, and none inside a body already known"
     branch: perception_one_detection_per_thing
@@ -243,6 +267,64 @@ items:
       volume, and resolves overlapping detections against each other.
       semantic_digital_twin.reasoning.predicates.is_place_occupied already
       exists for the first half.
+
+      It now has a failing test rather than a description: measured on 2026-08-30, every one of the
+      six captures reports a piece that is standing on the board's lid a second time on the table,
+      about 50 mm from the first, because the table pass rectifies it onto the table's plane and
+      claims it there. That is a second shape of the same fault as the border boxes, and the wider
+      one - it fires whenever anything rests on the lid, not only at its edges.
+      test_only_the_pieces_resting_on_the_table_are_detected_there in
+      test_montessori_detection_on_captures.py is the test; it is marked strict expected-to-fail
+      against this item.
+
+  - id: holes-fitted-like-pieces
+    title: "Read a hole by fitting the known outlines to it, the way a piece is read"
+    branch: perception_holes_fitted_like_pieces
+    pull_request_number: null
+    track: surfaces
+    depends_on: [detect-per-supporting-surface]
+    status: not_started
+    notes: >-
+      Raised by the capture benchmark on 2026-08-30, and the largest error it found. The board's
+      mesh is cut with six holes - two circles, a square, a triangle, a slot and a disk slit -
+      and the pipeline finds five of them in five captures and four in the sixth, calling three
+      of the five triangular prisms in most of them. Loose pieces stopped being read this way in
+      4b74460f8, which replaced the threshold-based CrossSectionClassifier with a fit of the
+      known outlines to the edges, and holes were left on the old classifier because they "read
+      correctly" at the time; the later lighting is what they no longer read correctly in.
+      Pointing the same fit at the holes is the obvious move, and the holes are the easier case:
+      their outlines are known exactly from the board mesh (detect_hole_footprints), they lie
+      flat in the lid's own plane, and the board detection already says where to look. One
+      detection also lands on the drawer fronts below the lid, which are not holes at all.
+      test_every_hole_in_the_board_is_found in test_montessori_detection_on_captures.py is the
+      test, marked strict expected-to-fail against this item; it asserts against the mesh's own
+      footprints rather than a copy of them.
+
+  - id: montessori-classes-in-the-orm
+    title: "Map the Montessori package's own classes, which the ORM has never seen"
+    branch: montessori_classes_in_the_orm
+    pull_request_number: null
+    track: package-landing
+    depends_on: [montessori-perception-on-main]
+    status: not_started
+    notes: >-
+      experiments/src/experiments/montessori/ has no __init__.py, and never has on any branch, so
+      pkgutil does not report it as a subpackage of experiments and the ORM generator's package
+      walk skips the whole thing. Nothing under experiments.montessori is in
+      experiments/orm/ormatic_interface.py - not MontessoriShape, not CubeShape, not
+      ShapeSortingBoard. That is the whole cause of the five NoDAOFoundError failures in
+      test_montessori_insert_shape_action.py that this branch has carried as "the documented
+      empty-ORM state": regenerating the interfaces cannot fix them, because the classes are not
+      being offered to the generator in the first place.
+
+      Adding the file was tried on 2026-08-30 and is not a one-liner. Two things follow it, and
+      there may be more behind them: NoSceneAvailable.missing_inputs was typed Sequence[str],
+      which the generator cannot resolve (already changed to List[str], the shape every other
+      field in that module uses); and experiments.montessori.perception.footprint.Footprint
+      collides by name with semantic_digital_twin...graph_of_convex_sets.plotting.Footprint, so
+      the generator emits two FootprintDAO classes and SQLAlchemy refuses the mapping. That
+      collision needs one of the two renamed, which is an API change across the perception
+      package, so it is its own piece of work rather than a fix folded into a capture commit.
 
   - id: perception-backend
     title: "Answer a query by looking, as a backend of the entity query language"
