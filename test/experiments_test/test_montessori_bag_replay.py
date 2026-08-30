@@ -16,11 +16,11 @@ from pathlib import Path
 
 import pytest
 
-from experiments.montessori.perception.recorded_setup import (
+from experiments.montessori.perception.recorded_setup import perception_pipeline
+from experiments.montessori.perception.recordings import (
     REFERENCE_FRAME,
-    perception_pipeline,
+    RecordedCamera,
 )
-from experiments.montessori.perception.recordings import RecordedCamera
 from experiments.montessori.perception.viewer import CameraFrameViewer
 from experiments.montessori.perception.watch_bag import BagReplay
 

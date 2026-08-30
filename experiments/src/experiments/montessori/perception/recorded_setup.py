@@ -23,12 +23,6 @@ SETUP_NAME = "tracy"
 Prefix naming the physical setup these surfaces were measured on.
 """
 
-REFERENCE_FRAME = "map"
-"""
-Frame the recordings root their transform tree in, and so the frame detections made on
-them come out in.
-"""
-
 TABLE_HEIGHT = 0.88
 """
 Height of Tracy's own table top above the reference frame, in metres.
