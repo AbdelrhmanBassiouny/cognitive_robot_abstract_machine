@@ -730,12 +730,30 @@ items:
     to be chosen by hand; the manifest's `depends_on` for `D-ui-splice-fix` names
     `d-core-backend` (PR #210), which is the obvious candidate but is a judgement this pass
     does not make.
+  - >-
+    plan-item-resolve 2026-08-30: the re-target this item's own note prescribes is dead, and the
+    branch carries a production commit that was superseded. `D-core-engine` (#68) — the base the
+    note says #79 must move to — is itself `deferred`, so nothing can land through it; the live tip
+    of the same stack is `D-core-backend` (#210), which carries every `rdr/` module this branch's
+    tests import. Separately, `D-ui-rendering` still contains #78's `cfe32ad0`, which reintroduces
+    `SymbolicExpression._last_parent_of_type_` — the symbol #89 deleted from `main`, superseded by
+    #118's façade-level fix, and forbidden by `dag-facade-hardening`'s Wave-1 guard test — so a
+    plain restack onto the stack tip would carry that superseded fix into #79's diff. The ported
+    tests also import `krrood.entity_query_language.rdr.utils.UNSET`, a module #98 deleted (roadmap
+    §19, `UNSET` → `...`).
+
+    Neither review nor CI is what stalled this: #79 has no review threads at all, and its only CI
+    run is from 2026-07-19 — against a base branch that no longer leads anywhere — whose one red
+    check is `test_each_lib (coraplex)`.
   session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
   notes: 'Still based on the D-ui-splice-fix branch, whose PR (#78) was closed as superseded on
     2026-07-31. The branch still exists so nothing is broken today, but #79 can no longer land through
     #78 and must be re-targeted onto D-core-engine before it can merge. Not re-targeted here — that is
     this PR''s own session''s call. Its depends_on is kept pointing at the closed item so the stack''s
-    real shape stays visible until the re-target happens.'
+    real shape stays visible until the re-target happens.
+
+    Correction 2026-08-30 (`/plan-item-resolve`): the "re-target onto D-core-engine" instruction in
+    the paragraph above is stale — #68 is deferred. The stack tip is `D-core-backend` (#210).'
 - id: D-ui
   title: 'RDR engine: interactive expert interface (IPython shell, magics, prompt sections/examples)'
   branch: D-ui
