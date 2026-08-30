@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 import cv2
 import numpy as np
-from typing_extensions import List, Sequence, Tuple
+from typing_extensions import List, Optional, Sequence, Tuple
 
 from experiments.montessori.hole_geometry import HoleFootprint, detect_hole_footprints
 from experiments.montessori.perception.camera import CameraIntrinsics, RgbdFrame
@@ -88,7 +88,7 @@ def piece_side_color(piece: KnownPiece) -> Tuple[int, int, int]:
 @dataclass(frozen=True)
 class PlacedPiece:
     """
-    One loose piece standing on the table, at a position the test chose.
+    One loose piece standing on a surface, at a position the test chose.
     """
 
     category: MontessoriShapeCategory
@@ -109,6 +109,12 @@ class PlacedPiece:
     yaw: float = 0.0
     """
     How far it is turned about the world frame's z-axis, in radians.
+    """
+
+    surface_height: Optional[float] = None
+    """
+    Height of the surface it stands on above the world frame's origin, in metres, or
+    None for the table this scene is set up on.
     """
 
     @property
@@ -213,13 +219,48 @@ class MontessoriSceneRenderer:
         """
         return detect_hole_footprints()
 
+    def clear_lid_position(self) -> Tuple[float, float]:
+        """
+        Where on the lid a piece can stand without covering a hole.
+
+        The holes lie in rows across the board, so this is the middle of the widest
+        stretch of lid between two of those rows, on the lid's own centre line.
+        """
+        footprints = self.hole_footprints()
+        half_length = max(abs(point[1]) for point in self._lid_corners(footprints))
+        free_from = -half_length
+        gaps = []
+        for near, far in sorted(
+            (
+                footprint.center.y - footprint.size.y / 2,
+                footprint.center.y + footprint.size.y / 2,
+            )
+            for footprint in footprints
+        ):
+            if near > free_from:
+                gaps.append((free_from, near))
+            free_from = max(free_from, far)
+        gaps.append((free_from, half_length))
+        near, far = max(gaps, key=lambda gap: gap[1] - gap[0])
+        return (self.board_x, self.board_y + (near + far) / 2)
+
+    def resting_height(self, piece: PlacedPiece) -> float:
+        """
+        Height of the surface a piece stands on, in metres.
+
+        :param piece: The piece whose resting surface is wanted.
+        """
+        if piece.surface_height is None:
+            return self.table_height
+        return piece.surface_height
+
     def hole_center(self, footprint: HoleFootprint) -> Tuple[float, float]:
         """
         Where a hole's centre lies in the world frame.
 
         :param footprint: The hole, positioned relative to the board's own centre.
         """
-        return (self.board_x + footprint.center[0], self.board_y + footprint.center[1])
+        return (self.board_x + footprint.center.x, self.board_y + footprint.center.y)
 
     def render(self, pieces: Sequence[PlacedPiece]) -> RgbdFrame:
         """
@@ -261,7 +302,10 @@ class MontessoriSceneRenderer:
             center = self.hole_center(footprint)
             self._fill(
                 canvas,
-                [(center[0] + x, center[1] + y) for x, y in footprint.boundary],
+                [
+                    (center[0] + point.x, center[1] + point.y)
+                    for point in footprint.boundary
+                ],
                 self.lid_height,
                 HOLE_COLOR,
             )
@@ -278,8 +322,8 @@ class MontessoriSceneRenderer:
         margin = 0.02
         return [
             (
-                footprint.center[0] + sign_x * (footprint.size[0] / 2 + margin),
-                footprint.center[1] + sign_y * (footprint.size[1] / 2 + margin),
+                footprint.center.x + sign_x * (footprint.size.x / 2 + margin),
+                footprint.center.y + sign_y * (footprint.size.y / 2 + margin),
             )
             for footprint in footprints
             for sign_x, sign_y in ((-1, -1), (1, -1), (1, 1), (-1, 1))
@@ -299,10 +343,14 @@ class MontessoriSceneRenderer:
             return
         known = piece.known_piece
         boundary = self._piece_boundary(piece)
-        spread = self._pixels_across(boundary, self.reflection_spread)
+        spread = self._pixels_across(
+            boundary, self.reflection_spread, self.resting_height(piece)
+        )
         cast = np.zeros(canvas.shape[:2], dtype=np.uint8)
         cv2.fillPoly(
-            cast, [self._project(boundary, self.table_height).astype(np.int32)], 255
+            cast,
+            [self._project(boundary, self.resting_height(piece)).astype(np.int32)],
+            255,
         )
         cast = cv2.GaussianBlur(
             cv2.dilate(cast, np.ones((spread, spread), np.uint8)),
@@ -318,20 +366,19 @@ class MontessoriSceneRenderer:
         canvas[lit, 0] = known.hue
 
     def _pixels_across(
-        self, boundary: Sequence[Tuple[float, float]], reach: float
+        self, boundary: Sequence[Tuple[float, float]], reach: float, height: float
     ) -> int:
         """
-        How many pixels of the camera image a distance on the table covers, measured
-        where a piece stands.
+        How many pixels of the camera image a distance on a plane covers, measured where
+        a piece stands.
 
         :param boundary: The piece's world-frame ``(x, y)`` outline.
         :param reach: The distance to convert, in metres.
+        :param height: Height of the plane the distance is measured on, in metres.
         :return: The distance in pixels, at least one.
         """
-        here = self._project(boundary[:1], self.table_height)
-        there = self._project(
-            [(boundary[0][0] + reach, boundary[0][1])], self.table_height
-        )
+        here = self._project(boundary[:1], height)
+        there = self._project([(boundary[0][0] + reach, boundary[0][1])], height)
         return max(1, int(round(float(np.linalg.norm(there - here)))))
 
     def _draw_piece(self, canvas: np.ndarray, piece: PlacedPiece) -> None:
@@ -344,8 +391,9 @@ class MontessoriSceneRenderer:
         """
         known = piece.known_piece
         boundary = self._piece_boundary(piece)
-        base = self._project(boundary, self.table_height)
-        top = self._project(boundary, self.table_height + known.height)
+        resting_height = self.resting_height(piece)
+        base = self._project(boundary, resting_height)
+        top = self._project(boundary, resting_height + known.height)
         silhouette = cv2.convexHull(np.vstack([base, top]).astype(np.int32))
         cv2.fillPoly(canvas, [silhouette], piece_side_color(known))
         cv2.fillPoly(canvas, [top.astype(np.int32)], piece_color(known))

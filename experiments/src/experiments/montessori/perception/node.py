@@ -44,7 +44,6 @@ from experiments.montessori.perception.camera import (
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.exceptions import NoSceneAvailable
 from experiments.montessori.perception.markers import DetectionMarkerPublisher
-from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.overlay import (
     CameraView,
     DetectionOverlay,
@@ -53,9 +52,7 @@ from experiments.montessori.perception.overlay import (
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.scene_source import MontessoriSceneSource
 from experiments.montessori.perception.viewer import CameraFrameViewer
-from experiments.montessori.world import BOARD_SCALE
 from experiments.network_limits import check_large_messages_can_arrive
-from experiments.tracy_experiments.equipment import table_top_z
 from semantic_digital_twin.adapters.ros.tfwrapper import TFWrapper
 from semantic_digital_twin.adapters.ros.world_fetcher import fetch_world_from_service
 from semantic_digital_twin.robots.tracy import Tracy
@@ -99,14 +96,6 @@ REPORT_PERIOD_SECONDS = 1.0
 How often the scene is logged while the node runs.
 """
 
-TRACY_WORKSPACE = WorkspaceRegion(
-    minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75
-)
-"""
-The reachable stretch of Tracy's own table that the Montessori scene is set up on, which
-also keeps the far edge of the table and whatever stands beyond it out of view.
-"""
-
 # %% the node
 
 
@@ -137,6 +126,11 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
 
     The camera publishes far faster than the scene changes, and rectifying a full
     resolution frame twice is not worth doing at camera rate.
+    """
+
+    scene_check_period: float = 0.05
+    """
+    How long :meth:`wait_for_scene` waits between two checks for a result, in seconds.
     """
 
     markers: Optional[DetectionMarkerPublisher] = None
@@ -272,7 +266,10 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
         self.viewer.show_depth(workspace.clip(frame.depth, frame))
         self.viewer.show_rectified(
             self.overlay.draw(
-                RectifiedView(frame, self.pipeline.rectify_table(frame)), scene
+                RectifiedView(
+                    frame, self.pipeline.rectify(frame, self.pipeline.table.height)
+                ),
+                scene,
             )
         )
 
@@ -371,7 +368,7 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
             with self._lock:
                 if self._scene is not None:
                     return self._scene
-            time.sleep(0.05)
+            time.sleep(self.scene_check_period)
         raise NoSceneAvailable(timeout_seconds, self._missing_inputs())
 
 
@@ -380,16 +377,15 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
 
 def build_node(
     node: Node,
-    board_height: float = float(BOARD_SCALE.z),
     draw_markers: bool = True,
     show_images: bool = False,
 ) -> MontessoriPerceptionNode:
     """
-    Wire the perception node against the live robot: fetch its world to learn where its
-    table top is and which frame to report poses in.
+    Wire the perception node against the live robot: fetch its world to learn which
+    stretch of table the scene stands on, how high its surfaces lie, and which frame to
+    report poses in.
 
     :param node: The node to subscribe and publish on.
-    :param board_height: How far the board's lid stands above the table, in metres.
     :param draw_markers: Whether to draw the detections into rviz.
     :param show_images: Whether to open a window on each camera stream.
     :return: The wired, already-subscribing perception node.
@@ -397,17 +393,12 @@ def build_node(
     world = fetch_world_from_service(node=node, timeout_seconds=300)
     [robot] = world.get_semantic_annotations_by_type(Tracy)
     reference_frame: KinematicStructureEntity = world.root
-    pipeline = MontessoriPerceptionPipeline(
-        region=TRACY_WORKSPACE,
-        table_height=table_top_z(robot),
-        board_height=board_height,
-        reference_frame=reference_frame,
-    )
+    pipeline = MontessoriPerceptionPipeline.of_world(world, robot.root)
     logger.info(
         "Watching %s: table top at z=%.3f, board lid at z=%.3f, poses in %s.",
-        TRACY_WORKSPACE,
-        pipeline.table_height,
-        pipeline.lid_height,
+        pipeline.table.region,
+        pipeline.table.height,
+        pipeline.lid.height,
         reference_frame.name,
     )
     markers = (

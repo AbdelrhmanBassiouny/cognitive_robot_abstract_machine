@@ -13,6 +13,7 @@ than numbers tied to where the camera happened to stand.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import cached_property
 
 import cv2
 import numpy as np
@@ -213,7 +214,19 @@ class Orthophoto:
     Height of the rectified plane above the world frame's origin, in metres.
     """
 
-    @property
+    @cached_property
+    def hue_saturation_value(self) -> np.ndarray:
+        """
+        The rectified image as hue, saturation and value, which is what every colour a
+        surface or a piece is measured in.
+
+        Kept once per view rather than converted at each reading: the same plane is read
+        for several colours in turn, and the conversion costs more than any one of those
+        readings.
+        """
+        return cv2.cvtColor(self.image, cv2.COLOR_BGR2HSV)
+
+    @cached_property
     def observed(self) -> np.ndarray:
         """
         Mask of the pixels the camera actually saw, as opposed to the black border left

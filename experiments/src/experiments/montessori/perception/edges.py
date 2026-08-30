@@ -30,13 +30,13 @@ the sensor noise on a bare metal table from being read as edges of its own.
 
 WEAK_EDGE_STEP = 30
 """
-Brightness step, out of 255, a pixel must stand out by to continue an edge already
-found.
+Step in one colour channel, out of 255, a pixel must stand out by to continue an edge
+already found.
 """
 
 STRONG_EDGE_STEP = 90
 """
-Brightness step, out of 255, a pixel must stand out by to start an edge.
+Step in one colour channel, out of 255, a pixel must stand out by to start an edge.
 
 Low enough to keep the crease between a piece's lit top face and its shaded sides, which
 is the boundary that says how far the piece reaches; a reflection's own gradients are
@@ -67,11 +67,22 @@ class EdgeDistances:
         """
         Find the edges in a rectified view and measure the distance to them.
 
+        Each colour channel is read for edges of its own and the results are taken
+        together, because two surfaces can differ in colour while matching in
+        brightness: a cyan piece standing on the board's pale wooden lid is one grey
+        level away from it, so a boundary that is obvious to the eye leaves no edge at
+        all in a brightness image.
+
         :param orthophoto: The rectified view to read.
         """
-        brightness = cv2.cvtColor(orthophoto.image, cv2.COLOR_BGR2GRAY)
-        smoothed = cv2.GaussianBlur(brightness, (SMOOTHING_WIDTH, SMOOTHING_WIDTH), 0)
-        edges = cv2.Canny(smoothed, WEAK_EDGE_STEP, STRONG_EDGE_STEP)
+        smoothed = cv2.GaussianBlur(
+            orthophoto.image, (SMOOTHING_WIDTH, SMOOTHING_WIDTH), 0
+        )
+        edges = np.zeros(smoothed.shape[:2], dtype=np.uint8)
+        for channel in cv2.split(smoothed):
+            edges = np.maximum(
+                edges, cv2.Canny(channel, WEAK_EDGE_STEP, STRONG_EDGE_STEP)
+            )
         return cls(
             distances=cv2.distanceTransform(255 - edges, cv2.DIST_L2, 3)
             * orthophoto.region.resolution,

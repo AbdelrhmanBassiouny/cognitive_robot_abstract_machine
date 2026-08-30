@@ -176,6 +176,14 @@ class RobotDemonstration(ABC):
     whatever it already was.
     """
 
+    repetitions: int = 1
+    """
+    How often the plan is performed against the scene.
+
+    Repeating only makes sense for a plan that leaves the scene as it found it, such as
+    one carrying an object away and back again.
+    """
+
     ros_session: RobotDemonstrationRosSession | None = field(init=False, default=None)
     """
     Session held for the duration of a real run, and ``None`` in simulation.
@@ -258,14 +266,15 @@ class RobotDemonstration(ABC):
         try:
             if not self.is_scene_populated(world):
                 self.populate_scene(world)
-            plan = self.build_plan(self.build_context(world))
-            with ExecutionEnvironment(
-                execution_type=self.execution_type,
-                collision_avoidance=self.collision_avoidance,
-                real_time_factor=self.real_time_factor,
-                prediction_horizon=self.prediction_horizon,
-            ):
-                plan.perform()
+            for _ in range(self.repetitions):
+                plan = self.build_plan(self.build_context(world))
+                with ExecutionEnvironment(
+                    execution_type=self.execution_type,
+                    collision_avoidance=self.collision_avoidance,
+                    real_time_factor=self.real_time_factor,
+                    prediction_horizon=self.prediction_horizon,
+                ):
+                    plan.perform()
         finally:
             self.tear_down()
         return world

@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from trimesh import Trimesh
 
+from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY
 from experiments.montessori.semantics import (
     MontessoriShape,
     MontessoriShapeCategory,
@@ -424,3 +425,20 @@ def test_add_robot_stand_spawns_a_table_at_the_mount_height():
     assert float(position.x) == pytest.approx(float(MOUNT_POSITION.x))
     assert float(position.y) == pytest.approx(float(MOUNT_POSITION.y))
     assert float(position.z) + highest_local_z == pytest.approx(float(MOUNT_POSITION.z))
+
+
+def test_a_loose_shape_wears_the_colour_measured_off_the_real_piece():
+    montessori = MontessoriWorld()
+
+    coloured = {
+        shape.shape_category: shape.root.visual[0].color
+        for shape in montessori.world.get_semantic_annotations_by_type(MontessoriShape)
+        if shape.shape_category in KNOWN_PIECE_BY_CATEGORY
+    }
+
+    assert coloured == {
+        category: piece.color
+        for category, piece in KNOWN_PIECE_BY_CATEGORY.items()
+        if category in coloured
+    }
+    assert set(coloured) == set(KNOWN_PIECE_BY_CATEGORY)
