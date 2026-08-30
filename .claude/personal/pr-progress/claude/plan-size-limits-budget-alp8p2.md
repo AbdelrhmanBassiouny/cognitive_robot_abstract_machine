@@ -29,6 +29,6 @@
   a Python entry point needs that resolver ported first — its own item, and it
   collides with #185). Left open.
 
-**Next.** Nothing until one of those two is answered. CI on 6cde496 not yet
-checked — it was green on the previous head and this commit touches only
-`.claude/hooks`.
+**Next.** Nothing until one of those two is answered. CI on 6cde496:
+`test_claude_dev_tooling` (the job running these tests) passed, 16 checks green,
+7 still running, none failing.
