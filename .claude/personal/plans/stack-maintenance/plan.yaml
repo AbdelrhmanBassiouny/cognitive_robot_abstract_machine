@@ -232,9 +232,15 @@ items:
     Single-sourcing an external contract deletes the guard the duplicated literals were providing, and
     whether to replace it with a dedicated test or keep the literals depends on who reads the contract.
   blockers:
-  - Conflicts against its base main as of the 2026-08-29 stacked-pr-maintenance pass, carrying the
-    needs-resolution label and a routine comment. That pass did not attempt a fresh merge, having
-    already withheld it from a previous one.
+  - Merge conflict against `main`, standing since 2026-08-12 and re-reported unchanged by eight
+    successive stacked-pr-maintenance passes (latest 2026-08-28 21:55Z). Seven hunks across six
+    files - `.claude/hooks/tests/scratch_repository.py`,
+    `.claude/skills/plan-item-kickoff/SKILL.md`, `.claude/skills/plan-item-resolve/SKILL.md`,
+    `.claude/stack/maintenance_restack_procedure.py`, `.claude/stack/maintenance_restack_steps.py`
+    and `.claude/stack/tests/test_maintenance.py`. Nothing else holds the item - CI is green on head
+    `896930cd` (21 of 21 checks), the dependency `stack-maintenance-executor` merged on 2026-08-12,
+    and the four open review threads were each answered and left open for the user's call rather
+    than being requests still owed.
 - id: pinned-stack-tooling
   title: Pin the stack tooling for the length of a maintenance pass
   branch: claude/stack-tooling-pinning-qf5r2m
@@ -600,4 +606,3 @@ items:
     tips through the ordinary build and candidate, which answers "does this plan hold together on its own"
     - most of what the topology was wanted for - with no extra branch and nothing that can publish.
 
-# probe
