@@ -116,3 +116,44 @@ no item in any of the eight plans covers it.
   split it, which is the whole premise.
 - Whether the dashboard should show a plan's budget consumption. Not currently an
   item — it is reporting, and the gate is the enforcement.
+
+## Review round of 2026-08-30 (#207)
+
+Five of seven threads are answered and resolved; two are open on the reviewer's
+own decision.
+
+**5. No constant sits mid-module, and no free functions.** (reviewer) The budget
+became `SizeBudget`'s own `MAXIMUM_ITEMS`/`MAXIMUM_LINES` class variables rather
+than a `PLAN_SIZE_BUDGET` instance built halfway down the file - an instance
+cannot move to the top, since the class has to exist first. `SizeBudget()` is
+now the budget, which is what `refuse-oversized-save` will import. The eight
+free functions moved onto `PlanSize`, a new `PlansDirectory` (the directory and
+its two filenames, which were three loose primitives) and a new `SizeReport`
+(the plans with the budget judging them).
+
+**6. A dependency is written down once.** (reviewer) The hardcoded `import yaml`
+probe is gone. `.claude/hooks/requirements.txt` is the one place the hooks' own
+dependencies are stated, and `missing_requirements.py` reports whichever of a
+requirements file's distributions are absent - generic, so `check-setup.sh`
+dropped its inline copy of the same parse and calls it too. The file needed a
+`.gitignore` exception: the repository ignores `*.txt` wholesale, so without one
+it would never have reached CI, and the report's tests read it from disk.
+
+**7. A filename is written down once too.** (reviewer) `HookScript`,
+`PlanDocument` and `PLANS_DIRECTORY` already existed and were being duplicated
+by the tests; they are now imported. `ScratchRepository.install_hook_modules`
+names hook modules by the module objects. `resolve-personal-notes-config.sh`
+gained `CREATE_PERSONAL_NOTES_BRANCH_SCRIPT`, `HOOKS_REQUIREMENTS_FILE`,
+`MISSING_REQUIREMENTS_SCRIPT`, `PLAN_SIZE_BUDGET_SCRIPT` and
+`PLAN_SIZE_REPORT_SCRIPT`.
+
+### Open with the reviewer
+
+- **Should `plan-size-report.sh` be Python?** It can be, but the notes-branch
+  config resolver is bash and has no Python half, so a Python entry point has to
+  shell back into it or port it. Every hook entry point needing the config is
+  bash for that reason. Porting the resolver is its own item if wanted, and it
+  collides with #185.
+- **Do the eight scripts on `main` that spell `create-personal-notes-branch.sh`
+  convert now or later?** The constant exists for them; converting here widens
+  this PR into files it does not otherwise touch.

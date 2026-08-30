@@ -52,36 +52,27 @@ items:
     session: https://claude.ai/code/session_01SziLFUkhv1REwwQM8dQoJj
     blockers:
       - >-
-          Two review threads on #207 are open on questions only the reviewer can answer, both
-          replied to and neither resolved: whether the eight scripts already on main that spell
-          "create-personal-notes-branch.sh" should be converted to the new
-          CREATE_PERSONAL_NOTES_BRANCH_SCRIPT constant in this PR or a follow-up, and whether
-          plan-size-report.sh should be Python. The other five threads of the 2026-08-30 round are
-          answered and resolved in 6cde496.
+          Review round of 2026-08-30 on #207 is unanswered: 7 unresolved threads, none replied to.
+          CI is green on 103a881d (all 23 checks) and the branch merges cleanly, so nothing is
+          failing - the item is stalled purely on the review. The threads ask for: file names read
+          from their definitions rather than re-hardcoded (2 in test_plan_size_report_sh.py, 1 in
+          plan-size-report.sh), a generic missing-requirement check instead of the hardcoded `import
+          yaml` probe, PLAN_SIZE_BUDGET moved off the middle of plan_size_budget.py, the module's
+          free functions grouped into classes, and a question about whether plan-size-report.sh
+          should be Python rather than bash.
     notes: >
-      The budget as named constants - 15 items and 2,000 combined plan.yaml + roadmap.md lines -
-      with a typed check and a command reporting every plan against it. Report-only: nothing is
-      refused at this stage, so it can land while workflow-unification and rdr-refactor are still
-      over. Numbers chosen from the live measurement on 2026-08-28: the largest healthy plan is
-      montessori-eql-stack at 13 items / 1,634 lines, and the two outliers are 3,676 and 14,259
-      lines, so the budget clears six of eight plans untouched. The count must parse the YAML rather
-      than grep it - rdr-refactor reads 0 items under `grep '^  - id:'` because its manifest indents
-      differently, and 49 once parsed. Landed as .claude/hooks/plan_size_budget.py, a module of its
-      own on main rather than a third copy of .claude/shared/plan_model.py - the later items import
-      the budget from there.
-
-      The 2026-08-30 review round settled the module's shape. There is no PLAN_SIZE_BUDGET constant:
-      SizeBudget carries MAXIMUM_ITEMS/MAXIMUM_LINES as class variables its fields default to, so
-      SizeBudget() is the budget and wave 3's refusal imports the class, not a constant. The free
-      functions are gone onto PlanSize, a new PlansDirectory and a new SizeReport. The round also
-      produced .claude/hooks/missing_requirements.py plus .claude/hooks/requirements.txt - a generic
-      "which requirements are absent" check that check-setup.sh now shares -and it established that
-      no test or script spells a filename another module defines: HookScript, PlanDocument and
-      PLANS_DIRECTORY are the definitions, and resolve-personal-notes-config.sh gained
-      CREATE_PERSONAL_NOTES_BRANCH_SCRIPT, HOOKS_REQUIREMENTS_FILE, MISSING_REQUIREMENTS_SCRIPT,
-      PLAN_SIZE_BUDGET_SCRIPT and PLAN_SIZE_REPORT_SCRIPT. Whether plan-size-report.sh should be
-      Python is open with the reviewer: the notes-branch config resolver is bash with no Python
-      half, so a Python entry point needs that resolver ported first - its own item if wanted.
+      The budget as named constants - 15 items and 2,000 combined plan.yaml +
+      roadmap.md lines - with a typed check and a command reporting every plan
+      against it. Report-only: nothing is refused at this stage, so it can land
+      while workflow-unification and rdr-refactor are still over. Numbers chosen
+      from the live measurement on 2026-08-28: the largest healthy plan is
+      montessori-eql-stack at 13 items / 1,634 lines, and the two outliers are
+      3,676 and 14,259 lines, so the budget clears six of eight plans untouched.
+      The count must parse the YAML rather than grep it - rdr-refactor reads 0
+      items under `grep '^  - id:'` because its manifest indents differently,
+      and 49 once parsed. Landed as .claude/hooks/plan_size_budget.py, a module
+      of its own on main rather than a third copy of .claude/shared/plan_model.py
+      - the later items import the budget from there.
 
   - id: split-workflow-unification
     title: "Split workflow-unification into plans under the budget"
