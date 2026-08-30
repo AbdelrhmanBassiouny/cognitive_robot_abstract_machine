@@ -104,6 +104,14 @@ one-line module docstring into three, so the file stayed in the diff doing exact
 what the reviewer asked it not to. The re-exports the thread was about were indeed
 gone, which is what made the claim feel true.
 
+**9. A formatter sweep puts untouched files back into the diff.** #76's
+`rdr/__init__.py` was restored to the base and then reflowed by the PR-wide
+`scripts/format_docstrings.py` pass, because docformatter expands the base's
+one-line module docstring into three every time it runs over that file. The
+sweep is what AGENTS.md asks for on modified files, so the rule is narrower
+than it reads: it applies to the files a pull request actually changes, and a
+file restored to the base is not one of them.
+
 ## The lesson this plan is the case study for
 
 **Six weeks on a dead base costs three moved interfaces, and none of it is
@@ -146,14 +154,13 @@ passing suite:
   member the way `EXIT` does. Both are real rule instances that no thread named
   and that the PR-wide sweep thread's own categories (abbreviations, docstrings,
   formatting) do not cover.
-- **Two review threads on #76 remain open**, both with the reviewer's own
-  instruction on them: the generated-model header is to be changed in the pull
-  request that owns `templates/rdr_module.py.jinja` - #66 (`D-core-serialization`),
-  open and unmerged - and the side-by-side labels are to become a `StrEnum` in #79.
-  The other three of the five left open on 2026-08-30 he resolved himself, taking
-  the answers as given: the `match`/`case` lookup table, the removed
-  `except Exception: pass`, and the `elision` rename declined for want of a better
-  word.
+- **One review thread on #76 remains open, deliberately.** The generated-model
+  header changes in the pull request that owns `templates/rdr_module.py.jinja` -
+  #66 (`D-core-serialization`), open and unmerged - which is five branches below
+  #76 and in `rdr-core-engine`, so it waits on the developer's word rather than a
+  cross-plan push. The labels thread is done: `CaseColumnLabel` landed in #79 and
+  both readers use it. The other three of the five left open he resolved himself,
+  taking the answers as given.
 - **Known conformance debt left alone deliberately** on #79: `av`, `sp`, `d` and
   `test_progress_bar.py`'s own box-drawing dividers are real instances of rules
   this pull request's other fixes enforced elsewhere, but no thread named them.
