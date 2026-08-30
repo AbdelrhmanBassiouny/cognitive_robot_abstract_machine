@@ -14,3 +14,10 @@ session-notes-infrastructure: https://claude.ai/code/artifact/a35f0207-226c-4a96
 stack-maintenance: https://claude.ai/code/artifact/c61f29b5-37a6-4498-a159-1b8c6a881d8a
 stack-tooling-install: https://claude.ai/code/artifact/7681295b-a29c-41b8-9799-81eab81b4033
 workflow-cutover: https://claude.ai/code/artifact/2bfad2c4-a7a0-42a4-a6ea-f75ed043a8f4
+eql-core-and-code-generation: https://claude.ai/code/artifact/28c961bb-4dad-44dc-93cb-432c1b0cef7b
+rdr-core-engine: https://claude.ai/code/artifact/fff3e473-d419-4aa5-8bb6-ca5f61604c79
+rdr-interface-and-decorator: https://claude.ai/code/artifact/6cea5f36-bcf7-494e-8f1c-413f19963ed6
+test-suite-fixes: https://claude.ai/code/artifact/95f5454f-7b05-4391-8c61-5e503bf8db5b
+rdr-explanation: https://claude.ai/code/artifact/95d875eb-d7dc-4a1b-9b12-9437a04ad51d
+rdr-engine-extensions: https://claude.ai/code/artifact/9e492000-7c37-4c83-bf0d-3d276a54de23
+rdr-expert-framework: https://claude.ai/code/artifact/4575c5c5-220f-45b9-b734-59875514b17b
