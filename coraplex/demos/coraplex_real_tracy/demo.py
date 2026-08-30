@@ -66,7 +66,7 @@ if execition_mode == ExecutionType.REAL:
 elif execition_mode == ExecutionType.SIMULATED:
     world = URDFParser.from_file(Tracy.get_ros_file_path()).parse()
     Tracy.from_world(world)
-    VizMarkerPublisher(_world=world, node=node).with_tf_publisher()
+    VizMarkerPublisher(_world=world, node=node)
 
 print("Setup World")
 # Setup cubes
