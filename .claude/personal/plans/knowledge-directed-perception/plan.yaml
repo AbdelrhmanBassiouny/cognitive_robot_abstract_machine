@@ -212,6 +212,19 @@ items:
       supporting surface like the table. One detection pass per surface, each
       at its own plane height, with detections attributed to the surface
       supporting them.
+      Built 2026-08-30 as #221, 2744c23d. The pass-per-surface restructure landed as planned,
+      but a piece on the lid was invisible four times over rather than the two this note
+      recorded, and the restructure alone fixes two. The lid's wood reads within two hues of
+      the amber prisms, so marking every piece colour at once merged a piece standing on it
+      into the lid; and the edge fit ran Canny over brightness, where a cyan piece is one grey
+      level from the lid against 34 from the bare table. Each colour is now segmented on its
+      own and each colour channel read for edges of its own; both stay inside the one detector,
+      so choose-detection-method still owns choosing between detectors - but its "the lid
+      selects the colour blob" rule now needs a different justification, since the edge fit
+      fits a cube on the lid at 0.93 agreement. 153 tests pass across the montessori modules
+      where 144 did. This item does not populate supporting_surface, against
+      surface-finish-annotation's prediction, so the finish question that raised does not arise
+      yet. detect costs 0.35 s per frame against 0.23 s, inside the node's 0.5 s period.
 
   - id: one-detection-per-thing
     title: "One physical thing, one detection, and none inside a body already known"
