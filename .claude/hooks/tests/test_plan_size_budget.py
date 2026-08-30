@@ -8,16 +8,14 @@ from pathlib import Path
 
 import yaml
 
+from plan_item_bootstrap import PlanDocument
 from plan_size_budget import (
-    PLAN_SIZE_BUDGET,
-    WITHIN_BUDGET,
     BudgetLimit,
+    PlansDirectory,
     PlanSize,
     SizeBudget,
+    SizeReport,
     main,
-    measure_plan,
-    measure_plans,
-    render_report,
 )
 
 FIXTURES_DIRECTORY = Path(__file__).parent / "fixtures"
@@ -28,14 +26,16 @@ A manifest whose item entries sit flush with the ``items:`` key holding them, th
 a line-matching count misses.
 """
 
-MANIFEST_FILENAME = "plan.yaml"
+MANIFEST_FILENAME = PlanDocument.MANIFEST
 """
-The manifest filename the scratch plans in these tests are laid out under.
+The manifest filename the scratch plans in these tests are laid out under, read from the
+definition every plan tool shares rather than spelled again here.
 """
 
-ROADMAP_FILENAME = "roadmap.md"
+ROADMAP_FILENAME = PlanDocument.ROADMAP
 """
-The roadmap filename the scratch plans in these tests are laid out under.
+The roadmap filename the scratch plans in these tests are laid out under, read from the
+same definition.
 """
 
 
@@ -75,7 +75,7 @@ def measure(plan_directory: Path) -> PlanSize:
     :param plan_directory: The plan's directory.
     :return: Its measured size.
     """
-    return measure_plan(
+    return PlanSize.measure(
         plan_directory / MANIFEST_FILENAME, plan_directory / ROADMAP_FILENAME
     )
 
@@ -115,7 +115,7 @@ def test_counts_items_that_are_not_indented_under_their_key(tmp_path):
     expected_item_count = len(
         yaml.safe_load(UNINDENTED_ITEMS_MANIFEST.read_text())["items"]
     )
-    size = measure_plan(UNINDENTED_ITEMS_MANIFEST, tmp_path / "absent-roadmap.md")
+    size = PlanSize.measure(UNINDENTED_ITEMS_MANIFEST, tmp_path / "absent-roadmap.md")
     assert size.item_count == expected_item_count
 
 
@@ -157,37 +157,37 @@ def test_the_line_count_is_both_files_together():
 def test_a_plan_at_the_budget_is_within_it():
     size = PlanSize(
         plan_id="a-plan",
-        item_count=PLAN_SIZE_BUDGET.maximum_items,
-        manifest_line_count=PLAN_SIZE_BUDGET.maximum_lines,
+        item_count=SizeBudget().maximum_items,
+        manifest_line_count=SizeBudget().maximum_lines,
         roadmap_line_count=0,
     )
-    assert PLAN_SIZE_BUDGET.overruns(size) == ()
+    assert SizeBudget().overruns(size) == ()
 
 
 def test_one_item_over_the_budget_is_an_overrun():
     size = PlanSize(
         plan_id="a-plan",
-        item_count=PLAN_SIZE_BUDGET.maximum_items + 1,
+        item_count=SizeBudget().maximum_items + 1,
         manifest_line_count=0,
         roadmap_line_count=0,
     )
-    (overrun,) = PLAN_SIZE_BUDGET.overruns(size)
+    (overrun,) = SizeBudget().overruns(size)
     assert overrun.limit is BudgetLimit.ITEMS
     assert overrun.excess == 1
-    assert overrun.allowed == PLAN_SIZE_BUDGET.maximum_items
+    assert overrun.allowed == SizeBudget().maximum_items
 
 
 def test_one_line_over_the_budget_is_an_overrun():
     size = PlanSize(
         plan_id="a-plan",
         item_count=0,
-        manifest_line_count=PLAN_SIZE_BUDGET.maximum_lines,
+        manifest_line_count=SizeBudget().maximum_lines,
         roadmap_line_count=1,
     )
-    (overrun,) = PLAN_SIZE_BUDGET.overruns(size)
+    (overrun,) = SizeBudget().overruns(size)
     assert overrun.limit is BudgetLimit.LINES
     assert overrun.excess == 1
-    assert overrun.allowed == PLAN_SIZE_BUDGET.maximum_lines
+    assert overrun.allowed == SizeBudget().maximum_lines
 
 
 def test_the_line_limit_is_blown_by_both_files_together():
@@ -226,7 +226,7 @@ def test_an_overrun_states_the_excess_against_what_was_allowed():
 def test_measures_every_plan_in_the_directory(tmp_path):
     write_plan(tmp_path, "plan-a", item_count=1)
     write_plan(tmp_path, "plan-b", item_count=2)
-    sizes = measure_plans(tmp_path, MANIFEST_FILENAME, ROADMAP_FILENAME)
+    sizes = PlansDirectory(tmp_path, MANIFEST_FILENAME, ROADMAP_FILENAME).measure()
     assert [(size.plan_id, size.item_count) for size in sizes] == [
         ("plan-a", 1),
         ("plan-b", 2),
@@ -237,12 +237,12 @@ def test_skips_a_directory_that_holds_no_manifest(tmp_path):
     write_plan(tmp_path, "plan-a")
     (tmp_path / "_generated").mkdir()
     (tmp_path / "_generated" / "branch-index.tsv").write_text("a-branch\tplan-a\n")
-    sizes = measure_plans(tmp_path, MANIFEST_FILENAME, ROADMAP_FILENAME)
+    sizes = PlansDirectory(tmp_path, MANIFEST_FILENAME, ROADMAP_FILENAME).measure()
     assert [size.plan_id for size in sizes] == ["plan-a"]
 
 
 def test_measures_nothing_when_there_are_no_plans(tmp_path):
-    assert measure_plans(tmp_path, MANIFEST_FILENAME, ROADMAP_FILENAME) == []
+    assert PlansDirectory(tmp_path, MANIFEST_FILENAME, ROADMAP_FILENAME).measure() == []
 
 
 # %% the rendered report
@@ -253,8 +253,8 @@ def test_a_plan_within_the_budget_is_reported_as_within_it():
     size = PlanSize(
         plan_id="small-plan", item_count=2, manifest_line_count=10, roadmap_line_count=5
     )
-    assert report_line_for(render_report([size], budget), "small-plan").endswith(
-        WITHIN_BUDGET
+    assert report_line_for(SizeReport([size], budget).render(), "small-plan").endswith(
+        SizeReport.WITHIN_BUDGET
     )
 
 
@@ -264,7 +264,9 @@ def test_a_plan_over_the_budget_is_reported_with_every_overrun():
         plan_id="big-plan", item_count=12, manifest_line_count=90, roadmap_line_count=60
     )
     expected = ", ".join(str(overrun) for overrun in budget.overruns(size))
-    assert report_line_for(render_report([size], budget), "big-plan").endswith(expected)
+    assert report_line_for(SizeReport([size], budget).render(), "big-plan").endswith(
+        expected
+    )
 
 
 def test_a_reported_row_carries_the_measured_numbers():
@@ -272,14 +274,14 @@ def test_a_reported_row_carries_the_measured_numbers():
     size = PlanSize(
         plan_id="a-plan", item_count=2, manifest_line_count=10, roadmap_line_count=5
     )
-    row = report_line_for(render_report([size], budget), "a-plan")
+    row = report_line_for(SizeReport([size], budget).render(), "a-plan")
     assert row.split()[1:5] == ["2", "10", "5", "15"]
 
 
 def test_the_report_names_the_budget_it_measured_against():
     budget = SizeBudget(maximum_items=10, maximum_lines=100)
-    assert "10 items" in render_report([], budget)
-    assert "100 lines" in render_report([], budget)
+    assert "10 items" in SizeReport([], budget).render()
+    assert "100 lines" in SizeReport([], budget).render()
 
 
 def test_the_report_counts_how_many_plans_are_over_budget():
@@ -295,7 +297,7 @@ def test_the_report_counts_how_many_plans_are_over_budget():
             plan_id="plan-c", item_count=12, manifest_line_count=1, roadmap_line_count=0
         ),
     ]
-    assert "2 of 3 plans are over budget." in render_report(sizes, budget)
+    assert "2 of 3 plans are over budget." in SizeReport(sizes, budget).render()
 
 
 def test_the_report_says_so_when_every_plan_is_within_budget():
@@ -303,7 +305,7 @@ def test_the_report_says_so_when_every_plan_is_within_budget():
     size = PlanSize(
         plan_id="plan-a", item_count=1, manifest_line_count=1, roadmap_line_count=0
     )
-    assert "All 1 plans are within budget." in render_report([size], budget)
+    assert "All 1 plans are within budget." in SizeReport([size], budget).render()
 
 
 # %% the command
@@ -327,11 +329,11 @@ def test_main_reports_every_plan_against_the_budget(tmp_path, monkeypatch, capsy
     exit_code = main()
     assert exit_code == 0
     printed = capsys.readouterr().out
-    assert report_line_for(printed, "plan-a").endswith(WITHIN_BUDGET)
+    assert report_line_for(printed, "plan-a").endswith(SizeReport.WITHIN_BUDGET)
 
 
 def test_main_measures_against_the_plan_size_budget(tmp_path, monkeypatch, capsys):
-    write_plan(tmp_path, "plan-a", item_count=PLAN_SIZE_BUDGET.maximum_items + 1)
+    write_plan(tmp_path, "plan-a", item_count=SizeBudget().maximum_items + 1)
     monkeypatch.setattr(
         sys,
         "argv",
@@ -347,5 +349,5 @@ def test_main_measures_against_the_plan_size_budget(tmp_path, monkeypatch, capsy
     )
     main()
     size = measure(tmp_path / "plan-a")
-    (overrun,) = PLAN_SIZE_BUDGET.overruns(size)
+    (overrun,) = SizeBudget().overruns(size)
     assert report_line_for(capsys.readouterr().out, "plan-a").endswith(str(overrun))

@@ -103,8 +103,8 @@ What opens an item block, the list marker its first field sits behind.
 
 class HookScript(StrEnum):
     """
-    The hook scripts this module drives, named once so a caller - a test installing them
-    into a scratch layout, or this module invoking one - never spells a filename itself.
+    The hook scripts this tooling drives, named once so a caller - a test installing them
+    into a scratch layout, or a module invoking one - never spells a filename itself.
     """
 
     CONFIGURATION = "resolve-personal-notes-config.sh"
@@ -120,6 +120,11 @@ class HookScript(StrEnum):
     PLAN_ITEM_BOOTSTRAP = "plan_item_bootstrap.py"
     """
     This module, which a caller invokes by path.
+    """
+
+    PLAN_SIZE_REPORT = "plan-size-report.sh"
+    """
+    Reports every plan on the notes branch against the size budget.
     """
 
     @property

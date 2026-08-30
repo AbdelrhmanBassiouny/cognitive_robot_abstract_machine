@@ -9,7 +9,7 @@ set -euo pipefail
 #   "$CLAUDE_PROJECT_DIR/.claude/hooks/plan-size-report.sh"
 #
 # Takes no arguments: the budget is fixed (see plan_size_budget.py's
-# PLAN_SIZE_BUDGET) and every plan is measured, since the question the report
+# SizeBudget) and every plan is measured, since the question the report
 # answers is which plans are approaching it, not how one plan is doing.
 #
 # Reports only. Nothing here refuses a save, so a plan already over the budget
@@ -23,8 +23,9 @@ set -euo pipefail
 # scratch directory for the report to measure. Never checks anything out and
 # never touches your current branch or working tree.
 #
-# Requires python3 with PyYAML, like save-plan.sh - the item count is parsed
-# out of each manifest rather than matched line by line.
+# Requires python3 and everything the hooks' requirements.txt lists, like
+# save-plan.sh - the item count is parsed out of each manifest rather than
+# matched line by line.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
@@ -39,14 +40,20 @@ if ! command -v python3 > /dev/null 2>&1; then
   echo "python3 is required to parse plan manifests and render the report." >&2
   exit 1
 fi
-if ! python3 -c "import yaml" > /dev/null 2>&1; then
-  echo "python3's PyYAML module is required (pip install pyyaml)." >&2
+# Every requirement is reported, and none is named here: the hooks'
+# requirements file is where a dependency is written down, so adding one there
+# is enough for this check to start covering it.
+MISSING_REQUIREMENTS="$(python3 "${PROJECT_ROOT}/${MISSING_REQUIREMENTS_SCRIPT}" \
+  "${PROJECT_ROOT}/${HOOKS_REQUIREMENTS_FILE}")"
+if [ -n "${MISSING_REQUIREMENTS}" ]; then
+  echo "Not installed: ${MISSING_REQUIREMENTS}" >&2
+  echo "Run: pip install -r ${HOOKS_REQUIREMENTS_FILE}" >&2
   exit 1
 fi
 
 if ! fetch_personal_notes_branch; then
   echo "Branch '${NOTES_BRANCH}' doesn't exist yet (tried: ${ATTEMPTED_NOTES_REMOTES})." >&2
-  echo "Run ./create-personal-notes-branch.sh first, then re-run this script." >&2
+  echo "Run ${CREATE_PERSONAL_NOTES_BRANCH_SCRIPT} first, then re-run this script." >&2
   exit 1
 fi
 
@@ -70,7 +77,7 @@ while IFS= read -r file_path; do
 done < <(git ls-tree -r --name-only FETCH_HEAD -- "${PLANS_DIR}")
 
 echo "=== Plan sizes on '${NOTES_BRANCH}' (remote '${ACTIVE_NOTES_REMOTE}') ==="
-python3 "${SCRIPT_DIR}/plan_size_budget.py" \
+python3 "${PROJECT_ROOT}/${PLAN_SIZE_BUDGET_SCRIPT}" \
   --plans-dir "${SCRATCH_DIR}" \
   --manifest-filename "${PLAN_MANIFEST_FILENAME}" \
   --roadmap-filename "${PLAN_ROADMAP_FILENAME}"

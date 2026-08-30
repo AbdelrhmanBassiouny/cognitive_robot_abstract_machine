@@ -10,27 +10,46 @@ import subprocess
 import pytest
 import yaml
 
-from plan_size_budget import PLAN_SIZE_BUDGET, WITHIN_BUDGET, PlanSize
-from scratch_repository import ScratchRepository
+import missing_requirements
+import plan_manifest_tools
+import plan_size_budget
+from plan_item_bootstrap import (
+    HOOKS_DIRECTORY,
+    PLANS_DIRECTORY,
+    HookScript,
+    PlanDocument,
+)
+from missing_requirements import RequirementsFile
+from plan_size_budget import PlanSize, SizeBudget, SizeReport
+from scratch_repository import HOOKS_SOURCE_DIRECTORY, ScratchRepository
 
-PLANS_DIRECTORY = ".claude/personal/plans"
+MANIFEST_FILENAME = PlanDocument.MANIFEST
 """
-Where plans live on the notes branch, relative to its root.
-"""
-
-MANIFEST_FILENAME = "plan.yaml"
-"""
-The manifest filename the report reads each plan's item count out of.
+The manifest filename the report reads each plan's item count out of, read from the
+definition every plan tool shares rather than spelled again here.
 """
 
-ROADMAP_FILENAME = "roadmap.md"
+ROADMAP_FILENAME = PlanDocument.ROADMAP
 """
-The roadmap filename whose lines count against the same budget.
+The roadmap filename whose lines count against the same budget, from the same
+definition.
 """
 
-SCRIPT_NAME = "plan-size-report.sh"
+SCRIPT_NAME = HookScript.PLAN_SIZE_REPORT
 """
 The script under test.
+"""
+
+REQUIREMENTS_PATH = f"{HOOKS_DIRECTORY}/{RequirementsFile.FILENAME}"
+"""
+Where the hooks list their Python dependencies, composed from the two definitions that
+own its halves rather than spelled again here.
+"""
+
+ABSENT_DISTRIBUTION = "no-such-distribution-exists"
+"""
+A name no environment can have installed, so a requirements file naming it is always
+reported as missing.
 """
 
 
@@ -65,11 +84,13 @@ def report_repository(scratch_repository: ScratchRepository) -> ScratchRepositor
     :param scratch_repository: The initialized scratch repository and notes remote.
     :return: The same repository, ready to publish plans and run the report against.
     """
-    scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        SCRIPT_NAME,
-        "plan_size_budget.py",
-        "plan_manifest_tools.py",
+    scratch_repository.install_hook_scripts(HookScript.CONFIGURATION, SCRIPT_NAME)
+    scratch_repository.install_hook_modules(
+        plan_size_budget, plan_manifest_tools, missing_requirements
+    )
+    scratch_repository.write(
+        REQUIREMENTS_PATH,
+        (HOOKS_SOURCE_DIRECTORY / RequirementsFile.FILENAME).read_text(),
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
@@ -134,15 +155,15 @@ def test_a_plan_within_the_budget_is_reported_as_within_it(
 ):
     report_repository.publish_notes_branch(plan_files("plan-a", item_count=1))
     result = run_report(report_repository)
-    assert report_line_for(result.stdout, "plan-a").endswith(WITHIN_BUDGET)
+    assert report_line_for(result.stdout, "plan-a").endswith(SizeReport.WITHIN_BUDGET)
 
 
 def test_a_plan_over_the_budget_is_reported_as_over_it(
     report_repository: ScratchRepository,
 ):
-    item_count = PLAN_SIZE_BUDGET.maximum_items + 1
+    item_count = SizeBudget().maximum_items + 1
     report_repository.publish_notes_branch(plan_files("plan-a", item_count=item_count))
-    (overrun,) = PLAN_SIZE_BUDGET.overruns(
+    (overrun,) = SizeBudget().overruns(
         PlanSize(
             plan_id="plan-a",
             item_count=item_count,
@@ -185,3 +206,50 @@ def test_fails_when_the_notes_branch_does_not_exist(
     result = run_report(report_repository)
     assert result.returncode == 1
     assert "doesn't exist yet" in result.stderr
+
+
+def test_reports_whichever_requirement_is_missing(
+    report_repository: ScratchRepository,
+):
+    report_repository.write(REQUIREMENTS_PATH, f"{ABSENT_DISTRIBUTION}>=2\n")
+    report_repository.publish_notes_branch(plan_files("plan-a"))
+
+    result = run_report(report_repository)
+
+    assert result.returncode == 1
+    assert ABSENT_DISTRIBUTION in result.stderr
+    assert REQUIREMENTS_PATH in result.stderr
+
+
+def test_runs_when_every_requirement_is_installed(
+    report_repository: ScratchRepository,
+):
+    report_repository.publish_notes_branch(plan_files("plan-a"))
+
+    result = run_report(report_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert ABSENT_DISTRIBUTION not in result.stderr
+
+
+def test_the_requirements_path_matches_the_shell_configuration_that_owns_it(
+    report_repository: ScratchRepository,
+):
+    """
+    ``REQUIREMENTS_PATH`` mirrors ``HOOKS_REQUIREMENTS_FILE`` in the shell
+    configuration; this is what stops the mirror drifting, since the two are edited in
+    different files.
+    """
+    resolved = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "{HookScript.CONFIGURATION.path}" && '
+            'printf "%s\\n" "${HOOKS_REQUIREMENTS_FILE}"',
+        ],
+        cwd=report_repository.project_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert resolved.stdout.strip() == REQUIREMENTS_PATH

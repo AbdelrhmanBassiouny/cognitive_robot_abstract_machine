@@ -376,6 +376,23 @@ SETUP_PERSONAL_NOTES_DIRECTORY=".claude/skills/setup-personal-notes"
 # the single source of truth for that question, so no caller re-implements
 # "is the notes branch there?" with its own git plumbing.
 CHECK_SETUP_SCRIPT=".claude/hooks/check-setup.sh"
+# CREATE_PERSONAL_NOTES_BRANCH_SCRIPT: the script that creates the notes
+# branch, named once here because nine scripts tell the user to run it when the
+# branch is missing. Defined-once for the same reason as every path above: a
+# rename otherwise has to find every message that spells it.
+CREATE_PERSONAL_NOTES_BRANCH_SCRIPT=".claude/hooks/create-personal-notes-branch.sh"
+# HOOKS_REQUIREMENTS_FILE / MISSING_REQUIREMENTS_SCRIPT: what the Python half of
+# the hooks needs, and the check that reports which of it is absent. The file is
+# the only place a hook dependency is written down, and the script is generic
+# over whichever requirements file it is handed - so neither check-setup.sh nor
+# plan-size-report.sh names a distribution of its own.
+HOOKS_REQUIREMENTS_FILE=".claude/hooks/requirements.txt"
+MISSING_REQUIREMENTS_SCRIPT=".claude/hooks/missing_requirements.py"
+# PLAN_SIZE_BUDGET_SCRIPT / PLAN_SIZE_REPORT_SCRIPT: the budget every plan is
+# measured against and the command that reports it, same defined-once reasoning
+# as every path above.
+PLAN_SIZE_BUDGET_SCRIPT=".claude/hooks/plan_size_budget.py"
+PLAN_SIZE_REPORT_SCRIPT=".claude/hooks/plan-size-report.sh"
 # prerequisite-check.md: the shared "run check-setup.sh, offer
 # /setup-personal-notes if it fails" procedure that plan-create,
 # plan-dashboard, plan-item-kickoff and plan-item-resolve each reference in

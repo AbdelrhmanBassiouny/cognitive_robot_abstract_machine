@@ -16,6 +16,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from types import ModuleType
 
 import plan_manifest_tools
 
@@ -283,6 +284,15 @@ class ScratchRepository:
                 HOOKS_SOURCE_DIRECTORY / script_name,
                 self.project_root / ".claude" / "hooks" / script_name,
             )
+
+    def install_hook_modules(self, *modules: ModuleType) -> None:
+        """
+        Copy hook modules under test into the scratch layout, named by the module objects
+        themselves rather than by a second spelling of their filenames.
+
+        :param modules: Already-imported modules from the hooks directory.
+        """
+        self.install_hook_scripts(*(Path(module.__file__).name for module in modules))
 
     def write_setup_prerequisites(self) -> None:
         """
