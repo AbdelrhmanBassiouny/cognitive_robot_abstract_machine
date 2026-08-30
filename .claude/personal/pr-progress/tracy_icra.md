@@ -463,3 +463,34 @@ base `1646dd355`, against the 234 the plan recorded four days earlier.
   only really proven by the demo running on the real robot.
 - The branch's upstream still points at `sorin/tracy_icra`. This merge went to
   `origin`, as the earlier rounds did.
+
+## Watching the captures (commit `10f1a5dad`, cherry-picked onto #221 as `54dd5f6c0`)
+
+`python -m experiments.montessori.perception.watch_captures` runs the pipeline over
+every committed capture and draws each look in the same three windows a live run uses,
+through `SceneWindows`. A capture is held on screen until a key is pressed, so a scene
+can be lingered on; `q` or escape stops the walk, and `--seconds-per-capture` moves on
+by itself instead. Name captures on the command line to review only those.
+
+Each capture logs its pieces **grouped by the surface they were put on**, which is what
+makes the duplicate visible in text as well as in the picture:
+
+    disoriented_cube_on_hole: table: rectangular_prism, triangular_prism, cylinder,
+      cube; board_lid: cylinder; 5 holes; board found
+
+The viewer had no way to report a key press. `ImageDisplay.wait` now answers with the
+character that was typed (`None` when the wait ran out), and `CameraFrameViewer.hold`
+keeps the windows up until one arrives - drawing once however short the wait, which is
+what `--seconds-per-capture 0` and the tests rely on. `QuitKey` names the two keys that
+stop a walk.
+
+Tests: `test_montessori_capture_review.py` (the walk itself - every capture asked for is
+detected on and drawn, a quit key stops it where it stands, no viewer means no drawing)
+plus three viewer tests for the key reporting. `KeyPressingDisplay` beside
+`RecordingDisplay` in `test_montessori_viewer.py` stands in for a screen with someone
+typing at it. 206 passed against 199, same 5 pre-existing `NoDAOFoundError` failures.
+
+It went onto **#221** rather than #202, because it reads `recorded_setup.py`, which
+exists only there. Its tests run in CI, unlike the bag replay's, since the captures are
+committed.
+
