@@ -494,3 +494,35 @@ It went onto **#221** rather than #202, because it reads `recorded_setup.py`, wh
 exists only there. Its tests run in CI, unlike the bag replay's, since the captures are
 committed.
 
+### The rectified window was mirrored (commit `8d8018e69`, on #221 as `a76fb80a8`)
+
+Watching the captures is what showed it. A rectified image is indexed the way its region
+is measured - the world's x-axis across the columns and its y-axis down the rows - which
+draws the plane as it looks from *underneath*, and a quarter turn from the camera's own
+view of it. Nothing computed on it was wrong, since the mapping is used consistently
+both ways; it is the picture a person reads that was mirrored.
+
+`ViewFromAbove` (overlay.py) turns it: x up the picture, y to the left, the way the
+camera on its pole sees the same table. It is a `DetectionView` rather than a transform
+applied to the finished image, which matters - drawing first and turning afterwards
+leaves every label mirrored, which is exactly what the first attempt did.
+
+`RectifiedView` itself is untouched, so its round-trip test still pins the geometry.
+
+### How much of the workspace is floor
+
+Measured on the six captures: everything detected in all of them together spans
+x 0.57..0.91 and y -0.02..0.37. The region searched is x 0.35..1.35, y -0.45..0.75, so
+the great majority of it is floor, chairs and whoever is standing at the table - which is
+what the workspace clip shows and what the rectified window shows around the table.
+
+The black in the rectified window is *not* the clip: it is where the region falls outside
+the camera's field of view, so there is no pixel to draw. Nothing is clipped in that
+window at all - the rectified image is the region by definition.
+
+Tightening the numbers is still the user's call, as recorded above: they describe their
+table. Brightness alone does not measure the table's extent off a capture - the biggest
+bright patch reads x 0.35..0.91, y -0.26..0.26 in all six, but it is a specular patch,
+and it starts exactly at the region's own minimum_x, so the table runs past the region on
+the near side.
+
