@@ -1300,3 +1300,116 @@ of what is rectified every frame is floor.
 
 It sits after the deadline's critical path deliberately - the demo runs on a tuned
 workspace, and this replaces the tuning rather than unblocking anything.
+
+## `one-detection-per-thing`: no two things in one place
+
+Kicked off 2026-08-30 in `auto` mode, as pull request #225 off
+`perception_per_supporting_surface` (#221, open and out of draft, so ready to stack on --
+`check_dependency_readiness.py` reports `open_ready`). The mechanical scope check reports
+every path this touches absent from `main` and shared with #202, #205, #221 and #223,
+which every round on this plan has already recorded as expected: every file in this plan
+is introduced by #202, so path overlap alone would fold the whole plan into one item.
+What remains once the overlapping edits are removed is an occupancy rule that no earlier
+item states in any form, and the detection benchmark #221 shipped already fails for the
+want of it.
+
+**The branch is `claude/plan-item-kickoff-kdp-z4pv7l`, not the
+`perception_one_detection_per_thing` the manifest named**, following #223: the session
+was designated that branch, and the manifest records what exists rather than what was
+planned. The session's branch arrived cut from `integration` rather than from anything
+this plan is stacked on -- the hazard #199 exists to refuse -- and was reset onto #221's
+tip before the first commit.
+
+**It is based on #221's current tip, `df667585e`, not on the `2744c23d` the item's note
+records.** #221 has since gained `tune_workspace` and the tuned-workspace file, which is
+what the searched region now comes from.
+
+### The fault has two shapes, and the wider one is measured
+
+The item's note names the border boxes: a lid border is a long straight edge, a prism
+template fits it at about 0.7, and `board.encloses` rejects only a contour whose *centre*
+falls inside the board, which a contour riding the border does not have.
+
+The capture benchmark #221 shipped measured the wider shape. Every capture holding a
+piece on the board's lid reports that piece a second time on the table, about 50 mm from
+the first: the table pass rectifies a piece standing 80 mm higher onto the table's plane,
+where parallax displaces it outward, and the displacement is exactly what carries its
+centre out of the board's outline and past `SurfaceSearch.claims`. So both shapes are one
+rule missing, and it is the rule the item's title states: nothing may be reported in a
+place something else already occupies.
+
+### A place is a volume, not a position
+
+`SurfaceSearch.claims` already asks a question of this kind and asks it of a single point,
+which is why a contour riding a border escapes it. The rule here is asked of the space a
+detection takes up: its own outline, between the surface it rests on and its own top.
+`MontessoriDetection` already reports both heights (`surface_height`, `top_height`) and
+its outline in world coordinates, so the volume is a reading of what a detection already
+carries rather than anything new measured.
+
+Two volumes are the same place when their outlines overlap in plan view *and* their height
+spans overlap. Both halves are load-bearing: a piece resting on the lid stands directly
+above the board and shares its outline entirely, and only the height span tells it apart
+from a ghost reported inside the board at the table's plane.
+
+### What already occupies a place
+
+- **The board, as it was seen this frame.** It stands from the table up to its lid, so
+  anything reported at the table's plane within its outline is either the board's own edge
+  or a ghost of something standing on it. The *detected* board is used rather than the one
+  the world models, because the world's board pose is known to have drifted from the real
+  one -- recorded under "Finding the surface by looking" -- while the board detector
+  measures it every frame. This is the same split #221 already made for the lid: its
+  height from the world, its extent from the detection.
+- **Another detection.** Two detections in one place are one thing seen twice, and the one
+  kept is the one with the stronger `outline_agreement` -- already documented as how a
+  piece is told from its own reflection, and the measurement that a rectification onto the
+  wrong plane degrades.
+- **A body the world already knows about**, for the bodies perception is not itself
+  measuring: the robot's own links reaching over the table, and whatever else the world
+  places in the workspace. The table, the board and the pieces are excluded, since
+  perception measures those and the model of them is what has drifted.
+
+### `is_place_occupied` is measured before it is used
+
+`semantic_digital_twin.reasoning.predicates.is_place_occupied` is what the item's note
+names for the known-body half, and it answers exactly this question -- but it builds a
+trimesh `CollisionManager` over every collidable body on every call, and `detect` already
+costs 0.35 s of the node's 0.5 s period. Whether it is affordable per detection per frame
+is measured in this container and recorded with the result, rather than assumed either
+way. The alternative, if it is not, is the same box-shaped reading of a body the
+`WorkspaceSurface` fallback already takes.
+
+### The expected-to-fail mark is this item's to remove
+
+`test_only_the_pieces_resting_on_the_table_are_detected_there` is marked strict
+expected-to-fail naming this item, and its module's own docstring says the mark reports
+itself stale the day the item lands. Removing it is that contract being honoured, not a
+test being changed to pass.
+
+### Verification
+
+Tests first, at three levels, so each failure names its own cause:
+
+- The volume rule on its own, in a new `test_montessori_occupancy.py`: two volumes at one
+  position but different height spans are not the same place; overlapping outlines in one
+  span are; a weaker detection loses its place to a stronger one.
+- The pipeline on the rendered scene, in `test_montessori_perception.py`: a detection at
+  the table's plane inside the board's own outline is not reported.
+- The captures, as the measurement that matters: the strict expected-to-fail mark comes
+  off, and no piece is reported on the table that is not lying on it, in all six.
+
+How much of a shared outline counts as one place is a threshold, and it is measured off
+the captures and the rendered scene rather than chosen -- two pieces standing side by side
+touch, and their fitted outlines overlap slightly, so the number has to separate that from
+a ghost. It is recorded with the value it takes.
+
+Run under the environment #223 recorded, `uv sync --extra dev --python 3.12`, which builds
+the whole workspace here.
+
+### Landing hazard
+
+#223 renames `Footprint` to `RectifiedFootprint` across the perception package, and this
+branch edits `pipeline.py` and `detections.py`, so it conflicts with that rename the same
+mechanical way #205 and #221 do: take this branch's edit, spell the class
+`RectifiedFootprint`.
