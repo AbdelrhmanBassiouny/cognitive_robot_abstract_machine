@@ -428,10 +428,30 @@ items:
   branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
   pull_request_number: 211
   status: in_progress
-  session: https://claude.ai/code/session_017dDTDzd6185o65JFBuFiLm
+  session: https://claude.ai/code/session_01DwZVodQjhAL4QJEuPPrWnK
   track: integration
   depends_on:
   - integration-branch
+  blockers:
+  - 'An unanswered review round on #211, submitted 2026-08-30T09:48Z against this item''s own head commit
+    `8227ef57` ("Judge a build in the run after the one that opened it, and remember what passed"). Six
+    threads, none replied to, none resolved; CI on that head is green across all 25 checks and the pull
+    request is `clean`, so nothing else holds it. Four are one complaint - hard-coded string keys and dict
+    literals where a class already knows the shape: `test_integration_plans.py` (the `BoardExport.from_api_records`
+    record and `opened["base"]`), `test_integration_verdict.py` (`an_open_pull_request`, which spells `number`/`head`/`ref`/`sha`/`base`
+    past the `PullRequestField` enum that reads them), `test_integration_refresh_workflow.py` (the shell
+    expansion pattern `${PLANS:+--plan ` retyped in the assertion), and `integration_pipeline.py` (the `"shared"`
+    in its `sys.path` insertion, which 18 files repeat). The fifth reports a real defect and asks a design
+    question: eight `integration-<timestamp>` build branches are still on the fork, never taken down - only
+    probe branches are deleted - and a first-time build needs two scheduled runs to publish, which the reviewer
+    calls slow. The sixth asks for an integrate-selected-plans control on the plan dashboard index, which
+    is not this item''s.
+
+
+    Also outstanding on the same pull request from the round before: the reviewer granted "yes also put
+    the ls-tree on the runner" on 2026-08-29T21:20Z, and `localisation_fixtures.py:329` still calls `run_git("ls-tree",
+    ...)` directly. That thread belongs to `red-candidate-localisation`, but it sits open on the shared
+    branch.'
   notes: |-
     Part D of `integration-branch`'s review round: the verdict moves from a local test run to real CI.
     Folded back onto that item's branch after being split out, so it has no pull request of its own - the
@@ -608,4 +628,3 @@ items:
     real cost is known. **Reachable before then without any of it**: a `--plan` filter carries one plan's
     tips through the ordinary build and candidate, which answers "does this plan hold together on its own"
     - most of what the topology was wanted for - with no extra branch and nothing that can publish.
-
