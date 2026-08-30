@@ -25,8 +25,15 @@ class DistinctFieldAnimal:
     """
 
     name: str
+    """The animal's name."""
+
     has_wings: bool
+    """
+    Whether the animal has wings.
+    """
+
     leg_count: int
+    """The number of legs the animal has."""
 
 
 _NEW_CASE = DistinctFieldAnimal(name="eagle", has_wings=True, leg_count=2)

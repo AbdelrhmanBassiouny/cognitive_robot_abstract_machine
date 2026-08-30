@@ -27,7 +27,7 @@ from .animal import Animal, Species
 # %% building rule trees without a fit loop
 
 
-def _animal_var():
+def _animal_variable():
     """
     Return a fresh Animal variable (new query-scope each call).
     """
@@ -38,7 +38,7 @@ def _single_rule_query():
     """
     Build a query with exactly one rule: milk == True -> mammal.
     """
-    animal = _animal_var()
+    animal = _animal_variable()
     query = entity(animal).where(animal.milk == True)
     with query:
         add(animal.species, Species.mammal)
@@ -52,7 +52,7 @@ def _all_alternatives_query():
 
     Insertion order: A (milk/mammal), B (feathers/bird), D (fins/fish).
     """
-    animal = _animal_var()
+    animal = _animal_variable()
     query = entity(animal).where(animal.milk == True)
     with query:
         add(animal.species, Species.mammal)  # A
@@ -79,7 +79,7 @@ def _all_refinements_query():
 
     Each new refinement is anchored on the previous rule's condition node.
     """
-    animal = _animal_var()
+    animal = _animal_variable()
     query = entity(animal).where(animal.backbone == True)
     with query:
         add(animal.species, Species.fish)  # A
@@ -99,7 +99,7 @@ def _all_refinements_query():
     return query, animal, node_c, node_e
 
 
-def _mixed_alt_then_ref_query():
+def _mixed_alternative_then_refinement_query():
     """
     Build the key divergence tree: A (backbone/fish), B (feathers/bird alt of A), C
     (milk/mammal refinement of A).
@@ -107,7 +107,7 @@ def _mixed_alt_then_ref_query():
     The resulting DAG is Refinement(Alternative(A, B), C) — or similar left-nested form.
     walk_rules (display) order: A, B, C. _emit_rule_body (emission) order: A, C, B.
     """
-    animal = _animal_var()
+    animal = _animal_variable()
     query = entity(animal).where(animal.backbone == True)
     with query:
         add(animal.species, Species.fish)  # A
@@ -222,7 +222,7 @@ def test_mixed_tree_returns_three_nodes():
     """
     The mixed Alternative+Refinement tree contains exactly three condition nodes.
     """
-    query, _animal = _mixed_alt_then_ref_query()
+    query, _animal = _mixed_alternative_then_refinement_query()
     result = walk_rules_in_emission_order(query._conditions_root_)
     assert len(result) == 3
 
@@ -231,7 +231,7 @@ def test_mixed_tree_emission_first_node_is_base_rule():
     """
     In the mixed tree, the first emission node is the base rule A (backbone/fish).
     """
-    query, _animal = _mixed_alt_then_ref_query()
+    query, _animal = _mixed_alternative_then_refinement_query()
     display = walk_rules(query._conditions_root_)
     result = walk_rules_in_emission_order(query._conditions_root_)
     # display[0] is A (base rule) — emission must also start with A
@@ -247,7 +247,7 @@ def test_mixed_tree_emission_order_is_A_C_B():
     placing C (refinement) before B (alternative) in the branch list.  The serializer
     emits the base A first, then walks each branch — C then B.
     """
-    query, _animal = _mixed_alt_then_ref_query()
+    query, _animal = _mixed_alternative_then_refinement_query()
     display = walk_rules(query._conditions_root_)
     # display order: A[0], B[1], C[2]
     A_id = display[0].condition._id_
@@ -268,7 +268,7 @@ def test_mixed_tree_emission_order_differs_from_display_order():
     If these were equal it would mean the two walkers agree — which is the bug
     Phase 0 is designed to prevent.
     """
-    query, _animal = _mixed_alt_then_ref_query()
+    query, _animal = _mixed_alternative_then_refinement_query()
     display_ids = [r.condition._id_ for r in walk_rules(query._conditions_root_)]
     emission_ids = [
         n._id_ for n in walk_rules_in_emission_order(query._conditions_root_)

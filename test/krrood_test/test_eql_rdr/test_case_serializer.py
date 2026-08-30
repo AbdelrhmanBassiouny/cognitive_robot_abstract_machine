@@ -35,8 +35,15 @@ class FlatAnimal:
     """
 
     hair: bool
+    """Whether the animal has hair."""
+
     legs: int
+    """
+    The number of legs the animal has.
+    """
+
     name: str
+    """The animal's name."""
 
 
 @dataclass
@@ -50,7 +57,12 @@ class AnimalWithSpecies:
     """
 
     name: str
+    """The animal's name."""
+
     species: Species
+    """
+    The animal's species.
+    """
 
 
 @dataclass
@@ -62,7 +74,12 @@ class Limb:
     """
 
     count: int
+    """How many of this limb the animal has."""
+
     has_claws: bool
+    """
+    Whether the limb has claws.
+    """
 
 
 @dataclass
@@ -75,7 +92,12 @@ class LimbedAnimal:
     """
 
     name: str
+    """The animal's name."""
+
     limb: Limb
+    """
+    The animal's limb, nested to exercise recursive serialization.
+    """
 
 
 @dataclass
@@ -89,14 +111,19 @@ class BadFieldCase:
     """
 
     name: str
+    """The case's name."""
+
     payload: set  # type: ignore[type-arg]
+    """
+    An arbitrary object that ``AsdictCaseSerializer`` cannot serialize.
+    """
 
 
 # %% the shared serializer instance
 
 
 @pytest.fixture(scope="module")
-def ser() -> AsdictCaseSerializer:
+def serializer() -> AsdictCaseSerializer:
     """
     Module-scoped ``AsdictCaseSerializer`` instance.
 
@@ -109,7 +136,7 @@ def ser() -> AsdictCaseSerializer:
 # %% to_source: the cases it can render
 
 
-def test_flat_dataclass_to_source_is_eval_able(ser):
+def test_flat_dataclass_to_source_is_eval_able(serializer):
     """
     ``to_source`` for a flat dataclass emits source that ``eval`` reconstructs to an
     equal instance.
@@ -119,37 +146,37 @@ def test_flat_dataclass_to_source_is_eval_able(ser):
     """
     case = FlatAnimal(hair=True, legs=4, name="cat")
 
-    case_source = ser.to_source(case)
+    case_source = serializer.to_source(case)
 
     reconstructed = eval(case_source.source, {"FlatAnimal": FlatAnimal})  # noqa: S307
     assert reconstructed == case
 
 
-def test_flat_dataclass_to_source_source_is_nonempty_string(ser):
+def test_flat_dataclass_to_source_source_is_nonempty_string(serializer):
     """
     ``to_source`` returns a ``CaseSource`` whose ``source`` is a non-empty string.
     """
     case = FlatAnimal(hair=False, legs=6, name="ant")
 
-    case_source = ser.to_source(case)
+    case_source = serializer.to_source(case)
 
     assert isinstance(case_source.source, str)
     assert case_source.source.strip() != ""
 
 
-def test_flat_dataclass_referenced_types_includes_case_type(ser):
+def test_flat_dataclass_referenced_types_includes_case_type(serializer):
     """
     ``to_source`` includes the case class itself in the returned ``referenced_types``
     set.
     """
     case = FlatAnimal(hair=True, legs=2, name="bird")
 
-    case_source = ser.to_source(case)
+    case_source = serializer.to_source(case)
 
     assert FlatAnimal in case_source.referenced_types
 
 
-def test_enum_field_to_source_is_eval_able(ser):
+def test_enum_field_to_source_is_eval_able(serializer):
     """
     ``to_source`` for a dataclass with an enum field emits eval-able source.
 
@@ -158,36 +185,36 @@ def test_enum_field_to_source_is_eval_able(ser):
     """
     case = AnimalWithSpecies(name="wolf", species=Species.mammal)
 
-    case_source = ser.to_source(case)
+    case_source = serializer.to_source(case)
 
     ns = {"AnimalWithSpecies": AnimalWithSpecies, "Species": Species}
     reconstructed = eval(case_source.source, ns)  # noqa: S307
     assert reconstructed == case
 
 
-def test_enum_field_referenced_types_includes_enum_type(ser):
+def test_enum_field_referenced_types_includes_enum_type(serializer):
     """
     ``referenced_types`` for a dataclass with an enum field includes the enum class.
     """
     case = AnimalWithSpecies(name="eagle", species=Species.bird)
 
-    case_source = ser.to_source(case)
+    case_source = serializer.to_source(case)
 
     assert Species in case_source.referenced_types
 
 
-def test_enum_field_referenced_types_includes_case_type(ser):
+def test_enum_field_referenced_types_includes_case_type(serializer):
     """
     ``referenced_types`` for a dataclass with an enum field also includes the case type.
     """
     case = AnimalWithSpecies(name="frog", species=Species.amphibian)
 
-    case_source = ser.to_source(case)
+    case_source = serializer.to_source(case)
 
     assert AnimalWithSpecies in case_source.referenced_types
 
 
-def test_nested_dataclass_to_source_is_eval_able(ser):
+def test_nested_dataclass_to_source_is_eval_able(serializer):
     """
     ``to_source`` for a dataclass with a nested dataclass field emits eval-able source.
 
@@ -196,32 +223,32 @@ def test_nested_dataclass_to_source_is_eval_able(ser):
     """
     case = LimbedAnimal(name="cat", limb=Limb(count=4, has_claws=True))
 
-    case_source = ser.to_source(case)
+    case_source = serializer.to_source(case)
 
     ns = {"LimbedAnimal": LimbedAnimal, "Limb": Limb}
     reconstructed = eval(case_source.source, ns)  # noqa: S307
     assert reconstructed == case
 
 
-def test_nested_dataclass_referenced_types_includes_outer_type(ser):
+def test_nested_dataclass_referenced_types_includes_outer_type(serializer):
     """
     ``referenced_types`` for a case with a nested field includes the outer case type.
     """
     case = LimbedAnimal(name="dog", limb=Limb(count=4, has_claws=False))
 
-    case_source = ser.to_source(case)
+    case_source = serializer.to_source(case)
 
     assert LimbedAnimal in case_source.referenced_types
 
 
-def test_nested_dataclass_referenced_types_includes_inner_type(ser):
+def test_nested_dataclass_referenced_types_includes_inner_type(serializer):
     """
     ``referenced_types`` for a case with a nested field includes the inner dataclass
     type.
     """
     case = LimbedAnimal(name="dog", limb=Limb(count=4, has_claws=False))
 
-    case_source = ser.to_source(case)
+    case_source = serializer.to_source(case)
 
     assert Limb in case_source.referenced_types
 
@@ -229,7 +256,7 @@ def test_nested_dataclass_referenced_types_includes_inner_type(ser):
 # %% to_source: the case it refuses
 
 
-def test_non_serializable_field_raises_case_not_serializable_error(ser):
+def test_non_serializable_field_raises_case_not_serializable_error(serializer):
     """
     ``to_source`` raises ``CaseNotSerializableError`` for a field holding an arbitrary
     object.
@@ -241,13 +268,13 @@ def test_non_serializable_field_raises_case_not_serializable_error(ser):
     case = BadFieldCase(name="problem", payload={"a", "b", "c"})
 
     with pytest.raises(CaseNotSerializableError):
-        ser.to_source(case)
+        serializer.to_source(case)
 
 
 # %% from_data: reconstructing a case
 
 
-def test_from_data_reconstructs_flat_dataclass(ser):
+def test_from_data_reconstructs_flat_dataclass(serializer):
     """
     ``from_data(asdict(case), CaseType)`` reconstructs a flat dataclass equal to the
     original.
@@ -256,13 +283,13 @@ def test_from_data_reconstructs_flat_dataclass(ser):
     """
     case = FlatAnimal(hair=True, legs=4, name="lynx")
 
-    reconstructed = ser.from_data(asdict(case), FlatAnimal)
+    reconstructed = serializer.from_data(asdict(case), FlatAnimal)
 
     assert reconstructed == case
     assert isinstance(reconstructed, FlatAnimal)
 
 
-def test_from_data_reconstructs_nested_dataclass(ser):
+def test_from_data_reconstructs_nested_dataclass(serializer):
     """
     ``from_data(asdict(case), CaseType)`` reconstructs a case with a nested dataclass
     field.
@@ -272,7 +299,7 @@ def test_from_data_reconstructs_nested_dataclass(ser):
     """
     case = LimbedAnimal(name="panther", limb=Limb(count=4, has_claws=True))
 
-    reconstructed = ser.from_data(asdict(case), LimbedAnimal)
+    reconstructed = serializer.from_data(asdict(case), LimbedAnimal)
 
     assert reconstructed == case
     assert isinstance(reconstructed, LimbedAnimal)
@@ -300,12 +327,23 @@ class SentinelSerializer(CaseSerializer):
     """
 
     SENTINEL: str = "SENTINEL_SOURCE"
+    """
+    The source string every call to :meth:`to_source` returns.
+    """
+
     called_with: list = field(default_factory=list)
+    """
+    Every case passed to :meth:`to_source`, in call order.
+    """
 
     def to_source(self, case: Any) -> CaseSource:
         """
         Record the case and return a sentinel source so callers can detect this was
         used.
+
+        :param case: The case to record.
+        :return: A :class:`CaseSource` carrying :data:`SENTINEL` and no referenced
+            types.
         """
         self.called_with.append(case)
         return CaseSource(self.SENTINEL, set())
@@ -325,16 +363,16 @@ def test_custom_serializer_is_used_by_to_ordered_sources():
     Guarantees: the store delegates serialization to ``self.serializer``; the default
     ``AsdictCaseSerializer`` is NOT used when a custom serializer is provided.
     """
-    sentinel_ser = SentinelSerializer()
-    store = CornerCaseStore(serializer=sentinel_ser)
+    sentinel_serializer = SentinelSerializer()
+    store = CornerCaseStore(serializer=sentinel_serializer)
     node = _make_condition_node()
     case = FlatAnimal(hair=True, legs=4, name="fox")
     store.record(node, case)
 
     result = store.to_ordered_sources([node])
 
-    assert len(sentinel_ser.called_with) == 1
-    assert sentinel_ser.called_with[0] is case
+    assert len(sentinel_serializer.called_with) == 1
+    assert sentinel_serializer.called_with[0] is case
     assert result[0].source == SentinelSerializer.SENTINEL
 
 

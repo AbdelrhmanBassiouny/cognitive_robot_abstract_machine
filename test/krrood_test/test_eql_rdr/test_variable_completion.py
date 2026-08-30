@@ -14,22 +14,35 @@ from .animal import Animal, Species
 
 
 class TestVariableCompletion(unittest.TestCase):
+    """
+    Tests for ``__dir__`` on an EQL variable.
+    """
+
     def test_dir_surfaces_case_type_fields(self):
+        """
+        ``dir()`` on a variable lists the wrapped case type's fields, both undefaulted
+        (annotations-only) and defaulted ones.
+        """
         v = variable(Animal, domain=[])
         listed = set(dir(v))
-        # Both undefaulted fields (annotations-only) and defaulted ones must appear.
         self.assertTrue({"name", "hair", "milk", "legs", "species"} <= listed)
 
     def test_dir_does_not_change_getattr(self):
+        """
+        Surfacing field names in ``dir()`` does not change ``__getattr__``: every
+        attribute access, including a name not on the type, is still symbolic.
+        """
         v = variable(Animal, domain=[])
-        # Every attribute access is still symbolic, including names not on the type.
         self.assertIsInstance(v.milk, Attribute)
         self.assertIsInstance(v.totally_made_up, Attribute)
         self.assertIsInstance(v.milk == True, Comparator)
 
     def test_chained_attribute_reflects_its_own_type(self):
+        """
+        ``dir()`` on an Enum-typed attribute reflects the Enum's members, not the
+        wrapped case type's fields.
+        """
         v = variable(Animal, domain=[])
-        # ``species`` is an Enum-typed attribute; its dir reflects the Enum, not Animal.
         species_listed = set(dir(v.species))
         self.assertIn("mammal", species_listed)
         self.assertNotIn("milk", species_listed)

@@ -90,8 +90,19 @@ class SyntheticFunctionCase(FunctionCase):
     """
 
     x: int
+    """
+    The first operand passed to :func:`_score_func`.
+    """
+
     y: int
+    """
+    The second operand passed to :func:`_score_func`.
+    """
+
     _output: float
+    """
+    The RDR's conclusion field, populated by fitting or classification.
+    """
 
 
 SyntheticFunctionCase.function = _score_func

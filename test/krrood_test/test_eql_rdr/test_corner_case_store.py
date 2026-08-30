@@ -32,7 +32,12 @@ class MinimalCase:
     """
 
     name: str
+    """The case's name."""
+
     milk: bool
+    """
+    Whether the case produces milk, the condition these tests distinguish on.
+    """
 
 
 def _make_condition_node(case_type=Animal):
@@ -58,6 +63,9 @@ class TrivialSerializer(CaseSerializer):
     def to_source(self, case: Any) -> Tuple[str, Set[Type]]:
         """
         Return ``(str(case), set())`` — trivial serialization for test isolation.
+
+        :param case: The case to serialize.
+        :return: ``(str(case), set())``.
         """
         return (str(case), set())
 
@@ -79,10 +87,16 @@ class SpySerializer(CaseSerializer):
     """
 
     received: list = field(default_factory=list)
+    """
+    Every case passed to :meth:`to_source`, in call order.
+    """
 
     def to_source(self, case: Any) -> Tuple[str, Set[Type]]:
         """
         Record ``case`` and return a trivial serialization.
+
+        :param case: The case to record.
+        :return: ``(str(case), set())``.
         """
         self.received.append(case)
         return (str(case), set())
