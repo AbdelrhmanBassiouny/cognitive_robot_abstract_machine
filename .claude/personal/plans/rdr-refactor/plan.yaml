@@ -715,7 +715,21 @@ items:
   track: S1-d-ui
   depends_on:
   - D-ui-splice-fix
-  status: in_progress
+  status: blocked
+  blockers:
+  - >-
+    stacked-pr-maintenance: Fork PR #79 (branch `D-ui-rendering`) is based on
+    `D-ui-splice-fix`, whose own PR #78 was closed without merging, so its commits are in
+    neither the upstream base nor any other open fork branch. The 2026-08-30
+    stacked-pr-maintenance pass could therefore derive no base to restack onto and handed the
+    branch back to its owner:
+    https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/79#issuecomment-5467705276
+
+    This is the first pass that could see the case at all - it needed the parent-placement
+    rule from PR #198 (`unfetched-parent-branches`), which is still unlanded. A new base has
+    to be chosen by hand; the manifest's `depends_on` for `D-ui-splice-fix` names
+    `d-core-backend` (PR #210), which is the obvious candidate but is a judgement this pass
+    does not make.
   session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
   notes: 'Still based on the D-ui-splice-fix branch, whose PR (#78) was closed as superseded on
     2026-07-31. The branch still exists so nothing is broken today, but #79 can no longer land through
@@ -772,6 +786,17 @@ items:
   track: oo-prototypes
   depends_on: []
   status: deferred
+  blockers:
+  - >-
+    stacked-pr-maintenance: Fork PR #21 (branch `rdr/oo-recognition`) is based on
+    `rdr/oo-plan`, whose commits are in neither the upstream base nor any other open fork
+    branch, so the 2026-08-30 stacked-pr-maintenance pass could derive no base to restack onto
+    and handed the branch back to its owner:
+    https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/21#issuecomment-5467705500
+
+    First pass that could see the case, which needed the parent-placement rule from the
+    unlanded PR #198 (`unfetched-parent-branches`). The item is deferred, so choosing a new
+    base can wait, but the PR cannot reach main on the base it names.
   notes: Prototype input for Wave 3's rdr/oo-definitions, then close. Base is stale (rdr/oo-plan), do
     not merge as-is.
 - id: rdr-backend-unification
