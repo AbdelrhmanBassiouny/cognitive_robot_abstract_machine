@@ -109,6 +109,20 @@ and re-applies its delta.
   walked as nested string keys, and a whole section of `test_integration_verdict.py` went on doing
   exactly that through the round that introduced it and the two after. Only searching for the old
   shape finds them.
+- **A fix that two unlanded branches each own half of belongs on whichever one can test it.**
+  `plan_item_bootstrap`'s `update` writes item fields at a hardcoded four-space indent; #160 fixes
+  that with an `ItemIndentation` read off the manifest, but predates `update` entirely, so a failing
+  test for the reported reproduction cannot even be written there. This branch introduces `update`,
+  `ValueStyle.SEQUENCE` and `manifest-staleness.md` - the document that tells every plan skill to run
+  the broken command - so it is where the two halves meet. The user chose the fold on 2026-08-30 over
+  a third branch stacked on both; a third branch editing the same emitter is the collision pattern
+  this repository has already paid for twice.
+- **A reported symptom is a place to look, not a fact to carry.** The report's example of the
+  unquoted-scalar defect was a blocker containing `#`, and blockers turn out to round-trip: a
+  sequence entry is quoted when it is short and folded when it is long, and both survive. The defect
+  is real but sits on `ValueStyle.PLAIN` keys. Reproducing before recording is what separated them,
+  and the same run turned up a third defect nobody had reported - `depends_on` declared `PLAIN` while
+  every manifest writes it as a block sequence, so replacing it orphans its entries.
 
 ## The integration branch's design, stated once
 

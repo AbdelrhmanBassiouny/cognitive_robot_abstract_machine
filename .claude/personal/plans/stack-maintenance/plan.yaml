@@ -173,7 +173,7 @@ items:
   branch: claude/plan-manifest-update-priority-ex2zst
   pull_request_number: 151
   status: in_progress
-  session: https://claude.ai/code/session_01SgGzMvxTxaePhpkT28uuJV
+  session: https://claude.ai/code/session_01LDVvWsb7wFEeH3roTnD3FR
   track: pass
   depends_on:
   - stack-maintenance-executor
@@ -244,6 +244,22 @@ items:
     widens after this lands or this branch adopts its `ItemIndentation` and #160 folds is an
     ordering call left to the user; duplicating the class across both is the one option ruled out.
     This entry was written with `save-plan.sh` directly in the meantime.
+
+    **The ordering call in the paragraph above was made: this branch adopts #160's `ItemIndentation`
+    and #160 folds into it.** Reproduced again on 2026-08-30 against `rdr-interface-and-decorator`'s
+    `D-ui` and `D-store`, whose `depends_on` is a written-out block sequence: `update --status` emits
+    the field four spaces in, directly under the last sequence entry, and `yaml.safe_load` refuses it.
+
+    Two further defects in the same emitter came out of reproducing it, neither of them #160's.
+    Every `ValueStyle.PLAIN` value is written bare, so one containing a space and then `#` reads back
+    truncated at that point - the reported example, a blocker, is not actually affected, because a
+    sequence entry is already quoted or folded and `title` is double-quoted. And
+    `ManifestKey.DEPENDS_ON` is declared `PLAIN` while every manifest writes it as a block sequence,
+    so `value_span` stops at the key's own line and replacing the field orphans its entries - the
+    same corruption this note records for `notes`, still latent only because `update` exposes no
+    `--depends-on`. The branch was opened in
+    https://claude.ai/code/session_01SgGzMvxTxaePhpkT28uuJV, which the `session` field named until
+    this entry moved it to the session continuing the work.
 - id: pinned-stack-tooling
   title: Pin the stack tooling for the length of a maintenance pass
   branch: claude/stack-tooling-pinning-qf5r2m
