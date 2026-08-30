@@ -198,10 +198,11 @@ items:
   - id: detect-per-supporting-surface
     title: "Look at every supporting surface, not only the table"
     branch: perception_per_supporting_surface
-    pull_request_number: null
+    pull_request_number: 221
     track: surfaces
     depends_on: [surfaces-from-world]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01T8CPPnj2uqZB7bACWBFJhb
     notes: >-
       Fixes the second fault: a piece resting on the board's lid is invisible
       twice over. The pipeline rectifies loose pieces onto exactly one plane
