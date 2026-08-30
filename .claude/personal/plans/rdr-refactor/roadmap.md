@@ -147,8 +147,9 @@ sequential.
   **Steward: the propagation chain is now D-core-backend → D-ui-rendering →
   D-ui → D-deco.** #79 was rebuilt onto `D-core-backend` on 2026-08-30 (§34);
   `D-core-engine`, which this line used to name as its target, is deferred and
-  is not a base anything can land through. #76 has not been restacked yet — it
-  still sits on #79's pre-rebuild tip.
+  is not a base anything can land through. #76 was rebuilt onto the rebuilt #79
+  the same day (§36), so the chain is whole again; #80 and #77 still sit on
+  #76's pre-rebuild tip `c50d2109` and need the same restack.
 - **S2 (D-deco) — SPLIT INTO 2 STACKED PRs** (see `pr-progress/D-store.md`
   + `pr-progress/D-deco.md`): #80 `D-store` (RDRFileStore) then #77 `D-deco`
   (decorator + docs), on the new `D-ui` tip. The sweep that made #38's diff
@@ -3157,3 +3158,102 @@ The PR description was refreshed to record the round; `draft` was already `true`
   this round was actually asked to close. `from __future__ import annotations` keeps the
   annotation lazy (a string), so it does not break collection; flagging it here rather
   than silently fixing an unrelated defect on someone else's review round.
+
+## 36. Addendum (2026-08-30) — `D-ui` (#76): the same rebuild as §34, plus the segregation the branch had never absorbed
+
+`/plan-item-resolve rdr-refactor D-ui`, run hours after §34/§35 finished #79. §34 had
+recorded that #76 was "the next instance of this same problem"; it was that, and one
+thing more.
+
+### What the item's own record was missing
+
+Both of the item's notes were written before this run, and neither carried what was
+actually blocking it. #76's head had not moved since 2026-07-19, so its all-green CI was
+six weeks old and had been measured on the dead base; the 2026-08-30 maintenance pass had
+tried to merge the rebuilt `D-ui-rendering` in, hit **19 conflicting files**, skipped the
+branch and labelled it `needs-resolution`. And #98's comment `5201827158`, from
+2026-08-06, named four call sites on this branch that the `ExpertInterface` segregation
+had broken — recorded on the pull request, never on the item. All of it was written into
+`blockers` before any code was written, which is the step this skill exists to force.
+
+### The reset, for the same reason as §34's
+
+`D-ui` merged #79's pre-rebuild tip `0a305c68`, so it still carried #78's `cfe32ad0` and
+its `_last_parent_of_type_`. Merging the rebuilt base would have kept an addition the
+other side never deleted, exactly as §34 found. Rebuilt as `D-ui-rendering` plus this
+slice's own 23 files; pre-rebuild tip `c50d2109`.
+
+### The segregation is the substantive half, and it is where §30's outstanding work lands
+
+§11 designed the split and named this PR as the one that absorbs it: "the interactive
+layer constructs both and hands them in." §30 then recorded the progress-bar default as
+outstanding work here, on the developer's own call. Both landed together, because they
+are the same change seen from two sides:
+
+- `%save` persists through `rdr.model_saver` rather than `interface.on_save`. A `%save`
+  saves the *model*, so the model is what it asks — and the "no save path configured"
+  hint becomes "no model is attached", which is the only case left.
+- Attaching an RDR to an `IPythonInterface` installs `IPythonProgressBar` on it, unless
+  the caller chose a reporter of their own. `IPythonInterface(rdr=rdr)` was already how
+  every caller wires the two together, so the default lands at the moment the layer
+  learns there is a shell, rather than as a method nobody calls.
+
+An unused `progress_reporter()` method was the first shape tried, and it was the same
+mistake §11 diagnosed: a member that exists so that something *could* ask, on a class
+nothing asks. The wiring has to happen where the two objects meet.
+
+### Two defects the interface change had left behind, both proven before being fixed
+
+**The `%conclusion`/`%conditions` magics had stopped rejecting invalid answers.**
+`validate()` returns a `List[DataclassException]` now; the magic still asked
+`if target_name in errors`, which on a list of exceptions is always false, so an invalid
+answer exited the shell instead of re-prompting. Its four tests passed throughout,
+because their `validate` double still returned the old `{name: message}` mapping — a
+double that had drifted from the contract it stands in for, and therefore could only
+confirm the drift. Bringing the double onto the real contract made them fail, which is
+the failing test the fix needed.
+
+**The shipped user guide failed when CI executed it.** `test_eql_documentation.sh` runs
+`jupytext --to notebook doc/eql/user/*.md` and executes every one, so
+`eql_rdr_conclusion_asking.md` is a CI job, not prose — and it still called
+`FunctionInterface(answer_fn=…)`. Found by running that script rather than by reading the
+file. Both guides now describe the current API; 15 of 16 notebooks pass, the sixteenth
+(`predicate_and_symbolic_function`) being identically red on the base.
+
+This is the sixth entry in the measure-don't-reason ledger (§12, §15, §16, §22, §26, §30),
+and the second where the defect was invisible to a passing test suite.
+
+### Conformance done at rebuild time rather than at review time
+
+§34 converted #79's dividers at rebuild time and §35 wrote its docstrings only after the
+review asked for them, PR-wide. Doing both here in one pass cost one round instead of two:
+~130 missing docstrings across 21 files, the `# ---`/"Test N:" dividers as `# %%` headers
+naming the behaviour, and the ported abbreviations (`cv`, `ns`, `sp`, `aid`, `f`, `iface`)
+spelled out. `format_docstrings.py` reproduced its `:return: ``x``` regression once — the
+fourteenth recorded instance — and it was hand-reverted as every round has.
+
+### The aid → helper rename, and why it was not optional
+
+`aid.py` became `conclusion_helper.py` on the stack, and `ConclusionAid`'s two
+default-to-`None` hooks became two mixins a helper opts into. The interactive layer had to
+follow or it would have read as a second concept: `context.aids`, `%aid`, `_aid_text` all
+became the helper spelling, and the four places that called `present()` on every helper now
+narrow through one `supporting_material_presenters`, since a suggester-only helper has no
+`present` to call.
+
+### Verification
+
+`test/krrood_test/test_eql_rdr/`: **524 passed, 2 skipped** — 341 on the base alone,
+measured by re-running with this slice's modules ignored, so the 183 added are 183 that
+pass. The rest of `test/krrood_test/`: **2104 passed, 7 skipped**;
+`test_object_diagram.py`'s two failures are identically red on the base.
+
+### Also
+
+- Subscribing to tracking issue #94 was refused by the permission classifier again — the
+  fifth recorded instance in the roadmap (§11, §16, §20, §34) and the ninth counting the
+  tracking issue's own tally. It has never once worked in these containers.
+- `plan_item_bootstrap.py`'s four-space indent defect (§20, §33, §34) still makes `update`
+  unusable on this manifest; the item was edited directly and saved with `save-plan.sh`.
+- The CCR-provisioned session branch again carried unrelated integration history and was
+  again never used; the work is on `D-ui` itself, as §35 did for #79.
