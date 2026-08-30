@@ -252,11 +252,12 @@ items:
 
   - id: one-detection-per-thing
     title: "One physical thing, one detection, and none inside a body already known"
-    branch: perception_one_detection_per_thing
-    pull_request_number: null
+    branch: claude/plan-item-kickoff-kdp-z4pv7l
+    pull_request_number: 225
     track: surfaces
     depends_on: [detect-per-supporting-surface]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01RRu7SutvRcNWHYNVUDCUFr
     notes: >-
       Fixes the third fault: the duplicate boxes on the board's borders are the
       lid's own edges, which a rectangular or triangular prism template fits at
