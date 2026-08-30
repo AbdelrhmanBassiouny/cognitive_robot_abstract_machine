@@ -714,46 +714,21 @@ items:
   pull_request_number: 79
   track: S1-d-ui
   depends_on:
-  - D-ui-splice-fix
-  status: blocked
-  blockers:
-  - >-
-    stacked-pr-maintenance: Fork PR #79 (branch `D-ui-rendering`) is based on
-    `D-ui-splice-fix`, whose own PR #78 was closed without merging, so its commits are in
-    neither the upstream base nor any other open fork branch. The 2026-08-30
-    stacked-pr-maintenance pass could therefore derive no base to restack onto and handed the
-    branch back to its owner:
-    https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/79#issuecomment-5467705276
+  - d-core-backend
+  status: in_progress
+  session: https://claude.ai/code/session_01LxKeDwSHK6QQpucBHz3Bhf
+  notes: 'Rebuilt onto `D-core-backend` (#210) on 2026-08-30, which is what unblocked it: its old base
+    `D-ui-splice-fix` (#78, closed unmerged) led nowhere, and the re-target its own note prescribed —
+    `D-core-engine` (#68) — is deferred and leads nowhere either. Rebuilt as a branch reset rather than
+    a merge so #78''s production commit (reintroducing `_last_parent_of_type_`, superseded by #118 and
+    forbidden by dag-facade-hardening''s Wave-1 guard) stays out of #79''s diff; pre-rebuild tip
+    `0a305c68` if it is ever wanted back. `depends_on` now names `d-core-backend`, which is where the
+    branch actually sits.
 
-    This is the first pass that could see the case at all - it needed the parent-placement
-    rule from PR #198 (`unfetched-parent-branches`), which is still unlanded. A new base has
-    to be chosen by hand; the manifest's `depends_on` for `D-ui-splice-fix` names
-    `d-core-backend` (PR #210), which is the obvious candidate but is a judgement this pass
-    does not make.
-  - >-
-    plan-item-resolve 2026-08-30: the re-target this item's own note prescribes is dead, and the
-    branch carries a production commit that was superseded. `D-core-engine` (#68) — the base the
-    note says #79 must move to — is itself `deferred`, so nothing can land through it; the live tip
-    of the same stack is `D-core-backend` (#210), which carries every `rdr/` module this branch's
-    tests import. Separately, `D-ui-rendering` still contains #78's `cfe32ad0`, which reintroduces
-    `SymbolicExpression._last_parent_of_type_` — the symbol #89 deleted from `main`, superseded by
-    #118's façade-level fix, and forbidden by `dag-facade-hardening`'s Wave-1 guard test — so a
-    plain restack onto the stack tip would carry that superseded fix into #79's diff. The ported
-    tests also import `krrood.entity_query_language.rdr.utils.UNSET`, a module #98 deleted (roadmap
-    §19, `UNSET` → `...`).
-
-    Neither review nor CI is what stalled this: #79 has no review threads at all, and its only CI
-    run is from 2026-07-19 — against a base branch that no longer leads anywhere — whose one red
-    check is `test_each_lib (coraplex)`.
-  session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
-  notes: 'Still based on the D-ui-splice-fix branch, whose PR (#78) was closed as superseded on
-    2026-07-31. The branch still exists so nothing is broken today, but #79 can no longer land through
-    #78 and must be re-targeted onto D-core-engine before it can merge. Not re-targeted here — that is
-    this PR''s own session''s call. Its depends_on is kept pointing at the closed item so the stack''s
-    real shape stays visible until the re-target happens.
-
-    Correction 2026-08-30 (`/plan-item-resolve`): the "re-target onto D-core-engine" instruction in
-    the paragraph above is stale — #68 is deferred. The stack tip is `D-core-backend` (#210).'
+    Three interfaces had moved under the branch in the six weeks it spent on a dead base and the ported
+    tests were brought up to them; the two `save_path` test classes went with `EQLSingleClassRDR.save_path`
+    itself, their replacement already covered by `test_fit_convergence.py` and `test_serialization.py`.
+    See roadmap.md §34.'
 - id: D-ui
   title: 'RDR engine: interactive expert interface (IPython shell, magics, prompt sections/examples)'
   branch: D-ui
@@ -763,7 +738,11 @@ items:
   - D-ui-rendering
   status: in_progress
   session: https://claude.ai/code/session_01B3Ji1kNxRinif4y1dD2xPy
-  notes: '2026-08-23: outstanding work added from the #159 review - **default the progress reporter to IPythonProgressBar here**. The engine keeps NullProgressReporter, which is the only default correct for a caller it knows nothing about; the developer agreed the interactive default belongs in this layer, which is the one that knows there is a shell to draw on. This also matches roadmap section 11''s original reasoning for segregating ExpertInterface: the interactive layer constructs both the reporter and the Q&A surface and hands them in. Not started. See roadmap.md section 30.'
+  notes: '2026-08-23: outstanding work added from the #159 review - **default the progress reporter to IPythonProgressBar here**. The engine keeps NullProgressReporter, which is the only default correct for a caller it knows nothing about; the developer agreed the interactive default belongs in this layer, which is the one that knows there is a shell to draw on. This also matches roadmap section 11''s original reasoning for segregating ExpertInterface: the interactive layer constructs both the reporter and the Q&A surface and hands them in. Not started. See roadmap.md section 30.
+
+    2026-08-30: this branch still sits on `D-ui-rendering`''s pre-rebuild tip `0a305c68` and so
+    still carries #78''s superseded `_last_parent_of_type_` commit. It needs the same restack #79
+    just had — onto the rebuilt `D-ui-rendering` — and the splice commit must not survive it.'
 - id: D-store
   title: 'D-store: RDRFileStore for the @rdr model-file lifecycle'
   branch: D-store

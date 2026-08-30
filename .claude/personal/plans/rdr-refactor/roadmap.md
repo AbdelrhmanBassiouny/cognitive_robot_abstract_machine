@@ -144,11 +144,11 @@ sequential.
   superseded by #118 — see §10), #79 `D-ui-rendering` (case_table +
   shell-free tests), #76 `D-ui` (interactive layer + conftest fixture +
   docs). Merge order #79 → #76.
-  **Steward: the propagation chain is now D-core-engine → D-ui-rendering →
-  D-ui → D-deco. #79 is still *based* on the closed `D-ui-splice-fix` branch
-  and must be re-targeted onto `D-core-engine` before it can land — the
-  branch still exists, so nothing is broken today, but it can no longer
-  merge through #78.**
+  **Steward: the propagation chain is now D-core-backend → D-ui-rendering →
+  D-ui → D-deco.** #79 was rebuilt onto `D-core-backend` on 2026-08-30 (§34);
+  `D-core-engine`, which this line used to name as its target, is deferred and
+  is not a base anything can land through. #76 has not been restacked yet — it
+  still sits on #79's pre-rebuild tip.
 - **S2 (D-deco) — SPLIT INTO 2 STACKED PRs** (see `pr-progress/D-store.md`
   + `pr-progress/D-deco.md`): #80 `D-store` (RDRFileStore) then #77 `D-deco`
   (decorator + docs), on the new `D-ui` tip. The sweep that made #38's diff
@@ -2985,3 +2985,88 @@ only as a `CalledProcessError` naming a temporary path. That is **PR #160**
 (`plan-item-bootstrap-yaml-indent`), also unlanded, and its branch predates the `block` subcommand
 so it could not simply be borrowed. The two entries were composed from the script's own intended
 output with the indentation corrected, and the manifest was parsed before saving.
+
+## 34. Addendum (2026-08-30) — `D-ui-rendering` (#79): rebuilt off a base that led nowhere, and what six weeks on it had cost
+
+`/plan-item-resolve rdr-refactor D-ui-rendering`, run on the item §33's maintenance pass
+had handed back to its owner.
+
+### The recorded fix was itself dead
+
+The item's note said #79 "must be re-targeted onto D-core-engine before it can merge".
+`D-core-engine` (#68) is `deferred` — §33 had already caught this and said so, and it is
+worth repeating because it is the second dead target in one item: the base was closed,
+and the replacement the note named was parked. The live tip of the same stack is
+`D-core-backend` (#210), which the manifest's own `depends_on` chain pointed at and which
+carries every `rdr/` module these tests import. Checked rather than assumed: `main` has
+seven `rdr/` modules, `D-core-backend` has twenty-two, and the seven test modules here
+import `corner_case`, `single_class`, `serialization`, `rule_tree`, `rule_tree_view`,
+`expert`, `interface`, `function_case` and `progress` between them. `main` is therefore
+not a candidate base, and no other open branch carries that set.
+
+### A reset, not a merge — the branch was still carrying the superseded fix
+
+Restacking by merge would have been wrong here, and only reading the branch's history
+showed why. `D-ui-rendering` still contained #78's `cfe32ad0`, which reintroduces
+`SymbolicExpression._last_parent_of_type_`. §10 settled that this is superseded by #118's
+façade-level fix and that the symbol is one `dag-facade-hardening`'s Wave-1 guard test
+forbids; neither `main` nor `D-core-backend` has it. A merge keeps an addition the other
+side never deleted, so #79's diff would have carried the rejected fix into review.
+
+Rebuilt instead as `D-core-backend` plus this item's own eight files, force-pushed with
+lease. Pre-rebuild tip `0a305c68`, recorded because a reset is the one restack shape that
+does not leave its own history behind. Nothing is lost by it: `TestAttributeReusedInEarlierSiblingBranch`
+still lives on the `D-ui-splice-fix` branch, which was never deleted, and re-adding it
+against the fixed API remains that (deferred) item's follow-up exactly as §10 left it.
+
+### What the six weeks on a dead base had cost — three moved interfaces
+
+None of this was visible while the branch could not be built. Running the suite on the new
+base found 28 failures across two modules, all of them the stack moving under a branch that
+could not follow it:
+
+| What the ported test used | What the stack has now | Landed in |
+|---|---|---|
+| `SpyProgressReporter.events` holding `(name, args, kwargs)` tuples | `RecordedCall` dataclasses | the stack's own AGENTS.md tuple-to-dataclass rule |
+| `FunctionInterface(answer_fn=…)` | `answer_function` | — |
+| `EQLSingleClassRDR(save_path=…)`, saving once per inserted rule | `model_saver: ModelSaver`, saving once per fit | #98 (§14) |
+| `rdr.utils.UNSET` | `...` | #98 (§19) |
+
+The first, second and fourth are ports. The third is not, and it is the one worth
+recording: `TestSavePathFieldDefault` and `TestSavePathFieldPresent` pin a contract that
+was *deliberately reversed* — a fit now saves once on its way out rather than once per
+rule, so `test_save_called_twice_for_two_fit_case_calls` asserts the opposite of the
+current behaviour. Its replacement already exists on the base, in
+`test_fit_convergence.py`'s six `RecordingModelSaver` tests and `test_serialization.py`'s
+`NullModelSaver`/`FileModelSaver` tests. Both classes were dropped rather than rewritten,
+on §31's rule about what a sibling has already made redundant — rewriting them would have
+produced a second copy of coverage that landed later and is better placed.
+
+### Conformance the file's own newness makes this branch's job
+
+The six added test modules divided themselves with box-drawing rules and numbered their
+sections ("test 1 — …"), both of which `AGENTS.md` rules out. These files are new in this
+pull request rather than pre-existing, so they are held to the current rules: converted to
+`# %%` headers naming the behaviour each section covers. `scripts/format_docstrings.py`
+run over all eight files afterwards.
+
+### Verification
+
+`test/krrood_test/test_eql_rdr/`: **341 passed**, measured against the base's own **264** by
+re-running the suite with the seven added modules ignored — so the 77 added here are 77
+that pass, not a count of what was collected.
+
+### Also
+
+- Subscribing to tracking issue #94 was refused by the permission classifier again — the
+  fourth recorded instance, after §11, §16 and §20. Whatever else changes, that mechanism
+  does not work in these containers, and a skill that depends on it should assume so.
+- `plan_item_bootstrap.py`'s four-space indent defect (§20, §33) still makes `update`
+  unusable on this manifest; the item was edited directly and saved with `save-plan.sh`,
+  per the standing rule about preferring a direct edit to a stale manifest.
+- The `needs-resolution` label is deliberately left on #79. `WithholdBranchStillConflicting`
+  clears it itself on the next pass now that the pull request reports `clean`, and clearing
+  it by hand would only pre-empt the pass's own record of having re-examined the branch.
+- **#76 (`D-ui`) is the next instance of this same problem**, recorded on its item: it sits
+  on #79's pre-rebuild tip and so still carries `cfe32ad0`. Its restack has to drop that
+  commit too, not merge over it.
