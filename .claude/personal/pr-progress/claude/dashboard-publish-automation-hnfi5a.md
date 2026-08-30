@@ -14,7 +14,7 @@ as fresh as the last time someone ran `/plan-dashboard`.
    pull request listing it needs. Done.
 3. `.github/workflows/plan-dashboards.yml` - Pages deploy on pull request
    events, on renderer changes, and on `workflow_dispatch`. Done.
-4. Tests + docs. Done: 50 new tests, 293 in the suite (was 243).
+4. Tests + docs. Done: 52 new tests, 295 in the suite (was 243).
 
 ## Decisions worth remembering
 
@@ -30,6 +30,13 @@ as fresh as the last time someone ran `/plan-dashboard`.
   run failed on exactly that. The site goes to the `plan-dashboards-site` branch
   instead, with `pages_site.py` pointing Pages there; a test pins the rejected
   route out.
+- **The fork's default branch is `integration`, not `main`.** The checkout said
+  `github.event.repository.default_branch` meaning "main's scripts"; that is 172
+  commits of unlanded work carrying no `build_site.py`, so the job would have had
+  no script to run. It names `SOURCE_BRANCH: main` explicitly now. Knock-on:
+  `workflow_dispatch` only offers a workflow on the default branch, so dispatch
+  works once an integration rebuild carries the file. `push`/`pull_request` are
+  unaffected - both name their branch.
 - **One deliberate file overlap with #111**, which carries its own
   `build_site.py` at the same path. Same path, same CLI contract, so the merge
   is one file resolved in favour of #111's richer version; this branch's
