@@ -8,7 +8,8 @@ The session-driven skill gathers this through its GitHub tools, following
 paginated listing per repository rather than a call per item - so the headless site
 build (``build_site.py``) can gather it unattended.
 
-Read-only: nothing here writes to GitHub.
+Also carries the small write the site build needs: pointing GitHub Pages at the branch
+the built site is pushed to, so a fork publishes with no settings visit.
 """
 
 from __future__ import annotations
@@ -16,7 +17,9 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from enum import StrEnum
+from http import HTTPStatus
 from typing import Any, Mapping
+from urllib.error import HTTPError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -39,12 +42,21 @@ Named here so the workflow and this module cannot disagree about it."""
 
 
 class RequestHeader(StrEnum):
-    """The headers every request to GitHub carries."""
+    """The headers a request to GitHub carries."""
 
     ACCEPT = "Accept"
     AUTHORIZATION = "Authorization"
     API_VERSION = "X-GitHub-Api-Version"
     USER_AGENT = "User-Agent"
+    CONTENT_TYPE = "Content-Type"
+
+
+class HttpMethod(StrEnum):
+    """The HTTP methods this module sends."""
+
+    GET = "GET"
+    POST = "POST"
+    PUT = "PUT"
 
 
 JSON_MEDIA_TYPE = "application/vnd.github+json"
@@ -81,6 +93,49 @@ class GitHubApi:
         :param parameters: The query parameters to send, if any.
         :return: The decoded JSON body.
         """
+        return self._request(HttpMethod.GET, path, parameters=parameters)
+
+    def find(self, path: str) -> Any | None:
+        """
+        Fetch one API path whose absence is an ordinary outcome rather than an error.
+
+        :param path: The path below the API root, without a leading slash.
+        :return: The decoded JSON body, or ``None`` if GitHub has no such resource.
+        """
+        try:
+            return self.get(path)
+        except HTTPError as error:
+            if error.code != HTTPStatus.NOT_FOUND:
+                raise
+            return None
+
+    def send(self, method: HttpMethod, path: str, payload: Mapping[str, Any]) -> Any:
+        """
+        Send one writing request.
+
+        :param method: The HTTP method to send it with.
+        :param path: The path below the API root, without a leading slash.
+        :param payload: The JSON body to send.
+        :return: The decoded JSON body, or ``None`` when GitHub answers with none.
+        """
+        return self._request(method, path, payload=payload)
+
+    def _request(
+        self,
+        method: HttpMethod,
+        path: str,
+        parameters: Mapping[str, str] | None = None,
+        payload: Mapping[str, Any] | None = None,
+    ) -> Any:
+        """
+        Send one request and decode its body.
+
+        :param method: The HTTP method to send it with.
+        :param path: The path below the API root, without a leading slash.
+        :param parameters: The query parameters to send, if any.
+        :param payload: The JSON body to send, if any.
+        :return: The decoded JSON body, or ``None`` when the response carries none.
+        """
         url = f"{self.base_url}/{path}"
         if parameters:
             url = f"{url}?{urlencode(dict(parameters))}"
@@ -91,8 +146,14 @@ class GitHubApi:
         }
         if self.token:
             headers[RequestHeader.AUTHORIZATION.value] = f"Bearer {self.token}"
-        with urlopen(Request(url, headers=headers)) as response:
-            return json.load(response)
+        body = None
+        if payload is not None:
+            body = json.dumps(dict(payload)).encode()
+            headers[RequestHeader.CONTENT_TYPE.value] = JSON_MEDIA_TYPE
+        request = Request(url, data=body, headers=headers, method=method.value)
+        with urlopen(request) as response:
+            content = response.read()
+        return json.loads(content) if content else None
 
 
 # %% pull request state

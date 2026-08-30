@@ -324,6 +324,12 @@ BUILD_SITE_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/build_site.py"
 # snippets and GitHub tools instead.
 PERSONAL_NOTES_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/personal_notes.py"
 GITHUB_API_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/github_api.py"
+# pages_site.py: points GitHub Pages at the branch the built site is pushed to
+# and prints the URL it is served from.
+PAGES_SITE_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/pages_site.py"
+# publish_site.sh: replaces a branch's whole content with a built site directory,
+# which is what Pages then serves.
+PUBLISH_SITE_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/publish_site.sh"
 # record_dashboard_url.py: writes one key's published Artifact URL into
 # DASHBOARD_URL_CACHE_PATH, resolving that URL from the account's live
 # Artifact listing so a URL nobody published cannot be recorded.

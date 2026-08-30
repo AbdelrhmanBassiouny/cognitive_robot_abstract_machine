@@ -287,7 +287,11 @@ this skill.
 `${PLAN_DASHBOARDS_WORKFLOW}` renders every plan's dashboard and the master
 index into a GitHub Pages site — one page per plan at `/plans/<plan-id>/`,
 the index at the site root — through `${BUILD_SITE_SCRIPT}`, the headless
-entrypoint for the same scripts this document drives. It runs on every pull
+entrypoint for the same scripts this document drives. The site is pushed to
+a branch of its own (`${PUBLISH_SITE_SCRIPT}`) that Pages serves from
+(`${PAGES_SITE_SCRIPT}` points it there), rather than deployed through the
+`github-pages` environment, which only accepts deployments from the default
+branch and would reject every run a pull request triggered. It runs on every pull
 request that opens, reopens, leaves or enters draft, or closes, on a change
 to these scripts, and on demand (`workflow_dispatch`), so the site is
 current within a minute of whatever changed the data, with nobody watching.
