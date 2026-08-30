@@ -1,0 +1,311 @@
+schema_version: 1
+id: session-notes-infrastructure
+title: 'Personal notes and the session-start hook: the state a session is handed before it acts'
+description: The personal-notes branch and the SessionStart hook that reads it. What a session is
+  given at start - a fresh base, the right git identity, the local settings, the plan its branch belongs
+  to, and a setup verdict - and the conventions those carry, each made a mechanism rather than a line
+  of prose someone has to remember.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 102
+waves:
+- id: slimming
+  name: What the notes branch holds
+  description: Getting the personal-notes branch down to conventions and data, and retiring what it
+    superseded.
+- id: handover
+  name: What a session starts with
+  description: 'The hook''s own work: the base, the identity, the settings, the plan, the setup verdict.'
+- id: conventions
+  name: Conventions that became mechanisms
+  description: Standing rules that stopped being prose a session had to remember.
+tracks:
+- id: slimming
+  name: Notes-branch slimming
+  wave: slimming
+- id: handover
+  name: Session start
+  wave: handover
+- id: conventions
+  name: Conventions made mechanical
+  wave: conventions
+items:
+- id: eql-roadmap-migration
+  title: Migrate the EQL living roadmap out of cram-notes.md into its own plan
+  branch: null
+  status: done
+  track: slimming
+  depends_on: []
+  notes: |-
+    Done, personal-notes branch only - no pull request. The EQL living roadmap and its 22 review-round
+    logs loaded into every session on every branch, the single largest recurring token cost, and exactly
+    the pattern the plan system replaced. Ran `/plan-create eql-verbalization` from that section, folded
+    the review-round logs into the three PR-progress files, slimmed `cram-notes.md` to pure conventions,
+    fixed a stale reference to a retired branch, and deleted the superseded `rdr-roadmap.md`.
+
+    This is the precedent for a plan item that is data only: no branch, no pull request.
+- id: session-hooks-retirement
+  title: Tag and delete the superseded claude/session-hooks branch
+  branch: null
+  status: done
+  track: slimming
+  depends_on: []
+  notes: |-
+    Done. The branch's tip was a literal ancestor of `main`, so nothing was lost by skipping the tag -
+    every commit on it remains reachable.
+
+    **The standing platform constraint this established**: tag pushes and branch deletes get a 403
+    through a session's git proxy, and no GitHub tool substitutes. The user deleted the branch directly,
+    outside the harness, once this was confirmed safe. `tooling-branch-retirement` has the same shape.
+
+    Remaining cleanup of the same kind: a throwaway branch pushed while diagnosing the gap, identical in
+    content to main, still needs deleting the same way.
+- id: personal-settings-sync
+  title: Sync personal .claude/settings.local.json off the personal-notes branch
+  branch: claude/local-settings-dashboard-sync-8sx0tf
+  pull_request_number: 109
+  status: done
+  session: https://claude.ai/code/session_01XkWmfMzYYAaCsgyrHDuoKn
+  track: handover
+  depends_on: []
+  notes: |-
+    Merged. Extends the session-start hook so the notes branch also carries this project's local Claude
+    Code settings, with a write half for the other direction, seeded with a rule allowing the Artifact
+    tool without prompting. The copy is skipped whenever the local file changed since the last sync,
+    since Claude Code writes its own "don't ask again" grants into that same file; the baseline is a hash
+    stamp.
+
+    This widened the track beyond its "slimming" name: what the notes branch holds is personal data *and
+    config*, which is what the target architecture already said.
+
+    **Its stall is the first instance of a pattern this work then saw four more times: the manifest was
+    the least accurate source.** It sat stalled for three days on two blockers, neither of which its
+    entry recorded, and everything needed to diagnose both was on the pull request itself. The conflict
+    was not drifting text but a duplicated artifact - `main` had extracted the hook-test scratch
+    repository under one name through a review round while this branch independently extracted the same
+    thing under another - resolved by adopting main's superset and deleting the local one.
+
+    Worth knowing before replying on a stalled pull request: review threads belonging to an unsubmitted
+    *pending* review reject inline replies with a 422 until that review is submitted, since GitHub allows
+    one pending review per user. The resolution was explained in a pull-request-level comment instead.
+- id: plan-updates-since-helper
+  title: 'plan-updates-since.sh: delta recheck of plan state and tracking-issue comments'
+  branch: claude/plan-item-kickoff-workflow-n814iz
+  pull_request_number: 115
+  status: done
+  session: https://claude.ai/code/session_01UrxbEr6ZHMThA2p4Vcnrqv
+  track: handover
+  depends_on: []
+  notes: |-
+    Merged. Implements the recheck-deltas convention: given a plan id and the last-seen notes-branch
+    commit, print only the delta - the diff of that plan's directory - plus the plan's tracking-issue
+    comments newer than that commit. `session-start.sh` stamps the commit it loaded plan state at, so
+    every session has the baseline for free.
+
+    Two real bugs the tests caught before they shipped: an f-string with escaped quotes inside the
+    expression, invalid before Python 3.12 while this repository's test tooling runs 3.11, and a missing
+    `|| true` on a grep that let `set -e` silently kill the script on a plan with a tracking issue but no
+    default repository.
+
+    **The README lesson, which generalizes past this item.** The branch was cut before a 378-to-140-line
+    rewrite of the same file, and an earlier merge resolved that rewrite hunk by hunk, resurrecting two
+    superseded sections beside the ones that had replaced them and stranding a list's closing sentence 75
+    lines from its list. Re-authored against main rather than merged, and only after confirming both
+    resurrected sections were superseded verbatim: the branch's delta went from +86/-0 to +12/-2. A
+    conflict report understates a conflict against a restructured document, so read the merged file end
+    to end.
+- id: session-start-plan-and-setup-guards
+  title: Make the plan-item and setup steps impossible for a session to skip
+  branch: claude/workflow-unification-setup-jgvs53
+  pull_request_number: 121
+  status: done
+  session: https://claude.ai/code/session_01JSxeoePmxWoA4aETrwhFcx
+  track: handover
+  depends_on: []
+  notes: |-
+    Merged. Recorded from two process failures in another session, both of which the conventions already
+    forbade in prose and neither of which anything enforced: work was implemented and pushed before its
+    plan item existed, because session-start printed a bare "plan: none" that reads as "no plan applies
+    here" when it can equally mean "the plan you were told about has no item for this branch yet"; and
+    `check-setup.sh` was never run, so the dashboard dependencies were discovered one `ModuleNotFoundError`
+    at a time when one read-only call reports the whole picture.
+
+    Three fixes in increasing strength were recorded; this ships the first two, with the third split out
+    as `plan-item-edit-guard`. Plan mode was considered and rejected as the mechanism: it would probably
+    have caught the first failure but rests on the same judgement that missed it, and would not have
+    caught the second at all.
+
+    **The user's framing reshaped the design and needed no new setting**: a clone whose owner wants
+    neither plans nor personal notes must see none of this. Everything added sits after the hook's
+    existing early exit, and within the group that does use the branch, whether the generated branch
+    index exists separates notes-but-no-plans from plans-in-use. Five distinct plan-line outcomes,
+    including an index entry whose manifest has gone missing, previously indistinguishable from having no
+    plan. The setup line runs after `CLAUDE.local.md` is written so its own check sees this run's output,
+    and is captured so a setup gap can never fail the hook. Extended after the user raised the case the
+    first pass missed: the default branch, the notes branch and a detached HEAD can never be tracked by a
+    plan item, so they report "not applicable" rather than prompting.
+
+    One latent crash was found by writing the first tests the hook has ever had: a plan with no
+    `tracking_issue` made grep exit 1, which `pipefail` and `set -e` turned into the hook dying with no
+    output at all.
+
+    **Two review reversals worth carrying.** A test added specifically to replace the guard that
+    single-sourcing the summary wording had removed was cut on the user's instruction, replaced by one
+    asserting each message renders non-empty. So a reword is invisible to the suite, deliberately: it is
+    the reviewer's call whether wording is worth pinning, and here it was not. What survives is the pair
+    of failures that actually break the hook, both mutation-checked - a member naming a function that
+    does not exist, and a function that prints nothing. And the ask to rewrite the summary messages in
+    Python was answered by measurement rather than assertion: with `python3` off `PATH` entirely the hook
+    still prints every line and exits 0, degrading only one row; as Python that whole block becomes
+    nothing.
+
+    A fixture tree of real files, rather than strings written inline, forced one thing worth knowing: the
+    repository ignores `*.txt`, so the fixture's requirements file needed a `.gitignore` exception, and
+    it was caught only by diffing the staged tree against main - the local suite passed either way and CI
+    on a fresh checkout would not have.
+- id: git-identity-from-personal-notes
+  title: Stop sessions committing as an assistant identity
+  branch: claude/workflow-unification-git-identity-ppzcyh
+  pull_request_number: 126
+  status: done
+  session: https://claude.ai/code/session_011qPaY1qP7B8hhGQauH4k61
+  track: handover
+  depends_on:
+  - session-start-plan-and-setup-guards
+  notes: |-
+    Merged. Found when a session discovered its own clone configured to commit as an assistant identity -
+    exactly what AGENTS.md forbids. The diagnosis is what makes it worth tracking rather than fixing by
+    hand each time: the value is in the container's *global* git config, so a fresh clone inherits it and
+    there is no repository-local identity until something writes one. It is the default, not a slip, and
+    every session that commits without setting an identity first reproduces it.
+
+    `session-start.sh` writes a repository-local identity read from the notes branch, and
+    `check-setup.sh` gains a check that surfaces through the setup line with no further plumbing. Written
+    only when no local identity exists yet: a fresh clone has none and someone who set one deliberately
+    keeps it, which is precise where blocklisting known assistant identities would be brittle.
+
+    **Two limits stated rather than papered over.** The hook covers only commits made inside a session in
+    this clone; merge commits landing from outside any session - the merge button, a scheduled run - no
+    local hook can reach, and that half needs the GitHub account's own commit-email setting. And the
+    same result is available with no code at all and is stronger where it applies:
+    `GIT_AUTHOR_*`/`GIT_COMMITTER_*` set at the environment level beat both local and global config and
+    are in force from the session's first command, but they are per-environment and do not travel to
+    another contributor's clone.
+
+    One correction the implementation forced: those variables *are* set in this environment, so the check
+    resolves authorship with `git var GIT_AUTHOR_IDENT` rather than `git config --get user.name`, which
+    reports the assistant on a clone whose commits are correctly authored. A review thread asking for
+    `GIT_AUTHOR_IDENTITY` was answered rather than applied and left open: `git var -l` lists only the
+    short spelling, and the long one exits with a usage error, so the rename would make the check report
+    that git cannot determine an identity at all.
+
+    **The stacking constraint it inherited**, this being the first item stacked on another item's pull
+    request outside the upstream chain: GitHub retargets a child to main by itself only if the parent is
+    merged *through the pull request* rather than by a push. A second pull request also existed briefly
+    on this branch, opened 95 seconds earlier from the same head against a different base, with GitHub's
+    auto-filled title and body; it was closed as a duplicate.
+- id: fresh-base-at-session-start
+  title: Fast-forward the fork's default branch at session start
+  branch: claude/fork-main-upstream-sync-mtrzpr
+  pull_request_number: 188
+  status: in_progress
+  session: https://claude.ai/code/session_01DmexEkCHmVuQjanQpsHX4F
+  track: handover
+  depends_on: []
+  notes: |-
+    Raised by the user. Sessions are cut from the fork's default branch, so a fork that has drifted
+    behind upstream makes every session in that clone plan and implement against a stale base -
+    invisibly, because the clone is consistent with itself. Live when it was raised: the fork's main was
+    86 commits behind and that session's branch was cut from exactly that commit.
+
+    `session-start.sh` now fast-forwards the default branch before printing its report: it resolves the
+    upstream through the stack configuration, so no repository is named in the hook and it works on a
+    fork of anything, fetches, fast-forwards this clone's copy, and pushes the result to the fork - the
+    copy the next session is cloned from. Fast-forward only at every step, that one branch only, never
+    fatal. Verified live: 86 commits in 3.9 seconds.
+
+    Deliberately not done: merging or rebasing the checked-out branch. Whether to take a moved base into
+    work already in progress is a judgement call that can conflict, so it is reported rather than
+    performed.
+
+    Carries a second fix with the same root cause: catching the base up leaves the upstream tip in
+    `FETCH_HEAD`, and the summary's plan-state stamp was re-reading `FETCH_HEAD` rather than the baseline
+    it had already recorded, so a session rechecking from it would have diffed plan state from an
+    unrelated commit.
+
+    Complementary to the cutover Action's own fork fast-forward rather than duplicate: that one is a
+    timer keeping the fork fresh between sessions and is gated on the upstream wave landing; this one
+    guarantees the base of the session about to run, and is live now.
+- id: setup-runs-without-asking
+  title: Run the personal-notes setup from the planning skills instead of asking first
+  branch: claude/auto-run-setup-notes-02nhxv
+  pull_request_number: 156
+  status: in_progress
+  session: https://claude.ai/code/session_01RydZutnNtFBYeT73Qt4Bxv
+  track: conventions
+  depends_on: []
+  notes: |-
+    Every planning skill defers its step 0 to one shared document, which told the session to run the
+    setup check and then *ask* whether to run `/setup-personal-notes`. So a clone missing any part of the
+    setup - in practice every fresh container, where the dashboard dependencies are never installed -
+    opened every planning invocation with a yes/no question before doing any of the work asked for. The
+    gate is gone: state what is missing, invoke the skill, re-run the check, carry on.
+
+    The questions that survive are the ones inside the setup skill, and they are a different kind - which
+    remote holds the notes, what the notes start out saying, whether to create labels, whether to restore
+    a diverged tracked file. Each picks a destination to write to rather than deciding whether to act.
+    Only "shall I run this at all" is gone, which had exactly one useful answer from a user who had
+    already invoked the skill.
+
+    **The finding that made the rule a mechanism rather than prose.** Two other pull requests carried the
+    superseded "offer the setup" wording in *new files*, so neither conflicts with this branch and
+    nothing would flag them at merge time - landing either afterwards silently reinstates the gate. Both
+    were flagged on their own pull requests, but flagging is coordination and nothing enforces it, so a
+    test sweeps every markdown document under `.claude/skills` for a verb of offering governing the setup
+    command. Discovered rather than listed, because the case it exists for is a document that does not
+    exist yet. Narrow by design: it catches the sentence the rule replaced rather than every paraphrase of
+    asking, and must not fire on the prose that explains the rule.
+
+    The prediction held exactly. Both of those pull requests landed while this branch sat behind a merge
+    conflict, main arrived carrying the two forked copies, and merging failed on precisely those two
+    paths - which no merge could have flagged, both being new files that conflict with nothing.
+
+    No upstream pull request exists: the branch carries `cram2-link-sent`, meaning the compare link was
+    built, but no upstream pull request has this head, so Create was never clicked.
+- id: no-pr-subscriptions
+  title: Stop sessions from subscribing to their own pull requests
+  branch: claude/remove-auto-subscribe-pr-oowwkp
+  pull_request_number: 153
+  status: done
+  session: https://claude.ai/code/session_012yfsn1ZZBsUcfKK1zDW1zh
+  track: conventions
+  depends_on: []
+  notes: |-
+    Merged. The standing rule was that a session subscribes to every pull request it opens and handles
+    each event until that pull request's job ends. The user's decision inverts it rather than tuning it: a
+    session never subscribes to a pull request's activity, and opening one is terminal for the session
+    that opened it - push, report what is outstanding in the chat, stop. A CI failure or review comment
+    gets handled when the user asks, in a session started for it.
+
+    Two halves, because the rule lived in two places. The notes half replaced the bullet and fixed three
+    sections written around the old assumption - one called event subscriptions wanted, one justified its
+    action-only routing by saying pull request comments wake subscribed sessions, and one was largely
+    teardown for subscriptions that no longer exist. The repository half ships the never-subscribe default
+    to any new user of the setup skill.
+
+    **Scope call: pull requests only.** A plan's tracking issue is subscribed with the same tool but is a
+    coordination mailbox several sessions read, not a pull request one session owns, so the planning
+    skills keep theirs.
+
+    Two passages a grep for the tool name would have missed were also reworded, because they explained
+    behaviour by the old rule rather than stating it.
+- id: always-read-upstream-reviews
+  title: Read upstream review threads whether or not the fork pull request is labelled
+  branch: claude/plan-item-kickoff-workflow-y2xfva
+  pull_request_number: 194
+  status: in_progress
+  session: https://claude.ai/code/session_01Cs9MvTBPS4hsd1HJimooVy
+  track: conventions
+  depends_on: []
+  notes: |-
+    Read upstream review threads whether or not the fork pull request is labelled. No detail was recorded
+    on this item beyond its title before the split; the pull request is the record.

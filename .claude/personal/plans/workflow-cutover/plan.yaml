@@ -1,0 +1,125 @@
+schema_version: 1
+id: workflow-cutover
+title: 'Cutover: one published site, no scheduled LLM run, the old branches retired'
+description: The end state the workflow-unification work was for. Plan dashboards publish themselves
+  from a single Pages site; the scheduled LLM Routine is replaced by a plain Action for the deterministic
+  duties and on-demand sessions for the judgment ones; and the superseded tooling branch is tagged
+  and deleted once one green cycle has run on the new paths.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 102
+waves:
+- id: cutover
+  name: Cutover and retirement
+  description: Each item flips a live system onto the new path and retires the old one.
+tracks:
+- id: cutover
+  name: Cutover and retirements
+  wave: cutover
+items:
+- id: stack-board-single-site
+  title: 'PR 4: plans-only Pages site (stack board retired for the native stack map)'
+  branch: claude/dashboard-publish-automation-hnfi5a
+  pull_request_number: 218
+  status: in_progress
+  session: https://claude.ai/code/session_01CfwosnvBeiWvRLXxcnfHPk
+  track: cutover
+  depends_on: []
+  notes: |-
+    Re-scoped 2026-07-31 to the user's one-dashboard decision: no board index is built at all.
+    GitHub's native stack map covers derived stack mechanics, so the plan dashboards are the single
+    surface, published as `_site/plans/<id>/` with no live session. Shipped 2026-08-30 as draft #218 off
+    `main` rather than stacked on #111, at the user's instruction not to wait - the workflow does
+    nothing until it is on a base branch, and #111 has been conflict-blocked since the 2026-08-29
+    maintenance pass. Both recorded dependencies were dropped for the same reason; neither is needed by
+    what shipped. The site publishes from this fork's own Pages, so the repository override is gone.
+
+    Three facts the build established, each recorded because a later change would otherwise rediscover
+    them. **Which branch carries the workflow decides which trigger can reach it**: `workflow_dispatch`
+    is offered only from the default branch (here, `integration`), a `pull_request` run uses that pull
+    request's own merge ref so it fires only where the base already carries the file, and `push` fires
+    on the branch it names. No workflow design substitutes one for another. **The `github-pages`
+    environment accepts deployments only from the default branch**, so `actions/deploy-pages` is
+    rejected before the first step of any pull request run, and nothing reachable from `GITHUB_TOKEN`
+    relaxes it; the site is pushed to a branch of its own that Pages serves from, with `pages_site.py`
+    pointing Pages there through the API, so a fresh fork still needs no settings visit.
+    **`fetch-depth: 0` is load-bearing**, not caution: neither that push nor the notes-branch worktree
+    the merged-to-done correction commits in can push from a shallow clone.
+
+    `build_site.py` is a deliberate single-file overlap with #111 - same path, same command-line
+    contract - so whichever lands second takes #111's richer version, and this branch's `github_api.py`
+    and `personal_notes.py` are then deletable in favour of the package. 50 new tests, 293 in the
+    plan-dashboard suite. Verified end to end against live GitHub with the notes remote redirected to a
+    local mirror: all ten plans rendered. The rejected environment deployment is pinned out by a test of
+    its own.
+
+    The user does not want this on `main` (2026-08-30). What that costs, stated rather than worked
+    around: the `pull_request` trigger then covers this pull request alone. Un-drafting it makes it
+    eligible for the next integration rebuild, which puts it on the default branch and makes
+    `workflow_dispatch` available. Closing the rest of the gap means landing it on `main` later or
+    adding a cron - deliberately not added, since the no-scheduled-checks rule makes that the user's
+    call. Living on `integration` is fragile in one way worth knowing: that branch is regenerated from
+    scratch, so a rebuild that drops this tip takes the workflow off the default branch with it.
+
+    Left undone and carried by nothing else: the every-fork-pull-request-belongs-to-a-plan invariant,
+    the repo/branch/upstream repository variables, and three inconsistent poll-interval statements.
+- id: routine-cutover
+  title: 'Retire the scheduled LLM Routine: deterministic Action + on-demand sessions'
+  branch: null
+  status: in_progress
+  session: https://claude.ai/code/session_017JMftn3ujp7xsyhwcMaF75
+  track: cutover
+  depends_on: []
+  notes: "Target revised 2026-07-31 (native-stacks pivot, user-approved): the endgame is no scheduled\
+    \ LLM run\nat all, which finally aligns the Routine with the no-scheduled-checks rule. A plain\
+    \ scheduled Action\ntakes the deterministic duties - fork-main fast-forward from cram2/main, label\
+    \ hygiene, the\ncram2-link comment, the plans-site build, and the happy-path cascade, since `gh\
+    \ stack sync` is\ndocumented as safe in automation and Actions runners ship `gh`. The judgment\
+    \ residue - cascade\nconflicts, red CI after a restack - runs in on-demand sessions surfaced by\
+    \ the dashboard rather than\nby a timer. The gate is unchanged: only after the stack tooling is\
+    \ on cram2/main and fork main\nfast-forwards; one green Action cycle flips this done. The live\
+    \ Routine is trigger\n`trig_01N79jHmLo3bSbg8pLM6MNTB` (\"PR Stack Monitor and Update\"), which\
+    \ the final cutover deletes.\n\n**The base-change 403 is one credential, not the platform** (corrected\
+    \ 2026-08-02 by\n`session-safe-pr-reparent`'s probe). The MCP `update_pull_request` tool changes\
+    \ a base fine, verified\non throwaway pull request #129, so the \"no session can ever reparent\"\
+    \ reading was wrong and there is\nno close-and-recreate fallback to inherit. The Action's own\
+    \ credential is a third identity again;\nverify it with a real base change from the Action before\
+    \ relying on it, and if it does 403, call the\nsame REST endpoint under a token that does not\
+    \ carry the restriction rather than degrade to\nrenumbering pull requests.\n\n**Detection must\
+    \ be event-triggered, and one event type wider than first designed.** Tracing #40/#41\non 2026-08-02\
+    \ showed the human action was correct maintenance, not a mistake automation should\nprevent: the\
+    \ user closed #40 after rebuilding its branch, and its successor #53 merged normally nine\ndays\
+    \ later. The real defect is that *any* pull request leaving the open set drops it from\n`board.json`,\
+    \ whether it closes unmerged or merges and GitHub auto-closes it. `pull_request: closed`\nfires\
+    \ for both, so the Action re-sweeps git ancestry for every remaining open fork pull request's\n\
+    base on that one event - not only the closed pull request's own branch. In the real case that\
+    \ would\nhave caught #41's orphaning at #53's merge, days before a review round noticed it by\
+    \ accident.\n\n**The interim pointer prompt is adopted and live** (2026-08-02). The user replaced\
+    \ the Routine's\n~17.5k-token inline prompt with the short pointer this item specified: HARD RULES\
+    \ inline, because\nthey must bind before any file is read, plus \"read `.claude/stack/ROUTINE.md`\
+    \ and execute\". It\nresolves `origin/main` first and falls back to the landed-parent-detection\
+    \ branch while\n`.claude/stack/` is still in review, so that branch is live production input and\
+    \ an edit to\n`ROUTINE.md` ships on push with no deploy step. That is what stops doctrine corrections\
+    \ needing a\nmanual paste. Adoption immediately exposed a latent ordering bug, fixed in #117:\
+    \ SETUP step 0 \nasserted that `stack.py` and `stack.toml` were already on the checkout, written\
+    \ in anticipation of a\nlanding that had not happened. Under the pointer the Routine would have\
+    \ resolved its doctrine,\nbelieved the tooling present, and failed on the first `stack.py` call\
+    \ in phase 2 - after phase 1 had\nalready mutated pull requests. Step 0 now fetches `.claude/stack/`\
+    \ from the same ref instead of\nasserting it. Two deletions fall due when `.claude/stack/` reaches\
+    \ main: the pointer prompt's\nsecond source line, which needs a manual paste, and step 0's fetch\
+    \ fallback. Neither breaks anything\nif forgotten; both are dead weight."
+- id: tooling-branch-retirement
+  title: Tag and delete claude/stack-workflow-tooling after one green cycle
+  branch: null
+  status: not_started
+  track: cutover
+  depends_on:
+  - routine-cutover
+  - stack-board-single-site
+  notes: |-
+    Only after one full Routine cycle and one site-Action cycle have run green on the new paths. Tag for
+    history first.
+
+    Platform constraint, recorded 2026-07-29 and unchanged: tag pushes and branch deletes get a 403
+    through a session's git proxy, so those two steps run outside the harness - the user's machine, or
+    `gh api`. A session can still do every verification and prepare the exact commands. The sibling
+    `session-hooks-retirement` hit the same wall and the user ran the delete.

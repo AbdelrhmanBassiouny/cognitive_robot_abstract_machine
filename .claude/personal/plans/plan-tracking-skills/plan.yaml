@@ -1,0 +1,209 @@
+schema_version: 1
+id: plan-tracking-skills
+title: 'The plan-item skills: deciding where work goes, and recording it before doing it'
+description: The skills a session uses to place a piece of work and to keep the manifest honest about
+  it - deciding whether something is new work or a change to work in flight, opening an item's branch
+  and draft pull request before implementation rather than after, and choosing whether a kickoff asks
+  for approval or proceeds.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 102
+waves:
+- id: skills
+  name: The skills themselves
+  description: Each adds or corrects one decision the skills were leaving to a session's judgement.
+tracks:
+- id: skills
+  name: Plan-item skills
+  wave: skills
+items:
+- id: add-plan-item-skill
+  title: '/add-plan-item: decide where a new piece of work belongs'
+  branch: claude/add-plan-item-skill-e89irj
+  pull_request_number: 135
+  status: done
+  session: https://claude.ai/code/session_01XGMaAHK8LQCoxa52KVaMCc
+  track: skills
+  depends_on: []
+  notes: |-
+    Merged. The plan skills covered creating a plan, starting an item, unblocking one and publishing
+    status, but nothing covered the most frequent event: someone describing new work and asking where it
+    goes. That decision was being made by default, which is what produced this work's own fold chain
+    (#133 into #117, #117 into #106) and the #110/#106 collision where two sessions independently built
+    the same artifact under two names. `/add-plan-item` derives the paths the work touches, gathers
+    every plan and open pull request as candidate homes, runs the scope check, and proposes exactly one
+    of four outcomes - fold, new item in an existing plan, new plan, or no item at all - through plan
+    mode, without writing code.
+
+    **The rule was triplicated, which is the failure mode the rule is about.** Three independently
+    worded copies had been added to `plan-create`, `plan-item-kickoff` and `plan-item-resolve` by an
+    unlanded branch with no pull request and no shared anchor. It moves into
+    `add-plan-item/scope-decision.md`, referenced in a line by all four skills, following the
+    `prerequisite-check.md` precedent. Rather than stack two pull requests, this branch was reset onto
+    that one so a single branch carries both - the new rule applied to its own introduction.
+
+    Ships `check_scope_overlap.py` rather than prose alone, since the #110/#106 collision is exactly
+    what eyeballing missed: given a base and the work's paths it reports which paths the base lacks and
+    which unlanded branches already touch them, plus each candidate's full changed-file list so
+    same-purpose, different-filename duplicates stay findable. Pure git, no network.
+
+    One review finding worth carrying: making the report's JSON keys a `ReportKey` StrEnum removed
+    coverage the duplicated literals had been providing by accident - with both sides reading the enum, a
+    rename changes them identically and nothing notices, verified by renaming a member and watching every
+    test still pass. One test now pins the member names to their wire values.
+- id: plan-item-bootstrap
+  title: Bootstrap an item's branch, draft pull request and manifest state before implementing
+  branch: claude/plan-item-kickoff-workflow-vocs6b
+  pull_request_number: 143
+  status: done
+  session: https://claude.ai/code/session_01VoH56TLkH5rA5EFu2xhML9
+  track: skills
+  depends_on: []
+  notes: |-
+    Merged. A session whose implementation plan had just been approved went straight to writing code, and
+    the branch, the draft pull request, the manifest fields, the roadmap entry and the dashboard all
+    followed at the end - so for the whole length of the implementation the plan said the item was
+    `not_started` with no branch, and any other session reading it was reading a lie. The inversion: the
+    first step after approval creates the branch and draft pull request, writes the plan plus branch,
+    session and pull request number into the manifest, flips the item to `in_progress`, and republishes
+    the dashboard. None of that waits on the code, because none of it depends on the code.
+
+    **Two operations, not one shared procedure** (the user's revision, and what fixes the design).
+    Recording an item is `add-plan-item`'s whole business and all it gets; *opening* the work - branch,
+    push, draft pull request, and writing those back - belongs only to `plan-item-kickoff`. Kickoff calls
+    both, in that order, because the pull request number does not exist until the pull request does. The
+    first shape had `add-plan-item` referencing the whole thing, which would have handed a
+    branch-and-push step to a skill whose own opening paragraph promises it never creates a branch.
+
+    **The probe that changed the design.** Creating the pull request from a script succeeds and honours
+    `draft: true`, but a pull request the script creates is attributed to `claude[bot]` - the app its
+    requests are proxied through - while the same creation through the session's own GitHub tool is
+    attributed to the user, verified minutes apart on the same repository. That is the authorship problem
+    AGENTS.md rules out for commits, and it would have applied to every plan item's pull request. So
+    `open` takes `--pull-request-number` for one the caller already created, with the creating path kept
+    for an unattended run whose credential is a real one. Within a session the credential is irrelevant
+    either way: the identical response comes back with an exported token, a junk token, and no
+    authorization header at all, because the proxy supplies the identity.
+
+    One part cannot be a script and is handed back explicitly rather than pretended: only a live session
+    can call the Artifact tool, so the dashboard republish stays a `/plan-dashboard` step.
+
+    Four review rounds, every thread resolved except the `ItemStatus`/`build_dashboard.py` unification
+    question, answered with a recommendation and left for the user; it belongs to the package extraction,
+    the item that actually moves that file. Residue needing out-of-harness deletion: the remote probe
+    branch, since sessions cannot delete branches.
+- id: plan-item-execution-modes
+  title: Auto and plan execution modes for the plan-item skills
+  branch: claude/plan-item-kickoff-modes-p1yuwc
+  pull_request_number: 149
+  status: done
+  session: https://claude.ai/code/session_015v3RfcEvtzNj47uEMac9p9
+  track: skills
+  depends_on: []
+  notes: |-
+    Merged. Gives the plan-item skills three modes - `auto` (draft the plan, record it, implement without
+    asking), `plan` (present it and stop for approval) and `ask` (put the choice to the user) - pinned in
+    the personal-notes branch so the answer does not depend on the run's own judgement. The shared
+    gathering procedure moved out of both skills into one document in the same round.
+
+    Promoted upstream as cram2 #537, which the manifest has no field for, so the number is recorded here.
+    Three upstream rounds and two fork rounds, and two of them reversed calls made in the round before -
+    which is the reason to record them rather than the diff. A wire-value contract test added in one
+    round was deleted in the next. `as_document` became `as_json`, then `to_json`: the count settled what
+    two rounds of argument had not - `to_json` is defined 93 times outside `.claude/` against 3 for the
+    other three names together, and it is the name
+    `krrood.adapters.json_serializer.SubclassJSONSerializer` gives a dict-returning serializer. Adopting
+    that base class itself stays declined on the CI measurement; the rename is what "make yourself ready"
+    costs, and it is free. The naming sweep across the rest of the tooling became `report-document-naming`.
+
+    One measurement worth not repeating: `class Location(Path, Enum)` raises `AttributeError: _flavour`
+    on 3.11, which is the floor, and even on 3.12 f-string interpolation renders the member repr rather
+    than the path, while `.parent`, `json.dumps` and by-value lookup all raise. A `StrEnum` whose members
+    are the paths as text, with a `.path` property, is what shipped.
+
+    The upstream threads cannot be answered from this fork - sessions cannot write to cram2 - so reply
+    text is handed to the user. Two threads stay open on purpose, each answered differently from what it
+    asked.
+- id: plan-item-bootstrap-yaml-indent
+  title: Fix plan_item_bootstrap writing item fields at the wrong indentation
+  branch: claude/plan-item-bootstrap-yaml-indent-y8qs0m
+  pull_request_number: 160
+  status: in_progress
+  session: https://claude.ai/code/session_0157EHWeTzFSYf1nqHX5J7NC
+  track: skills
+  depends_on: []
+  notes: |-
+    Bug fix off `main`, found by using the bootstrap script on `rdr-refactor`. `open` patched the item's
+    fields at a hardcoded four-space indent, which does not parse in a manifest whose items are written
+    flush with `items:` - `rdr-refactor`'s style - so `save-plan.sh` failed in `yaml.safe_load`. The
+    depth is now read off the manifest being edited.
+
+    Two defects in the same path are fixed with it: the save swallowed `save-plan.sh`'s output, and it
+    reported success without checking the write landed. It now raises with the script's own message and
+    reads the plan back off the notes branch afterwards. This item's own entry was written by the fixed
+    script.
+- id: plan-item-edit-guard
+  title: 'PreToolUse guard: refuse source edits from a branch with no plan item'
+  branch: null
+  status: not_started
+  track: skills
+  depends_on: []
+  notes: |-
+    The third and strongest of the three fixes recorded on `session-start-plan-and-setup-guards`, split
+    out at that item's kickoff: the only one that makes the miss impossible rather than merely unlikely,
+    where the two that shipped make it unlikely by reporting better. A `PreToolUse` hook on `Edit|Write`
+    that refuses a source edit from a branch no plan item tracks.
+
+    Semantics settled with the user: block until resolved, not a one-shot speed bump - an edit is refused
+    until either an item exists or the branch is explicitly exempted - but active only for someone who
+    uses plans or personal notes, and completely inert for everyone else. The discriminator is the same
+    state-derived one its predecessor established (no notes branch reachable, or no generated branch
+    index on it, means silence), not a new setting, since the requirement is that it works automatically
+    for both kinds of user with nothing to configure. **Inertness is a hard constraint rather than a
+    preference**: `.claude/settings.json` is committed, so every contributor who inherits this repository
+    inherits the hook, and one that blocked their edits would be indefensible upstream.
+
+    Scope settled from the user's point that plans-and-notes users still do work that is purely a
+    personal-notes edit and needs no item. Two exemptions, both mechanical rather than opt-outs: the
+    guard fires only for files tracked in the working tree, so notes-only work is exempt for free, since
+    `CLAUDE.local.md` is gitignored and plan and notes data live on the notes branch, written from
+    scratch paths outside the repository; and a branch whose pull request targets the notes branch is
+    exempt, since it carries notes data rather than code bound for the default branch.
+
+    The second exemption has no mechanism yet and is this item's own work: the branch names its
+    predecessor excludes do not cover it, and the obvious local test - the notes branch tip being an
+    ancestor of HEAD - collides with the hook tests' scratch fixture, which builds its work branch off
+    the notes branch. Either the fixture branches from the initial commit instead, or the test reads the
+    pull request base; the predecessor's plan line has the same residual gap and should follow whatever
+    is settled here.
+
+    Its dependency on `session-start-plan-and-setup-guards` is merged and now lives in the
+    `session-notes-infrastructure` plan, so it is dropped from `depends_on`; what it needed from it - the
+    discriminator helpers - is on main.
+- id: report-document-naming
+  title: One name for the report-to-document method across the .claude tooling
+  branch: null
+  status: not_started
+  track: skills
+  depends_on: []
+  notes: |-
+    From an upstream review of cram2 #537: "i feel like you have `as_document`, `as_dict`, `as_json`,
+    `as_json_dict` etc scattered across your different PRs". Measured rather than taken on impression:
+    `as_document` returns a dict in two files, `to_json_dict` returns a dict in two more, and `as_json`
+    returns a *str* in two others - one operation under two names, plus a genuinely different one under a
+    third.
+
+    **The surviving name is `to_json`**, settled by count rather than by argument after two earlier
+    answers had been reversed: `to_json` is defined 93 times outside `.claude/` against 3 for the other
+    three names together, and it is what
+    `krrood.adapters.json_serializer.SubclassJSONSerializer` declares for a dict-returning serializer.
+    `plan_item_mode.py` is already on it; this item carries the other five - `as_document` in
+    `plan_item_bootstrap.py`, `to_json_dict` in `build_dashboard.py`, `sync_manifest_status.py` and
+    `record_dashboard_url.py`, and `as_json` in `check_scope_overlap.py`.
+
+    The collision this could not dodge dissolves rather than needing a ruling: `to_json` goes to the
+    dict-returners, which leaves `as_json` free for the two str-returning ones, so neither has to be
+    renamed to something like `as_json_text`.
+
+    Split out rather than folded into `plan-item-execution-modes` because every divergent file is already
+    on main, so the rename stands on its own. Best done inside or after the package extraction, which
+    moves all six files into one home and is where a shared `Report` base would live.

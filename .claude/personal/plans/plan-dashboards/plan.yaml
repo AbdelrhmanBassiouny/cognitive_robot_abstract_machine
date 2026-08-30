@@ -1,0 +1,335 @@
+schema_version: 1
+id: plan-dashboards
+title: 'The plan dashboard: what it shows, what it gets wrong, and what it can publish'
+description: The renderer behind /plan-dashboard. Bug fixes to what it computes about an item's readiness
+  and drift, chips and toggles that keep a large plan legible, and the shared pull-request-state module
+  that lets one page carry CI, size and conflict information rather than only the manifest's own view
+  of itself.
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 102
+waves:
+- id: corrections
+  name: What the dashboard computes
+  description: Bugs in readiness, drift and merge-state classification, each fixed on its own root
+    cause.
+- id: legibility
+  name: Keeping a large plan readable
+  description: Chips, toggles and the masthead - what a plan with dozens of items needs to stay an
+    overview.
+- id: live-state
+  name: Live pull request state on the page
+  description: The shared fetch/compute module, and the promotion surface it makes possible.
+tracks:
+- id: corrections
+  name: Computation fixes
+  wave: corrections
+- id: legibility
+  name: Legibility and navigation
+  wave: legibility
+- id: live-state
+  name: Shared pull request state
+  wave: live-state
+items:
+- id: ready-to-start-dependency-free-fix
+  title: Fix ready-to-start dashboard list dropping dependency-free items
+  branch: claude/funny-feynman-wexezs
+  pull_request_number: 103
+  status: done
+  session: https://claude.ai/code/session_016mfBqcBibxA7Wa5eNfWtoL
+  track: corrections
+  depends_on: []
+  notes: |-
+    Merged. `_compute_next_steps` skipped items with no dependencies at all, so a dependency-free
+    not-started item never reached the ready-to-start list. Found when `plan-updates-since-helper`
+    failed to appear in the sidebar. Fixed with a failing test first, plus a companion test pinning that
+    a dependency-free *blocked* item stays out of both lists.
+
+    Two pre-existing tests carried an incidental dependency-free not-started fixture item that
+    legitimately became ready-to-start under the corrected semantics; that item's status changed to
+    blocked so each test keeps isolating only the behaviour it names, with no assertion touched.
+- id: dependency-chips-blocked-fix
+  title: Show unmet dependency chips as blocked on plan dashboards
+  branch: claude/plan-dashboard-dependencies-1am49n
+  pull_request_number: 105
+  status: done
+  track: corrections
+  depends_on: []
+  notes: |-
+    Merged. Renders an item's unmet dependencies as blocked chips instead of neutral ones. A
+    pre-existing bug-fix pull request, adopted under the every-fork-pull-request-belongs-to-a-plan rule.
+- id: merge-timestamp-required-fix
+  title: Reject closed pull request data that omits merged_at
+  branch: claude/cram2-main-drift-4owm9a
+  pull_request_number: 119
+  status: done
+  session: https://claude.ai/code/session_01BsUHGwZaRpxo97jVDUmaau
+  track: corrections
+  depends_on: []
+  notes: |-
+    Merged. Opened from false drift flags this plan's own dashboard raised - "closed without merging"
+    for two pull requests GitHub records as merged. The root cause is the hand-assembled
+    `pr_data.json`: `merged_at` is the only signal separating merged from closed-unmerged, since `state`
+    is `"closed"` for both, `list_pull_requests` lets a caller drop it through `fields`, and the fetch
+    document only ever required `labels`. `from_mapping` now raises `MissingMergeTimestampError` for a
+    closed entry missing the key, keeping key-present-and-null as the genuine closed-unmerged case, and
+    the fetch document names the minimum field set.
+- id: ready-to-review-merged-dependency
+  title: Ready-to-review drops items whose dependency has already merged
+  branch: claude/plan-item-kickoff-workflow-s9e8bj
+  pull_request_number: 122
+  status: done
+  session: https://claude.ai/code/session_01Ltrz1G8qwSHgo6jyfeV1EU
+  track: corrections
+  depends_on: []
+  notes: |-
+    Merged. `_compute_ready_to_review` admitted an item only when every dependency had an *open* pull
+    request, which inverted the intent: an item whose dependency merely had an open draft was listed,
+    while one whose dependency had fully landed was not, so a dependency becoming more finished made its
+    dependent look less reviewable. Found while working `sidebar-bug-fix-chips` and deliberately kept
+    out of it, one root cause per bug fix. The user confirmed the oversight reading before anything
+    changed, per the rule against inventing a reason for existing behaviour.
+
+    **The consolidation this work proposed and must not revive:** folding the predicate onto
+    `is_ready_to_unblock_dependents()` is wrong, because that one excludes `OPEN_DRAFT` - a draft is
+    unsafe to build a *branch* on - while this list deliberately includes a draft dependency. The two
+    differ by exactly `OPEN_DRAFT`, and that difference is the real distinction: safe-to-build-on
+    requires out-of-draft, worth-reviewing-behind requires only that the base exists. Delivered instead
+    as `Item.is_ready_for_dependent_review()`, composing `has_open_pull_request` with
+    `is_effectively_done()`.
+
+    The screenshot regeneration recipe, since no script exists: render `example/` with
+    `build_dashboard.py`, then headless Chromium with
+    `--blink-settings=preferredColorScheme=0` for the dark theme the committed images use, cropped to a
+    100px bottom margin.
+- id: deferred-dependency-drift-check
+  title: Flag an item stacked on a deferred/closed dependency instead of leaving it to a stale note
+  branch: claude/deferred-dependency-drift-pr-qxpfsm
+  pull_request_number: 184
+  status: in_progress
+  session: https://claude.ai/code/session_01VBa9VPHJW4VjpWtdq1XLE2
+  track: corrections
+  depends_on: []
+  notes: |-
+    Found 2026-08-12 in `rdr-refactor`'s D-ui stack: `D-ui-splice-fix` was closed as superseded, but
+    `D-ui-rendering` still depends on it and is still in progress, with no automated signal anywhere
+    that its base is dead - only a previous session's freeform note, which nothing re-reads.
+    `_drift_description_of` only compared an item's own status against its own live state, and
+    `_compute_next_steps` only evaluates not-started and blocked items, so an in-progress item stacked
+    on a dead dependency slipped past every check. Same defect shape as `landed-parent-detection`, which
+    taught the restack plan to decide a parent has landed from git ancestry rather than board
+    membership, never ported to the `depends_on` graph.
+
+    The condition is **deferred, or closed unmerged** - not `is_ready_to_unblock_dependents()`, which is
+    also false for a not-started dependency and for an open draft, and stacking on an open draft is this
+    repository's normal workflow, so a check built on it would flag most of every plan. Shipped as
+    `Item.stall_reason`. `drift_description` became `drift_flags`, because an item can carry manifest
+    drift and a stalled dependency at once and reporting one would hide the other. Only direct
+    `depends_on` is checked - an item further up is stacked on a base that is itself alive - and each
+    flag names the stalled dependency's own `depends_on` as the reparent target.
+
+    Five review rounds, all applied, converging on one lesson worth carrying: **check the neighbours
+    before defending a guard.** Three rounds argued about whether tests should pin the drift sentences,
+    and what ended it was reading how the module already treats the identical pattern - `display_label`
+    on two enums is built the same way, carries the identical silent-`None` exposure, and is covered by
+    two spot checks. The parametrised guards were deleted; what survives pins rules rather than
+    phrasings. Given up deliberately and stated on the thread: a cause added later without a match
+    branch shows as "None" on the page rather than as a failing test.
+
+    Two mechanical findings the rounds left behind. `DashboardCssClass` moved into production, since
+    `status_and_drift_css_class` was already spelling one class itself; its placement is load-bearing,
+    because an attribute docstring directly before a decorated definition makes docformatter drop a
+    blank line, black restore it, and `format_docstrings.py` discard the lot - the non-convergence this
+    file was in until the first round. And a `TextOfElementsWithClass` `HTMLParser` subclass reads the
+    page by class instead of matching strings, which is what let the hand-modelled `markupsafe.escape()`
+    call go.
+
+    State: draft, 267 plan-dashboard tests. Live, the check flags exactly one item and the right one.
+- id: sidebar-bug-fix-chips
+  title: Mark bug-fix pull requests with a chip in the dashboard sidebar
+  branch: claude/dashboard-bugfix-pr-section-161vf8
+  pull_request_number: 120
+  status: done
+  session: https://claude.ai/code/session_01UkRVjgoWouwbndZa1siY29
+  track: legibility
+  depends_on: []
+  notes: |-
+    Merged. Surfaces bug-fix pull requests in the "What to do next" sidebar.
+
+    **The design reversal that defines it.** The first attempt was a separate top "Bug fixes" group with
+    its own outline; the user rejected it, because the sidebar groups by *action* and being a bug fix is
+    not one - such items already sit in ready-to-start, blocker-may-be-cleared or ready-to-review - and a
+    fifth outline would collide with the per-group outlines, which are not mutually exclusive with it.
+    So it is an attribute, rendered as a chip on the entry wherever the item already appears, never
+    moving an item between groups. Adds `Item.is_bug_fix`, giving the already-defined but unused
+    `PullRequestLabel.BUG` its first consumer, and collapses four near-identical sidebar group blocks
+    into one `next_step_group` macro so the chip has a single home.
+
+    Extended with the filter the chip made possible: a "Bug fixes only" checkbox, rendered only when
+    some entry is a bug fix so it can never empty the card, with both per-group counts rendered up front
+    and swapped by CSS rather than recomputed in script.
+
+    It carries no `bug` label of its own: it surfaces bug fixes, it does not fix one.
+- id: dashboard-chip-notes-collapse
+  title: Collapse plan-item notes on dashboard chips behind an expand arrow
+  branch: claude/dashboard-chip-collapse-g5uyj1
+  pull_request_number: 124
+  status: done
+  session: https://claude.ai/code/session_01HaU9fwvtLUvFh4k93K6p5C
+  track: legibility
+  depends_on: []
+  notes: |-
+    Merged. Raised against a screenshot of this very plan's own dashboard: one card's notes ran to
+    several hundred words and alone filled the viewport, leaving one item visible at a time and
+    defeating the dashboard's purpose as an overview. Fixed by wrapping the notes in a
+    collapsed-by-default `<details>`/`<summary>` toggle, reusing the CSS-only arrow-toggle pattern
+    already in the file rather than inventing new script. No Python change was needed, and the sidebar
+    cards are unaffected since they render short fixed one-liners.
+- id: dashboard-url-cache-integrity
+  title: Record dashboard URLs from the live artifact listing instead of by hand
+  branch: claude/plan-dashboard-cache-drift-0g2s1w
+  pull_request_number: 150
+  status: done
+  session: https://claude.ai/code/session_01CtpkhY4uomdaWY2rv25WaY
+  track: legibility
+  depends_on: []
+  notes: |-
+    Merged. Five of six plans plus the master index pointed at artifacts that did not exist, and two
+    plans had duplicate dashboards. Hand-corrected at least six times and drifted again every time, so
+    the question was the mechanism rather than the mapping.
+
+    Classifying every URL ever written against the live artifact listing separated by run kind: bulk
+    refresh named a real artifact 0 times in 23, first publish 10 in 13, corrections 15 in 15 - and
+    every correction had been made from an `Artifact action: "list"`. The cache *read* was never at
+    fault. The skill asked the session to hand-write the YAML with "your updated url(s)", but on an
+    in-place update there is no returned URL to copy, so a UUID was invented and nothing checked it; the
+    next run passed that dead URL, could not update a missing page, minted a fresh artifact, and
+    produced the duplicate. Both live pairs arose that way. Fixed by moving the write into
+    `record_dashboard_url.py`, which resolves the URL from the listing by title so no UUID passes
+    through the session, and refuses an unlisted URL, a title matching nothing, and a title matching
+    several.
+
+    **The gap it left, and the evidence that it matters.** Nothing re-checks an entry after write time.
+    Five days later a reconciled entry this item had recorded as verified went dead on its own, and
+    recovery meant resolving from the live listing by hand - into exactly the ambiguous case the script
+    refuses. Two things that argues for when this is picked back up: an audit is worth having, because a
+    stale entry costs a duplicate artifact rather than an error; and the refusal on an ambiguous title
+    is right but leaves the caller no recorded rule for choosing - most-recently-updated is what both
+    corrections have used.
+- id: deferred-items-hidden-by-default
+  title: Hide deferred items in the dashboard by default, behind their own toggle
+  branch: claude/hidden-deferred-plan-items-6weef1
+  pull_request_number: 157
+  status: in_progress
+  session: https://claude.ai/code/session_01Je624Mq716GToQRqtkTXXn
+  track: legibility
+  depends_on: []
+  notes: |-
+    A deferred item is intentionally paused or superseded, so it is the same kind of noise on a
+    dashboard as a done one, and done items have been hidden behind a sidebar toggle since the dashboard
+    existed. `rdr-refactor` shows it: eight of its items are deferred and sit inline among the live ones.
+    This gives deferred its own checkbox, hidden by default, parallel to "Show done / merged items".
+
+    The substance is the indentation, not the checkbox. An item's indent level is its depth in the
+    same-track `depends_on` chain, and the existing toggle already carries a second precomputed level -
+    "as if every done item were not a dependency at all" - so a dependent dedents to zero rather than
+    hanging one level in from an invisible parent. A second independent toggle makes that four
+    combinations, not two, so `StackedItem` stops carrying named pairs of fields and carries one
+    position per filter state, keyed by a `StatusFilter` enum whose value doubles as the page's CSS
+    class and the item's custom-property suffix. Adding a third hidden status later is then data rather
+    than another pair of fields and another template branch.
+- id: dashboard-refresh-button
+  title: Refresh button in the dashboard masthead, copying the command that rebuilds the page
+  branch: claude/rdr-dashboard-refresh-button-tpuvo9
+  pull_request_number: 206
+  status: in_progress
+  session: https://claude.ai/code/session_0112C4kGpRE6uLmi5Lwkghx2
+  track: legibility
+  depends_on: []
+  notes: |-
+    Raised while refreshing a dashboard: a published page is a snapshot of the moment it was rendered
+    and nothing on it can republish it, so getting a current one meant recalling both the skill name and
+    the plan's id from outside the page that needs them. The masthead now carries a Refresh button
+    copying `/plan-dashboard <plan-id>`, with a hint beside it so it is not read as an in-page reload.
+
+    The item action buttons and this one are the same affordance - a button whose click copies a slash
+    command - so they share one `CopyableCommand` base and one macro rather than a second copy of the
+    markup and the clipboard handler.
+
+    One existing test changed rather than a behaviour: an assertion that no action command appeared
+    anywhere on the page was a proxy for the done item's own card having no button, and a page-level
+    button legitimately introduces one, so it narrows to the item commands the test actually names.
+
+    Landing order rather than a dependency: the bastler migration moves this file verbatim, so whichever
+    of the two lands second carries the other's change through the merge it already needs. Deliberately
+    not done: the overview screenshot predates the button, and re-rendering it headlessly would leave it
+    visually inconsistent with the two beside it.
+- id: shared-pr-state-chips
+  title: 'PR 3: shared pr_state module + LOC/CI/conflict chips in plan dashboards'
+  branch: claude/shared-pr-state-chips
+  pull_request_number: 111
+  status: blocked
+  session: https://claude.ai/code/session_014KoJeaTUxyECZZpfWiVmvr
+  track: live-state
+  depends_on: []
+  notes: |-
+    One pull-request-state fetch/compute module - CI rollup, lines changed against base, mergeable
+    probe, session-link parse - shared by `stack.py` and the dashboard's own pull-request data fetching,
+    plus board-semantics chips on dashboard items and a headless static-HTML build entry point for the
+    Pages Action, with the Artifact path still working during the transition. `pr_state` also reads a
+    pull request's native stack object through REST, GraphQL being unusable from sessions, and renders a
+    stack chip when the pull request is a stack member; that addition is specified but not yet
+    implemented.
+
+    One old bug was fixed in the port and is worth not reintroducing: `merge-tree` exits 1 for both a
+    conflict and a missing reference, so the old probe reported a typo as a conflict. The port verifies
+    references first.
+
+    **Re-scoped 2026-08-20 by the bastler pivot.** This pull request no longer creates the tooling
+    package - `bastler-package` does, off `main` - and the dependency inverted: once that branch exists,
+    #111 rebases onto it and folds its `development_tooling` modules and test suite into `bastler` under
+    its naming, deleting the repository-root `sys.path` insert. What stays this item's own is the
+    feature half: the chips, the `pr_state` module itself, and `build_site.py`.
+
+    Its dependency on `stack-tooling-on-main` is merged and now lives in the `stack-tooling-install`
+    plan, so it is dropped from `depends_on`. The live dependency on `bastler-package` crosses a plan
+    boundary and is recorded as a blocker instead.
+  blockers:
+  - 'Cross-plan dependency, not representable in depends_on: this branch rebases onto bastler-package
+    (#185, bastler-package plan) and folds its modules into the package under bastler''s naming.'
+  - Conflicts against its base main as of the 2026-08-29 stacked-pr-maintenance pass, carrying the
+    needs-resolution label. That pass did not attempt a fresh merge, having already withheld it from
+    a previous one.
+- id: ready-to-promote-upstream-links
+  title: 'PR 5: ready-to-promote sidebar list + one-click upstream create-pull-request links'
+  branch: null
+  status: not_started
+  track: live-state
+  depends_on:
+  - shared-pr-state-chips
+  - sidebar-bug-fix-chips
+  notes: |-
+    A fifth sidebar group - "Ready to promote" - listing every item whose fork pull request is
+    open-and-ready, cleanly mergeable and based on the fork's default branch, each with a one-click link
+    opening the upstream compare-and-create page with the title and body prefilled and the fork pull
+    request linked from it. This is the Routine's phase-3 link building turned into a surface instead of
+    an emailed summary: the same compare URL, computed at dashboard build time, so it reaches the user
+    with no scheduled run - which is what the cutover requires of every deterministic duty.
+
+    Portability applies as everywhere else: the upstream is a new optional `plan.yaml` field, never a
+    hardcoded repository, and a plan without it renders no group and no links.
+
+    Decisions settled with the user at planning time: the link builder lands in the package next to
+    `pr_state`, so the scheduled Action can reuse it verbatim; the prefilled body is the fork pull
+    request's own description truncated to one paragraph plus a link back, matching the doctrine's
+    existing warning that a compare URL silently drops an over-long body; check state is a chip and
+    never excludes an item, since a red robotics job routinely has nothing to do with the pull request
+    under it; and an item leaves the list when the user applies the `in-review` label after clicking
+    Create, with `cram2-link-sent` left alone entirely, since it exists only to stop the Routine
+    re-emailing a link and a stateless recomputed list does not need it.
+
+    Requires three fields in `pr_data.json` that its dependency's entries do not yet carry - `base`,
+    `title` and `body` - plus the fetch document's minimum field set updated to match.
+
+    It depends on `sidebar-bug-fix-chips` for a concrete reason worth keeping: adding a fifth sidebar
+    group is one `next_step_group` call once that macro has landed, and a fifth copy of the markup if it
+    has not.

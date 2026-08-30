@@ -1,0 +1,601 @@
+schema_version: 1
+id: stack-maintenance
+title: 'The maintenance pass and the integration branch: running a stack of pull requests'
+description: 'What keeps a stack of pull requests moving without a person driving each step: a deterministic
+  executor that fast-forwards, restacks, promotes and reports; reparenting a child whose parent has
+  landed; reading upstream review threads from a fork; and a regenerated integration branch that answers
+  whether the in-flight branches actually coexist.'
+default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+tracking_issue: 102
+waves:
+- id: pass
+  name: The maintenance pass
+  description: The executor, what it decides for itself, and the version of itself it runs.
+- id: integration
+  name: The integration branch
+  description: A branch regenerated from upstream plus every reviewed tip, built to be worked from
+    rather than merged out of, and judged by real CI.
+tracks:
+- id: pass
+  name: Maintenance pass
+  wave: pass
+- id: integration
+  name: Integration branch
+  wave: integration
+items:
+- id: stack-maintenance-executor
+  title: 'Deterministic maintenance executor: board, fast-forward, restack, run-report'
+  branch: claude/plan-item-kickoff-workflow-koufa6
+  pull_request_number: 139
+  status: done
+  session: https://claude.ai/code/session_014E9nB1MUvm4jwgC2UTN5GT
+  track: pass
+  depends_on: []
+  notes: |-
+    Merged. Every fetch, merge, rebase and push in the workflow was performed by a session following
+    prose, and the board was hand-assembled from tool output - the same hand-assembled-input failure
+    class as the dropped merge timestamp. Verified rather than assumed: `grep "git push"` over
+    `stack.py`'s 1,600 lines returned nothing, so it was read-only derivation only.
+
+    **The credential probe came back the opposite way round from the fear it was written against.** On a
+    throwaway pull request, four calls minutes apart through the same token and proxy: label write 200,
+    comment 201, body-only description write 200, and - as a control on the same pull request - a
+    base-branch change 403. So the recorded 403 is a property of the *base field* specifically, not of
+    writes generally and not of the credential. Label writes, conflict comments and description writes
+    are all available to deterministic code; only the base change needs the MCP client. That table is
+    what the cutover's Action needs for its own credential.
+
+    Delivered as its own module with zero edits to `stack.py`, keeping that file's read-only contract.
+    Forcing is decided in exactly one place and only for the rebase strategy, and even then with a lease,
+    so a branch somebody else moved comes back push-rejected and untouched. Scope widened once the probe
+    landed: a conflict is now handled end to end - the branch is labelled, its owner gets a comment
+    naming the conflicting files, and the next pass reads the merge state to either withhold the branch
+    or clear the label and restack it, which closes the loop the label was invented for.
+
+    **Three defects only the live runs found, and they are one lesson three times: a write computed from
+    a snapshot a later step invalidates.** The pass exported a board at the start, `restack` then
+    labelled a conflicted branch live, and `promote` read neither back - so promotion promoted a branch
+    the same pass had just conflicted on and computed a whole-set label write from a stale list, silently
+    stripping the label. Both now read off the pull request record `promote` already fetches. Separately,
+    a `restack` that hit a conflict exited 0, as did a `run-report` whose fast-forward was refused: a
+    caller acting on the status alone would have read both as nothing outstanding, so every command now
+    derives its status from one mapping over the report. And CI caught an ordering defect a local run
+    could not, because a session environment exports a token and the wrong branch was never taken -
+    **a test that reads ambient state cannot assert about the state it is reading**, met twice in one
+    pull request.
+
+    **Review shaped this file more than any other.** The skill now leads with the single JSON report and
+    demotes the individual commands to a resume reference, which was only possible once the doctrine was
+    split away from the command descriptions into a "what this pass never does" section. Dispatch is
+    open/closed - each command a subclass discovered from `__subclasses__()`, so a command that exists but
+    is unreachable is not expressible - while the restack's steps stay *listed*, because their order is
+    the procedure and a mutation check proved it load-bearing. The command name and description went
+    through three rounds before landing: a plain class property silently loses abstractness, because
+    `ABCMeta` decides what is abstract with `getattr`, which calls the descriptor and gets a string back.
+
+    **One rule from the user that cut the skill in half**: a sentence describing what the code does has
+    nothing holding it true, so it is a future lie with a delay attached. Out went every description of
+    mechanics documented next to the code that does it; what is left is what the agent decides.
+
+    The formatter finding worth carrying: `format_docstrings.py` reported no change on the flagged file
+    while `docformatter` disagreed on 33 docstrings, because the script keeps black's content whenever
+    docformatter's result does not survive a second black pass - one blank line, after an attribute
+    docstring immediately preceding a decorated definition. The file was not unformatted through an
+    omission; the repository's own formatter had silently declined it.
+- id: landed-parent-detection
+  title: Decide a parent has landed from git ancestry, not board membership
+  branch: claude/stack-landed-parent-detection
+  pull_request_number: 117
+  status: done
+  session: https://claude.ai/code/session_01URVDhViP2TijuQAHAysUKL
+  track: pass
+  depends_on: []
+  notes: |-
+    Merged. The board carries only *open* fork pull requests, so a parent branch whose own pull request
+    was closed is absent from it, and both consumers read that absence as "no parent": the restack left
+    the child on the stale parent instead of reparenting onto the upstream base, and the promotion check
+    treated the missing parent as a root and reported the child promotable. Both now derive from a merged
+    predicate answered from git ancestry - the test the doctrine already names as the definition of
+    merged.
+
+    **Reversed mid-review, and the reversal is the point.** The first revision treated the stack-member
+    422 as report-and-continue, which optimised for the diff-size symptom rather than the goal: a child
+    left on a landed base cannot reach main and is closed outright when the base is deleted, so deferring
+    the reparent leaves the pull request broken while the pass re-reports it every run. The doctrine also
+    rules out fast-forwarding the landed base as a shortcut - it fixes the merge base only, and
+    desynchronises a stack's recorded base when that base is the stack's trunk.
+
+    Validated against the real 7-pull-request stack the bug was found on, not only its own tests: the
+    pre-fix planner reparents onto the stale branch exactly as described, and the fixed one emits `main`
+    while leaving the rest of the chain untouched. The live repair then took that pull request's diff from
+    268 files and +27,825 lines to 7 files and +1,318, keeping its number, labels and review thread.
+
+    Its unfinished half became `unfetched-parent-branches`: this made the decision ancestry-based but
+    never made the ref that decision reads present.
+- id: session-safe-pr-reparent
+  title: Reparent a base through the GitHub MCP server, not a raw PATCH
+  branch: claude/stack-landed-parent-detection
+  pull_request_number: 117
+  status: done
+  session: https://claude.ai/code/session_01WvRrTrtiznzAyvaoeCdNSq
+  track: pass
+  depends_on:
+  - landed-parent-detection
+  notes: |-
+    Merged, sharing its sibling's pull request. **Premise disproven and item re-scoped.** It was spun out
+    on the reading that changing any pull request's base 403s from a session unconditionally, and was to
+    replace every reparent with close-old and create-new. A direct probe showed the block is a property
+    of *one client*: the MCP `update_pull_request` tool changed the base successfully while a raw request
+    through the session git proxy 403'd on the same pull request minutes apart. The earlier attempt only
+    ever saw the 403 because the stacks endpoints have no MCP tool, so that session was already in the
+    other client and stayed there.
+
+    So: no close-and-create fallback, and no reparent-recovery script - the one previously recorded as
+    already scoped elsewhere was never actually written, verified rather than assumed, and with the base
+    change available there is nothing for it to work around. Not writing new mechanics also matches the
+    standing direction that GitHub maintains the mechanics and we maintain policy.
+
+    **Base changes are not a third member of the tag-push and branch-delete family.** Those two have no
+    alternative client at all and stay genuinely blocked; this one simply needed the other one.
+
+    It has no pull request of its own by design. It was opened stacked on its sibling and then folded
+    into it on the user's instruction that a pull request must be self-sufficient and correct: its only
+    purpose was correcting a section that pull request had just introduced, so leaving it stacked meant
+    the parent would sit in review carrying an instruction already known to 403.
+- id: upstream-review-reader
+  title: Read upstream review threads from a fork via a dispatched Action
+  branch: claude/automate-upstream-reviews-0fte9f
+  pull_request_number: 146
+  status: done
+  session: https://claude.ai/code/session_01MQavvbnknGrFiw6q7ccZaE
+  track: pass
+  depends_on: []
+  notes: |-
+    Merged. Review threads on the upstream reached a session only by the user reading them and retyping
+    them, making them the bottleneck on every review round.
+
+    **Measured rather than assumed, and the measurement is what decided the shape.** The upstream is
+    public and git-readable from a session, but its REST API and even its HTML are 403 for a session not
+    scoped to it, and GraphQL is refused for every repository including the fork's own. Thread
+    resolved-state exists *only* in GraphQL and the user required it, so no script running in a session
+    can produce this report.
+
+    The read therefore runs as a dispatched Action on the contributor's own fork, where `gh` and a token
+    are already present, and the session reads the job log over plain REST - verified, all three
+    endpoints answer 200. Queue time on this fork measured a median and maximum of 0s over the last 14
+    completed runs, so the round trip is the job itself. Dispatch-only, never scheduled. Portable by
+    construction: the upstream comes from configuration and the fork owner from the runner context, so no
+    repository is named anywhere.
+
+    This is also the shape the integration pipeline's own verdict read later reuses.
+- id: manifest-currency-first
+  title: Write the manifest and republish the dashboard before anything else, at every transition
+  branch: claude/plan-manifest-update-priority-ex2zst
+  pull_request_number: 151
+  status: blocked
+  session: https://claude.ai/code/session_01SgGzMvxTxaePhpkT28uuJV
+  track: pass
+  depends_on:
+  - stack-maintenance-executor
+  notes: |-
+    Every skill that can affect a plan must treat writing the manifest and republishing the dashboard as
+    its first priority, at every point that makes a recorded field stale. The bootstrap item inverted this
+    ordering for exactly one moment - a kickoff whose plan has just been approved; this generalizes it to
+    every transition and every bound skill. **The premise is recorded rather than asserted**: this work's
+    roadmap named the manifest "the least accurate source" three times in one week, and each time
+    everything needed to diagnose the item was already on the pull request.
+
+    **Two premises the item's own notes carried were disproved by reading the code.** The instruction to
+    reuse the existing sync script is wrong and following it would have been worse than not: that script
+    imports the renderer, which imports templating libraries at module level, so a hook cannot import it
+    at all - and it answers a different question, post-hoc and GitHub-side. The split is by what each can
+    *see*: the dashboard compares the manifest against GitHub after the fact, while `check` compares it
+    against local git before a push, which the dashboard can never see. And writing notes through the
+    existing setter silently corrupted the manifest, latent since the field members were added with no
+    writer: the block-styled pattern matched the key line while the renderer emitted a single line, so the
+    indented body was orphaned and YAML read it as a continuation, concatenating the old note onto the
+    new one. The result still validated, so nothing caught it.
+
+    **Reversed at the user's request**: the maintenance pass now writes and publishes rather than
+    reporting. One of the two recorded reasons for the asymmetry was simply wrong - the non-interactive
+    flag suppresses the question tool and nothing else, and the pass runs as a live session, so the
+    Artifact tool was reachable throughout; the reasoning was about the mode's *name* rather than what the
+    mode does. The second reason survives and bounds the change: which status a reparent or promotion
+    implies is a reading rather than a mechanical fact, so the pass writes only what it decided itself and
+    reports the rest. The blocker carries its owner, so a pass replaces and withdraws its own entries and
+    never a person's.
+
+    **A repair rule needs its own evidence, not a shape match.** A subcommand was built to rejoin words a
+    folding bug had broken; counting broken words per commit then showed eleven of the twelve predate that
+    code entirely - they are hand-wrapped prose, a session breaking a line at a hyphen. So the fix is
+    deterministic and at write time (a hyphen immediately before a hard-wrapped break is closed up; a
+    suspended hyphen keeps its space, because a person types those on one line), and the repair
+    subcommand was cut as a YAGNI smell whose stated justification was spent. Worth carrying: five words
+    had been fixed earlier with a blind regular expression and that only happened to be right - running
+    the same rule over the whole plan turned up seven more, one of which it would have corrupted.
+
+    `.claude/shared/` holds four standard-library-only modules both this branch and the executor needed.
+    **The git seam is the one extraction that was not mechanical**: the three copies' contracts are
+    deliberately opposite - one raises, `stack.py`'s answers nothing on failure, a third raises a domain
+    error - so a single function could not have served them. The executor's runner already had both
+    halves, so it was moved rather than redesigned. Its 152 tests passing unchanged is the evidence the
+    never-raises contract survived rather than being quietly tightened. Four production `sys.path` inserts
+    are the cost, the first in this repository, and the package extraction removes all four.
+
+    `classproperty` is deleted rather than shared, reversing the shape the executor adopted over three
+    rounds: both parsers are built from *instances*, and grep found no class-level reader in production,
+    so plain abstract properties give the same refusal at the same moment - which also avoided copying
+    that file into a second directory in answer to a complaint about duplication.
+
+    The wire-format guard is the opposite call from its sibling's, deliberately: the report's keys become
+    an enum but the tests keep their string literals, because two other programs parse that format.
+    Single-sourcing an external contract deletes the guard the duplicated literals were providing, and
+    whether to replace it with a dedicated test or keep the literals depends on who reads the contract.
+  blockers:
+  - Conflicts against its base main as of the 2026-08-29 stacked-pr-maintenance pass, carrying the
+    needs-resolution label and a routine comment. That pass did not attempt a fresh merge, having
+    already withheld it from a previous one.
+- id: pinned-stack-tooling
+  title: Pin the stack tooling for the length of a maintenance pass
+  branch: claude/stack-tooling-pinning-qf5r2m
+  pull_request_number: 158
+  status: in_progress
+  session: https://claude.ai/code/session_016DukdvsJzggwAAF3CkKaDZ
+  track: pass
+  depends_on: []
+  notes: |-
+    Found while running a maintenance pass, and fixed at the source rather than worked around. The skill
+    invoked the tooling by its in-tree path for a whole run, which assumes that path is the same file from
+    step 0 to the end - and it is not, since it is tracked content and a pass switches branch in the
+    checkout it runs from. The failure is either loud (a command validated in step 0 comes back as an
+    invalid choice, which is exactly what a rename produces) or quiet (the same command name answering
+    with semantics the skill does not describe). In the reported run it produced a string of spurious
+    failures partway through a restack, survived only because the operator hand-copied the tool to a
+    stable path.
+
+    `pin-tooling` copies the modules and configuration - not the board, which belongs to the pass that
+    exported it - to a digest-named directory outside every checkout. Digest naming makes pinning
+    idempotent per version and stops a later pass overwriting the copy an earlier one is still running;
+    the copy is staged beside its destination and moved whole, so a caller never invokes a half-written
+    one. Deterministic rather than a note to remember: a test asserts the skill runs nothing else from
+    the working tree.
+
+    **The review-level question - whether fast-forwarding and restacking everything first would solve
+    this instead - is circular**, and that is the answer rather than a preference: the restack is
+    performed by the tool whose version is in question, so uniformity arrives at the *end* of a pass and
+    the tool must be stable at the start. It also cannot reach the branches that differ most, which are
+    exactly the ones being withheld. And a branch whose own diff edits the tooling is meant to differ.
+
+    **An integration build found the pin incomplete, which is how a pinned tool fails worst.**
+    `pin_to` listed one directory's contents and copied them flat, complete only while the tool imports
+    nothing outside that directory. Built together with a branch that had moved shared modules into a
+    sibling directory, the pinned copy died on its first import - so the pin produced a program that
+    cannot start. Both halves had to change, and the second is easy to miss: the copy now carries every
+    sibling directory the tool's own modules name in a `sys.path` insertion, read out of the modules by an
+    `ast` walk rather than listed beside them, *and* it keeps the layout instead of flattening it - such an
+    insertion is relative to the module making it, so flattened the same line resolves outside the copy
+    and finds whatever happens to be there.
+
+    Using the real runner in the test exposed a weakness the raw invocation had hidden: the helper created
+    the branch and then wrote the other version, so the working tree changed because the test wrote it
+    rather than because version control moved it - a weaker reproduction than the bug. Both versions are
+    committed at install time now and the step is nothing but a branch switch.
+- id: promotion-summaries-and-table
+  title: Promote with a written summary, and report the links as a table rather than a notification
+  branch: claude/plan-item-kickoff-workflow-y38l38
+  pull_request_number: 162
+  status: in_progress
+  session: https://claude.ai/code/session_01RTWnbUYSauqy9peX7JFJUz
+  track: pass
+  depends_on:
+  - stack-maintenance-executor
+  - pinned-stack-tooling
+  notes: |-
+    The user's requirements for a pass's promotion phase: the compare-and-create link must be built by the
+    script rather than assembled by the session; the upstream pull request must open with a title and with
+    a body that always links back to the fork pull request and otherwise carries text the caller supplies;
+    the skill must always supply that text as a point-based summary; neither the skill nor a scheduled run
+    may send a notification; and every promoted branch must be reported as a table in the session the pass
+    ran in.
+
+    Three of those already have a home - the link builder owns the encoding, the title passes through, and
+    the "full detail" link back is already appended. **What is missing is the body itself.** It is derived
+    from the fork description's first paragraph verbatim, so the upstream reader gets whatever that
+    description happened to open with, and one opening with a heading, a badge or a link opens the upstream
+    pull request with that. Nobody has written a word for the upstream reader.
+
+    **The body cannot be derived, which is what makes this the one model-shaped step in an otherwise
+    mechanical pass**: the script owns the title, the fork link, the encoding, the length budget and the
+    table, and the session supplies only the bullets. Proposed interface, to settle at kickoff: the
+    commands read summaries from a file keyed by fork pull request number, and a promotable branch with no
+    entry is reported as awaiting one rather than promoted with a body nobody wrote. Two invocations is the
+    honest shape, since a summary cannot exist before the pass has decided a branch is promotable.
+
+    The table replaces a hand-assembly the skill asks for today, which is a rendering and therefore belongs
+    to the executor - one command emitting a markdown row per pending promotion. **Notifications off is the
+    reason the table has to exist**: the skill's finish section currently rests on "a scheduled run emails
+    its summary, so the summary *is* the delivery", and that premise goes.
+
+    Open and not to be invented: an already-registered scheduled run's notification setting has no field on
+    the update API, so whether it can be changed in place or needs re-registering has to be checked before
+    any document tells anyone how to do it.
+
+    The dependency on `pinned-stack-tooling` is a real ordering constraint rather than a courtesy: that
+    branch rewrites every command invocation in the skill and asserts the exact set still run from the
+    working tree, so a command added here must be pinned too.
+- id: integration-branch
+  title: 'Regenerated personal integration branch: build, check, resolve, report'
+  branch: claude/plan-item-kickoff-workflow-ixbvxl
+  pull_request_number: 154
+  status: in_progress
+  session: https://claude.ai/code/session_01Ra51SAHQKy7TVYRG2HRERW
+  track: integration
+  depends_on:
+  - manifest-currency-first
+  notes: |-
+    The constraint is upstream review throughput: pull requests are produced faster than the upstream
+    merges them, so shipped-but-unreviewed features are unusable in daily work, and two in-flight features
+    that conflict only discover it at the far end of the review queue. The answer is a regenerated
+    integration branch - the upstream base with every in-flight reviewed tip merged on top, rebuilt from
+    scratch on demand, existing to be built *from* rather than to be history. Nothing merges out of it.
+
+    **It gates nothing, and that is a decision rather than an omission.** Promotion asks whether a branch
+    is ready for upstream review, judged against upstream main; integration asks whether the branches
+    coexist. Gating promotion on a clean build would block A because B conflicts with it, with no
+    principled reason A is the one that waits.
+
+    **No CI gate on entry** either: it would deadlock against the restack, since restacking rewrites heads,
+    CI re-runs, every restacked branch reads pending, and a green filter yields a near-empty build. A
+    single run on the finished branch replaces it and is strictly more informative - it catches semantic
+    conflicts that per-branch CI structurally cannot, such as A renaming a method while B adds a caller,
+    both green, merging clean and breaking on import. Conflicts skip and continue rather than halting,
+    reversing the original stop-on-conflict spec, because a build that halts leaves nothing to work from.
+    The report names the conflicting *pair* rather than the casualty, since "B skipped" is not actionable.
+
+    **Only reviewed work is carried, and that is not the one-line filter it reads as.** A tip contains its
+    whole stack, so filtering tips alone would merge a ready pull request together with the drafts beneath
+    it - the reading of "only ready pull requests" that quietly does the opposite. Readiness is read down
+    the entire chain: a stack draft at its root is left out entire, and the branch merged for a stack is
+    the last one reached before its first draft.
+
+    **Judgement lives in a skill, not the script.** The script detects, attributes and skips;
+    `/integration-conflict-triage` judges each pair reconcile, stack or defer. It resolves too, but bounded
+    by *where the resolution lands* rather than by how confident it is - the artifact decides the risk. On
+    defer it resolves fully into the rerere cache, since nothing touches a feature branch and the build is
+    regenerated anyway, so a wrong answer costs one cache entry. On reconcile it proposes and does not
+    apply, because that is a real code change to a published pull request under review. On stack it
+    reports. **Asking is not driven by confidence**, which would make the skill a prompt generator whose
+    questions get rubber-stamped: uncertainty about *facts* is resolved by reading, uncertainty about
+    *intent* is asked.
+
+    **One hazard follows from a skill authoring resolutions rather than replaying a human's**: rerere
+    matches on the conflict preimage and replays automatically, so a textually matching but semantically
+    wrong resolution is reapplied unreviewed on every later build. A recorded resolution therefore carries
+    its provenance and the report distinguishes skill-authored replays from human ones.
+
+    **Two failure shapes git makes identical, told apart before the design was committed to.** A merge that
+    fails leaving no unmerged paths is not a conflict - unrelated histories, an unresolvable reference - and
+    a *replayed* resolution also fails leaving no unmerged paths, because the replay has already staged
+    them, distinguishable only by what git says on stderr. So the replay marker has to be read before the
+    unmerged-paths rule. Two later defects came from getting the neighbourhood of that rule wrong: reading
+    the marker before asking which paths were unmerged is right for a fully replayed merge and wrong for a
+    partially replayed one, since rerere replays per conflict rather than per merge; and resolving git's
+    common-directory answer against the process's directory rather than the runner's wrote a build's
+    fixtures over the real provenance manifest, observed rather than reasoned about.
+
+    **Two naming and basing constraints that are not cosmetic.** Builds are `integration-<timestamp>` with
+    a hyphen, because git stores refs as files, so a path-shaped name cannot exist while the plain branch
+    does - the obvious naming is the one git refuses. And `integration-conflict` must be a second blocking
+    label rather than a reuse of `needs-resolution`: the withholding step clears that one whenever GitHub
+    stops reporting a conflict, and a semantic break never makes a pull request conflicted, so reusing it
+    means the next pass strips it and the loop reopens.
+
+    **Basing, and the lesson it left.** The recorded "reparent this onto its parent branch" step was
+    attempted rather than restated, and both halves of the claim were wrong: the base change is not blocked
+    (the MCP client performs it), and the reparent was wrong to do, because the parent branch was 159
+    commits behind main, so basing on it swelled the diff from 45 files to 261. Reverted immediately.
+    **A note saying an operation is blocked is a claim with an expiry date** - this one had two at once, the
+    client changed and the target moved, and it had been carried forward verbatim through two entries.
+
+    **Six review rounds, and the thread worth carrying is the one about a contract test.** It was defended
+    across five rounds and deleted in the sixth, and both were right at the time. For four rounds the
+    objection was answered on its own terms while the test asserted the enum against a copy of itself;
+    fixing that in round five made the real question askable - is one deliberate line per breaking change
+    worth it when no reader executes the contract - and that answer was the user's to give. Two general
+    rules came out of it: **a test that pins a contract must read the artifact the contract is about**, and
+    **a reviewer returning to the same line is evidence the answer has not landed, not that the question has
+    been asked already.** The wire format is now deliberately unguarded, recorded on the pull request rather
+    than quietly dropped; the natural place to close it is a consumer that actually runs.
+
+    Two smaller general findings. **A mechanical rename across a file reaches identifiers inside names it
+    was never meant to touch**, and only reading the names back catches it. And **a helper whose only
+    content is a type conversion is a docstring explaining a surprise** - two helpers were deleted once the
+    single defaulted argument moved to the call site.
+
+    Its recorded dependency was corrected once already, from the executor to `manifest-currency-first`,
+    after the chain became linear; the executor stays a dependency transitively.
+- id: integration-branch-ci-verdict
+  title: Move the integration branch's verdict to CI, with a stable branch and a targeted job
+  branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
+  pull_request_number: 211
+  status: in_progress
+  session: https://claude.ai/code/session_017dDTDzd6185o65JFBuFiLm
+  track: integration
+  depends_on:
+  - integration-branch
+  notes: |-
+    Part D of `integration-branch`'s review round: the verdict moves from a local test run to real CI.
+    Folded back onto that item's branch after being split out, so it has no pull request of its own - the
+    scope test inverted at the fold, because it had first been run against *planned* content none of which
+    had been written, the same expiry a basing decision has.
+
+    **One measured fact shapes the whole design**: `ci.yml` triggers on push to `main` and on
+    `pull_request` and nothing else, so a pushed build collects no checks at all. That is what makes a
+    candidate pull request the only shape that reaches a verdict rather than one option among several.
+    The candidate is never merged - a build is regenerated from scratch, so it shares no history with the
+    branch it replaces and merging would give that branch a history the next build cannot regenerate.
+    Green force-updates the pointer onto the build and closes the candidate unmerged; red closes it naming
+    the failing checks; unfinished does nothing and says so with its own status.
+
+    **Two kickoff conclusions were corrected by measurement.** A marked-only job cannot be the build's
+    verdict, because with no matching tests pytest exits 5 - so a healthy build's marked job is empty and
+    says nothing; the marker keeps its place aimed at whether a recorded break is *fixed*, which is the
+    automatic clearing condition `integration-conflict` shipped without. And nothing that opens the
+    candidate may use the default token, since GitHub creates no workflow run from an event it triggered -
+    a fine-grained token is a required setup step, not a hardening. One trap found while probing it: the
+    checkout action persists the default token as an http header that overrides credentials in a push URL,
+    so the token has to be handed to the checkout rather than to the push.
+
+    **Six defects found after the pipeline had published zero builds, each measured rather than guessed.**
+    The rebuild's own check was judging branches, because a rebuild triggered by a branch leaving draft
+    attaches its own check to that branch's head, and the red-tip exclusion then left that branch out of
+    the build its flip had asked for - the pipeline's check names are read off the workflow files now, and
+    holding them to being shared with no other workflow is what found a probe job colliding with `ci.yml`'s
+    names. The `pull_request` arm could not work at all, because it correctly pins the checkout to the
+    default branch and that branch is a *build output*, so it always lags whatever is in flight; a
+    too-old pipeline is an answer now rather than a usage error. The warm-up was one to two orders of
+    magnitude short and no constant fixes it - measured queue delays of 19 minutes and 2h47m - so the
+    verdict moved off the run that opens the candidate entirely: a rebuild settles whatever an earlier run
+    left, then assembles the next. The maintenance pass was adopting candidates, which is how the pointer
+    branch would accumulate history across rebuilds; the exclusion moved to the one place both readers
+    derive their work from. And what passed is remembered now, keyed on a build's git *tree* - because
+    re-assembling the same branches over the same base gives a new commit every time and the same tree
+    every time - as one git reference each, which needs nothing created or merged, cannot lose a
+    concurrent write, and carries its own age so pruning needs no object fetch. Only passes are recorded,
+    deliberately: a red is cleared by re-running the same commit.
+
+    **Selection learned three things, each from a build going wrong.** Blocking labels: the stack was read
+    *before* the restack ran and built from the same object, so labels that pass had just written were
+    invisible - the same snapshot-invalidated-by-a-later-step shape as the promotion incident. A branch's
+    own checks: a build was guaranteed red whenever any carried tip was red alone, so a finished-badly tip
+    and anything standing on it is left out, named apart from blocked because what lets it back in is its
+    checks going green rather than a label coming off. This does not reopen the no-CI-gate decision, whose
+    reasoning still holds: requiring *green* empties the build after every restack, while excluding a
+    *known* failure has no such deadlock and is self-limiting, since a restacked branch reads running and
+    is carried.
+
+    The targeted job's first real run failed for a reason that follows from its own design: collecting
+    from the repository root loads every `conftest.py`, including the robotics stack's, so a runner
+    carrying the tooling dependencies alone died during collection before reaching a reproduction. It
+    collects the four directories the tooling CI job names, read off that job rather than listed a second
+    time, since what makes the two trees the same is the install.
+
+    Also settled: the pipeline runs from the default branch rather than waiting for `main`, because a
+    schedule registers from the *default* branch and that branch is main plus every carried tip - the
+    proof was already sitting there. And this branch stays out of draft deliberately, overriding the
+    re-draft convention, because a draft is excluded from every build.
+
+    Deliberately kept rather than removed: the local test run. It caught a real cross-branch break hours
+    before any candidate existed, and it answers before a build is pushed rather than after a matrix has
+    run. What the CI verdict replaces is the *publishing* decision.
+- id: red-candidate-localisation
+  title: Localise a red candidate to the branches that caused it
+  branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
+  pull_request_number: 211
+  status: in_progress
+  session: https://claude.ai/code/session_0138w5mqzbkyMPtotF7PD59Z
+  track: integration
+  depends_on:
+  - integration-branch-ci-verdict
+  notes: |-
+    What happens when the candidate's verdict comes back red for a reason the local suite cannot see. The
+    local localisation re-assembles the tips and re-runs the configured tooling suite, so it reaches a
+    break between two branches whose tooling code disagrees and reaches nothing in the docker matrix.
+
+    **The gap is narrower than it was.** A candidate can go red for two reasons: a tip whose checks had not
+    finished when the build was assembled and have since failed, which the next rebuild leaves out by
+    itself; or a genuine break only the matrix sees, where two branches each pass their own run, merge
+    cleanly, and fail a matrix job together. Only the second needs this item, and only the second is a
+    break in the sense the workflow means.
+
+    Localising it means re-running the matrix rather than a suite: push each prefix of the merge order as
+    its own branch, dispatch a run for each, and read the conclusions - against roughly twenty minutes a
+    run and sixteen jobs apiece. The waiting, the concurrency, the credential and what a partial answer
+    means are all different from the local path. **Measure the cheaper variant first**: re-run only the
+    failing job per prefix, which the per-library job names make expressible.
+
+    It does not replace the local localisation, which answers before a build is pushed.
+
+    **Review turned the pipeline from YAML into code, and the reason is the one that matters.** Every
+    decision the rebuild block made was a decision about an exit status, and written in a job's `run:`
+    those were loops and exit-code literals nothing could run outside a runner - so there was no way to be
+    wrong about an exit code and find out before a scheduled run did the wrong thing silently. The workflow
+    dropped 223 lines to about 107 and calls one command. Four guards that had asserted the shape of the
+    shell were replaced by two stronger ones: every subcommand a rebuild names checked against the live
+    registry, and the keys the steps hand each other held equal across the two enums that write and read
+    them.
+
+    A workflow is parsed once into named things now, so no reader indexes into a mapping under keys it
+    spells itself - and writing that caught the hazard it exists to prevent: **a trigger block is not
+    under `"on"`**, because YAML reads a bare `on` key as the boolean, so triggers live under `True` and a
+    reader that forgets concludes the workflow responds to nothing. Similarly, the matrix's libraries are
+    derived from the matrix job rather than enumerated, because an enum matching the workflow and held by
+    nothing would answer a new library's failures as naming no library at all - silent, and in the
+    direction that loses a real break.
+
+    **One collision the round uncovered, which a union type had been hiding**: two push methods across a
+    class boundary were the same git command under two names with incompatible signatures, and nothing had
+    passed the new type down that path yet. There is one push now, on the runner that runs git, taking the
+    object that already decides forcing.
+
+    **One defect the tests could not have caught by reading, and did not.** A conditional written as a
+    folded scalar whose continuation lines were indented further than its first is kept verbatim by YAML,
+    so it parsed cleanly into a string with newlines inside an expression, for GitHub to reject at run
+    time - while the assertion about it passed throughout. Found by printing the parsed value.
+
+    **And one shape the pipeline got wrong twice in the same place**: settling closed the candidate on any
+    verdict that was not "running", and "absent" is what a candidate opened two seconds ago looks like,
+    before GitHub has created its run. The first reading closed the pull request, no run was ever created,
+    and every later reading found the same absence. Both readings come from one predicate now, so the close
+    and the exit status cannot disagree about which verdicts are answers.
+
+    The git-command-vocabulary thread is answered with measurements and left open, because the question is
+    owned elsewhere: no git command name is spelled twice for the same operation, so an enum would be 16
+    members with one reader each, and the class-per-command hierarchy is what the method signature already
+    is. It goes to `bastler-notes-core-python`, which owns the git seam by name and has four callers
+    waiting - deciding the ergonomics before the raise-versus-answer-nothing question is settled means
+    deciding them twice.
+- id: per-plan-integration-branches
+  title: One integration branch per plan, and a complete branch built from their last green builds
+  branch: null
+  status: deferred
+  track: integration
+  depends_on:
+  - integration-branch-ci-verdict
+  notes: |-
+    Proposed by the user and recorded without being built: one integration branch per plan, plus a complete
+    branch merging them. Everything below is settled by measurement; **the deferral is the only part that
+    is a judgement.**
+
+    The scope check was run rather than eyeballed, and the answer is that this is a new item: strip the
+    edits to the files its siblings introduce and what remains is nine build branches, nine candidate
+    cycles, a complete branch with a build rule of its own and per-plan cleanup - substantial and standing
+    alone by a wide margin.
+
+    **The partition is real**: 9 plans, 125 indexed branches, 63 open pull requests; every sampled
+    open-pull-request head has a plan, and stacks stay inside one, including a chain that looks
+    cross-domain and is filed entirely under one plan.
+
+    **It saves no CI on its own.** The complete branch's tree changes whenever any sub-build changes, so
+    one branch moving still forces a full check at the top: one matrix run today becomes two. The saving
+    people expect from it is the pass record, which needs no new branches at all.
+
+    **The complete check cannot be waived.** Six of the nine plans all edit the shared library, and the
+    cross-library job exists because these packages import each other. Only the tooling-only plan is
+    separable.
+
+    What it does buy is one free level of attribution - a red sub-build is an intra-plan break,
+    all-green-sub-builds-but-red-complete is a cross-plan one, which halves the localisation search - and
+    graceful degradation. **But only in a form other than the one proposed**: merging current tips leaves
+    one red area blocking everyone, so the complete branch is built from each plan's *last known-green
+    sub-build*, which composes with the pass record rather than needing a mechanism of its own.
+
+    Per-plan branches do not change what a session clones: the fork has one default branch, so they are
+    opt-in checkouts.
+
+    Deferred for sequencing rather than doubt. The pipeline has published very little; nine sub-branches,
+    nine candidates per cycle, nine times the stale-branch cleanup and the adoption defect multiplied by
+    nine is how you end up unable to tell which layer is broken. Revisit once green cycles have run and the
+    real cost is known. **Reachable before then without any of it**: a `--plan` filter carries one plan's
+    tips through the ordinary build and candidate, which answers "does this plan hold together on its own"
+    - most of what the topology was wanted for - with no extra branch and nothing that can publish.
