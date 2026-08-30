@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import List, Type
+from typing_extensions import Any, List, Tuple, Type
 
 from krrood.exceptions import DataclassException
 
@@ -100,3 +100,55 @@ class UnsupportedInferenceTarget(DataclassException):
 
     def suggest_correction(self) -> str:
         return "This will be supported by a future MultiClassRDR."
+
+
+# %% corner-case serialization
+
+
+@dataclass
+class CaseNotSerializableError(DataclassException):
+    """Raised when a :class:`~krrood.entity_query_language.rdr.corner_case.CaseSerializer`
+    cannot emit constructor source for a value."""
+
+    value: Any
+    """The field value that could not be serialized."""
+
+    supported_types: Tuple[Type, ...]
+    """The scalar types the serializer does support (``None`` and nested dataclasses are
+    always supported in addition to these, so are not part of this list)."""
+
+    def error_message(self) -> str:
+        type_names = ", ".join(t.__name__ for t in self.supported_types)
+        return (
+            f"Cannot serialize value of type {type(self.value).__name__!r} to Python "
+            f"constructor source. Only None, {type_names} members, and nested "
+            "dataclasses are supported."
+        )
+
+    def suggest_correction(self) -> str:
+        return "For other types, implement a custom CaseSerializer."
+
+
+@dataclass
+class UnsupportedNodeForSerialization(DataclassException):
+    """Raised when the rule-tree DAG contains a node the serializer cannot emit."""
+
+    node: Any
+    """The node (or leaf value) the serializer does not know how to emit as Python source."""
+
+    def error_message(self) -> str:
+        return f"Cannot serialize node of type {type(self.node).__name__!r} to Python source."
+
+    def suggest_correction(self) -> str:
+        return ""
+
+
+@dataclass
+class EmptyRuleTreeError(DataclassException):
+    """Raised when serializing an RDR that has no rules yet."""
+
+    def error_message(self) -> str:
+        return "Cannot serialize an empty RDR (no rules have been added)."
+
+    def suggest_correction(self) -> str:
+        return "Fit at least one rule before saving."
