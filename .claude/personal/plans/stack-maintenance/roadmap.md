@@ -89,6 +89,18 @@ and re-applies its delta.
   broken words happened to be right; run over the whole plan it turned up seven more, one of which it
   would have corrupted.
 
+- **A branch a pipeline creates needs a take-down rule of its own, not one hanging off the happy
+  path.** Publishing dropped a build's branch, and nothing else did - so every other ending left
+  one, four times a day, and eight had gathered before anyone counted. The rule that works is what
+  *keeps* a thing rather than what drops it: a build branch is kept while a pull request is still
+  open against it, which covers both the candidate judging it and a filtered build somebody is
+  working from, and it needs no knowledge of how the run that made it ended.
+- **Introducing a model does not retire the hand-rolled readers it replaces**, because nothing
+  breaks when it lands. `workflow_document.py` was written to stop `integration-refresh.yml` being
+  walked as nested string keys, and a whole section of `test_integration_verdict.py` went on doing
+  exactly that through the round that introduced it and the two after. Only searching for the old
+  shape finds them.
+
 ## The integration branch's design, stated once
 
 - **It gates nothing.** Promotion asks whether a branch is ready for upstream review; integration asks

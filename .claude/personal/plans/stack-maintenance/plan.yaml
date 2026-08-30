@@ -433,90 +433,153 @@ items:
   depends_on:
   - integration-branch
   blockers:
-  - 'An unanswered review round on #211, submitted 2026-08-30T09:48Z against this item''s own head commit
-    `8227ef57` ("Judge a build in the run after the one that opened it, and remember what passed"). Six
-    threads, none replied to, none resolved; CI on that head is green across all 25 checks and the pull
-    request is `clean`, so nothing else holds it. Four are one complaint - hard-coded string keys and dict
-    literals where a class already knows the shape: `test_integration_plans.py` (the `BoardExport.from_api_records`
-    record and `opened["base"]`), `test_integration_verdict.py` (`an_open_pull_request`, which spells `number`/`head`/`ref`/`sha`/`base`
-    past the `PullRequestField` enum that reads them), `test_integration_refresh_workflow.py` (the shell
-    expansion pattern `${PLANS:+--plan ` retyped in the assertion), and `integration_pipeline.py` (the `"shared"`
-    in its `sys.path` insertion, which 18 files repeat). The fifth reports a real defect and asks a design
-    question: eight `integration-<timestamp>` build branches are still on the fork, never taken down - only
-    probe branches are deleted - and a first-time build needs two scheduled runs to publish, which the reviewer
-    calls slow. The sixth asks for an integrate-selected-plans control on the plan dashboard index, which
-    is not this item''s.
+  - 'Two threads of the 2026-08-30 round are answered and deliberately left open for the author, and neither
+    is work this item can do alone. The repeated `"shared"` is the `sys.path` insertion in 18 files across
+    three directories; a constant cannot live where the insertion exists to reach, and `bastler-package` (#185)
+    removes all 18 by name, so a fix here is one to undo. And the rebuild cadence: a first-time build is judged
+    by a later run, up to six hours away, and closing that properly means a `workflow_run` trigger on `ci.yml`
+    completing, which adds a trigger to the workflow and so is a scope call rather than a fix.'
+  notes: 'Part D of `integration-branch`''s review round: the verdict moves from a local test run to real CI.
 
+    Folded back onto that item''s branch after being split out, so it has no pull request of its own - the
 
-    Also outstanding on the same pull request from the round before: the reviewer granted "yes also put
-    the ls-tree on the runner" on 2026-08-29T21:20Z, and `localisation_fixtures.py:329` still calls `run_git("ls-tree",
-    ...)` directly. That thread belongs to `red-candidate-localisation`, but it sits open on the shared
-    branch.'
-  notes: |-
-    Part D of `integration-branch`'s review round: the verdict moves from a local test run to real CI.
-    Folded back onto that item's branch after being split out, so it has no pull request of its own - the
     scope test inverted at the fold, because it had first been run against *planned* content none of which
+
     had been written, the same expiry a basing decision has.
 
+
     **One measured fact shapes the whole design**: `ci.yml` triggers on push to `main` and on
+
     `pull_request` and nothing else, so a pushed build collects no checks at all. That is what makes a
+
     candidate pull request the only shape that reaches a verdict rather than one option among several.
+
     The candidate is never merged - a build is regenerated from scratch, so it shares no history with the
+
     branch it replaces and merging would give that branch a history the next build cannot regenerate.
+
     Green force-updates the pointer onto the build and closes the candidate unmerged; red closes it naming
+
     the failing checks; unfinished does nothing and says so with its own status.
 
-    **Two kickoff conclusions were corrected by measurement.** A marked-only job cannot be the build's
-    verdict, because with no matching tests pytest exits 5 - so a healthy build's marked job is empty and
+
+    **Two kickoff conclusions were corrected by measurement.** A marked-only job cannot be the build''s
+
+    verdict, because with no matching tests pytest exits 5 - so a healthy build''s marked job is empty and
+
     says nothing; the marker keeps its place aimed at whether a recorded break is *fixed*, which is the
+
     automatic clearing condition `integration-conflict` shipped without. And nothing that opens the
+
     candidate may use the default token, since GitHub creates no workflow run from an event it triggered -
+
     a fine-grained token is a required setup step, not a hardening. One trap found while probing it: the
+
     checkout action persists the default token as an http header that overrides credentials in a push URL,
+
     so the token has to be handed to the checkout rather than to the push.
 
+
     **Six defects found after the pipeline had published zero builds, each measured rather than guessed.**
-    The rebuild's own check was judging branches, because a rebuild triggered by a branch leaving draft
-    attaches its own check to that branch's head, and the red-tip exclusion then left that branch out of
-    the build its flip had asked for - the pipeline's check names are read off the workflow files now, and
-    holding them to being shared with no other workflow is what found a probe job colliding with `ci.yml`'s
+
+    The rebuild''s own check was judging branches, because a rebuild triggered by a branch leaving draft
+
+    attaches its own check to that branch''s head, and the red-tip exclusion then left that branch out of
+
+    the build its flip had asked for - the pipeline''s check names are read off the workflow files now, and
+
+    holding them to being shared with no other workflow is what found a probe job colliding with `ci.yml`''s
+
     names. The `pull_request` arm could not work at all, because it correctly pins the checkout to the
+
     default branch and that branch is a *build output*, so it always lags whatever is in flight; a
+
     too-old pipeline is an answer now rather than a usage error. The warm-up was one to two orders of
+
     magnitude short and no constant fixes it - measured queue delays of 19 minutes and 2h47m - so the
+
     verdict moved off the run that opens the candidate entirely: a rebuild settles whatever an earlier run
+
     left, then assembles the next. The maintenance pass was adopting candidates, which is how the pointer
+
     branch would accumulate history across rebuilds; the exclusion moved to the one place both readers
-    derive their work from. And what passed is remembered now, keyed on a build's git *tree* - because
+
+    derive their work from. And what passed is remembered now, keyed on a build''s git *tree* - because
+
     re-assembling the same branches over the same base gives a new commit every time and the same tree
+
     every time - as one git reference each, which needs nothing created or merged, cannot lose a
+
     concurrent write, and carries its own age so pruning needs no object fetch. Only passes are recorded,
+
     deliberately: a red is cleared by re-running the same commit.
 
+
     **Selection learned three things, each from a build going wrong.** Blocking labels: the stack was read
+
     *before* the restack ran and built from the same object, so labels that pass had just written were
-    invisible - the same snapshot-invalidated-by-a-later-step shape as the promotion incident. A branch's
+
+    invisible - the same snapshot-invalidated-by-a-later-step shape as the promotion incident. A branch''s
+
     own checks: a build was guaranteed red whenever any carried tip was red alone, so a finished-badly tip
+
     and anything standing on it is left out, named apart from blocked because what lets it back in is its
+
     checks going green rather than a label coming off. This does not reopen the no-CI-gate decision, whose
+
     reasoning still holds: requiring *green* empties the build after every restack, while excluding a
+
     *known* failure has no such deadlock and is self-limiting, since a restacked branch reads running and
+
     is carried.
 
-    The targeted job's first real run failed for a reason that follows from its own design: collecting
-    from the repository root loads every `conftest.py`, including the robotics stack's, so a runner
+
+    The targeted job''s first real run failed for a reason that follows from its own design: collecting
+
+    from the repository root loads every `conftest.py`, including the robotics stack''s, so a runner
+
     carrying the tooling dependencies alone died during collection before reaching a reproduction. It
+
     collects the four directories the tooling CI job names, read off that job rather than listed a second
+
     time, since what makes the two trees the same is the install.
 
+
     Also settled: the pipeline runs from the default branch rather than waiting for `main`, because a
+
     schedule registers from the *default* branch and that branch is main plus every carried tip - the
+
     proof was already sitting there. And this branch stays out of draft deliberately, overriding the
+
     re-draft convention, because a draft is excluded from every build.
 
+
     Deliberately kept rather than removed: the local test run. It caught a real cross-branch break hours
+
     before any candidate existed, and it answers before a build is pushed rather than after a matrix has
+
     run. What the CI verdict replaces is the *publishing* decision.
+
+
+    **The review round of 2026-08-30 found the one thing the design had no rule for: a branch the pipeline
+    creates and nothing takes down.** `publish()` dropped a build''s branch because the pointer then held the
+    same commit, and that was the *only* path that did - so a candidate closed red, one nothing ever reported
+    a check against, and a build superseded before it was judged each left a branch for good, at four rebuilds
+    a day. Eight had gathered on the fork; seven had a closed candidate. The rule now is what keeps a build
+    rather than what drops it: a pull request still open against it, which covers the candidate judging it
+    and a filtered `--plan` build somebody is working from, and it runs before a rebuild reaches anything it
+    can stop on, since a run that stopped early is exactly the kind that left one. It narrows the earlier decision
+    to keep a red build''s branch for whoever reads its checks rather than reversing it - that branch now lasts
+    until the next rebuild instead of forever.
+
+
+    **One complaint, made about four lines, reached a fifth nobody had looked at.** Asking for structure over
+    hard-coded keys turned up `GitHubRepository.open_pull_request` sending `{"title", "head", "base", "body"}`
+    and reading `["number"]` back straight past the enum that reads them, with no test over the payload at
+    all - found only because the *test* records built beside it were being routed through that enum. And a
+    whole section of `test_integration_verdict.py` was still walking `integration-refresh.yml` by hand, having
+    survived the round that introduced `workflow_document.py` intact: a model does not retire the hand-rolled
+    readers it replaces, because nothing breaks when it lands.'
 - id: red-candidate-localisation
   title: Localise a red candidate to the branches that caused it
   branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
@@ -591,40 +654,80 @@ items:
   track: integration
   depends_on:
   - integration-branch-ci-verdict
-  notes: |-
-    Proposed by the user and recorded without being built: one integration branch per plan, plus a complete
+  notes: 'Proposed by the user and recorded without being built: one integration branch per plan, plus a complete
+
     branch merging them. Everything below is settled by measurement; **the deferral is the only part that
+
     is a judgement.**
 
+
     The scope check was run rather than eyeballed, and the answer is that this is a new item: strip the
+
     edits to the files its siblings introduce and what remains is nine build branches, nine candidate
+
     cycles, a complete branch with a build rule of its own and per-plan cleanup - substantial and standing
+
     alone by a wide margin.
 
+
     **The partition is real**: 9 plans, 125 indexed branches, 63 open pull requests; every sampled
+
     open-pull-request head has a plan, and stacks stay inside one, including a chain that looks
+
     cross-domain and is filed entirely under one plan.
 
-    **It saves no CI on its own.** The complete branch's tree changes whenever any sub-build changes, so
+
+    **It saves no CI on its own.** The complete branch''s tree changes whenever any sub-build changes, so
+
     one branch moving still forces a full check at the top: one matrix run today becomes two. The saving
+
     people expect from it is the pass record, which needs no new branches at all.
 
+
     **The complete check cannot be waived.** Six of the nine plans all edit the shared library, and the
+
     cross-library job exists because these packages import each other. Only the tooling-only plan is
+
     separable.
 
+
     What it does buy is one free level of attribution - a red sub-build is an intra-plan break,
+
     all-green-sub-builds-but-red-complete is a cross-plan one, which halves the localisation search - and
+
     graceful degradation. **But only in a form other than the one proposed**: merging current tips leaves
-    one red area blocking everyone, so the complete branch is built from each plan's *last known-green
+
+    one red area blocking everyone, so the complete branch is built from each plan''s *last known-green
+
     sub-build*, which composes with the pass record rather than needing a mechanism of its own.
 
+
     Per-plan branches do not change what a session clones: the fork has one default branch, so they are
+
     opt-in checkouts.
 
+
     Deferred for sequencing rather than doubt. The pipeline has published very little; nine sub-branches,
+
     nine candidates per cycle, nine times the stale-branch cleanup and the adoption defect multiplied by
+
     nine is how you end up unable to tell which layer is broken. Revisit once green cycles have run and the
-    real cost is known. **Reachable before then without any of it**: a `--plan` filter carries one plan's
+
+    real cost is known. **Reachable before then without any of it**: a `--plan` filter carries one plan''s
+
     tips through the ordinary build and candidate, which answers "does this plan hold together on its own"
+
     - most of what the topology was wanted for - with no extra branch and nothing that can publish.
+
+
+    **Asked for again on 2026-08-30, in four parts, and only one of them is this item.** The request was a
+    control on the plan-dashboard index: tick the plans to integrate, press integrate, and get a copied command
+    that runs integration over them, labels the conflicts and leaves a dedicated branch to work from - plus
+    a choice of what the build is based on, from a dropdown of the author''s own branches. Running over chosen
+    plans and labelling the conflicts already exist, as `--plan` and the `plans` dispatch input that `integration-branch-ci-verdict`
+    shipped, and `integration-conflict`. The dashboard control is `plan-dashboards`'' work and has a sibling
+    in flight there, `dashboard-refresh-button` (#206), which copies the command that rebuilds - this is the
+    same shape one level up. Choosing the base is new to both: it is `configuration.upstream_base` today, read
+    from `stack.toml`, and nothing takes one per run. The dedicated per-plan branch is this item, and the deferral
+    still holds for the reason it was written - the pipeline has published nothing, so nine sub-branches and
+    nine candidate cycles would multiply a defect nobody has seen a clean cycle of yet.'
