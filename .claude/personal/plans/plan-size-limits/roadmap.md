@@ -183,3 +183,110 @@ Unrelated to this item: `#207`'s `giskardpy` check is red on the current head
 (`test_collision_matrix_tool.py::test_script_launch_and_kill`, a
 `subprocess.TimeoutExpired`), a ROS2 integration test this diff does not touch.
 Left alone rather than re-run or investigated further here.
+
+## Kickoff 2026-08-30: `split-workflow-unification` — the seams, measured
+
+Session: https://claude.ai/code/session_019636yuByUTH6aFiEQdDztc
+
+`size-budget-and-report` (#207) is open and non-draft, so this item's only dependency is
+ready to build on.
+
+### Measured, not assumed: the tracks alone do not get under budget
+
+The item's notes say the five existing tracks "already name the natural seams". Measured
+on the live manifest today (59 items, 5,129 manifest + 11,788 roadmap = 16,917 lines), a
+straight by-track split leaves two of the five plans still over:
+
+| track | items | manifest | roadmap | total | verdict |
+|---|---|---|---|---|---|
+| personal-data | 16 | 798 | 3,531 | 4,329 | over both halves |
+| stack-tooling | 18 | 2,598 | 5,735 | 8,333 | over both halves |
+| dashboards | 12 | 533 | 1,246 | 1,779 | within |
+| bastler | 10 | 491 | 669 | 1,160 | within |
+| cutover | 3 | 138 | 134 | 272 | within |
+
+Roadmap lines are attributed by counting each `## Update` section's mentions of item ids
+and pull request numbers. `stack-tooling` is over the line budget on its manifest alone,
+before a word of roadmap: one item, `integration-branch`, carries 585 manifest lines.
+
+So the split is a partition **and** a compression, and both halves need a stated rule.
+
+### Seven plans, seamed on subject
+
+`stack-tooling` and `personal-data` each split in two along a seam their own items already
+draw; the other three tracks become plans unchanged.
+
+1. `stack-tooling-install` (7) — the tooling on main and the skills that install it:
+   `setup-personal-notes-pr101`, `stack-tooling-on-main`, `setup-stacked-prs-skill`,
+   `setup-personal-notes-script`, `native-stacks-prototype`, `unfetched-parent-branches`,
+   `session-branch-base`.
+2. `stack-maintenance` (11) — the pass that runs over a live stack: the executor,
+   reparenting, upstream review reading, manifest currency, promotion, and the whole
+   integration-branch family.
+3. `plan-tracking-skills` (6) — `add-plan-item-skill`, `plan-item-bootstrap`,
+   `plan-item-execution-modes`, `plan-item-bootstrap-yaml-indent`, `plan-item-edit-guard`,
+   `report-document-naming`.
+4. `session-notes-infrastructure` (10) — the session-start hook, notes, git identity,
+   settings sync and the conventions that ride in them.
+5. `plan-dashboards` (12) — the `dashboards` track unchanged.
+6. `bastler-package` (10) — the `bastler` track unchanged.
+7. `workflow-cutover` (3) — the `cutover` track unchanged.
+
+The seams were chosen to keep live dependency edges inside one plan, not by subject alone:
+moving `pinned-stack-tooling` to `stack-maintenance` (which is what it is — the tool a
+maintenance pass runs) is what removes the last live edge crossing the stack-tooling seam.
+
+### `depends_on` cannot cross a plan, so five edges dissolve and three demote
+
+`build_dashboard.validate_plan` raises `UnknownDependency` for any `depends_on` entry that
+names no item in the same manifest, so the split cannot preserve a cross-plan edge. Nine
+edges cross a track today. Five name items that are already `done` — a satisfied
+dependency carries no information the dashboard acts on, so those are dropped and stated
+in the depending item's `notes` instead.
+
+Three name live items and cannot be kept without merging plans that would then be over
+budget again:
+
+- `shared-pr-state-chips` → `bastler-package`
+- `bastler-github-api-unification` → `setup-personal-notes-script`
+- `bastler-github-api-unification` → `shared-pr-state-chips`
+
+These become `blockers` entries naming the other plan and item. The cost is real and worth
+recording: those three items lose their dependency chips and their automatic readiness
+computation, and keep only the free-text blocker a human reads. A cross-plan reference in
+the schema (`<plan-id>:<item-id>`) would restore it, and is code rather than data — a
+candidate item for whichever plan ends up owning the dashboard, not for this one.
+
+### The compression rule
+
+Splitting alone leaves `stack-tooling`'s successors far over, so each successor roadmap is
+rewritten rather than sliced:
+
+- **Keep** what binds future work: the plan's "why", the target architecture, the numbered
+  design decisions, standing risks and hazards, open questions, and any conclusion a later
+  item depends on.
+- **Compress** the per-round implementation narrative of items that are already merged to
+  a line or two naming the outcome. The pull request is that record, and it is linked.
+- **Compress item `notes`** the same way, hardest on `done` items.
+
+Nothing is destroyed: the full 11,788-line roadmap stays reachable in the personal-notes
+branch's own history.
+
+### Mechanics the split has to get right
+
+- `save-plan.sh` writes one plan's two files and regenerates `branch-index.tsv` across
+  every manifest, so the branch index self-heals. It cannot *delete* the old plan
+  directory — that needs its own commit on the notes branch.
+- `_generated/dashboard-urls.yaml` is keyed by plan id and is written by the
+  `plan-dashboard` skill, not by `save-plan.sh`. The `workflow-unification` key is removed
+  by hand; the seven new keys are minted by publishing each new dashboard.
+- Every item keeps its `pull_request_number`, `branch`, `status` and `session` verbatim.
+- All seven plans keep `tracking_issue: 102`. Reusing the existing mailbox keeps the
+  continuity that seven new issues would scatter, and creating issues is not this item's
+  to do.
+
+### No branch and no pull request
+
+Personal-notes data only, per the item's own notes and the `eql-roadmap-migration`
+precedent. This session's designated branch stays empty; the manifest's `branch` and
+`pull_request_number` stay `null`.

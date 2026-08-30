@@ -94,7 +94,7 @@ items:
     pull_request_number: null
     track: plan-splits
     depends_on: [size-budget-and-report]
-    status: not_started
+    status: in_progress
     notes: >
       55 items / 14,259 lines becomes several under-budget plans. Its existing
       tracks - personal-data, stack-tooling, dashboards, bastler, cutover -
