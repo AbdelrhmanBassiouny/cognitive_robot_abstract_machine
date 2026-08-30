@@ -144,3 +144,16 @@ Run as a live prototype rather than read off documentation, and it re-scoped fou
   submitting that draft is the user's. They are answered in code.
 - **Live label creation is still exercised only through a stub**, since this environment's token is a
   fine-grained installation token.
+
+## The stall on `setup-stacked-prs-skill`, as found on 2026-08-30
+
+Two causes at once, and the manifest recorded neither: the pull request was `dirty` against its own
+base, whose review round had added two commits it never merged, and the pending review its previous
+session could not reply into had since been submitted - turning two invisible threads into 27
+unresolved ones, 25 of them a round dated the same day.
+
+**The two are one piece of work, not two.** The round is almost entirely a single rule - a literal
+naming a fixed thing where a named definition belongs - and the base's own round is what created the
+definitions to name it with (`.claude/hooks/tooling_files.py`, and `RepositoryLabel` in
+`tests/github_api.py`). Applying the round before merging the base would have built a second copy of
+exactly the thing the reviewer was asking not to have two of.
