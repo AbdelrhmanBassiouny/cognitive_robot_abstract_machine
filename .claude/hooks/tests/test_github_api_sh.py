@@ -17,7 +17,7 @@ from github_api import (
     GitHubApiCall,
     GitHubApiRunner,
     GitHubRemoteUrl,
-    PullRequestLabel,
+    RepositoryLabel,
 )
 from scratch_repository import HOOKS_SOURCE_DIRECTORY, ScratchRepository, ShellProgram
 from stub_executables import (
@@ -112,7 +112,7 @@ def test_the_labels_match_the_ones_the_shell_declares():
     )
 
     assert declared.returncode == 0, declared.stderr
-    assert declared.stdout.split() == [label.value for label in PullRequestLabel]
+    assert declared.stdout.split() == [label.value for label in RepositoryLabel]
 
 
 # %% label existence
@@ -124,7 +124,7 @@ def test_reports_a_label_that_exists(
     stub_executables.install(StubbedExecutable.GH)
 
     result = GitHubApiRunner(stub_executables, tmp_path).run(
-        GitHubApiCall.LABEL_EXISTS, REPOSITORY, PullRequestLabel.MERGED
+        GitHubApiCall.LABEL_EXISTS, REPOSITORY, RepositoryLabel.MERGED
     )
 
     assert result.returncode == 0, result.stderr
@@ -138,8 +138,8 @@ def test_reports_a_label_that_is_missing(
     result = GitHubApiRunner(stub_executables, tmp_path).run(
         GitHubApiCall.LABEL_EXISTS,
         REPOSITORY,
-        PullRequestLabel.IN_REVIEW,
-        STUB_GH_MISSING_LABELS=PullRequestLabel.IN_REVIEW,
+        RepositoryLabel.IN_REVIEW,
+        STUB_GH_MISSING_LABELS=RepositoryLabel.IN_REVIEW,
     )
 
     assert result.returncode != 0
@@ -153,10 +153,10 @@ def test_reports_a_missing_label_through_the_curl_fallback_too(
     result = GitHubApiRunner(stub_executables, tmp_path).run(
         GitHubApiCall.LABEL_EXISTS,
         REPOSITORY,
-        PullRequestLabel.IN_REVIEW,
+        RepositoryLabel.IN_REVIEW,
         hidden_executables=(StubbedExecutable.GH,),
         GH_TOKEN="a-token",
-        STUB_CURL_MISSING_LABELS=PullRequestLabel.IN_REVIEW,
+        STUB_CURL_MISSING_LABELS=RepositoryLabel.IN_REVIEW,
     )
 
     assert result.returncode != 0
@@ -170,7 +170,7 @@ def test_reports_an_existing_label_through_the_curl_fallback_too(
     result = GitHubApiRunner(stub_executables, tmp_path).run(
         GitHubApiCall.LABEL_EXISTS,
         REPOSITORY,
-        PullRequestLabel.MERGED,
+        RepositoryLabel.MERGED,
         hidden_executables=(StubbedExecutable.GH,),
         GH_TOKEN="a-token",
     )
@@ -188,7 +188,7 @@ def test_creates_a_label(stub_executables: StubExecutableDirectory, tmp_path: Pa
     result = GitHubApiRunner(stub_executables, tmp_path).run(
         GitHubApiCall.CREATE_LABEL,
         REPOSITORY,
-        PullRequestLabel.BUG,
+        RepositoryLabel.BUG,
         LABEL_DESCRIPTION,
         STUB_GH_CALL_LOG=str(call_log),
     )
@@ -196,7 +196,7 @@ def test_creates_a_label(stub_executables: StubExecutableDirectory, tmp_path: Pa
     assert result.returncode == 0, result.stderr
     logged_call = call_log.read_text()
     assert f"repos/{REPOSITORY}/labels" in logged_call
-    assert f"name={PullRequestLabel.BUG}" in logged_call
+    assert f"name={RepositoryLabel.BUG}" in logged_call
     assert f"description={LABEL_DESCRIPTION}" in logged_call
 
 
@@ -208,7 +208,7 @@ def test_reports_a_creation_that_the_api_refuses(
     result = GitHubApiRunner(stub_executables, tmp_path).run(
         GitHubApiCall.CREATE_LABEL,
         REPOSITORY,
-        PullRequestLabel.BUG,
+        RepositoryLabel.BUG,
         LABEL_DESCRIPTION,
         STUB_GH_CREATE_LABEL_FAILS="1",
     )

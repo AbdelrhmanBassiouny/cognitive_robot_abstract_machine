@@ -576,9 +576,22 @@ last_recorded_plan_state_sha() {
   cat "${PLAN_STATE_SYNC_STAMP}"
 }
 
-# PULL_REQUEST_LABELS: the labels this tooling reads and applies, checked (and
-# on request created) by ./setup-personal-notes.sh. Here rather than in that
-# script so the shell and the Python that tests it read one declaration; a test
-# holds `PullRequestLabel` in .claude/hooks/tests/github_api.py equal to this
-# list, so neither can gain a label the other has not.
-PULL_REQUEST_LABELS=("merged" "bug" "in-review")
+# PULL_REQUEST_LABELS: every label this repository's tooling applies to a pull
+# request, checked (and on request created) by ./setup-personal-notes.sh. Here
+# rather than in that script so the shell and the Python that tests it read one
+# declaration; a test holds `RepositoryLabel` in .claude/hooks/tests/github_api.py
+# equal to this list, so neither can gain a label the other has not.
+#
+# Creating them here is mostly about how they read: one created this way carries
+# a description saying what it means, where a label that arrives any other way
+# does not. `in-review` on this fork is grey and undescribed for that reason.
+#
+# The first three are read by the plan dashboard (see .claude/hooks/README.md);
+# the rest belong to the stacked-PR workflow, and the three of them that
+# .claude/stack/stack.toml makes configurable are listed here at their defaults.
+# A fork that renames one there gets its own created by /setup-stacked-prs, and
+# this default created harmlessly alongside.
+PULL_REQUEST_LABELS=(
+  "merged" "bug" "in-review"
+  "rebase" "needs-resolution" "cram2-link-sent"
+)

@@ -210,7 +210,12 @@ the narrative that doesn't belong in structured data.
 are pulled into `CLAUDE.local.md` too, via a generated branch-to-plan index that `save-plan.sh`
 regenerates from every manifest on each save, so it can't drift.
 
-**Labels the dashboard reads**, all applied by this repo's convention rather than by GitHub itself:
+**Labels this tooling applies**, all by this repo's convention rather than by GitHub itself.
+`setup-personal-notes.sh --create-labels` creates whichever are missing, each with a description —
+which is most of what creating one ahead of time buys, since a label that arrives any other way
+turns up undescribed.
+
+Read by the plan dashboard:
 
 - `merged` — the changes landed but GitHub's merge API never recorded it (branch pushed directly,
   PR then closed by hand). Treated exactly like a real merge.
@@ -219,6 +224,16 @@ regenerates from every manifest on each save, so it can't drift.
   keeps. Being a bug fix is a property of the work, not a next action of its own, so it never
   moves an item into a group or out of one.
 - `in-review` — recognized so it doesn't read as an unknown label; no script acts on it yet.
+
+Applied by the stacked-PR workflow, and configurable in `.claude/stack/stack.toml` except the
+last:
+
+- `rebase` — restack this branch by rebasing rather than merging its parent (`rebase_label`).
+- `needs-resolution` — conflicts with its parent, and its owner needs to resolve that
+  (`needs_resolution_label`). `in-review` above is that workflow's `in_review_label` too.
+- `cram2-link-sent` — carries the link that opens its upstream pull request. A plain constant
+  (`maintenance_constants.PROMOTION_LINK_LABEL`) rather than a setting, so unlike the others its
+  name is fixed and mentions a particular upstream.
 
 Any other label is preserved but not interpreted.
 

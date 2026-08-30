@@ -75,10 +75,14 @@ review comments and progress tracking — defaulting to yes, and make clear it i
 starting point they own and can edit or discard. Declining leaves an empty file,
 which is a perfectly good state.
 
-**Create missing labels?** The tooling reads `merged` and applies `bug` and
-`in-review`, and a fresh fork has none of them. Creation writes to their
-repository and is visible to everyone who can see it, so ask before passing
-`--create-labels`. Defaulting to yes is fine; doing it unasked is not.
+**Create missing labels?** Six between the dashboard and the stacked-PR workflow
+(`resolve-personal-notes-config.sh`'s `PULL_REQUEST_LABELS` is the list), and a
+fresh fork has none of them. Creation writes to their repository and is visible
+to everyone who can see it, so ask before passing `--create-labels`. Defaulting
+to yes is fine; doing it unasked is not.
+
+What creating them buys is mostly the description: a label that arrives any other
+way turns up unexplained to everyone who later sees it.
 
 **Which git identity?** What their commits should be authored as, recorded on the
 notes branch so every clone they work in picks it up. Read what git resolves here

@@ -217,13 +217,21 @@ bash "${SESSION_START_SCRIPT}"
 # %% the pull request labels the tooling applies
 
 # label_description: what each label means, so a created one explains itself to
-# everyone who later sees it in the repository.
+# everyone who later sees it in the repository - which is most of the reason to
+# create one ahead of time rather than letting it arrive undescribed.
+#
+# An unknown label is refused rather than given a generic description: falling
+# back would let a label added to PULL_REQUEST_LABELS ship a sentence that says
+# nothing, with nothing to notice.
 label_description() {
   case "$1" in
     merged) printf 'The changes landed even though GitHub never recorded a merge' ;;
     bug) printf 'Fixes incorrect behaviour' ;;
-    in-review) printf 'Waiting on review' ;;
-    *) printf 'Used by this repository review workflow' ;;
+    in-review) printf 'Promoted to the upstream repository and under review there' ;;
+    rebase) printf 'Restack this branch by rebasing it rather than merging its parent' ;;
+    needs-resolution) printf 'Conflicts with its parent, and its owner needs to resolve that' ;;
+    cram2-link-sent) printf 'Carries the link that opens its upstream pull request' ;;
+    *) echo "label_description: no description for '$1'" >&2; return 1 ;;
   esac
 }
 
@@ -258,8 +266,16 @@ check_pull_request_labels() {
     return 0
   fi
 
+  local description
   for label in "${missing_labels[@]}"; do
-    if github_create_label "${repository}" "${label}" "$(label_description "${label}")"; then
+    # Resolved before the call rather than inside its arguments: a command
+    # substitution that fails there still runs the command, with an empty
+    # description nobody would notice.
+    if ! description="$(label_description "${label}")"; then
+      echo "Not creating '${label}' - add its description to label_description." >&2
+      continue
+    fi
+    if github_create_label "${repository}" "${label}" "${description}"; then
       echo "Created '${label}' on '${repository}'."
     else
       echo "Could not create '${label}' on '${repository}' - the error above says why." >&2

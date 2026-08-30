@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from github_api import GitHubRemoteUrl, PullRequestLabel
+from github_api import GitHubRemoteUrl, RepositoryLabel
 from scratch_repository import (
     FIXTURE_DIRECTORY,
     NOTES_PATH,
@@ -67,6 +67,37 @@ CREATE_LABEL_METHOD = "POST"
 """
 The HTTP method a label creation is recognised by in the stub's call log.
 """
+
+LABEL_FIELD_PREFIX = "name="
+"""
+How the label being created is spelled in that call, as ``gh``'s own ``-f`` field.
+"""
+
+DESCRIPTION_FIELD_PREFIX = "description="
+"""
+How its description is spelled in the same call.
+"""
+
+
+def described_label(creation_call: str) -> tuple[str, str]:
+    """
+    The label a logged creation call creates, and the description it gives it.
+
+    The description is read to the end of the line rather than as one whitespace-
+    separated argument, because the log joins the call's arguments with spaces and a
+    description is a sentence - splitting on whitespace yields its first word, which
+    for these labels happens to be distinct and so would pass while checking nothing.
+    It is last in the call, which is what makes the remainder of the line exactly it.
+
+    :param creation_call: One line of the stub's call log, for a label creation.
+    :return: The label and its description.
+    :raises ValueError: If the call names neither.
+    """
+    label, _, remainder = creation_call.partition(LABEL_FIELD_PREFIX)[2].partition(" ")
+    description = remainder.partition(DESCRIPTION_FIELD_PREFIX)[2]
+    if not label or not description:
+        raise ValueError(f"not a label creation: {creation_call}")
+    return label, description
 
 
 def identity_arguments(identity: GitIdentity) -> tuple[str, ...]:
@@ -442,12 +473,12 @@ def test_reports_missing_labels_without_creating_them(
         str(setup_repository.notes_remote_path),
         hidden_executables=(),
         STUB_GH_LOGIN=STUB_LOGIN,
-        STUB_GH_MISSING_LABELS=PullRequestLabel.IN_REVIEW,
+        STUB_GH_MISSING_LABELS=RepositoryLabel.IN_REVIEW,
         STUB_GH_CALL_LOG=str(call_log),
     )
 
     assert result.returncode == 0, result.stderr
-    assert PullRequestLabel.IN_REVIEW in result.stdout
+    assert RepositoryLabel.IN_REVIEW in result.stdout
     assert CREATE_LABEL_METHOD not in call_log.read_text()
 
 
@@ -467,7 +498,7 @@ def test_creates_only_the_missing_labels_when_asked(
         "--create-labels",
         hidden_executables=(),
         STUB_GH_LOGIN=STUB_LOGIN,
-        STUB_GH_MISSING_LABELS=PullRequestLabel.IN_REVIEW,
+        STUB_GH_MISSING_LABELS=RepositoryLabel.IN_REVIEW,
         STUB_GH_CALL_LOG=str(call_log),
     )
 
@@ -478,8 +509,42 @@ def test_creates_only_the_missing_labels_when_asked(
         if CREATE_LABEL_METHOD in line
     ]
     assert len(creation_calls) == 1
-    assert f"name={PullRequestLabel.IN_REVIEW}" in creation_calls[0]
+    assert f"name={RepositoryLabel.IN_REVIEW}" in creation_calls[0]
     assert f"repos/{ORIGIN_REPOSITORY}/labels" in creation_calls[0]
+
+
+def test_every_label_it_creates_carries_a_description_of_its_own(
+    setup_repository: ScratchRepository,
+    stub_executables: StubExecutableDirectory,
+    tmp_path: Path,
+):
+    # A description saying what the label means is most of what creating one ahead of
+    # time buys, so a label created without one of its own is the point of the step going
+    # missing. A label declared with no description is refused rather than given a generic
+    # one, which is what makes this fail by creating fewer labels than were declared.
+    stub_executables.install(StubbedExecutable.GH)
+    call_log = tmp_path / "gh-calls.txt"
+
+    result = run_setup(
+        setup_repository,
+        stub_executables,
+        "--remote",
+        str(setup_repository.notes_remote_path),
+        "--create-labels",
+        hidden_executables=(),
+        STUB_GH_LOGIN=STUB_LOGIN,
+        STUB_GH_MISSING_LABELS=" ".join(RepositoryLabel),
+        STUB_GH_CALL_LOG=str(call_log),
+    )
+
+    assert result.returncode == 0, result.stderr
+    described = dict(
+        described_label(line)
+        for line in call_log.read_text().splitlines()
+        if CREATE_LABEL_METHOD in line
+    )
+    assert set(described) == set(RepositoryLabel)
+    assert len(set(described.values())) == len(RepositoryLabel)
 
 
 # %% the plan-dashboard dependencies

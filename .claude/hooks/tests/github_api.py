@@ -47,9 +47,14 @@ class GitHubApiCall(StrEnum):
     """
 
 
-class PullRequestLabel(StrEnum):
+class RepositoryLabel(StrEnum):
     """
-    The labels this tooling reads and applies.
+    Every label this repository's tooling applies to a pull request, which setup-
+    personal-notes.sh checks for and can create.
+
+    Wider than ``build_dashboard.PullRequestLabel``, which is the subset the dashboard
+    *interprets*; these are the ones something *applies*, and a fork wants each to exist
+    with a description rather than turning up unexplained.
 
     Held equal to ``PULL_REQUEST_LABELS`` in ``resolve-personal-notes-config.sh``, which
     is where the shell reads them from, by
@@ -68,7 +73,26 @@ class PullRequestLabel(StrEnum):
 
     IN_REVIEW = "in-review"
     """
-    Promoted upstream and waiting on review.
+    Promoted to the upstream repository and under review there.
+    """
+
+    REBASE = "rebase"
+    """
+    Restack this branch by rebasing it rather than merging its parent.
+    """
+
+    NEEDS_RESOLUTION = "needs-resolution"
+    """
+    Conflicts with its parent, and its owner needs to resolve that.
+    """
+
+    PROMOTION_LINK_SENT = "cram2-link-sent"
+    """
+    Carries the link that opens its upstream pull request.
+
+    The one member whose *value* names a particular upstream rather than what the label
+    means - it mirrors ``maintenance_constants.PROMOTION_LINK_LABEL``, a plain constant
+    where the three above it are configurable in ``.claude/stack/stack.toml``.
     """
 
 
