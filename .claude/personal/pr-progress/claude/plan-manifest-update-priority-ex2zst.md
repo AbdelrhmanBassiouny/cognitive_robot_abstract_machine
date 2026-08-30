@@ -1,47 +1,44 @@
 ## #151 — manifest-currency-first, plus the folded `update` YAML fix
 
-**Branch:** `claude/plan-manifest-update-priority-ex2zst` (not the designated
-`claude/plan-item-bootstrap-yaml-tr8xyq`, which is the integration tip and carries no
-work — the fold onto #151 was approved in plan mode this session).
+**Branch:** `claude/plan-manifest-update-priority-ex2zst`, not the designated
+`claude/plan-item-bootstrap-yaml-tr8xyq` (which is the integration tip and carries no
+work). The fold onto #151 was approved in plan mode this session.
 
-### Why this session is on #151
+### Why this session was on #151
 
 `/add-plan-item` was run on a report that `plan_item_bootstrap.py update` emits invalid
 YAML. The scope check placed it inside two unlanded branches rather than as new work:
 #151 introduces the `update` subcommand and `manifest-staleness.md`; #160 fixes the
 hardcoded indent but predates `update` entirely. Neither alone gives a working `update`,
-and they conflict (6 hunks in the module, 3 in its tests). User chose the fold into #151.
+and they conflicted. The user chose the fold into #151.
 
-### Plan
+### Done — the work is finished and pushed
 
-1. ~~Record the fold in both manifests, republish both dashboards, comment on #102.~~ **Done.**
-2. Failing tests first: an item whose `depends_on` is a written-out block sequence written
-   through `update`; a `PLAIN` scalar containing ` #` round-tripping equal; replacing
-   `depends_on` not orphaning its entries.
-3. Merge #160; keep #151's `update`/`SEQUENCE`/`BLOCK` machinery, adopt `ItemIndentation`
-   as the single source of indentation and carry it into the sequence-entry and block-body
-   render paths #160 never saw. Adopt `PlanSaveFailedError`/`PlanNotWrittenError`.
-4. Delegate scalar emission to PyYAML so a value with ` #` is quoted while
-   `pull_request_number` stays an integer; declare `DEPENDS_ON` as `SEQUENCE`.
-5. Run the three suites and `format_docstrings.py`, re-run the original reproduction
-   end to end, push, re-draft #151, update its description.
+1. Both manifests carry the decision; `manifest-currency-first`'s `session` moved here,
+   `plan-item-bootstrap-yaml-indent` records that nothing more is pushed to #160. Both
+   roadmaps carry the reasoning, both dashboards republished, #102 has the structural
+   comment.
+2. Failing tests first: a `a-stacked-item` fixture with a written-out `depends_on`, three
+   tests through `update`, and a parameterized round-trip contract over every
+   scalar-styled key. 25 failures before, 0 after.
+3. #160 merged in — 6 hunks in the module, 3 in its tests. `ItemIndentation` carried
+   through to the sequence-entry and block-body render paths it never saw; exit codes 9/10
+   collided and the save's two moved to 11/12; `ItemStatus` kept its single shared
+   definition.
+4. `render_scalar` hands quoting to PyYAML, values keep their own types, and `depends_on`
+   is declared `SEQUENCE` with `value_span` widened for entries flush with their key.
+5. 649 tests green across the four CI directories; `format_docstrings.py` clean. The
+   reported reproduction re-run end to end against `rdr-interface-and-decorator` for both
+   `D-ui` and `D-store`: exit 0, `depends_on` intact, byte-identical manifest.
 
-### Done so far
+Pushed as `0bc24dcc`. #151 is back to draft, carries the `bug` label #160 had, and its
+description's open ordering question is rewritten to record the settled fold.
 
-- Both manifests carry the decision; `manifest-currency-first`'s `session` moved to this
-  session, and `plan-item-bootstrap-yaml-indent` records that nothing more is pushed to it.
-- Both roadmaps carry the reasoning; both dashboards republished; #102 has the structural
-  comment.
-- Reproduced all three defects locally against the live `rdr-interface-and-decorator`
-  manifest before writing any of it down.
+### Outstanding
 
-### Next
-
-Step 2 — the failing tests.
-
-### Outstanding / worth knowing
-
-- #151 is currently **not a draft**. Flagged in the approved plan; re-draft after pushing
-  per the standing convention.
-- The reported blocker example for the ` #` truncation does not reproduce — blockers are
-  quoted or folded and round-trip. The defect is on `PLAIN`-styled keys.
+- CI run 33340371549 was still in progress when this session ended. The previous head
+  (`fb1a5a4a`) was green and this diff is `.claude/`-only.
+- #160 is left open and untouched; it is superseded by this merge and is the user's to
+  close.
+- The three review threads #151 already had open are unchanged — none of them touch this
+  work.
