@@ -11,6 +11,7 @@ import pytest
 import yaml
 
 import missing_requirements
+import plan_item_bootstrap
 import plan_manifest_tools
 import plan_size_budget
 from plan_item_bootstrap import (
@@ -22,23 +23,6 @@ from plan_item_bootstrap import (
 from missing_requirements import RequirementsFile
 from plan_size_budget import PlanSize, SizeBudget, SizeReport
 from scratch_repository import HOOKS_SOURCE_DIRECTORY, ScratchRepository
-
-MANIFEST_FILENAME = PlanDocument.MANIFEST
-"""
-The manifest filename the report reads each plan's item count out of, read from the
-definition every plan tool shares rather than spelled again here.
-"""
-
-ROADMAP_FILENAME = PlanDocument.ROADMAP
-"""
-The roadmap filename whose lines count against the same budget, from the same
-definition.
-"""
-
-SCRIPT_NAME = HookScript.PLAN_SIZE_REPORT
-"""
-The script under test.
-"""
 
 REQUIREMENTS_PATH = f"{HOOKS_DIRECTORY}/{RequirementsFile.FILENAME}"
 """
@@ -68,8 +52,8 @@ def plan_files(plan_id: str, item_count: int = 0, roadmap_line_count: int = 0) -
         "items": [{"id": f"item-{number}"} for number in range(item_count)],
     }
     return {
-        f"{plan_directory}/{MANIFEST_FILENAME}": yaml.safe_dump(manifest),
-        f"{plan_directory}/{ROADMAP_FILENAME}": "".join(
+        f"{plan_directory}/{PlanDocument.MANIFEST}": yaml.safe_dump(manifest),
+        f"{plan_directory}/{PlanDocument.ROADMAP}": "".join(
             f"roadmap line {number}\n" for number in range(roadmap_line_count)
         ),
     }
@@ -84,9 +68,11 @@ def report_repository(scratch_repository: ScratchRepository) -> ScratchRepositor
     :param scratch_repository: The initialized scratch repository and notes remote.
     :return: The same repository, ready to publish plans and run the report against.
     """
-    scratch_repository.install_hook_scripts(HookScript.CONFIGURATION, SCRIPT_NAME)
+    scratch_repository.install_hook_scripts(
+        HookScript.CONFIGURATION, HookScript.PLAN_SIZE_REPORT
+    )
     scratch_repository.install_hook_modules(
-        plan_size_budget, plan_manifest_tools, missing_requirements
+        plan_size_budget, plan_manifest_tools, missing_requirements, plan_item_bootstrap
     )
     scratch_repository.write(
         REQUIREMENTS_PATH,
@@ -105,7 +91,7 @@ def run_report(repository: ScratchRepository) -> subprocess.CompletedProcess[str
     :param repository: A fixture-built scratch repository.
     :return: The finished subprocess.
     """
-    return repository.run_hook_script(SCRIPT_NAME)
+    return repository.run_hook_script(HookScript.PLAN_SIZE_REPORT)
 
 
 def report_line_for(report: str, plan_id: str) -> str:
@@ -140,7 +126,7 @@ def test_counts_the_manifest_and_roadmap_lines_together(
     files = plan_files("plan-a", item_count=1, roadmap_line_count=4)
     report_repository.publish_notes_branch(files)
     manifest_line_count = len(
-        files[f"{PLANS_DIRECTORY}/plan-a/{MANIFEST_FILENAME}"].splitlines()
+        files[f"{PLANS_DIRECTORY}/plan-a/{PlanDocument.MANIFEST}"].splitlines()
     )
     result = run_report(report_repository)
     assert report_line_for(result.stdout, "plan-a").split()[2:5] == [
@@ -195,7 +181,7 @@ def test_generated_data_beside_the_plans_is_not_reported_as_a_plan(
 
 def test_rejects_an_unexpected_argument(report_repository: ScratchRepository):
     report_repository.publish_notes_branch(plan_files("plan-a"))
-    result = report_repository.run_hook_script(SCRIPT_NAME, "plan-a")
+    result = report_repository.run_hook_script(HookScript.PLAN_SIZE_REPORT, "plan-a")
     assert result.returncode == 1
     assert result.stderr.startswith("Unexpected argument: plan-a\n")
 

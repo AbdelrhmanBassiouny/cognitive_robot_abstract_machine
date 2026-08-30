@@ -23,6 +23,7 @@ from typing import ClassVar
 
 import yaml
 
+from plan_item_bootstrap import PlanDocument
 from plan_manifest_tools import read_manifest_id
 
 # %% the budget
@@ -353,7 +354,7 @@ class SizeReport:
             [
                 f"Budget: {self.budget.maximum_items} items, "
                 f"{self.budget.maximum_lines} lines "
-                "(plan.yaml and roadmap.md together).",
+                f"({PlanDocument.MANIFEST} and {PlanDocument.ROADMAP} together).",
                 "",
                 self.render_row(header, widths),
                 *(self.render_row(row, widths) for row in rows),
