@@ -77,6 +77,12 @@ report base would live and why `report-document-naming` is best done inside or a
   who inherits this repository, so a hook that blocked their edits would be indefensible upstream.
   Inertness for a clone that uses neither plans nor personal notes is a hard constraint, not a
   preference, and it is derived from state rather than from a setting.
+- **#160's fix lands through #151, not on its own branch.** `plan-item-bootstrap-yaml-indent` fixes
+  the indentation for the code as it stood before the `update` subcommand existed. `update` arrives
+  on `stack-maintenance/manifest-currency-first` (#151), which carries the unfixed indent, and the
+  two conflict - six hunks in the module, three in its tests. Rather than fixing it twice, #160 is
+  merged into #151 and its `ItemIndentation` is carried through to the sequence-entry and block-body
+  render paths it never saw. Nothing more is pushed to #160.
 
 ## Open
 

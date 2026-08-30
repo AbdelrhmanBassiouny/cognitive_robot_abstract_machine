@@ -141,6 +141,13 @@ items:
     reported success without checking the write landed. It now raises with the script's own message and
     reads the plan back off the notes branch afterwards. This item's own entry was written by the fixed
     script.
+
+    This fix is being carried into #151 (`stack-maintenance/manifest-currency-first`) by merging this
+    branch into it, at the user's direction on 2026-08-30, rather than being duplicated there. #151
+    introduces the `update` subcommand and `ValueStyle.SEQUENCE`, neither of which exists here, so the
+    `ItemIndentation` this item added cannot reach `render_sequence_entry` or the block-body indent
+    from this branch alone; the merge conflicts on six hunks in the module and three in its tests.
+    Nothing is being pushed here. A later reader should not fix the indentation a second time.
 - id: plan-item-edit-guard
   title: 'PreToolUse guard: refuse source edits from a branch with no plan item'
   branch: null
