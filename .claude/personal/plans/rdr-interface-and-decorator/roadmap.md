@@ -52,18 +52,41 @@ first shape tried and was the same mistake the segregation diagnosed: a member
 that exists so something *could* ask, on a class nothing asks. The wiring
 belongs where the two objects meet.
 
-**3. Conformance is done at rebuild time, not at review time.** #79 converted
-its dividers when rebuilt and then spent a whole review round on docstrings;
-#76 did both in one pass and cost one round instead of two. These files are new
-in their pull requests rather than pre-existing, so they are held to the current
-`AGENTS.md` rules — `# %%` headers naming the behaviour, a docstring on every
-function, method and field, no abbreviations.
+**3. Conformance at rebuild time buys less than it looked like.** These files
+are new in their pull requests rather than pre-existing, so they are held to the
+current `AGENTS.md` rules — `# %%` headers naming the behaviour, a docstring on
+every function, method and field, no abbreviations — and doing that during the
+rebuild is still right. What is *not* true is the claim this entry used to make,
+that #76 therefore cost one review round instead of #79's two: #76 drew a
+**fifty-thread** round twenty-five minutes after its rebuild landed. The rules a
+rebuild can satisfy mechanically are the cheap half. The expensive half is the
+design the reviewer reads for — primitives that should be classes, strings that
+should be enum members, a 1,456-line test file — and no amount of pre-formatting
+anticipates that.
 
 **4. A fix scoped to what a thread asked, and no wider.** An abbreviation fix
 cascades to every use site of *that* function's own local names, because leaving
 three of seven abbreviated names in one function reads as arbitrary — but it is
 not extended to identifiers elsewhere that no thread named. What is knowingly
 left behind is recorded rather than silently skipped.
+
+**5. A fix belongs in the slice that owns the name, even when the thread is
+raised here.** Four of the review round's asks named identifiers this pull
+request does not define: `case_table.py`'s `new_label` / `corner_label`
+defaults and `rule_tree_view.py`'s `elision` vocabulary (#79 and #67
+respectively), plus the generated-model header, which comes from
+`templates/rdr_module.py.jinja` on the base. The available answer inside #76
+was a second enum holding the same strings — a duplicate source of truth, which
+is the very thing the asks exist to remove. So they were answered with where
+the change belongs and left open, rather than satisfied locally. Hand-editing
+one of three generated files was tried and reverted for the same reason: it
+would have desynchronised that copy from its template and its two siblings.
+
+**6. A session that reports itself finished is when to look again, not when to
+stop.** #76's fifty-thread round opened at 14:34Z; the session that rebuilt the
+branch had posted its completion note at 14:09Z and was gone. The item then
+read healthy for the rest of the day while nothing on it was true. This is the
+sixth instance of that class on this plan.
 
 ## The lesson this plan is the case study for
 
@@ -101,6 +124,17 @@ passing suite:
   `TestAttributeReusedInEarlierSiblingBranch` needs no production change to pass
   against the fixed API once `test_eql_rdr/` lands; it asserts through the RDR
   layer, which is why #118 could only cover the same defect DSL-only.
+- **Known conformance debt left alone deliberately** on #76: the
+  `try`/`except`-around-attribute-access in `prompt_examples.pick_case_attribute`,
+  and `namespace["quit"]` in `interactive.py`, which has no `NamespaceName`
+  member the way `EXIT` does. Both are real rule instances that no thread named
+  and that the PR-wide sweep thread's own categories (abbreviations, docstrings,
+  formatting) do not cover.
+- **Five review threads on #76 are answered and left open**, each because the
+  answer differed from the ask or the change belongs to another slice: the
+  `match`/`case` suggestion (answered with a lookup table), the generated-model
+  header, the side-by-side labels, the `except Exception: pass` (nothing is
+  raised there), and the `elision` rename.
 - **Known conformance debt left alone deliberately** on #79: `av`, `sp`, `d` and
   `test_progress_bar.py`'s own box-drawing dividers are real instances of rules
   this pull request's other fixes enforced elsewhere, but no thread named them.

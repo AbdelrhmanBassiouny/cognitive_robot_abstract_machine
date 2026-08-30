@@ -80,14 +80,25 @@ items:
     rejected invalid answers after `validate()` became a list, and the shipped user guide - which CI executes
     through `test_eql_documentation.sh` - still called `FunctionInterface(answer_fn=...)`. Every function,
     method and field across the 21 files this PR adds now carries a docstring. test_eql_rdr: 524 passed,
-    2 skipped (341 on the base, 183 added). See roadmap.md section 36.'
+    2 skipped (341 on the base, 183 added). See roadmap.md section 36.
+    2026-08-30 (later): a fresh `/plan-item-resolve` session found a 50-thread review round opened
+    on #76 between 14:34Z and 17:13Z - twenty-five minutes after the rebuild session posted its own
+    completion note and stopped - and none of it recorded here. Sixth instance of that staleness
+    class on this plan. Applied as `a07a4458` and `c40da8fa`. The substantive part is a redesign the
+    round asked for rather than conformance: the magics are classes under a `Magic` base, each
+    carrying its own name, collaborators and `register(shell)`; `MagicName`, `MagicKind` and
+    `NamespaceKey` replace the name literals and the four private key constants; `%knows` becomes
+    `%sufficient_conditions_for`; the prompt sections become eleven `PromptSection` subclasses
+    identified by a `PromptSectionName` member; and the 1,456-line prompt-sections test splits into
+    four files named for their subjects. `rdr/__init__.py` is restored to the base, so the pull
+    request no longer touches it. Magic selection and registration were reachable only through a real
+    terminal, so eight tests now cover them against a shell stub. test_eql_rdr: 532 passed, 2 skipped.
+    Forty-five threads replied to and resolved; five replied to and left open, because the answer
+    differed from the ask or the identifier belongs to #79, #67 or the base template - see roadmap.md
+    decisions 5 and 6.'
   blockers:
-  - A 50-thread review round opened on the pull request (#76) between 2026-08-30T14:34Z and 17:13Z,
-    all still unresolved and none of them recorded here - the previous session reported the item
-    finished at 14:09Z and the round landed 25 minutes later. Sixth instance of this staleness class
-    on this plan, after the D-core-aid and d-core-single-class precedents.
-  - CI has never run on the rebuilt head 5269a778 - the pull request reports zero check runs - so
-    the recorded 524-passed figure is a local measurement only.
+  - CI has never run on this branch - the pull request reports zero check runs on any head it has
+    had - so every figure recorded for it, the 532 above included, is a local measurement.
 - id: D-ui-splice-fix
   title: 'RDR engine: fix rule-tree splice for attributes reused across sibling branches'
   branch: D-ui-splice-fix
