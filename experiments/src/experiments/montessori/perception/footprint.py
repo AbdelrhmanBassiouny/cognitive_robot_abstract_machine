@@ -31,7 +31,7 @@ keeping the corners that tell a triangle from a square.
 
 
 @dataclass(frozen=True)
-class Footprint:
+class RectifiedFootprint:
     """
     The shape of one rectified outline, measured in metres about the world frame.
     """
@@ -120,7 +120,9 @@ class FootprintClassifier(ABC):
     """
 
     @abstractmethod
-    def classify(self, footprint: Footprint) -> Optional[MontessoriShapeCategory]:
+    def classify(
+        self, footprint: RectifiedFootprint
+    ) -> Optional[MontessoriShapeCategory]:
         """
         Name the shape an outline belongs to.
 
@@ -169,7 +171,9 @@ class CrossSectionClassifier(FootprintClassifier):
     :data:`~experiments.montessori.hole_geometry._RECTANGLE_ASPECT_RATIO_THRESHOLD`.
     """
 
-    def classify(self, footprint: Footprint) -> Optional[MontessoriShapeCategory]:
+    def classify(
+        self, footprint: RectifiedFootprint
+    ) -> Optional[MontessoriShapeCategory]:
         if footprint.fill_ratio <= 0.0:
             return None
         if footprint.fill_ratio < self.triangle_fill_ratio:

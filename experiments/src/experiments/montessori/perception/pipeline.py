@@ -38,8 +38,8 @@ from experiments.montessori.perception.detections import (
 from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.footprint import (
     CrossSectionClassifier,
-    Footprint,
     FootprintClassifier,
+    RectifiedFootprint,
 )
 from experiments.montessori.perception.orthophoto import (
     Orthophoto,
@@ -257,7 +257,7 @@ class SizeRange:
     Largest area, in square metres, an outline may have and still be considered.
     """
 
-    def admits(self, footprint: Footprint) -> bool:
+    def admits(self, footprint: RectifiedFootprint) -> bool:
         """
         Whether an outline's area falls in this range.
 
@@ -351,7 +351,9 @@ class BoardDetector:
 
         best: List[ShapeSortingHoleDetection] = []
         for contour in contours:
-            footprint = Footprint.from_contour(contour, orthophoto.region.resolution)
+            footprint = RectifiedFootprint.from_contour(
+                contour, orthophoto.region.resolution
+            )
             if footprint.area < self.minimum_lid_area:
                 continue
             holes = self._board_sized_cluster(
@@ -390,7 +392,9 @@ class BoardDetector:
 
         holes = []
         for contour in contours:
-            footprint = Footprint.from_contour(contour, orthophoto.region.resolution)
+            footprint = RectifiedFootprint.from_contour(
+                contour, orthophoto.region.resolution
+            )
             if not self.hole_size.admits(footprint):
                 continue
             category = self.classifier.classify(footprint)
@@ -499,7 +503,7 @@ class BoardDetector:
                 yaw=yaw,
                 reference_frame=reference_frame,
             ),
-            footprint=Footprint(
+            footprint=RectifiedFootprint(
                 area=width * length,
                 width=width,
                 length=length,
@@ -517,7 +521,7 @@ class BoardDetector:
         contour: np.ndarray,
         orthophoto: Orthophoto,
         reference_frame: Optional[KinematicStructureEntity],
-        footprint: Optional[Footprint] = None,
+        footprint: Optional[RectifiedFootprint] = None,
     ) -> Pose:
         """
         Where a contour's centre sits on the rectified plane.
@@ -529,7 +533,9 @@ class BoardDetector:
         :return: The pose of the contour's centre, on the rectified plane.
         """
         if footprint is None:
-            footprint = Footprint.from_contour(contour, orthophoto.region.resolution)
+            footprint = RectifiedFootprint.from_contour(
+                contour, orthophoto.region.resolution
+            )
         x, y = orthophoto.contour_center(contour)
         return Pose.from_xyz_rpy(
             x,
@@ -617,7 +623,9 @@ class LoosePieceDetector:
 
         pieces = []
         for contour in contours:
-            footprint = Footprint.from_contour(contour, orthophoto.region.resolution)
+            footprint = RectifiedFootprint.from_contour(
+                contour, orthophoto.region.resolution
+            )
             if not self.piece_size.admits(footprint):
                 continue
             if not _wholly_within(contour, orthophoto):
