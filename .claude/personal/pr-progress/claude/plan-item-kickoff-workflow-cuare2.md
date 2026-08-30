@@ -45,8 +45,9 @@ neither had been answered.
 
 ## Outstanding
 
-- `test_each_lib (coraplex)` was still running on the previous head when this session
-  started; CI on `7730b5177` has not been read.
+- CI on `7730b5177` is green on all 23 checks, `test_bastler` among them, and the
+  `test_each_lib (coraplex)` job that was still running when this session started
+  finished green too. Nothing is red on this branch.
 - Two threads from the 2026-08-23 round stay open on purpose: the `RESTACK_STEPS` name
   `monkeypatch.setattr` takes as a string, and the surviving `status_label` assertion
   offered for deletion.
