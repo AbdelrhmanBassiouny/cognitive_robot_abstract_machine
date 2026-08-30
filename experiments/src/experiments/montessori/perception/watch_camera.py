@@ -21,10 +21,10 @@ from rclpy.qos import qos_profile_sensor_data
 from sensor_msgs.msg import CompressedImage
 
 from experiments.montessori.perception.camera import (
+    CameraTopic,
     decode_compressed_color_image,
     decode_compressed_depth_image,
 )
-from experiments.montessori.perception.node import CameraTopic
 from experiments.montessori.perception.viewer import CameraFrameViewer
 
 # %% watching
