@@ -8,7 +8,10 @@ import dataclasses
 
 import pytest
 
-from krrood.entity_query_language.rdr.case_table import render_cases_side_by_side
+from krrood.entity_query_language.rdr.case_table import (
+    CaseColumnLabel,
+    render_cases_side_by_side,
+)
 
 from .animal import Animal, Species
 
@@ -117,12 +120,12 @@ def test_render_cases_side_by_side_keeps_values_intact_on_a_narrow_terminal(
 
 def test_render_cases_side_by_side_default_labels():
     """
-    When called without label kwargs the output contains the default label strings.
+    When called without label kwargs the output carries the default column labels.
     """
     result = render_cases_side_by_side(
         _NEW_CASE,
         _CORNER_CASE,
         use_color=False,
     )
-    assert "New case" in result
-    assert "Corner case" in result
+    assert CaseColumnLabel.NEW in result
+    assert CaseColumnLabel.CORNER in result

@@ -14,6 +14,7 @@ Kept deliberately small and dependency-light (just ``tabulate``);
 from __future__ import annotations
 
 import dataclasses
+import enum
 import shutil
 import textwrap
 
@@ -24,6 +25,25 @@ from typing_extensions import Any, Dict, List, Optional, Tuple
 import tabulate as _tabulate
 
 from colorama import Fore, Style
+
+# %% the column labels of the side-by-side comparison table
+
+
+class CaseColumnLabel(enum.StrEnum):
+    """
+    The headers of the two value columns in a side-by-side case comparison.
+    """
+
+    NEW = "New case"
+    """
+    Heads the column holding the case currently being fitted.
+    """
+
+    CORNER = "Corner case"
+    """
+    Heads the column holding the corner case of the firing rule.
+    """
+
 
 #: Smallest total width (key + value + borders) a single pair column may occupy. The
 #: number of pairs laid side by side is ``terminal_width // min_column_width``.
@@ -248,8 +268,8 @@ def render_cases_side_by_side(
     new_case: Any,
     corner_case: Any,
     *,
-    new_label: str = "New case",
-    corner_label: str = "Corner case",
+    new_label: str = CaseColumnLabel.NEW,
+    corner_label: str = CaseColumnLabel.CORNER,
     min_column_width: int = DEFAULT_MIN_COLUMN_WIDTH,
     use_color: bool = True,
 ) -> str:
