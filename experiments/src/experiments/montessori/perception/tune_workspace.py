@@ -8,19 +8,21 @@ Run it as::
 The windows show exactly what a run shows -- the camera image clipped to the workspace,
 its depth, and the table rectified -- while four sliders move the workspace's edges. Drag
 them until only the table is left, then press ``q`` or escape: the region you settled on
-is printed and written to a file, to be put back into the setup it was tuned for.
+is printed and written down as the workspace the setup searches, so the next run over
+these captures looks at exactly what was left on screen.
 
-The sliders can only cut the declared region down, never grow it past what the setup
-already searches, so a workspace tuned here is always one the camera saw.
+The sliders can only cut the whole workspace down, never grow it past what the camera
+looks over, so a workspace tuned here is always one the camera saw. They open from that
+whole workspace rather than from a previous tuning, so an edge brought in too far can be
+pushed back out.
 """
 
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 from abc import ABC, abstractmethod
-from dataclasses import asdict, dataclass, replace
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
@@ -32,7 +34,11 @@ from experiments.montessori.perception.captures import CAPTURE_DIRECTORY, SceneC
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.overlay import RectifiedView, ViewFromAbove
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
-from experiments.montessori.perception.recorded_setup import perception_pipeline
+from experiments.montessori.perception.recorded_setup import (
+    TUNED_WORKSPACE_FILE,
+    WIDEST_WORKSPACE,
+    perception_pipeline,
+)
 from experiments.montessori.perception.viewer import CameraFrameViewer, QuitKey
 
 logger = logging.getLogger(__name__)
@@ -66,8 +72,8 @@ class WorkspaceControls(ABC):
 @dataclass
 class TrackbarControls(WorkspaceControls):
     """
-    One OpenCV slider per edge, each measured in millimetres from the declared region's
-    own corner, so an edge can be brought in but never pushed out.
+    One OpenCV slider per edge, each measured in millimetres from the corner of the
+    whole workspace, so an edge can be brought in but never pushed out.
     """
 
     bounds: WorkspaceRegion
@@ -104,25 +110,30 @@ class TrackbarControls(WorkspaceControls):
             WorkspaceEdge.MAXIMUM_Y: along,
         }
 
-    def _metres_from_corner(self, edge: WorkspaceEdge) -> float:
+    def _position_of(self, edge: WorkspaceEdge, corner: float) -> float:
         """
-        How far one edge's slider stands from the declared region's corner, in metres.
+        Where one edge stands, in metres.
+
+        The whole sum is taken in the millimetres the slider is graduated in, so an edge
+        is written down as the round number it was dragged to rather than as that number
+        plus the remainder of adding two metric floats.
 
         :param edge: The edge to read.
+        :param corner: The corner of the whole workspace its slider is measured from, in
+            metres.
         """
-        return cv2.getTrackbarPos(edge.value, self.window_name) / MILLIMETRES_PER_METRE
+        travelled = cv2.getTrackbarPos(edge.value, self.window_name)
+        return (round(corner * MILLIMETRES_PER_METRE) + travelled) / (
+            MILLIMETRES_PER_METRE
+        )
 
     def read(self) -> WorkspaceRegion:
         return replace(
             self.bounds,
-            minimum_x=self.bounds.minimum_x
-            + self._metres_from_corner(WorkspaceEdge.MINIMUM_X),
-            maximum_x=self.bounds.minimum_x
-            + self._metres_from_corner(WorkspaceEdge.MAXIMUM_X),
-            minimum_y=self.bounds.minimum_y
-            + self._metres_from_corner(WorkspaceEdge.MINIMUM_Y),
-            maximum_y=self.bounds.minimum_y
-            + self._metres_from_corner(WorkspaceEdge.MAXIMUM_Y),
+            minimum_x=self._position_of(WorkspaceEdge.MINIMUM_X, self.bounds.minimum_x),
+            maximum_x=self._position_of(WorkspaceEdge.MAXIMUM_X, self.bounds.minimum_x),
+            minimum_y=self._position_of(WorkspaceEdge.MINIMUM_Y, self.bounds.minimum_y),
+            maximum_y=self._position_of(WorkspaceEdge.MAXIMUM_Y, self.bounds.minimum_y),
         )
 
 
@@ -190,8 +201,7 @@ class WorkspaceTuner:
         Draw the workspace until the windows are quit, reporting each edge that moves.
 
         The edges are reported as they are moved because a slider says where it stands
-        far less precisely than a number does, and the number is what the setup is
-        written back with.
+        far less precisely than a number does, and the number is what is written back.
 
         :return: The region the edges were left at.
         """
@@ -230,7 +240,7 @@ def main() -> None:
     parser.add_argument(
         "--save-to",
         type=Path,
-        default=Path("tuned_workspace.json"),
+        default=TUNED_WORKSPACE_FILE,
         help="where to write the region the edges were left at",
     )
     arguments = parser.parse_args()
@@ -241,14 +251,14 @@ def main() -> None:
     tuner = WorkspaceTuner(
         frame=SceneCapture.load(name, arguments.directory).to_frame(),
         pipeline=pipeline,
-        controls=TrackbarControls(bounds=pipeline.table.region),
+        controls=TrackbarControls(bounds=WIDEST_WORKSPACE),
         viewer=viewer,
     )
     try:
         region = tuner.tune()
     finally:
         viewer.close()
-    arguments.save_to.write_text(json.dumps(asdict(region), indent=2) + "\n")
+    region.save(arguments.save_to)
     logger.info("tuned on %s to %s, written to %s", name, region, arguments.save_to)
 
 

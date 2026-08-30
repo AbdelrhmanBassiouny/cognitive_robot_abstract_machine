@@ -12,22 +12,38 @@ than numbers tied to where the camera happened to stand.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from enum import StrEnum
 from functools import cached_property
+from pathlib import Path
 
 import cv2
 import numpy as np
-from typing_extensions import Tuple
+from typing_extensions import Any, Dict, Self, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.exceptions import WorkspaceOutOfView
+from krrood.adapters.json_serializer import SubclassJSONSerializer
 from semantic_digital_twin.spatial_types.math import inverse_frame
 
 # %% the region being looked at
 
 
+class RegionField(StrEnum):
+    """
+    The keys a region is written under when it is kept as a file.
+    """
+
+    MINIMUM_X = "minimum_x"
+    MAXIMUM_X = "maximum_x"
+    MINIMUM_Y = "minimum_y"
+    MAXIMUM_Y = "maximum_y"
+    RESOLUTION = "resolution"
+
+
 @dataclass(frozen=True)
-class WorkspaceRegion:
+class WorkspaceRegion(SubclassJSONSerializer):
     """
     The axis-aligned patch of a horizontal plane that perception looks at, and how
     finely it is sampled.
@@ -113,6 +129,44 @@ class WorkspaceRegion:
             self.minimum_x <= x <= self.maximum_x
             and self.minimum_y <= y <= self.maximum_y
         )
+
+    def to_json(self) -> Dict[str, Any]:
+        return {
+            **super().to_json(),
+            RegionField.MINIMUM_X.value: self.minimum_x,
+            RegionField.MAXIMUM_X.value: self.maximum_x,
+            RegionField.MINIMUM_Y.value: self.minimum_y,
+            RegionField.MAXIMUM_Y.value: self.maximum_y,
+            RegionField.RESOLUTION.value: self.resolution,
+        }
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any]) -> Self:
+        return cls(
+            minimum_x=data[RegionField.MINIMUM_X.value],
+            maximum_x=data[RegionField.MAXIMUM_X.value],
+            minimum_y=data[RegionField.MINIMUM_Y.value],
+            maximum_y=data[RegionField.MAXIMUM_Y.value],
+            resolution=data[RegionField.RESOLUTION.value],
+        )
+
+    @classmethod
+    def load(cls, path: Path) -> Self:
+        """
+        Read a region back from the file it was written to.
+
+        :param path: The file to read.
+        """
+        return cls.from_json(json.loads(path.read_text()))
+
+    def save(self, path: Path) -> None:
+        """
+        Write this region down, so a later run searches what this one settled on.
+
+        :param path: The file to write.
+        """
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(self.to_json(), indent=2) + "\n")
 
 
 # %% the space being looked at

@@ -12,6 +12,8 @@ against the live robot reads this.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.surfaces import WorkspaceSurface
@@ -30,12 +32,36 @@ Height of Tracy's own table top above the reference frame, in metres.
 Read off the ``map`` to ``table`` transform the robot publishes into every recording.
 """
 
-WORKSPACE = WorkspaceRegion(
+WIDEST_WORKSPACE = WorkspaceRegion(
     minimum_x=0.35, maximum_x=1.35, minimum_y=-0.45, maximum_y=0.75
 )
 """
-The stretch of that table the scene stands on, as the demo searched it.
+The whole stretch of that table the camera looks over, and the widest a run may search.
+
+A workspace tuned for this setup is cut out of this one, so an edge brought in by
+:mod:`~experiments.montessori.perception.tune_workspace` can always be pushed back out
+to where it started.
 """
+
+TUNED_WORKSPACE_FILE = (
+    Path(__file__).parent.parent / "resources" / f"{SETUP_NAME}_workspace.json"
+)
+"""
+Where the stretch of table tuned for this setup is kept.
+"""
+
+
+def searched_workspace(path: Path = TUNED_WORKSPACE_FILE) -> WorkspaceRegion:
+    """
+    The stretch of table a run over this setup's recordings searches.
+
+    :param path: The file a tuned workspace was written to.
+    :return: That workspace, or the whole of :data:`WIDEST_WORKSPACE` where none has
+        been tuned.
+    """
+    if not path.is_file():
+        return WIDEST_WORKSPACE
+    return WorkspaceRegion.load(path)
 
 
 def table_surface() -> WorkspaceSurface:
@@ -44,7 +70,7 @@ def table_surface() -> WorkspaceSurface:
     """
     return WorkspaceSurface(
         name=PrefixedName("table", SETUP_NAME),
-        region=WORKSPACE,
+        region=searched_workspace(),
         height=TABLE_HEIGHT,
     )
 
@@ -55,7 +81,7 @@ def lid_surface() -> WorkspaceSurface:
     """
     return WorkspaceSurface(
         name=PrefixedName("board_lid", SETUP_NAME),
-        region=WORKSPACE,
+        region=searched_workspace(),
         height=TABLE_HEIGHT + float(BOARD_SCALE.z),
     )
 
