@@ -1,3 +1,1 @@
-"""
-Ripple-Down-Rules engine for the Entity Query Language.
-"""
+"""Ripple-Down-Rules engine for the Entity Query Language."""

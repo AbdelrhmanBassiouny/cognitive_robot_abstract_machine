@@ -5,7 +5,10 @@ Unit tests for ``IPythonInterface._case_table`` dispatching.
 from __future__ import annotations
 
 
-from krrood.entity_query_language.rdr.case_table import render_case_table
+from krrood.entity_query_language.rdr.case_table import (
+    CaseColumnLabel,
+    render_case_table,
+)
 from krrood.entity_query_language.rdr.interactive import IPythonInterface
 from krrood.entity_query_language.rdr.interface import CaseContext
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
@@ -101,6 +104,6 @@ def test_ipython_case_table_with_corner_case_contains_both_labels():
 
     result = interface._case_table(context)
 
-    # The exact default labels from render_cases_side_by_side must appear.
-    assert "New case" in result
-    assert "Corner case" in result
+    # The default labels render_cases_side_by_side supplies must appear.
+    assert CaseColumnLabel.NEW in result
+    assert CaseColumnLabel.CORNER in result
