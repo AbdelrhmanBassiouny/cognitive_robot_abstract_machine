@@ -1491,23 +1491,50 @@ items:
       gh. The three recorded carriers are unchanged.
 
   - id: stack-board-single-site
-    branch: null
+    branch: claude/dashboard-publish-automation-hnfi5a
     title: "PR 4: plans-only Pages site (stack board retired for the native stack map)"
-    repository: AbdelrhmanBassiouny/stack-board
     track: cutover
-    depends_on: [stack-tooling-on-main, shared-pr-state-chips]
-    status: not_started
+    depends_on: []
+    status: in_progress
+    pull_request_number: 218
+    session: https://claude.ai/code/session_01CfwosnvBeiWvRLXxcnfHPk
     notes: >
       Re-scoped 2026-07-31 per the user's one-dashboard decision: the board index is
       not built at all — GitHub's native stack map covers derived stack mechanics, and
-      the plans dashboards are the single surface. board.yml checks out fork main (not
-      the tooling branch) + fetches personal-notes for plans and config; publishes
-      _site/ = plans/<id>/ per plan, refreshed every poll with no live session, via
-      PR 3's build_site.py. Adds the every-fork-PR-belongs-to-a-plan invariant: the
-      build lists open fork PRs and flags any that no plan.yaml claims. Parameterize
-      repo/branch/upstream as repository variables (portability). Fix the three
+      the plans dashboards are the single surface, published as _site/ = plans/<id>/
+      per plan with no live session.
+      Built 2026-08-30 as draft PR #218, off main rather than stacked on #111, at the
+      user's instruction not to wait: the workflow does nothing until it is on main
+      (pull_request triggers only fire from the base branch's workflow files), and
+      #111 has been blocked on a merge conflict since the 2026-08-29 maintenance pass,
+      so stacking would have parked the whole feature behind it. Its two dependencies
+      are dropped for the same reason — neither is needed by what actually shipped.
+      Two consequences recorded rather than assumed. The repository override is gone:
+      the site publishes from this fork's own Pages, not from AbdelrhmanBassiouny/
+      stack-board, so #218 lives here and the item's pull request resolves against the
+      plan's default repository. And build_site.py is a deliberate, single-file overlap
+      with #111, which carries its own at the same path on development_tooling's
+      pr_state/personal_notes plus the CI/size/conflict chips: same path and same CLI
+      contract, so whichever lands second resolves one file's content in favour of
+      #111's richer version, and this PR's github_api.py/personal_notes.py are then
+      deletable in favour of the package.
+      Triggers as shipped: pull_request opened/reopened/ready_for_review/
+      converted_to_draft/closed, push to main under the renderer's paths, and
+      workflow_dispatch. It checks out the default branch rather than the triggering
+      head, so a branch editing the renderer cannot change what the site publishes,
+      and configure-pages runs with enablement:true so a fresh fork needs no settings
+      visit. fetch-depth:0 is load-bearing, not caution — the notes-branch worktree
+      the merged-to-done correction commits in cannot push from a shallow clone
+      ("shallow update not allowed", reproduced while building this).
+      Deliberately not done, and not carried by anything else yet: the
+      every-fork-PR-belongs-to-a-plan invariant (list open fork PRs, flag any no
+      plan.yaml claims), the repo/branch/upstream repository variables, and the three
       inconsistent poll-interval statements. dashboard-urls.yaml / Artifact publishing
-      become optional legacy.
+      stay as they are; the skill is untouched.
+      34 new tests, 277 in the plan-dashboard suite (was 243), 558 across the four
+      directories CI runs (was 531). Verified end to end against the real plan data and
+      live GitHub with the notes remote redirected to a local mirror: all 10 plans
+      rendered.
 
   - id: routine-cutover
     branch: null

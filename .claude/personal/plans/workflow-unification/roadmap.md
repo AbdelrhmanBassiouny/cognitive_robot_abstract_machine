@@ -11367,3 +11367,77 @@ built wheel carries its four `Requires-Dist` lines and its package data.
 The summary line is `dependencies:` rather than `requirements:` now, since what it reports
 is the package's declared dependencies and "requirements" named a file that no longer
 exists.
+
+## Update 2026-08-30: the dashboards publish themselves, off main rather than behind #111
+
+`stack-board-single-site` (PR 4) is built and open as draft #218. The user asked for it
+now, in those words - "I do not want to wait" - and the interesting part of the session
+was working out what "now" actually forced.
+
+### The dependency was real, and honouring it would have shipped nothing
+
+The item depended on `shared-pr-state-chips` (#111), which carries a `build_site.py` at
+exactly the path this needed one at. Stacking on it is what the plan says to do, and it
+would have been wrong here for a reason that has nothing to do with impatience: a
+workflow's `pull_request` triggers fire from the *base* branch's copy of the workflow
+file, never from the pull request's own. So the feature is inert until it is on `main`.
+Stacking on a branch that has been conflict-blocked since the 2026-08-29 maintenance
+pass would have parked the whole thing behind an unrelated merge conflict, and the
+Action would still not have run once.
+
+**A dependency between two branches is a dependency between two *landings*. When the
+thing being built only works from the default branch, "stacked on" and "not shipped" are
+the same state.**
+
+### The duplicate was chosen, not missed
+
+This is the case CLAUDE.local.md's precedent list warns about - #110 and #106 building
+the same artifact twice because nobody ran the check. The check was run: `git ls-tree
+main -- .claude/skills/plan-dashboard/build_site.py` is empty, #111 builds it, and the
+two would collide. What differs from the precedent is that the collision is now a
+recorded decision instead of a discovery. It was kept to *one file* deliberately: same
+path, same CLI contract, so the merge is one file's content resolved in favour of #111's
+richer version (its chips, its `development_tooling` modules), and this branch's
+`github_api.py`/`personal_notes.py` are then deletable rather than merged.
+
+**A duplicate you can name, bound to one file, with the resolution written down before
+either lands, is a different object from one you find afterwards.** The rule that says
+fold rather than sequence still holds; what it cannot decide is the case where folding
+means shipping nothing.
+
+### Two things the build taught that no amount of reading would have
+
+`fetch-depth: 0` is in the workflow because a shallow clone genuinely cannot do the job,
+not out of caution. The merged-to-done correction commits in a worktree over the notes
+branch and pushes it; git refuses that from a shallow clone with `shallow update not
+allowed`. This was reproduced by accident - mirroring the notes branch for a smoke test
+failed with exactly that error - which is a better way to learn it than a CI run would
+have been.
+
+And the site build was verified against the *real* plan data and live GitHub, with the
+notes remote redirected to a local bare mirror so the correction push had somewhere
+harmless to go. All 10 plans rendered, tracking issues resolved through the issues
+endpoint, index links absolute against the Pages base URL. **A test with a fake
+transport proves the wiring; only real data proves the manifests you actually have go
+through it.**
+
+### What was dropped, and said so rather than quietly
+
+The item's own note listed more than shipped. The every-fork-pull-request-belongs-to-a-
+plan invariant, the repo/branch/upstream repository variables, and the three inconsistent
+poll-interval statements are all still open, and nothing else carries them. The
+`repository: AbdelrhmanBassiouny/stack-board` override is gone for a substantive reason
+rather than tidiness: the site publishes from this fork's own Pages, so #218 lives here
+and the item's pull request has to resolve against the plan's default repository or the
+dashboard looks it up in the wrong one.
+
+Pages on this repository is public. The plan data is already public on
+`claude/personal-notes`, so the site discloses nothing the branch does not - but it does
+give it a discoverable URL, which is a different thing and belongs in front of the user
+rather than in a commit message.
+
+### Counts
+
+34 new tests; the plan-dashboard suite is 277, from 243. 558 across the four directories
+CI runs, from 531. The scratch notes remote is a bare repository and the GitHub side is a
+fake, so no test reaches the network.
