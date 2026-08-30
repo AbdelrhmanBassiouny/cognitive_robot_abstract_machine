@@ -172,7 +172,7 @@ items:
   title: Write the manifest and republish the dashboard before anything else, at every transition
   branch: claude/plan-manifest-update-priority-ex2zst
   pull_request_number: 151
-  status: blocked
+  status: in_progress
   session: https://claude.ai/code/session_01SgGzMvxTxaePhpkT28uuJV
   track: pass
   depends_on:
@@ -231,16 +231,19 @@ items:
     an enum but the tests keep their string literals, because two other programs parse that format.
     Single-sourcing an external contract deletes the guard the duplicated literals were providing, and
     whether to replace it with a dedicated test or keep the literals depends on who reads the contract.
-  blockers:
-  - Merge conflict against `main`, standing since 2026-08-12 and re-reported unchanged by eight
-    successive stacked-pr-maintenance passes (latest 2026-08-28 21:55Z). Seven hunks across six
-    files - `.claude/hooks/tests/scratch_repository.py`,
-    `.claude/skills/plan-item-kickoff/SKILL.md`, `.claude/skills/plan-item-resolve/SKILL.md`,
-    `.claude/stack/maintenance_restack_procedure.py`, `.claude/stack/maintenance_restack_steps.py`
-    and `.claude/stack/tests/test_maintenance.py`. Nothing else holds the item - CI is green on head
-    `896930cd` (21 of 21 checks), the dependency `stack-maintenance-executor` merged on 2026-08-12,
-    and the four open review threads were each answered and left open for the user's call rather
-    than being requests still owed.
+
+    **The `update` subcommand this item exists to provide is the one thing that could not record
+    this item.** Run against a real plan for the first time rather than a fixture, it wrote `status`
+    and `blockers` four spaces in and orphaned them inside the preceding note, and the manifest
+    stopped parsing. `ITEM_FIELD_INDENT`, `BLOCK_BODY_INDENT` and `SEQUENCE_ENTRY_INDENT` each
+    assume items sit one level inside `items:`; every plan here writes them flush with it, so no
+    fixture caught what every real caller would hit. #160 owns half the fix and is based on main -
+    its `ItemIndentation` reads the depth off the manifest being edited - but
+    `render_sequence_entry` and the block-body indent arrived with this branch's own
+    `ValueStyle.SEQUENCE`, which does not exist on main, so #160 cannot reach them. Whether #160
+    widens after this lands or this branch adopts its `ItemIndentation` and #160 folds is an
+    ordering call left to the user; duplicating the class across both is the one option ruled out.
+    This entry was written with `save-plan.sh` directly in the meantime.
 - id: pinned-stack-tooling
   title: Pin the stack tooling for the length of a maintenance pass
   branch: claude/stack-tooling-pinning-qf5r2m

@@ -79,6 +79,12 @@ and re-applies its delta.
   review rounds, and the tell was available the whole time: it imported nothing that produced a
   document. Related: **a reviewer returning to the same line is evidence the answer has not landed**,
   not that the question has been asked already.
+- **A label that makes later passes skip a branch removes the only thing that would have retried
+  it.** The conflict label was invented so a pass reports a conflict once rather than every run, and
+  it clears only when GitHub stops reporting one - which only a resolution produces. So a branch it
+  marks is never re-attempted by the mechanism that marked it. One branch sat conflicted for eighteen
+  days and eight passes, and its recorded blocker named the most recent pass rather than the first, so
+  the manifest described a one-day-old problem.
 - **A repair rule needs its own evidence, not a shape match.** A blind regular expression fixing five
   broken words happened to be right; run over the whole plan it turned up seven more, one of which it
   would have corrupted.
