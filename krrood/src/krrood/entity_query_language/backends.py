@@ -1,13 +1,16 @@
+from __future__ import annotations
+
 import enum
 from abc import abstractmethod, ABC
 from dataclasses import dataclass, field
+from operator import eq
 from types import NoneType
 from typing import Iterable, TypeVar
 
 import random_events.variable
 from random_events.product_algebra import Event
 from sqlalchemy.orm import sessionmaker
-from typing_extensions import ClassVar, Dict, List, Optional
+from typing_extensions import Any, ClassVar, Dict, List, Optional
 
 from krrood import logger
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
@@ -21,7 +24,9 @@ from krrood.entity_query_language.operators.causal import (
     CauseEffectVariables,
     ScoredIntervention,
 )
-from krrood.entity_query_language.core.variable import Variable
+from krrood.entity_query_language.core.mapped_variable import Attribute
+from krrood.entity_query_language.core.variable import Literal, Variable
+from krrood.entity_query_language.operators.comparator import Comparator
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.exceptions import (
     BackendCannotEvaluateCause,
@@ -62,6 +67,49 @@ except ImportError as e:
     UnderspecifiedParameters = NoneType
 
 T = TypeVar("T")
+
+
+@dataclass(frozen=True)
+class AttributeEquality:
+    """
+    A condition fixing one attribute of the variable a query selects to a single value.
+
+    This is the shape a backend translating a query into another engine's plan can
+    usually act on directly, so it is read off a condition once here rather than by
+    every such backend.
+    """
+
+    attribute_name: str
+    """
+    The attribute the condition fixes, by the name the selected type gives it.
+    """
+
+    value: Any
+    """
+    The value it is fixed to.
+    """
+
+    @classmethod
+    def read_from(
+        cls, condition: Evaluable, selection: Selectable
+    ) -> Optional[AttributeEquality]:
+        """
+        Read a condition as an equality about the selected variable's own attribute.
+
+        :param condition: The condition to read.
+        :param selection: The variable the query selects.
+        :return: The equality the condition states, or ``None`` when it states none --
+            because it compares something else, compares by something other than
+            equality, or compares against anything but a fixed value.
+        """
+        if not isinstance(condition, Comparator) or condition.operation is not eq:
+            return None
+        attribute, compared = condition._children_
+        if not isinstance(attribute, Attribute) or not isinstance(compared, Literal):
+            return None
+        if attribute._chain_root_ is not selection:
+            return None
+        return cls(attribute._attribute_name_, compared._value_)
 
 
 @dataclass
