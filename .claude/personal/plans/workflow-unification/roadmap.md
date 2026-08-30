@@ -11494,3 +11494,71 @@ rather than in a commit message.
 bare repository and the GitHub side is a fake, so no test reaches the network. The
 rejected environment deployment is pinned out by a test of its own, so the route the
 first run refuted cannot come back unnoticed.
+
+## Update 2026-08-30 (not merging to main): the pin was half a pin, and it pointed at an empty tree
+
+The user's constraint, in one sentence: *"but I do not want to merge to main"*. Taking it
+seriously turned out to expose a real defect rather than merely constrain the deployment.
+
+### `ref: main` would have checked out a tree with no renderer
+
+The workflow pinned its checkout to `main` on the reasoning that a run triggered by a pull
+request should publish the site the repository defines rather than whatever that branch had
+changed the renderer into. `main` carries no `build_site.py`: it, `personal_notes.py`,
+`github_api.py`, `pages_site.py` and `publish_site.sh` exist on this branch alone. So under
+any plan except *merge to main first*, the job would have checked out an empty tree and
+failed on a missing script - and the pin was only ever going to work in the one scenario the
+user has now ruled out.
+
+The precedent settled the replacement rather than an argument: `integration-refresh.yml` -
+the workflow the user pointed at as the model for dispatch - pins **no** `ref`. It builds
+with the tree the run started on. Checked rather than remembered.
+
+The isolation the pin claimed was half a pin anyway. A `pull_request` run executes the
+workflow file **from the merge ref**, which is why this workflow ran at all on the day it was
+opened, before existing on any other branch. So the steps that decide what runs already come
+from the pull request; pinning only the *script* checkout isolated the less dangerous half
+while leaving the more dangerous one open. What is worth holding instead is that the workflow
+and the scripts land in one commit, so the run builds with one tree - which is now the test.
+
+### Which branch carries the file decides which triggers reach it
+
+The three answers differ, and none substitutes for another:
+
+| trigger | which copy runs | needs the file on |
+| --- | --- | --- |
+| `workflow_dispatch` | the default branch's | `integration`, on this fork |
+| `pull_request` | the pull request's own merge ref | that pull request's base - `main`, ordinarily |
+| `push` | the branch it names | that branch |
+
+That table is the honest answer to the constraint, and it is a property of GitHub rather than
+of this design: **no workflow shape makes the `pull_request` trigger reach a pull request
+whose base does not carry the file.** For PR #199, based on `main`, the merge ref is
+`main` + #199, neither of which has this workflow, so no run is created at all.
+
+So without `main`, what is reachable is: dispatch (once un-drafting #218 lets the next
+integration rebuild carry it to the default branch), plus this pull request's own events.
+The gap is closed either by landing it on `main` later or by a `schedule:` cron of the kind
+`integration-refresh.yml` already runs. **The cron was deliberately not added** - it was not
+asked for, and the standing no-scheduled-checks rule makes it the user's call rather than a
+default to assume, even though the roadmap's own 2026-08-28 reading (a timer on deterministic
+automation is not a scheduled LLM check) would permit it.
+
+One fragility of living on `integration` instead, stated rather than discovered later: that
+branch is regenerated from scratch on every rebuild, so a build that drops this tip - a
+conflict with a sibling, a blocking label, red checks - takes the workflow off the default
+branch with it, and dispatch silently stops being offered until a later build carries it
+again.
+
+### Worth carrying
+
+**A constraint the user adds late is worth testing against the design rather than only
+routed around.** "Do not merge to main" read as a deployment preference and turned out to
+name a bug: the checkout could only ever have worked on the one path being ruled out. The
+check that found it was one command - does the branch this names actually carry the script it
+runs - and it was available from the moment the pin was written.
+
+And the smaller one, which cost a wasted write this session: `save-pr-progress.sh` takes no
+`--file`, it reads `CLAUDE.local.md`'s marked section. Passing one is accepted silently and
+ignored, and the run then reports *no changes to save* - which reads as success. The tell was
+the no-op on a note that had definitely changed.
