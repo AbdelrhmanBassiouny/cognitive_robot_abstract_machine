@@ -19,6 +19,7 @@ import shutil
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -181,7 +182,7 @@ def manifest_line(manifest_key: ManifestKey, value: str) -> str:
     return manifest_key.render(value, PLAN_INDENTATION)
 
 
-def opened_item_fields() -> dict[ManifestKey, str]:
+def opened_item_fields() -> dict[ManifestKey, Any]:
     """
     The fields opening an item's work writes onto it, as the manifest spells them.
 
@@ -189,7 +190,7 @@ def opened_item_fields() -> dict[ManifestKey, str]:
     """
     return {
         ManifestKey.BRANCH: NEW_BRANCH,
-        ManifestKey.PULL_REQUEST_NUMBER: str(PULL_REQUEST_NUMBER),
+        ManifestKey.PULL_REQUEST_NUMBER: PULL_REQUEST_NUMBER,
         ManifestKey.SESSION: SESSION_URL,
         ManifestKey.STATUS: ItemStatus.IN_PROGRESS.value,
     }
@@ -561,9 +562,9 @@ def test_recording_a_new_item_appends_it_to_the_manifest(
     assert manifest.endswith(
         ManifestKey.IDENTIFIER.render(NEW_ITEM, PLAN_INDENTATION, opening_the_item=True)
         + manifest_line(ManifestKey.TITLE, "A brand new item")
-        + manifest_line(ManifestKey.BRANCH, "null")
+        + manifest_line(ManifestKey.BRANCH, None)
         + manifest_line(ManifestKey.TRACK, "a-track")
-        + manifest_line(ManifestKey.DEPENDS_ON, "[]")
+        + manifest_line(ManifestKey.DEPENDS_ON, ())
         + manifest_line(ManifestKey.STATUS, ItemStatus.NOT_STARTED.value)
     )
 
@@ -603,7 +604,7 @@ def test_recording_against_an_unknown_plan_is_refused(
 def test_opening_writes_the_branch_pull_request_and_session_onto_the_item(
     bootstrap_repository: ScratchRepository,
 ):
-    opener = RecordingPullRequestOpener(number=143)
+    opener = RecordingPullRequestOpener(number=PULL_REQUEST_NUMBER)
 
     result = open_work(
         open_request(),
@@ -612,14 +613,9 @@ def test_opening_writes_the_branch_pull_request_and_session_onto_the_item(
     )
 
     assert result.exit_code is ExitCode.SUCCESS
-    assert result.pull_request_number == 143
+    assert result.pull_request_number == PULL_REQUEST_NUMBER
     manifest = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
-    for written_key, value in (
-        (ManifestKey.BRANCH, NEW_BRANCH),
-        (ManifestKey.PULL_REQUEST_NUMBER, "143"),
-        (ManifestKey.SESSION, SESSION_URL),
-        (ManifestKey.STATUS, ItemStatus.IN_PROGRESS.value),
-    ):
+    for written_key, value in opened_item_fields().items():
         assert manifest_line(written_key, value) in manifest
 
 
@@ -745,7 +741,7 @@ def test_a_supplied_pull_request_number_is_recorded_without_creating_one(
     assert opener.requests == []
     assert result.pull_request_number == 57
     assert (
-        manifest_line(ManifestKey.PULL_REQUEST_NUMBER, "57")
+        manifest_line(ManifestKey.PULL_REQUEST_NUMBER, 57)
         in published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
     )
 
@@ -1416,6 +1412,8 @@ def test_unblocking_a_branch_no_plan_claims_writes_nothing(
 
     assert report.exit_code is ExitCode.BRANCH_TRACKS_NO_ITEM
     assert published_plan(bootstrap_repository)[PlanDocument.MANIFEST] == before
+
+
 # %% plans whose items are written indentless
 
 
@@ -1684,7 +1682,11 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
 
 
 def test_only_the_keys_whose_values_run_over_lines_are_block_styled():
-    assert BLOCK_STYLED_KEYS == {ManifestKey.NOTES, ManifestKey.BLOCKERS}
+    assert BLOCK_STYLED_KEYS == {
+        ManifestKey.NOTES,
+        ManifestKey.BLOCKERS,
+        ManifestKey.DEPENDS_ON,
+    }
 
 
 # %% exit statuses

@@ -146,6 +146,12 @@ One level of YAML indentation, which is what separates a key from the lines its 
 value occupies beneath it.
 """
 
+UNBROKEN_LINE_WIDTH = sys.maxsize
+"""
+A width the dumper can never reach, so a scalar written on its key's own line stays on
+it instead of being wrapped into a continuation.
+"""
+
 MANIFEST_LINE_WIDTH = 100
 """
 The column a wrapped body line is kept under.
@@ -206,6 +212,38 @@ def fold(text: str, indent: str) -> str:
         for paragraph in paragraphs_of(text)
     ]
     return "\n\n".join(paragraphs) + "\n"
+
+
+def render_scalar(key: str, value: Any, style: ValueStyle) -> str:
+    """
+    One ``key: value`` line, written so that it reads back as the value it was given.
+
+    Which quoting a value needs is YAML's rule rather than this module's - a space
+    before ``#`` opens a comment, a trailing colon opens a mapping, and inside double
+    quotes a quote closes the scalar and a backslash escapes what follows - so the
+    dumper decides it. A double-quoted key asks for that style outright, since the
+    quotes there are how the manifest reads rather than something the value needs.
+
+    :param key: The key the line sets.
+    :param value: The value to write, in whatever type it is to be read back as.
+    :param style: How the key's value is written.
+    :return: The line, without its indentation or its newline.
+    """
+    if style is ValueStyle.DOUBLE_QUOTED:
+        written = yaml.safe_dump(
+            str(value),
+            default_style='"',
+            width=UNBROKEN_LINE_WIDTH,
+            allow_unicode=True,
+        )
+        return f"{key}: {written.rstrip()}"
+    return yaml.safe_dump(
+        {key: value},
+        default_flow_style=False,
+        width=UNBROKEN_LINE_WIDTH,
+        allow_unicode=True,
+        sort_keys=False,
+    ).rstrip("\n")
 
 
 def render_sequence_entry(entry: str, indentation: ItemIndentation) -> str:
@@ -409,9 +447,12 @@ class ManifestKey(KeySpecification, Enum):
     The parallel line of work the item belongs to.
     """
 
-    DEPENDS_ON = ("depends_on",)
+    DEPENDS_ON = ("depends_on", ValueStyle.SEQUENCE)
     """
     The items this one stacks on, by id.
+
+    Written beneath its key like any other sequence, which is what decides how much of
+    the manifest replacing it has to take with it.
     """
 
     STATUS = ("status",)
@@ -468,8 +509,7 @@ class ManifestKey(KeySpecification, Enum):
             return f"{prefix}{self.key}:\n{entries}"
         if self.style is ValueStyle.BLOCK:
             return f"{prefix}{self.key}: >\n{fold(str(value), indentation.nested)}"
-        written = f'"{value}"' if self.style is ValueStyle.DOUBLE_QUOTED else value
-        return f"{prefix}{self.key}: {written}\n"
+        return f"{prefix}{render_scalar(self.key, value, self.style)}\n"
 
     @property
     def pattern(self) -> re.Pattern[str]:
@@ -490,13 +530,18 @@ rather than listed a second time.
 """
 
 
-
 ITEM_START_PATTERN = re.compile(rf"^(\s*-\s+){re.escape(ManifestKey.IDENTIFIER.key)}:")
 """
 Matches the first line of an item block, which is always its ``id``, capturing the
 marker that opens it.
 
 Same anchor ``sync_manifest_status.py`` uses to find item boundaries in raw text.
+"""
+
+SEQUENCE_ENTRY_PATTERN = re.compile(r"^\s*-\s")
+"""
+Matches one entry of a block sequence, which YAML lets sit either indented under its key
+or flush with it.
 """
 
 TOP_LEVEL_KEY_PATTERN = re.compile(r"^\S")
@@ -1330,7 +1375,7 @@ def apply_item_fields(
     manifest_text: str,
     plan_identifier: str,
     item_identifier: str,
-    values_by_key: dict[ManifestKey, str],
+    values_by_key: dict[ManifestKey, Any],
 ) -> str:
     """
     Set each of *values_by_key* on one item, patching an existing line or inserting a new
@@ -1388,6 +1433,10 @@ def value_span(
     past the key itself; replacing only the key's own line would leave that body behind,
     where YAML reads it as a continuation of whatever replaced it.
 
+    A block sequence is the one value that also owns lines at the key's *own* depth,
+    since YAML lets its entries sit flush with the key they belong to - which is where
+    the dumper writes them, so it is the shape every saved manifest has.
+
     :param manifest_lines: The manifest, split into lines.
     :param key_line: The line the key sits on.
     :param end: One past the item block's last line.
@@ -1397,12 +1446,19 @@ def value_span(
     if not manifest_key.style.spans_lines_beneath:
         return key_line + 1
     key_indent = indentation_of(manifest_lines[key_line])
+    entries_sit_flush = manifest_key.style is ValueStyle.SEQUENCE
     last_value_line = key_line
     for index in range(key_line + 1, end):
         line = manifest_lines[index]
         if not line.strip():
             continue
-        if indentation_of(line) <= key_indent:
+        indent = indentation_of(line)
+        if indent > key_indent:
+            last_value_line = index
+            continue
+        if indent < key_indent or not entries_sit_flush:
+            break
+        if not SEQUENCE_ENTRY_PATTERN.match(line):
             break
         last_value_line = index
     return last_value_line + 1
@@ -1452,9 +1508,9 @@ def render_new_item(request: ItemRecordRequest, indentation: ItemIndentation) ->
         )
     body = {
         ManifestKey.TITLE: request.title,
-        ManifestKey.BRANCH: "null",
+        ManifestKey.BRANCH: None,
         ManifestKey.TRACK: request.track,
-        ManifestKey.DEPENDS_ON: "[]",
+        ManifestKey.DEPENDS_ON: (),
         ManifestKey.STATUS: request.status.value,
     }
     return ManifestKey.IDENTIFIER.render(
@@ -1740,15 +1796,21 @@ def update_item(request: ItemUpdateRequest, project_root: Path) -> BootstrapRepo
     )
 
 
-def written_value(value: Any) -> str | Sequence[str]:
+def written_value(value: Any) -> Any:
     """
     A caller's value in the form a key renders, so callers can pass what they hold.
+
+    A string subclass is narrowed to :class:`str` - a ``StrEnum`` member is a string
+    the dumper has no representer for - and every other scalar keeps its own type, since
+    that is what it is read back as.
 
     :param value: The value to write - a status, a number, prose, or a sequence.
     :return: The value a :class:`ManifestKey` renders.
     """
-    if isinstance(value, str) or not isinstance(value, Sequence):
+    if isinstance(value, str):
         return str(value)
+    if not isinstance(value, Sequence):
+        return value
     return [str(entry) for entry in value]
 
 
@@ -2550,7 +2612,7 @@ def open_work(
         request.item_identifier,
         {
             ManifestKey.BRANCH: request.branch,
-            ManifestKey.PULL_REQUEST_NUMBER: str(created.number),
+            ManifestKey.PULL_REQUEST_NUMBER: created.number,
             ManifestKey.SESSION: request.session_url,
             ManifestKey.STATUS: ItemStatus.IN_PROGRESS.value,
         },
