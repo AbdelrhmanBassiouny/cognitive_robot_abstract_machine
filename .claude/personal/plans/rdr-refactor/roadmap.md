@@ -2940,3 +2940,48 @@ that a fresh pull request buys one push, not a working ref.
 Both outstanding items are the stack's or the developer's rather than this branch's, and both are
 recorded in the item's `blockers`: the `GroundTruth` question, and `test_each_lib
 (semantic_digital_twin)`, which only the cascade clears. No subscription and no check-in were armed.
+
+## 33. Addendum (2026-08-30) — the maintenance pass had been silently skipping this plan's reparents
+
+Run on the developer's report that branches in this plan were sitting on parents that had merged,
+closed or been deferred, and that no stacking-maintenance pass had moved them.
+
+**Root cause, reproduced before anything was written.** `load_stack()` on main fetches only
+`[pr.head for pr in prs]` — the *head* branches of the open pull requests on the board. A parent
+that is not itself an open pull request head is therefore never fetched, and `is_merged` runs
+`git merge-base --is-ancestor` through `_git_succeeds`, which cannot tell exit 128 (the ref does
+not exist) from exit 1 (not an ancestor). On this clone `stack.py reparents` printed nothing
+before the fork branch refs were fetched and printed #64 afterwards, from the same board. The
+answer was not "no reparents"; it was a missing ref read as one.
+
+This is already fixed, unlanded, by **PR #198** (`unfetched-parent-branches`, plan
+`workflow-unification`), whose own notes root-cause the same #64. The pass was therefore run from
+#198's tooling rather than from main's, and no new fix was written here.
+
+**What it found in this plan.** #64 (`D-core-underspecified`) had been orphaned on `D-core-aid`
+since #63 merged: never reparented and, because the same wrong boolean feeds `parent_landed`,
+never promoted either — it carried no labels at all. It is now based on `main` and has its cram2
+link. #79 and #21 are the other half of the same defect: their bases (`D-ui-splice-fix`,
+`rdr/oo-plan`) were closed without merging, so their commits are in neither the upstream base nor
+any open fork branch, and #198's parent-placement rule reports them to their owners rather than
+inventing a target. Both are recorded in `blockers`.
+
+**A premise in §the D-ui-rendering entry no longer holds.** That note says #79 "must be
+re-targeted onto D-core-engine before it can merge". `D-core-engine` (#68) is itself deferred, so
+it is not a base anything can land through. The manifest's `depends_on` for `D-ui-splice-fix`
+names `d-core-backend` (#210), which is the candidate a session picking this up should weigh; the
+pass does not choose it, because which base is right is a judgement about the work rather than a
+fact about git.
+
+**`rdr-oo-recognition` keeps `deferred` rather than being flipped to `blocked`.** Both are true of
+it — deliberately parked, and standing on a dead base — and the deferral is the developer's own
+decision, so the blocker was added beside it instead of overwriting it.
+
+**Two unlanded fixes were needed to complete one pass.** Writing those blockers through
+`plan_item_bootstrap.py block` fails on this plan: it patches item fields at a hardcoded
+four-space indent, which does not parse in a manifest whose items are written flush with `items:`
+— this plan's style — and `save-plan.sh`'s error is swallowed by `capture_output`, so it surfaces
+only as a `CalledProcessError` naming a temporary path. That is **PR #160**
+(`plan-item-bootstrap-yaml-indent`), also unlanded, and its branch predates the `block` subcommand
+so it could not simply be borrowed. The two entries were composed from the script's own intended
+output with the indentation corrected, and the manifest was parsed before saving.
