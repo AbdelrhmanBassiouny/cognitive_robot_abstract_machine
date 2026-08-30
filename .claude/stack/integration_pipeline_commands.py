@@ -1,5 +1,5 @@
 """
-One whole rebuild: prepare the checkout, assemble, get it checked, publish.
+One whole rebuild: prepare the checkout, settle what is already being judged, assemble.
 
 The preparation is what only this knows about the runner it is on - a fresh checkout
 has no upstream remote and no identity to commit under, and a rebuild makes merge
@@ -31,7 +31,8 @@ from integration_run import IntegrationCommand, IntegrationRun
 @dataclass(frozen=True)
 class RefreshCommand(IntegrationCommand):
     """
-    Performs a whole rebuild: prepare, assemble, get it checked, publish or localise.
+    Performs a whole rebuild: prepare, settle whatever an earlier run left being judged,
+    then assemble the next build and open the candidate that judges it.
     """
 
     @property
@@ -46,7 +47,7 @@ class RefreshCommand(IntegrationCommand):
         """
         What it does, as ``--help`` puts it.
         """
-        return "rebuild the integration branch and publish it once its checks pass"
+        return "settle the build being judged, then assemble and open the next"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """:param parser: The subparser to declare this command's flags on."""
@@ -63,6 +64,17 @@ class RefreshCommand(IntegrationCommand):
             type=Path,
             default=Path(tempfile.gettempdir()) / LOCALISATION_STATE_FILE,
             help="where a localisation keeps what it has established between calls",
+        )
+        parser.add_argument(
+            "--plan",
+            action="append",
+            default=[],
+            metavar="PLAN",
+            help=(
+                "rebuild carrying only the tips belonging to this plan, to find out "
+                "whether it holds together on its own; such a rebuild settles nothing "
+                "and publishes nothing"
+            ),
         )
         parser.add_argument(
             "--actor",
@@ -86,7 +98,9 @@ class RefreshCommand(IntegrationCommand):
         """
         self._prepare(run, arguments.actor)
         return RefreshPipeline(
-            dispatch_on=arguments.dispatch_on, state_document=arguments.state
+            dispatch_on=arguments.dispatch_on,
+            state_document=arguments.state,
+            plans=tuple(arguments.plan),
         ).run()
 
     @staticmethod

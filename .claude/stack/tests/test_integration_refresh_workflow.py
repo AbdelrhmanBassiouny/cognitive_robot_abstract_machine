@@ -13,6 +13,11 @@ import integration_pipeline_commands
 from integration_exit_codes import IntegrationExitCode
 from workflow_document import Action, TriggerEvent, WorkflowFile
 
+PLANS_INPUT = "plans"
+"""
+What a dispatch names the plans it wants a rebuild of.
+"""
+
 REFRESH_JOB = "refresh"
 """
 The job the rebuild is, whose key the workflow's own concurrency group is named for.
@@ -100,3 +105,80 @@ def test_the_dispatch_reference_is_one_expression_rather_than_several_lines():
     rebuilding = next(step for step in refresh_job().steps if step.environment)
 
     assert "\n" not in rebuilding.environment["PIPELINE_REFERENCE"]
+
+
+# %% a published pipeline older than the rebuild it is asked for
+
+
+def probing_step():
+    """:return: The step that asks whether the checked-out tooling can rebuild at all."""
+    return next(step for step in refresh_job().steps if step.tolerates_its_own_failure)
+
+
+def steps_conditioned_on(identifier: str):
+    """:param identifier: A step's own ``id``.
+    :return: Every step whose condition reads that step's outcome."""
+    return [step for step in refresh_job().steps if identifier in step.condition]
+
+
+def test_a_rebuild_the_published_pipeline_cannot_perform_is_asked_for_before_it_is_run():
+    """
+    A pull request's run is pinned to the default branch so that no branch's own code
+    runs against a writing token - and that branch is the one this pipeline publishes,
+    so it lags whatever is in flight and can predate the command the job invokes. Asking
+    first is what turns that into an answer rather than a usage error.
+    """
+    asking = probing_step()
+
+    assert integration_pipeline_commands.RefreshCommand().invoked_as in asking.script
+    assert asking.identifier
+
+
+def test_a_pipeline_that_cannot_rebuild_neither_rebuilds_nor_fails_the_run():
+    """
+    Failing would attach a red check to whichever branch's ready-flip asked for the
+    rebuild, which is the branch the rebuild exists to carry.
+    """
+    conditioned = steps_conditioned_on(probing_step().identifier)
+    rebuilding = [step for step in conditioned if step.environment]
+
+    assert len(rebuilding) == 1
+    assert integration_pipeline_commands.RefreshCommand().invoked_as in (
+        rebuilding[0].script
+    )
+
+
+def test_a_rebuild_that_was_never_attempted_says_so():
+    """
+    A job that answers green having done nothing is the state this pipeline has already
+    been in once, and it reads as a rebuild that worked.
+    """
+    conditioned = steps_conditioned_on(probing_step().identifier)
+
+    assert [step for step in conditioned if not step.environment]
+
+
+# %% a rebuild carrying one plan
+
+
+def test_a_dispatch_can_ask_for_a_rebuild_of_particular_plans():
+    """
+    Asking whether one plan holds together on its own is a thing a person reaches for
+    when the full build is red, so it has to be reachable from where they start a
+    rebuild.
+    """
+    declared = WorkflowFile.INTEGRATION_REFRESH.read().dispatch_inputs
+
+    assert PLANS_INPUT in declared
+    assert declared[PLANS_INPUT]["default"] == ""
+
+
+def test_a_rebuild_that_was_asked_for_no_plan_names_none():
+    """
+    An empty input passed through as a flag would name a plan of no name, which the index
+    matches nothing against - so the full build, which is every scheduled run, would come
+    out empty.
+    """
+    rebuilding = next(step for step in refresh_job().steps if step.environment)
+
+    assert f"${{{PLANS_INPUT.upper()}:+--plan " in rebuilding.script

@@ -14,6 +14,11 @@ install, and call this.
 The individual commands are unchanged and still each answer one question and exit, so a
 caller that does not want to wait need not; the waiting is this composition's, not
 theirs.
+
+One run never reaches a verdict on the candidate it opened. Measured on this fork, the
+first check appeared 19 minutes after one candidate was opened and 2 hours 47 minutes
+after another, which no job can outwait - so a run opens a candidate and stops, and the
+next run inherits and settles it.
 """
 
 from __future__ import annotations
@@ -22,7 +27,7 @@ import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, Iterator
+from typing import Any, Callable, Iterator, Mapping
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 
@@ -34,7 +39,6 @@ from tool_runner import (  # noqa: E402
     IntegrationSubcommand,
     MaintenanceSubcommand,
     LOCALISATION_SCHEDULE,
-    VERDICT_SCHEDULE,
     PollingSchedule,
     SubprocessToolRunner,
     ToolRunner,
@@ -43,17 +47,6 @@ from tool_runner import (  # noqa: E402
 
 # %% the rebuild
 
-
-CHECKS_WARM_UP_ATTEMPTS = 5
-"""
-How many readings of a candidate may find no check at all before the rebuild stops
-waiting for one.
-
-GitHub creates a pull request's run within seconds of the request being opened, so on
-the verdict schedule's interval this is minutes of nothing having started - long enough
-that a queue is not mistaken for a trigger that never fired, and short enough that one
-that never fired is not waited out for an hour.
-"""
 
 A_BUILD_WAS_ASSEMBLED = frozenset(
     {IntegrationExitCode.SUCCESS, IntegrationExitCode.TIP_LEFT_OUT}
@@ -69,18 +62,33 @@ assembled is usable, it is simply not whole.
 @dataclass(frozen=True)
 class Candidate:
     """
-    The pull request opened so a build collects checks.
+    The pull request a build is being judged as.
     """
 
     number: str
     """
-    Its number, as the command that opened it reported.
+    Its number, as the command that reported it spelled it.
+    """
+
+    build_branch: str
+    """
+    The build it is judging.
     """
 
     head: str
     """
     The commit its checks are reported against.
     """
+
+    @classmethod
+    def from_json(cls, document: Mapping[str, Any]) -> Candidate:
+        """:param document: What a command that reported a candidate printed.
+        :return: The candidate it names."""
+        return cls(
+            number=str(document[VerdictReportKey.CANDIDATE]),
+            build_branch=str(document[VerdictReportKey.BUILD_BRANCH]),
+            head=str(document[VerdictReportKey.HEAD]),
+        )
 
 
 @dataclass(frozen=True)
@@ -103,8 +111,8 @@ class AssembledBuild:
 @dataclass
 class RefreshPipeline:
     """
-    One rebuild: bring the base forward, assemble, get it checked, publish it if green,
-    and localise it if not.
+    One rebuild: settle whatever an earlier run left being judged, then bring the base
+    forward and assemble the next build for the run after this one to settle.
     """
 
     dispatch_on: str
@@ -118,6 +126,16 @@ class RefreshPipeline:
     Where the localisation keeps what it has established between calls.
     """
 
+    plans: tuple[str, ...] = ()
+    """
+    The plans this rebuild was asked to carry, empty when it carries all of them.
+
+    A filtered rebuild answers one question - whether those plans hold together on their
+    own - and answers it about a build that is deliberately not the whole of what is in
+    flight. So it never settles the candidate the cycle left, and never publishes: the
+    branch a developer works from is only ever moved onto a build carrying everything.
+    """
+
     runner: ToolRunner = field(default_factory=SubprocessToolRunner)
     """
     How each command is run.
@@ -126,16 +144,6 @@ class RefreshPipeline:
     wait: Callable[[float], None] = time.sleep
     """
     How the rebuild waits between asking a question again.
-    """
-
-    verdict_schedule: PollingSchedule = VERDICT_SCHEDULE
-    """
-    How long to wait for the candidate's checks.
-    """
-
-    warm_up_attempts: int = CHECKS_WARM_UP_ATTEMPTS
-    """
-    How many readings may find no check at all before the rebuild gives up on one.
     """
 
     localisation_schedule: PollingSchedule = LOCALISATION_SCHEDULE
@@ -147,21 +155,105 @@ class RefreshPipeline:
         """
         Perform the rebuild.
 
-        :return: The status of whichever step decided the run - success only when a
-            build was assembled, checked and published.
+        Success is this run having done its part rather than a build having been
+        published: what a run can finish is settling what it inherited and leaving the
+        next build being judged, and the checks it opened a candidate for start long
+        after the run is over. A status other than success is one somebody has to look
+        at.
+
+        A rebuild asked for particular plans does neither of the two things that act on
+        the whole of what is in flight - it settles no inherited candidate and publishes
+        nothing - because the build it assembled is deliberately partial.
+
+        :return: The status of whichever step decided the run.
         """
+        if not self.plans:
+            inherited = self._settle_what_is_already_being_judged()
+            if inherited is not None:
+                return inherited
         if not self._fast_forward():
             return IntegrationExitCode.BASE_NOT_PREPARED
         assembled = self._build()
         if assembled.branch is None:
             return assembled.status
-        candidate = self._open_candidate(assembled.branch)
-        if candidate is None:
+        if not self.plans and self._publish_recorded_pass(assembled.branch):
+            return IntegrationExitCode.SUCCESS
+        if self._open_candidate(assembled.branch) is None:
             return IntegrationExitCode.GITHUB_REQUEST_FAILED
-        verdict = self._await_verdict(assembled.branch, candidate)
-        if verdict is IntegrationExitCode.CANDIDATE_FAILED:
+        return IntegrationExitCode.SUCCESS
+
+    def _settle_what_is_already_being_judged(self) -> IntegrationExitCode | None:
+        """
+        Read the candidate an earlier run left, and act on what its checks say.
+
+        A run that assembled while one was open would open a second candidate against the
+        same branch, so this is what the rebuild asks first. A candidate whose checks are
+        still coming is left where it is rather than waited on: this run has nothing
+        further it can do, and the next one inherits it.
+
+        :return: The status to stop with, or ``None`` when the run should carry on and
+            assemble the next build.
+        """
+        found = self.runner.run(
+            ToolingScript.INTEGRATION,
+            IntegrationSubcommand.FIND_CANDIDATE,
+            CommandLineFlag.JSON,
+        )
+        if IntegrationExitCode(found.status) is IntegrationExitCode.NO_CANDIDATE_OPEN:
+            return None
+        if found.status != IntegrationExitCode.SUCCESS:
+            print(found.output, end="")
+            return IntegrationExitCode.GITHUB_REQUEST_FAILED
+        candidate = Candidate.from_json(found.document())
+        return self._act_on(candidate, self._settle(candidate))
+
+    def _act_on(
+        self, candidate: Candidate, settled: CommandOutcome
+    ) -> IntegrationExitCode | None:
+        """
+        Decide what one reading of an inherited candidate leaves the run to do.
+
+        A candidate with no check at all is the one case this can call a fault rather
+        than slowness: it has been open since at least the previous run, so whatever
+        should have started one - the trigger, or the credential it was opened with - did
+        not.
+
+        :param candidate: The candidate that was read.
+        :param settled: What reading its checks answered.
+        :return: The status to stop with, or ``None`` when the run should carry on.
+        """
+        status = IntegrationExitCode(settled.status)
+        if status is IntegrationExitCode.CANDIDATE_STILL_RUNNING:
+            if _reported_no_check(settled):
+                print(
+                    f"no check has been reported against candidate {candidate.number} "
+                    "since before the previous rebuild, so nothing is starting one",
+                    file=sys.stderr,
+                )
+                return IntegrationExitCode.CANDIDATE_UNCHECKED
+            return IntegrationExitCode.SUCCESS
+        if status is IntegrationExitCode.CANDIDATE_FAILED:
             self._localise(candidate)
-        return verdict
+            return status
+        if status is not IntegrationExitCode.SUCCESS:
+            print(settled.output, end="")
+            return status
+        return None
+
+    def _settle(self, candidate: Candidate) -> CommandOutcome:
+        """:param candidate: The candidate to read.
+        :return: What reading its checks answered."""
+        return self.runner.run(
+            ToolingScript.INTEGRATION,
+            IntegrationSubcommand.SETTLE_CANDIDATE,
+            CommandLineFlag.CANDIDATE,
+            candidate.number,
+            CommandLineFlag.BUILD,
+            candidate.build_branch,
+            CommandLineFlag.HEAD,
+            candidate.head,
+            CommandLineFlag.JSON,
+        )
 
     def _fast_forward(self) -> bool:
         """
@@ -193,6 +285,7 @@ class RefreshPipeline:
             ToolingScript.INTEGRATION,
             IntegrationSubcommand.BUILD,
             CommandLineFlag.RESTACK,
+            *self._named_plans(),
             CommandLineFlag.JSON,
         )
         status = IntegrationExitCode(assembled.status)
@@ -211,6 +304,28 @@ class RefreshPipeline:
             branch=assembled.document()[VerdictReportKey.BUILD_BRANCH],
         )
 
+    def _publish_recorded_pass(self, build: str) -> bool:
+        """
+        Publish the build outright if its tree is one already seen to pass.
+
+        A rebuild assembles the same branches over the same base four times a day and
+        nothing has usually moved, so most builds are byte-for-byte one already judged -
+        and judging it again costs a matrix plus however long GitHub takes to start one.
+
+        :param build: The assembled branch.
+        :return: Whether the branch a developer works from was moved onto it.
+        """
+        return (
+            self.runner.run(
+                ToolingScript.INTEGRATION,
+                IntegrationSubcommand.PUBLISH_RECORDED_PASS,
+                CommandLineFlag.BUILD,
+                build,
+                CommandLineFlag.JSON,
+            ).status
+            == IntegrationExitCode.SUCCESS
+        )
+
     def _open_candidate(self, build: str) -> Candidate | None:
         """:param build: The assembled branch to get checked.
         :return: The pull request collecting its checks, or ``None`` when none opened.
@@ -220,61 +335,21 @@ class RefreshPipeline:
             IntegrationSubcommand.OPEN_CANDIDATE,
             CommandLineFlag.BUILD,
             build,
+            *self._named_plans(),
             CommandLineFlag.JSON,
         )
         if opened.status != IntegrationExitCode.SUCCESS:
             print(opened.output, end="")
             return None
-        document = opened.document()
-        return Candidate(
-            number=str(document[VerdictReportKey.CANDIDATE]),
-            head=document[VerdictReportKey.HEAD],
+        return Candidate.from_json(opened.document())
+
+    def _named_plans(self) -> tuple[str, ...]:
+        """:return: The plans as a command line names them, empty when unfiltered."""
+        return tuple(
+            argument
+            for plan in self.plans
+            for argument in (str(CommandLineFlag.PLAN), plan)
         )
-
-    def _await_verdict(self, build: str, candidate: Candidate) -> IntegrationExitCode:
-        """
-        Ask what the candidate's checks say until they have finished saying it.
-
-        A candidate nothing has reported a check against is given a warm-up and then
-        given up on rather than waited out: no run having been created is a different
-        thing from a matrix taking its time, and spending the whole schedule on it ends
-        the rebuild saying the checks were slow when none was ever started.
-
-        :param build: The assembled branch under judgement.
-        :param candidate: The pull request collecting the checks.
-        :return: The verdict's own status.
-        """
-        settled = IntegrationExitCode.CANDIDATE_STILL_RUNNING
-        for attempt, answer in enumerate(
-            self._ask_repeatedly(
-                self.verdict_schedule,
-                ToolingScript.INTEGRATION,
-                IntegrationSubcommand.SETTLE_CANDIDATE,
-                CommandLineFlag.CANDIDATE,
-                candidate.number,
-                CommandLineFlag.BUILD,
-                build,
-                CommandLineFlag.HEAD,
-                candidate.head,
-                CommandLineFlag.JSON,
-            )
-        ):
-            settled = IntegrationExitCode(answer.status)
-            if settled is not IntegrationExitCode.CANDIDATE_STILL_RUNNING:
-                return settled
-            if attempt + 1 >= self.warm_up_attempts and _reported_no_check(answer):
-                print(
-                    "no check has been reported against the candidate in "
-                    f"{self.warm_up_attempts} readings, so nothing is starting one",
-                    file=sys.stderr,
-                )
-                return IntegrationExitCode.CANDIDATE_UNCHECKED
-        print(
-            "the candidate's checks had not finished in "
-            f"{self.verdict_schedule.attempts} attempts",
-            file=sys.stderr,
-        )
-        return settled
 
     def _localise(self, candidate: Candidate) -> None:
         """

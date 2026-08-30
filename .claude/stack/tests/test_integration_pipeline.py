@@ -6,6 +6,11 @@ Every decision the rebuild makes is a decision about an exit status. Written in 
 nothing can run outside a runner and so nothing checked. Here they are ordinary branches
 in a procedure, exercised through a runner that answers with the statuses a real one
 would.
+
+A rebuild never reaches a verdict on the candidate it opened: measured on this fork, the
+first check appeared 19 minutes after one candidate was opened and 2 hours 47 minutes
+after another, which no job can outwait. So one run opens a candidate and a later one
+settles it, and these are written in terms of what a run inherits.
 """
 
 from __future__ import annotations
@@ -16,11 +21,9 @@ from pathlib import Path
 
 import pytest
 
-from command_line import commands_of
-
 import integration_constants
 import integration_pipeline_commands
-from integration_run import IntegrationCommand
+from integration_commands import COMMANDS
 from integration_exit_codes import IntegrationExitCode
 from integration_pipeline import A_BUILD_WAS_ASSEMBLED, RefreshPipeline
 from tool_runner import (
@@ -52,13 +55,6 @@ The commit the candidate's checks are reported against.
 QUICKLY = PollingSchedule(attempts=3, interval_seconds=0)
 """
 A schedule short enough that a test giving up is a test that finished.
-"""
-
-A_SHORT_WARM_UP = 2
-"""
-How long a test lets a candidate answer nothing at all for, kept under
-:data:`QUICKLY`'s attempts so that giving up on one is told apart from running out of
-them.
 """
 
 
@@ -122,11 +118,27 @@ def a_settling(verdict: ChecksVerdict, status: IntegrationExitCode) -> CommandOu
     return answered(status, {VerdictReportKey.VERDICT: str(verdict)})
 
 
-def an_open_candidate() -> CommandOutcome:
-    """:return: One candidate's outcome, naming the pull request and the commit."""
+def no_candidate_open() -> CommandOutcome:
+    """:return: The answer a run gets when nothing is being judged."""
+    return answered(IntegrationExitCode.NO_CANDIDATE_OPEN)
+
+
+def no_recorded_pass() -> CommandOutcome:
+    """:return: The answer a run gets when this build's tree is one nothing has checked."""
+    return answered(IntegrationExitCode.NO_RECORDED_PASS)
+
+
+def a_reported_candidate() -> CommandOutcome:
+    """
+    Both opening a candidate and finding the one already open report the same three
+    facts, which is what lets a run settle a candidate it did not open.
+
+    :return: One candidate's outcome, naming the pull request, the build and the commit.
+    """
     return succeeded(
         {
             VerdictReportKey.CANDIDATE: A_CANDIDATE,
+            VerdictReportKey.BUILD_BRANCH: A_BUILD_BRANCH,
             VerdictReportKey.HEAD: A_HEAD,
         }
     )
@@ -144,8 +156,6 @@ def rebuild(*answers: CommandOutcome, tmp_path: Path) -> tuple:
         state_document=tmp_path / "localisation.json",
         runner=runner,
         wait=lambda seconds: None,
-        verdict_schedule=QUICKLY,
-        warm_up_attempts=A_SHORT_WARM_UP,
         localisation_schedule=QUICKLY,
     ).run()
     return status, runner
@@ -162,9 +172,7 @@ def test_every_command_a_rebuild_runs_is_one_the_builder_answers_to(
     Spelled here and implemented there, so a name that names nothing is a usage error at
     the far end of a runner - after the base has been fast-forwarded and a branch built.
     """
-    assert str(named) in {
-        command.invoked_as for command in commands_of(IntegrationCommand)
-    }
+    assert str(named) in {command.invoked_as for command in COMMANDS}
 
 
 def test_the_rebuild_itself_is_one_of_those_commands():
@@ -173,7 +181,7 @@ def test_the_rebuild_itself_is_one_of_those_commands():
     workflow calling something that does not exist.
     """
     assert integration_pipeline_commands.RefreshCommand().invoked_as in {
-        command.invoked_as for command in commands_of(IntegrationCommand)
+        command.invoked_as for command in COMMANDS
     }
 
 
@@ -193,24 +201,169 @@ def test_the_rebuild_reads_each_document_by_the_key_the_command_writes(
     assert str(read) in {str(written) for written in integration_constants.ReportKey}
 
 
-# %% what a rebuild does with each answer
+# %% the candidate a run inherits
 
 
-def test_a_green_rebuild_publishes_without_localising_anything(tmp_path: Path):
+def test_a_rebuild_asks_what_is_already_being_judged_before_assembling_anything():
     """
-    Nothing failed, so there is no branch to look for - and a search costs a round of
-    matrix runs per prefix.
+    Two candidates open at once are two builds racing for one branch, and the checks a
+    run opens a candidate for do not start while it is still running - so what an
+    earlier run left is the first thing a rebuild has to know about.
+    """
+    _, runner = rebuild(
+        no_candidate_open(),
+        succeeded(),
+        a_build(),
+        no_recorded_pass(),
+        a_reported_candidate(),
+        tmp_path=Path("/nowhere"),
+    )
+
+    assert runner.subcommands[0] == str(IntegrationSubcommand.FIND_CANDIDATE)
+
+
+def test_a_candidate_still_collecting_checks_is_left_for_a_later_run(tmp_path: Path):
+    """
+    Measured on this fork, a candidate's first check appeared 19 minutes after it was
+    opened and, for another, 2 hours 47 minutes - so a run that waited would time out
+    with the build unjudged, and one that assembled another would open a second
+    candidate against the same branch.
     """
     status, runner = rebuild(
-        succeeded(), a_build(), an_open_candidate(), succeeded(), tmp_path=tmp_path
+        a_reported_candidate(),
+        a_settling(ChecksVerdict.RUNNING, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
+        tmp_path=tmp_path,
     )
 
     assert status is IntegrationExitCode.SUCCESS
     assert runner.subcommands == [
+        str(IntegrationSubcommand.FIND_CANDIDATE),
+        str(IntegrationSubcommand.SETTLE_CANDIDATE),
+    ]
+
+
+def test_the_candidate_a_run_inherits_is_settled_as_the_build_it_was_opened_for(
+    tmp_path: Path,
+):
+    """
+    The run that opened it is over, so the branch it judges and the commit its checks
+    are reported against are read back off the fork rather than remembered.
+    """
+    _, runner = rebuild(
+        a_reported_candidate(),
+        a_settling(ChecksVerdict.RUNNING, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
+        tmp_path=tmp_path,
+    )
+    settling = next(
+        invocation
+        for invocation in runner.invoked
+        if str(IntegrationSubcommand.SETTLE_CANDIDATE) in invocation
+    )
+
+    assert str(A_CANDIDATE) in settling
+    assert A_BUILD_BRANCH in settling
+    assert A_HEAD in settling
+
+
+def test_a_green_candidate_is_published_and_the_run_goes_on_to_the_next_build(
+    tmp_path: Path,
+):
+    """
+    Publishing is what the settling does; assembling again afterwards is what keeps one
+    scheduled run worth one build rather than one every other run.
+    """
+    status, runner = rebuild(
+        a_reported_candidate(),
+        succeeded(),
+        succeeded(),
+        a_build(),
+        no_recorded_pass(),
+        a_reported_candidate(),
+        tmp_path=tmp_path,
+    )
+
+    assert status is IntegrationExitCode.SUCCESS
+    assert runner.subcommands == [
+        str(IntegrationSubcommand.FIND_CANDIDATE),
+        str(IntegrationSubcommand.SETTLE_CANDIDATE),
         str(MaintenanceSubcommand.FAST_FORWARD),
         str(IntegrationSubcommand.BUILD),
+        str(IntegrationSubcommand.PUBLISH_RECORDED_PASS),
         str(IntegrationSubcommand.OPEN_CANDIDATE),
-        str(IntegrationSubcommand.SETTLE_CANDIDATE),
+    ]
+
+
+def test_an_inherited_candidate_nothing_reported_a_check_against_stops_the_rebuild(
+    tmp_path: Path,
+):
+    """
+    A candidate reads as unchecked for its first minutes whatever happens, so nothing
+    could be concluded from that inside the run that opened it. One that has been open
+    since the previous run and still has no check is a different statement: whatever
+    should have started one - the trigger, or the credential it was opened with - did
+    not.
+    """
+    status, _ = rebuild(
+        a_reported_candidate(),
+        a_settling(ChecksVerdict.ABSENT, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
+        tmp_path=tmp_path,
+    )
+
+    assert status is IntegrationExitCode.CANDIDATE_UNCHECKED
+
+
+# %% what a rebuild does with each answer
+
+
+def test_a_rebuild_that_opened_a_candidate_stops_rather_than_waiting_for_its_checks(
+    tmp_path: Path,
+):
+    """
+    Nothing is thrown away by stopping - the candidate is open and the next run settles
+    it - where waiting holds a runner for the whole job to end on a build still
+    unjudged.
+    """
+    status, runner = rebuild(
+        no_candidate_open(),
+        succeeded(),
+        a_build(),
+        no_recorded_pass(),
+        a_reported_candidate(),
+        tmp_path=tmp_path,
+    )
+
+    assert status is IntegrationExitCode.SUCCESS
+    assert runner.subcommands == [
+        str(IntegrationSubcommand.FIND_CANDIDATE),
+        str(MaintenanceSubcommand.FAST_FORWARD),
+        str(IntegrationSubcommand.BUILD),
+        str(IntegrationSubcommand.PUBLISH_RECORDED_PASS),
+        str(IntegrationSubcommand.OPEN_CANDIDATE),
+    ]
+
+
+def test_a_build_whose_tree_has_already_passed_is_published_with_no_candidate(
+    tmp_path: Path,
+):
+    """
+    Nothing moved, so the assembled tree is the one already published: opening a
+    candidate for it spends about twenty-five minutes of matrix, plus however long
+    GitHub takes to start one, to be told what the fork already recorded.
+    """
+    status, runner = rebuild(
+        no_candidate_open(),
+        succeeded(),
+        a_build(),
+        succeeded(),
+        tmp_path=tmp_path,
+    )
+
+    assert status is IntegrationExitCode.SUCCESS
+    assert runner.subcommands == [
+        str(IntegrationSubcommand.FIND_CANDIDATE),
+        str(MaintenanceSubcommand.FAST_FORWARD),
+        str(IntegrationSubcommand.BUILD),
+        str(IntegrationSubcommand.PUBLISH_RECORDED_PASS),
     ]
 
 
@@ -222,23 +375,29 @@ def test_a_base_that_would_not_come_forward_stops_before_anything_is_assembled(
     step would be about it.
     """
     status, runner = rebuild(
-        answered(IntegrationExitCode.GIT_COMMAND_FAILED), tmp_path=tmp_path
+        no_candidate_open(),
+        answered(IntegrationExitCode.GIT_COMMAND_FAILED),
+        tmp_path=tmp_path,
     )
 
     assert status is IntegrationExitCode.BASE_NOT_PREPARED
-    assert runner.subcommands == [str(MaintenanceSubcommand.FAST_FORWARD)]
+    assert runner.subcommands == [
+        str(IntegrationSubcommand.FIND_CANDIDATE),
+        str(MaintenanceSubcommand.FAST_FORWARD),
+    ]
 
 
 def test_a_tip_left_out_is_still_a_build_worth_judging(tmp_path: Path):
     """
     A collision to triage rather than a build that failed: what was assembled is usable,
-    it is simply not whole - so it is still published if its checks pass.
+    it is simply not whole - so it is still opened as a candidate.
     """
     status, runner = rebuild(
+        no_candidate_open(),
         succeeded(),
         a_build(IntegrationExitCode.TIP_LEFT_OUT),
-        an_open_candidate(),
-        succeeded(),
+        no_recorded_pass(),
+        a_reported_candidate(),
         tmp_path=tmp_path,
     )
 
@@ -256,6 +415,7 @@ def test_a_suite_that_failed_on_the_build_blocks_the_tip_that_turned_it(
     carried by every later build.
     """
     status, runner = rebuild(
+        no_candidate_open(),
         succeeded(),
         a_build(IntegrationExitCode.TESTS_FAILED),
         succeeded(),
@@ -264,6 +424,7 @@ def test_a_suite_that_failed_on_the_build_blocks_the_tip_that_turned_it(
 
     assert status is IntegrationExitCode.TESTS_FAILED
     assert runner.subcommands == [
+        str(IntegrationSubcommand.FIND_CANDIDATE),
         str(MaintenanceSubcommand.FAST_FORWARD),
         str(IntegrationSubcommand.BUILD),
         str(IntegrationSubcommand.BLOCK_BRANCH),
@@ -276,9 +437,7 @@ def test_a_red_candidate_is_localised_rather_than_left_naming_a_check(tmp_path: 
     repeats on every rebuild with nobody told which pair to look at.
     """
     status, runner = rebuild(
-        succeeded(),
-        a_build(),
-        an_open_candidate(),
+        a_reported_candidate(),
         answered(IntegrationExitCode.CANDIDATE_FAILED),
         answered(IntegrationExitCode.NO_LIBRARY_CHECK_FAILED),
         tmp_path=tmp_path,
@@ -294,34 +453,89 @@ def test_only_a_candidate_that_failed_is_localised(tmp_path: Path):
     published, or on one still waiting, is a real cost for no answer.
     """
     _, runner = rebuild(
-        succeeded(), a_build(), an_open_candidate(), succeeded(), tmp_path=tmp_path
+        a_reported_candidate(),
+        succeeded(),
+        succeeded(),
+        a_build(),
+        no_recorded_pass(),
+        a_reported_candidate(),
+        tmp_path=tmp_path,
     )
 
     assert str(IntegrationSubcommand.LOCATE_CANDIDATE_FAILURE) not in runner.subcommands
 
 
-# %% waiting for an answer that is not ready
+# %% a rebuild asked for one plan
 
 
-def test_a_rebuild_keeps_asking_while_the_candidate_s_checks_are_unfinished(
+A_PLAN = "rdr-refactor"
+"""
+The plan a filtered rebuild is asked for.
+"""
+
+
+def filtered_rebuild(*answers: CommandOutcome, tmp_path: Path) -> tuple:
+    """
+    :param answers: What each command in turn answers.
+    :param tmp_path: Where the localisation would keep its state.
+    :return: The status the rebuild reached, and the runner that recorded it.
+    """
+    runner = RecordingRunner(answers=list(answers))
+    status = RefreshPipeline(
+        dispatch_on="integration",
+        plans=(A_PLAN,),
+        state_document=tmp_path / "localisation.json",
+        runner=runner,
+        wait=lambda seconds: None,
+        localisation_schedule=QUICKLY,
+    ).run()
+    return status, runner
+
+
+def test_a_rebuild_asked_for_one_plan_settles_nothing_and_publishes_nothing(
     tmp_path: Path,
 ):
     """
-    Read once and acted on, a candidate whose matrix has not finished reads as a build
-    nothing had judged - and throwing one away is what this waiting exists to prevent.
+    The build it assembles is deliberately not the whole of what is in flight, so
+    settling the cycle's candidate or moving the branch a developer works from onto this
+    would act on everything else on the strength of one plan.
     """
-    status, runner = rebuild(
-        succeeded(),
-        a_build(),
-        an_open_candidate(),
-        answered(IntegrationExitCode.CANDIDATE_STILL_RUNNING),
-        tmp_path=tmp_path,
+    status, runner = filtered_rebuild(
+        succeeded(), a_build(), a_reported_candidate(), tmp_path=tmp_path
     )
 
-    assert status is IntegrationExitCode.CANDIDATE_STILL_RUNNING
-    assert runner.subcommands.count(str(IntegrationSubcommand.SETTLE_CANDIDATE)) == (
-        QUICKLY.attempts
+    assert status is IntegrationExitCode.SUCCESS
+    assert runner.subcommands == [
+        str(MaintenanceSubcommand.FAST_FORWARD),
+        str(IntegrationSubcommand.BUILD),
+        str(IntegrationSubcommand.OPEN_CANDIDATE),
+    ]
+
+
+def test_both_the_build_and_its_candidate_are_told_which_plan_was_asked_for(
+    tmp_path: Path,
+):
+    """
+    The build to know which tips to carry, and the candidate because what keeps a
+    filtered build from ever being published is where its candidate is opened.
+    """
+    _, runner = filtered_rebuild(
+        succeeded(), a_build(), a_reported_candidate(), tmp_path=tmp_path
     )
+    told = [
+        invocation
+        for invocation in runner.invoked
+        if {str(IntegrationSubcommand.BUILD), str(IntegrationSubcommand.OPEN_CANDIDATE)}
+        & set(invocation)
+    ]
+
+    assert len(told) == 2
+    for invocation in told:
+        assert str(CommandLineFlag.PLAN) in invocation
+        assert A_PLAN in invocation
+
+
+# %% waiting for an answer that is not ready
 
 
 def test_a_rebuild_keeps_asking_while_a_localisation_s_probes_are_still_running(
@@ -332,9 +546,7 @@ def test_a_rebuild_keeps_asking_while_a_localisation_s_probes_are_still_running(
     from: it dispatches and leaves the round to be read back by a later call.
     """
     _, runner = rebuild(
-        succeeded(),
-        a_build(),
-        an_open_candidate(),
+        a_reported_candidate(),
         answered(IntegrationExitCode.CANDIDATE_FAILED),
         answered(IntegrationExitCode.PROBES_STILL_RUNNING),
         tmp_path=tmp_path,
@@ -355,9 +567,7 @@ def test_a_localisation_is_told_where_to_dispatch_and_where_to_keep_its_state(
     rather than a new one.
     """
     _, runner = rebuild(
-        succeeded(),
-        a_build(),
-        an_open_candidate(),
+        a_reported_candidate(),
         answered(IntegrationExitCode.CANDIDATE_FAILED),
         answered(IntegrationExitCode.NO_LIBRARY_CHECK_FAILED),
         tmp_path=tmp_path,
@@ -366,41 +576,3 @@ def test_a_localisation_is_told_where_to_dispatch_and_where_to_keep_its_state(
 
     assert str(CommandLineFlag.DISPATCH_ON) in localising
     assert str(tmp_path / "localisation.json") in localising
-
-
-def test_a_candidate_nothing_reports_a_check_against_stops_the_rebuild(tmp_path: Path):
-    """
-    No check having been created is a different thing from a matrix taking its time, and
-    waiting it out spends the whole schedule to end saying the checks were slow - when
-    what a reader has to look at is whatever should have started one.
-    """
-    status, runner = rebuild(
-        succeeded(),
-        a_build(),
-        an_open_candidate(),
-        a_settling(ChecksVerdict.ABSENT, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
-        tmp_path=tmp_path,
-    )
-
-    assert status is IntegrationExitCode.CANDIDATE_UNCHECKED
-    assert runner.subcommands.count(str(IntegrationSubcommand.SETTLE_CANDIDATE)) == (
-        A_SHORT_WARM_UP
-    )
-
-
-def test_a_first_reading_finding_no_check_yet_is_waited_through(tmp_path: Path):
-    """
-    A candidate's run takes a moment to be created, so the first reading finding nothing
-    is what an ordinary rebuild looks like - giving up there would throw away the build
-    that run was about to judge.
-    """
-    status, _ = rebuild(
-        succeeded(),
-        a_build(),
-        an_open_candidate(),
-        a_settling(ChecksVerdict.ABSENT, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
-        succeeded(),
-        tmp_path=tmp_path,
-    )
-
-    assert status is IntegrationExitCode.SUCCESS

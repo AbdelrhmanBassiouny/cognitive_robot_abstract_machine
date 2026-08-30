@@ -55,6 +55,7 @@ from maintenance_commands import (
     RestackCommand,
     RunReportCommand,
 )
+from integration_constants import POINTER_BRANCH
 from maintenance_constants import CREDENTIAL_VARIABLES, PROMOTION_LINK_LABEL
 from maintenance_fast_forward import (
     FastForwardOutcome,
@@ -377,10 +378,15 @@ def test_every_field_is_named_by_the_key_the_api_answers_under():
     A member's value is the specification's argument tuple; passing a built
     specification instead lands the whole instance in the key, where every read then
     silently finds nothing.
+
+    Two members may share a key where they read different halves of what it answers -
+    a head is both a branch and the commit that branch points at - so what has to be
+    distinct is the pair.
     """
     for field in PullRequestField:
         assert isinstance(field.key, str), field
-    assert len({field.key for field in PullRequestField}) == len(list(PullRequestField))
+    read_by = {(field.key, field.shape) for field in PullRequestField}
+    assert len(read_by) == len(list(PullRequestField))
 
 
 def test_the_export_reads_each_field_out_of_the_shape_the_api_returns_it_in():
@@ -430,6 +436,26 @@ def test_the_written_board_parses_back_into_the_records_it_was_built_from(
     export.write(destination)
 
     assert load_board(destination) == list(export.pull_requests)
+
+
+def test_a_candidate_is_not_on_the_board_at_all():
+    """
+    A candidate is a build being judged rather than work in flight, and it looks to
+    every reader like an ordinary reviewed branch: the next build would merge it, and a
+    maintenance pass would restack it onto the branch the build replaces - which is how
+    ``integration`` came to accumulate history across rebuilds and a candidate's diff
+    came to be a delta rather than a whole build.
+    """
+    export = BoardExport.from_api_records(
+        [
+            an_api_record(number=41, head="a-feature", base="a-parent"),
+            an_api_record(
+                number=213, head="integration-20260829-112642", base=POINTER_BRANCH
+            ),
+        ]
+    )
+
+    assert [entry.number for entry in export.pull_requests] == [41]
 
 
 def test_a_pull_request_missing_a_required_field_is_rejected_rather_than_defaulted():

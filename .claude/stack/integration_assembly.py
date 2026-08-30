@@ -28,6 +28,7 @@ from integration_constants import (
     RERERE_SETTINGS,
     RESOLUTION_REPLAY_MARKER,
 )
+from integration_plans import PlanFilter
 from integration_report import IntegrationReport
 from integration_selection import select_for_build, tips_of
 from integration_suite import run_tests
@@ -172,6 +173,7 @@ def build_integration(
     build_branch: str,
     provenance: ResolutionProvenance,
     test_command: str | None,
+    plans: PlanFilter | None = None,
 ) -> IntegrationReport:
     """
     Assemble one integration branch and report what went into it.
@@ -185,10 +187,11 @@ def build_integration(
     :param build_branch: The branch to assemble onto.
     :param provenance: Who wrote each recorded resolution.
     :param test_command: The suite to run on the finished branch, or ``None`` to skip.
+    :param plans: The plans this build was asked to carry, or ``None`` for all of them.
     :return: What the build contains and what it left out.
     """
-    selection = select_for_build(stack)
-    tips = tips_of(stack)
+    selection = select_for_build(stack, plans)
+    tips = tips_of(stack, plans)
     with DetachedCheckout.of(git), RestackWorktree.added_to(git) as assembling:
         build = IntegrationBuild(
             git=dataclasses.replace(

@@ -31,7 +31,13 @@ on:
         type: string
 
 jobs:
+  # Both jobs are named rather than left to their keys, because a check named after a
+  # key this file shares with ci.yml is one the pipeline cannot tell apart from its own.
+  # A probe's checks land on whichever reference the pipeline was dispatched on, and
+  # they say nothing about that branch - a probe failing is what a localisation is
+  # looking for - so they are read out of that branch's verdict by name.
   to-lowercase:
+    name: Name the container image a probe runs in
     runs-on: ubuntu-latest
     outputs:
       repo_lowercase: ${{ steps.lowercase.outputs.repository }}
@@ -41,6 +47,7 @@ jobs:
           echo "repository=ghcr.io/${GITHUB_REPOSITORY,,}:jazzy" >> $GITHUB_OUTPUT
 
   test:
+    name: Run one library's tests over a probed tree
     needs: [to-lowercase]
     uses: ./.github/workflows/ci_reusable.yml
     with:

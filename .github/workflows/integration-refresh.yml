@@ -31,6 +31,16 @@ on:
     # moved, and the branches move on a working day's rhythm rather than an hourly one.
     - cron: "0 5,11,17,23 * * *"
   workflow_dispatch:
+    inputs:
+      plans:
+        # A rebuild carrying one plan answers whether that plan's branches hold together
+        # on their own, which is what you reach for when the full build is red. It
+        # settles nothing and publishes nothing: the branch a developer works from is
+        # only ever moved onto a build carrying everything in flight.
+        description: "Plans to carry, comma separated; empty carries everything"
+        required: false
+        type: string
+        default: ""
   pull_request:
     # Leaving draft is what makes a branch integrable at all, so it is the moment the
     # build is worth redoing rather than one to wait out: until the next scheduled run
@@ -92,7 +102,29 @@ jobs:
           source .claude/hooks/resolve-personal-notes-config.sh
           pip install pytest -r "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"
 
+      # A pull request's run is pinned to the default branch, and that branch is the one
+      # this pipeline publishes: it only moves when a build goes green, so it lags every
+      # change in flight and can predate the command this job invokes. Asking argparse
+      # whether it knows the command turns that into an answer instead of a usage error
+      # - and a usage error here would attach a red check to whichever branch's
+      # ready-flip asked for the rebuild, which is the branch the rebuild exists to
+      # carry.
+      - name: Ask whether the published pipeline can rebuild
+        id: published_pipeline
+        continue-on-error: true
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          python "${STACK_DIRECTORY}/integration.py" refresh --help > /dev/null
+
+      - name: Say that the published pipeline is too old to rebuild
+        if: steps.published_pipeline.outcome != 'success'
+        run: |
+          echo "The pipeline on this repository's default branch does not know the" \
+            "rebuild this run asked for, so nothing was rebuilt. It will once a build" \
+            "carrying the rebuild has published." >> "${GITHUB_STEP_SUMMARY}"
+
       - name: Rebuild the integration branch
+        if: steps.published_pipeline.outcome == 'success'
         env:
           GH_TOKEN: ${{ secrets.INTEGRATION_REFRESH_TOKEN }}
           # A probe is dispatched on a reference carrying this pipeline rather than on
@@ -103,7 +135,11 @@ jobs:
             ${{ github.event_name == 'pull_request'
             && github.event.repository.default_branch
             || github.ref_name }}
+          # Empty on every trigger but a dispatch, and an empty --plan is dropped by the
+          # shell rather than read as a plan of no name.
+          PLANS: ${{ inputs.plans }}
         run: |
           source .claude/hooks/resolve-personal-notes-config.sh
           python "${STACK_DIRECTORY}/integration.py" refresh \
-            --dispatch-on "${PIPELINE_REFERENCE}"
+            --dispatch-on "${PIPELINE_REFERENCE}" \
+            ${PLANS:+--plan "${PLANS}"}

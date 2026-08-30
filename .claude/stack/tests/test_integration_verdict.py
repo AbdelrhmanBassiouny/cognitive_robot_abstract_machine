@@ -15,7 +15,12 @@ from pathlib import Path
 import pytest
 import yaml
 
-from maintenance_github import CandidatePullRequests, CheckRunRecord
+from maintenance_github import (
+    CandidatePullRequests,
+    CheckRunRecord,
+    PullRequestReader,
+    PullRequestRecord,
+)
 
 import integration_candidate_commands
 import tool_runner
@@ -23,7 +28,18 @@ from integration_exit_codes import IntegrationExitCode
 
 from test_maintenance import make_configuration
 
+from integration_pipeline_commands import RefreshCommand
+from workflow_document import (
+    CALLED_JOB_SEPARATOR,
+    WorkflowDocument,
+    WorkflowFile,
+    every_workflow_file,
+)
+
 from integration_verdict import (
+    PIPELINE_WORKFLOWS,
+    Candidate,
+    ChecksAboutTheBuild,
     ReportedChecks,
     ChecksVerdict,
     CheckRunConclusion,
@@ -34,6 +50,7 @@ from integration_verdict import (
     candidate_description,
     candidate_title,
     open_candidate,
+    open_candidate_on,
     read_checks,
 )
 
@@ -71,8 +88,28 @@ def a_check(
     }
 
 
+def a_rebuild_check_name() -> str:
+    """
+    :return: What the rebuild's own job reports its check as, read off the workflow.
+    """
+    refresh = WorkflowFile.INTEGRATION_REFRESH.read()
+    return refresh.job_whose_script_holds(RefreshCommand().invoked_as).name
+
+
+def a_probe_check_name() -> str:
+    """
+    :return: What a probe reports its library job's check as, which is the calling job's
+        name and the reusable workflow's job beneath it.
+    """
+    calling = next(
+        job for job in WorkflowFile.INTEGRATION_PROBE.read().jobs if job.calls
+    )
+    called = WorkflowFile.REUSABLE_LIBRARY_JOB.read().jobs[0]
+    return f"{calling.name}{CALLED_JOB_SEPARATOR}{called.name}"
+
+
 @dataclass(frozen=True)
-class RecordingCandidates(CandidatePullRequests):
+class RecordingCandidates(CandidatePullRequests, PullRequestReader):
     """
     A fork stand-in recording what a candidate did to it.
 
@@ -110,6 +147,9 @@ class RecordingCandidates(CandidatePullRequests):
         """:param number: The pull request closed."""
         self.closed.append(number)
 
+    pull_requests: list[PullRequestRecord] = field(default_factory=list)
+    """What it answers a read of the fork's open pull requests with."""
+
     def check_runs(self, reference: str) -> list[CheckRunRecord]:
         """
         :param reference: The commit or branch read.
@@ -117,6 +157,17 @@ class RecordingCandidates(CandidatePullRequests):
         """
         self.read_references.append(reference)
         return self.checks
+
+    def open_pull_requests(self) -> list[PullRequestRecord]:
+        """:return: The open pull requests this stand-in was given."""
+        return self.pull_requests
+
+    def pull_request(self, number: int) -> PullRequestRecord:
+        """:param number: The pull request wanted.
+        :return: It, out of the ones this stand-in was given."""
+        return next(
+            record for record in self.pull_requests if record["number"] == number
+        )
 
 
 # %% what the checks amount to
@@ -200,6 +251,79 @@ def test_no_check_at_all_is_told_apart_from_one_still_running():
     assert ReportedChecks.of([]).verdict is ChecksVerdict.ABSENT
 
 
+# %% the checks the pipeline reports about its own work
+
+
+def test_the_rebuild_s_own_check_does_not_decide_whether_a_branch_is_fit_to_carry():
+    """
+    The rebuild opens a candidate for the *build*, and its run attaches a check to
+    whichever branch triggered it. Counting that would let a rebuild that failed for its
+    own reasons exclude the branch whose ready-flip asked for it - which is how the
+    branch that triggered a build was left out of it.
+    """
+    checks = ReportedChecks.of(
+        [a_check(), a_check(name=a_rebuild_check_name(), conclusion="failure")]
+    )
+
+    assert checks.verdict is ChecksVerdict.PASSED
+    assert checks.failed == ()
+
+
+def test_a_probe_s_check_does_not_decide_it_either():
+    """
+    A probe is dispatched on the reference carrying the pipeline, so its checks land on
+    that branch - and a probe *failing* is how a localisation finds what it is looking
+    for, so reading one as the branch's own red is backwards.
+    """
+    checks = ReportedChecks.of(
+        [a_check(name=a_probe_check_name(), conclusion="failure")]
+    )
+
+    assert checks.verdict is ChecksVerdict.ABSENT
+
+
+def test_a_branch_carrying_nothing_but_the_pipeline_s_own_checks_is_unjudged():
+    """
+    Told apart from a pass rather than folded into one: nothing has said anything about
+    this tree, and answering "passed" would publish a build no matrix had looked at.
+    """
+    assert ReportedChecks.of([a_check(name=a_rebuild_check_name())]).verdict is (
+        ChecksVerdict.ABSENT
+    )
+
+
+def test_the_pipeline_s_own_check_names_are_read_off_the_workflows_that_report_them():
+    """
+    A workflow cannot import a constant, so the names are its own to state - and a name
+    retyped here would keep matching a job that had been renamed.
+    """
+    reported = ChecksAboutTheBuild.read()
+
+    assert reported.reports(a_rebuild_check_name())
+    assert not reported.reports(
+        WorkflowFile.CONTINUOUS_INTEGRATION.read().job_fanning_out_over_a_matrix.name
+    )
+
+
+def test_no_other_workflow_reports_a_check_the_pipeline_would_claim_as_its_own():
+    """
+    The exclusion is by name, so a job of this repository's sharing one with a job of
+    the pipeline's would have its failures silently ignored - which is the opposite
+    defect, and the one a shared ``to-lowercase`` key would have caused.
+    """
+    reported = ChecksAboutTheBuild.read()
+    the_pipeline_s_own = {workflow.path for workflow in PIPELINE_WORKFLOWS}
+    elsewhere = [
+        job.name
+        for workflow in every_workflow_file()
+        if workflow not in the_pipeline_s_own
+        for job in WorkflowDocument.at(workflow).jobs
+    ]
+
+    assert elsewhere
+    assert [name for name in elsewhere if reported.reports(name)] == []
+
+
 # %% the candidate itself
 
 
@@ -235,6 +359,53 @@ def test_the_candidate_is_recognisable_among_the_fork_s_pull_requests():
     """
     assert candidate_title(A_BUILD_BRANCH).endswith(A_BUILD_BRANCH)
     assert candidate_title(A_BUILD_BRANCH) != A_BUILD_BRANCH
+
+
+def an_open_pull_request(
+    number: int, head: str, base: str, commit: str
+) -> PullRequestRecord:
+    """
+    :param number: Its number.
+    :param head: The branch it would merge.
+    :param base: The branch it is opened against.
+    :param commit: What that branch points at.
+    :return: One open pull request, as the API answers it.
+    """
+    return {
+        "number": number,
+        "head": {"ref": head, "sha": commit},
+        "base": {"ref": base},
+    }
+
+
+def test_the_candidate_a_later_run_settles_is_found_by_what_it_is_opened_against():
+    """
+    The run that opened a candidate is over long before its first check appears, so what
+    settles it reads the fork rather than remembering - and what makes a pull request a
+    build being judged is its base, which is the same fact that keeps one off the board.
+    """
+    fork = RecordingCandidates(
+        pull_requests=[
+            an_open_pull_request(41, "a-feature", "main", "aaaa"),
+            an_open_pull_request(213, A_BUILD_BRANCH, THE_BASE, A_HEAD),
+        ]
+    )
+
+    found = open_candidate_on(fork, THE_BASE)
+
+    assert found == Candidate(number=213, build_branch=A_BUILD_BRANCH, head=A_HEAD)
+
+
+def test_nothing_being_judged_is_told_apart_from_a_candidate():
+    """
+    A run finding none has a build to assemble rather than one to settle, so this is a
+    different instruction rather than a missing answer.
+    """
+    fork = RecordingCandidates(
+        pull_requests=[an_open_pull_request(41, "a-feature", "main", "aaaa")]
+    )
+
+    assert open_candidate_on(fork, THE_BASE) is None
 
 
 def test_the_verdict_is_read_against_the_build_s_own_head():

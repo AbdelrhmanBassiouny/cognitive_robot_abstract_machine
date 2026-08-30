@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from git_commands import BranchPublication, ProposedPush
@@ -22,6 +23,7 @@ import integration
 from integration_assembly import build_integration
 from integration_failure import IntegrationTestFailure
 from integration_report import IntegrationReport
+from integration_run import IntegrationRun
 from integration_tips import (
     PullRequestStackTipOutcome,
     ResolutionAuthor,
@@ -168,6 +170,23 @@ def create_stack_object(
         branches=branches,
         is_merged=lambda name: name in landed,
     )
+
+
+@dataclass(frozen=True)
+class RunAgainstAGivenFork(IntegrationRun):
+    """
+    A run whose fork is handed to it, so a command that reads or writes pull requests
+    can be exercised against a scratch repository without a credential.
+    """
+
+    given: object = None
+    """
+    The fork this run reads and writes.
+    """
+
+    def fork(self) -> object:
+        """:return: The fork it was given."""
+        return self.given
 
 
 def build(

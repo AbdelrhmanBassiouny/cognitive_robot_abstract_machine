@@ -31,6 +31,25 @@ WORKFLOW_DIRECTORY = REPOSITORY_ROOT / ".github" / "workflows"
 Where GitHub looks for a workflow, and so where one is read from.
 """
 
+CALLED_JOB_SEPARATOR = " / "
+"""
+What GitHub puts between a job that calls a reusable workflow and the called workflow's
+own job, when it names the check the pair reports.
+"""
+
+
+def every_workflow_file() -> tuple[Path, ...]:
+    """
+    Every workflow GitHub runs from this checkout.
+
+    The top level only, which is where GitHub looks: the per-library directories beside
+    them hold files it never starts.
+
+    :return: The workflow files, in name order.
+    """
+    return tuple(sorted(WORKFLOW_DIRECTORY.glob("*.yml")))
+
+
 # %% the files, and what is in them
 
 
@@ -153,9 +172,26 @@ class WorkflowStep:
         return str(self.declared.get("run", ""))
 
     @property
+    def identifier(self) -> str:
+        """:return: The step's own ``id``, empty when nothing refers to it."""
+        return str(self.declared.get("id", ""))
+
+    @property
     def condition(self) -> str:
         """:return: What decides whether this step runs at all, empty when nothing does."""
         return str(self.declared.get("if", ""))
+
+    @property
+    def tolerates_its_own_failure(self) -> bool:
+        """
+        Whether this step failing leaves the job running.
+
+        A step declared this way is asking a question rather than doing the work: what it
+        answered is read from its outcome by whatever runs next.
+
+        :return: Whether the job carries on past it.
+        """
+        return bool(self.declared.get("continue-on-error", False))
 
     @property
     def inputs(self) -> Mapping[str, Any]:
@@ -181,7 +217,7 @@ class WorkflowJob:
 
     identifier: str
     """
-    The job's key, which is what a check reported for it is named after.
+    The job's key, which is how the rest of the file refers to it.
     """
 
     declared: Mapping[str, Any]
@@ -195,9 +231,34 @@ class WorkflowJob:
         return tuple(WorkflowStep(step) for step in self.declared.get("steps", ()))
 
     @property
+    def name(self) -> str:
+        """
+        What a check reported for this job is called: its declared name where it has
+        one, and otherwise its key.
+
+        :return: The job's name.
+        """
+        return str(self.declared.get("name", self.identifier))
+
+    @property
     def calls(self) -> str:
         """:return: The reusable workflow this job is, empty when it has its own steps."""
         return str(self.declared.get("uses", ""))
+
+    def reports(self, check_name: str) -> bool:
+        """
+        Whether a check of that name came from this job.
+
+        A job with steps of its own reports one check under its own name; one that calls
+        a reusable workflow reports the called workflow's jobs beneath it, each named
+        after both.
+
+        :param check_name: A check reported against some commit.
+        :return: Whether this job is what reported it.
+        """
+        return check_name == self.name or check_name.startswith(
+            f"{self.name}{CALLED_JOB_SEPARATOR}"
+        )
 
     @property
     def inputs(self) -> Mapping[str, Any]:
@@ -224,14 +285,20 @@ class WorkflowJob:
                 return step
         raise StepNotFoundError(action=action)
 
+    def step(self, step_identifier: str) -> WorkflowStep:
+        """:param step_identifier: The step's own ``id``.
+        :return: That step.
+        :raises StepNotFoundError: When the job has no such step."""
+        for found in self.steps:
+            if found.identifier == step_identifier:
+                return found
+        raise StepNotFoundError(action=step_identifier)
+
     def script_of(self, step_identifier: str) -> str:
         """:param step_identifier: The step's own ``id``.
         :return: The shell that step runs.
         :raises StepNotFoundError: When the job has no such step."""
-        for step in self.steps:
-            if step.declared.get("id") == step_identifier:
-                return step.script
-        raise StepNotFoundError(action=step_identifier)
+        return self.step(step_identifier).script
 
 
 @dataclass(frozen=True)
@@ -285,6 +352,11 @@ class WorkflowDocument:
     def run_name(self) -> str:
         """:return: What this workflow names its runs, empty when it names them nothing."""
         return str(self.declared.get("run-name", ""))
+
+    @property
+    def jobs(self) -> tuple[WorkflowJob, ...]:
+        """:return: Every job this workflow declares, in the order it declares them."""
+        return tuple(self.job(identifier) for identifier in self.declared["jobs"])
 
     def job(self, identifier: str) -> WorkflowJob:
         """:param identifier: The job's key.

@@ -26,12 +26,42 @@ from integration_verdict import (
     Candidate,
     ChecksVerdict,
     open_candidate,
+    open_candidate_on,
     read_checks,
 )
 
 from integration_constants import POINTER_BRANCH, ReportKey
 from integration_exit_codes import IntegrationExitCode
+from integration_pass_record import PassedChecks, RecordedSubject
 from integration_run import IntegrationCommand, IntegrationRun
+
+
+def publish(run: IntegrationRun, build_branch: str, head: str) -> None:
+    """
+    Move the branch a developer works from onto a build, and drop the build's own
+    branch.
+
+    The branch goes because the pointer now holds the same commit, and a rebuild that
+    left one behind every time would accumulate one per run.
+
+    :param run: What this run has resolved.
+    :param build_branch: The build being published.
+    :param head: The commit to move the pointer to.
+    """
+    remote = run.configuration.fork_remote
+    run.git.run("push", "--force", remote, f"{head}:refs/heads/{POINTER_BRANCH}")
+    run.git.run("push", "--delete", remote, build_branch)
+
+
+def tree_of(run: IntegrationRun, reference: str) -> str:
+    """
+    :param run: What this run has resolved.
+    :param reference: A commit or branch.
+    :return: The tree it holds, which is what two assemblies of the same branches over
+        the same base share where their commits do not.
+    """
+    return run.git.run("rev-parse", f"{reference}^{{tree}}").strip()
+
 
 # %% getting the build judged
 
@@ -62,6 +92,17 @@ class OpenCandidateCommand(IntegrationCommand):
             "--build", required=True, help="the build branch to have judged"
         )
         parser.add_argument(
+            "--plan",
+            action="append",
+            default=[],
+            metavar="PLAN",
+            help=(
+                "the plans this build was asked to carry; a candidate naming any is "
+                "opened against the upstream base rather than against the branch a "
+                "build publishes to, so nothing ever publishes it"
+            ),
+        )
+        parser.add_argument(
             "--json",
             action="store_true",
             help="emit the machine-readable document rather than a summary",
@@ -77,6 +118,12 @@ class OpenCandidateCommand(IntegrationCommand):
         carry cannot be opened, and the checks are reported against the commit rather
         than the branch, so the head is read back from what was pushed.
 
+        A build carrying only some plans is opened against the upstream base instead.
+        What makes a candidate the one the rebuild settles is that it is opened against
+        the branch a build publishes to, so a one-plan build opened there would be
+        published over everything else in flight by the next run - and the base is what
+        decides that rather than a flag anybody has to remember.
+
         :param run: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code.
@@ -88,7 +135,14 @@ class OpenCandidateCommand(IntegrationCommand):
             run.configuration.fork_remote,
             f"{arguments.build}:{arguments.build}",
         )
-        candidate = open_candidate(run.fork(), arguments.build, POINTER_BRANCH, head)
+        plans = tuple(arguments.plan)
+        candidate = open_candidate(
+            run.fork(),
+            arguments.build,
+            run.configuration.upstream_base if plans else POINTER_BRANCH,
+            head,
+            plans,
+        )
         document = {
             ReportKey.CANDIDATE: candidate.number,
             ReportKey.BUILD_BRANCH: candidate.build_branch,
@@ -98,6 +152,138 @@ class OpenCandidateCommand(IntegrationCommand):
             json.dumps(document, indent=2)
             if arguments.json
             else _candidate_line(candidate)
+        )
+        return IntegrationExitCode.SUCCESS
+
+
+@dataclass(frozen=True)
+class FindCandidateCommand(IntegrationCommand):
+    """
+    Reports the build currently being judged, if one is.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        The name it is invoked by on the command line.
+        """
+        return "find-candidate"
+
+    @property
+    def description(self) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return "report the candidate a build is being judged as, if one is open"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare this command's flags on."""
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """
+        Report what is being judged.
+
+        Read off the fork rather than remembered, because the run that opened the
+        candidate is over by the time anything settles it: a candidate's first check
+        appears minutes to hours after it is opened, so the run that opens one cannot
+        also reach its verdict.
+
+        :param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        candidate = open_candidate_on(run.fork(), POINTER_BRANCH)
+        if candidate is None:
+            print(json.dumps({}, indent=2) if arguments.json else "no candidate")
+            return IntegrationExitCode.NO_CANDIDATE_OPEN
+        document = {
+            ReportKey.CANDIDATE: candidate.number,
+            ReportKey.BUILD_BRANCH: candidate.build_branch,
+            ReportKey.HEAD: candidate.head,
+        }
+        print(
+            json.dumps(document, indent=2)
+            if arguments.json
+            else _candidate_line(candidate)
+        )
+        return IntegrationExitCode.SUCCESS
+
+
+@dataclass(frozen=True)
+class PublishRecordedPassCommand(IntegrationCommand):
+    """
+    Publishes a build whose tree this fork has already seen pass.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        The name it is invoked by on the command line.
+        """
+        return "publish-recorded-pass"
+
+    @property
+    def description(self) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return "publish a build whose tree has already been seen to pass"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare this command's flags on."""
+        parser.add_argument(
+            "--build", required=True, help="the build branch to publish"
+        )
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """
+        Publish the build if its tree is one that has already passed.
+
+        A rebuild assembles the same branches over the same base four times a day, and
+        each assembly is a new commit holding the same tree - so without this every
+        unchanged build is checked again, at about twenty-five minutes of matrix plus
+        whatever GitHub takes to start it.
+
+        The build is pushed first, because a fork that does not carry the commit cannot
+        be asked to move a branch onto it.
+
+        :param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        remote = run.configuration.fork_remote
+        head = run.git.run("rev-parse", arguments.build).strip()
+        tree = tree_of(run, arguments.build)
+        if not PassedChecks.read(run.git, remote).holds(
+            RecordedSubject.BUILD_TREE, tree
+        ):
+            print(json.dumps({}, indent=2) if arguments.json else "not recorded")
+            return IntegrationExitCode.NO_RECORDED_PASS
+        run.git.run("push", "--force", remote, f"{arguments.build}:{arguments.build}")
+        publish(run, arguments.build, head)
+        document = {
+            ReportKey.BUILD_BRANCH: arguments.build,
+            ReportKey.HEAD: head,
+            ReportKey.PUBLISHED: True,
+        }
+        print(
+            json.dumps(document, indent=2)
+            if arguments.json
+            else f"{arguments.build}\tpublished\t{POINTER_BRANCH}"
         )
         return IntegrationExitCode.SUCCESS
 
@@ -157,6 +343,10 @@ class SettleCandidateCommand(IntegrationCommand):
         one is kept: its candidate names checks somebody has to look at, and a closed
         pull request whose head is gone cannot be read.
 
+        A build that passed has its *tree* recorded, so a later assembly of the same
+        branches over the same base - which produces a new commit every time and the same
+        tree every time - is published without spending a matrix on it again.
+
         The candidate itself is closed only once its checks have settled. Closed
         before they have, it collects none at all - GitHub creates a pull request's
         run a moment after the request is opened, and none is created for one
@@ -174,22 +364,18 @@ class SettleCandidateCommand(IntegrationCommand):
         )
         checks = read_checks(fork, candidate.head)
         published = checks.verdict is ChecksVerdict.PASSED
-        if published:
-            run.git.run(
-                "push",
-                "--force",
-                run.configuration.fork_remote,
-                f"{candidate.head}:refs/heads/{POINTER_BRANCH}",
-            )
         if checks.verdict.has_settled:
             fork.close_pull_request(candidate.number)
         if published:
-            run.git.run(
-                "push",
-                "--delete",
-                run.configuration.fork_remote,
-                candidate.build_branch,
+            remote = run.configuration.fork_remote
+            PassedChecks.read(run.git, remote).record(
+                run.git,
+                remote,
+                RecordedSubject.BUILD_TREE,
+                tree_of(run, candidate.head),
+                candidate.head,
             )
+            publish(run, candidate.build_branch, candidate.head)
         document = {
             ReportKey.VERDICT: str(checks.verdict),
             ReportKey.CANDIDATE: candidate.number,

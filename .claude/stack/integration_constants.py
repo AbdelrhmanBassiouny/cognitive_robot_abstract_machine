@@ -47,6 +47,15 @@ BUILD_NAME_FORMAT = "%Y%m%d-%H%M%S"
 How a build's moment is spelled in its branch name.
 """
 
+CANDIDATE_TITLE_PREFIX = "Integration candidate:"
+"""
+Opens the title of the pull request a build is judged as.
+
+Beside the branch names rather than beside the judging, because it is also how a reader
+of the fork's pull requests tells a build being judged from somebody's work - and one
+kind of candidate is opened against the same base as every ordinary branch.
+"""
+
 RERERE_SETTINGS = (
     GitSetting("rerere.enabled", "true"),
     GitSetting("rerere.autoupdate", "true"),

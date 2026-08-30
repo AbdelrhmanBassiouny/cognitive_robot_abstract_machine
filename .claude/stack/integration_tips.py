@@ -82,6 +82,15 @@ class TipStatus(StrEnum):
     tried to merge it. Reported apart from :attr:`BLOCKED` because nobody labelled it:
     what lets it back in is its checks going green, not a label coming off."""
 
+    ANOTHER_PLAN = TipStatusSpecification("another-plan", integrated=False)
+    """This build was asked for particular plans and the branch belongs to a different
+    one. Nothing is wrong with it; it is simply not what was asked for."""
+
+    NO_PLAN_RECORDED = TipStatusSpecification("no-plan-recorded", integrated=False)
+    """This build was asked for particular plans and the index names none for the
+    branch, so the filter cannot answer for it either way. Reported rather than dropped
+    or carried: a build that decided silently is one nobody can read."""
+
 
 # %% who resolved the conflict that let it in
 

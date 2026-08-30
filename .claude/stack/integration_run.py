@@ -31,7 +31,6 @@ from maintenance_github import GitHubRepository
 
 from integration_constants import ReportKey, PROVENANCE_FILENAME, RERERE_SETTINGS
 from integration_exit_codes import IntegrationExitCode
-from integration_selection import work_in_flight
 from integration_tips import ResolutionAuthor, ResolutionProvenance
 
 
@@ -108,9 +107,8 @@ class IntegrationRun:
 
         Read rather than loaded from ``board.json``: a build is only as good as its idea
         of what is in flight, and a snapshot left behind by an earlier pass is worse
-        than no snapshot at all. What is in flight is
-        :func:`integration_selection.work_in_flight`, which is every open pull request
-        except a candidate.
+        than no snapshot at all. What is in flight is what the export carries, which is
+        every open pull request except a candidate.
 
         :param fork: The fork to read the open pull requests from.
         :return: The derived stack.
@@ -122,7 +120,7 @@ class IntegrationRun:
         )
         return build_stack(
             self.configuration,
-            work_in_flight(export.pull_requests),
+            list(export.pull_requests),
             lambda name: ancestry.is_ancestor(name, upstream),
         )
 

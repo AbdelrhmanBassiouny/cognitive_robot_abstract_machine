@@ -13,15 +13,29 @@ import sys
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 
-from maintenance_github import CandidatePullRequests, CheckRunRecord  # noqa: E402
+from integration_constants import (  # noqa: E402
+    CANDIDATE_TITLE_PREFIX,
+    POINTER_BRANCH,
+)
+from maintenance_board import PullRequestField  # noqa: E402
+from maintenance_github import (  # noqa: E402
+    CandidatePullRequests,
+    CheckRunRecord,
+    PullRequestReader,
+)
+from workflow_document import CALLED_JOB_SEPARATOR, WorkflowFile  # noqa: E402
 
-CANDIDATE_TITLE_PREFIX = "Integration candidate:"
+PIPELINE_WORKFLOWS = (
+    WorkflowFile.INTEGRATION_REFRESH,
+    WorkflowFile.INTEGRATION_PROBE,
+)
 """
-Opens a candidate's title, so one is recognisable among the fork's pull requests.
+The workflows this pipeline runs about its own work rather than about a tree.
 """
 
 
@@ -115,6 +129,52 @@ reading an absent check as an answer acts on a build nothing has judged.
 
 
 @dataclass(frozen=True)
+class ChecksAboutTheBuild:
+    """
+    The checks this pipeline reports about its own work.
+
+    A rebuild runs on the branch whose ready-flip asked for it and a probe runs on the
+    reference carrying the pipeline, so both attach checks to a branch they say nothing
+    about: the rebuild's answers for the build it assembled, and a probe's failing is how
+    a localisation finds what it is looking for. Counting either would let the pipeline
+    decide that a branch is unfit to carry because the pipeline itself had a bad run.
+    """
+
+    job_names: tuple[str, ...]
+    """
+    What each of those workflows calls the jobs it reports checks for.
+    """
+
+    @classmethod
+    def read(cls) -> ChecksAboutTheBuild:
+        """
+        Read the names off the workflows that report them.
+
+        A workflow cannot import a constant, so the names are its own to state - and one
+        retyped here would go on matching a job that had since been renamed.
+
+        :return: What the pipeline reports about itself.
+        """
+        return cls(
+            tuple(
+                job.name
+                for workflow in PIPELINE_WORKFLOWS
+                for job in workflow.read().jobs
+            )
+        )
+
+    def reports(self, check_name: str) -> bool:
+        """
+        :param check_name: A check reported against some commit or branch.
+        :return: Whether this pipeline is what reported it.
+        """
+        return any(
+            check_name == name or check_name.startswith(f"{name}{CALLED_JOB_SEPARATOR}")
+            for name in self.job_names
+        )
+
+
+@dataclass(frozen=True)
 class CheckRun:
     """
     One check reported against a candidate's head.
@@ -163,15 +223,27 @@ class ReportedChecks:
     """
 
     runs: tuple[CheckRun, ...]
-    """The checks, in the order the API reported them."""
+    """The checks that judge the tree, in the order the API reported them."""
 
     @classmethod
     def of(cls, records: list[CheckRunRecord]) -> ReportedChecks:
         """
+        Read what the checks say, leaving out the ones the pipeline reports about its
+        own work: those are about the build rather than about the tree they are attached
+        to, so a rebuild that failed for its own reasons must not make the branch that
+        triggered it unfit to carry.
+
         :param records: The check runs, as the API answers them.
         :return: The checks they make up.
         """
-        return cls(tuple(CheckRun.from_json(record) for record in records))
+        about_the_build = ChecksAboutTheBuild.read()
+        return cls(
+            tuple(
+                CheckRun.from_json(record)
+                for record in records
+                if not about_the_build.reports(str(record[CheckRunField.NAME]))
+            )
+        )
 
     @property
     def failed(self) -> tuple[CheckRun, ...]:
@@ -216,6 +288,30 @@ class Candidate:
     """The commit its checks are reported against."""
 
 
+def open_candidate_on(fork: PullRequestReader, base: str) -> Candidate | None:
+    """
+    Find the candidate a run is judging, if one is.
+
+    Recognised by what it is opened against rather than by its title: the base is what
+    makes a pull request a build being judged, and it is the same fact that keeps one out
+    of the board every other reader derives its work from.
+
+    :param fork: The fork to read the open pull requests of.
+    :param base: The branch a build would replace.
+    :return: The candidate, or ``None`` when nothing is being judged.
+    """
+    for record in fork.open_pull_requests():
+        number = int(PullRequestField.NUMBER.read(record))
+        if PullRequestField.BASE.read(record, number) != base:
+            continue
+        return Candidate(
+            number=number,
+            build_branch=PullRequestField.HEAD.read(record, number),
+            head=PullRequestField.HEAD_COMMIT.read(record, number),
+        )
+    return None
+
+
 def candidate_title(build_branch: str) -> str:
     """
     :param build_branch: The build to be judged.
@@ -224,14 +320,28 @@ def candidate_title(build_branch: str) -> str:
     return f"{CANDIDATE_TITLE_PREFIX} {build_branch}"
 
 
-def candidate_description(build_branch: str, base: str) -> str:
+def candidate_description(
+    build_branch: str, base: str, plans: Sequence[str] = ()
+) -> str:
     """Write what the candidate is for, since a reader meets it as an ordinary pull
     request and it is not one.
 
     :param build_branch: The build to be judged.
-    :param base: The branch the build would replace.
+    :param base: The branch the build is opened against.
+    :param plans: The plans this build was asked to carry, empty when it carries all of
+        them.
     :return: The description.
     """
+    if plans:
+        return (
+            f"Opened so that this repository's own checks run over `{build_branch}`, "
+            f"which is a build of the upstream base plus only the reviewed, unblocked "
+            f"branches belonging to {', '.join(f'`{plan}`' for plan in sorted(plans))}."
+            f"\n\n"
+            f"**Not for review, never merged, and never published.** It exists to answer "
+            f"whether those branches hold together on their own; `{POINTER_BRANCH}` is "
+            f"only ever moved onto a build carrying everything in flight."
+        )
     return (
         f"Opened so that this repository's own checks run over `{build_branch}`, which "
         f"is a build of the upstream base plus every reviewed, unblocked branch in "
@@ -245,21 +355,27 @@ def candidate_description(build_branch: str, base: str) -> str:
 
 
 def open_candidate(
-    fork: CandidatePullRequests, build_branch: str, base: str, head: str
+    fork: CandidatePullRequests,
+    build_branch: str,
+    base: str,
+    head: str,
+    plans: Sequence[str] = (),
 ) -> Candidate:
     """Open the pull request that gets the build judged.
 
     :param fork: The fork to open it on.
     :param build_branch: The build to be judged, already published.
-    :param base: The branch the build would replace.
+    :param base: The branch to open it against.
     :param head: The build's head commit.
+    :param plans: The plans this build was asked to carry, empty when it carries all of
+        them.
     :return: The candidate.
     """
     number = fork.open_pull_request(
         title=candidate_title(build_branch),
         head=build_branch,
         base=base,
-        body=candidate_description(build_branch, base),
+        body=candidate_description(build_branch, base, plans),
     )
     return Candidate(number=number, build_branch=build_branch, head=head)
 

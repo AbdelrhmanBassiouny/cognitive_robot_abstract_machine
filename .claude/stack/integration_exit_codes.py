@@ -115,11 +115,29 @@ class IntegrationExitCode(IntEnum):
 
     CANDIDATE_UNCHECKED = 17
     """
-    No check was ever reported against the candidate, so none is coming.
+    No check was ever reported against a candidate a whole cycle old, so none is coming.
 
     Told apart from a matrix that is merely slow because what a reader has to look at is
     different: whatever should have started a run - the trigger, or the credential the
-    candidate was opened with - rather than the checks themselves.
+    candidate was opened with - rather than the checks themselves. A candidate reads as
+    unchecked for its first minutes whatever happens, so this is only ever said of one a
+    later run inherited.
+    """
+
+    NO_CANDIDATE_OPEN = 18
+    """
+    Nothing is being judged, so there is a build to assemble rather than one to settle.
+
+    Its own status rather than an empty document, so a caller decides on the exit status
+    it decides everything else on.
+    """
+
+    NO_RECORDED_PASS = 19
+    """
+    Nothing has been seen to pass over this build's tree, so it has to be judged.
+
+    The ordinary answer rather than a fault: a build carrying a branch that moved is a
+    tree nobody has checked, which is the whole reason a rebuild runs.
     """
 
     @property

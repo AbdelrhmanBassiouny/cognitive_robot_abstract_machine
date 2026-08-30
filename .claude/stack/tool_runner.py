@@ -62,9 +62,19 @@ class IntegrationSubcommand(StrEnum):
     Name the tip whose arrival turned the local suite, and block it.
     """
 
+    PUBLISH_RECORDED_PASS = "publish-recorded-pass"
+    """
+    Publish a build whose tree has already been seen to pass, with no candidate at all.
+    """
+
     OPEN_CANDIDATE = "open-candidate"
     """
     Publish the build and open the pull request that gets it checked.
+    """
+
+    FIND_CANDIDATE = "find-candidate"
+    """
+    Report the build already being judged, if one is.
     """
 
     SETTLE_CANDIDATE = "settle-candidate"
@@ -117,6 +127,11 @@ class CommandLineFlag(StrEnum):
     HEAD = "--head"
     """
     Name the commit the checks are reported against.
+    """
+
+    PLAN = "--plan"
+    """
+    Carry only the tips belonging to one plan.
     """
 
     STATE = "--state"
@@ -213,12 +228,6 @@ class PollingSchedule:
     How long to wait between asking.
     """
 
-
-VERDICT_SCHEDULE = PollingSchedule(attempts=60, interval_seconds=60)
-"""
-An hour, which is longer than this repository's matrix takes and short enough that a
-candidate nothing is running for does not hold a runner all day.
-"""
 
 LOCALISATION_SCHEDULE = PollingSchedule(attempts=180, interval_seconds=60)
 """

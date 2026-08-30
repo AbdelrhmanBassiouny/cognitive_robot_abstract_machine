@@ -93,12 +93,28 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   each time. It writes to no branch and pushes nothing.
   - `python .claude/stack/integration.py build` - assemble it, then run the suite on the result.
     `--restack` brings stale tips forward first, which pushes to other people's branches and is
-    why it is opt-in; `--no-test` skips the suite; `--json` emits the whole build as one document.
+    why it is opt-in; `--no-test` skips the suite; `--json` emits the whole build as one document;
+    `--plan <id>` carries only the tips belonging to that plan, repeatable or comma-separated, for
+    finding out whether one plan holds together when the full build is red. A branch the plan
+    index names no plan for is reported rather than dropped or carried.
   - `python .claude/stack/integration.py locate-failure` - when the branch builds and the suite fails on
     it, add the tips back one at a time until it turns, and name the pair. A semantic collision
     leaves no conflict to attribute, so there is nothing else to go on.
   - `stage-conflict` / `record-resolution` - reproduce one collision, and record what was chosen
     so later builds replay it instead of skipping the tip again.
+  - `open-candidate` / `find-candidate` / `settle-candidate` - a pushed build collects no checks,
+    so a build is judged as a pull request. One rebuild opens the candidate and a later one
+    settles it: the first check against a candidate has been measured appearing between 19 minutes
+    and 2 hours 47 minutes after it was opened, which no job outwaits.
+  - `publish-recorded-pass` - publish a build whose *tree* this fork has already seen pass, with
+    no candidate at all. Nothing usually moves between rebuilds, so most assembled builds are
+    byte-for-byte one already judged; the passes are kept as git references under
+    `refs/integration/passed/`, expire after a week and are pruned as new ones are written. Only
+    passes are recorded: a red is cleared by re-running the same commit, and a remembered one
+    would make the rule that a branch re-enters a build by going green unreachable.
+  - `refresh` - the whole cycle as one command, which is what the scheduled Action runs. It takes
+    the same `--plan`; a rebuild asked for particular plans settles nothing and publishes nothing,
+    and its candidate is opened against the upstream base so nothing ever can.
 - **`.claude/skills/integration-conflict-triage/SKILL.md`** - what a collision between two
   in-flight branches *means*, which the build deliberately does not decide. Invocable as
   `/integration-conflict-triage`.

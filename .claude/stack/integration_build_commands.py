@@ -14,6 +14,7 @@ from stack import (
 )
 
 from integration_assembly import build_integration
+from integration_plans import PlanFilter
 from integration_exit_codes import IntegrationExitCode
 from integration_failure import FailureLocation, print_failure_location
 from integration_report import exit_code_for, print_build
@@ -60,6 +61,17 @@ class BuildCommand(IntegrationCommand):
             help="skip the suite that would otherwise be run on the finished branch",
         )
         parser.add_argument(
+            "--plan",
+            action="append",
+            default=[],
+            metavar="PLAN",
+            help=(
+                "carry only the tips belonging to this plan; repeat it or separate "
+                "several with commas. A branch the plan index names no plan for is "
+                "reported rather than dropped or carried"
+            ),
+        )
+        parser.add_argument(
             "--json",
             action="store_true",
             help="emit the machine-readable document rather than a summary",
@@ -68,9 +80,19 @@ class BuildCommand(IntegrationCommand):
     def run(
         self, run: IntegrationRun, arguments: argparse.Namespace
     ) -> IntegrationExitCode:
-        """:param run: What this run has resolved.
+        """
+        Assemble the branch and report what went into it.
+
+        The plans and the suite are settled before anything is built, so a request that
+        cannot be served fails before it has cost a build rather than after.
+
+        :param run: What this run has resolved.
         :param arguments: The parsed command line.
-        :return: The process exit code."""
+        :return: The process exit code.
+        :raises BranchPlanIndexUnavailable: If plans were named and the index that says
+            which branch is whose could not be read.
+        """
+        plans = PlanFilter.over(arguments.plan)
         test_command = self._test_command(run.configuration, arguments.run_tests)
         fork = run.fork()
         run.refresh_remotes()
@@ -81,6 +103,7 @@ class BuildCommand(IntegrationCommand):
             build_branch=build_branch_name(datetime.now(timezone.utc)),
             provenance=ResolutionProvenance.read(run.provenance_path()),
             test_command=test_command,
+            plans=plans,
         )
         if arguments.json:
             print(report.as_json())
