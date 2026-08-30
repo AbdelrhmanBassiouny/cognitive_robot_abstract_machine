@@ -526,3 +526,20 @@ bright patch reads x 0.35..0.91, y -0.26..0.26 in all six, but it is a specular 
 and it starts exactly at the region's own minimum_x, so the table runs past the region on
 the near side.
 
+### Tuning the workspace by eye (commit `dafafb374`, on #221 as `54dd5f6c0`'s successor)
+
+`python -m experiments.montessori.perception.tune_workspace` draws one capture in the
+three windows a run uses while four sliders move the workspace's edges, and hands back
+the region they were left at - printed, logged on every move, and written to
+`tuned_workspace.json`. The sliders can only cut the declared region down, never grow it
+past what the setup already searches, so a tuned workspace is always one the camera saw
+and no slider position can put the box out of view.
+
+`WorkspaceTuner` runs no detection while tuning: which stretch of table is worth looking
+at is answered by the clipped image and the rectified table on their own, and detecting
+would cost 0.35 s per slider tick. `WorkspaceControls` is the abstraction the sliders sit
+behind, so the tuner is tested with the edges simply set where a test wants them.
+
+Note the OpenCV build here is the Qt one and warns `Cannot find font directory` - if the
+slider labels come out blank, the console line names the region every time an edge moves.
+
