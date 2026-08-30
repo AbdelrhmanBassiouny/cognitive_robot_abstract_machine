@@ -7,15 +7,20 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
+import numpy as np
 import pytest
+from typing_extensions import List, Tuple
 
 from experiments.montessori.perception import pipeline as pipeline_module
+from experiments.montessori.perception.detections import MontessoriBoardDetection
 from experiments.montessori.perception.exceptions import (
     BoardMissingFromWorld,
     SurfaceHasNothingToMeasure,
 )
+from experiments.montessori.perception.footprint import Footprint
+from experiments.montessori.perception.orthophoto import WorkspaceRegion
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
-from experiments.montessori.perception.surfaces import WorkspaceSurface
+from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
 from experiments.montessori import world as montessori_world
 from experiments.montessori.world import (
     BOARD_POSITION,
@@ -30,6 +35,7 @@ from semantic_digital_twin.semantic_annotations.semantic_annotations import Tabl
 from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
+    Pose,
 )
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.connections import FixedConnection
@@ -198,8 +204,8 @@ def test_the_pipeline_takes_its_workspace_from_the_table_in_the_world():
     pipeline = MontessoriPerceptionPipeline.of_world(montessori.world, table)
 
     expected = WorkspaceSurface.of_body(table, montessori.world.root)
-    assert pipeline.region == expected.region
-    assert pipeline.table_height == pytest.approx(expected.height)
+    assert pipeline.table.region == expected.region
+    assert pipeline.table.height == pytest.approx(expected.height)
 
 
 def test_the_pipeline_takes_the_lid_height_from_the_board_in_the_world():
@@ -209,7 +215,7 @@ def test_the_pipeline_takes_the_lid_height_from_the_board_in_the_world():
         montessori.world, _table_in(montessori).root
     )
 
-    assert pipeline.lid_height == pytest.approx(
+    assert pipeline.lid.height == pytest.approx(
         float(BOARD_POSITION.z) + BOARD_SCALE.z / 2
     )
 
@@ -235,3 +241,60 @@ def test_the_node_takes_no_scene_constant_from_another_module():
 
     assert montessori_world.__name__ not in imported
     assert tracy_equipment.__name__ not in imported
+
+
+# %% which surface a detection belongs to
+
+
+def _board_outlining(corners: List[Tuple[float, float]]) -> MontessoriBoardDetection:
+    """
+    A board whose lid was seen covering one outline.
+
+    :param corners: The lid's world-frame ``(x, y)`` corners.
+    """
+    outline = np.asarray(corners, dtype=np.float32)
+    center = outline.mean(axis=0)
+    return MontessoriBoardDetection(
+        pose=Pose.from_xyz_rpy(float(center[0]), float(center[1]), 0.0),
+        footprint=Footprint.from_contour(outline.reshape(-1, 1, 2), 1.0),
+        outline=outline.astype(float),
+    )
+
+
+def _surface_at(height: float) -> WorkspaceSurface:
+    """
+    A surface spanning the unit square at one height.
+
+    :param height: Height of its plane above the world frame's origin, in metres.
+    """
+    return WorkspaceSurface(
+        name=PrefixedName("surface", "test"),
+        region=WorkspaceRegion(
+            minimum_x=0.0, maximum_x=1.0, minimum_y=0.0, maximum_y=1.0
+        ),
+        height=height,
+    )
+
+
+def test_an_unbounded_surface_claims_whatever_stands_on_its_plane():
+    search = SurfaceSearch(surface=_surface_at(0.8))
+
+    assert search.claims(0.5, 0.5)
+
+
+def test_a_surface_does_not_claim_what_stands_on_a_surface_above_it():
+    board = _board_outlining([(0.4, 0.4), (0.6, 0.4), (0.6, 0.6), (0.4, 0.6)])
+
+    search = SurfaceSearch(surface=_surface_at(0.8), supported_surfaces=(board,))
+
+    assert not search.claims(0.5, 0.5)
+    assert search.claims(0.2, 0.2)
+
+
+def test_a_bounded_surface_claims_only_what_stands_within_it():
+    board = _board_outlining([(0.4, 0.4), (0.6, 0.4), (0.6, 0.6), (0.4, 0.6)])
+
+    search = SurfaceSearch(surface=_surface_at(0.88), boundary=board)
+
+    assert search.claims(0.5, 0.5)
+    assert not search.claims(0.2, 0.2)

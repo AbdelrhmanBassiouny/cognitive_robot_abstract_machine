@@ -266,7 +266,10 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
         self.viewer.show_depth(workspace.clip(frame.depth, frame))
         self.viewer.show_rectified(
             self.overlay.draw(
-                RectifiedView(frame, self.pipeline.rectify_table(frame)), scene
+                RectifiedView(
+                    frame, self.pipeline.rectify(frame, self.pipeline.table.height)
+                ),
+                scene,
             )
         )
 
@@ -393,9 +396,9 @@ def build_node(
     pipeline = MontessoriPerceptionPipeline.of_world(world, robot.root)
     logger.info(
         "Watching %s: table top at z=%.3f, board lid at z=%.3f, poses in %s.",
-        pipeline.region,
-        pipeline.table_height,
-        pipeline.lid_height,
+        pipeline.table.region,
+        pipeline.table.height,
+        pipeline.lid.height,
         reference_frame.name,
     )
     markers = (

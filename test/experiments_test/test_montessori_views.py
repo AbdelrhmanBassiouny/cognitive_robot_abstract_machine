@@ -289,7 +289,7 @@ def test_the_depth_image_is_cut_down_the_same_way_as_the_colour_one(
 def test_a_camera_that_is_not_looking_at_the_workspace_has_nothing_to_show(
     renderer: MontessoriSceneRenderer, pipeline: MontessoriPerceptionPipeline
 ):
-    elsewhere = looking_straight_down(pipeline.table_height + 1.0)
+    elsewhere = looking_straight_down(pipeline.table.height + 1.0)
     elsewhere[0, 3] = 100.0
     frame = RgbdFrame(
         color=np.zeros((64, 64, 3), dtype=np.uint8),
@@ -308,7 +308,7 @@ def test_a_camera_that_is_not_looking_at_the_workspace_has_nothing_to_show(
 def test_a_point_on_the_rectified_plane_lands_on_the_pixel_that_samples_it(
     frame: RgbdFrame, pipeline: MontessoriPerceptionPipeline
 ):
-    orthophoto = pipeline.rectify_table(frame)
+    orthophoto = pipeline.rectify(frame, pipeline.table.height)
     x, y = 0.6, 0.2
 
     [pixel] = RectifiedView(frame, orthophoto).to_pixels(
@@ -321,7 +321,7 @@ def test_a_point_on_the_rectified_plane_lands_on_the_pixel_that_samples_it(
 def test_a_point_above_the_rectified_plane_lands_further_from_the_camera_axis(
     frame: RgbdFrame, pipeline: MontessoriPerceptionPipeline
 ):
-    orthophoto = pipeline.rectify_table(frame)
+    orthophoto = pipeline.rectify(frame, pipeline.table.height)
     view = RectifiedView(frame, orthophoto)
     below_camera = np.array(frame.reference_frame_T_camera[:2, 3]).reshape(1, 2)
     point = below_camera + np.array([[0.2, 0.0]])
@@ -338,7 +338,7 @@ def test_a_point_above_the_rectified_plane_lands_further_from_the_camera_axis(
 def test_the_rectified_view_draws_on_the_rectified_image(
     frame: RgbdFrame, pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
 ):
-    orthophoto = pipeline.rectify_table(frame)
+    orthophoto = pipeline.rectify(frame, pipeline.table.height)
 
     drawn = DetectionOverlay().draw(RectifiedView(frame, orthophoto), scene)
 

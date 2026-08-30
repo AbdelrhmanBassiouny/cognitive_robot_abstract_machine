@@ -127,6 +127,109 @@ def test_pipeline_reports_no_board_when_none_is_in_view(
     assert pipeline.detect(empty).board is None
 
 
+# %% pieces standing on a raised surface
+
+
+@pytest.fixture
+def piece_on_the_lid(renderer: MontessoriSceneRenderer) -> PlacedPiece:
+    """
+    A cube standing on the board's lid, clear of the holes cut through it.
+    """
+    x, y = renderer.clear_lid_position()
+    return PlacedPiece(
+        MontessoriShapeCategory.CUBE, x=x, y=y, surface_height=renderer.lid_height
+    )
+
+
+@pytest.fixture
+def scene_with_a_piece_on_the_lid(
+    pipeline: MontessoriPerceptionPipeline,
+    renderer: MontessoriSceneRenderer,
+    placed_pieces: list[PlacedPiece],
+    piece_on_the_lid: PlacedPiece,
+) -> MontessoriScene:
+    return pipeline.detect(renderer.render([*placed_pieces, piece_on_the_lid]))
+
+
+def _pieces_near(
+    scene: MontessoriScene, placed: PlacedPiece
+) -> list[MontessoriShapeDetection]:
+    """
+    The detections standing within one piece's own outline of where it was placed.
+
+    :param scene: The look at the scene to search.
+    :param placed: The piece whose position the detections are measured against.
+    """
+    reach = placed.known_piece.turned_outline(0.0).max()
+    return [
+        piece
+        for piece in scene.shapes
+        if math.hypot(
+            float(piece.pose.to_position().to_np()[0]) - placed.x,
+            float(piece.pose.to_position().to_np()[1]) - placed.y,
+        )
+        <= reach
+    ]
+
+
+def test_a_piece_standing_on_the_board_lid_is_found_where_it_stands(
+    scene_with_a_piece_on_the_lid: MontessoriScene, piece_on_the_lid: PlacedPiece
+):
+    detected = [
+        tuple(piece.pose.to_position().to_np()[:2])
+        for piece in scene_with_a_piece_on_the_lid.shapes
+    ]
+
+    nearest = min(
+        math.hypot(x - piece_on_the_lid.x, y - piece_on_the_lid.y) for x, y in detected
+    )
+    assert nearest == pytest.approx(0.0, abs=0.006)
+
+
+def test_a_piece_standing_on_the_lid_is_reported_once(
+    scene_with_a_piece_on_the_lid: MontessoriScene, piece_on_the_lid: PlacedPiece
+):
+    assert len(_pieces_near(scene_with_a_piece_on_the_lid, piece_on_the_lid)) == 1
+
+
+def test_a_piece_standing_on_the_lid_rests_at_the_lid_height(
+    scene_with_a_piece_on_the_lid: MontessoriScene,
+    piece_on_the_lid: PlacedPiece,
+    renderer: MontessoriSceneRenderer,
+):
+    [detected] = _pieces_near(scene_with_a_piece_on_the_lid, piece_on_the_lid)
+
+    assert detected.surface_height == pytest.approx(renderer.lid_height, abs=0.001)
+
+
+def test_a_piece_standing_on_the_lid_is_attributed_to_the_lid(
+    scene_with_a_piece_on_the_lid: MontessoriScene,
+    piece_on_the_lid: PlacedPiece,
+    pipeline: MontessoriPerceptionPipeline,
+):
+    [detected] = _pieces_near(scene_with_a_piece_on_the_lid, piece_on_the_lid)
+
+    assert detected.supporting_surface == pipeline.lid.name
+
+
+def test_a_piece_standing_on_the_table_is_attributed_to_the_table(
+    scene_with_a_piece_on_the_lid: MontessoriScene,
+    placed_pieces: list[PlacedPiece],
+    pipeline: MontessoriPerceptionPipeline,
+):
+    for placed in placed_pieces:
+        [detected] = _pieces_near(scene_with_a_piece_on_the_lid, placed)
+        assert detected.supporting_surface == pipeline.table.name
+
+
+def test_the_board_is_still_found_under_a_piece_standing_on_its_lid(
+    scene_with_a_piece_on_the_lid: MontessoriScene,
+    renderer: MontessoriSceneRenderer,
+):
+    assert scene_with_a_piece_on_the_lid.board is not None
+    assert len(scene_with_a_piece_on_the_lid.holes) == len(renderer.hole_footprints())
+
+
 # %% querying it
 
 
@@ -202,8 +305,8 @@ def test_a_piece_the_depth_image_cannot_resolve_stands_at_its_nominal_height(
 
     for piece in scene.shapes:
         assert piece.height == pytest.approx(nominal)
-        assert piece.surface_height == pytest.approx(pipeline.table_height)
-        assert piece.top_height == pytest.approx(pipeline.table_height + nominal)
+        assert piece.surface_height == pytest.approx(pipeline.table.height)
+        assert piece.top_height == pytest.approx(pipeline.table.height + nominal)
 
 
 def test_a_hole_has_no_thickness_to_stand_above_its_own_surface(
