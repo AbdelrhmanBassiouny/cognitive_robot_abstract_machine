@@ -728,7 +728,19 @@ items:
     Three interfaces had moved under the branch in the six weeks it spent on a dead base and the ported
     tests were brought up to them; the two `save_path` test classes went with `EQLSingleClassRDR.save_path`
     itself, their replacement already covered by `test_fit_convergence.py` and `test_serialization.py`.
-    See roadmap.md §34.'
+    See roadmap.md §34.
+
+    2026-08-30 (later): a fresh `/plan-item-resolve` session picked this item up again and found a
+    review round the rebuild above had drawn minutes after it pushed — 11 threads (missing docstrings
+    and `:param:`/`:return:` docs, missing dataclass field docstrings, four abbreviated names, one
+    box-drawing divider), never recorded here since the previous session had already reported itself
+    finished. Applied and pushed as `8dc1a7c8`: every function/method/field across all eight files this
+    PR adds now has a docstring, the flagged abbreviations (`_val`/`attr` in `case_table.py`, `ser` in
+    `test_case_serializer.py`, `_animal_var`/`_mixed_alt_then_ref_query` in `test_rule_order.py`) are
+    spelled out along with the rest of the same names in the same functions, and the divider is `# %%`.
+    All eleven threads replied to individually (naming the commit) and resolved. `test_eql_rdr`
+    unchanged: 341 passed, 0 failed. Draft was already `true`, so no restore-to-draft was needed. See
+    roadmap.md §35.'
 - id: D-ui
   title: 'RDR engine: interactive expert interface (IPython shell, magics, prompt sections/examples)'
   branch: D-ui

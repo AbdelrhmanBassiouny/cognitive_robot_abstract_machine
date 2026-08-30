@@ -3070,3 +3070,90 @@ that pass, not a count of what was collected.
 - **#76 (`D-ui`) is the next instance of this same problem**, recorded on its item: it sits
   on #79's pre-rebuild tip and so still carries `cfe32ad0`. Its restack has to drop that
   commit too, not merge over it.
+
+## 35. Addendum (2026-08-30) — `D-ui-rendering` (#79): the review round §34 never saw, applied
+
+A fresh `/plan-item-resolve rdr-refactor D-ui-rendering` session picked the item up hours
+after §34 pushed the rebuild. Ninth instance of this plan's staleness class (§5, §14, §18,
+§19, §23, §27, §29, §32) — and the tightest yet after §32's own: the developer opened a
+review round (`10:32:45Z`–`10:51:25Z`) on `case_table.py`, `test_case_serializer.py`,
+`test_rule_order.py` and `test_save_rdr_with_case.py` while §34's session was still
+finishing, and the item's `notes` never recorded it because nothing re-read the PR before
+reporting the round done — exactly §19's own procedural lesson, restated for a fourth time.
+
+### The eleven threads, and what they actually asked
+
+All eleven were mechanical, not design questions: four asked for a function's own
+docstring or its missing `:param:`/`:return:` (`_format_value`, `_style_key`,
+`_tabulate_full_width`, `_pairs_per_row` — the last one adding *"Check the doc strings for
+this whole PR please"*), two asked for missing dataclass field docstrings
+(`FlatAnimal.hair`, `SyntheticFunctionCase.x`/`y`/`_output`), four asked to drop an
+abbreviated name (`_val`/its `attr` parameter, `ser`, `_animal_var`,
+`_mixed_alt_then_ref_query`), and one asked to replace a box-drawing divider with `# %%`
+or remove it.
+
+### Reading "check the whole PR" as a scope instruction, not a one-off
+
+The fourth docstring thread's ask was explicitly PR-wide, so the round audited all eight
+files this PR adds rather than only the four the reviewer had reached — the same
+`git diff --stat origin/D-core-backend origin/D-ui-rendering` file list §31/§34 already
+established. That surfaced the identical gap in the other four
+(`test_case_table_side_by_side.py`'s `DistinctFieldAnimal`, `test_corner_case_store.py`'s
+`MinimalCase`/`SpySerializer.received`/`TrivialSerializer.to_source`,
+`test_variable_completion.py`'s class and all three test methods carrying no docstring at
+all) and fixed the same shape there too, rather than stopping at the four files a
+reviewer's attention happened to reach first.
+
+The "no abbreviations" asks were read narrower, deliberately: each was fixed at its
+flagged identifier and cascaded to every use site of *that* function's own local names
+(`render_cases_side_by_side`'s `attr`/`all_attrs`/`_style_new_val`/`tbl_rows`/
+`table_strs`/`max_h`/`idx` all went with `_val`, since leaving three of seven abbreviated
+names in one function while fixing four would read as arbitrary), but not extended to
+other abbreviated identifiers elsewhere in the PR that no thread named (`av` in two
+files' `_make_condition_node`, `sp` in `test_save_rdr_with_case.py`'s `first`, `d` for
+`tempfile.TemporaryDirectory() as d`) — matching the standing "keep each fix minimal"
+rule rather than turning one comment into an unscoped sweep. Same call for the divider:
+fixed in the one function the reviewer commented on (its three siblings there too, since
+leaving three of four in one function unconverted would look unfinished), left alone in
+`test_progress_bar.py`'s own four box-drawing dividers, which no thread named.
+
+### Verified before pushing, not assumed
+
+A 3.12 `uv sync --extra dev` environment was built fresh in this container (§14/§18's
+documented method); `test/krrood_test/test_eql_rdr/`: **341 passed, 0 failed**, unchanged
+from §34's own baseline — compared as the same count on the same suite, since the round
+touched no test's behaviour, only names and docstrings.
+
+`scripts/format_docstrings.py` reproduced its own recurring defect a further three times
+in this round alone — the **eleventh, twelfth and thirteenth** recorded instances of the
+`:return: ``x``` → `:return:``x``` space regression (§12, §14, §16, §18, §19, §22, §23,
+§30, §31, §32) — on `case_table.py`'s `_style_key` and two of
+`test_corner_case_store.py`'s `to_source` methods. Reverted those three lines by hand,
+kept the rest of the tool's output, the same call every prior round has made. The
+regenerated `ormatic_interface.py` files (five packages) and
+`test_verbalization_results.py` the sweep dirtied were reverted before staging, per
+§23/§24's standing habit; nothing was staged with `git add -u`.
+
+### What landed (`8dc1a7c8`)
+
+Pushed to the existing branch (`D-ui-rendering`, already tracking `origin/D-ui-rendering`
+— the CCR-provisioned session branch this run started on carried unrelated integration-
+branch history and was never used). All eleven threads replied to individually, each
+naming the commit, then resolved — one thread, one reply, per the standing convention.
+The PR description was refreshed to record the round; `draft` was already `true` from
+§34, so no restore-to-draft was needed this time.
+
+### Left alone, and why
+
+- `av`, `sp`, `d` and `test_progress_bar.py`'s own dividers are real instances of rules
+  this PR's other fixes just enforced elsewhere, but no thread named them and fixing them
+  would have widened the PR past what was asked, per the standing "small, local,
+  mechanical" bar for a reviewer's own PR. Worth a future pass's attention if the pattern
+  recurs.
+- `TestIPythonProgressBar`'s later test methods type-hint `mock_tqdm: pytest.MagicMock`,
+  which does not exist on `pytest` (only the first method uses the correct
+  `MagicMock` import) — found while reading `test_progress_bar.py` for the docstring
+  audit, not something the review flagged, and outside the docstring/naming/divider scope
+  this round was actually asked to close. `from __future__ import annotations` keeps the
+  annotation lazy (a string), so it does not break collection; flagging it here rather
+  than silently fixing an unrelated defect on someone else's review round.
