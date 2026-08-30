@@ -190,11 +190,14 @@ items:
     blockers:
       - >-
           stacked-pr-maintenance: Fork PR #192 (branch
-          `claude/match-query-interface-refactor-l55jym`) still conflicts against its base
-          `claude/match-query-ergonomics-where-rooted-b876wm` as of the 2026-08-29
-          stacked-pr-maintenance pass. It carries the `needs-resolution` label and a routine comment
-          on the PR; this pass did not attempt a fresh merge because it was already withheld from a
-          previous pass.
+          `claude/match-query-interface-refactor-l55jym`) still conflicts against its base as of the
+          2026-08-30 stacked-pr-maintenance pass, and carries the `needs-resolution` label and a
+          routine comment on the PR.
+
+          Its base changed this pass: the parent `claude/match-query-ergonomics-where-rooted-b876wm`
+          had merged into main, which no previous pass could see, so the PR was retargeted at `main`
+          (GitHub stack 195 was dissolved to allow it, and could not be re-created because only one
+          open member was left). The conflict is now against `main`.
     notes: >
       Implemented ahead of order by an independent IDE-typing session on
       claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which
