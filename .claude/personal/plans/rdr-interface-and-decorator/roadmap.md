@@ -112,6 +112,14 @@ sweep is what AGENTS.md asks for on modified files, so the rule is narrower
 than it reads: it applies to the files a pull request actually changes, and a
 file restored to the base is not one of them.
 
+**10. A cross-plan ask is the developer's call, not the session's.** The
+generated-model header belonged to #66, five branches down and in
+`rdr-core-engine`. The resolve did the work it owned, replied with where the
+rest belonged and what it would cost, and asked; the answer was to push it and
+regenerate #76's copies. Asking cost one turn. Pushing to another plan's
+in-flight pull request unasked would have cost that plan's manifest its record
+of why its own diff had grown.
+
 ## The lesson this plan is the case study for
 
 **Six weeks on a dead base costs three moved interfaces, and none of it is
@@ -154,13 +162,15 @@ passing suite:
   member the way `EXIT` does. Both are real rule instances that no thread named
   and that the PR-wide sweep thread's own categories (abbreviations, docstrings,
   formatting) do not cover.
-- **One review thread on #76 remains open, deliberately.** The generated-model
-  header changes in the pull request that owns `templates/rdr_module.py.jinja` -
-  #66 (`D-core-serialization`), open and unmerged - which is five branches below
-  #76 and in `rdr-core-engine`, so it waits on the developer's word rather than a
-  cross-plan push. The labels thread is done: `CaseColumnLabel` landed in #79 and
-  both readers use it. The other three of the five left open he resolved himself,
-  taking the answers as given.
+- **#76 has no open review threads left.** `CaseColumnLabel` landed in #79 and
+  both readers use it; the generated-model header changed in #66, the pull request
+  that owns the template, with #76 bringing its three `fitted_models/` copies onto
+  the new wording. The other three of the five left open the developer resolved
+  himself, taking the answers as given.
+- **The generated header is inconsistent on every branch between #66 and #76**
+  until the stack restacks: those branches carry the template with the old line and,
+  on #76, three generated modules with the new one. Regenerating a model there
+  before #66 arrives puts the old header back.
 - **Known conformance debt left alone deliberately** on #79: `av`, `sp`, `d` and
   `test_progress_bar.py`'s own box-drawing dividers are real instances of rules
   this pull request's other fixes enforced elsewhere, but no thread named them.

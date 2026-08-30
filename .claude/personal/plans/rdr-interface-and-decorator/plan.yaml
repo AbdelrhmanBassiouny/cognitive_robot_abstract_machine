@@ -131,19 +131,23 @@ items:
     the one thread still open, and deliberately - `templates/rdr_module.py.jinja` belongs to #66 (`D-core-serialization`),
     open and unmerged, so by the reviewer''s own rule it changes there, five branches down and in another
     plan. Replied with the proposed wording and left open pending the developer''s word on whether this
-    session pushes to #66. See roadmap.md sections 7 to 9.'
+    session pushes to #66. See roadmap.md sections 7 to 9.
+
+
+    2026-08-30 (resolve, second half): the developer chose to have the header change pushed rather than
+    deferred, so it landed in #66 (`bb01256df`) with the first test of that header, and #76 brought its
+    three `fitted_models/` copies onto the new wording (`1045c6d5a`). Both threads from the round are
+    now replied to and resolved, and the item has no open review threads left. `rdr-core-engine`''s D-core-serialization
+    item records the #66 side. What is knowingly inconsistent until the stack restacks: `rdr_module.py.jinja`
+    on this branch is #66''s file and untouched here, so it still reads the old line while the three generated
+    modules beside it read the new one, and regenerating a model on this branch before #66 arrives would
+    put the old header back.'
   blockers:
   - CI has never run on this branch - the pull request reports zero check runs on any head it has had
     - so every figure recorded for it is a local measurement. This session could not close that gap either,
     because the container has no project interpreter provisioned; the suite ran with --noconftest against
     the packages the rdr modules import (415 passed, 119 skipped of 534 collected, identical before and
     after the change) and the conftest-dependent tests were not exercised.
-  - 'One review thread stays open by choice - the generated model''s "Do not edit by hand" header. The
-    reviewer''s answer was to change it in the pull request that owns the template if that one is unmerged,
-    and the owner is #66 (D-core-serialization), open and unmerged, five branches below this one and in
-    the rdr-core-engine plan. Needs the developer''s word on whether a D-ui session pushes to #66, and
-    the wording will not reach this pull request''s three fitted_models copies until the branches in between
-    restack.'
 - id: D-ui-splice-fix
   title: 'RDR engine: fix rule-tree splice for attributes reused across sibling branches'
   branch: D-ui-splice-fix
