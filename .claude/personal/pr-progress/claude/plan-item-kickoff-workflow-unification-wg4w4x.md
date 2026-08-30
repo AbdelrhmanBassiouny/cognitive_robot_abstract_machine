@@ -1,55 +1,48 @@
-## Why the pipeline had never published a build, and the six fixes for it
+# PR #211 - `integration-branch-ci-verdict` + `red-candidate-localisation`
 
-**Status**: done and pushed as `8227ef57c` on #211. Manifest, roadmap and dashboard all
-current. #211 and #154 both stay out of draft, on your explicit instruction - a draft is
-excluded from every integration build, which is the process this work serves.
+Two plan items share this branch, both in `stack-maintenance`. This session resolved
+`integration-branch-ci-verdict` via `/plan-item-resolve` (auto mode).
 
-### The four defects, each verified live before it was fixed
+## What was stalling it
 
-- **The rebuild's own check judged the branch it ran on.** `ReportedChecks.verdict`
-  returned FAILED for any failed check, so #211's ready-flip fired a rebuild whose own
-  failure attached to #211's head and the red-tip exclusion then left #211 out of the
-  build its flip had triggered. `ChecksAboutTheBuild` reads the job names off the two
-  pipeline workflows and filters them out. Naming the probe's jobs was forced by it: the
-  keys `to-lowercase` and `test` collided with `ci.yml`'s.
-- **The `pull_request` arm could not work.** It pins the checkout to the default branch,
-  correctly, and that branch's `integration.py` predates `refresh`. It asks the pinned
-  copy whether it can rebuild and says so plainly when it cannot, rather than dying on
-  `invalid choice: 'refresh'` in 19 seconds. Kept as a bootstrap rather than reshaped.
-- **The warm-up was one to two orders of magnitude short.** Measured: +19m on #214,
-  +2h47m on #217. The verdict is settled by a later run now - `find-candidate` reads the
-  open candidate off the fork and `refresh` settles it before building anything, so no
-  run waits for its own candidate.
-- **The maintenance pass adopted candidates and restacked them.** `is_a_candidate`
-  recognises one by base *or* title, so the board never carries it. `work_in_flight` is
-  gone with it.
+A six-thread review round submitted 2026-08-30T09:48Z against the branch's own head
+commit `8227ef57`, unanswered. CI green on all 25 checks, `clean`, out of draft - nothing
+else held it, and the manifest recorded no blocker at all.
 
-### The two new features
+## Done
 
-- **Recorded passes**, on `refs/integration/passed/*` - reachable with
-  `INTEGRATION_REFRESH_TOKEN`, no personal-notes access, read in one `ls-remote`, pruned
-  in the same push that records. Keyed by build tree hash and by branch head. Only passes
-  are recorded, never failures: a red is cleared by re-running the same commit, and the
-  rule that a red branch re-enters a build by going green would be unreachable if a red
-  were remembered. Seven-day retention, because the container the matrix runs in is
-  rebuilt from the upstream base even when the tree has not changed.
-- **`--plan`**, on `build` and through `refresh`, repeatable or comma-separated, reading
-  `_generated/branch-index.tsv`. A branch the index does not name is reported
-  `no-plan-recorded` rather than silently dropped or forced in. A filtered build never
-  publishes, enforced structurally: its candidate opens against the upstream base, so
-  `find-candidate` cannot see it.
+- `7d9ba6f6d` - `take-down-unreferenced-builds` (the eight stranded `integration-*`
+  branches), the one pull-request-record builder across tests and the production client,
+  the workflow model growth (`WorkflowInput`, `ActivityType`, `variable`/`passes`,
+  `OptionalArgument`), `file_names_in` + `remote_branch_names` on the runner.
+- `b08badf05` - moved `test_integration_verdict.py`'s raw-YAML section onto the model
+  (`test_integration_verdict.py` 742 -> 618 lines), `PassedArgument`, `CheckoutInput`,
+  `GitHubContext` additions.
+- Six threads answered; four resolved. PR description brought up to date - it had no
+  section for `8227ef57` at all.
+- Manifest + roadmap saved (`2cd57b1ae`), dashboard republished, tracking issue #102
+  updated with the structural split.
+- 907 tests pass across the four directories CI runs, from 899. Nine mutations checked.
 
-### Verified against the fork, not only the harness
-26 check runs on #211's head, of which only the two rebuild runs failed. `PlanFilter`
-over the live index: 125 branches, 9 plans, 42 under `rdr-refactor`.
+## Outstanding - both are the author's call, and both are why the item still carries a blocker
 
-899 tests across the four CI directories, from 851. 32 mutations checked.
+1. **The repeated `"shared"`** (thread on `integration_pipeline.py`). It is the `sys.path`
+   insertion in 18 files across three directories. Answered with `bastler-package` (#185),
+   which removes all 18 by name. If the author wants the three-constant version now, it is
+   a small change.
+2. **The rebuild cadence** (thread on `integration_pipeline.py`). A first-time build is
+   judged by a later run, up to six hours away. Proposed fix is a `workflow_run` trigger
+   on `ci.yml` completing, filtered to `integration-*`; it adds a trigger, so it was not
+   made unilaterally. Asked whether it belongs in this PR or its own item.
+3. **The dashboard integrate control** (thread on `integration-refresh.yml`). Four asks;
+   two already shipped, two need items on `plan-dashboards`. Proposed on #102, not created.
 
-### Outstanding
-- **No rebuild was dispatched.** Publishing needs your say-so, and the fixes reach the
-  schedule only through a dispatch on this branch or a hand push to `integration`.
-- **Seven `integration-2026*` build branches remain.** `git push --delete` returns
-  HTTP 403 through the session git proxy - the standing constraint recorded 2026-07-29,
-  not a transfer failure. They need deleting outside the harness.
-- `per-plan-integration-branches` is recorded as deferred under `stack-tooling`,
-  depending on `integration-branch-ci-verdict`, and was deliberately not built.
+## Not to do
+
+- **Do not re-draft this PR after pushing.** The item's notes record that it stays out of
+  draft deliberately - a draft is excluded from every integration build.
+- No PR-activity subscription, and no scheduled check-ins.
+
+## Next, if asked
+
+Whichever of the three above the author picks. Nothing else is outstanding on the branch.
