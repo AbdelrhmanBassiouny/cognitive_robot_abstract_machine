@@ -75,12 +75,30 @@ review comments and progress tracking — defaulting to yes, and make clear it i
 starting point they own and can edit or discard. Declining leaves an empty file,
 which is a perfectly good state.
 
-**Create missing labels?** The tooling reads `merged` and applies `bug` and
-`in-review`, and a fresh fork has none of them. Creation writes to their
-repository and is visible to everyone who can see it, so ask before passing
-`--create-labels`. Defaulting to yes is fine; doing it unasked is not.
+**Create missing labels?** Six between the dashboard and the stacked-PR workflow
+(`resolve-personal-notes-config.sh`'s `PULL_REQUEST_LABELS` is the list), and a
+fresh fork has none of them. Creation writes to their repository and is visible
+to everyone who can see it, so ask before passing `--create-labels`. Defaulting
+to yes is fine; doing it unasked is not.
 
-Only these three are worth asking. The branch and path have working defaults;
+What creating them buys is mostly the description: a label that arrives any other
+way turns up unexplained to everyone who later sees it.
+
+**Which git identity?** What their commits should be authored as, recorded on the
+notes branch so every clone they work in picks it up. Read what git resolves here
+first:
+
+```bash
+git var GIT_AUTHOR_IDENT
+```
+
+That is what commits carry today, and in a session it is usually the agent's rather
+than theirs, which is exactly what recording one fixes. Offer it as the default when
+it looks like a person's, and otherwise ask outright. The script refuses to guess -
+what someone's commits say is theirs to decide - so a run given neither flag simply
+leaves the `git_identity` row `needs-setup`.
+
+Only these four are worth asking. The branch and path have working defaults;
 mention that both are overridable (`claude.personalNotesBranch` /
 `claude.personalNotesPath`, same three-way precedence) and only ask if they want
 something else — for example a distinct branch name so several people sharing one
@@ -90,11 +108,12 @@ remote don't collide.
 
 ```bash
 bash "${SETUP_PERSONAL_NOTES_SCRIPT}" --remote <chosen-remote-or-url> \
-  [--starter-notes] [--create-labels]
+  [--name "<their name>" --email <their email>] [--starter-notes] [--create-labels]
 ```
 
 It points the notes remote at the choice, creates the branch, seeds it if asked,
-installs the plan-dashboard dependencies, runs `session-start.sh` so this clone
+records the identity when given one, installs the plan-dashboard dependencies, runs
+`session-start.sh` so this clone
 picks the notes up, checks the labels, and finishes by printing `check-setup.sh`'s
 report. Safe to re-run: every step is skipped when already done, and it exits with
 the final check's status, so it cannot report a half-finished setup as success.

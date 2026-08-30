@@ -10,7 +10,16 @@ from __future__ import annotations
 
 import shutil
 
-from stub_executables import StubExecutableDirectory
+from stub_executables import (
+    GitHubCredentialVariable,
+    StubbedExecutable,
+    StubExecutableDirectory,
+)
+
+DELIBERATE_TOKEN = "a-token"
+"""
+A token a test sets on purpose, which the scrubbing must leave alone.
+"""
 
 
 def test_hiding_one_executable_leaves_its_neighbours_findable(
@@ -19,20 +28,22 @@ def test_hiding_one_executable_leaves_its_neighbours_findable(
     # Hiding used to drop the whole PATH entry providing the executable. That entry is
     # normally /usr/bin, which also provides bash - so on a machine that has the hidden
     # executable installed, every test hiding it failed before its subject even started.
-    environment = stub_executables.subprocess_environment(hidden_executables=("git",))
+    environment = stub_executables.subprocess_environment(
+        hidden_executables=(StubbedExecutable.GIT,)
+    )
 
-    assert shutil.which("git", path=environment["PATH"]) is None
+    assert shutil.which(StubbedExecutable.GIT, path=environment["PATH"]) is None
     assert shutil.which("bash", path=environment["PATH"]) is not None
 
 
 def test_an_installed_stub_wins_over_a_real_executable(
     stub_executables: StubExecutableDirectory,
 ):
-    stub_executables.install("curl")
+    stub_executables.install(StubbedExecutable.CURL)
     environment = stub_executables.subprocess_environment()
 
-    assert shutil.which("curl", path=environment["PATH"]) == str(
-        stub_executables.path / "curl"
+    assert shutil.which(StubbedExecutable.CURL, path=environment["PATH"]) == str(
+        stub_executables.path / StubbedExecutable.CURL.value
     )
 
 
@@ -43,13 +54,12 @@ def test_strips_the_callers_own_github_credentials(
     # run that reached GitHub with them would be neither reproducible nor safe.
     environment = stub_executables.subprocess_environment()
 
-    assert "GH_TOKEN" not in environment
-    assert "GITHUB_TOKEN" not in environment
+    assert not set(GitHubCredentialVariable) & environment.keys()
 
 
 def test_keeps_a_token_a_test_sets_deliberately(
     stub_executables: StubExecutableDirectory,
 ):
-    environment = stub_executables.subprocess_environment(GH_TOKEN="a-token")
+    environment = stub_executables.subprocess_environment(GH_TOKEN=DELIBERATE_TOKEN)
 
-    assert environment["GH_TOKEN"] == "a-token"
+    assert environment[GitHubCredentialVariable.GH_TOKEN] == DELIBERATE_TOKEN

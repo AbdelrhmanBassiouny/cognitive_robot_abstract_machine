@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 
 from scratch_repository import NOTES_BRANCH, ScratchRepository
+from tooling_files import HookScript
 
 NOTES_PATH = ".claude/personal/cram-notes.md"
 
@@ -29,9 +30,7 @@ def writer_repository(scratch_repository: ScratchRepository) -> ScratchRepositor
     :return: The same repository, ready for a write.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "write-branch-files.sh",
-        "write-personal-notes-file.sh",
+        HookScript.WRITE_NOTES_FILE,
     )
     scratch_repository.write("README.md", "scratch\n")
     scratch_repository.commit_everything("initial commit")
@@ -57,7 +56,7 @@ def run_write_personal_notes_file(
                 repository.project_root
                 / ".claude"
                 / "hooks"
-                / "write-personal-notes-file.sh"
+                / HookScript.WRITE_NOTES_FILE.value
             ),
             *arguments,
         ],
@@ -111,9 +110,7 @@ def test_refuses_when_the_notes_branch_does_not_exist_yet(
     scratch_repository: ScratchRepository,
 ):
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "write-branch-files.sh",
-        "write-personal-notes-file.sh",
+        HookScript.WRITE_NOTES_FILE,
     )
     scratch_repository.write("README.md", "scratch\n")
     scratch_repository.commit_everything("initial commit")
@@ -132,7 +129,7 @@ def test_refuses_when_the_notes_branch_does_not_exist_yet(
 
     assert result.returncode != 0
     assert NOTES_BRANCH in result.stderr
-    assert "create-personal-notes-branch.sh" in result.stderr
+    assert HookScript.CREATE_NOTES_BRANCH in result.stderr
 
 
 @pytest.mark.parametrize("destination", ["/etc/passwd", "../escape.md"])

@@ -9,6 +9,7 @@ notes remote - so no test needs network access or a real personal-notes branch.
 
 from __future__ import annotations
 
+import ast
 import os
 import re
 import shutil
@@ -19,10 +20,23 @@ from enum import StrEnum
 from pathlib import Path
 
 import plan_manifest_tools
+from stub_executables import SCRUBBED_VARIABLE_PREFIXES
+from tooling_files import (
+    HOOKS_DIRECTORY,
+    HookScript,
+    ProjectFile,
+    SetupPrerequisiteFile,
+)
 
 HOOKS_SOURCE_DIRECTORY = Path(plan_manifest_tools.__file__).parent
 """
 The real hooks directory the scripts under test are copied from.
+"""
+
+PROJECT_SOURCE_DIRECTORY = HOOKS_SOURCE_DIRECTORY.parent.parent
+"""
+This clone's own root, which the files a scratch layout needs real copies of are read
+from - derived from where the hooks are rather than counted out in parent steps.
 """
 
 NOTES_BRANCH = "claude/personal-notes"
@@ -30,68 +44,93 @@ NOTES_BRANCH = "claude/personal-notes"
 The personal-notes branch name the hooks resolve to by default.
 """
 
+NOTES_PATH = ".claude/personal/cram-notes.md"
+"""
+The notes file's path within a clone, the hooks' own default.
+
+A contributor can redirect it, so this is what they resolve to rather than a fixed
+convention - which is why it is not a :class:`ProjectFile` member.
+"""
+
 WORK_BRANCH = "some-work-branch"
 """
 The throwaway branch a scratch repository is left checked out on.
 """
 
-PERSONAL_GIT_IDENTITY_PATH = ".claude/personal/git-identity"
+SOURCED_SCRIPT_PATTERN = re.compile(r'source\s+"([^"]+)"')
 """
-The path the hooks read a recorded git identity from, relative to the project root.
+A shell ``source`` of a quoted path, one of the two ways a hook script reaches another.
 
-Kept as a literal here for the same reason as :class:`SetupPrerequisiteFile` below.
-"""
-
-SCRUBBED_ENVIRONMENT_PREFIXES = (
-    "CLAUDE_PERSONAL_NOTES_",
-    "GIT_AUTHOR_",
-    "GIT_COMMITTER_",
-)
-"""
-Variable prefixes stripped from a hook's environment before running it.
-
-A value that happens to be set in whoever's shell is running the tests can otherwise
-change what they assert - the personal-notes variables by redirecting where a hook
-looks, and the git identity variables by outranking the repository's own git config in
-every commit and in ``git var GIT_AUTHOR_IDENT``.
+A path composed through a variable (``source "${GITHUB_API_SCRIPT}"``) names nothing
+readable here; :data:`CONFIGURATION_CONSTANT_DEFINITION_PATTERN` is what resolves those.
 """
 
-SET_UP_CLONE_FIXTURE = Path(__file__).parent / "fixtures" / "set-up-clone"
+PYTHON_SUFFIX = ".py"
+"""
+What tells a hook script written in Python from one written in shell, and so which of
+the two ways of naming a sibling its own dependencies are stated in.
+"""
+
+FIXTURE_DIRECTORY = Path(__file__).parent / "fixtures"
+"""
+Where the checked-in files the tests read live.
+"""
+
+SET_UP_CLONE_FIXTURE = FIXTURE_DIRECTORY / "set-up-clone"
 """
 A checked-in clone layout satisfying every check-setup.sh check that reads a file, laid
 out under the same relative paths it will occupy in a scratch project root.
 """
 
+SHELL_PROGRAM_DIRECTORY = Path(__file__).parent / "scripts"
+"""
+Where the shell programs the tests run live, each in a file of its own.
+"""
 
-class SetupPrerequisiteFile(StrEnum):
-    """
-    The files check-setup.sh's ``tooling_files`` check requires, relative to the project
-    root.
 
-    Stated here as well as in the fixture tree deliberately. A rename that breaks the
-    check then has to be made in both places, rather than the fixture and the tests
-    following each other silently and asserting nothing.
+class ShellProgram(StrEnum):
     """
+    The shell programs the tests run to observe what the hooks' own shell knows.
 
-    BUILD_DASHBOARD = ".claude/skills/plan-dashboard/build_dashboard.py"
-    """
-    The dashboard builder the plan-dashboard skill runs.
+    Each is a file rather than a string built in Python, so what runs is readable,
+    executable and syntax-highlighted as the shell it is.
     """
 
-    REFRESH_DASHBOARD = ".claude/skills/plan-dashboard/refresh_dashboard.sh"
+    PRINT_UPSTREAM_REMOTE = "print_upstream_remote.sh"
     """
-    The refresh entry point the same skill runs.
-    """
-
-    DASHBOARD_REQUIREMENTS = ".claude/skills/plan-dashboard/requirements.txt"
-    """
-    The requirements file check-setup.sh also derives the dependency check from.
+    Calls ``current_branch_upstream_remote`` the way its strict-mode caller does.
     """
 
-    PLAN_SCHEMA = ".claude/skills/plan-dashboard/plan-schema.md"
+    PRINT_PULL_REQUEST_LABELS = "print_pull_request_labels.sh"
     """
-    The manifest field reference.
+    Prints the labels ``resolve-personal-notes-config.sh`` declares.
     """
+
+    @property
+    def path(self) -> Path:
+        """
+        The program's absolute path.
+        """
+        return SHELL_PROGRAM_DIRECTORY / self.value
+
+
+def imported_module_names(module: ast.Module) -> list[str]:
+    """
+    The top-level module names *module* imports.
+
+    Read from the syntax tree rather than matched in the text, so a module named inside
+    a string or a comment is not mistaken for one that is imported.
+
+    :param module: The parsed module.
+    :return: Every module name it imports, in either import form.
+    """
+    names: list[str] = []
+    for node in ast.walk(module):
+        if isinstance(node, ast.Import):
+            names.extend(alias.name.split(".")[0] for alias in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module and not node.level:
+            names.append(node.module.split(".")[0])
+    return names
 
 
 @dataclass(frozen=True)
@@ -176,99 +215,31 @@ def initialize_bare_repository(path: Path) -> Path:
 
 # %% which hook scripts a hook script runs
 
-CONFIGURATION_SCRIPT_NAME = "resolve-personal-notes-config.sh"
-"""
-The hook script declaring where every other hook script lives.
-"""
-
-SCRIPT_DIRECTORY_REFERENCE_PATTERN = re.compile(
-    r"\$\{SCRIPT_DIR\}/(?P<script_name>[a-z0-9-]+\.sh)"
-)
-"""
-How a hook script names a sibling it runs from its own directory.
-"""
-
 CONFIGURATION_CONSTANT_DEFINITION_PATTERN = re.compile(
     r'^(?P<constant>[A-Z_]+)="\.claude/hooks/(?P<script_name>[a-z0-9-]+\.sh)"',
     re.MULTILINE,
 )
 """
-How the configuration script declares the path of another hook script.
+How the configuration script declares where another hook script lives.
+
+The second way a shell hook names a sibling: it sources or runs ``${GITHUB_API_SCRIPT}``
+rather than a path, and only the configuration script says which file that is.
 """
 
 
-@dataclass(frozen=True)
-class HookScriptDependencies:
-    """
-    Which hook scripts each hook script runs, read from the scripts themselves.
-
-    A hook reaches a sibling either through the configuration script's constant for it
-    or through its own directory, so both are resolved here and a script installed
-    without them is not runnable. Reading it rather than listing it is what keeps a
-    newly added dependency from having to be remembered in every test module that
-    installs its caller.
-
-    ..note:: Only the shell hooks' two ways of naming a sibling are recognised; a
-        Python hook that shells out to one still names it at its own call site.
-    """
-
-    script_name_by_constant: Mapping[str, str]
+def script_name_by_configuration_constant() -> dict[str, str]:
     """
     The hook script each configuration constant names, keyed by the constant.
+
+    :return: The declarations the real configuration script carries.
     """
-
-    @classmethod
-    def read(cls) -> HookScriptDependencies:
-        """
-        Read the configuration script's declarations of where the other hooks live.
-
-        :return: The dependencies derivable from the real hooks directory.
-        """
-        configuration = (HOOKS_SOURCE_DIRECTORY / CONFIGURATION_SCRIPT_NAME).read_text()
-        return cls(
-            {
-                match["constant"]: match["script_name"]
-                for match in CONFIGURATION_CONSTANT_DEFINITION_PATTERN.finditer(
-                    configuration
-                )
-            }
-        )
-
-    def scripts_run_by(self, script_name: str) -> set[str]:
-        """
-        Read which hook scripts one hook script runs directly.
-
-        :param script_name: File name within the hooks directory.
-        :return: The file names it names as siblings to run.
-        """
-        source = (HOOKS_SOURCE_DIRECTORY / script_name).read_text()
-        by_directory = {
-            match["script_name"]
-            for match in SCRIPT_DIRECTORY_REFERENCE_PATTERN.finditer(source)
-        }
-        by_constant = {
-            named_script
-            for constant, named_script in self.script_name_by_constant.items()
-            if f"${{{constant}}}" in source
-        }
-        return by_directory | by_constant
-
-    def scripts_needed_to_run(self, script_names: Iterable[str]) -> set[str]:
-        """
-        Read which hook scripts have to be in place for *script_names* to run.
-
-        :param script_names: File names within the hooks directory.
-        :return: Those names, plus every sibling they reach directly or indirectly.
-        """
-        needed: set[str] = set()
-        pending = list(script_names)
-        while pending:
-            script_name = pending.pop()
-            if script_name in needed:
-                continue
-            needed.add(script_name)
-            pending.extend(self.scripts_run_by(script_name))
-        return needed
+    configuration = (
+        HOOKS_SOURCE_DIRECTORY / HookScript.CONFIGURATION.value
+    ).read_text()
+    return {
+        match["constant"]: match["script_name"]
+        for match in CONFIGURATION_CONSTANT_DEFINITION_PATTERN.finditer(configuration)
+    }
 
 
 @dataclass
@@ -324,6 +295,22 @@ class ScratchRepository:
         self.run_git("config", "--unset", "user.name")
         self.run_git("config", "--unset", "user.email")
 
+    def has_upstream(self) -> bool:
+        """
+        Report whether the current branch tracks a remote.
+
+        A branch created locally and never pushed has none, which is the state every
+        scratch repository starts in and the one several hooks have to keep working in.
+
+        :return: Whether an upstream is configured.
+        """
+        return (
+            self.run_git_allowing_failure(
+                "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"
+            ).returncode
+            == 0
+        )
+
     def local_git_identity(self) -> GitIdentity | None:
         """
         Read the identity configured in this repository's own config.
@@ -370,20 +357,95 @@ class ScratchRepository:
             text=True,
         )
 
-    def install_hook_scripts(self, *script_names: str) -> None:
+    def install_hook_scripts(self, *scripts: HookScript) -> None:
         """
         Copy the real hook scripts under test into the scratch layout, along with the
         siblings they run, so naming the script a test is about is enough to get a
         layout it can run in.
 
-        :param script_names: File names within the hooks directory.
+        Reading each script's own dependencies rather than asking every caller to list
+        them is what keeps them stated once, in the script itself: a hook that grows one
+        does not silently break every test module that installs it.
+
+        :param scripts: The scripts to install.
         """
-        dependencies = HookScriptDependencies.read()
-        for script_name in dependencies.scripts_needed_to_run(script_names):
+        for script in self.with_dependencies(scripts):
             shutil.copy(
-                HOOKS_SOURCE_DIRECTORY / script_name,
-                self.project_root / ".claude" / "hooks" / script_name,
+                HOOKS_SOURCE_DIRECTORY / script.value,
+                self.hook_script_path(script),
             )
+
+    def install_hooks_directory_file(self, file_name: str) -> None:
+        """
+        Copy a file that sits beside the hook scripts but is not one - the committed
+        mode defaults, for instance.
+
+        :param file_name: File name within the hooks directory.
+        """
+        shutil.copy(
+            HOOKS_SOURCE_DIRECTORY / file_name,
+            self.project_root / HOOKS_DIRECTORY / file_name,
+        )
+
+    @staticmethod
+    def with_dependencies(scripts: Iterable[HookScript]) -> list[HookScript]:
+        """
+        Close a set of hook scripts over the siblings they name, transitively.
+
+        :param scripts: The scripts asked for.
+        :return: Those scripts and their dependencies, each once.
+        """
+        by_file_name = {script.value: script for script in HookScript}
+        resolved: dict[HookScript, None] = {}
+        pending = list(scripts)
+        while pending:
+            script = pending.pop()
+            if script in resolved:
+                continue
+            resolved[script] = None
+            pending.extend(
+                by_file_name[name]
+                for name in ScratchRepository.siblings_named_by(script)
+                if name in by_file_name
+            )
+        return list(resolved)
+
+    @staticmethod
+    def siblings_named_by(script: HookScript) -> list[str]:
+        """
+        The file names *script* names a sibling by, in whichever of the two ways its own
+        language states a dependency: a shell ``source`` of a path, or a Python import of
+        a module.
+
+        :param script: The script to read.
+        :return: The file names it names, whether or not each is a hook script.
+        """
+        source_text = (HOOKS_SOURCE_DIRECTORY / script.value).read_text()
+        if not script.value.endswith(PYTHON_SUFFIX):
+            sourced_directly = [
+                Path(sourced).name
+                for sourced in SOURCED_SCRIPT_PATTERN.findall(source_text)
+            ]
+            return sourced_directly + [
+                named_script
+                for constant, named_script in (
+                    script_name_by_configuration_constant().items()
+                )
+                if f"${{{constant}}}" in source_text
+            ]
+        return [
+            f"{module}{PYTHON_SUFFIX}"
+            for module in imported_module_names(ast.parse(source_text))
+        ]
+
+    def hook_script_path(self, script: HookScript) -> Path:
+        """
+        Where a hook script sits in the scratch layout.
+
+        :param script: The script to locate.
+        :return: Its absolute path.
+        """
+        return self.project_root / script.path
 
     def write_setup_prerequisites(self) -> None:
         """
@@ -398,19 +460,19 @@ class ScratchRepository:
 
     def run_hook_script(
         self,
-        script_name: str,
+        script: HookScript,
         *arguments: str,
         **environment_overrides: str,
     ) -> subprocess.CompletedProcess[str]:
         """
         Run one of the installed hook scripts from the project root, against an
         environment scrubbed of everything that could change what a test asserts (see
-        :data:`SCRUBBED_ENVIRONMENT_PREFIXES`).
+        :data:`SCRUBBED_VARIABLE_PREFIXES`).
 
         Returns the finished process rather than asserting on it, since a hook's exit
         code and stderr are often what a test is about.
 
-        :param script_name: File name within the scratch layout's hooks directory.
+        :param script: The installed script to run.
         :param arguments: The arguments to pass to the script.
         :param environment_overrides: Variables to set for this run, for the tests that
             exercise resolution from the environment.
@@ -419,15 +481,11 @@ class ScratchRepository:
         environment = {
             name: value
             for name, value in os.environ.items()
-            if not name.startswith(SCRUBBED_ENVIRONMENT_PREFIXES)
+            if not name.startswith(SCRUBBED_VARIABLE_PREFIXES)
         }
         environment.update(environment_overrides)
         return subprocess.run(
-            [
-                "bash",
-                str(self.project_root / ".claude" / "hooks" / script_name),
-                *arguments,
-            ],
+            ["bash", str(self.hook_script_path(script)), *arguments],
             cwd=self.project_root,
             capture_output=True,
             text=True,

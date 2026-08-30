@@ -10,17 +10,18 @@ run in.
 from __future__ import annotations
 
 from scratch_repository import ScratchRepository
+from tooling_files import HOOKS_DIRECTORY, HookScript
 
 
-def installed_hook_scripts(repository: ScratchRepository) -> set[str]:
+def installed_hook_scripts(repository: ScratchRepository) -> set[HookScript]:
     """
     Read back which hook scripts the scratch layout actually holds.
 
     :param repository: The scratch repository to inspect.
-    :return: The file names present in its hooks directory.
+    :return: The scripts present in its hooks directory.
     """
-    hooks_directory = repository.project_root / ".claude" / "hooks"
-    return {path.name for path in hooks_directory.iterdir()}
+    hooks_directory = repository.project_root / HOOKS_DIRECTORY
+    return {HookScript(path.name) for path in hooks_directory.iterdir()}
 
 
 # %% a script arrives with what it runs
@@ -29,48 +30,50 @@ def installed_hook_scripts(repository: ScratchRepository) -> set[str]:
 def test_installs_the_configuration_every_script_sources(
     scratch_repository: ScratchRepository,
 ):
-    scratch_repository.install_hook_scripts("check-setup.sh")
+    scratch_repository.install_hook_scripts(HookScript.CHECK_SETUP)
     assert installed_hook_scripts(scratch_repository) == {
-        "check-setup.sh",
-        "resolve-personal-notes-config.sh",
+        HookScript.CHECK_SETUP,
+        HookScript.CONFIGURATION,
     }
 
 
 def test_installs_a_sibling_reached_through_a_configuration_constant(
     scratch_repository: ScratchRepository,
 ):
-    scratch_repository.install_hook_scripts("write-personal-notes-file.sh")
+    scratch_repository.install_hook_scripts(HookScript.WRITE_NOTES_FILE)
     assert installed_hook_scripts(scratch_repository) == {
-        "write-personal-notes-file.sh",
-        "write-branch-files.sh",
-        "resolve-personal-notes-config.sh",
+        HookScript.WRITE_NOTES_FILE,
+        HookScript.WRITE_BRANCH_FILES,
+        HookScript.CONFIGURATION,
     }
 
 
 def test_installs_a_sibling_reached_through_the_script_directory(
     scratch_repository: ScratchRepository,
 ):
-    scratch_repository.install_hook_scripts("session-start.sh")
+    scratch_repository.install_hook_scripts(HookScript.SESSION_START)
     assert installed_hook_scripts(scratch_repository) == {
-        "session-start.sh",
-        "session-start-messages.sh",
-        "check-setup.sh",
-        "resolve-personal-notes-config.sh",
+        HookScript.SESSION_START,
+        HookScript.SESSION_START_MESSAGES,
+        HookScript.CHECK_SETUP,
+        HookScript.CONFIGURATION,
     }
 
 
 def test_installs_what_a_sibling_itself_runs(scratch_repository: ScratchRepository):
-    scratch_repository.install_hook_scripts("save-git-identity.sh")
+    scratch_repository.install_hook_scripts(HookScript.SAVE_GIT_IDENTITY)
     assert installed_hook_scripts(scratch_repository) == {
-        "save-git-identity.sh",
-        "write-personal-notes-file.sh",
-        "write-branch-files.sh",
-        "resolve-personal-notes-config.sh",
+        HookScript.SAVE_GIT_IDENTITY,
+        HookScript.WRITE_NOTES_FILE,
+        HookScript.WRITE_BRANCH_FILES,
+        HookScript.CONFIGURATION,
     }
 
 
 def test_installs_only_the_script_when_it_runs_no_other(
     scratch_repository: ScratchRepository,
 ):
-    scratch_repository.install_hook_scripts("session-start-messages.sh")
-    assert installed_hook_scripts(scratch_repository) == {"session-start-messages.sh"}
+    scratch_repository.install_hook_scripts(HookScript.SESSION_START_MESSAGES)
+    assert installed_hook_scripts(scratch_repository) == {
+        HookScript.SESSION_START_MESSAGES
+    }

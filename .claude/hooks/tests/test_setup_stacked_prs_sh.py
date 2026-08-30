@@ -10,43 +10,82 @@ tests) fork remotes are local bare repositories, with ``gh`` and ``curl`` stubbe
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from scratch_repository import ScratchRepository, initialize_bare_repository
-from stub_executables import StubExecutableDirectory
+from github_api import GitHubRemoteUrl, RepositoryLabel
+from scratch_repository import (
+    HOOKS_SOURCE_DIRECTORY,
+    NOTES_PATH,
+    ScratchRepository,
+    initialize_bare_repository,
+)
+from stub_executables import StubbedExecutable, StubExecutableDirectory
+from tooling_files import (
+    MAINTENANCE_SKILL_INVOCATION,
+    HookScript,
+    ProjectFile,
+    RoutinePromptPlaceholder,
+    StackToolingFile,
+)
 
 from test_check_stack_setup_sh import (
-    BOARD_PATH,
-    PERSONAL_STACK_CONFIG_PATH,
     UPSTREAM_BASE,
     UPSTREAM_REPOSITORY,
     install_stack_tooling,
     repository_url,
 )
 
-# The hook scripts a full setup run touches, all installed into the scratch layout.
-SCRIPTS_UNDER_TEST = (
-    "resolve-personal-notes-config.sh",
-    "github-api.sh",
-    "write-branch-files.sh",
-    "write-personal-notes-file.sh",
-    "check-stack-setup.sh",
-    "setup-stacked-prs.sh",
+STACK_LABELS = (
+    RepositoryLabel.IN_REVIEW,
+    RepositoryLabel.REBASE,
+    RepositoryLabel.NEEDS_RESOLUTION,
+    RepositoryLabel.PROMOTION_LINK_SENT,
 )
+"""
+The labels the stacked-pull-request workflow itself reads and writes - the subset of
+:class:`RepositoryLabel` stack.toml names, rather than every label the tooling applies.
+"""
 
-# The labels the workflow reads and writes, as stack.toml names them.
-STACK_LABELS = ("in-review", "rebase", "needs-resolution", "cram2-link-sent")
+OVERLAY_BRANCH_DECLARATION_PATTERN = re.compile(
+    r'^DEFAULT_OVERLAY_BRANCH="(?P<branch>[^"]+)"', re.MULTILINE
+)
+"""
+How setup-stacked-prs.sh declares the branch a fork-overlay install writes to by default.
+"""
 
-OVERLAY_BRANCH = "claude/stack-tooling"
+OVERLAY_BRANCH = OVERLAY_BRANCH_DECLARATION_PATTERN.search(
+    (HOOKS_SOURCE_DIRECTORY / HookScript.SETUP_STACKED_PRS.value).read_text()
+)["branch"]
+"""
+That branch, read from the script rather than restated - so these tests assert against
+the default the run under test actually used.
+"""
 
-# The login the stubbed GitHub reports, and a fork owned by it - so the ownership check
-# has something real to agree with.
 STUB_LOGIN = "stub-user"
+"""
+The login the stubbed GitHub reports, which the fork below is owned by so the ownership
+check has something real to agree with.
+"""
+
 FORK_REPOSITORY = f"{STUB_LOGIN}/octo-repo"
-FORK_URL = f"https://github.com/{FORK_REPOSITORY}.git"
+"""
+A fork that login owns.
+"""
+
+FORK_URL = GitHubRemoteUrl.HTTPS_WITH_SUFFIX.for_repository(FORK_REPOSITORY)
+"""
+How ``--fork`` is given that repository: a URL rather than an ``owner/name``, since both
+spellings have to work and this is the one a contributor copies out of GitHub.
+"""
+
+UNOWNED_FORK_REPOSITORY = "someone-else/octo-repo"
+"""
+A repository :data:`STUB_LOGIN` does not own, which the ownership check must refuse.
+"""
 
 
 def assert_remote_points_at_the_fork(repository: ScratchRepository, remote_name: str):
@@ -96,16 +135,17 @@ def setup_repository(
     :param upstream_remote: The bare repository standing in for the upstream.
     :return: The same repository, ready for a setup run.
     """
-    scratch_repository.install_hook_scripts(*SCRIPTS_UNDER_TEST)
+    scratch_repository.install_hook_scripts(HookScript.SETUP_STACKED_PRS)
     install_stack_tooling(scratch_repository)
-    scratch_repository.write(".gitignore", f"CLAUDE.local.md\n{BOARD_PATH}\n")
+    scratch_repository.write(
+        ProjectFile.GIT_IGNORE,
+        f"{ProjectFile.CLAUDE_LOCAL_MD}\n{ProjectFile.STACK_BOARD}\n",
+    )
     scratch_repository.commit_everything("initial commit")
     scratch_repository.run_git(
         "push", "--quiet", f"file://{upstream_remote}", f"HEAD:{UPSTREAM_BASE}"
     )
-    scratch_repository.publish_notes_branch(
-        {".claude/personal/cram-notes.md": "notes\n"}
-    )
+    scratch_repository.publish_notes_branch({NOTES_PATH: "notes\n"})
     scratch_repository.resolve_notes_remote_to()
     return scratch_repository
 
@@ -125,11 +165,11 @@ def run_setup(
     :param stub_controls:``STUB_*`` variables declaring what the stubbed GitHub reports.
     :return: The finished subprocess.
     """
-    stub_executables.install("gh")
+    stub_executables.install(StubbedExecutable.GH)
     return subprocess.run(
         [
             "bash",
-            str(repository.project_root / ".claude" / "hooks" / "setup-stacked-prs.sh"),
+            str(repository.hook_script_path(HookScript.SETUP_STACKED_PRS)),
             *arguments,
         ],
         cwd=repository.project_root,
@@ -257,10 +297,10 @@ def test_prints_the_routine_prompt_with_the_repositories_substituted(
         setup_repository, stub_executables, *native_arguments(upstream_remote)
     )
 
-    assert "<FORK_REPOSITORY>" not in result.stdout
-    assert "<UPSTREAM_REPOSITORY>" not in result.stdout
+    for placeholder in RoutinePromptPlaceholder:
+        assert placeholder not in result.stdout
     assert (
-        f"/stacked-pr-maintenance fork={FORK_REPOSITORY} "
+        f"{MAINTENANCE_SKILL_INVOCATION} fork={FORK_REPOSITORY} "
         f"upstream={UPSTREAM_REPOSITORY} --non-interactive" in result.stdout
     )
 
@@ -296,13 +336,13 @@ def test_refuses_a_fork_owned_by_somebody_else(
         setup_repository,
         stub_executables,
         "--fork",
-        "https://github.com/someone-else/octo-repo.git",
+        GitHubRemoteUrl.HTTPS_WITH_SUFFIX.for_repository(UNOWNED_FORK_REPOSITORY),
         "--upstream",
         f"file://{upstream_remote}",
     )
 
     assert result.returncode != 0
-    assert "someone-else" in result.stderr
+    assert UNOWNED_FORK_REPOSITORY.split("/")[0] in result.stderr
     assert STUB_LOGIN in result.stderr
 
 
@@ -413,7 +453,7 @@ def test_writes_only_the_settings_that_differ_from_the_committed_defaults(
     )
 
     checkout = setup_repository.clone_notes_branch(tmp_path / "notes")
-    written = (checkout / PERSONAL_STACK_CONFIG_PATH).read_text()
+    written = (checkout / ProjectFile.PERSONAL_STACK_CONFIGURATION).read_text()
     assert 'fork_remote = "my-own-fork"' in written
     assert "upstream_remote" not in written
 
@@ -506,10 +546,10 @@ def test_fork_overlay_installs_the_canonical_files_on_the_overlay_branch(
     checkout = overlay_repository.clone_branch(
         overlay_fork_path(tmp_path), OVERLAY_BRANCH, tmp_path / "overlay"
     )
-    assert (checkout / ".claude" / "stack" / "stack.py").is_file()
-    assert (checkout / ".claude" / "hooks" / "check-stack-setup.sh").is_file()
+    assert (checkout / StackToolingFile.STACK).is_file()
+    assert (checkout / HookScript.CHECK_STACK_SETUP.path).is_file()
     assert (
-        checkout / ".claude" / "skills" / "stacked-pr-maintenance" / "SKILL.md"
+        checkout / StackToolingFile.MAINTENANCE_SKILL
     ).is_file(), "an overlay carrying no instructions installs tooling nobody can run"
 
 

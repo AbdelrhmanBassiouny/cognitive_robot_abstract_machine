@@ -26,10 +26,8 @@ import yaml
 import plan_item_bootstrap
 from plan_item_bootstrap import (
     BLOCK_STYLED_KEYS,
-    PLANS_DIRECTORY,
     CreatedPullRequest,
     ExitCode,
-    HookScript,
     ItemRecordRequest,
     ItemStatus,
     KeySpecification,
@@ -43,7 +41,12 @@ from plan_item_bootstrap import (
     open_work,
     record_item,
 )
-from scratch_repository import WORK_BRANCH, ScratchRepository
+from scratch_repository import (
+    HOOKS_SOURCE_DIRECTORY,
+    WORK_BRANCH,
+    ScratchRepository,
+)
+from tooling_files import PLANS_DIRECTORY, HookScript
 
 FIXTURES_DIRECTORY = Path(__file__).parent / "fixtures"
 
@@ -151,10 +154,10 @@ def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     :return: The same repository, ready to bootstrap an item in.
     """
     scratch_repository.install_hook_scripts(
-        HookScript.CONFIGURATION.value,
-        HookScript.SAVE_PLAN.value,
-        "plan_manifest_tools.py",
-        HookScript.PLAN_ITEM_BOOTSTRAP.value,
+        HookScript.CONFIGURATION,
+        HookScript.SAVE_PLAN,
+        HookScript.PLAN_MANIFEST_TOOLS,
+        HookScript.PLAN_ITEM_BOOTSTRAP,
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
@@ -683,7 +686,7 @@ def run_bootstrap(
     return subprocess.run(
         [
             "python3",
-            str(repository.project_root / HookScript.PLAN_ITEM_BOOTSTRAP.path),
+            str(repository.hook_script_path(HookScript.PLAN_ITEM_BOOTSTRAP)),
             *arguments,
         ],
         cwd=repository.project_root,
@@ -749,3 +752,18 @@ def test_the_dashboard_republish_is_handed_back_rather_than_attempted(
 
     report = json.loads(result.stdout)
     assert report["dashboard_command"] == f"/plan-dashboard {PLAN_IDENTIFIER}"
+
+
+def test_installing_a_script_installs_the_modules_it_imports(
+    bootstrap_repository: ScratchRepository,
+):
+    # plan_item_bootstrap.py imports tooling_files, which no caller names: a script
+    # written in Python states its dependencies as imports where a shell script states
+    # them as source lines, and both are read out of the script rather than restated at
+    # every call site.
+    installed = bootstrap_repository.hook_script_path(HookScript.TOOLING_FILES)
+
+    assert (
+        installed.read_text()
+        == (HOOKS_SOURCE_DIRECTORY / HookScript.TOOLING_FILES.value).read_text()
+    )

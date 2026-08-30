@@ -1,10 +1,10 @@
 """
 The stubbed ``PATH`` the hook tests run their subprocesses against.
 
-``github-api.sh`` reaches GitHub through ``gh`` or ``curl``, and
-``setup-personal-notes.sh`` installs dependencies through ``pip``. Tests replace all
-three with the scripts in ``stubs/``, placed earlier on ``PATH`` than any real one, so
-the suite runs in CI with no network access and no credentials.
+``github-api.sh`` reaches GitHub through ``gh`` or ``curl``, and ``setup-personal-
+notes.sh`` installs dependencies through ``pip``. Tests replace all three with the
+scripts in ``stubs/``, placed earlier on ``PATH`` than any real one, so the suite runs
+in CI with no network access and no credentials.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ import os
 import shutil
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 
 STUB_SOURCE_DIRECTORY = Path(__file__).parent / "stubs"
@@ -20,18 +21,81 @@ STUB_SOURCE_DIRECTORY = Path(__file__).parent / "stubs"
 The directory holding the stub scripts, each named ``<executable>.sh``.
 """
 
-CREDENTIAL_VARIABLE_NAMES = ("GH_TOKEN", "GITHUB_TOKEN", "GH_HOST")
-"""
-The GitHub credential variables stripped from every stubbed subprocess.
 
-Whoever runs the tests may well have real ones set - this environment does - and a test
-that reached GitHub with them would be neither reproducible nor safe.
-"""
+class GitHubCredentialVariable(StrEnum):
+    """
+    The GitHub credential variables stripped from every stubbed subprocess.
 
-PERSONAL_NOTES_VARIABLE_PREFIX = "CLAUDE_PERSONAL_NOTES_"
+    Whoever runs the tests may well have real ones set - this environment does - and a
+    test that reached GitHub with them would be neither reproducible nor safe.
+    """
+
+    GH_TOKEN = "GH_TOKEN"
+    """
+    The token ``gh`` reads first, and the fallback backend's own preference.
+    """
+
+    GITHUB_TOKEN = "GITHUB_TOKEN"
+    """
+    The token both fall back to.
+    """
+
+    GH_HOST = "GH_HOST"
+    """
+    The host ``gh`` would talk to, which a real value could redirect.
+    """
+
+
+class StubbedExecutable(StrEnum):
+    """
+    The executables the hook tests replace, each backed by ``<name>.sh`` in ``stubs/``.
+
+    ``git`` has no stub of its own - the scratch repositories run it for real - and is
+    named here because tests hide it to exercise what a script does without it.
+    """
+
+    GH = "gh"
+    """
+    The GitHub CLI, ``github-api.sh``'s preferred backend.
+    """
+
+    CURL = "curl"
+    """
+    The fallback backend, used with a token when ``gh`` is absent.
+    """
+
+    PIP = "pip"
+    """
+    How setup-personal-notes.sh installs the plan-dashboard dependencies.
+    """
+
+    GIT = "git"
+    """
+    Never stubbed, only hidden.
+    """
+
+    @property
+    def stub_script(self) -> Path:
+        """
+        The script backing this stub.
+        """
+        return STUB_SOURCE_DIRECTORY / f"{self.value}.sh"
+
+
+SCRUBBED_VARIABLE_PREFIXES = (
+    "CLAUDE_PERSONAL_NOTES_",
+    "GIT_AUTHOR_",
+    "GIT_COMMITTER_",
+    *GitHubCredentialVariable,
+)
 """
-The prefix of the settings the hooks resolve from the environment, stripped for the same
-reason: a value set in the caller's shell must never change what a test asserts.
+Everything stripped from a subprocess's environment before a test runs it.
+
+A whole variable name is its own prefix, so the credentials above belong in the same
+tuple as the families. The personal-notes settings redirect where a hook looks; the git
+identity variables outrank every config file, so a clone whose recorded identity is
+exactly right still commits as whatever they say - which is precisely what
+``check-setup.sh``'s ``git_identity`` check reports on.
 """
 
 
@@ -65,26 +129,24 @@ class StubExecutableDirectory:
         path.mkdir()
         return cls(path)
 
-    def install(self, *executable_names: str) -> None:
+    def install(self, *executables: StubbedExecutable) -> None:
         """
         Install stubs, each taking over the name it is asked for.
 
-        :param executable_names: Names to install, each backed by ``<name>.sh`` in
-            ``stubs/`` - for example ``"gh"``, ``"curl"``, ``"pip"``.
-        :raises FileNotFoundError: If no stub script backs one of the names.
+        :param executables: The executables to stub.
+        :raises FileNotFoundError: If no stub script backs one of them.
         """
-        for executable_name in executable_names:
-            source = STUB_SOURCE_DIRECTORY / f"{executable_name}.sh"
-            if not source.is_file():
+        for executable in executables:
+            if not executable.stub_script.is_file():
                 raise FileNotFoundError(
-                    f"no stub script for '{executable_name}': {source}"
+                    f"no stub script for '{executable}': {executable.stub_script}"
                 )
-            destination = self.path / executable_name
-            shutil.copy(source, destination)
+            destination = self.path / executable.value
+            shutil.copy(executable.stub_script, destination)
             destination.chmod(0o755)
 
     def subprocess_environment(
-        self, hidden_executables: Sequence[str] = (), **overrides: str
+        self, hidden_executables: Sequence[StubbedExecutable] = (), **overrides: str
     ) -> dict[str, str]:
         """
         Build the environment a stubbed subprocess runs in: this directory first on
@@ -101,8 +163,7 @@ class StubExecutableDirectory:
         environment = {
             name: value
             for name, value in os.environ.items()
-            if name not in CREDENTIAL_VARIABLE_NAMES
-            and not name.startswith(PERSONAL_NOTES_VARIABLE_PREFIX)
+            if not name.startswith(SCRUBBED_VARIABLE_PREFIXES)
         }
         path_entries = [
             self.path_entry_hiding(entry, hidden_executables)
@@ -114,7 +175,7 @@ class StubExecutableDirectory:
         return environment
 
     def path_entry_hiding(
-        self, directory: str, hidden_executables: Sequence[str]
+        self, directory: str, hidden_executables: Sequence[StubbedExecutable]
     ) -> str:
         """
         Return *directory*, or a mirror of it that omits *hidden_executables*.
@@ -132,7 +193,11 @@ class StubExecutableDirectory:
         source = Path(directory)
         if not source.is_dir():
             return directory
-        shadowed = [name for name in hidden_executables if (source / name).exists()]
+        shadowed = [
+            executable.value
+            for executable in hidden_executables
+            if (source / executable.value).exists()
+        ]
         if not shadowed:
             return directory
 

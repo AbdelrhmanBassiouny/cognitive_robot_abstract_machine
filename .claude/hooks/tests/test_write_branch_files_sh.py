@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from scratch_repository import ScratchRepository, initialize_bare_repository
+from tooling_files import HookScript
 
 TOOLING_BRANCH = "claude/stack-tooling"
 """
@@ -32,9 +33,7 @@ def writer_repository(scratch_repository: ScratchRepository) -> ScratchRepositor
     :param scratch_repository: The initialized scratch repository and notes remote.
     :return: The same repository, ready for a write.
     """
-    scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh", "write-branch-files.sh"
-    )
+    scratch_repository.install_hook_scripts(HookScript.WRITE_BRANCH_FILES)
     scratch_repository.write("README.md", "scratch\n")
     scratch_repository.commit_everything("initial commit")
     return scratch_repository
@@ -66,9 +65,7 @@ def run_write_branch_files(
     return subprocess.run(
         [
             "bash",
-            str(
-                repository.project_root / ".claude" / "hooks" / "write-branch-files.sh"
-            ),
+            str(repository.hook_script_path(HookScript.WRITE_BRANCH_FILES)),
             *arguments,
         ],
         cwd=repository.project_root,

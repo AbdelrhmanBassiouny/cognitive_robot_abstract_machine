@@ -15,44 +15,99 @@ from pathlib import Path
 
 import pytest
 
-from scratch_repository import ScratchRepository
-from stub_executables import StubExecutableDirectory
+from github_api import GitHubRemoteUrl, RepositoryLabel
+from scratch_repository import (
+    FIXTURE_DIRECTORY,
+    NOTES_PATH,
+    SCRATCH_IDENTITY,
+    GitIdentity,
+    ScratchRepository,
+)
+from setup_report import CheckStatus, SetupCheck, SetupReport
+from stub_executables import StubbedExecutable, StubExecutableDirectory
+from tooling_files import HookScript, ProjectFile, SetupPrerequisiteFile
 
-# The hook scripts a full setup run touches, all installed into the scratch layout.
 SCRIPTS_UNDER_TEST = (
-    "resolve-personal-notes-config.sh",
-    "check-setup.sh",
-    "create-personal-notes-branch.sh",
-    "write-branch-files.sh",
-    "write-personal-notes-file.sh",
-    "session-start.sh",
-    "github-api.sh",
-    "setup-personal-notes.sh",
+    HookScript.CHECK_SETUP,
+    HookScript.CREATE_NOTES_BRANCH,
+    HookScript.WRITE_NOTES_FILE,
+    HookScript.SESSION_START,
+    HookScript.SAVE_GIT_IDENTITY,
+    HookScript.GITHUB_API,
+    HookScript.SETUP,
 )
+"""
+The hook scripts a full setup run touches.
 
-# The files check-setup.sh's `tooling_files` check requires. Literals rather than values
-# read from resolve-personal-notes-config.sh, for the reason test_check_setup_sh.py gives
-# for the same list: a rename that breaks the check should have to be made deliberately
-# here too, instead of the test silently following along.
-TOOLING_FILES = (
-    ".claude/skills/plan-dashboard/build_dashboard.py",
-    ".claude/skills/plan-dashboard/refresh_dashboard.sh",
-    ".claude/skills/plan-dashboard/requirements.txt",
-    ".claude/skills/plan-dashboard/plan-schema.md",
-)
+What each of them sources is installed with it, so nothing here restates another
+script's own dependencies.
+"""
 
-REQUIREMENTS_FILE = ".claude/skills/plan-dashboard/requirements.txt"
+STARTER_NOTES_FIXTURE = FIXTURE_DIRECTORY / "starter-notes.md"
+"""
+The template ``--starter-notes`` seeds the notes file from.
+"""
 
-STARTER_NOTES_FILE = ".claude/skills/setup-personal-notes/starter-notes.md"
-
-NOTES_PATH = ".claude/personal/cram-notes.md"
-
-STARTER_NOTES_CONTENT = "# Personal notes\n\n- Always open pull requests as drafts.\n"
-
-# The login the stubbed GitHub reports, and an origin owned by it - so the ownership
-# check has something real to agree with.
 STUB_LOGIN = "stub-user"
+"""
+The login the stubbed GitHub reports.
+"""
+
 ORIGIN_REPOSITORY = f"{STUB_LOGIN}/octo-repo"
+"""
+An origin owned by that login, so the ownership check has something real to agree with.
+"""
+
+SOMEONE_ELSE_REPOSITORY = "someone-else/their-repo"
+"""
+An origin owned by anybody else, which the ownership check must refuse.
+"""
+
+CREATE_LABEL_METHOD = "POST"
+"""
+The HTTP method a label creation is recognised by in the stub's call log.
+"""
+
+LABEL_FIELD_PREFIX = "name="
+"""
+How the label being created is spelled in that call, as ``gh``'s own ``-f`` field.
+"""
+
+DESCRIPTION_FIELD_PREFIX = "description="
+"""
+How its description is spelled in the same call.
+"""
+
+
+def described_label(creation_call: str) -> tuple[str, str]:
+    """
+    The label a logged creation call creates, and the description it gives it.
+
+    The description is read to the end of the line rather than as one whitespace-
+    separated argument, because the log joins the call's arguments with spaces and a
+    description is a sentence - splitting on whitespace yields its first word, which
+    for these labels happens to be distinct and so would pass while checking nothing.
+    It is last in the call, which is what makes the remainder of the line exactly it.
+
+    :param creation_call: One line of the stub's call log, for a label creation.
+    :return: The label and its description.
+    :raises ValueError: If the call names neither.
+    """
+    label, _, remainder = creation_call.partition(LABEL_FIELD_PREFIX)[2].partition(" ")
+    description = remainder.partition(DESCRIPTION_FIELD_PREFIX)[2]
+    if not label or not description:
+        raise ValueError(f"not a label creation: {creation_call}")
+    return label, description
+
+
+def identity_arguments(identity: GitIdentity) -> tuple[str, ...]:
+    """
+    The setup script's arguments recording *identity*.
+
+    :param identity: The identity to record.
+    :return: The ``--name``/``--email`` pair.
+    """
+    return ("--name", identity.name, "--email", identity.email)
 
 
 # %% the scratch layout
@@ -70,24 +125,17 @@ def setup_repository(scratch_repository: ScratchRepository) -> ScratchRepository
     :return: The same repository, ready for a setup run.
     """
     scratch_repository.install_hook_scripts(*SCRIPTS_UNDER_TEST)
-
-    for tooling_file in TOOLING_FILES:
-        scratch_repository.write(tooling_file, "placeholder\n")
-    # A requirement that is certainly installed, so the dependency step is a no-op and
-    # the stub pip is never reached unless a test asks for it.
-    scratch_repository.write(REQUIREMENTS_FILE, "pytest>=1\n")
-    scratch_repository.write(STARTER_NOTES_FILE, STARTER_NOTES_CONTENT)
-
+    scratch_repository.write_setup_prerequisites()
     scratch_repository.write(
-        ".claude/settings.json",
-        '{"hooks": {"SessionStart": [{"hooks": [{"type": "command",'
-        ' "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"}]}]}}\n',
+        ProjectFile.STARTER_NOTES, STARTER_NOTES_FIXTURE.read_text()
     )
-    scratch_repository.write(".gitignore", "CLAUDE.local.md\n")
     # The repository pull requests are opened against, which is where the labels are
     # checked - distinct from the notes remote, which is a local bare repository here.
     scratch_repository.run_git(
-        "remote", "add", "origin", f"https://github.com/{ORIGIN_REPOSITORY}.git"
+        "remote",
+        "add",
+        "origin",
+        GitHubRemoteUrl.HTTPS_WITH_SUFFIX.for_repository(ORIGIN_REPOSITORY),
     )
     scratch_repository.commit_everything("initial commit")
     return scratch_repository
@@ -97,7 +145,8 @@ def run_setup(
     repository: ScratchRepository,
     stub_executables: StubExecutableDirectory,
     *arguments: str,
-    hidden_executables: tuple[str, ...] = ("gh",),
+    identity: GitIdentity | None = SCRATCH_IDENTITY,
+    hidden_executables: tuple[StubbedExecutable, ...] = (StubbedExecutable.GH,),
     **environment_overrides: str,
 ) -> subprocess.CompletedProcess[str]:
     """
@@ -107,6 +156,9 @@ def run_setup(
     :param stub_executables: The stub directory the run resolves ``gh``/``curl``/``pip``
         from.
     :param arguments: Arguments to pass to the script.
+    :param identity: The identity to record, appended as ``--name``/``--email``. The
+        scratch repository's own by default, which is what a contributor recording the
+        identity they already commit as looks like; ``None`` to record none.
     :param hidden_executables: Executables to make unfindable, defaulting to hiding a
         real ``gh`` so a test only sees the stubs it installed itself.
     :param environment_overrides: Variables to set, chiefly the stubs' ``STUB_*``
@@ -116,13 +168,9 @@ def run_setup(
     return subprocess.run(
         [
             "bash",
-            str(
-                repository.project_root
-                / ".claude"
-                / "hooks"
-                / "setup-personal-notes.sh"
-            ),
+            str(repository.hook_script_path(HookScript.SETUP)),
             *arguments,
+            *(identity_arguments(identity) if identity else ()),
         ],
         cwd=repository.project_root,
         capture_output=True,
@@ -145,11 +193,13 @@ def run_check_setup(
     :return: The finished subprocess.
     """
     return subprocess.run(
-        ["bash", str(repository.project_root / ".claude" / "hooks" / "check-setup.sh")],
+        ["bash", str(repository.hook_script_path(HookScript.CHECK_SETUP))],
         cwd=repository.project_root,
         capture_output=True,
         text=True,
-        env=stub_executables.subprocess_environment(hidden_executables=("gh",)),
+        env=stub_executables.subprocess_environment(
+            hidden_executables=(StubbedExecutable.GH,)
+        ),
     )
 
 
@@ -180,6 +230,77 @@ def test_rejects_an_unknown_flag(
     assert result.returncode != 0
     assert "--not-a-flag" in result.stderr
     assert setup_repository.notes_branch_commit() is None
+
+
+# %% the git identity every clone authors as
+
+
+def test_records_the_git_identity_it_is_given(
+    setup_repository: ScratchRepository,
+    stub_executables: StubExecutableDirectory,
+    tmp_path: Path,
+):
+    result = run_setup(
+        setup_repository,
+        stub_executables,
+        "--remote",
+        str(setup_repository.notes_remote_path),
+    )
+
+    assert result.returncode == 0, result.stderr
+    checkout = setup_repository.clone_notes_branch(tmp_path / "notes-checkout")
+    recorded = GitIdentity.from_git_config_file(
+        checkout / ProjectFile.PERSONAL_GIT_IDENTITY
+    )
+    assert recorded == SCRATCH_IDENTITY
+    report = SetupReport.from_completed_process(result, SetupCheck)
+    assert report.results[SetupCheck.GIT_IDENTITY].status is CheckStatus.OK
+
+
+def test_refuses_a_name_without_an_email(
+    setup_repository: ScratchRepository, stub_executables: StubExecutableDirectory
+):
+    # Half an identity cannot author a commit, and the refusal comes before anything is
+    # written, so a run that got it wrong leaves the clone exactly as it found it.
+    result = run_setup(
+        setup_repository,
+        stub_executables,
+        "--remote",
+        str(setup_repository.notes_remote_path),
+        "--name",
+        SCRATCH_IDENTITY.name,
+        identity=None,
+    )
+
+    assert result.returncode != 0
+    assert "--name" in result.stderr
+    assert "--email" in result.stderr
+    assert setup_repository.notes_branch_commit() is None
+
+
+def test_finishes_the_rest_of_the_setup_when_given_no_identity(
+    setup_repository: ScratchRepository,
+    stub_executables: StubExecutableDirectory,
+    tmp_path: Path,
+):
+    # Recording one is not this script's to guess at - what a contributor's commits
+    # should say is theirs - so a run without it finishes everything else and leaves the
+    # one check it cannot satisfy to the report, rather than aborting or inventing an
+    # answer. What that report says is check-setup.sh's own, and is asserted there.
+    result = run_setup(
+        setup_repository,
+        stub_executables,
+        "--remote",
+        str(setup_repository.notes_remote_path),
+        identity=None,
+    )
+
+    assert setup_repository.notes_branch_commit() is not None
+    checkout = setup_repository.clone_notes_branch(tmp_path / "notes-checkout")
+    assert not (checkout / ProjectFile.PERSONAL_GIT_IDENTITY).exists()
+    report = SetupReport.from_completed_process(result, SetupCheck)
+    assert report.results[SetupCheck.GIT_IDENTITY].status is CheckStatus.NEEDS_SETUP
+    assert report.results[SetupCheck.NOTES_FILE].status is CheckStatus.OK
 
 
 # %% a full, non-interactive setup
@@ -245,7 +366,7 @@ def test_seeds_the_notes_file_from_the_starter_notes_when_asked(
     )
 
     checkout = setup_repository.clone_notes_branch(tmp_path / "notes-checkout")
-    expected = (setup_repository.project_root / STARTER_NOTES_FILE).read_text()
+    expected = STARTER_NOTES_FIXTURE.read_text()
     assert (checkout / NOTES_PATH).read_text() == expected
 
 
@@ -259,10 +380,12 @@ def test_prints_the_final_report(
         str(setup_repository.notes_remote_path),
     )
 
-    reported_checks = {
-        line.split("\t")[0] for line in result.stdout.splitlines() if "\t" in line
-    }
-    assert {"notes_branch", "notes_file", "claude_local_md"} <= reported_checks
+    report = SetupReport.from_completed_process(result, SetupCheck)
+    assert {
+        SetupCheck.NOTES_BRANCH,
+        SetupCheck.NOTES_FILE,
+        SetupCheck.CLAUDE_LOCAL_MD,
+    } <= report.results.keys()
 
 
 # %% re-running
@@ -299,19 +422,19 @@ def test_a_second_run_changes_nothing(
 def test_aborts_before_creating_anything_when_the_remote_belongs_to_someone_else(
     setup_repository: ScratchRepository, stub_executables: StubExecutableDirectory
 ):
-    stub_executables.install("gh")
+    stub_executables.install(StubbedExecutable.GH)
 
     result = run_setup(
         setup_repository,
         stub_executables,
         "--remote",
-        "https://github.com/someone-else/their-repo.git",
+        GitHubRemoteUrl.HTTPS_WITH_SUFFIX.for_repository(SOMEONE_ELSE_REPOSITORY),
         hidden_executables=(),
         STUB_GH_LOGIN=STUB_LOGIN,
     )
 
     assert result.returncode != 0
-    assert "someone-else" in result.stderr
+    assert SOMEONE_ELSE_REPOSITORY in result.stderr
     assert STUB_LOGIN in result.stderr
     # Nothing may have been pushed anywhere observable before the refusal.
     assert setup_repository.notes_branch_commit() is None
@@ -340,7 +463,7 @@ def test_reports_missing_labels_without_creating_them(
     stub_executables: StubExecutableDirectory,
     tmp_path: Path,
 ):
-    stub_executables.install("gh")
+    stub_executables.install(StubbedExecutable.GH)
     call_log = tmp_path / "gh-calls.txt"
 
     result = run_setup(
@@ -350,13 +473,13 @@ def test_reports_missing_labels_without_creating_them(
         str(setup_repository.notes_remote_path),
         hidden_executables=(),
         STUB_GH_LOGIN=STUB_LOGIN,
-        STUB_GH_MISSING_LABELS="in-review",
+        STUB_GH_MISSING_LABELS=RepositoryLabel.IN_REVIEW,
         STUB_GH_CALL_LOG=str(call_log),
     )
 
     assert result.returncode == 0, result.stderr
-    assert "in-review" in result.stdout
-    assert "POST" not in call_log.read_text()
+    assert RepositoryLabel.IN_REVIEW in result.stdout
+    assert CREATE_LABEL_METHOD not in call_log.read_text()
 
 
 def test_creates_only_the_missing_labels_when_asked(
@@ -364,7 +487,7 @@ def test_creates_only_the_missing_labels_when_asked(
     stub_executables: StubExecutableDirectory,
     tmp_path: Path,
 ):
-    stub_executables.install("gh")
+    stub_executables.install(StubbedExecutable.GH)
     call_log = tmp_path / "gh-calls.txt"
 
     result = run_setup(
@@ -375,17 +498,53 @@ def test_creates_only_the_missing_labels_when_asked(
         "--create-labels",
         hidden_executables=(),
         STUB_GH_LOGIN=STUB_LOGIN,
-        STUB_GH_MISSING_LABELS="in-review",
+        STUB_GH_MISSING_LABELS=RepositoryLabel.IN_REVIEW,
         STUB_GH_CALL_LOG=str(call_log),
     )
 
     assert result.returncode == 0, result.stderr
     creation_calls = [
-        line for line in call_log.read_text().splitlines() if "POST" in line
+        line
+        for line in call_log.read_text().splitlines()
+        if CREATE_LABEL_METHOD in line
     ]
     assert len(creation_calls) == 1
-    assert "name=in-review" in creation_calls[0]
+    assert f"name={RepositoryLabel.IN_REVIEW}" in creation_calls[0]
     assert f"repos/{ORIGIN_REPOSITORY}/labels" in creation_calls[0]
+
+
+def test_every_label_it_creates_carries_a_description_of_its_own(
+    setup_repository: ScratchRepository,
+    stub_executables: StubExecutableDirectory,
+    tmp_path: Path,
+):
+    # A description saying what the label means is most of what creating one ahead of
+    # time buys, so a label created without one of its own is the point of the step going
+    # missing. A label declared with no description is refused rather than given a generic
+    # one, which is what makes this fail by creating fewer labels than were declared.
+    stub_executables.install(StubbedExecutable.GH)
+    call_log = tmp_path / "gh-calls.txt"
+
+    result = run_setup(
+        setup_repository,
+        stub_executables,
+        "--remote",
+        str(setup_repository.notes_remote_path),
+        "--create-labels",
+        hidden_executables=(),
+        STUB_GH_LOGIN=STUB_LOGIN,
+        STUB_GH_MISSING_LABELS=" ".join(RepositoryLabel),
+        STUB_GH_CALL_LOG=str(call_log),
+    )
+
+    assert result.returncode == 0, result.stderr
+    described = dict(
+        described_label(line)
+        for line in call_log.read_text().splitlines()
+        if CREATE_LABEL_METHOD in line
+    )
+    assert set(described) == set(RepositoryLabel)
+    assert len(set(described.values())) == len(RepositoryLabel)
 
 
 # %% the plan-dashboard dependencies
@@ -394,8 +553,11 @@ def test_creates_only_the_missing_labels_when_asked(
 def test_reports_a_failed_dependency_install_and_carries_on(
     setup_repository: ScratchRepository, stub_executables: StubExecutableDirectory
 ):
-    stub_executables.install("pip")
-    setup_repository.write(REQUIREMENTS_FILE, "a-distribution-that-is-not-installed\n")
+    stub_executables.install(StubbedExecutable.PIP)
+    setup_repository.write(
+        SetupPrerequisiteFile.DASHBOARD_REQUIREMENTS,
+        "a-distribution-that-is-not-installed\n",
+    )
 
     result = run_setup(
         setup_repository,
@@ -405,6 +567,6 @@ def test_reports_a_failed_dependency_install_and_carries_on(
     )
 
     # The steps after the failed install still ran: session-start.sh wrote the file.
-    assert (setup_repository.project_root / "CLAUDE.local.md").is_file()
+    assert (setup_repository.project_root / ProjectFile.CLAUDE_LOCAL_MD).is_file()
     assert setup_repository.notes_branch_commit() is not None
-    assert "pip" in result.stdout + result.stderr
+    assert StubbedExecutable.PIP in result.stdout + result.stderr

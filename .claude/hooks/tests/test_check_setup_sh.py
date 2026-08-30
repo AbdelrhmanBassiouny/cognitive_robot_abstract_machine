@@ -7,7 +7,7 @@ personal-notes remote - no network access or real personal-notes branch involved
 
 from __future__ import annotations
 
-from enum import StrEnum
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -15,37 +15,13 @@ import pytest
 from setup_report import CheckStatus, ExitCode, SetupReport
 from scratch_repository import (
     NOTES_BRANCH,
-    PERSONAL_GIT_IDENTITY_PATH,
+    NOTES_PATH,
     SCRATCH_IDENTITY,
     ScratchRepository,
-    SetupPrerequisiteFile,
     initialize_bare_repository,
 )
-
-NOTES_PATH = ".claude/personal/cram-notes.md"
-
-
-# %% what a report is made of
-
-
-class SetupCheck(StrEnum):
-    """
-    The checks check-setup.sh reports on, in the order it prints them.
-    """
-
-    TOOLING_FILES = "tooling_files"
-    SESSION_START_HOOK = "session_start_hook"
-    CLAUDE_LOCAL_MD_IGNORED = "claude_local_md_ignored"
-    NOTES_REMOTE = "notes_remote"
-    NOTES_REMOTE_URL = "notes_remote_url"
-    NOTES_BRANCH_NAME = "notes_branch_name"
-    NOTES_PATH = "notes_path"
-    NOTES_BRANCH = "notes_branch"
-    NOTES_FILE = "notes_file"
-    GIT_IDENTITY = "git_identity"
-    DASHBOARD_DEPENDENCIES = "dashboard_dependencies"
-    CLAUDE_LOCAL_MD = "claude_local_md"
-
+from setup_report import CheckStatus, ExitCode, SetupCheck, SetupReport
+from tooling_files import HookScript, ProjectFile, SetupPrerequisiteFile
 
 # %% the scratch layout
 
@@ -66,7 +42,7 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
     :return: The same repository, fully set up.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh", "check-setup.sh"
+        HookScript.CONFIGURATION, HookScript.CHECK_SETUP
     )
 
     scratch_repository.write_setup_prerequisites()
@@ -76,7 +52,7 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
     scratch_repository.publish_notes_branch(
         {
             NOTES_PATH: "my notes\n",
-            PERSONAL_GIT_IDENTITY_PATH: SCRATCH_IDENTITY.as_git_config_file(),
+            ProjectFile.PERSONAL_GIT_IDENTITY: SCRATCH_IDENTITY.as_git_config_file(),
         }
     )
     scratch_repository.resolve_notes_remote_to()
@@ -95,7 +71,7 @@ def run_check_setup(
     :return: The parsed report.
     """
     return SetupReport.from_completed_process(
-        repository.run_hook_script("check-setup.sh", **environment_overrides),
+        repository.run_hook_script(HookScript.CHECK_SETUP, **environment_overrides),
         SetupCheck,
     )
 
@@ -184,7 +160,7 @@ def test_reports_a_recorded_identity_that_matches_this_clone(
 def test_reports_a_notes_branch_that_records_no_identity(
     check_setup_repository: ScratchRepository,
 ):
-    check_setup_repository.remove_from_notes_branch(PERSONAL_GIT_IDENTITY_PATH)
+    check_setup_repository.remove_from_notes_branch(ProjectFile.PERSONAL_GIT_IDENTITY)
 
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == ExitCode.NEEDS_SETUP

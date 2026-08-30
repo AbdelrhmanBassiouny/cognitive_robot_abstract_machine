@@ -15,24 +15,13 @@ from pathlib import Path
 
 import pytest
 
-from scratch_repository import ScratchRepository, initialize_bare_repository
-from setup_report import CheckStatus, ExitCode, SetupReport
-
-# The files check-stack-setup.sh's `stack_tooling_files` check requires, relative to the
-# project root. Literals rather than values read from resolve-personal-notes-config.sh,
-# for the reason test_check_setup_sh.py gives for the same list: a rename that breaks the
-# check should have to be made deliberately here too.
-STACK_TOOLING_FILES = (
-    ".claude/stack/stack.py",
-    ".claude/stack/stack.toml",
-    ".claude/stack/README.md",
-    ".claude/skills/stacked-pr-maintenance/SKILL.md",
-    ".claude/skills/stacked-pr-maintenance/routine-prompt.md",
+from scratch_repository import (
+    PROJECT_SOURCE_DIRECTORY,
+    ScratchRepository,
+    initialize_bare_repository,
 )
-
-BOARD_PATH = ".claude/stack/board.json"
-
-PERSONAL_STACK_CONFIG_PATH = ".claude/personal/stack.toml"
+from setup_report import CheckStatus, ExitCode, SetupReport
+from tooling_files import HookScript, ProjectFile, StackToolingFile
 
 UPSTREAM_BASE = "main"
 
@@ -59,16 +48,59 @@ class StackSetupCheck(StrEnum):
     """
 
     STACK_TOOLING_FILES = "stack_tooling_files"
+    """
+    Whether every file the workflow runs is present.
+    """
+
     PYTHON_TOML_SUPPORT = "python_toml_support"
+    """
+    Whether the interpreter can read the configuration's format at all.
+    """
+
     STACK_CONFIGURATION = "stack_configuration"
+    """
+    Whether stack.py resolves a configuration from what this clone carries.
+    """
+
     FORK_REMOTE = "fork_remote"
+    """
+    Whether a remote points at the fork the stack is staged in.
+    """
+
     FORK_REMOTE_URL = "fork_remote_url"
+    """
+    The URL that remote points at.
+    """
+
     UPSTREAM_REMOTE = "upstream_remote"
+    """
+    Whether a remote points at the repository the stack is reviewed in.
+    """
+
     UPSTREAM_REMOTE_URL = "upstream_remote_url"
+    """
+    The URL that remote points at.
+    """
+
     UPSTREAM_BASE = "upstream_base"
+    """
+    Whether the branch every stack ultimately targets is reachable there.
+    """
+
     PERSONAL_STACK_CONFIG = "personal_stack_config"
+    """
+    Whether the notes branch carries this contributor's own overrides.
+    """
+
     BOARD_IGNORED = "board_ignored"
+    """
+    Whether the pass's scratch snapshot is excluded, so it can never be committed.
+    """
+
     BOARD_SNAPSHOT = "board_snapshot"
+    """
+    Whether a snapshot from a previous pass is lying around.
+    """
 
 
 # %% the scratch layout
@@ -116,12 +148,13 @@ def stack_repository(
     :param tmp_path: pytest's per-test temporary directory.
     :return: The same repository, fully set up.
     """
-    scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh", "check-stack-setup.sh"
-    )
+    scratch_repository.install_hook_scripts(HookScript.CHECK_STACK_SETUP)
     install_stack_tooling(scratch_repository)
 
-    scratch_repository.write(".gitignore", f"CLAUDE.local.md\n{BOARD_PATH}\n")
+    scratch_repository.write(
+        ProjectFile.GIT_IGNORE,
+        f"{ProjectFile.CLAUDE_LOCAL_MD}\n{ProjectFile.STACK_BOARD}\n",
+    )
     scratch_repository.commit_everything("initial commit")
 
     _, fork_url = repository_url(tmp_path, FORK_REPOSITORY)
@@ -143,15 +176,14 @@ def install_stack_tooling(repository: ScratchRepository) -> None:
 
     :param repository: The scratch repository to install into.
     """
-    project_root = Path(__file__).parent.parent.parent.parent
-    for tooling_file in STACK_TOOLING_FILES:
+    for tooling_file in StackToolingFile:
         (repository.project_root / tooling_file).parent.mkdir(
             parents=True, exist_ok=True
         )
         (repository.project_root / tooling_file).write_text(
-            (project_root / tooling_file).read_text()
+            (PROJECT_SOURCE_DIRECTORY / tooling_file).read_text()
         )
-    configuration = repository.project_root / ".claude" / "stack" / "stack.toml"
+    configuration = repository.project_root / StackToolingFile.STACK_CONFIGURATION
     kept = [
         line
         for line in configuration.read_text().splitlines()
@@ -187,15 +219,7 @@ def run_check_stack_setup(repository: ScratchRepository) -> SetupReport:
     }
     return SetupReport.from_completed_process(
         subprocess.run(
-            [
-                "bash",
-                str(
-                    repository.project_root
-                    / ".claude"
-                    / "hooks"
-                    / "check-stack-setup.sh"
-                ),
-            ],
+            ["bash", str(repository.hook_script_path(HookScript.CHECK_STACK_SETUP))],
             cwd=repository.project_root,
             capture_output=True,
             text=True,
@@ -233,13 +257,13 @@ def test_reports_every_check_it_documents(stack_repository: ScratchRepository):
 def test_reports_which_stack_tooling_files_are_missing(
     stack_repository: ScratchRepository,
 ):
-    (stack_repository.project_root / ".claude" / "stack" / "stack.toml").unlink()
+    (stack_repository.project_root / StackToolingFile.STACK_CONFIGURATION).unlink()
 
     report = run_check_stack_setup(stack_repository)
 
     result = report.results[StackSetupCheck.STACK_TOOLING_FILES]
     assert result.status == CheckStatus.NEEDS_SETUP
-    assert ".claude/stack/stack.toml" in result.detail
+    assert StackToolingFile.STACK_CONFIGURATION in result.detail
     assert report.exit_code == ExitCode.NEEDS_SETUP
 
 
@@ -252,11 +276,7 @@ def test_requires_the_maintenance_instructions_rather_than_the_retired_routine_d
     not. Checking the retired paths reported ``needs-setup`` on a correct installation.
     """
     skill_document = (
-        stack_repository.project_root
-        / ".claude"
-        / "skills"
-        / "stacked-pr-maintenance"
-        / "SKILL.md"
+        stack_repository.project_root / StackToolingFile.MAINTENANCE_SKILL
     )
 
     assert (
@@ -272,7 +292,7 @@ def test_requires_the_maintenance_instructions_rather_than_the_retired_routine_d
     ]
 
     assert result.status == CheckStatus.NEEDS_SETUP
-    assert ".claude/skills/stacked-pr-maintenance/SKILL.md" in result.detail
+    assert StackToolingFile.MAINTENANCE_SKILL in result.detail
 
 
 def test_does_not_check_the_remotes_when_the_configuration_cannot_be_resolved(
@@ -314,7 +334,7 @@ def test_checks_the_remote_the_personal_override_names_rather_than_the_committed
     """
     stack_repository.run_git("remote", "remove", "origin")
     stack_repository.publish_notes_branch(
-        {PERSONAL_STACK_CONFIG_PATH: 'fork_remote = "my-own-fork"\n'}
+        {ProjectFile.PERSONAL_STACK_CONFIGURATION: 'fork_remote = "my-own-fork"\n'}
     )
     stack_repository.resolve_notes_remote_to()
 
@@ -372,7 +392,7 @@ def test_reports_a_personal_stack_config_that_exists(
     stack_repository: ScratchRepository,
 ):
     stack_repository.publish_notes_branch(
-        {PERSONAL_STACK_CONFIG_PATH: 'upstream_base = "main"\n'}
+        {ProjectFile.PERSONAL_STACK_CONFIGURATION: 'upstream_base = "main"\n'}
     )
     stack_repository.resolve_notes_remote_to()
 
@@ -380,7 +400,7 @@ def test_reports_a_personal_stack_config_that_exists(
 
     result = report.results[StackSetupCheck.PERSONAL_STACK_CONFIG]
     assert result.status == CheckStatus.INFORMATIONAL
-    assert PERSONAL_STACK_CONFIG_PATH in result.detail
+    assert ProjectFile.PERSONAL_STACK_CONFIGURATION in result.detail
 
 
 def test_reports_a_board_snapshot_that_has_never_been_written(
@@ -394,12 +414,12 @@ def test_reports_a_board_snapshot_that_has_never_been_written(
 
 
 def test_reports_a_board_that_is_not_gitignored(stack_repository: ScratchRepository):
-    stack_repository.write(".gitignore", "CLAUDE.local.md\n")
+    stack_repository.write(ProjectFile.GIT_IGNORE, f"{ProjectFile.CLAUDE_LOCAL_MD}\n")
     stack_repository.commit_everything("stop ignoring the board")
 
     report = run_check_stack_setup(stack_repository)
 
     result = report.results[StackSetupCheck.BOARD_IGNORED]
     assert result.status == CheckStatus.NEEDS_SETUP
-    assert BOARD_PATH in result.detail
+    assert ProjectFile.STACK_BOARD in result.detail
     assert report.exit_code == ExitCode.NEEDS_SETUP
