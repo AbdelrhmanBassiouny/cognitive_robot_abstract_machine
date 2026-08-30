@@ -543,3 +543,33 @@ behind, so the tuner is tested with the edges simply set where a test wants them
 Note the OpenCV build here is the Qt one and warns `Cannot find font directory` - if the
 slider labels come out blank, the console line names the region every time an edge moves.
 
+### The tuning was written where nothing read it (commit `ae361fe23`, on #221 as `df667585e`)
+
+Found by the user: tune, then watch the captures, and the run searches the whole region
+again. The tuner wrote `tuned_workspace.json` into the working directory - which is why
+one sat untracked in the repository root - and `recorded_setup.WORKSPACE` was a constant
+nothing ever read it into. The tool worked; its result had nowhere to go.
+
+Now the region is written to `resources/tracy_workspace.json`, beside the captures it was
+tuned against, and `recorded_setup.searched_workspace()` reads it, falling back to the
+whole workspace where none has been tuned. `WORKSPACE` is renamed `WIDEST_WORKSPACE`,
+since it is no longer what a run searches but the widest it may search - and it is what
+the sliders now open from, rather than the tuning already in force, so an edge brought in
+too far can be pushed back out. Without that, one narrow tuning could never be widened
+again.
+
+`WorkspaceRegion` gained the `SubclassJSONSerializer` round trip that needs, `load` /
+`save` following `SceneCapture`'s, and `RegionField` naming the keys. `TrackbarControls`
+sums each edge in the millimetres its slider is graduated in, so the file records 0.915
+rather than 0.9149999999999999.
+
+The shipped tuning is the user's own: x 0.35-0.915, y -0.45-0.674. Every capture detects
+exactly what it did before the narrowing (checked by re-running the walk), and the whole
+`test/experiments_test` suite is unchanged at 9 failures and 1 error, all reproduced on a
+stashed tree - the five ORM ones plus `test_orm_generation`, the stretch demo and two
+Tracy pick-and-place tests.
+
+Watch out: `perception_pipeline()` reads the file at call time, so a test that wants a
+particular workspace passes a path to `searched_workspace` rather than expecting the
+shipped one.
+
