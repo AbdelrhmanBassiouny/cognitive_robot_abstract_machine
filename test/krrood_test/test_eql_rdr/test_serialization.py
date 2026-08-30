@@ -12,7 +12,9 @@ test suite once the engine slice lands.
 
 from __future__ import annotations
 
+import ast
 from dataclasses import dataclass, field
+from pathlib import Path
 from enum import Enum
 
 import pytest
@@ -23,6 +25,8 @@ from krrood.entity_query_language.rdr.backward_inference import what_do_we_know_
 from krrood.entity_query_language.rdr.corner_case import CornerCaseStore
 from krrood.entity_query_language.rdr.exceptions import EmptyRuleTreeError
 from krrood.entity_query_language.rdr.serialization import (
+    _RDR_MODULE_TEMPLATE_NAME,
+    _TEMPLATES_DIRECTORY,
     RDR_CASE_TYPE_NAME,
     RDR_CASE_VARIABLE_NAME,
     RDR_CONCLUSION_ATTRIBUTE_NAME,
@@ -152,6 +156,26 @@ def test_generated_source_rebuilds_an_equivalent_alternative_chain():
         assert len(rebuilt_knowledge.sufficient_condition_sets) == len(
             original_knowledge.sufficient_condition_sets
         )
+
+
+def _template_docstring() -> str:
+    """The docstring the module template opens with, read through the same constants that
+    locate it for rendering so the expected text has one source rather than a retyped copy.
+    Everything from the first placeholder on is dropped, since a Jinja template is not
+    parseable Python."""
+    template_source = (Path(_TEMPLATES_DIRECTORY) / _RDR_MODULE_TEMPLATE_NAME).read_text()
+    return ast.get_docstring(ast.parse(template_source[: template_source.index("{{")]))
+
+
+# %% rdr_to_python: the generated module states how it may be edited
+
+
+def test_generated_source_opens_with_the_template_docstring():
+    """The header telling a reader how a generated module may be edited reaches the
+    output, rather than only living in the template."""
+    source = rdr_to_python(_flat_tree_rdr())
+
+    assert ast.get_docstring(ast.parse(source)) == _template_docstring()
 
 
 # %% rdr_to_python: corner cases are embedded in the generated source
