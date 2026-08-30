@@ -13,15 +13,19 @@ from krrood.entity_query_language.rdr.answer_vocabulary import (
     AnswerName,
 )
 import unittest
+from unittest.mock import MagicMock
 
 # %% shared helpers and domain types from the peer test modules
 from krrood.entity_query_language.rdr.conclusion_domain import (
     ConclusionValidator,
 )
-from krrood.entity_query_language.rdr.expert import ConditionsValidator
+from krrood.entity_query_language.rdr.expert import ConditionsValidator, Expert
+from krrood.entity_query_language.rdr.observer import ClassificationTrace
+from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 from krrood.entity_query_language.rdr.interface import (
     AnswerRequest,
     CaseContext,
+    FunctionInterface,
 )
 from krrood.entity_query_language.rdr.interactive import IPythonInterface
 
@@ -33,6 +37,7 @@ from krrood.entity_query_language.rdr.prompt_sections import (
 )
 
 from .animal import Animal, Species
+from .test_conclusion_domain import Tag
 
 # %% context builders reused from the no-target rendering tests
 from .test_no_target_rendering import (
@@ -533,8 +538,6 @@ class TestLabellingFiredAnchorSectionApplicable(unittest.TestCase):
         rdr = _zoo_rdr()
 
         # Seed a rule so the trace carries a real firing_anchor.
-        from krrood.entity_query_language.rdr.interface import FunctionInterface
-        from krrood.entity_query_language.rdr.expert import Expert
 
         def _fish_answer(context, requests):
             """
@@ -606,7 +609,6 @@ class TestLabellingFiredAnchorSectionApplicable(unittest.TestCase):
         labelling_fired_anchor.applicable returns False when trace.firing_anchor is
         None.
         """
-        from krrood.entity_query_language.rdr.observer import ClassificationTrace
 
         case = _make_animal()
         rdr = _zoo_rdr()
@@ -1025,8 +1027,6 @@ class TestLabellingFiredAnchorLines(unittest.TestCase):
         """
         Lines contain 'It fired on'.
         """
-        from krrood.entity_query_language.rdr.observer import ClassificationTrace
-        from unittest.mock import MagicMock
 
         case = _make_animal()
         rdr = _zoo_rdr()
@@ -1116,8 +1116,6 @@ class TestAllowedValuesLines(unittest.TestCase):
         """
         Lines contain 'Conclusion type:' for an open (str) domain.
         """
-        from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
-        from .test_conclusion_domain import Tag
 
         rdr_str = EQLSingleClassRDR(Tag, "name")
         case_context = CaseContext(
