@@ -340,3 +340,84 @@ requests, and the pull requests are that record already.
 `_generated/branch-index.yaml` still names `workflow-unification`. Nothing reads it - `save-plan.sh`
 regenerates only the `.tsv`, and a grep of `.claude/` finds no reader - so it is a dead generated file
 predating this work, and deleting it is outside this item.
+
+## Done 2026-08-30: `split-rdr-refactor` — seven plans, 4,372 lines to 1,806
+
+Pushed to the notes branch as `397532690`. Both plans that motivated the budget are now
+under it, so `refuse-oversized-save` is unblocked.
+
+| new plan | items | lines | was |
+|---|---|---|---|
+| `eql-core-and-code-generation` | 6 | 177 | the EQL/codegen foundation, all merged |
+| `rdr-core-engine` | 14 | 517 | the `rdr/` package stack |
+| `rdr-interface-and-decorator` | 5 | 242 | the D-ui and D-deco tracks |
+| `test-suite-fixes` | 3 | 180 | the flaky-marker and pytest-conversion items |
+| `rdr-explanation` | 8 | 239 | the Why & Montessori wave |
+| `rdr-engine-extensions` | 10 | 301 | waves 1–3 and the architecture brief |
+| `rdr-expert-framework` | 3 | 150 | the expert-capabilities track |
+
+### The item's own note predicted the wrong seam, and measuring is what caught it
+
+The note said the plan's waves "already separate the engine work from the Why & Montessori
+track and the expert framework, which is the likely seam." Measured, a by-wave split does
+not get under budget: wave 0 alone holds **26 of the 49 items, 867 manifest lines and about
+2,565 of the 3,259 roadmap lines** — 92% of the roadmap attributed by counting each
+addendum's mentions of item ids and pull request numbers. The other six waves together are
+23 items and under 700 lines. So the split had to cut *inside* wave 0, which the note did
+not anticipate.
+
+The seam it cuts on is subject: the EQL core and `code_generation` extraction under the
+engine (all merged, and not RDR work at all); the `rdr/` package delivery stack itself; the
+interactive shell, magics, decorator and file store on top of it; and the repository-wide
+test-suite defects the stack surfaced but does not own. That last group is three items and
+looks thin, but folding it anywhere would have put unrelated work in a plan already at the
+budget — the same reasoning `workflow-cutover` was kept separate under.
+
+### The cost, which is larger than the sibling split's
+
+`depends_on` cannot cross a plan, so **seven live edges dissolve into `blockers`** here
+against the sibling's three. The reason is structural rather than a partition mistake:
+`d-core-backend` and `d-core-single-class` are the trunk, and six items across four
+different subjects stack directly on them. Keeping any one of those dependents with the
+engine pushes `rdr-core-engine` over 15 items. Three further edges name items that have
+already merged and are dropped into the depending item's notes instead.
+
+That makes ten items in this programme with no dependency chip and no automatic readiness.
+The `<plan-id>:<item-id>` reference already noted as a candidate for `plan-dashboards` would
+restore all of them, and this split roughly triples the case for it.
+
+### Verified rather than trusted
+
+All 49 items are present exactly once and none is invented, by set comparison against the
+source; every successor passes `build_dashboard.validate_plan`; every item's `title`,
+`branch`, `repository`, `pull_request_number`, `status` and `session` are byte-identical to
+the source, checked field-by-field rather than by reading the diff; and every declared track
+has at least one item. The branch index went from 125 branches to 125, with **none unmapped
+and 42 remapped**, so `session-start.sh` resolves every branch exactly as before.
+
+One warning from the index regeneration is pre-existing, not this split's:
+`conditions-root-drop-dead-parent-recovery` is claimed by both `dag-facade-hardening` and
+this plan's `eql-core-and-code-generation`, and it mapped to `dag-facade-hardening` before
+the split too.
+
+### The compression rule paid the same way it did on the sibling
+
+The predecessor's roadmap was 3,259 lines, of which sections 1–4 (266 lines) are the design
+and the standing conventions and the remaining 31 addenda are per-round narrative about
+individual pull requests. Rewriting rather than slicing took the seven roadmaps to 855 lines
+total and the manifests from 1,113 to 951. What was kept is what binds future work: the
+locked engine decisions, the open design questions nobody has answered, the standing hazards
+— the wedged CI merge refs, the tracked generated interface, the formatter's fourteen-instance
+regression — and the programme's own working method, which is recorded once in
+`rdr-core-engine`'s roadmap and referenced from the others rather than copied into each.
+
+Second independent confirmation of `minimal-roadmap-writing`'s premise: 92% of this roadmap
+was narrative about merged pull requests, against the sibling's 94%.
+
+### Left alone deliberately
+
+`rdr-refactor` was a live plan while this ran — another session pushed a resolve to it
+mid-way through, so the source was re-read from the current tip before building. The seven
+successors all keep `tracking_issue: 94`, reusing the existing mailbox rather than scattering
+the continuity across seven new issues. Personal-notes data only, so no branch and no pull
+request, per the item's own notes and the sibling split's precedent.

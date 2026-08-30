@@ -120,7 +120,7 @@ items:
     pull_request_number: null
     track: plan-splits
     depends_on: [size-budget-and-report]
-    status: not_started
+    status: done
     notes: >
       49 items / 3,676 lines, same treatment and same index regeneration as the
       sibling split. Its waves already separate the engine work from the Why &
