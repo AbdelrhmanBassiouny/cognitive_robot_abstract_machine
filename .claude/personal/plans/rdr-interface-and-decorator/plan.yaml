@@ -62,7 +62,7 @@ items:
   depends_on:
   - D-ui-rendering
   status: in_progress
-  session: https://claude.ai/code/session_01WnFnM5sADR7Nmz5tMDHy1H
+  session: https://claude.ai/code/session_01W5rkhDr2xdFuFVExi6bXb4
   notes: '2026-08-23: outstanding work added from the #159 review - **default the progress reporter to
     IPythonProgressBar here**. The engine keeps NullProgressReporter, which is the only default correct
     for a caller it knows nothing about; the developer agreed the interactive default belongs in this
@@ -81,24 +81,49 @@ items:
     through `test_eql_documentation.sh` - still called `FunctionInterface(answer_fn=...)`. Every function,
     method and field across the 21 files this PR adds now carries a docstring. test_eql_rdr: 524 passed,
     2 skipped (341 on the base, 183 added). See roadmap.md section 36.
-    2026-08-30 (later): a fresh `/plan-item-resolve` session found a 50-thread review round opened
-    on #76 between 14:34Z and 17:13Z - twenty-five minutes after the rebuild session posted its own
-    completion note and stopped - and none of it recorded here. Sixth instance of that staleness
-    class on this plan. Applied as `a07a4458` and `c40da8fa`. The substantive part is a redesign the
-    round asked for rather than conformance: the magics are classes under a `Magic` base, each
-    carrying its own name, collaborators and `register(shell)`; `MagicName`, `MagicKind` and
-    `NamespaceKey` replace the name literals and the four private key constants; `%knows` becomes
-    `%sufficient_conditions_for`; the prompt sections become eleven `PromptSection` subclasses
-    identified by a `PromptSectionName` member; and the 1,456-line prompt-sections test splits into
-    four files named for their subjects. `rdr/__init__.py` is restored to the base, so the pull
-    request no longer touches it. Magic selection and registration were reachable only through a real
-    terminal, so eight tests now cover them against a shell stub. test_eql_rdr: 532 passed, 2 skipped.
-    Forty-five threads replied to and resolved; five replied to and left open, because the answer
-    differed from the ask or the identifier belongs to #79, #67 or the base template - see roadmap.md
-    decisions 5 and 6.'
+
+
+    2026-08-30 (later): a fresh `/plan-item-resolve` session found a 50-thread review round opened on
+    #76 between 14:34Z and 17:13Z - twenty-five minutes after the rebuild session posted its own completion
+    note and stopped - and none of it recorded here. Sixth instance of that staleness class on this plan.
+    Applied as `a07a4458` and `c40da8fa`. The substantive part is a redesign the round asked for rather
+    than conformance: the magics are classes under a `Magic` base, each carrying its own name, collaborators
+    and `register(shell)`; `MagicName`, `MagicKind` and `NamespaceKey` replace the name literals and the
+    four private key constants; `%knows` becomes `%sufficient_conditions_for`; the prompt sections become
+    eleven `PromptSection` subclasses identified by a `PromptSectionName` member; and the 1,456-line prompt-sections
+    test splits into four files named for their subjects. `rdr/__init__.py` is restored to the base, so
+    the pull request no longer touches it. Magic selection and registration were reachable only through
+    a real terminal, so eight tests now cover them against a shell stub. test_eql_rdr: 532 passed, 2 skipped.
+    Forty-five threads replied to and resolved; five replied to and left open, because the answer differed
+    from the ask or the identifier belongs to #79, #67 or the base template - see roadmap.md decisions
+    5 and 6.
+
+
+    2026-08-30 (later still): a `/plan-item-resolve` session read the pull request''s live state and found
+    the round was not finished. The roadmap''s count of five threads answered-and-left-open is stale:
+    the developer resolved three of them, accepting the answers as given (the `match`/`case` lookup table,
+    the removed `except Exception: pass`, and the `elision` rename declined for want of a better word).
+    The remaining two carry fresh instructions rather than agreement, and neither change lands on #76:
+    the generated-model header goes to the pull request that owns `templates/rdr_module.py.jinja`, which
+    is #66 (`D-core-serialization`), open and unmerged; the side-by-side column labels go to #79.
+
+
+    Both dependencies read ready and the head is current: #76''s base sha is #79''s head sha, so there
+    is no restack owed here. The pull request is out of draft, and nothing in the record says a session
+    marked it so, which is why it was left ready rather than restored to draft.'
   blockers:
-  - CI has never run on this branch - the pull request reports zero check runs on any head it has
-    had - so every figure recorded for it, the 532 above included, is a local measurement.
+  - CI has never run on this branch - the pull request reports zero check runs on any head it has had
+    - so every figure recorded for it, the 532 above included, is a local measurement.
+  - 'Two of #76''s review threads are unresolved and both carry a developer answer posted at 21:55Z/21:56Z
+    on 2026-08-30, after the session that applied the round reported itself finished at 21:26Z - the seventh
+    instance of that staleness class on this plan. Thread r3889815677, on the generated model''s "Do not
+    edit by hand" header, answers "edit it in the pull request that owns it if it is not merged yet, otherwise
+    do it here" - the owner is #66 (D-core-serialization), which is open and unmerged, so the change belongs
+    there and not on #76. Thread r3889859180, on making the side-by-side column labels a StrEnum, answers
+    "ok do it in pr 79" - the defaults live in case_table.py, which is D-ui-rendering''s file.'
+  - 'krrood/src/krrood/entity_query_language/rdr/__init__.py is still in #76''s diff - a docformatter
+    reflow of the base''s one-line module docstring into three lines - although the reply that resolved
+    the "empty this file" thread stated the pull request no longer touches the file at all.'
 - id: D-ui-splice-fix
   title: 'RDR engine: fix rule-tree splice for attributes reused across sibling branches'
   branch: D-ui-splice-fix

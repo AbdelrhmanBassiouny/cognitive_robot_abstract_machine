@@ -88,6 +88,22 @@ branch had posted its completion note at 14:09Z and was gone. The item then
 read healthy for the rest of the day while nothing on it was true. This is the
 sixth instance of that class on this plan.
 
+**7. A review round ends when the reviewer says so, not when the replies are
+posted.** The 2026-08-30 round on #76 was recorded here as "five threads answered
+and left open". The reviewer then read those five: three he resolved, accepting the
+answers as given, and two he answered with instructions - the generated-model header
+goes in the pull request that owns the template, and the side-by-side labels go in
+#79. Both arrived at 21:55Z and 21:56Z, half an hour after the session that posted
+the replies had stopped. Answering a thread is a turn in a conversation, and the
+turn after it is the one that says what happens.
+
+**8. A thread is resolved against the file, not against the intention.** #76's
+`rdr/__init__.py` thread was resolved on the claim that the pull request no longer
+touches the file. It still did: `format_docstrings.py` had reflowed the base's
+one-line module docstring into three, so the file stayed in the diff doing exactly
+what the reviewer asked it not to. The re-exports the thread was about were indeed
+gone, which is what made the claim feel true.
+
 ## The lesson this plan is the case study for
 
 **Six weeks on a dead base costs three moved interfaces, and none of it is
@@ -130,11 +146,14 @@ passing suite:
   member the way `EXIT` does. Both are real rule instances that no thread named
   and that the PR-wide sweep thread's own categories (abbreviations, docstrings,
   formatting) do not cover.
-- **Five review threads on #76 are answered and left open**, each because the
-  answer differed from the ask or the change belongs to another slice: the
-  `match`/`case` suggestion (answered with a lookup table), the generated-model
-  header, the side-by-side labels, the `except Exception: pass` (nothing is
-  raised there), and the `elision` rename.
+- **Two review threads on #76 remain open**, both with the reviewer's own
+  instruction on them: the generated-model header is to be changed in the pull
+  request that owns `templates/rdr_module.py.jinja` - #66 (`D-core-serialization`),
+  open and unmerged - and the side-by-side labels are to become a `StrEnum` in #79.
+  The other three of the five left open on 2026-08-30 he resolved himself, taking
+  the answers as given: the `match`/`case` lookup table, the removed
+  `except Exception: pass`, and the `elision` rename declined for want of a better
+  word.
 - **Known conformance debt left alone deliberately** on #79: `av`, `sp`, `d` and
   `test_progress_bar.py`'s own box-drawing dividers are real instances of rules
   this pull request's other fixes enforced elsewhere, but no thread named them.
