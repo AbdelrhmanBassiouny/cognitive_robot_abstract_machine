@@ -62,6 +62,25 @@ PAYLOAD_ENCODING_MARKER = "compressed"
 Word a ``format`` field puts in front of the encoding its payload is stored in.
 """
 
+
+class CameraTopic(StrEnum):
+    """
+    The camera streams this package reads.
+
+    The depth stream must be the one the driver has registered onto colour: both carry
+    the same frame, resolution and intrinsics, so a pixel names the same ray in each.
+
+    Both images are read over a compressed transport rather than raw. A raw frame of
+    this camera is several megabytes, which a wireless link cannot carry: the datagrams
+    are fragmented and almost none of them arrive whole, so a node subscribed to the raw
+    stream is served nothing at all.
+    """
+
+    COLOR = f"/camera/color/image_raw/{ImageTransport.COMPRESSED}"
+    DEPTH = f"/camera/depth/image_raw/{ImageTransport.COMPRESSED_DEPTH}"
+    CAMERA_INFO = "/camera/color/camera_info"
+
+
 # %% intrinsics
 
 
