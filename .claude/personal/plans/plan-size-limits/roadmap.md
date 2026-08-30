@@ -290,3 +290,53 @@ branch's own history.
 Personal-notes data only, per the item's own notes and the `eql-roadmap-migration`
 precedent. This session's designated branch stays empty; the manifest's `branch` and
 `pull_request_number` stay `null`.
+
+## Done 2026-08-30: `split-workflow-unification` — seven plans, 16,917 lines to 2,916
+
+Pushed to the notes branch as `e69094af3`; dashboard URLs recorded in `273436cb9`. Structural record
+on tracking issue #102.
+
+| new plan | items | lines | was |
+|---|---|---|---|
+| `stack-tooling-install` | 7 | 435 | `stack-tooling`, install half |
+| `stack-maintenance` | 11 | 737 | `stack-tooling`, pass half |
+| `plan-tracking-skills` | 6 | 299 | `personal-data`, plan-item skills |
+| `session-notes-infrastructure` | 10 | 415 | `personal-data`, hook and notes |
+| `plan-dashboards` | 12 | 419 | `dashboards`, unchanged |
+| `bastler-package` | 10 | 413 | `bastler`, unchanged |
+| `workflow-cutover` | 3 | 198 | `cutover`, unchanged |
+
+Measured against the live notes branch afterwards: every plan in the directory is now within the
+budget except `rdr-refactor` (49 items, 4,282 lines), which is `split-rdr-refactor`'s work.
+
+### What the split preserved, and how that was checked rather than trusted
+
+All 59 items are present exactly once and none is invented, checked by set comparison against the
+source manifest; every successor passes `build_dashboard.validate_plan`; and each item's `branch`,
+`pull_request_number`, `status` and `session` are copied field-for-field by the builder rather than
+retyped. The dashboards then rendered against live GitHub with **zero drift flags across all seven**,
+which is the independent confirmation that no status was changed by the move.
+
+### What it could not preserve
+
+Three live `depends_on` edges crossed a plan boundary and are now `blockers`, so those items lose
+their dependency chips and automatic readiness. Merging the plans that would keep them puts two of
+them back over budget, so this is a cost rather than an oversight. A `<plan-id>:<item-id>` reference
+in the schema would restore it, and is a candidate item for `plan-dashboards`.
+
+### What the compression rule turned out to be worth
+
+The manifests alone were 5,129 lines for 59 items - one item carried 585 - because notes had been
+accreting per resolve session rather than being rewritten. Compressing to what binds future work took
+the manifests to 2,203 and the roadmaps from 11,788 to 713. Nothing is destroyed: the full
+predecessor roadmap is in the notes branch's history immediately before the split commit.
+
+This is direct evidence for `minimal-roadmap-writing`, the item that changes what the skills ask
+sessions to write: 94% of the roadmap was per-round implementation narrative about merged pull
+requests, and the pull requests are that record already.
+
+### Left alone deliberately
+
+`_generated/branch-index.yaml` still names `workflow-unification`. Nothing reads it - `save-plan.sh`
+regenerates only the `.tsv`, and a grep of `.claude/` finds no reader - so it is a dead generated file
+predating this work, and deleting it is outside this item.
