@@ -1,4 +1,5 @@
-"""Moving the fork's copy of the upstream base onto the upstream's tip.
+"""
+Moving the fork's copy of the upstream base onto the upstream's tip.
 
 This is the step that closes the pull requests whose work has landed, since GitHub marks
 one merged the moment its head becomes an ancestor of its base.
@@ -14,42 +15,63 @@ from stack import Configuration, resolve_ref
 
 
 class FastForwardOutcome(StrEnum):
-    """What became of the fork's base branch."""
+    """
+    What became of the fork's base branch.
+    """
 
     PUSHED = "pushed"
-    """It was moved onto the upstream's tip."""
+    """
+    It was moved onto the upstream's tip.
+    """
 
     ALREADY_CURRENT = "already-current"
-    """It already pointed at the upstream's tip."""
+    """
+    It already pointed at the upstream's tip.
+    """
 
     REFUSED_NOT_FAST_FORWARD = "refused-not-fast-forward"
-    """It carries commits the upstream does not, so moving it would discard them."""
+    """
+    It carries commits the upstream does not, so moving it would discard them.
+    """
 
 
 @dataclass(frozen=True)
 class FastForwardReport:
-    """What the fast-forward did, and to what."""
+    """
+    What the fast-forward did, and to what.
+    """
 
     outcome: FastForwardOutcome
-    """What became of the fork's base branch."""
+    """
+    What became of the fork's base branch.
+    """
 
     upstream_reference: str
-    """The upstream ref the fork's base was compared against."""
+    """
+    The upstream ref the fork's base was compared against.
+    """
 
     fork_reference: str
-    """The fork ref that was to be moved."""
+    """
+    The fork ref that was to be moved.
+    """
 
     commit: str
-    """The commit the fork's base points at now."""
+    """
+    The commit the fork's base points at now.
+    """
 
     explanation: str | None = None
-    """Why a refusal was refused, absent when nothing was refused."""
+    """
+    Why a refusal was refused, absent when nothing was refused.
+    """
 
 
 def fast_forward(
     configuration: Configuration, git: MaintenanceGitCommandRunner
 ) -> FastForwardReport:
-    """Move the fork's copy of the upstream base onto the upstream's tip.
+    """
+    Move the fork's copy of the upstream base onto the upstream's tip.
 
     This is what closes the pull requests whose work has landed: GitHub marks one merged
     the moment its head becomes an ancestor of its base. A move that is not a

@@ -52,7 +52,11 @@ from semantic_digital_twin.world_description.connections import (
 from semantic_digital_twin.world_description.degree_of_freedom import (
     DegreeOfFreedomLimits,
 )
-from semantic_digital_twin.world_description.geometry import Scale, Color
+from semantic_digital_twin.world_description.geometry import (
+    VolumetricBoundingBox,
+    Scale,
+    Color,
+)
 from semantic_digital_twin.world_description.shape_collection import (
     BoundingBoxCollection,
 )
@@ -220,7 +224,7 @@ class Aperture(HasRootRegion):
         ).event
         new_wall_event = wall_event - hole_event
         new_bounding_box_collection = BoundingBoxCollection.from_event(
-            parent.root, new_wall_event
+            VolumetricBoundingBox, parent.root, new_wall_event
         ).as_shapes()
 
         parent.root.collision = new_bounding_box_collection
@@ -268,9 +272,20 @@ class MechanicalJoint(HasRootBody):
         Inserts the joint between the whole (``main_has_root_body_annotation``) and the
         whole's current parent, preserving the whole's ancestry.
 
-        So whole_parent -(fixed)-> whole becomes whole_parent -(active)-> joint
-        -(fixed)-> whole. The joint keeps its active connection (now anchored at the
-        whole's parent); the whole hangs rigidly off the joint.
+        Ordinarily, whole_parent -(fixed)-> whole becomes whole_parent -(active)->
+        joint -(fixed)-> whole: the joint keeps its own active connection (now
+        anchored at the whole's parent), and the whole hangs rigidly off the joint.
+
+        When the whole is already wired straight to its parent through a connection
+        of the same type this joint provides (for example a door whose URDF attaches
+        it to its cabinet with a revolute joint directly, without a hinge body in
+        between), that connection is redundant with the joint's own: the joint takes
+        over carrying the physical joint data (its creator is expected to have copied
+        the axis, limits, ... over from it), the whole's old connection to its parent
+        is discarded, and the whole is attached to the joint with a fixed connection
+        instead. The degree of freedom the discarded connection used is reclaimed by
+        :meth:`World.delete_orphaned_dofs` when the enclosing ``modify_world`` block
+        exits.
         """
         if (
             main_has_root_body_annotation.root.parent_kinematic_structure_entity
@@ -281,13 +296,31 @@ class MechanicalJoint(HasRootBody):
         if list(self._world.kinematic_structure.successors(self.root.index)):
             raise MechanicalJointAlreadyMounted(self, main_has_root_body_annotation)
 
+        whole_parent = (
+            main_has_root_body_annotation.root.parent_kinematic_structure_entity
+        )
+        whole_already_carries_this_joint_type = type(
+            main_has_root_body_annotation.root.parent_connection
+        ) is type(self.root.parent_connection)
+
+        # Mounting always runs inside a still-open modification block, so take the
+        # offline path, like every other mount strategy does.
         self._world.move_branch(
-            self.root,
-            main_has_root_body_annotation.root.parent_kinematic_structure_entity,
+            self.root, whole_parent, enable_unsafe_inside_world_block=True
         )
-        main_has_root_body_annotation._world.move_branch(
-            main_has_root_body_annotation.root, self.root
-        )
+
+        if whole_already_carries_this_joint_type:
+            main_has_root_body_annotation._world.move_branch_with_fixed_connection(
+                main_has_root_body_annotation.root,
+                self.root,
+                enable_unsafe_inside_world_block=True,
+            )
+        else:
+            main_has_root_body_annotation._world.move_branch(
+                main_has_root_body_annotation.root,
+                self.root,
+                enable_unsafe_inside_world_block=True,
+            )
 
     @property
     def position(self):
@@ -899,6 +932,34 @@ class Wall(HasApertures):
             connection_specification=connection_specification,
         )
 
+    def bloated_bounding_box_collection(
+        self,
+        origin: HomogeneousTransformationMatrix,
+        bloat_amount: float,
+        obstacle_height_clearance: float = 0.01,
+    ) -> BoundingBoxCollection[VolumetricBoundingBox]:
+        """
+        Bloat this wall's bounding boxes along their thinner dimension only -- the
+        side that faces the room -- rather than symmetrically in x and y.
+
+        :param origin: The origin to express the bounding boxes relative to.
+        :param bloat_amount: The amount to bloat by.
+        :param obstacle_height_clearance: The amount to bloat by in z, regardless of
+            ``bloat_amount``.
+        :return: The bloated bounding boxes.
+        """
+        return BoundingBoxCollection(
+            [
+                (
+                    bounding_box.bloat(bloat_amount, 0, obstacle_height_clearance)
+                    if bounding_box.width > bounding_box.depth
+                    else bounding_box.bloat(0, bloat_amount, obstacle_height_clearance)
+                )
+                for bounding_box in self.as_bounding_box_collection_at_origin(origin)
+            ],
+            origin.reference_frame,
+        )
+
 
 @dataclass(eq=False)
 class Bottle(HasRootBody):
@@ -1435,6 +1496,83 @@ class SemanticEnvironmentAnnotation(HasRootBody):
     """
     Represents a semantic annotation of the environment.
     """
+
+    def obstacle_entities(
+        self, search_space: BoundingBoxCollection[VolumetricBoundingBox]
+    ) -> List[Body]:
+        """
+        Collect the obstacle bodies to consider within ``search_space``.
+
+        Filters out robot bodies so a robot does not treat itself as an obstacle, and
+        bodies without meaningful collision geometry.
+
+        :param search_space: The search space; its reference frame is used to look up
+            the owning world.
+        :return: The obstacle bodies to consider.
+        """
+        world = search_space.reference_frame._world
+        return [
+            body
+            for body in self.bodies_with_collision
+            if body not in world.robot_bodies_with_collision
+        ]
+
+    def build_bloated_obstacle_collection(
+        self,
+        search_space: BoundingBoxCollection[VolumetricBoundingBox],
+        semantic_wall_annotation: Optional[Wall] = None,
+        bloat_obstacles: float = 0.0,
+        bloat_walls: float = 0.0,
+        obstacle_height_clearance: float = 0.01,
+    ) -> BoundingBoxCollection[VolumetricBoundingBox]:
+        """
+        Collect and bloat this annotation's obstacle bounding boxes.
+
+        Applies independent bloat amounts to obstacles and walls.
+
+        :param search_space: The search space; its reference frame is used as the
+            origin.
+        :param semantic_wall_annotation: An optional wall annotation, bloated by its
+            own rule (see :meth:`Wall.bloated_bounding_box_collection`).
+        :param bloat_obstacles: Amount to expand each obstacle bounding box
+            symmetrically in x and y.
+        :param bloat_walls: Amount to expand wall bounding boxes in their thinner
+            dimension.
+        :param obstacle_height_clearance: Amount to expand every obstacle bounding box
+            in z, regardless of ``bloat_obstacles``/``bloat_walls``.
+        :return: A collection of the bloated obstacle and wall bounding boxes.
+        """
+        world_root = search_space.reference_frame
+        origin = HomogeneousTransformationMatrix(reference_frame=world_root)
+
+        entities_to_consider = self.obstacle_entities(search_space)
+
+        collections = (
+            entity.collision.as_bounding_box_collection_at_origin(origin)
+            for entity in entities_to_consider
+        )
+        obstacle_bounding_boxes = BoundingBoxCollection.merge_all(
+            collections, world_root
+        )
+
+        bloated_obstacles = BoundingBoxCollection(
+            [
+                bounding_box.bloat(
+                    bloat_obstacles, bloat_obstacles, obstacle_height_clearance
+                )
+                for bounding_box in obstacle_bounding_boxes
+            ],
+            world_root,
+        )
+
+        if semantic_wall_annotation is not None:
+            bloated_obstacles = bloated_obstacles.merge(
+                semantic_wall_annotation.bloated_bounding_box_collection(
+                    origin, bloat_walls, obstacle_height_clearance
+                )
+            )
+
+        return bloated_obstacles
 
 
 @dataclass(eq=False)

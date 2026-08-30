@@ -1,4 +1,5 @@
-"""The restack itself: which steps a branch is put through, in which order, and where.
+"""
+The restack itself: which steps a branch is put through, in which order, and where.
 
 The order is the procedure, so it is stated here rather than discovered - a branch is
 published only once its move has been checked. The steps run in a worktree of their own
@@ -39,21 +40,27 @@ RESTACK_STEPS: tuple[RestackStep, ...] = (
     RefuseAnUnsafeMove(),
     PublishBranch(),
 )
-"""Every step a branch is put through, in the order that is the procedure.
+"""
+Every step a branch is put through, in the order that is the procedure.
 
-Unlike :data:`maintenance_commands.COMMANDS`, these are listed rather than found from their own subclasses: a
-branch is published only once its move has been checked, so this order is a decision
-about what a pass does, not bookkeeping. Stating it here keeps it where it is read,
-rather than making it a consequence of where the classes happen to be defined.
+Unlike :data:`maintenance_commands.COMMANDS`, these are listed rather than found from
+their own subclasses: a branch is published only once its move has been checked, so this
+order is a decision about what a pass does, not bookkeeping. Stating it here keeps it
+where it is read, rather than making it a consequence of where the classes happen to be
+defined.
 """
 
 
 @dataclass
 class RestackConcludedNothingError(RuntimeError):
-    """Raised when no step concluded a branch, which the last step always must."""
+    """
+    Raised when no step concluded a branch, which the last step always must.
+    """
 
     branch: str
-    """The branch left without an outcome."""
+    """
+    The branch left without an outcome.
+    """
 
     def __str__(self) -> str:
         """:return: Which branch was left unconcluded."""
@@ -65,7 +72,8 @@ class RestackConcludedNothingError(RuntimeError):
 
 @dataclass(frozen=True)
 class DetachedCheckout:
-    """The invoking checkout, detached so its branch can be restacked elsewhere.
+    """
+    The invoking checkout, detached so its branch can be restacked elsewhere.
 
     git refuses to check one branch out in two worktrees at once, and the caller of a
     pass is usually sitting on a branch of the stack. Detaching releases the name while
@@ -75,10 +83,14 @@ class DetachedCheckout:
     """
 
     git: MaintenanceGitCommandRunner
-    """The invoking checkout."""
+    """
+    The invoking checkout.
+    """
 
     branch: str
-    """The branch it was on, empty when it was already detached."""
+    """
+    The branch it was on, empty when it was already detached.
+    """
 
     @classmethod
     def of(cls, git: MaintenanceGitCommandRunner) -> DetachedCheckout:
@@ -98,7 +110,8 @@ class DetachedCheckout:
         exception: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        """Put the checkout back on the branch it was on.
+        """
+        Put the checkout back on the branch it was on.
 
         Attempted rather than depended on, so failing to restore never replaces the
         exception on its way out; the checkout is then left detached at the commit it
@@ -110,7 +123,8 @@ class DetachedCheckout:
 
 @dataclass(frozen=True)
 class RestackWorktree:
-    """A checkout of its own for the branch switching a restack does.
+    """
+    A checkout of its own for the branch switching a restack does.
 
     Every step of the pass shells out to this file, which is tracked content in the
     checkout the pass is invoked from. Most branches in a stack were cut before that
@@ -122,14 +136,19 @@ class RestackWorktree:
     """
 
     git: MaintenanceGitCommandRunner
-    """The runner every branch switch of a restack goes through."""
+    """
+    The runner every branch switch of a restack goes through.
+    """
 
     origin: MaintenanceGitCommandRunner
-    """The invoking checkout, which the worktree is added to and removed from."""
+    """
+    The invoking checkout, which the worktree is added to and removed from.
+    """
 
     @classmethod
     def added_to(cls, origin: MaintenanceGitCommandRunner) -> RestackWorktree:
-        """Add a worktree, detached at whatever the invoking checkout has.
+        """
+        Add a worktree, detached at whatever the invoking checkout has.
 
         :param origin: The checkout to add it to.
         :return: The worktree, to be used as a context manager so it is removed again.
@@ -148,7 +167,8 @@ class RestackWorktree:
         exception: BaseException | None,
         traceback: TracebackType | None,
     ) -> None:
-        """Remove the worktree, whether the restack finished or was abandoned.
+        """
+        Remove the worktree, whether the restack finished or was abandoned.
 
         Removal is attempted rather than depended on, so a failure to tidy up never
         replaces the exception that is on its way out.
@@ -164,7 +184,8 @@ class RestackWorktree:
 def restack(
     stack: Stack, git: MaintenanceGitCommandRunner, fork: ForkPullRequests
 ) -> list[BranchOutcome]:
-    """Put every branch whose parent moved through :data:`RESTACK_STEPS`, bottom up.
+    """
+    Put every branch whose parent moved through :data:`RESTACK_STEPS`, bottom up.
 
     The steps run in a :class:`RestackWorktree` rather than in the invoking checkout,
     which lends its branch through a :class:`DetachedCheckout` and gets it back with its

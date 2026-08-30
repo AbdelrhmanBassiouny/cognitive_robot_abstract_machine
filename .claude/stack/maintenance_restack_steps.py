@@ -1,4 +1,5 @@
-"""What a restack does to one branch, one step at a time.
+"""
+What a restack does to one branch, one step at a time.
 
 A step either concludes the branch - returning the outcome its owner acts on - or lets
 the next one run. The order they run in is the procedure itself, and lives with the pass
@@ -37,71 +38,108 @@ from stack import (
 
 
 class RestackOutcome(StrEnum):
-    """What became of one branch during a restack."""
+    """
+    What became of one branch during a restack.
+    """
 
     PUSHED = "pushed"
-    """Its parent was integrated and the result published."""
+    """
+    Its parent was integrated and the result published.
+    """
 
     UP_TO_DATE = "up-to-date"
-    """Its parent's tip was already contained in it."""
+    """
+    Its parent's tip was already contained in it.
+    """
 
     CONFLICT = "conflict"
-    """Its parent could not be integrated cleanly; nothing was published."""
+    """
+    Its parent could not be integrated cleanly; nothing was published.
+    """
 
     INTEGRATION_FAILED = "integration-failed"
-    """Integrating its parent failed without conflicting on anything, so the branch is
-    not the thing to fix and its owner was not told; nothing was published."""
+    """
+    Integrating its parent failed without conflicting on anything, so the branch is not
+    the thing to fix and its owner was not told; nothing was published.
+    """
 
     REFUSED = "refused"
-    """Move check refused the push; nothing was published."""
+    """
+    Move check refused the push; nothing was published.
+    """
 
     PUSH_REJECTED = "push-rejected"
-    """The fork rejected the push, so the branch moved under this pass; nothing was
-    published, and nothing was forced over whatever moved it."""
+    """
+    The fork rejected the push, so the branch moved under this pass; nothing was
+    published, and nothing was forced over whatever moved it.
+    """
 
     WITHHELD = "withheld"
-    """It is still conflicted against its base from a previous pass, so it was left
-    untouched rather than re-reported."""
+    """
+    It is still conflicted against its base from a previous pass, so it was left
+    untouched rather than re-reported.
+    """
 
 
 @dataclass(frozen=True)
 class BranchOutcome:
-    """What became of one branch, in terms its owner can act on."""
+    """
+    What became of one branch, in terms its owner can act on.
+    """
 
     branch: str
-    """The branch this is about."""
+    """
+    The branch this is about.
+    """
 
     parent: str
-    """The branch whose tip was to be integrated into it."""
+    """
+    The branch whose tip was to be integrated into it.
+    """
 
     strategy: IntegrationStrategy
-    """How the parent was to be integrated."""
+    """
+    How the parent was to be integrated.
+    """
 
     outcome: RestackOutcome
-    """What became of it."""
+    """
+    What became of it.
+    """
 
     conflicting_paths: tuple[str, ...] = ()
-    """The paths that conflicted, empty unless the outcome is a conflict."""
+    """
+    The paths that conflicted, empty unless the outcome is a conflict.
+    """
 
     refusals: tuple[RefusalReason, ...] = ()
-    """Why the push was refused, empty unless the outcome is a refusal."""
+    """
+    Why the push was refused, empty unless the outcome is a refusal.
+    """
 
     pushed_commit: str | None = None
-    """The commit published, absent unless the outcome is a push."""
+    """
+    The commit published, absent unless the outcome is a push.
+    """
 
     explanation: str | None = None
-    """Why this outcome happened in words its owner can act on, absent unless the
-    outcome carries one."""
+    """
+    Why this outcome happened in words its owner can act on, absent unless the outcome
+    carries one.
+    """
 
     reported_at: str | None = None
-    """URL of the comment telling this branch's owner about it, absent unless one was
-    posted."""
+    """
+    URL of the comment telling this branch's owner about it, absent unless one was
+    posted.
+    """
 
 
 def conflict_report(
     branch: Branch, conflicting_paths: Sequence[str], parent: str
 ) -> str:
-    """Write the comment telling a branch's owner that their branch needs them.
+    """
+    Write the comment telling a branch's owner that their branch needs them.
 
     :param branch: The branch that could not be integrated.
     :param conflicting_paths: The paths that conflicted.
@@ -127,28 +165,44 @@ def conflict_report(
 
 @dataclass(frozen=True)
 class BranchUnderRestack:
-    """One branch's restack, and everything a step needs to carry it out."""
+    """
+    One branch's restack, and everything a step needs to carry it out.
+    """
 
     branch: Branch
-    """The branch being restacked."""
+    """
+    The branch being restacked.
+    """
 
     parent: str
-    """The branch whose tip is to be integrated into it."""
+    """
+    The branch whose tip is to be integrated into it.
+    """
 
     strategy: IntegrationStrategy
-    """How that parent is to be integrated, which is also what authorises a rewrite."""
+    """
+    How that parent is to be integrated, which is also what authorises a rewrite.
+    """
 
     stack: Stack
-    """The derived stack it belongs to."""
+    """
+    The derived stack it belongs to.
+    """
 
     git: MaintenanceGitCommandRunner
-    """The runner to execute through."""
+    """
+    The runner to execute through.
+    """
 
     fork: ForkPullRequests
-    """The fork, read for conflict state and written to when reporting."""
+    """
+    The fork, read for conflict state and written to when reporting.
+    """
 
     checks: CommitMoveChecks
-    """The checks its push is put through."""
+    """
+    The checks its push is put through.
+    """
 
     @property
     def configuration(self) -> Configuration:
@@ -166,7 +220,8 @@ class BranchUnderRestack:
         return resolve_ref(self.configuration, self.parent)
 
     def concluded(self, outcome: RestackOutcome, **detail: Any) -> BranchOutcome:
-        """Finish this branch with an outcome its owner can act on.
+        """
+        Finish this branch with an outcome its owner can act on.
 
         :param outcome: What became of it.
         :param detail: Whatever that outcome carries.
@@ -182,7 +237,8 @@ class BranchUnderRestack:
 
 @dataclass(frozen=True)
 class RestackStep(ABC):
-    """One step of a branch's restack.
+    """
+    One step of a branch's restack.
 
     A step either concludes the branch - returning the outcome its owner acts on - or
     returns nothing and lets the next step run. Adding a step is writing a subclass and
@@ -191,7 +247,8 @@ class RestackStep(ABC):
 
     @abstractmethod
     def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
-        """Carry out this step.
+        """
+        Carry out this step.
 
         :param restacking: The branch being restacked.
         :return: The outcome concluding the branch, or ``None`` to continue.
@@ -200,7 +257,8 @@ class RestackStep(ABC):
 
 @dataclass(frozen=True)
 class WithholdBranchStillConflicting(RestackStep):
-    """Leaves a branch alone while it is still conflicted from an earlier pass.
+    """
+    Leaves a branch alone while it is still conflicted from an earlier pass.
 
     Clears the label as a side effect when it is not, since that is what lets the branch
     rejoin the pass without anybody remembering to remove it by hand.
@@ -231,7 +289,9 @@ class WithholdBranchStillConflicting(RestackStep):
 
 @dataclass(frozen=True)
 class SkipBranchAlreadyCurrent(RestackStep):
-    """Leaves a branch alone when its parent's tip is already contained in it."""
+    """
+    Leaves a branch alone when its parent's tip is already contained in it.
+    """
 
     def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
         """:param restacking: The branch being restacked.
@@ -245,7 +305,8 @@ class SkipBranchAlreadyCurrent(RestackStep):
 
 @dataclass(frozen=True)
 class IntegrateParent(RestackStep):
-    """Integrates the parent's tip, reporting a conflict to the branch's owner.
+    """
+    Integrates the parent's tip, reporting a conflict to the branch's owner.
 
     A conflict is never resolved here - that is a change to somebody else's branch. It
     is labelled and commented on, so the next pass withholds the branch rather than
@@ -288,7 +349,8 @@ class IntegrateParent(RestackStep):
     def _report(
         restacking: BranchUnderRestack, conflicting_paths: Sequence[str]
     ) -> str:
-        """Tell the branch's owner, and label it so the next pass withholds it.
+        """
+        Tell the branch's owner, and label it so the next pass withholds it.
 
         :param restacking: The branch being restacked.
         :param conflicting_paths: The paths that conflicted.
@@ -310,7 +372,9 @@ class IntegrateParent(RestackStep):
 
 @dataclass(frozen=True)
 class RefuseAnUnsafeMove(RestackStep):
-    """Puts the push through the checks before it is made, without exception."""
+    """
+    Puts the push through the checks before it is made, without exception.
+    """
 
     def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
         """:param restacking: The branch being restacked.
@@ -338,7 +402,9 @@ class RefuseAnUnsafeMove(RestackStep):
 
 @dataclass(frozen=True)
 class PublishBranch(RestackStep):
-    """Publishes the integrated branch, reporting rather than forcing a rejection."""
+    """
+    Publishes the integrated branch, reporting rather than forcing a rejection.
+    """
 
     def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome:
         """:param restacking: The branch being restacked.

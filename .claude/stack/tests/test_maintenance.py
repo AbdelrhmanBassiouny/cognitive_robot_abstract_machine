@@ -1626,6 +1626,7 @@ def test_a_command_that_omits_its_name_cannot_be_built():
     subclass - so one that never says cannot reach the parser at all.
     """
 
+    @dataclass(frozen=True)
     class CommandWithoutAName(MaintenanceCommand):
         @property
         def description(self) -> str:
@@ -1654,10 +1655,14 @@ def test_a_fork_client_that_cannot_make_one_of_the_writes_cannot_be_built():
             return {}
 
         def replace_labels(self, number: int, labels: Sequence[str]) -> None:
-            """Recorded nowhere, since this fork is never expected to be built."""
+            """
+            Recorded nowhere, since this fork is never expected to be built.
+            """
 
         def set_description(self, number: int, body: str) -> None:
-            """Recorded nowhere, since this fork is never expected to be built."""
+            """
+            Recorded nowhere, since this fork is never expected to be built.
+            """
 
     with pytest.raises(TypeError, match="add_comment"):
         ForkThatCannotComment()
@@ -1694,6 +1699,7 @@ def test_a_restack_step_that_does_nothing_cannot_be_built():
     would silently pass every branch along to the next step.
     """
 
+    @dataclass(frozen=True)
     class StepWithoutAnAttempt(RestackStep):
         pass
 

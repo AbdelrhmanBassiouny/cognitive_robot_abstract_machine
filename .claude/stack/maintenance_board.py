@@ -1,4 +1,5 @@
-"""Reading fetched pull requests into the board the stack is derived from.
+"""
+Reading fetched pull requests into the board the stack is derived from.
 
 A fetch that drops a field is not partially correct, so every field the board is derived
 from is declared with how to read it and whether it may be absent, and a record omitting
@@ -19,46 +20,62 @@ from maintenance_constants import SESSION_LINK_PATTERN
 from stack import BOARD_PATH, PullRequest
 
 PullRequestRecord = Mapping[str, Any]
-"""One pull request as the REST API answers it, before any field is read."""
+"""
+One pull request as the REST API answers it, before any field is read.
+"""
 
 # %% the fields a board is read from
 
 
 class PullRequestFieldShape(StrEnum):
-    """How one pull-request field's value has to be read.
+    """
+    How one pull-request field's value has to be read.
 
     The API answers some fields with a nested object where a plain value would do, so
     reading is per-field rather than uniform.
     """
 
     VALUE = "value"
-    """Taken as it comes."""
+    """
+    Taken as it comes.
+    """
 
     BRANCH_REFERENCE = "branch-reference"
-    """A branch, given either plainly or as an object carrying a ``ref``."""
+    """
+    A branch, given either plainly or as an object carrying a ``ref``.
+    """
 
     LABEL_NAMES = "label-names"
-    """A list of labels, each given either plainly or as an object carrying a
-    ``name``."""
+    """
+    A list of labels, each given either plainly or as an object carrying a ``name``.
+    """
 
 
 @dataclass(frozen=True)
 class PullRequestFieldSpecification:
-    """What one pull-request field is called, how to read it, and whether it may be
-    absent."""
+    """
+    What one pull-request field is called, how to read it, and whether it may be absent.
+    """
 
     key: str
-    """The key the API answers under."""
+    """
+    The key the API answers under.
+    """
 
     shape: PullRequestFieldShape = PullRequestFieldShape.VALUE
-    """How its value has to be read."""
+    """
+    How its value has to be read.
+    """
 
     required: bool = False
-    """Whether a record omitting it is rejected rather than read."""
+    """
+    Whether a record omitting it is rejected rather than read.
+    """
 
 
 class PullRequestField(PullRequestFieldSpecification, Enum):
-    """Every pull-request field this executor reads, and how to read it.
+    """
+    Every pull-request field this executor reads, and how to read it.
 
     Each member *is* a specification, so nothing outside this enum knows that ``head``
     arrives nested while ``draft`` does not, or which fields a board cannot be derived
@@ -70,7 +87,8 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
     """
 
     def __init__(self, specification: PullRequestFieldSpecification) -> None:
-        """Carry the specification's values on the member itself.
+        """
+        Carry the specification's values on the member itself.
 
         Without this the mixin would receive the whole specification as its first
         argument - silently, landing the instance in :attr:`key` - since an enum passes
@@ -82,37 +100,43 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
             object.__setattr__(self, field.name, getattr(specification, field.name))
 
     NUMBER = PullRequestFieldSpecification(key="number", required=True)
-    """The pull request's number."""
-
+    """
+    The pull request's number.
+    """
     HEAD = PullRequestFieldSpecification(
         key="head", shape=PullRequestFieldShape.BRANCH_REFERENCE, required=True
     )
     """The branch the pull request would merge - the stack node it names."""
-
     BASE = PullRequestFieldSpecification(
         key="base", shape=PullRequestFieldShape.BRANCH_REFERENCE, required=True
     )
     """The branch it would merge into - its parent in the stack."""
-
     DRAFT = PullRequestFieldSpecification(key="draft", required=True)
-    """Whether its author has yet reviewed it themselves."""
-
+    """
+    Whether its author has yet reviewed it themselves.
+    """
     LABELS = PullRequestFieldSpecification(
         key="labels", shape=PullRequestFieldShape.LABEL_NAMES, required=True
     )
-    """The labels it carries, which the workflow reads as state."""
-
+    """
+    The labels it carries, which the workflow reads as state.
+    """
     BODY = PullRequestFieldSpecification(key="body")
-    """Its description, read for the session link and the promotion prefill."""
-
+    """
+    Its description, read for the session link and the promotion prefill.
+    """
     TITLE = PullRequestFieldSpecification(key="title")
-    """Its title, which prefills the upstream pull request."""
-
+    """
+    Its title, which prefills the upstream pull request.
+    """
     MERGEABLE_STATE = PullRequestFieldSpecification(key="mergeable_state")
-    """GitHub's own verdict on whether it currently conflicts with its base."""
+    """
+    GitHub's own verdict on whether it currently conflicts with its base.
+    """
 
     def read(self, record: PullRequestRecord, number: int | None = None) -> Any:
-        """Read this field out of a fetched pull request.
+        """
+        Read this field out of a fetched pull request.
 
         :param record: The fetched pull request.
         :param number: The pull request being read, named in any rejection.
@@ -150,7 +174,8 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
 
 @dataclass
 class MissingPullRequestFieldError(ValueError):
-    """Raised when a fetched pull request omits a field the board is derived from.
+    """
+    Raised when a fetched pull request omits a field the board is derived from.
 
     A fetch that drops a field is not partially correct: absent and legitimately empty
     are different facts, and defaulting one to the other is what makes bad board data
@@ -158,10 +183,14 @@ class MissingPullRequestFieldError(ValueError):
     """
 
     field_name: PullRequestField
-    """The field that was absent."""
+    """
+    The field that was absent.
+    """
 
     pull_request_number: int | None
-    """The pull request it was absent from, or ``None`` when the number itself is."""
+    """
+    The pull request it was absent from, or ``None`` when the number itself is.
+    """
 
     def __str__(self) -> str:
         """:return: Which field is missing, and from where."""
@@ -177,7 +206,8 @@ class MissingPullRequestFieldError(ValueError):
 
 
 def get_session_link_in(body: str | None) -> str | None:
-    """Read the session link out of a pull request description.
+    """
+    Read the session link out of a pull request description.
 
     :param body: The description to search, which may be absent.
     :return: The first session link, or ``None`` if the description names none.
@@ -193,14 +223,19 @@ def get_session_link_in(body: str | None) -> str | None:
 
 @dataclass(frozen=True)
 class BoardExport:
-    """The fork's open pull requests, in the shape the derived stack is read from."""
+    """
+    The fork's open pull requests, in the shape the derived stack is read from.
+    """
 
     pull_requests: tuple[PullRequest, ...]
-    """The exported pull requests."""
+    """
+    The exported pull requests.
+    """
 
     @classmethod
     def from_api_records(cls, records: Iterable[PullRequestRecord]) -> BoardExport:
-        """Build the export from what the REST API returned.
+        """
+        Build the export from what the REST API returned.
 
         :param records: The fetched pull requests.
         :return: The export.
@@ -210,7 +245,8 @@ class BoardExport:
 
     @staticmethod
     def _pull_request(record: PullRequestRecord) -> PullRequest:
-        """Read one fetched pull request into a board entry.
+        """
+        Read one fetched pull request into a board entry.
 
         :param record: The fetched pull request.
         :return: The board entry.
@@ -235,7 +271,8 @@ class BoardExport:
         )
 
     def write(self, path: Path = BOARD_PATH) -> Path:
-        """Write the export where the derived stack is read from.
+        """
+        Write the export where the derived stack is read from.
 
         :param path: Where to write it.
         :return: The path written to.
