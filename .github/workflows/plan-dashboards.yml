@@ -1,0 +1,117 @@
+name: Plan dashboards
+
+# Publishes every plan's dashboard as a GitHub Pages site: one page per plan under
+# /plans/<plan-id>/, plus the master index at the site root.
+#
+# Why an Action rather than the /plan-dashboard skill: only a live session can call the
+# Artifact tool, so a published Artifact was as fresh as the last time somebody thought
+# to run the skill. The same scripts render the same pages here with nobody watching,
+# so the site is current within a minute of the events that change it. The skill still
+# works and still publishes Artifacts; both paths drive build_dashboard.py over the
+# same manifest, so neither can drift from the other.
+#
+# Why these triggers: a plan's dashboard is a view over its items' pull requests, so
+# what changes it is a pull request opening, leaving draft, or closing - and a manifest
+# edit somebody pushed to the notes branch, which no event here can see, hence the
+# dispatch. Dispatchable through the API exactly like integration-refresh.yml.
+#
+# The build also pushes the one manifest correction that needs no judgment - an item
+# whose pull request GitHub reports as merged becomes done - back to the notes branch,
+# same as a session-driven refresh. GITHUB_TOKEN starts no workflow run of its own, so
+# that push cannot loop back into this workflow.
+#
+# Runs unchanged in any fork: the repository and its Pages URL come from the runner's
+# own context, and the notes branch from the same configuration every hook resolves it
+# through, so none is named here.
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review, converted_to_draft, closed]
+  push:
+    branches: [main]
+    # A change to the renderer or to this workflow changes every page, and nothing else
+    # would rebuild them until the next pull request event.
+    paths:
+      - .claude/skills/plan-dashboard/**
+      - .claude/hooks/resolve-personal-notes-config.sh
+      - .github/workflows/plan-dashboards.yml
+  workflow_dispatch:
+
+concurrency:
+  # Several pull requests moving at once would otherwise race for one Pages deployment.
+  # The build reads live state at the moment it runs, so a superseded run has nothing
+  # to contribute and is cancelled rather than queued.
+  group: plan-dashboards
+  cancel-in-progress: true
+
+permissions:
+  # contents: write for the merged-to-done correction pushed back to the notes branch;
+  # the other two are what deploy-pages needs.
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  publish:
+    name: Build every plan's dashboard and publish the site
+    # A pull request from a fork gets a read-only token, which cannot deploy - and its
+    # events say nothing about this repository's own plans anyway.
+    if: >-
+      github.event_name != 'pull_request'
+      || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Always the default branch's scripts, never a pull request's own: a run
+          # triggered by a pull request must publish the site the repository defines,
+          # not whatever that branch happens to have changed the renderer into.
+          ref: ${{ github.event.repository.default_branch }}
+          # Full history without the blobs: the notes-branch worktree the correction
+          # push commits in cannot be built from a shallow clone, and a partial clone
+          # gets there without paying for a full checkout of a robotics repository.
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install the rendering dependencies
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          pip install -r "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+        with:
+          # Enables Pages on a repository that has never had it, so a fresh fork needs
+          # no manual settings visit before its first run.
+          enablement: true
+
+      - name: Build the site
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          source .claude/hooks/resolve-personal-notes-config.sh
+          # The identity the merged-to-done correction is committed under, when there
+          # is one to push.
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          python3 "${BUILD_SITE_SCRIPT}" \
+            --output-directory "${RUNNER_TEMP}/site" \
+            --site-base-url "${{ steps.pages.outputs.base_url }}"
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ runner.temp }}/site
+
+      - name: Deploy the site
+        id: deploy
+        uses: actions/deploy-pages@v4
