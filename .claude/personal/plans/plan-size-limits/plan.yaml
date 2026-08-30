@@ -95,6 +95,7 @@ items:
     track: plan-splits
     depends_on: [size-budget-and-report]
     status: in_progress
+    session: https://claude.ai/code/session_019636yuByUTH6aFiEQdDztc
     notes: >
       55 items / 14,259 lines becomes several under-budget plans. Its existing
       tracks - personal-data, stack-tooling, dashboards, bastler, cutover -
