@@ -14,21 +14,29 @@ as fresh as the last time someone ran `/plan-dashboard`.
    pull request listing it needs. Done.
 3. `.github/workflows/plan-dashboards.yml` - Pages deploy on pull request
    events, on renderer changes, and on `workflow_dispatch`. Done.
-4. Tests + docs. Done: 34 new tests, 277 in the suite (was 243), 558 across
-   the four directories CI runs (was 531).
+4. Tests + docs. Done: 50 new tests, 293 in the suite (was 243).
 
 ## Decisions worth remembering
 
 - **Off `main`, not stacked on #111**, at the user's explicit "I do not want to
-  wait". A workflow's `pull_request` triggers fire from the base branch's copy
-  of the file, so the feature is inert until it is on `main`; stacking on a
-  branch conflict-blocked since 2026-08-29 would have shipped nothing.
+  wait". A workflow publishes for every plan only once it is on `main`: a copy on
+  a stacked branch runs on that branch's own PR events and nothing else, and
+  `workflow_dispatch` needs the file on the default branch at all. Stacking behind
+  a branch conflict-blocked since 2026-08-29 would have shipped nothing.
+  (I first wrote this as "`pull_request` triggers fire only from the base branch's
+  copy" - wrong, and the first run refuted it by running from this branch.)
+- **The `github-pages` environment only accepts deployments from the default
+  branch**, so `actions/deploy-pages` can never run from a pull request. The first
+  run failed on exactly that. The site goes to the `plan-dashboards-site` branch
+  instead, with `pages_site.py` pointing Pages there; a test pins the rejected
+  route out.
 - **One deliberate file overlap with #111**, which carries its own
   `build_site.py` at the same path. Same path, same CLI contract, so the merge
   is one file resolved in favour of #111's richer version; this branch's
-  `github_api.py`/`personal_notes.py` are then deletable.
-- `fetch-depth: 0` is load-bearing - the notes-branch worktree the
-  merged-to-done correction pushes from cannot push out of a shallow clone.
+  `github_api.py`/`personal_notes.py`/`pages_site.py` are then deletable.
+- `fetch-depth: 0` is load-bearing - neither the site branch's push nor the
+  notes-branch worktree the merged-to-done correction pushes from works out of a
+  shallow clone.
 
 ## Next
 
@@ -37,5 +45,5 @@ Nothing outstanding on the branch. Awaiting review.
 - Not carried by this PR and still open on the item: the
   every-fork-PR-belongs-to-a-plan invariant, the repo/branch/upstream
   repository variables, and the three inconsistent poll-interval statements.
-- The first run after merge is the real proof: `configure-pages` has to enable
-  Pages on this repository, which no test can exercise.
+- The first real run has to enable Pages on this repository and create the
+  site branch, which no test can exercise - that is what merging proves.
