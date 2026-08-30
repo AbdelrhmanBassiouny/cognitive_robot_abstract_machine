@@ -16,8 +16,10 @@ from tool_runner import CommandLineFlag
 from workflow_document import (
     Action,
     ActivityType,
+    CheckoutInput,
     GitHubContext,
     OptionalArgument,
+    PassedArgument,
     TriggerEvent,
     WorkflowFile,
 )
@@ -178,6 +180,23 @@ def test_a_dispatch_can_ask_for_a_rebuild_of_particular_plans():
     assert declared[str(RefreshWorkflowInput.PLANS)].default == ""
 
 
+def test_the_rebuild_is_told_which_reference_the_tooling_came_from():
+    """
+    A probe is dispatched on a reference carrying this pipeline rather than on the tree
+    under test, which carries no workflow of its own - so the job has to hand on the one
+    it read the tooling at, and setting the variable without passing it would leave the
+    rebuild defaulting to the branch it publishes.
+    """
+    rebuilding = next(step for step in refresh_job().steps if step.environment)
+
+    assert rebuilding.passes(
+        PassedArgument(
+            variable=str(RefreshJobVariable.PIPELINE_REFERENCE),
+            argument=str(CommandLineFlag.DISPATCH_ON),
+        )
+    )
+
+
 def test_a_rebuild_that_was_asked_for_no_plan_names_none():
     """
     An empty input passed through as a flag would name a plan of no name, which the index
@@ -192,3 +211,58 @@ def test_a_rebuild_that_was_asked_for_no_plan_names_none():
             argument=str(CommandLineFlag.PLAN),
         )
     )
+
+
+# %% which tooling a rebuild runs
+
+
+def checkout_reference() -> str:
+    """:return: The reference the job checks the tooling out at."""
+    return refresh_job().step_using(Action.CHECKOUT).given(CheckoutInput.REFERENCE)
+
+
+def test_the_checkout_reference_is_one_expression_rather_than_several_lines():
+    """
+    A folded YAML scalar folds only the lines level with its first one; a continuation
+    indented further keeps its newline, which parses cleanly and leaves a line break
+    inside a ``${{ }}`` expression for GitHub to reject at run time.
+    """
+    assert "\n" not in checkout_reference()
+
+
+def test_a_pull_request_rebuild_reads_the_tooling_from_the_default_branch():
+    """
+    A ``pull_request`` run checks out that pull request's merge reference by default, so
+    an unguarded checkout would run whatever ``integration.py`` the triggering branch
+    happens to carry, against a token that can write.
+
+    The rebuild is never about the branch that triggered it.
+    """
+    assert GitHubContext.DEFAULT_BRANCH in checkout_reference()
+
+
+def test_every_other_rebuild_reads_the_tooling_from_the_reference_it_was_started_on():
+    """
+    Pinning every trigger to the default branch would mean a change to the pipeline could
+    only ever run once it was already published there - and publishing is what the
+    pipeline does, so a change that broke publishing could not be fixed by running the
+    fix. Dispatching a reference is how a change is tried before it lands.
+    """
+    reference = checkout_reference()
+
+    assert reference.index(GitHubContext.REFERENCE) > reference.index(
+        GitHubContext.DEFAULT_BRANCH
+    )
+
+
+def test_a_pull_request_from_a_fork_does_not_start_a_rebuild():
+    """
+    A fork's pull request is handed no secret, so the run could only fail on a token it
+    has not got - and fail on somebody else's pull request, where the failure reads as
+    theirs. Not running says the same thing without the noise.
+    """
+    compared = (
+        f"{GitHubContext.PULL_REQUEST_HEAD_REPOSITORY} == {GitHubContext.REPOSITORY}"
+    )
+
+    assert compared in refresh_job().condition

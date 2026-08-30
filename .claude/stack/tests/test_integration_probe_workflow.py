@@ -16,6 +16,7 @@ from integration_probes import (
 )
 from workflow_document import (
     Action,
+    CheckoutInput,
     ReusableJobInput,
     TriggerEvent,
     WorkflowFile,
@@ -96,7 +97,7 @@ def test_the_reusable_job_checks_out_the_reference_it_is_given():
         WorkflowFile.REUSABLE_LIBRARY_JOB.read().job("test").step_using(Action.CHECKOUT)
     )
 
-    assert checkout.inputs[str(ReusableJobInput.REFERENCE)] == an_input_expression(
+    assert checkout.given(CheckoutInput.REFERENCE) == an_input_expression(
         ReusableJobInput.REFERENCE
     )
 

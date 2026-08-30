@@ -142,6 +142,22 @@ class GitHubContext(StrEnum):
     lives.
     """
 
+    REFERENCE = "github.ref"
+    """
+    What the run was started on, which is the tooling a dispatch is trying out.
+    """
+
+    REPOSITORY = "github.repository"
+    """
+    The repository the run belongs to.
+    """
+
+    PULL_REQUEST_HEAD_REPOSITORY = "github.event.pull_request.head.repo.full_name"
+    """
+    Where a pull request's branch lives, which is a fork's own repository when the pull
+    request came from one.
+    """
+
 
 class Action(StrEnum):
     """
@@ -159,6 +175,17 @@ class Action(StrEnum):
     SETUP_PYTHON = "actions/setup-python"
     """
     Puts an interpreter on the path.
+    """
+
+
+class CheckoutInput(StrEnum):
+    """
+    What :attr:`Action.CHECKOUT` can be told.
+    """
+
+    REFERENCE = "ref"
+    """
+    The tree to put in the runner's working directory.
     """
 
 
@@ -189,12 +216,9 @@ class MatrixKey(StrEnum):
 
 
 @dataclass(frozen=True)
-class OptionalArgument:
+class StepArgument:
     """
-    An argument a step passes on only when the variable carrying its value is set.
-
-    The shell's alternate-value expansion is what drops it otherwise, so an input
-    nobody filled in never reaches the command as a flag with no value behind it.
+    An argument a step passes on to what it runs, taking its value from a variable.
     """
 
     variable: str
@@ -204,11 +228,32 @@ class OptionalArgument:
 
     argument: str
     """
-    What to pass when it holds one.
+    What names the value to whatever the step runs.
+    """
+
+
+@dataclass(frozen=True)
+class PassedArgument(StepArgument):
+    """
+    An argument a step always passes, quoted so an empty or spaced value stays one
+    argument.
     """
 
     def __str__(self) -> str:
-        return f'${{{self.variable}:+{self.argument} "${{{self.variable}}}"}}'
+        return f'{self.argument} "${{{self.variable}}}"'
+
+
+@dataclass(frozen=True)
+class OptionalArgument(StepArgument):
+    """
+    An argument a step passes only when the variable carrying its value is set.
+
+    The shell's alternate-value expansion is what drops it otherwise, so an input nobody
+    filled in never reaches the command as a flag with no value behind it.
+    """
+
+    def __str__(self) -> str:
+        return f"${{{self.variable}:+{PassedArgument(self.variable, self.argument)}}}"
 
 
 @dataclass(frozen=True)
@@ -306,7 +351,12 @@ class WorkflowStep:
         :return: What this step gives it, empty when it gives it nothing."""
         return str(self.environment.get(named, ""))
 
-    def passes(self, argument: OptionalArgument) -> bool:
+    def given(self, named: str) -> str:
+        """:param named: The input wanted.
+        :return: What this step passes for it, empty when it passes nothing."""
+        return str(self.inputs.get(named, ""))
+
+    def passes(self, argument: StepArgument) -> bool:
         """:param argument: The argument to test for.
         :return: Whether this step's shell passes it that way."""
         return str(argument) in self.script
