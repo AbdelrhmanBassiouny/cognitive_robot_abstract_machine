@@ -327,6 +327,14 @@ items:
       collision needs one of the two renamed, which is an API change across the perception
       package, so it is its own piece of work rather than a fix folded into a capture commit.
 
+      Built 2026-08-30 as #223. Two of the three claims above did not reproduce, and the note is
+      left standing with this correction beneath it rather than rewritten, so a reader can see
+      what was assumed. NoSceneAvailable.missing_inputs is still Sequence[str] on this branch and
+      the generator resolves it, normalizing it to List[str] and mapping it as JSON; nothing was
+      behind the two known faults. The collision is exactly as recorded, reproduced before
+      anything was changed, and perception.footprint.Footprint became RectifiedFootprint. #205 and
+      #221 edit the same files and will both conflict on that rename.
+
   - id: perception-backend
     title: "Answer a query by looking, as a backend of the entity query language"
     branch: perception_eql_backend
