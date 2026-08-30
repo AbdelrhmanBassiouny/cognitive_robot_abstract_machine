@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from typing_extensions import List, Sequence, Tuple
+from typing_extensions import List, Tuple
 
 from krrood.exceptions import DataclassException
 
@@ -107,7 +107,7 @@ class NoSceneAvailable(DataclassException):
     How long the caller waited for a frame.
     """
 
-    missing_inputs: Sequence[str]
+    missing_inputs: List[str]
     """
     The inputs that never arrived.
     """
@@ -189,4 +189,65 @@ class BoardMissingFromWorld(DataclassException):
         return (
             "Spawn the board into the world the robot publishes, so the height of its "
             "lid is read from the scene rather than assumed."
+        )
+
+
+@dataclass
+class CaptureIncomplete(DataclassException):
+    """
+    Raised when a saved look at the scene is missing one of the files it is written as,
+    so it cannot be read back into a frame.
+    """
+
+    capture_name: str
+    """
+    Name of the capture that was asked for.
+    """
+
+    directory: str
+    """
+    Where its files were looked for.
+    """
+
+    missing_parts: List[str]
+    """
+    Suffixes of the files that are not there.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The capture {self.capture_name} in {self.directory} is missing "
+            f"{', '.join(self.missing_parts)}."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Write the capture again from the rosbag it was taken out of, with "
+            "experiments.montessori.perception.capture_from_bag."
+        )
+
+
+@dataclass
+class NothingRecordedOnTopic(DataclassException):
+    """
+    Raised when a rosbag carries none of a message a capture needs.
+    """
+
+    bag_name: str
+    """
+    The bag that was read.
+    """
+
+    topic: str
+    """
+    The topic that held nothing.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.bag_name} carries no message on {self.topic}."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Record the bag again with every camera topic the perception node reads, "
+            "or capture from a bag that already has them."
         )
