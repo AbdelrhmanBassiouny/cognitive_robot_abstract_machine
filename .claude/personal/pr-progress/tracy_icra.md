@@ -324,6 +324,83 @@ sorinar329's `75258debd` plus the seven commits after it, and nothing else from
 `tracy_icra`. Everything below stays true of this branch; the plan is where the
 next round of work is tracked, not here.
 
+### The open pull requests merged in, and a capture set to measure them on (2026-08-30)
+
+`tracy_icra` is now `d8a6132dc`, pushed to `origin`. Three merges, in this order,
+and the order mattered:
+
+1. `origin/tracy_icra` first - the local checkout was **279 commits behind it**,
+   missing `demo-catches-up-with-main`'s main merge entirely. Merging the
+   perception stack before that conflicted in eight places inside
+   `semantic_digital_twin/adapters/multi_sim.py` (a colleague's Mujoco work
+   against main's `[MultiSim]` refactor). After it, that file merged clean.
+   Always check `git rev-list --left-right --count HEAD...origin/<branch>`.
+2. `origin/perception_per_supporting_surface`, which carries #202 and #205 under
+   it. Every montessori and perception file was an *add/add* conflict, because
+   #202 replayed sorinar329's commits onto main rather than branching off here;
+   the branch versions are strict descendants of this one's, so "theirs" is the
+   answer for all of them. Only `coraplex/demonstrations.py` needed thought: two
+   sides added different fields (`real_time_factor`/`prediction_horizon` here,
+   `repetitions` on main), so the resolution is the union.
+3. `origin/sdt_surface_finish_annotation` (#216) - clean.
+
+`usd-core` had to be installed: it is declared in `semantic_digital_twin`'s
+pyproject but was missing from the `cram2` virtualenv, and without it
+`scripts/regenerate_all_orm.py` dies on `Could not resolve type Usd`.
+
+#### The captures
+
+Six looks at the real table, one per rosbag, live in
+`experiments/src/experiments/montessori/resources/captures/` - three files each
+(colour payload verbatim, depth as a millimetre PNG, camera as JSON), 3.0 MB in
+all. Written by `python -m experiments.montessori.perception.capture_from_bag`.
+The rosbags are gitignored.
+
+The five scene bags carry **no `/tf` at all**, only the three camera topics, so
+their camera pose is read from the pick-up demo bag, which does carry it. That is
+sound only because the camera is bolted to a pole on the table it looks at -
+`map -> table -> camera_link -> ... -> camera_color_optical_frame` is static all
+the way down. `map -> table` is `z = 0.88`, which is where `TABLE_HEIGHT` in
+`recorded_setup.py` comes from, and the camera sits 0.935 m above the table.
+
+They went onto **#202**, the base of the stack, so every branch cut from it
+inherits them; the benchmark that reads them needs `supporting_surface` and so
+sits on **#221**. All three pull requests were pushed.
+
+#### What the benchmark found
+
+Every loose piece on the bare table: 4/4, 3/3, 3/3, 3/3, 0/0, 2/2 - right
+category every time. Three faults, each with a strict `xfail` naming its plan
+item:
+- a piece on the lid is reported a second time on the table, ~50 mm away, in
+  every capture that has one (`one-detection-per-thing`);
+- pieces on the lid are lost where they wear its colour or touch each other -
+  `non_inserted_objects` finds none of its three (`detector-parameters-from-knowledge`);
+- five of six holes found, most called triangular prisms, and one box on the
+  drawer fronts (`holes-fitted-like-pieces`, a new plan item).
+
+#### Two bugs fixed on the way
+
+- `insert_shape_action.py` passed `montessori_shape.root` to `PickUpAction`,
+  which main changed to take the annotation and read the body off it -
+  `AttributeError` on every insert test. Seven failures became five.
+- The remaining five are **not** the "documented empty-ORM state" after all:
+  `experiments/src/experiments/montessori/` has no `__init__.py` on any branch,
+  so the ORM generator never walks it and no montessori class is mapped.
+  Regenerating cannot fix that. Adding the file surfaces two more problems (a
+  `Sequence[str]` hint the generator cannot resolve - already changed to
+  `List[str]` - and a `Footprint` name collision with `semantic_digital_twin`
+  that makes SQLAlchemy refuse two `FootprintDAO`s), so it became the plan item
+  `montessori-classes-in-the-orm` rather than a fix folded in here.
+
+#### Replaying a bag
+
+`python -m experiments.montessori.perception.watch_bag rosbags/<bag>` is the node
+with a recording in place of the camera and the robot. `SceneWindows` now owns
+the three-window drawing so a replay and a live run show the same picture.
+`test_montessori_bag_replay.py` plays five frames of the pick-up demo through it
+and is skipped when the rosbags are absent or there is no screen.
+
 ### Next / open
 - The x/y bounds of `TRACY_WORKSPACE` (x 0.35-1.35, y -0.45..0.75) still reach
   past the pieces and take in the clutter at the table's far edge (a jar, a spray
@@ -333,11 +410,12 @@ next round of work is tracked, not here.
   30x30, cylinder missed). Their lit faces wash out towards white. Colour only
   seeds the fit now, so this costs a piece only when it seeds nothing at all.
 - The *hole* classifier degraded in the later lighting (frame3 read five of six
-  holes as triangular_prism). Untouched by this work - it uses the old
-  threshold-based `CrossSectionClassifier`. Worth pointing the same fit at it.
-- `decode_color_image` and `decode_depth_image` (the raw-message decoders) now
-  have no production caller and are only used by tests. AGENTS.md says to consult
-  the developer before removing them - waiting on that decision.
+  holes as triangular_prism, and the captures say the same). Now tracked as the
+  plan item `holes-fitted-like-pieces` rather than left loose here.
+- `decode_color_image` and `decode_depth_image` (the raw-message decoders) have a
+  production caller again: `recordings.py` needs `decode_depth_image` for the
+  pick-up demo bag, which was recorded before the node moved onto the compressed
+  transports and carries raw depth. The question of removing them is closed.
 - A depth reading of +1 mm still counts as measured, so the white ball on the
   table is reported 14 mm lower than a nominal piece. A noise floor would be a
   tuned number, so it was left alone.
