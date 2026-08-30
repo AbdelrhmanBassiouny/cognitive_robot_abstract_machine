@@ -428,17 +428,23 @@ items:
   branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
   pull_request_number: 211
   status: in_progress
-  session: https://claude.ai/code/session_01DwZVodQjhAL4QJEuPPrWnK
+  session: https://claude.ai/code/session_01YJWSPtw91iyhyPK6cgJtNP
   track: integration
   depends_on:
   - integration-branch
   blockers:
-  - 'Two threads of the 2026-08-30 round are answered and deliberately left open for the author, and neither
-    is work this item can do alone. The repeated `"shared"` is the `sys.path` insertion in 18 files across
-    three directories; a constant cannot live where the insertion exists to reach, and `bastler-package` (#185)
-    removes all 18 by name, so a fix here is one to undo. And the rebuild cadence: a first-time build is judged
-    by a later run, up to six hours away, and closing that properly means a `workflow_run` trigger on `ci.yml`
-    completing, which adds a trigger to the workflow and so is a scope call rather than a fix.'
+  - 'Both threads the earlier round left open were answered by the author on 2026-08-30, and neither
+    answer is the one the recorded blocker anticipated. The repeated string is not the `sys.path`
+    insertion: asked again, the author said it is the docstring explaining the minutes a candidate''s
+    checks take, which is restated in four places across `integration_pipeline.py`,
+    `integration_pass_record.py`, `integration_candidate_commands.py` and `integration_exit_codes.py`.
+    That is a small in-scope fix rather than one `bastler-package` owns.'
+  - 'The rebuild cadence is no longer a scope question waiting on the author. Told that a `workflow_run`
+    trigger on `ci.yml` completing would settle a candidate minutes after its matrix finishes rather
+    than at the next scheduled slot, the author answered that they like the fix and asked only where it
+    should land. The mechanical scope check answers that: `git ls-tree origin/main` over the refresh
+    workflow, the pipeline and the workflow model returns nothing, so every file the trigger touches is
+    one this unlanded chain introduces and nothing stands alone once those edits are removed.'
   notes: 'Part D of `integration-branch`''s review round: the verdict moves from a local test run to real CI.
 
     Folded back onto that item''s branch after being split out, so it has no pull request of its own - the
