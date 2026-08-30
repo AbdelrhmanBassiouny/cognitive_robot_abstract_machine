@@ -157,3 +157,29 @@ gained `CREATE_PERSONAL_NOTES_BRANCH_SCRIPT`, `HOOKS_REQUIREMENTS_FILE`,
 - **Do the eight scripts on `main` that spell `create-personal-notes-branch.sh`
   convert now or later?** The constant exists for them; converting here widens
   this PR into files it does not otherwise touch.
+
+### Second pass of the same round, resolved in e4ba75a7
+
+Three more small threads landed on #207 after the first six were already
+answered - none of them recorded in this plan's manifest until this resolve
+found them live on GitHub rather than in `blockers`.
+
+**8. No constant may just point to another constant.** (reviewer) The test's
+`MANIFEST_FILENAME`, `ROADMAP_FILENAME` and `SCRIPT_NAME` module constants were
+each nothing but `PlanDocument.MANIFEST`, `PlanDocument.ROADMAP` and
+`HookScript.PLAN_SIZE_REPORT` under a second name. The reviewer flagged two of
+the three explicitly and left the third ("same comment as above") - all three
+are gone now, and every use site names the real definition directly.
+
+**9. The rendered report itself hardcoded the two filenames.** (reviewer) The
+budget line printed the literal `"plan.yaml and roadmap.md"` instead of reading
+`PlanDocument.MANIFEST`/`PlanDocument.ROADMAP`. Fixed by importing
+`PlanDocument` into `plan_size_budget.py` - no import cycle, since
+`plan_item_bootstrap` does not import this module - and by adding
+`plan_item_bootstrap` to the integration test's scratch-layout installs, since
+the script now needs it too when run as a real subprocess.
+
+Unrelated to this item: `#207`'s `giskardpy` check is red on the current head
+(`test_collision_matrix_tool.py::test_script_launch_and_kill`, a
+`subprocess.TimeoutExpired`), a ROS2 integration test this diff does not touch.
+Left alone rather than re-run or investigated further here.
