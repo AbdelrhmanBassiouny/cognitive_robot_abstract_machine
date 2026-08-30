@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC
 from copy import deepcopy, copy
 from dataclasses import dataclass, field
 from enum import Enum
@@ -801,7 +802,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     @classmethod
     def from_x_axis(
         cls,
-        x: Vector3,
+        x_vector: Vector3,
         reference_frame: Optional[KinematicStructureEntity] = None,
     ) -> RotationMatrix:
         """
@@ -809,15 +810,15 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
         The y- and z-axis only complete the frame and are otherwise arbitrary.
 
-        :param x: the direction the x-axis should point along
+        :param x_vector: the direction the x-axis should point along
         :param reference_frame: the frame the resulting rotation matrix is expressed in
         :return: a rotation matrix whose x-axis points along ``x``
         """
         # Crossing a direction with a world axis degenerates when the two are parallel, so
         # pick whichever of the X/Y axes yields the better-conditioned (longer) cross
         # product.
-        frame_V_cross_x = x.cross(Vector3.X())
-        frame_V_cross_y = x.cross(Vector3.Y())
+        frame_V_cross_x = x_vector.cross(Vector3.X())
+        frame_V_cross_y = x_vector.cross(Vector3.Y())
         y = Vector3.from_iterable(
             [
                 sm.if_greater(
@@ -829,7 +830,7 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
                 for i in range(3)
             ]
         )
-        return cls.from_vectors(x=x, y=y, reference_frame=reference_frame)
+        return cls.from_vectors(x=x_vector, y=y, reference_frame=reference_frame)
 
     @classmethod
     def from_rpy(
@@ -927,8 +928,36 @@ class RotationMatrix(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return r_distance.to_angle()
 
 
+class Point(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer, ABC):
+    """
+    Shared x/y coordinate access for 2D and 3D points.
+
+    :class:`Point2` and :class:`Point3` both subclass this directly -- a
+    :class:`Point3` is not a :class:`Point2` -- so that code which only needs the
+    coordinates every point has (e.g. path plotting) can accept either without a
+    ``Union``. Only :class:`Point3` has a ``z``: a 2D point has no height of its own,
+    so :class:`Point2` does not carry the attribute at all.
+    """
+
+    @property
+    def x(self) -> sm.Scalar:
+        return self[0]
+
+    @x.setter
+    def x(self, value: sm.ScalarData):
+        self[0] = value
+
+    @property
+    def y(self) -> sm.Scalar:
+        return self[1]
+
+    @y.setter
+    def y(self, value: sm.ScalarData):
+        self[1] = value
+
+
 @dataclass(eq=False, init=False, repr=False)
-class Point3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
+class Point3(Point):
     """
     Represents a 3D point with reference frame handling.
 
@@ -1048,22 +1077,6 @@ class Point3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         return sm.Scalar.from_casadi_sx(ca.norm_2(self[:3].casadi_sx))
 
     @property
-    def x(self) -> sm.Scalar:
-        return self[0]
-
-    @x.setter
-    def x(self, value: sm.ScalarData):
-        self[0] = value
-
-    @property
-    def y(self) -> sm.Scalar:
-        return self[1]
-
-    @y.setter
-    def y(self, value: sm.ScalarData):
-        self[1] = value
-
-    @property
     def z(self) -> sm.Scalar:
         return self[2]
 
@@ -1175,6 +1188,85 @@ class Point3(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
 
     def euclidean_distance(self, other: Self) -> sm.Scalar:
         return self.to_generic_vector().euclidean_distance(other.to_generic_vector())
+
+
+@dataclass(eq=False, init=False, repr=False)
+class Point2(Point):
+    """
+    Represents a 2D point with reference frame handling.
+
+    Stored as a bare 2×1 symbolic vector ``[x, y]``, with no homogeneous augmentation --
+    the same convention :class:`Pose2D` uses. The point always lies on its reference
+    frame's own x-y plane (z=0 relative to that frame); :meth:`to_point3` converts to
+    the equivalent 3D :class:`Point3` whenever a 3D calculation is required.
+    """
+
+    def __init__(
+        self,
+        x: sm.ScalarData = 0,
+        y: sm.ScalarData = 0,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ):
+        """
+        :param x: X-coordinate of the point. Defaults to 0.
+        :param y: Y-coordinate of the point. Defaults to 0.
+        :param reference_frame:
+        """
+        self.casadi_sx = sm.to_sx([x, y])
+        self.reference_frame = reference_frame
+        super().__post_init__()
+
+    def _verify_type(self):
+        if self.shape != (2, 1):
+            raise WrongDimensionsError(
+                expected_dimensions=(2, 1), actual_dimensions=self.shape
+            )
+
+    @classmethod
+    def from_pose(
+        cls,
+        pose: Pose,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ) -> Point2:
+        """
+        Extract a Point2 from a 3D Pose by dropping z, roll, pitch and yaw.
+
+        :param pose: The pose to extract the point from.
+        :param reference_frame: The reference frame. Defaults to ``pose``'s.
+        :return: The Point2 instance.
+        """
+        frame = reference_frame if reference_frame is not None else pose.reference_frame
+        return cls(x=pose.x, y=pose.y, reference_frame=frame)
+
+    @classmethod
+    def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        reference_frame = cls._parse_optional_frame_from_json(
+            data, key="reference_frame_id", **kwargs
+        )
+        x, y = data["data"][:2]
+        return cls(x=x, y=y, reference_frame=reference_frame)
+
+    def to_json(self) -> Dict[str, Any]:
+        if not self.is_constant():
+            raise SpatialTypeNotJsonSerializable(self)
+        result = super().to_json()
+        if self.reference_frame is not None:
+            result["reference_frame_id"] = to_json(self.reference_frame.id)
+        result["data"] = self.to_np().tolist()
+        return result
+
+    def to_point3(self, z: sm.ScalarData = 0) -> Point3:
+        """
+        Convert to a 3D :class:`Point3`.
+
+        :param z: The z-coordinate the resulting point should have. Defaults to 0.
+        """
+        return Point3(self.x, self.y, z, reference_frame=self.reference_frame)
+
+    def __hash__(self):
+        if self.is_constant():
+            return hash((*self.to_np().tolist(), self.reference_frame))
+        return super().__hash__()
 
 
 @dataclass(eq=False, init=False, repr=False)
@@ -2218,8 +2310,11 @@ class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
     # ------------------------------------------------------------------
 
     @property
-    def position(self) -> Point3:
-        return self.to_pose().to_position()
+    def position(self) -> Point2:
+        """
+        :return: The position this pose is composed of, dropping the bearing.
+        """
+        return Point2(self.x, self.y, reference_frame=self.reference_frame)
 
     @property
     def orientation(self) -> Quaternion:
@@ -2253,6 +2348,26 @@ class Pose2D(sm.SymbolicMathType, SpatialType, SubclassJSONSerializer):
         _, _, yaw = pose.to_rotation_matrix().to_rpy()
         frame = reference_frame if reference_frame is not None else pose.reference_frame
         return cls(x=pose.x, y=pose.y, yaw=yaw, reference_frame=frame)
+
+    @classmethod
+    def from_position_and_yaw(
+        cls,
+        position: Point2,
+        yaw: sm.ScalarData = 0,
+        reference_frame: Optional[KinematicStructureEntity] = None,
+    ) -> Pose2D:
+        """
+        Compose a Pose2D from a position and a bearing.
+
+        :param position: Where the pose is.
+        :param yaw: Which way the pose faces. Defaults to 0.
+        :param reference_frame: The reference frame. Defaults to ``position``'s.
+        :return: The Pose2D instance.
+        """
+        frame = (
+            reference_frame if reference_frame is not None else position.reference_frame
+        )
+        return cls(x=position.x, y=position.y, yaw=yaw, reference_frame=frame)
 
     # ------------------------------------------------------------------
     # JSON serialization

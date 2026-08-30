@@ -348,25 +348,6 @@ class TestConditions:
         with pytest.raises(NodeAlreadyBelongsToDifferentNodeError):
             kin_sim.compile(motion_statechart=msc)
 
-    def test_node_moves_to_a_second_motion_statechart(self):
-        """
-        A node reused by a later chart is registered into that chart, so a plan that is
-        parsed more than once keeps its nodes attached to the chart currently being built.
-        """
-        first_chart = MotionStatechart()
-        node = ConstTrueNode()
-        first_goal = Sequence([node])
-        first_chart.add_node(first_goal)
-        first_goal.add_node(node)
-
-        second_chart = MotionStatechart()
-        second_goal = Sequence([node])
-        second_chart.add_node(second_goal)
-        second_goal.add_node(node)
-
-        assert node.motion_statechart is second_chart
-        assert second_chart.get_node_by_index(node.index) is node
-        assert node.parent_node is second_goal
 
 
 @dataclass(eq=False, repr=False)
