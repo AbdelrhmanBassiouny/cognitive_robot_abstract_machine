@@ -62,7 +62,7 @@ items:
   depends_on:
   - D-ui-rendering
   status: in_progress
-  session: https://claude.ai/code/session_018YWbhu99a2SqnWTqS61Nj5
+  session: https://claude.ai/code/session_01WnFnM5sADR7Nmz5tMDHy1H
   notes: '2026-08-23: outstanding work added from the #159 review - **default the progress reporter to
     IPythonProgressBar here**. The engine keeps NullProgressReporter, which is the only default correct
     for a caller it knows nothing about; the developer agreed the interactive default belongs in this
@@ -81,6 +81,13 @@ items:
     through `test_eql_documentation.sh` - still called `FunctionInterface(answer_fn=...)`. Every function,
     method and field across the 21 files this PR adds now carries a docstring. test_eql_rdr: 524 passed,
     2 skipped (341 on the base, 183 added). See roadmap.md section 36.'
+  blockers:
+  - A 50-thread review round opened on the pull request (#76) between 2026-08-30T14:34Z and 17:13Z,
+    all still unresolved and none of them recorded here - the previous session reported the item
+    finished at 14:09Z and the round landed 25 minutes later. Sixth instance of this staleness class
+    on this plan, after the D-core-aid and d-core-single-class precedents.
+  - CI has never run on the rebuilt head 5269a778 - the pull request reports zero check runs - so
+    the recorded 524-passed figure is a local measurement only.
 - id: D-ui-splice-fix
   title: 'RDR engine: fix rule-tree splice for attributes reused across sibling branches'
   branch: D-ui-splice-fix
