@@ -22,11 +22,11 @@ from typing_extensions import List, Optional
 
 from experiments.montessori.perception.detections import MontessoriScene
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
-from experiments.montessori.perception.recorded_setup import (
+from experiments.montessori.perception.recorded_setup import perception_pipeline
+from experiments.montessori.perception.recordings import (
     REFERENCE_FRAME,
-    perception_pipeline,
+    RecordedCamera,
 )
-from experiments.montessori.perception.recordings import RecordedCamera
 from experiments.montessori.perception.scene_windows import SceneWindows
 from experiments.montessori.perception.viewer import CameraFrameViewer
 

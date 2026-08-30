@@ -45,6 +45,12 @@ The uncompressed depth stream, which recordings made before the node moved onto 
 compressed transports carry instead of :attr:`CameraTopic.DEPTH`.
 """
 
+REFERENCE_FRAME = "map"
+"""
+Frame the recordings root their transform tree in, and so the frame detections made on
+them come out in.
+"""
+
 STORAGE_IDENTIFIER = "mcap"
 """
 The storage format these recordings are written in.

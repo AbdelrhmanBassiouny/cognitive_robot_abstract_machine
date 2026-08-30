@@ -17,8 +17,10 @@ import argparse
 from pathlib import Path
 
 from experiments.montessori.perception.captures import CAPTURE_DIRECTORY, SceneCapture
-from experiments.montessori.perception.recorded_setup import REFERENCE_FRAME
-from experiments.montessori.perception.recordings import RecordedCamera
+from experiments.montessori.perception.recordings import (
+    REFERENCE_FRAME,
+    RecordedCamera,
+)
 
 MIDWAY = 0.5
 """
