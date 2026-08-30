@@ -599,3 +599,5 @@ items:
     real cost is known. **Reachable before then without any of it**: a `--plan` filter carries one plan's
     tips through the ordinary build and candidate, which answers "does this plan hold together on its own"
     - most of what the topology was wanted for - with no extra branch and nothing that can publish.
+
+# probe
