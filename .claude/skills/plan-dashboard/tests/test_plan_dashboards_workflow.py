@@ -36,7 +36,6 @@ DISPATCH_EVENT = "workflow_dispatch"
 PUSH_EVENT = "push"
 
 DEPLOY_PAGES_ACTION = "actions/deploy-pages"
-DEFAULT_BRANCH_EXPRESSION = "github.event.repository.default_branch"
 
 
 @pytest.fixture
@@ -131,32 +130,15 @@ def test_it_holds_the_permissions_its_writes_need(workflow: dict):
     assert workflow["permissions"] == {"contents": "write", "pages": "write"}
 
 
-def test_it_builds_from_the_reviewed_branch_rather_than_the_triggering_head(
-    workflow: dict,
-):
-    """
-    A run triggered by a pull request must publish the site the repository defines, not
-    whatever that branch has changed the renderer into.
-    """
+def test_it_builds_with_the_renderer_it_was_started_with(workflow: dict):
+    """The workflow and the scripts it drives are versioned together, so the checkout
+    names no branch: naming one can name a branch that carries no renderer at all,
+    which is what main is today. It also lets the same file publish from wherever it
+    is carried - a dispatch from the default branch, a push to main, a pull request -
+    without one of those routes silently building nothing."""
     checkout = workflow["jobs"]["publish"]["steps"][0]
 
-    assert checkout["with"]["ref"] == "${{ env.SOURCE_BRANCH }}"
-
-
-def test_it_does_not_build_from_whichever_branch_is_the_default(workflow: dict):
-    """This fork's default branch is the regenerated integration branch - main plus
-    every reviewed-but-unlanded tip - so building from it would run whichever renderer
-    that build happened to carry, and a tip it does not carry is a script simply
-    absent from the checkout."""
-    assert DEFAULT_BRANCH_EXPRESSION not in WORKFLOW_FILE.read_text()
-
-
-def test_the_branch_it_watches_is_the_branch_it_builds_from(workflow: dict, triggers):
-    """A renderer change is what the push trigger rebuilds for, so the branch that
-    change lands on has to be the one the rebuild reads it from - watching one branch
-    and building another would republish the site without the change that asked for
-    it."""
-    assert triggers[PUSH_EVENT]["branches"] == [workflow["env"]["SOURCE_BRANCH"]]
+    assert "ref" not in checkout["with"]
 
 
 def test_it_checks_out_the_whole_history(workflow: dict):
