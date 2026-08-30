@@ -13,56 +13,40 @@ from pathlib import Path
 
 import pytest
 
-from scratch_repository import HOOKS_SOURCE_DIRECTORY, ScratchRepository
-from stub_executables import StubExecutableDirectory
-
-GITHUB_API_SCRIPT = HOOKS_SOURCE_DIRECTORY / "github-api.sh"
-"""
-The script under test, sourced directly - it resolves no repository paths of its own, so
-it needs no scratch layout.
-"""
+from github_api import (
+    GitHubApiCall,
+    GitHubApiRunner,
+    GitHubRemoteUrl,
+    PullRequestLabel,
+)
+from scratch_repository import HOOKS_SOURCE_DIRECTORY, ScratchRepository, ShellProgram
+from stub_executables import (
+    GitHubCredentialVariable,
+    StubbedExecutable,
+    StubExecutableDirectory,
+)
+from tooling_files import HookScript
 
 REPOSITORY = "octo-org/octo-repo"
 """
 The ``owner/repo`` the label lookups are made against.
 """
 
+LOGIN_THROUGH_GH = "octocat"
+"""
+The login the stub ``gh`` is told to report.
+"""
 
-def run_github_api(
-    call: str,
-    stub_executables: StubExecutableDirectory,
-    working_directory: Path,
-    hidden_executables: tuple[str, ...] = (),
-    **environment_overrides: str,
-) -> subprocess.CompletedProcess[str]:
-    """
-    Source github-api.sh and run one call against the stubbed ``PATH``.
+LOGIN_THROUGH_CURL = "hubot"
+"""
+The login the stub ``curl`` is told to report, distinct so a test proves which backend
+answered.
+"""
 
-    :param call: The shell call to make, for example ``"github_authenticated_login"``.
-    :param stub_executables: The stub directory the call resolves its executables from.
-    :param working_directory: Where to run, which matters only for the calls that
-        consult git.
-    :param hidden_executables: Executables to make unfindable for this run.
-    :param environment_overrides: Variables to set, chiefly the stubs' ``STUB_*``
-        controls.
-    :return: The finished subprocess.
-    """
-    return subprocess.run(
-        [
-            "bash",
-            "-c",
-            f'source "$1"; {call}',
-            "github-api-test",
-            str(GITHUB_API_SCRIPT),
-        ],
-        cwd=working_directory,
-        capture_output=True,
-        text=True,
-        env=stub_executables.subprocess_environment(
-            hidden_executables=hidden_executables, **environment_overrides
-        ),
-    )
-
+LABEL_DESCRIPTION = "Something is broken"
+"""
+The description a created label is given.
+"""
 
 # %% credential precedence
 
@@ -70,54 +54,65 @@ def run_github_api(
 def test_reads_the_login_through_gh_when_it_is_installed(
     stub_executables: StubExecutableDirectory, tmp_path: Path
 ):
-    stub_executables.install("gh")
+    stub_executables.install(StubbedExecutable.GH)
 
-    result = run_github_api(
-        "github_authenticated_login",
-        stub_executables,
-        tmp_path,
-        STUB_GH_LOGIN="octocat",
+    result = GitHubApiRunner(stub_executables, tmp_path).run(
+        GitHubApiCall.AUTHENTICATED_LOGIN, STUB_GH_LOGIN=LOGIN_THROUGH_GH
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "octocat"
+    assert result.stdout.strip() == LOGIN_THROUGH_GH
 
 
 def test_falls_back_to_a_token_and_curl_when_gh_is_absent(
     stub_executables: StubExecutableDirectory, tmp_path: Path
 ):
-    stub_executables.install("curl")
+    stub_executables.install(StubbedExecutable.CURL)
 
-    result = run_github_api(
-        "github_authenticated_login",
-        stub_executables,
-        tmp_path,
-        hidden_executables=("gh",),
+    result = GitHubApiRunner(stub_executables, tmp_path).run(
+        GitHubApiCall.AUTHENTICATED_LOGIN,
+        hidden_executables=(StubbedExecutable.GH,),
         GITHUB_TOKEN="a-token",
-        STUB_CURL_LOGIN="hubot",
+        STUB_CURL_LOGIN=LOGIN_THROUGH_CURL,
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "hubot"
+    assert result.stdout.strip() == LOGIN_THROUGH_CURL
 
 
 def test_fails_when_neither_gh_nor_a_token_is_available(
     stub_executables: StubExecutableDirectory, tmp_path: Path
 ):
-    result = run_github_api(
-        "github_authenticated_login",
-        stub_executables,
-        tmp_path,
-        hidden_executables=("gh",),
+    result = GitHubApiRunner(stub_executables, tmp_path).run(
+        GitHubApiCall.AUTHENTICATED_LOGIN,
+        hidden_executables=(StubbedExecutable.GH,),
     )
 
     assert result.returncode != 0
     assert result.stdout.strip() == ""
     # Both routes out of the failure have to be named, or the reader is left guessing
     # which of the two they are missing.
-    assert "gh" in result.stderr
-    assert "GH_TOKEN" in result.stderr
-    assert "GITHUB_TOKEN" in result.stderr
+    assert StubbedExecutable.GH in result.stderr
+    assert GitHubCredentialVariable.GH_TOKEN in result.stderr
+    assert GitHubCredentialVariable.GITHUB_TOKEN in result.stderr
+
+
+# %% the labels the tooling knows about
+
+
+def test_the_labels_match_the_ones_the_shell_declares():
+    declared = subprocess.run(
+        [
+            "bash",
+            str(ShellProgram.PRINT_PULL_REQUEST_LABELS.path),
+            str(HOOKS_SOURCE_DIRECTORY / HookScript.CONFIGURATION.value),
+        ],
+        capture_output=True,
+        text=True,
+    )
+
+    assert declared.returncode == 0, declared.stderr
+    assert declared.stdout.split() == [label.value for label in PullRequestLabel]
 
 
 # %% label existence
@@ -126,12 +121,10 @@ def test_fails_when_neither_gh_nor_a_token_is_available(
 def test_reports_a_label_that_exists(
     stub_executables: StubExecutableDirectory, tmp_path: Path
 ):
-    stub_executables.install("gh")
+    stub_executables.install(StubbedExecutable.GH)
 
-    result = run_github_api(
-        f"github_repository_has_label {REPOSITORY} merged",
-        stub_executables,
-        tmp_path,
+    result = GitHubApiRunner(stub_executables, tmp_path).run(
+        GitHubApiCall.LABEL_EXISTS, REPOSITORY, PullRequestLabel.MERGED
     )
 
     assert result.returncode == 0, result.stderr
@@ -140,13 +133,13 @@ def test_reports_a_label_that_exists(
 def test_reports_a_label_that_is_missing(
     stub_executables: StubExecutableDirectory, tmp_path: Path
 ):
-    stub_executables.install("gh")
+    stub_executables.install(StubbedExecutable.GH)
 
-    result = run_github_api(
-        f"github_repository_has_label {REPOSITORY} in-review",
-        stub_executables,
-        tmp_path,
-        STUB_GH_MISSING_LABELS="in-review",
+    result = GitHubApiRunner(stub_executables, tmp_path).run(
+        GitHubApiCall.LABEL_EXISTS,
+        REPOSITORY,
+        PullRequestLabel.IN_REVIEW,
+        STUB_GH_MISSING_LABELS=PullRequestLabel.IN_REVIEW,
     )
 
     assert result.returncode != 0
@@ -155,15 +148,15 @@ def test_reports_a_label_that_is_missing(
 def test_reports_a_missing_label_through_the_curl_fallback_too(
     stub_executables: StubExecutableDirectory, tmp_path: Path
 ):
-    stub_executables.install("curl")
+    stub_executables.install(StubbedExecutable.CURL)
 
-    result = run_github_api(
-        f"github_repository_has_label {REPOSITORY} in-review",
-        stub_executables,
-        tmp_path,
-        hidden_executables=("gh",),
+    result = GitHubApiRunner(stub_executables, tmp_path).run(
+        GitHubApiCall.LABEL_EXISTS,
+        REPOSITORY,
+        PullRequestLabel.IN_REVIEW,
+        hidden_executables=(StubbedExecutable.GH,),
         GH_TOKEN="a-token",
-        STUB_CURL_MISSING_LABELS="in-review",
+        STUB_CURL_MISSING_LABELS=PullRequestLabel.IN_REVIEW,
     )
 
     assert result.returncode != 0
@@ -172,13 +165,13 @@ def test_reports_a_missing_label_through_the_curl_fallback_too(
 def test_reports_an_existing_label_through_the_curl_fallback_too(
     stub_executables: StubExecutableDirectory, tmp_path: Path
 ):
-    stub_executables.install("curl")
+    stub_executables.install(StubbedExecutable.CURL)
 
-    result = run_github_api(
-        f"github_repository_has_label {REPOSITORY} merged",
-        stub_executables,
-        tmp_path,
-        hidden_executables=("gh",),
+    result = GitHubApiRunner(stub_executables, tmp_path).run(
+        GitHubApiCall.LABEL_EXISTS,
+        REPOSITORY,
+        PullRequestLabel.MERGED,
+        hidden_executables=(StubbedExecutable.GH,),
         GH_TOKEN="a-token",
     )
 
@@ -189,32 +182,34 @@ def test_reports_an_existing_label_through_the_curl_fallback_too(
 
 
 def test_creates_a_label(stub_executables: StubExecutableDirectory, tmp_path: Path):
-    stub_executables.install("gh")
+    stub_executables.install(StubbedExecutable.GH)
     call_log = tmp_path / "gh-calls.txt"
 
-    result = run_github_api(
-        f"github_create_label {REPOSITORY} bug 'Something is broken'",
-        stub_executables,
-        tmp_path,
+    result = GitHubApiRunner(stub_executables, tmp_path).run(
+        GitHubApiCall.CREATE_LABEL,
+        REPOSITORY,
+        PullRequestLabel.BUG,
+        LABEL_DESCRIPTION,
         STUB_GH_CALL_LOG=str(call_log),
     )
 
     assert result.returncode == 0, result.stderr
     logged_call = call_log.read_text()
     assert f"repos/{REPOSITORY}/labels" in logged_call
-    assert "name=bug" in logged_call
-    assert "description=Something is broken" in logged_call
+    assert f"name={PullRequestLabel.BUG}" in logged_call
+    assert f"description={LABEL_DESCRIPTION}" in logged_call
 
 
 def test_reports_a_creation_that_the_api_refuses(
     stub_executables: StubExecutableDirectory, tmp_path: Path
 ):
-    stub_executables.install("gh")
+    stub_executables.install(StubbedExecutable.GH)
 
-    result = run_github_api(
-        f"github_create_label {REPOSITORY} bug 'Something is broken'",
-        stub_executables,
-        tmp_path,
+    result = GitHubApiRunner(stub_executables, tmp_path).run(
+        GitHubApiCall.CREATE_LABEL,
+        REPOSITORY,
+        PullRequestLabel.BUG,
+        LABEL_DESCRIPTION,
         STUB_GH_CREATE_LABEL_FAILS="1",
     )
 
@@ -224,23 +219,14 @@ def test_reports_a_creation_that_the_api_refuses(
 # %% parsing a remote into owner/repo
 
 
-@pytest.mark.parametrize(
-    "remote_url",
-    [
-        f"https://github.com/{REPOSITORY}",
-        f"https://github.com/{REPOSITORY}.git",
-        f"git@github.com:{REPOSITORY}.git",
-        f"ssh://git@github.com/{REPOSITORY}.git",
-        # A Claude Code cloud session's clone, rewritten through its local git
-        # proxy: no github.com host anywhere in the URL.
-        f"http://local_proxy@127.0.0.1:41729/git/{REPOSITORY}",
-    ],
-)
+@pytest.mark.parametrize("url_form", list(GitHubRemoteUrl))
 def test_parses_owner_and_repository_out_of_a_url(
-    stub_executables: StubExecutableDirectory, tmp_path: Path, remote_url: str
+    stub_executables: StubExecutableDirectory,
+    tmp_path: Path,
+    url_form: GitHubRemoteUrl,
 ):
-    result = run_github_api(
-        f"github_repository_of_remote {remote_url}", stub_executables, tmp_path
+    result = GitHubApiRunner(stub_executables, tmp_path).run(
+        GitHubApiCall.REPOSITORY_OF_REMOTE, url_form.for_repository(REPOSITORY)
     )
 
     assert result.returncode == 0, result.stderr
@@ -250,14 +236,16 @@ def test_parses_owner_and_repository_out_of_a_url(
 def test_resolves_a_remote_name_through_git(
     stub_executables: StubExecutableDirectory, scratch_repository: ScratchRepository
 ):
+    remote_name = "myfork"
     scratch_repository.run_git(
-        "remote", "add", "myfork", f"https://github.com/{REPOSITORY}.git"
+        "remote",
+        "add",
+        remote_name,
+        GitHubRemoteUrl.HTTPS_WITH_SUFFIX.for_repository(REPOSITORY),
     )
 
-    result = run_github_api(
-        "github_repository_of_remote myfork",
-        stub_executables,
-        scratch_repository.project_root,
+    result = GitHubApiRunner(stub_executables, scratch_repository.project_root).run(
+        GitHubApiCall.REPOSITORY_OF_REMOTE, remote_name
     )
 
     assert result.returncode == 0, result.stderr
@@ -267,14 +255,14 @@ def test_resolves_a_remote_name_through_git(
 def test_rejects_a_remote_that_is_neither_a_known_name_nor_a_github_url(
     stub_executables: StubExecutableDirectory, scratch_repository: ScratchRepository
 ):
-    result = run_github_api(
-        "github_repository_of_remote not-a-remote",
-        stub_executables,
-        scratch_repository.project_root,
+    unknown_remote = "not-a-remote"
+
+    result = GitHubApiRunner(stub_executables, scratch_repository.project_root).run(
+        GitHubApiCall.REPOSITORY_OF_REMOTE, unknown_remote
     )
 
     assert result.returncode != 0
-    assert "not-a-remote" in result.stderr
+    assert unknown_remote in result.stderr
 
 
 @pytest.mark.parametrize(
@@ -289,10 +277,8 @@ def test_rejects_a_local_path_rather_than_reading_an_owner_out_of_it(
     # that only counted segments would report a directory name as a GitHub account - and
     # any ownership check built on that would then compare a real login against a
     # directory name and refuse a perfectly valid setup.
-    result = run_github_api(
-        f"github_repository_of_remote {local_remote}",
-        stub_executables,
-        scratch_repository.project_root,
+    result = GitHubApiRunner(stub_executables, scratch_repository.project_root).run(
+        GitHubApiCall.REPOSITORY_OF_REMOTE, local_remote
     )
 
     assert result.returncode != 0

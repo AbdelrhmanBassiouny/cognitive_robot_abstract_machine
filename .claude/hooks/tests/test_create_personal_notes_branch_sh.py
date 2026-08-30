@@ -12,27 +12,38 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from scratch_repository import NOTES_BRANCH, ScratchRepository
+from scratch_repository import (
+    HOOKS_SOURCE_DIRECTORY,
+    NOTES_BRANCH,
+    NOTES_PATH,
+    ScratchRepository,
+    ShellProgram,
+)
 from stub_executables import StubExecutableDirectory
+from tooling_files import HookScript
 
-NOTES_PATH = ".claude/personal/cram-notes.md"
+NO_UPSTREAM_REPORT = "upstream=[]"
+"""
+What print_upstream_remote.sh prints when the current branch tracks nothing.
+"""
 
 
-def has_upstream(repository: ScratchRepository) -> bool:
+def run_create_notes_branch(
+    repository: ScratchRepository, stub_executables: StubExecutableDirectory
+) -> subprocess.CompletedProcess[str]:
     """
-    Report whether the scratch repository's current branch tracks a remote.
+    Run the scratch layout's create-personal-notes-branch.sh.
 
-    :param repository: The scratch repository to inspect.
-    :return: Whether an upstream is configured.
+    :param repository: A fixture-built scratch repository.
+    :param stub_executables: The stub directory the run resolves its executables from.
+    :return: The finished subprocess.
     """
-    return (
-        subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{upstream}"],
-            cwd=repository.project_root,
-            capture_output=True,
-            text=True,
-        ).returncode
-        == 0
+    return subprocess.run(
+        ["bash", str(repository.hook_script_path(HookScript.CREATE_NOTES_BRANCH))],
+        cwd=repository.project_root,
+        capture_output=True,
+        text=True,
+        env=stub_executables.subprocess_environment(),
     )
 
 
@@ -41,29 +52,13 @@ def test_creates_the_branch_when_the_current_branch_has_no_upstream(
     stub_executables: StubExecutableDirectory,
     tmp_path: Path,
 ):
-    scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh", "create-personal-notes-branch.sh"
-    )
+    scratch_repository.install_hook_scripts(HookScript.CREATE_NOTES_BRANCH)
     scratch_repository.write("README.md", "scratch\n")
     scratch_repository.commit_everything("initial commit")
     scratch_repository.resolve_notes_remote_to()
-    assert not has_upstream(scratch_repository)
+    assert not scratch_repository.has_upstream()
 
-    result = subprocess.run(
-        [
-            "bash",
-            str(
-                scratch_repository.project_root
-                / ".claude"
-                / "hooks"
-                / "create-personal-notes-branch.sh"
-            ),
-        ],
-        cwd=scratch_repository.project_root,
-        capture_output=True,
-        text=True,
-        env=stub_executables.subprocess_environment(),
-    )
+    result = run_create_notes_branch(scratch_repository, stub_executables)
 
     assert result.returncode == 0, result.stderr
     assert scratch_repository.notes_branch_commit() is not None
@@ -74,10 +69,10 @@ def test_creates_the_branch_when_the_current_branch_has_no_upstream(
 def test_reports_no_upstream_remote_without_failing(
     scratch_repository: ScratchRepository, stub_executables: StubExecutableDirectory
 ):
-    scratch_repository.install_hook_scripts("resolve-personal-notes-config.sh")
+    scratch_repository.install_hook_scripts(HookScript.CONFIGURATION)
     scratch_repository.write("README.md", "scratch\n")
     scratch_repository.commit_everything("initial commit")
-    assert not has_upstream(scratch_repository)
+    assert not scratch_repository.has_upstream()
 
     # The strict-mode caller is the point: create-personal-notes-branch.sh assigns this
     # helper's output at top level under `set -euo pipefail`, so a non-zero status here
@@ -85,17 +80,8 @@ def test_reports_no_upstream_remote_without_failing(
     result = subprocess.run(
         [
             "bash",
-            "-c",
-            'set -euo pipefail; source "$1"; '
-            'upstream="$(current_branch_upstream_remote)"; '
-            'printf "upstream=[%s]\\n" "${upstream}"',
-            "upstream-remote-test",
-            str(
-                scratch_repository.project_root
-                / ".claude"
-                / "hooks"
-                / "resolve-personal-notes-config.sh"
-            ),
+            str(ShellProgram.PRINT_UPSTREAM_REMOTE.path),
+            str(scratch_repository.hook_script_path(HookScript.CONFIGURATION)),
         ],
         cwd=scratch_repository.project_root,
         capture_output=True,
@@ -104,37 +90,36 @@ def test_reports_no_upstream_remote_without_failing(
     )
 
     assert result.returncode == 0, result.stderr
-    assert result.stdout.strip() == "upstream=[]"
+    assert result.stdout.strip() == NO_UPSTREAM_REPORT
 
 
 def test_still_refuses_when_the_branch_already_exists_on_the_remote(
     scratch_repository: ScratchRepository, stub_executables: StubExecutableDirectory
 ):
-    scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh", "create-personal-notes-branch.sh"
-    )
+    scratch_repository.install_hook_scripts(HookScript.CREATE_NOTES_BRANCH)
     scratch_repository.write("README.md", "scratch\n")
     scratch_repository.commit_everything("initial commit")
     scratch_repository.publish_notes_branch({NOTES_PATH: "already mine\n"})
     scratch_repository.resolve_notes_remote_to()
     existing_commit = scratch_repository.notes_branch_commit()
 
-    result = subprocess.run(
-        [
-            "bash",
-            str(
-                scratch_repository.project_root
-                / ".claude"
-                / "hooks"
-                / "create-personal-notes-branch.sh"
-            ),
-        ],
-        cwd=scratch_repository.project_root,
-        capture_output=True,
-        text=True,
-        env=stub_executables.subprocess_environment(),
-    )
+    result = run_create_notes_branch(scratch_repository, stub_executables)
 
     assert result.returncode != 0
     assert NOTES_BRANCH in result.stderr
     assert scratch_repository.notes_branch_commit() == existing_commit
+
+
+def test_installing_a_script_installs_what_it_sources(
+    scratch_repository: ScratchRepository,
+):
+    # create-personal-notes-branch.sh sources resolve-personal-notes-config.sh, which no
+    # caller names: a script's own dependencies are stated in the script, and following
+    # them is what stops a hook that grows one from breaking every test that installs it.
+    scratch_repository.install_hook_scripts(HookScript.CREATE_NOTES_BRANCH)
+
+    assert scratch_repository.hook_script_path(
+        HookScript.CONFIGURATION
+    ).read_text() == (
+        (HOOKS_SOURCE_DIRECTORY / HookScript.CONFIGURATION.value).read_text()
+    )

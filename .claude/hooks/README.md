@@ -39,12 +39,13 @@ Or without a session at all — the same setup, non-interactively:
 
 ```bash
 "$CLAUDE_PROJECT_DIR/.claude/hooks/setup-personal-notes.sh" --remote <name-or-url> \
-  [--starter-notes] [--create-labels]
+  [--name "Your Name" --email you@example.com] [--starter-notes] [--create-labels]
 ```
 
 `--remote` is required: guessing it wrong pushes your notes to a repository you may not own. It
 verifies the remote is yours, needing either the `gh` CLI or `GH_TOKEN`/`GITHUB_TOKEN`, and reports
-rather than guesses when it has neither.
+rather than guesses when it has neither. `--name`/`--email` are optional and go together; without
+them no identity is recorded and the final report says so.
 
 The individual steps, if you'd rather drive them yourself:
 

@@ -9,13 +9,20 @@ set -euo pipefail
 # Usage (from anywhere - always operates on this repo specifically, see
 # ./resolve-personal-notes-config.sh):
 #   ./.claude/hooks/setup-personal-notes.sh --remote <name-or-url> \
-#     [--starter-notes] [--create-labels]
+#     [--name "Your Name" --email you@example.com] [--starter-notes] [--create-labels]
 #
 #   --remote          Required: the remote your notes belong on, as a remote name
 #                     already in this clone or a raw URL. Required rather than
 #                     guessed - guessing wrong pushes your notes to a repository
 #                     you don't control, which is the one decision here that
 #                     cannot be undone by re-running.
+#   --name, --email   Your git identity, recorded on the notes branch so every
+#                     clone authors its commits as you. Both or neither, and not
+#                     guessed from this clone's git config for the reason
+#                     ./save-git-identity.sh gives: in a session environment that
+#                     config is the agent's identity, not yours. Omitting them
+#                     leaves the identity unrecorded, which check-setup.sh then
+#                     reports - and this script exits with its status.
 #   --starter-notes   Seed a brand-new notes file from the starter template
 #                     instead of leaving it empty.
 #   --create-labels   Create any of the `merged`, `bug` and `in-review` labels
@@ -37,15 +44,16 @@ source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 # cd'd to the project root they are relative to.
 source "${GITHUB_API_SCRIPT}"
 
-PULL_REQUEST_LABELS=("merged" "bug" "in-review")
-
 usage() {
-  echo "Usage: ${BASH_SOURCE[0]} --remote <name-or-url> [--starter-notes] [--create-labels]" >&2
+  echo "Usage: ${BASH_SOURCE[0]} --remote <name-or-url>" \
+    "[--name \"Your Name\" --email you@example.com] [--starter-notes] [--create-labels]" >&2
 }
 
 # %% arguments
 
 CHOSEN_REMOTE=""
+IDENTITY_NAME=""
+IDENTITY_EMAIL=""
 SEED_STARTER_NOTES=0
 CREATE_MISSING_LABELS=0
 while [ $# -gt 0 ]; do
@@ -57,6 +65,24 @@ while [ $# -gt 0 ]; do
         exit 1
       fi
       CHOSEN_REMOTE="$2"
+      shift 2
+      ;;
+    --name)
+      if [ $# -lt 2 ]; then
+        echo "--name needs a value: the name your commits should carry." >&2
+        usage
+        exit 1
+      fi
+      IDENTITY_NAME="$2"
+      shift 2
+      ;;
+    --email)
+      if [ $# -lt 2 ]; then
+        echo "--email needs a value: the email your commits should carry." >&2
+        usage
+        exit 1
+      fi
+      IDENTITY_EMAIL="$2"
       shift 2
       ;;
     --starter-notes)
@@ -79,6 +105,16 @@ if [ -z "${CHOSEN_REMOTE}" ]; then
   echo "--remote is required: name the remote your personal notes belong on." >&2
   echo "It is not guessed, because a wrong guess pushes your notes to a repository" >&2
   echo "you may not own." >&2
+  usage
+  exit 1
+fi
+
+# One half of an identity records nothing: git needs both to author a commit, and
+# ./save-git-identity.sh refuses the pair anyway. Catching it here means the
+# refusal comes before the branch is created rather than after.
+if [ -n "${IDENTITY_NAME}${IDENTITY_EMAIL}" ] \
+    && { [ -z "${IDENTITY_NAME}" ] || [ -z "${IDENTITY_EMAIL}" ]; }; then
+  echo "--name and --email go together: a commit needs both to be authored." >&2
   usage
   exit 1
 fi
@@ -149,6 +185,15 @@ if [ "${SEED_STARTER_NOTES}" = "1" ]; then
     --message "Initialize personal notes from the starter template"
 else
   echo "Left '${NOTES_PATH}' as it is - pass --starter-notes to seed it from the template."
+fi
+
+# %% the git identity every clone authors as
+
+# Given none, this step does nothing and the final report says so - check-setup.sh's
+# git_identity row already names both the identity commits carry today and the command
+# that records one, so saying it a second time here would be the same message twice.
+if [ -n "${IDENTITY_NAME}" ]; then
+  bash "${SAVE_GIT_IDENTITY_SCRIPT}" --name "${IDENTITY_NAME}" --email "${IDENTITY_EMAIL}"
 fi
 
 # %% the plan-dashboard dependencies

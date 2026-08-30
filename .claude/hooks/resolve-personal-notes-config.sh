@@ -395,6 +395,9 @@ GITHUB_API_SCRIPT=".claude/hooks/github-api.sh"
 # create-personal-notes-branch.sh: creates the notes branch on the resolved
 # remote with an empty notes file, refusing if it already exists anywhere.
 CREATE_PERSONAL_NOTES_BRANCH_SCRIPT=".claude/hooks/create-personal-notes-branch.sh"
+# save-git-identity.sh: records the contributor's git identity on the notes
+# branch, which session-start.sh then writes into every clone it runs in.
+SAVE_GIT_IDENTITY_SCRIPT=".claude/hooks/save-git-identity.sh"
 # session-start.sh: the SessionStart hook itself, which writes CLAUDE.local.md.
 # Named here because setup runs it directly, so a fresh clone picks the notes up
 # without waiting for the next session.
@@ -572,3 +575,10 @@ last_recorded_plan_state_sha() {
   [ -f "${PLAN_STATE_SYNC_STAMP}" ] || return 1
   cat "${PLAN_STATE_SYNC_STAMP}"
 }
+
+# PULL_REQUEST_LABELS: the labels this tooling reads and applies, checked (and
+# on request created) by ./setup-personal-notes.sh. Here rather than in that
+# script so the shell and the Python that tests it read one declaration; a test
+# holds `PullRequestLabel` in .claude/hooks/tests/github_api.py equal to this
+# list, so neither can gain a label the other has not.
+PULL_REQUEST_LABELS=("merged" "bug" "in-review")
