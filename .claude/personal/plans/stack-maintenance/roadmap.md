@@ -95,6 +95,15 @@ and re-applies its delta.
   *keeps* a thing rather than what drops it: a build branch is kept while a pull request is still
   open against it, which covers both the candidate judging it and a filtered build somebody is
   working from, and it needs no knowledge of how the run that made it ended.
+- **A measurement that explains more than one design is recorded once and referred to.** The
+  candidate check timing was written out at four of the designs it shapes, in three modules, and
+  each copy goes stale on its own with no reader able to tell which is current. What made the
+  duplication findable was making the numbers *data* - `CandidateCheckTiming` - so a test can
+  derive the figure it looks for from the record rather than carrying a second copy of it.
+- **A trigger is only safe to add once you can say what stops it.** Answering to CI completing
+  over a build branch starts a rebuild that opens the next candidate, whose CI completes in turn.
+  It terminates because a build whose tree is already recorded as passing publishes with no
+  candidate at all - the pass record, built for a different reason, is what bounds the loop.
 - **Introducing a model does not retire the hand-rolled readers it replaces**, because nothing
   breaks when it lands. `workflow_document.py` was written to stop `integration-refresh.yml` being
   walked as nested string keys, and a whole section of `test_integration_verdict.py` went on doing
@@ -130,7 +139,9 @@ and re-applies its delta.
   whatever is in flight - and a pipeline that cannot publish cannot carry its own fix. A dispatch on
   the working branch is the bootstrap.
 - **Queue delay is measured in hours, not minutes** (19 minutes and 2h47m on two candidates), so no
-  in-job wait can outwait it. The verdict is read by a later run.
+  in-job wait can outwait it. The verdict is read by a later run - started by CI completing over the
+  build branch, with the schedule left as the floor under it. The figures live in
+  `CandidateCheckTiming` rather than in the prose of every design they explain.
 - **A default-token-triggered event creates no workflow run**, so anything opening a candidate needs a
   provisioned token. Related trap: the checkout action persists that token as an http header that
   overrides credentials in a push URL.

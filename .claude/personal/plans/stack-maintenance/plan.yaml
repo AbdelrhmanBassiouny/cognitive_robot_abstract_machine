@@ -432,19 +432,6 @@ items:
   track: integration
   depends_on:
   - integration-branch
-  blockers:
-  - 'Both threads the earlier round left open were answered by the author on 2026-08-30, and neither
-    answer is the one the recorded blocker anticipated. The repeated string is not the `sys.path`
-    insertion: asked again, the author said it is the docstring explaining the minutes a candidate''s
-    checks take, which is restated in four places across `integration_pipeline.py`,
-    `integration_pass_record.py`, `integration_candidate_commands.py` and `integration_exit_codes.py`.
-    That is a small in-scope fix rather than one `bastler-package` owns.'
-  - 'The rebuild cadence is no longer a scope question waiting on the author. Told that a `workflow_run`
-    trigger on `ci.yml` completing would settle a candidate minutes after its matrix finishes rather
-    than at the next scheduled slot, the author answered that they like the fix and asked only where it
-    should land. The mechanical scope check answers that: `git ls-tree origin/main` over the refresh
-    workflow, the pipeline and the workflow model returns nothing, so every file the trigger touches is
-    one this unlanded chain introduces and nothing stands alone once those edits are removed.'
   notes: 'Part D of `integration-branch`''s review round: the verdict moves from a local test run to real CI.
 
     Folded back onto that item''s branch after being split out, so it has no pull request of its own - the
@@ -585,7 +572,38 @@ items:
     all - found only because the *test* records built beside it were being routed through that enum. And a
     whole section of `test_integration_verdict.py` was still walking `integration-refresh.yml` by hand, having
     survived the round that introduced `workflow_document.py` intact: a model does not retire the hand-rolled
-    readers it replaces, because nothing breaks when it lands.'
+    readers it replaces, because nothing breaks when it lands.
+    **Both threads the 2026-08-30 round left open are answered, and the recorded blocker had the first
+
+    one wrong.** The repeated string was never the `sys.path` insertion `bastler-package` owns: asked
+
+    again, the author said it is the measured check timing, written out at four of the designs it
+
+    explains. It is one `CandidateCheckTiming` in `integration_verdict.py` now, referred to rather than
+
+    restated, held by one test that derives the figure from the record and one that holds each design to
+
+    naming it. The limit is stated rather than hidden - the first catches a numeral, not a restatement
+
+    spelled out in words.
+
+    And the cadence is no longer a scope call. Told what a `workflow_run` trigger on `ci.yml` completing
+
+    would buy, the author asked only where it should land, and the mechanical check answered: every file
+
+    it touches is absent from `main`, so it folded here. **What made it safe to add is that it stops
+
+    itself** - the run it starts assembles the next build, and a build whose tree is already recorded as
+
+    passing publishes with no candidate, so once nothing in flight has moved there is no matrix left to
+
+    answer to. Two spellings a workflow forces are asserted against their definitions: `workflow_run`
+
+    matches a workflow''s *name* rather than its file, and a workflow''s branch filter does not take the
+
+    character class `BUILD_BRANCH_PATTERN` uses, so reusing it would have matched nothing - silently, in
+
+    the losing direction, both times.'
 - id: red-candidate-localisation
   title: Localise a red candidate to the branches that caused it
   branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
