@@ -50,9 +50,32 @@ to get giskardpy's interface built at all). Scratch harnesses, not repository ch
   `142 passed, 1 skipped` on the parent — the three added and nothing else.
 - PR description updated to match; dashboard republished; tracking issue told.
 
+## CI, 2026-08-30
+
+`experiments` passed: **321 passed** against **318** on #202 — the three added tests and
+nothing else. That job regenerates the interfaces through the conftest, so the DAO test ran
+against a real generated `experiments/orm/ormatic_interface.py` with coraplex in the chain,
+which is the one thing the container could not do. The ORM fix is confirmed in CI.
+
+Two of 23 red, neither reachable by this diff:
+
+- `test_each_lib (giskardpy)` — `test_integration_pr2.py::TestSelfCollisionAvoidance::
+  test_attached_self_collision_avoid_stick`, one AssertionError against 516 passed. A PR2
+  motion-statechart/QP integration test; `giskardpy` neither imports nor maps `experiments`.
+- `test_each_lib (coraplex/scripts/test_notebook_examples.sh)` — `RuntimeError: Kernel died
+  before replying to kernel_info`, i.e. the kernel never started. That job runs `treon`, no
+  pytest, so no conftest and no ORM regeneration at all.
+
+Both are green on the base #202 and on sibling #222, whose run started 13 minutes later on
+the same infrastructure. Failed jobs of runs 33337224858 and 33337224869 re-run once at the
+developer's prompting; the outcome is the deciding evidence and is not yet in.
+
 ## Next
 
-- Nothing on this branch. It is a draft awaiting review.
+- Read the two re-run results. If both pass, the branch is green and nothing else is owed.
+  If either reproduces identically, say so on the PR rather than silently — it is still not
+  this branch's failure, and the re-run is spent.
+- Otherwise nothing on this branch. It is a draft awaiting review.
 - When #205 or #221 rebases, the rename conflicts in `pipeline.py`/`footprint.py`:
   take their edit, spell the class `RectifiedFootprint`.
 - The DAO test runs for real only in CI, where the conftest builds the interface.
