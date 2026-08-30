@@ -302,11 +302,12 @@ items:
 
   - id: montessori-classes-in-the-orm
     title: "Map the Montessori package's own classes, which the ORM has never seen"
-    branch: montessori_classes_in_the_orm
-    pull_request_number: null
+    branch: claude/montessori-classes-orm-s7vxu1
+    pull_request_number: 223
     track: package-landing
     depends_on: [montessori-perception-on-main]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01PWzamoTtp8TNZyqhWornUs
     notes: >-
       experiments/src/experiments/montessori/ has no __init__.py, and never has on any branch, so
       pkgutil does not report it as a subpackage of experiments and the ORM generator's package
