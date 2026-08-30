@@ -207,7 +207,9 @@ class StackToolingFile(StrEnum):
     The maintenance pass itself, invocable from any session.
     """
 
-    MAINTENANCE_ROUTINE_PROMPT = ".claude/skills/stacked-pr-maintenance/routine-prompt.md"
+    MAINTENANCE_ROUTINE_PROMPT = (
+        ".claude/skills/stacked-pr-maintenance/routine-prompt.md"
+    )
     """
     The block registered as a scheduled Routine, which runs that skill.
     """

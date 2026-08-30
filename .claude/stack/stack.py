@@ -51,6 +51,10 @@ from urllib.parse import quote
 
 # %% configuration
 
+GITHUB_ROOT = "https://github.com"
+"""Where every link this tool builds to a repository, or to a comparison of two of its
+references, is rooted."""
+
 CONFIGURATION_PATH = Path(__file__).with_name("stack.toml")
 """The checked-in configuration every run starts from, before any per-user override."""
 
@@ -140,6 +144,20 @@ class Repository:
             raise MalformedRepositoryError(url)
         return cls.parse("/".join(segments[-2:]))
 
+    @property
+    def remote_url(self) -> str:
+        """:return: The HTTPS URL a clone of this repository is addressed by."""
+        return f"{GITHUB_ROOT}/{self}.git"
+
+    def compare_url(self, base: str, head: str) -> str:
+        """Build the URL comparing two references of this repository.
+
+        :param base: The reference changes would be merged into.
+        :param head: The reference carrying them, ``owner:branch`` when it is a fork's.
+        :return: The comparison's URL, without any prefill.
+        """
+        return f"{GITHUB_ROOT}/{self}/compare/{base}...{head}"
+
     def __str__(self) -> str:
         """:return: The ``owner/name`` form GitHub uses."""
         return f"{self.owner}/{self.name}"
@@ -227,7 +245,7 @@ def _remote_add_command(
     """
     if existing:
         return None
-    return f"git remote add {name} https://github.com/{repository}.git"
+    return f"git remote add {name} {repository.remote_url}"
 
 
 def resolve_remotes(
@@ -748,12 +766,11 @@ class PromotionLink:
         """
 
         def url_for(text: str) -> str:
-            return (
-                f"https://github.com/{configuration.upstream_repository}/compare/"
-                f"{configuration.upstream_base}..."
-                f"{configuration.fork_repository.owner}:{branch}"
-                f"?expand=1&title={quote(title)}&body={quote(text)}"
+            comparison = configuration.upstream_repository.compare_url(
+                configuration.upstream_base,
+                f"{configuration.fork_repository.owner}:{branch}",
             )
+            return f"{comparison}?expand=1&title={quote(title)}&body={quote(text)}"
 
         if len(url_for(body)) <= cls.URL_CHARACTER_LIMIT:
             return cls(url_for(body), body_was_truncated=False)

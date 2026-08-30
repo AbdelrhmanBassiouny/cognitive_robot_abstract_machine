@@ -22,29 +22,44 @@ source .claude/hooks/resolve-personal-notes-config.sh
 bash "${CHECK_STACK_SETUP_SCRIPT}" || true
 ```
 
-**Exit code 0 — set up.** Say nothing about setup at all; carry on. Someone who
-is already set up must never be asked about it.
+**Exit code 0 — set up.** Say nothing about setup at all; carry on. This whole
+document is a no-op on a clone that is already set up, and someone who is must
+never hear that it ran.
 
-**Non-zero — something is missing.** Do not attempt the individual fixes inline:
-`/setup-stacked-prs` exists to do exactly that, and duplicating a piece of it
-here is how the two drift apart.
+**Non-zero — something is missing.** Do not start the real work, and do not
+attempt the individual fixes inline: `/setup-stacked-prs` exists to do exactly
+that, and duplicating a piece of it here is how the two drift apart.
 
-1. Say, in a sentence or two, what is missing and why the work needs it — from
-   the `needs-setup` rows' own `<detail>` text, not a guess.
-2. Ask, via `AskUserQuestion`, whether to run the setup now. Running it is not a
-   decision to make for them: it adds remotes, can write to their fork, and can
-   create labels everyone who sees the repository will see.
-3. **If they accept:** invoke `/setup-stacked-prs`, let it finish, re-run the
-   check, and continue if it now exits 0. If it doesn't, report what remains
-   unresolved and stop.
-4. **If they decline:** stop, and say plainly what won't work without it.
+1. Say, in a sentence or two, what is missing and that setup is running now —
+   from the `needs-setup` rows' own `<detail>` text, not a guess. This is a
+   statement, not a question: never ask whether to run the setup.
+2. Invoke `/setup-stacked-prs` and let it finish. It asks its own questions for
+   the decisions that are genuinely somebody's to make — which repository holds
+   the stack, which it is reviewed in, whether to create labels — and does the
+   mechanical parts without asking.
+3. Re-run the check. If it now exits 0, carry on as though nothing had happened.
+   If it still doesn't, report what remains unresolved and stop — do not push on
+   into work that will fail later for the same reason.
+
+## Why this runs without being offered first
+
+Whoever reached this document has already said what they want, and the setup is
+the only route to it: there is no useful answer to "shall I set this up?" other
+than yes, and asking it turns every first run into two turns.
+
+What survives is narrower and stays inside `/setup-stacked-prs`: the choices
+with more than one reasonable answer — which repositories the fork and the
+upstream are, and whether to create labels everyone who sees the repository will
+see — are still asked there, because getting one of those wrong writes somewhere
+nobody chose. Running the setup is not that kind of decision; picking its
+destination is.
 
 ## The one variation: an unattended run
 
 `/stacked-pr-maintenance --non-interactive`, which is how a scheduled Routine
-invokes it, cannot follow steps 2 to 4 — its own hard rules forbid entering plan
-mode or opening a discussion, and there is nobody in the loop to answer. It
-therefore **reports and stops** instead of offering:
+invokes it, cannot follow step 2 — `/setup-stacked-prs` has questions of its own
+and there is nobody in the loop to answer them. It therefore **reports and
+stops** instead of running the setup:
 print the `needs-setup` rows in the run summary, and do not attempt the phases.
 A half-set-up clone silently doing half a restack is worse than a run that says
 what is missing.

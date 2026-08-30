@@ -54,7 +54,8 @@ OVERLAY_BRANCH_DECLARATION_PATTERN = re.compile(
     r'^DEFAULT_OVERLAY_BRANCH="(?P<branch>[^"]+)"', re.MULTILINE
 )
 """
-How setup-stacked-prs.sh declares the branch a fork-overlay install writes to by default.
+How setup-stacked-prs.sh declares the branch a fork-overlay install writes to by
+default.
 """
 
 OVERLAY_BRANCH = OVERLAY_BRANCH_DECLARATION_PATTERN.search(

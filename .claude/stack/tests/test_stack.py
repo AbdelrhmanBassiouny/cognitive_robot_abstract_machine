@@ -17,7 +17,9 @@ from pathlib import Path
 
 import pytest
 
+from github_api import RepositoryLabel
 from scratch_repository import ScratchRepository
+from tooling_files import StackToolingFile
 
 from stack import (
     CommitMoveAction,
@@ -33,6 +35,7 @@ from stack import (
     ProposedCommitMove,
     RefusalReason,
     PromotionLink,
+    PERSONAL_STACK_CONFIGURATION_PATH,
     PromotionLinkTooLongError,
     PullRequest,
     Remote,
@@ -65,10 +68,10 @@ The tool under test, invoked as a subprocess wherever an exit status is the asse
 
 def make_configuration(upstream_setup_command: str | None = None) -> Configuration:
     return Configuration(
-        in_review_label="in-review",
-        rebase_label="rebase",
-        needs_resolution_label="needs-resolution",
-        cram2_link_sent_label="cram2-link-sent",
+        in_review_label=RepositoryLabel.IN_REVIEW,
+        rebase_label=RepositoryLabel.REBASE,
+        needs_resolution_label=RepositoryLabel.NEEDS_RESOLUTION,
+        cram2_link_sent_label=RepositoryLabel.PROMOTION_LINK_SENT,
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         fork_setup_command=None,
@@ -305,13 +308,15 @@ def _committed_configuration_path(scratch_repository: ScratchRepository) -> Path
     :param scratch_repository: The scratch repository to write into.
     :return: The path :func:`load_configuration` should be pointed at.
     """
-    path = scratch_repository.write(".claude/stack/stack.toml", DEFAULT_STACK_TOML)
+    path = scratch_repository.write(
+        StackToolingFile.STACK_CONFIGURATION, DEFAULT_STACK_TOML
+    )
     scratch_repository.commit_everything("add stack.toml")
     scratch_repository.run_git(
         "remote",
         "add",
         "a-name-nobody-expects",
-        "https://github.com/a-fork-owner/a-fork.git",
+        Repository("a-fork-owner", "a-fork").remote_url,
     )
     return path
 
@@ -345,7 +350,7 @@ def test_load_configuration_layers_personal_notes_override_on_top_of_defaults(
 ):
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.publish_notes_branch(
-        {".claude/personal/stack.toml": 'upstream_remote = "my-fork-cram2"\n'}
+        {PERSONAL_STACK_CONFIGURATION_PATH: 'upstream_remote = "my-fork-cram2"\n'}
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
@@ -394,10 +399,12 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
     """
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.run_git(
-        "remote", "add", "another", "https://github.com/someone-else/their-fork.git"
+        "remote", "add", "another", Repository("someone-else", "their-fork").remote_url
     )
     scratch_repository.publish_notes_branch(
-        {".claude/personal/stack.toml": 'fork_repository = "someone-else/their-fork"\n'}
+        {
+            PERSONAL_STACK_CONFIGURATION_PATH: 'fork_repository = "someone-else/their-fork"\n'
+        }
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
@@ -585,16 +592,17 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
 
     printed = dict(line.split("\t") for line in capsys.readouterr().out.splitlines())
 
+    configuration = make_configuration()
     assert printed == {
-        "in_review_label": "in-review",
-        "rebase_label": "rebase",
-        "needs_resolution_label": "needs-resolution",
-        "cram2_link_sent_label": "cram2-link-sent",
-        "fork_repository": "a-fork-owner/a-fork",
-        "fork_remote": "origin",
-        "upstream_repository": "an-upstream-owner/a-project",
-        "upstream_remote": "cram2",
-        "upstream_base": "main",
+        "in_review_label": configuration.in_review_label,
+        "rebase_label": configuration.rebase_label,
+        "needs_resolution_label": configuration.needs_resolution_label,
+        "cram2_link_sent_label": configuration.cram2_link_sent_label,
+        "fork_repository": str(configuration.fork_repository),
+        "fork_remote": configuration.fork_remote,
+        "upstream_repository": str(configuration.upstream_repository),
+        "upstream_remote": configuration.upstream_remote,
+        "upstream_base": configuration.upstream_base,
     }
 
 
@@ -1060,7 +1068,7 @@ def test_a_named_fork_outranks_the_configured_one(
     """
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.run_git(
-        "remote", "add", "another", "https://github.com/someone-else/their-fork.git"
+        "remote", "add", "another", Repository("someone-else", "their-fork").remote_url
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
@@ -1088,7 +1096,7 @@ def test_a_checkout_that_names_no_fork_is_asked_rather_than_guessed_at(
     caller instead of an answer it invented.
     """
     configuration_path = scratch_repository.write(
-        ".claude/stack/stack.toml",
+        StackToolingFile.STACK_CONFIGURATION,
         DEFAULT_STACK_TOML.replace('fork_repository = "a-fork-owner/a-fork"\n', ""),
     )
     scratch_repository.commit_everything("add stack.toml naming no fork")
@@ -1209,11 +1217,11 @@ def test_a_readable_checkout_with_no_board_reports_the_missing_board_instead(
     offline_checkout: ScratchRepository,
 ):
     offline_checkout.publish_notes_branch(
-        {".claude/personal/stack.toml": 'fork_repository = "a-fork-owner/a-fork"\n'}
+        {PERSONAL_STACK_CONFIGURATION_PATH: 'fork_repository = "a-fork-owner/a-fork"\n'}
     )
     offline_checkout.resolve_notes_remote_to()
     offline_checkout.run_git(
-        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
+        "remote", "add", "whatever", Repository("a-fork-owner", "a-fork").remote_url
     )
 
     result = run_stack(offline_checkout, "status")
@@ -1229,10 +1237,10 @@ def test_a_named_fork_and_upstream_are_used_where_the_checkout_configures_neithe
     the answer must be able to say so and proceed.
     """
     offline_checkout.run_git(
-        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
+        "remote", "add", "whatever", Repository("a-fork-owner", "a-fork").remote_url
     )
     offline_checkout.run_git(
-        "remote", "add", "another", "https://github.com/someone-else/their-fork.git"
+        "remote", "add", "another", Repository("someone-else", "their-fork").remote_url
     )
 
     assert (
@@ -1268,11 +1276,11 @@ def test_a_promotion_link_is_built_from_the_resolved_repositories(
     offline_checkout: ScratchRepository,
 ):
     offline_checkout.publish_notes_branch(
-        {".claude/personal/stack.toml": 'fork_repository = "a-fork-owner/a-fork"\n'}
+        {PERSONAL_STACK_CONFIGURATION_PATH: 'fork_repository = "a-fork-owner/a-fork"\n'}
     )
     offline_checkout.resolve_notes_remote_to()
     offline_checkout.run_git(
-        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
+        "remote", "add", "whatever", Repository("a-fork-owner", "a-fork").remote_url
     )
 
     result = run_stack(

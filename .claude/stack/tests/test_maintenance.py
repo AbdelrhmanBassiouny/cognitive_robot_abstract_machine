@@ -25,6 +25,7 @@ from pathlib import Path
 
 import pytest
 
+from maintenance_git_commands import GitCommandRunner
 from scratch_repository import initialize_bare_repository
 
 from stack import (
@@ -225,19 +226,17 @@ class ForkCheckout:
 
     def run_git(self, *arguments: str) -> str:
         """
-        Run git in the clone, failing the test if it reports an error.
+        Run git in the clone, raising if it reports an error.
+
+        Through the executor's own runner, which already repeats none of this: same
+        working directory, same capture, same refusal to read a failed command's output
+        as an answer.
 
         :param arguments: The arguments to pass to git.
         :return: The command's stripped stdout.
+        :raises GitCommandFailed: If git exits non-zero.
         """
-        result = subprocess.run(
-            ["git", *arguments],
-            cwd=self.project_root,
-            capture_output=True,
-            text=True,
-        )
-        assert result.returncode == 0, result.stderr
-        return result.stdout.strip()
+        return GitCommandRunner(self.project_root).run(*arguments)
 
     def commit(self, name: str, content: str) -> str:
         """

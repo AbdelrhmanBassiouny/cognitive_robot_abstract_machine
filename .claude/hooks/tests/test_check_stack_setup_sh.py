@@ -275,9 +275,7 @@ def test_requires_the_maintenance_instructions_rather_than_the_retired_routine_d
     checkout carrying the real layout must read as set up - and one missing the skill must
     not. Checking the retired paths reported ``needs-setup`` on a correct installation.
     """
-    skill_document = (
-        stack_repository.project_root / StackToolingFile.MAINTENANCE_SKILL
-    )
+    skill_document = stack_repository.project_root / StackToolingFile.MAINTENANCE_SKILL
 
     assert (
         run_check_stack_setup(stack_repository)
