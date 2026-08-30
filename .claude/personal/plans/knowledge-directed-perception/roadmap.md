@@ -831,3 +831,69 @@ of it is what the twin draws; that assumption is stated on `KnownPiece.color` ra
 for a reader to infer.
 
 **147 passed, 1 skipped**, against 142 after the first round.
+
+## `detect-per-supporting-surface`: one pass per surface, and where each surface's extent comes from
+
+Kicked off 2026-08-30 in `auto` mode, as pull request #221 off
+`perception_surfaces_from_world` (#205, open and out of draft, so ready to stack on --
+`check_dependency_readiness.py` reports `open_ready`). The mechanical scope check reports
+every path this touches absent from `main` and shared with both #202 and #205, which the
+`montessori-perception-on-main` round already recorded as expected: every file in this plan
+is introduced by #202, so path overlap alone would fold the whole plan into one item. What
+remains once the overlapping edits are removed is the pipeline's restructure into one pass
+per surface, which is substantial and stands on its own, so this is ordinary stacking --
+the same call the `surfaces` track's "sequential, each item edits the same pipeline the
+previous one left behind" already made.
+
+### Two faults, one restructure
+
+`detect` runs the loose-piece detector exactly once, against the table's plane, and hands
+it the board so that `board.encloses(centre)` drops whatever stands on the board. Both
+halves of fault 2 are that single pass: a piece on the lid is parallax-shifted out of the
+intersection of the two table-plane silhouettes, and would be discarded as the board's own
+even if it survived.
+
+So the pipeline runs one pass per supporting surface, each rectified onto that surface's
+own plane -- which is what cancels the parallax, since a piece on the lid seen from the lid
+lies at its own footprint the way a piece on the table already does.
+
+### Which surface a contour belongs to
+
+The two skips are the same rule read from opposite sides: a contour on the table plane
+whose centre falls inside the board belongs to the lid, and a contour on the lid plane
+belongs to the lid only if its centre falls inside the board. So each pass carries the part
+of its plane it may claim -- the outline bounding the surface itself, and the outlines of
+the surfaces standing on it -- rather than carrying "the board" as an obstacle.
+
+**The lid's extent comes from the detection, not from the world, and its height comes from
+the world.** The rectification needs the height before anything has been detected, and the
+lid's height above the table does not change when the board is slid across it; where the
+board *is* does change, and the board detector measures it every frame. `of_world` already
+discarded `WorkspaceSurface.of(board).region` and kept only its height, so this is the
+existing split made explicit rather than a new one.
+
+### The pipeline holds surfaces, not three bare numbers
+
+`region`, `table_height` and `board_height` become the two surfaces themselves, which is
+the restructure #205 deliberately left here ("the pipeline keeps `region` / `table_height` /
+`board_height` as they are ... building it here would take that item's work"). The
+rectification region stays the table's for every pass, exactly as the board pass already
+uses it.
+
+### Attribution
+
+Every detection records the surface supporting it, by the name the world knows that surface
+by. `perception-backend` pushes `is_supported_by` down into the search, so what a detection
+answers about its own support has to name a world entity rather than a plane height.
+
+### Verification
+
+Tests first, against the rendered scene: `PlacedPiece` gains the height of the surface it
+stands on, so a test can stand a piece on the board's lid, and the assertions are that it
+is found there, reported at the lid's height, and attributed to the lid -- with a piece on
+the table still attributed to the table, and the lid itself still not reported as a piece.
+
+Run with `--noconftest` and the workspace on `PYTHONPATH` where the ORM regeneration is not
+wanted, following #202, #205 and #216; #216 recorded that the suite does run in a container
+once its dependency set is installed, so the full run is attempted rather than assumed
+impossible.
