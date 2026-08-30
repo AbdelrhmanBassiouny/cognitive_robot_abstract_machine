@@ -69,6 +69,27 @@ PLAN_ROADMAP = (FIXTURES_DIRECTORY / "bootstrap-roadmap.md").read_text()
 The roadmap every test starts from.
 """
 
+INDENTLESS_PLAN_MANIFEST = (
+    FIXTURES_DIRECTORY / "bootstrap-plan-indentless-items.yaml"
+).read_text()
+"""
+The same plan in the other block sequence style YAML admits, with items written flush
+with ``items:`` rather than indented one level inside it.
+
+This is the style every manifest ``save-plan.sh`` writes carries, because that is what
+PyYAML's dumper emits, so a writer that only ever sees the indented fixture is a writer
+no real caller's manifest exercises.
+"""
+
+STACKED_ITEM = "a-stacked-item"
+"""
+The item whose ``depends_on`` is written out beneath its key rather than inline.
+
+A field written after such a key lands under the sequence's last entry unless the writer
+reads the item's own depth, which is what makes this item, and not the two beside it,
+the one that catches it.
+"""
+
 EXISTING_ITEM = "an-existing-item"
 """
 The fixture item the plan already tracks, with no branch of its own yet.
@@ -209,6 +230,40 @@ def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchReposi
         {
             PlanDocument.MANIFEST.path_within_notes_branch(PLAN_IDENTIFIER): (
                 PLAN_MANIFEST
+            ),
+            PlanDocument.ROADMAP.path_within_notes_branch(PLAN_IDENTIFIER): (
+                PLAN_ROADMAP
+            ),
+        }
+    )
+    scratch_repository.resolve_notes_remote_to()
+    scratch_repository.add_work_remote()
+    return scratch_repository
+
+
+@pytest.fixture
+def indentless_plan_repository(
+    scratch_repository: ScratchRepository,
+) -> ScratchRepository:
+    """
+    The same scratch repository, publishing the plan in the style a real manifest is
+    written in rather than the indented fixture.
+
+    :param scratch_repository: The initialized scratch repository and notes remote.
+    :return: The same repository, ready to write to that plan.
+    """
+    scratch_repository.install_hook_scripts(
+        HookScript.CONFIGURATION.value,
+        HookScript.SAVE_PLAN.value,
+        "plan_manifest_tools.py",
+        HookScript.PLAN_ITEM_BOOTSTRAP.value,
+    )
+    scratch_repository.write("README.md", "scratch repo\n")
+    scratch_repository.commit_everything("initial commit")
+    scratch_repository.publish_notes_branch(
+        {
+            PlanDocument.MANIFEST.path_within_notes_branch(PLAN_IDENTIFIER): (
+                INDENTLESS_PLAN_MANIFEST
             ),
             PlanDocument.ROADMAP.path_within_notes_branch(PLAN_IDENTIFIER): (
                 PLAN_ROADMAP
@@ -907,6 +962,79 @@ def test_updating_hands_the_dashboard_republish_back(
     assert report.dashboard_command == f"/plan-dashboard {PLAN_IDENTIFIER}"
 
 
+# %% writing into a manifest whose items sit flush with items:
+
+
+def test_updating_an_item_whose_dependencies_are_written_out_keeps_the_manifest_parsing(
+    indentless_plan_repository: ScratchRepository,
+):
+    """
+    A field written after a block sequence has to land at the item's own depth.
+
+    Written one level deeper it sits under the sequence's last entry, where YAML reads a
+    mapping key inside a scalar and refuses the document - so the save fails rather than
+    writing something merely wrong.
+    """
+    update_item(
+        update_request(
+            item_identifier=STACKED_ITEM,
+            values_by_key={ManifestKey.STATUS: ItemStatus.BLOCKED.value},
+        ),
+        project_root=indentless_plan_repository.project_root,
+    )
+
+    written = published_items(indentless_plan_repository)[STACKED_ITEM]
+    assert written[ManifestKey.STATUS.key] == ItemStatus.BLOCKED
+    assert written[ManifestKey.DEPENDS_ON.key] == [EXISTING_ITEM]
+
+
+def test_updating_a_stacked_item_leaves_the_item_after_it_untouched(
+    indentless_plan_repository: ScratchRepository,
+):
+    """
+    A write that lands at the wrong depth is absorbed by its neighbours, so the item
+    beside the one being written has to parse to exactly what the fixture declares.
+    """
+    before = {
+        item[ManifestKey.IDENTIFIER.key]: item
+        for item in yaml.safe_load(INDENTLESS_PLAN_MANIFEST)[ManifestKey.ITEMS.key]
+    }
+
+    update_item(
+        update_request(
+            item_identifier=STACKED_ITEM,
+            values_by_key={ManifestKey.STATUS: ItemStatus.BLOCKED.value},
+        ),
+        project_root=indentless_plan_repository.project_root,
+    )
+
+    written = published_items(indentless_plan_repository)
+    assert written[SECOND_ITEM] == before[SECOND_ITEM]
+    assert written[EXISTING_ITEM] == before[EXISTING_ITEM]
+
+
+def test_replacing_written_out_dependencies_replaces_their_entries(
+    indentless_plan_repository: ScratchRepository,
+):
+    """
+    ``depends_on`` spans the lines beneath its key, so replacing it has to take the
+    entries with it.
+
+    Replacing the key's own line alone leaves them behind, where YAML reads them as a
+    sequence belonging to whatever key replaced it.
+    """
+    update_item(
+        update_request(
+            item_identifier=STACKED_ITEM,
+            values_by_key={ManifestKey.DEPENDS_ON: [SECOND_ITEM]},
+        ),
+        project_root=indentless_plan_repository.project_root,
+    )
+
+    written = published_items(indentless_plan_repository)[STACKED_ITEM]
+    assert written[ManifestKey.DEPENDS_ON.key] == [SECOND_ITEM]
+
+
 # %% checking what the manifest claims against local git
 
 
@@ -1272,6 +1400,46 @@ def test_a_key_quotes_its_own_value_when_its_style_says_to():
     assert ManifestKey.TRACK.render("a-track").endswith(": a-track\n")
     assert ManifestKey.TITLE.style is ValueStyle.DOUBLE_QUOTED
     assert ManifestKey.TRACK.style is ValueStyle.PLAIN
+
+
+SCALAR_STYLED_KEYS = tuple(
+    manifest_key
+    for manifest_key in ManifestKey
+    if not manifest_key.style.spans_lines_beneath
+)
+"""
+The keys whose value is written on the key's own line, derived from the styles rather
+than listed a second time.
+"""
+
+VALUES_YAML_READS_BACK_DIFFERENTLY = (
+    "opened on #76",
+    'a value carrying a "quoted" phrase',
+    r"a path like C:\temp",
+    "a value ending in a colon:",
+)
+"""
+Values a manifest can legitimately carry that YAML does not read back as written unless
+the writer quotes and escapes them.
+
+A space before ``#`` opens a comment, a double quote closes an opening one, and a
+backslash is an escape inside double quotes - each losing the tail of the value, or the
+document, silently.
+"""
+
+
+@pytest.mark.parametrize("hostile_value", VALUES_YAML_READS_BACK_DIFFERENTLY)
+@pytest.mark.parametrize("manifest_key", SCALAR_STYLED_KEYS)
+def test_a_rendered_scalar_reads_back_as_the_value_it_was_given(
+    manifest_key: ManifestKey, hostile_value: str
+):
+    """
+    Rendering is only correct if it round-trips: what a key writes has to parse back as
+    what the caller handed it, whatever the value contains.
+    """
+    written = yaml.safe_load(manifest_key.render(hostile_value))
+
+    assert written[manifest_key.key] == hostile_value
 
 
 def test_every_key_is_a_specification_in_its_own_right():
