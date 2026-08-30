@@ -1158,3 +1158,101 @@ Run with `--noconftest` and the workspace on `PYTHONPATH` where the ORM regenera
 not wanted, following #202, #205, #216 and #221; #216 and #221 both recorded that the
 suite does run in a container once its dependency set is installed, so the full run is
 attempted rather than assumed impossible.
+
+## `montessori-classes-in-the-orm`: what was actually wrong, and what was not
+
+Kicked off 2026-08-30 in `auto` mode, as pull request #223 off
+`montessori_perception_on_main` (#202, open and out of draft, so ready to stack on --
+`check_dependency_readiness.py` reports `open_ready`). The mechanical scope check reports
+every perception path this touches absent from `main` and shared with #202, #205 and
+#221, which every round on this plan has already recorded as expected: every file in this
+plan is introduced by #202, so path overlap alone would fold the whole plan into one item.
+What remains once the overlapping edits are removed is a package that the ORM generator
+has never walked and a class name it cannot map twice -- substantial, and unrelated to
+what any of those three branches is about.
+
+The item's branch is `claude/montessori-classes-orm-s7vxu1`, not the
+`montessori_classes_in_the_orm` the manifest named: the session was designated that branch,
+and the manifest now records what exists rather than what was planned.
+
+### The cause, measured rather than inferred
+
+`classes_of_package(experiments)` yields **87** classes on the parent branch and **154**
+with `experiments/montessori/__init__.py` added. `pkgutil.walk_packages` reports a
+directory as a subpackage only if it holds an `__init__.py`, so without one the entire
+Montessori package -- semantics, world, hole geometry and the whole perception package --
+is invisible to every generator, and regenerating the interfaces could never have fixed
+the `NoDAOFoundError` failures on `tracy_icra`.
+
+### The collision is real, and the rename is on this side
+
+With the package walked, the generator writes two `FootprintDAO` classes sharing one
+`__tablename__`: one for `experiments.montessori.perception.footprint.Footprint`, one for
+`semantic_digital_twin...graph_of_convex_sets.plotting.Footprint`, which the dependency
+interface already maps. Importing the result raises
+`InvalidRequestError: Table 'FootprintDAO' is already defined for this MetaData instance`.
+Reproduced before anything was changed, not taken from the note.
+
+Renamed to **`RectifiedFootprint`**, on the perception side, which is the side the item's
+own notes anticipated. It is the footprint measured in the metric top-down rectification
+the package already names (`orthophoto.py`), and that is also what distinguishes it from
+`HoleFootprint`, the footprint the board mesh gives. Keeping the word the module, the
+`footprint` field and `FootprintClassifier` already use makes it one identifier rather than
+a re-spelling of the package -- which matters here, because #205 and #221 are editing
+`pipeline.py` and `footprint.py` at the same time and every renamed line is a conflict they
+inherit.
+
+Renaming the `semantic_digital_twin` class instead was considered and not done: it would
+reach into another package from an item whose track is "the perception package reaches
+main", and #216 is that plan's `semantic_digital_twin` item.
+
+### Two things the item's notes recorded that did not reproduce
+
+- **`NoSceneAvailable.missing_inputs: Sequence[str]` resolves.** The note said the
+  generator cannot resolve it, and that it had already been changed to `List[str]`. Neither
+  is so on this branch: the field is still `Sequence[str]`, ORMatic normalizes it to
+  `typing.List[builtins.str]` and maps it as JSON. No source change is needed and none is
+  made.
+- **Nothing else was behind those two.** The note allowed for more faults after them.
+  With the `__init__.py` and the rename, the class diagram builds and the interface writes.
+
+### Everything the walk newly maps is left mapped
+
+The `__init__.py` brings the perception machinery into the interface too -- `RgbdFrame`,
+`Orthophoto`, the detectors, the viewer. Excluding them the way
+`experiments/scripts/generate_orm.py` excludes the control-loop benchmarks ("benchmarking
+measures a running system instead of describing it") was considered and not done: they map
+cleanly, nothing asks for them to be left out, and `detector-parameters-from-knowledge` is
+about moving detector parameters onto persisted objects, so an exclusion written now is a
+policy this plan would have to undo.
+
+### Verification, and what a container cannot do
+
+`test/experiments_test/test_montessori_orm.py`, written first: the walk offers the
+Montessori classes to the generator; no Montessori class shares its name with one
+`semantic_digital_twin` maps; and the generated interface resolves a DAO for `CubeShape`
+through `get_dao_class`, the lookup whose miss is what raises `NoDAOFoundError`.
+
+**The full workspace regeneration does not run in this container, and that is not this
+branch's doing.** `giskardpy`'s generator raises
+`CouldNotResolveType: DebugExpressionPublisher` because its ROS 2 executor's annotations
+name types nothing here can import, and `coraplex`'s generator imports `geometry_msgs`
+before it starts. Both reproduce on the unmodified parent. So the interface the tests read
+is built in CI, not here.
+
+What was run here instead is the experiments class diagram with the
+`semantic_digital_twin` and `giskardpy` interfaces as its dependencies, which is where both
+faults live: it reproduced the duplicate `FootprintDAO` and the import failure exactly, and
+is what confirms the fix. `giskardpy`'s own interface had to be built with its ROS executor
+classes ignored to get that far -- a scratch harness, not a repository change.
+
+**The environment is worth recording, because the two items before this one recorded a
+harder one.** `uv sync --extra dev --python 3.12` builds the whole workspace and every
+package imports, including `giskardpy` and `coraplex`. #216's hand-built recipe -- a
+virtual environment, `random_events` from source, `urdf_parser_py` copied in -- is no
+longer needed.
+
+### Landing hazard
+
+#205 and #221 both edit `pipeline.py` and `footprint.py`, so both conflict with the rename.
+The resolution is mechanical: take their edit, spell the class `RectifiedFootprint`.
