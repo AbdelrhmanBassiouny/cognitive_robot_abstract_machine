@@ -117,6 +117,32 @@ class TriggerEvent(StrEnum):
     """
 
 
+class ActivityType(StrEnum):
+    """
+    The particular activities of an event a workflow narrows itself to.
+
+    An event declared bare answers to all of them, so naming one is how a workflow says
+    it wants a pull request at one moment of its life rather than at every push to it.
+    """
+
+    READY_FOR_REVIEW = "ready_for_review"
+    """
+    A draft taken out of draft, which is when a branch becomes integrable at all.
+    """
+
+
+class GitHubContext(StrEnum):
+    """
+    The context expressions a workflow reads a fact about its own run out of.
+    """
+
+    DEFAULT_BRANCH = "github.event.repository.default_branch"
+    """
+    The branch a repository hands out by default, which is where a published pipeline
+    lives.
+    """
+
+
 class Action(StrEnum):
     """
     The published actions a step can use, without its version suffix.
@@ -136,6 +162,18 @@ class Action(StrEnum):
     """
 
 
+class ReusableJobInput(StrEnum):
+    """
+    What the reusable library job can be told, beyond which library to run.
+    """
+
+    REFERENCE = "ref"
+    """
+    The tree to check out and test, which is what lets a caller judge one it did not
+    itself start on.
+    """
+
+
 class MatrixKey(StrEnum):
     """
     The keys a matrix entry is read through.
@@ -148,6 +186,61 @@ class MatrixKey(StrEnum):
 
 
 # %% the model
+
+
+@dataclass(frozen=True)
+class OptionalArgument:
+    """
+    An argument a step passes on only when the variable carrying its value is set.
+
+    The shell's alternate-value expansion is what drops it otherwise, so an input
+    nobody filled in never reaches the command as a flag with no value behind it.
+    """
+
+    variable: str
+    """
+    The variable holding the value.
+    """
+
+    argument: str
+    """
+    What to pass when it holds one.
+    """
+
+    def __str__(self) -> str:
+        return f'${{{self.variable}:+{self.argument} "${{{self.variable}}}"}}'
+
+
+@dataclass(frozen=True)
+class WorkflowInput:
+    """
+    One input a workflow declares, asked for what it says rather than read as a mapping.
+    """
+
+    name: str
+    """
+    What a caller names it.
+    """
+
+    declared: Mapping[str, Any]
+    """
+    The input as the file declares it.
+    """
+
+    @property
+    def default(self) -> Any:
+        """:return: What it is given when a caller names none."""
+        return self.declared.get("default")
+
+    @property
+    def is_required(self) -> bool:
+        """:return: Whether a caller has to name it."""
+        return bool(self.declared.get("required", False))
+
+    @property
+    def description(self) -> str:
+        """:return: What it is for, as a caller is shown it."""
+        return str(self.declared.get("description", ""))
 
 
 @dataclass(frozen=True)
@@ -207,6 +300,16 @@ class WorkflowStep:
         """:param action: The action to test for.
         :return: Whether this step uses it, whatever version it pins."""
         return self.uses.startswith(str(action))
+
+    def variable(self, named: str) -> str:
+        """:param named: The variable wanted.
+        :return: What this step gives it, empty when it gives it nothing."""
+        return str(self.environment.get(named, ""))
+
+    def passes(self, argument: OptionalArgument) -> bool:
+        """:param argument: The argument to test for.
+        :return: Whether this step's shell passes it that way."""
+        return str(argument) in self.script
 
 
 @dataclass(frozen=True)
@@ -339,14 +442,27 @@ class WorkflowDocument:
         return self.triggers[str(event)] or {}
 
     @property
-    def dispatch_inputs(self) -> Mapping[str, Any]:
+    def dispatch_inputs(self) -> Mapping[str, WorkflowInput]:
         """:return: What a dispatch has to be told."""
         return self.inputs_for(TriggerEvent.WORKFLOW_DISPATCH)
 
-    def inputs_for(self, event: TriggerEvent) -> Mapping[str, Any]:
+    def inputs_for(self, event: TriggerEvent) -> Mapping[str, WorkflowInput]:
         """:param event: The event whose inputs are wanted.
-        :return: What a run started that way is given, each with its own declaration."""
-        return self.trigger(event).get("inputs", {})
+        :return: What a run started that way is given, by name."""
+        return {
+            name: WorkflowInput(name=name, declared=declared or {})
+            for name, declared in self.trigger(event).get("inputs", {}).items()
+        }
+
+    def activity_types(self, event: TriggerEvent) -> tuple[ActivityType, ...]:
+        """
+        :param event: The event whose activities are wanted.
+        :return: The activities this workflow narrows that event to, empty when it
+            answers to all of them.
+        """
+        return tuple(
+            ActivityType(named) for named in self.trigger(event).get("types", ())
+        )
 
     @property
     def run_name(self) -> str:

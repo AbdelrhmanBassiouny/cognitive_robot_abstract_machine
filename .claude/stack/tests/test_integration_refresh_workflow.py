@@ -11,12 +11,16 @@ from __future__ import annotations
 
 import integration_pipeline_commands
 from integration_exit_codes import IntegrationExitCode
-from workflow_document import Action, TriggerEvent, WorkflowFile
-
-PLANS_INPUT = "plans"
-"""
-What a dispatch names the plans it wants a rebuild of.
-"""
+from integration_pipeline_commands import RefreshJobVariable, RefreshWorkflowInput
+from tool_runner import CommandLineFlag
+from workflow_document import (
+    Action,
+    ActivityType,
+    GitHubContext,
+    OptionalArgument,
+    TriggerEvent,
+    WorkflowFile,
+)
 
 REFRESH_JOB = "refresh"
 """
@@ -79,7 +83,9 @@ def test_the_rebuild_answers_to_a_schedule_a_dispatch_and_a_branch_leaving_draft
 
     assert refresh.answers_to(TriggerEvent.SCHEDULE)
     assert refresh.answers_to(TriggerEvent.WORKFLOW_DISPATCH)
-    assert refresh.trigger(TriggerEvent.PULL_REQUEST)["types"] == ["ready_for_review"]
+    assert refresh.activity_types(TriggerEvent.PULL_REQUEST) == (
+        ActivityType.READY_FOR_REVIEW,
+    )
 
 
 def test_the_probes_are_dispatched_on_the_reference_the_tooling_was_read_from():
@@ -90,9 +96,8 @@ def test_the_probes_are_dispatched_on_the_reference_the_tooling_was_read_from():
     """
     rebuilding = next(step for step in refresh_job().steps if step.environment)
 
-    assert (
-        "github.event.repository.default_branch"
-        in rebuilding.environment["PIPELINE_REFERENCE"]
+    assert GitHubContext.DEFAULT_BRANCH in rebuilding.variable(
+        RefreshJobVariable.PIPELINE_REFERENCE
     )
 
 
@@ -104,7 +109,7 @@ def test_the_dispatch_reference_is_one_expression_rather_than_several_lines():
     """
     rebuilding = next(step for step in refresh_job().steps if step.environment)
 
-    assert "\n" not in rebuilding.environment["PIPELINE_REFERENCE"]
+    assert "\n" not in rebuilding.variable(RefreshJobVariable.PIPELINE_REFERENCE)
 
 
 # %% a published pipeline older than the rebuild it is asked for
@@ -169,8 +174,8 @@ def test_a_dispatch_can_ask_for_a_rebuild_of_particular_plans():
     """
     declared = WorkflowFile.INTEGRATION_REFRESH.read().dispatch_inputs
 
-    assert PLANS_INPUT in declared
-    assert declared[PLANS_INPUT]["default"] == ""
+    assert str(RefreshWorkflowInput.PLANS) in declared
+    assert declared[str(RefreshWorkflowInput.PLANS)].default == ""
 
 
 def test_a_rebuild_that_was_asked_for_no_plan_names_none():
@@ -181,4 +186,9 @@ def test_a_rebuild_that_was_asked_for_no_plan_names_none():
     """
     rebuilding = next(step for step in refresh_job().steps if step.environment)
 
-    assert f"${{{PLANS_INPUT.upper()}:+--plan " in rebuilding.script
+    assert rebuilding.passes(
+        OptionalArgument(
+            variable=str(RefreshJobVariable.PLANS),
+            argument=str(CommandLineFlag.PLAN),
+        )
+    )

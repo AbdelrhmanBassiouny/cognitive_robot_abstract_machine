@@ -167,6 +167,7 @@ class RefreshPipeline:
 
         :return: The status of whichever step decided the run.
         """
+        self._take_down_unreferenced_builds()
         if not self.plans:
             inherited = self._settle_what_is_already_being_judged()
             if inherited is not None:
@@ -181,6 +182,21 @@ class RefreshPipeline:
         if self._open_candidate(assembled.branch) is None:
             return IntegrationExitCode.GITHUB_REQUEST_FAILED
         return IntegrationExitCode.SUCCESS
+
+    def _take_down_unreferenced_builds(self) -> None:
+        """
+        Drop the builds earlier rebuilds left behind.
+
+        Asked first, and its answer is not acted on: only publishing takes a build down
+        on its own, so every other outcome leaves one, and a rebuild that stopped over
+        tidying would leave the work it exists to do undone. What is still being judged
+        has a pull request open against it, which is what keeps it.
+        """
+        self.runner.run(
+            ToolingScript.INTEGRATION,
+            IntegrationSubcommand.TAKE_DOWN_UNREFERENCED_BUILDS,
+            CommandLineFlag.JSON,
+        )
 
     def _settle_what_is_already_being_judged(self) -> IntegrationExitCode | None:
         """

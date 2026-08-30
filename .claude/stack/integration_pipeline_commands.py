@@ -13,6 +13,7 @@ import os
 import shlex
 import tempfile
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from git_commands import GitSetting
@@ -26,6 +27,38 @@ from integration_constants import (
 from integration_exit_codes import IntegrationExitCode
 from integration_pipeline import RefreshPipeline
 from integration_run import IntegrationCommand, IntegrationRun
+from tool_runner import CommandLineFlag
+
+
+class RefreshWorkflowInput(StrEnum):
+    """
+    What a dispatched rebuild can be told, beyond what its trigger already says.
+    """
+
+    PLANS = "plans"
+    """
+    The plans to carry, which is how one plan is asked about on its own.
+    """
+
+
+class RefreshJobVariable(StrEnum):
+    """
+    The variables the job hands the rebuild what its run was started with under.
+
+    Named apart from the inputs on purpose: a dispatch input is what a caller fills in,
+    and these are what the job puts in the shell's environment, including for the runs
+    no dispatch started.
+    """
+
+    PIPELINE_REFERENCE = "PIPELINE_REFERENCE"
+    """
+    The reference this job read the tooling from, which a probe is dispatched on.
+    """
+
+    PLANS = "PLANS"
+    """
+    What :attr:`RefreshWorkflowInput.PLANS` was given, empty on every other trigger.
+    """
 
 
 @dataclass(frozen=True)
@@ -52,7 +85,7 @@ class RefreshCommand(IntegrationCommand):
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """:param parser: The subparser to declare this command's flags on."""
         parser.add_argument(
-            "--dispatch-on",
+            str(CommandLineFlag.DISPATCH_ON),
             default=POINTER_BRANCH,
             help=(
                 "the reference carrying this pipeline, which is what a dispatch runs the "
@@ -60,13 +93,13 @@ class RefreshCommand(IntegrationCommand):
             ),
         )
         parser.add_argument(
-            "--state",
+            str(CommandLineFlag.STATE),
             type=Path,
             default=Path(tempfile.gettempdir()) / LOCALISATION_STATE_FILE,
             help="where a localisation keeps what it has established between calls",
         )
         parser.add_argument(
-            "--plan",
+            str(CommandLineFlag.PLAN),
             action="append",
             default=[],
             metavar="PLAN",

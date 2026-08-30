@@ -26,7 +26,9 @@ import integration_candidate_commands
 import tool_runner
 from integration_exit_codes import IntegrationExitCode
 
-from test_maintenance import make_configuration
+from maintenance_board import PullRequestField
+
+from test_maintenance import an_api_record, make_configuration
 
 from integration_pipeline_commands import RefreshCommand
 from workflow_document import (
@@ -109,6 +111,26 @@ def a_probe_check_name() -> str:
 
 
 @dataclass(frozen=True)
+class OpenedPullRequest:
+    """
+    What a stand-in fork was asked to open, kept so a test asks what it was asked for
+    rather than indexing into a mapping the stand-in built itself.
+    """
+
+    title: str
+    """What the pull request is called."""
+
+    head: str
+    """The branch to be judged."""
+
+    base: str
+    """The branch it is opened against."""
+
+    body: str
+    """The description."""
+
+
+@dataclass(frozen=True)
 class RecordingCandidates(CandidatePullRequests, PullRequestReader):
     """
     A fork stand-in recording what a candidate did to it.
@@ -123,7 +145,7 @@ class RecordingCandidates(CandidatePullRequests, PullRequestReader):
     number: int = 4242
     """The number it gives a pull request it opens."""
 
-    opened: list[dict[str, str]] = field(default_factory=list)
+    opened: list[OpenedPullRequest] = field(default_factory=list)
     """Every pull request opened on it."""
 
     closed: list[int] = field(default_factory=list)
@@ -140,7 +162,9 @@ class RecordingCandidates(CandidatePullRequests, PullRequestReader):
         :param body: The description.
         :return: The number it was given.
         """
-        self.opened.append({"title": title, "head": head, "base": base, "body": body})
+        self.opened.append(
+            OpenedPullRequest(title=title, head=head, base=base, body=body)
+        )
         return self.number
 
     def close_pull_request(self, number: int) -> None:
@@ -166,7 +190,9 @@ class RecordingCandidates(CandidatePullRequests, PullRequestReader):
         """:param number: The pull request wanted.
         :return: It, out of the ones this stand-in was given."""
         return next(
-            record for record in self.pull_requests if record["number"] == number
+            record
+            for record in self.pull_requests
+            if PullRequestField.NUMBER.read(record) == number
         )
 
 
@@ -336,8 +362,8 @@ def test_the_candidate_is_opened_against_the_branch_the_build_would_replace():
 
     candidate = open_candidate(fork, A_BUILD_BRANCH, THE_BASE, A_HEAD)
 
-    assert fork.opened[0]["head"] == A_BUILD_BRANCH
-    assert fork.opened[0]["base"] == THE_BASE
+    assert fork.opened[0].head == A_BUILD_BRANCH
+    assert fork.opened[0].base == THE_BASE
     assert candidate.number == fork.number
 
 
@@ -371,11 +397,7 @@ def an_open_pull_request(
     :param commit: What that branch points at.
     :return: One open pull request, as the API answers it.
     """
-    return {
-        "number": number,
-        "head": {"ref": head, "sha": commit},
-        "base": {"ref": base},
-    }
+    return an_api_record(number=number, head=head, base=base, commit=commit)
 
 
 def test_the_candidate_a_later_run_settles_is_found_by_what_it_is_opened_against():

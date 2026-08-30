@@ -16,6 +16,7 @@ from typing import Any
 
 from stack import Configuration
 
+from maintenance_board import PullRequestField
 from maintenance_github import ForkPullRequests
 from integration_reproduction import (
     ClearedBranchReport,
@@ -30,7 +31,7 @@ from integration_verdict import (
     read_checks,
 )
 
-from integration_constants import POINTER_BRANCH, ReportKey
+from integration_constants import BUILD_BRANCH_PATTERN, POINTER_BRANCH, ReportKey
 from integration_exit_codes import IntegrationExitCode
 from integration_pass_record import PassedChecks, RecordedSubject
 from integration_run import IntegrationCommand, IntegrationRun
@@ -284,6 +285,71 @@ class PublishRecordedPassCommand(IntegrationCommand):
             json.dumps(document, indent=2)
             if arguments.json
             else f"{arguments.build}\tpublished\t{POINTER_BRANCH}"
+        )
+        return IntegrationExitCode.SUCCESS
+
+
+@dataclass(frozen=True)
+class TakeDownUnreferencedBuildsCommand(IntegrationCommand):
+    """
+    Deletes the build branches nothing is judging any more.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        The name it is invoked by on the command line.
+        """
+        return "take-down-unreferenced-builds"
+
+    @property
+    def description(self) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return "delete the build branches no open pull request refers to"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare this command's flags on."""
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """
+        Take down every published build no open pull request refers to.
+
+        A build branch exists to be judged, and :func:`publish` drops the one build that
+        reaches a verdict it can act on - so every other outcome leaves one behind, and
+        four rebuilds a day leave four. What keeps a branch is a pull request still open
+        against it: the candidate judging it, or a filtered build somebody asked for and
+        is working from.
+
+        :param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        remote = run.configuration.fork_remote
+        judged = {
+            PullRequestField.HEAD.read(record)
+            for record in run.fork().open_pull_requests()
+        }
+        taken_down = tuple(
+            branch
+            for branch in run.git.remote_branch_names(remote, BUILD_BRANCH_PATTERN)
+            if branch not in judged
+        )
+        for branch in taken_down:
+            run.git.delete_branch(remote, branch).raise_if_failed()
+        document = {ReportKey.TAKEN_DOWN: list(taken_down)}
+        print(
+            json.dumps(document, indent=2)
+            if arguments.json
+            else "\n".join(taken_down) or "nothing to take down"
         )
         return IntegrationExitCode.SUCCESS
 

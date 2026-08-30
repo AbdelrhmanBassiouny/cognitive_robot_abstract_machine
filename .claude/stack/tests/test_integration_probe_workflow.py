@@ -14,12 +14,17 @@ from integration_probes import (
     ProbeWorkflowInput,
     probe_run_name,
 )
-from workflow_document import Action, TriggerEvent, WorkflowFile
+from workflow_document import (
+    Action,
+    ReusableJobInput,
+    TriggerEvent,
+    WorkflowFile,
+)
 
 from localisation_fixtures import A_PREFIX_BRANCH
 
 
-def an_input_expression(named: ProbeWorkflowInput) -> str:
+def an_input_expression(named: str) -> str:
     """
     :param named: The input to read.
     :return: How a workflow spells reading it.
@@ -45,7 +50,7 @@ def test_a_probe_is_dispatched_on_a_reference_that_carries_it_and_told_what_to_t
     assert probe.answers_to(TriggerEvent.WORKFLOW_DISPATCH)
     assert set(ProbeWorkflowInput) <= set(probe.dispatch_inputs)
     assert all(
-        probe.dispatch_inputs[str(declared)]["required"]
+        probe.dispatch_inputs[str(declared)].is_required
         for declared in ProbeWorkflowInput
     )
 
@@ -91,7 +96,9 @@ def test_the_reusable_job_checks_out_the_reference_it_is_given():
         WorkflowFile.REUSABLE_LIBRARY_JOB.read().job("test").step_using(Action.CHECKOUT)
     )
 
-    assert checkout.inputs["ref"] == "${{ inputs.ref }}"
+    assert checkout.inputs[str(ReusableJobInput.REFERENCE)] == an_input_expression(
+        ReusableJobInput.REFERENCE
+    )
 
 
 def test_the_reusable_job_still_runs_over_its_own_reference_when_given_none():
@@ -102,10 +109,10 @@ def test_the_reusable_job_still_runs_over_its_own_reference_when_given_none():
     """
     declared = WorkflowFile.REUSABLE_LIBRARY_JOB.read().inputs_for(
         TriggerEvent.WORKFLOW_CALL
-    )["ref"]
+    )[str(ReusableJobInput.REFERENCE)]
 
-    assert declared["required"] is False
-    assert declared["default"] == ""
+    assert declared.is_required is False
+    assert declared.default == ""
 
 
 # %% finding a probe's run again

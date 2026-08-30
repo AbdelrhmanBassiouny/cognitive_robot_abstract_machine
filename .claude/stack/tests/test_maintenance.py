@@ -43,8 +43,11 @@ import maintenance_commands
 import maintenance_restack_procedure
 from maintenance_board import (
     BoardExport,
+    BranchReferenceKey,
+    LabelKey,
     MissingPullRequestFieldError,
     PullRequestField,
+    PullRequestRecord,
     get_session_link_in,
 )
 from maintenance_commands import (
@@ -353,23 +356,34 @@ def an_api_record(
     draft: bool = False,
     labels: list[str] | None = None,
     body: str = "",
-) -> dict:
+    title: str = "",
+    commit: str = "",
+) -> PullRequestRecord:
     """
+    Every key spelled from the field that reads it, so a record built here and a record
+    read from GitHub can never disagree about what a field is called.
+
     :param number: The pull request number.
     :param head: The head branch reference.
     :param base: The base branch reference.
     :param draft: Whether the pull request is a draft.
     :param labels: The label names it carries.
     :param body: The description to read a session link out of.
+    :param title: What the pull request is called.
+    :param commit: What the head branch points at.
     :return: One pull request in the shape the REST API returns it.
     """
     return {
         PullRequestField.NUMBER.key: number,
-        PullRequestField.HEAD.key: {"ref": head},
-        PullRequestField.BASE.key: {"ref": base},
+        PullRequestField.HEAD.key: {
+            BranchReferenceKey.BRANCH: head,
+            BranchReferenceKey.COMMIT: commit,
+        },
+        PullRequestField.BASE.key: {BranchReferenceKey.BRANCH: base},
         PullRequestField.DRAFT.key: draft,
-        PullRequestField.LABELS.key: [{"name": name} for name in labels or []],
+        PullRequestField.LABELS.key: [{LabelKey.NAME: name} for name in labels or []],
         PullRequestField.BODY.key: body,
+        PullRequestField.TITLE.key: title,
     }
 
 

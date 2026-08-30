@@ -238,6 +238,19 @@ class ReportKey(StrEnum):
     The branches whose block a clearing run lifted.
     """
 
+    TAKEN_DOWN = "taken_down"
+    """
+    The build branches a run deleted because nothing was judging them any more.
+    """
+
+
+BUILD_BRANCH_PATTERN = f"{POINTER_BRANCH}-[0-9]*"
+"""
+Matches every branch a build was assembled onto, and nothing a build did not.
+
+The digit is what tells a build from a probe: both open with the pointer's own name and
+a hyphen, and only a build follows it with the moment it was named at.
+"""
 
 PROBE_BRANCH_PREFIX = f"{POINTER_BRANCH}-probe-"
 """

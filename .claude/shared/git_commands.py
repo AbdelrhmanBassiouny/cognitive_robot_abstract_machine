@@ -277,6 +277,13 @@ class GitCommandRunner:
             for line in self.run("branch", "--list").splitlines()
         )
 
+    def file_names_in(self, reference: str) -> tuple[str, ...]:
+        """
+        :param reference: The commit or branch to read.
+        :return: The names of the files that reference carries, in git's own order.
+        """
+        return tuple(self.run("ls-tree", "--name-only", reference).splitlines())
+
     def worktree_paths(self) -> tuple[str, ...]:
         """
         :return: The working trees attached to this checkout, the main one included.
@@ -309,6 +316,21 @@ class GitCommandRunner:
         :return: What the remote answered, empty when it holds no such reference.
         """
         return self.run("ls-remote", remote, reference)
+
+    def remote_branch_names(self, remote: str, pattern: str) -> tuple[str, ...]:
+        """
+        Ask a remote which of its branches match a shape, without fetching from it.
+
+        :param remote: The remote to ask.
+        :param pattern: A branch-name glob, matched against the branch's own name.
+        :return: The names of the branches it answered with, without their prefix.
+        """
+        answered = self.remote_reference(remote, f"{BRANCH_REFERENCE_PREFIX}{pattern}")
+        return tuple(
+            line.split()[-1].removeprefix(BRANCH_REFERENCE_PREFIX)
+            for line in answered.splitlines()
+            if line.strip()
+        )
 
     def remove_remote(self, remote: str) -> None:
         """

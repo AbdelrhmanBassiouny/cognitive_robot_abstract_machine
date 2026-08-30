@@ -30,6 +30,7 @@ from test_integration_verdict import A_BUILD_BRANCH, RecordingCandidates
 from test_maintenance import (
     ForkCheckout,
     UPSTREAM_BASE,
+    an_api_record,
     fork_checkout,  # noqa: F401  (imported so pytest finds the fixture by name)
     make_configuration,
 )
@@ -196,8 +197,8 @@ def test_a_filtered_build_s_candidate_is_never_the_one_the_rebuild_settles(
 
     opened = open_a_candidate(fork_checkout, A_BUILD_BRANCH, A_PLAN).opened[0]
 
-    assert opened["base"] == UPSTREAM_BASE
-    assert opened["base"] != POINTER_BRANCH
+    assert opened.base == UPSTREAM_BASE
+    assert opened.base != POINTER_BRANCH
 
 
 def test_an_unfiltered_build_s_candidate_is_opened_where_the_rebuild_settles_it(
@@ -212,7 +213,7 @@ def test_an_unfiltered_build_s_candidate_is_opened_where_the_rebuild_settles_it(
 
     opened = open_a_candidate(fork_checkout, A_BUILD_BRANCH).opened[0]
 
-    assert opened["base"] == POINTER_BRANCH
+    assert opened.base == POINTER_BRANCH
 
 
 def test_a_filtered_build_s_candidate_says_it_is_never_published():
@@ -233,14 +234,12 @@ def test_a_filtered_build_s_candidate_is_still_kept_off_the_board():
     """
     export = BoardExport.from_api_records(
         [
-            {
-                "number": 1,
-                "title": candidate_title(A_BUILD_BRANCH),
-                "head": {"ref": A_BUILD_BRANCH},
-                "base": {"ref": UPSTREAM_BASE},
-                "draft": False,
-                "labels": [],
-            }
+            an_api_record(
+                number=1,
+                title=candidate_title(A_BUILD_BRANCH),
+                head=A_BUILD_BRANCH,
+                base=UPSTREAM_BASE,
+            )
         ]
     )
 

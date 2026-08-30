@@ -144,13 +144,22 @@ def a_reported_candidate() -> CommandOutcome:
     )
 
 
-def rebuild(*answers: CommandOutcome, tmp_path: Path) -> tuple:
+def rebuild(
+    *answers: CommandOutcome,
+    tmp_path: Path,
+    take_down: CommandOutcome | None = None,
+) -> tuple:
     """
-    :param answers: What each command in turn answers.
+    The take-down a rebuild opens with is answered here rather than by each caller: its
+    status is deliberately not acted on, so scripting it would put a step no decision
+    depends on in front of every one that does.
+
+    :param answers: What each command a rebuild decides on answers, in turn.
     :param tmp_path: Where the localisation would keep its state.
+    :param take_down: What the take-down answers, where a test is about that.
     :return: The status the rebuild reached, and the runner that recorded it.
     """
-    runner = RecordingRunner(answers=list(answers))
+    runner = RecordingRunner(answers=[take_down or succeeded(), *answers])
     status = RefreshPipeline(
         dispatch_on="integration",
         state_document=tmp_path / "localisation.json",
@@ -219,7 +228,49 @@ def test_a_rebuild_asks_what_is_already_being_judged_before_assembling_anything(
         tmp_path=Path("/nowhere"),
     )
 
-    assert runner.subcommands[0] == str(IntegrationSubcommand.FIND_CANDIDATE)
+    asked = runner.subcommands
+
+    assert asked.index(str(IntegrationSubcommand.FIND_CANDIDATE)) < asked.index(
+        str(MaintenanceSubcommand.FAST_FORWARD)
+    )
+
+
+def test_a_rebuild_takes_down_what_earlier_runs_left_before_it_adds_another(
+    tmp_path: Path,
+):
+    """
+    Only publishing takes a build down on its own, so every rebuild that ends any other
+    way leaves one - four times a day. Asked before the run reaches anything it can stop
+    on, since a run that stopped early is exactly the kind that left one.
+    """
+    _, runner = rebuild(
+        no_candidate_open(),
+        answered(IntegrationExitCode.GIT_COMMAND_FAILED),
+        tmp_path=tmp_path,
+    )
+
+    assert runner.subcommands[0] == str(
+        IntegrationSubcommand.TAKE_DOWN_UNREFERENCED_BUILDS
+    )
+
+
+def test_a_rebuild_carries_on_past_a_take_down_that_failed(tmp_path: Path):
+    """
+    Tidying is not the work a rebuild exists to do, so a fork that refused a deletion
+    must not cost the build - the branches it did not drop are dropped by the next run.
+    """
+    status, runner = rebuild(
+        no_candidate_open(),
+        succeeded(),
+        a_build(),
+        no_recorded_pass(),
+        a_reported_candidate(),
+        tmp_path=tmp_path,
+        take_down=answered(IntegrationExitCode.GIT_COMMAND_FAILED),
+    )
+
+    assert status is IntegrationExitCode.SUCCESS
+    assert str(IntegrationSubcommand.OPEN_CANDIDATE) in runner.subcommands
 
 
 def test_a_candidate_still_collecting_checks_is_left_for_a_later_run(tmp_path: Path):
@@ -237,6 +288,7 @@ def test_a_candidate_still_collecting_checks_is_left_for_a_later_run(tmp_path: P
 
     assert status is IntegrationExitCode.SUCCESS
     assert runner.subcommands == [
+        str(IntegrationSubcommand.TAKE_DOWN_UNREFERENCED_BUILDS),
         str(IntegrationSubcommand.FIND_CANDIDATE),
         str(IntegrationSubcommand.SETTLE_CANDIDATE),
     ]
@@ -284,6 +336,7 @@ def test_a_green_candidate_is_published_and_the_run_goes_on_to_the_next_build(
 
     assert status is IntegrationExitCode.SUCCESS
     assert runner.subcommands == [
+        str(IntegrationSubcommand.TAKE_DOWN_UNREFERENCED_BUILDS),
         str(IntegrationSubcommand.FIND_CANDIDATE),
         str(IntegrationSubcommand.SETTLE_CANDIDATE),
         str(MaintenanceSubcommand.FAST_FORWARD),
@@ -334,6 +387,7 @@ def test_a_rebuild_that_opened_a_candidate_stops_rather_than_waiting_for_its_che
 
     assert status is IntegrationExitCode.SUCCESS
     assert runner.subcommands == [
+        str(IntegrationSubcommand.TAKE_DOWN_UNREFERENCED_BUILDS),
         str(IntegrationSubcommand.FIND_CANDIDATE),
         str(MaintenanceSubcommand.FAST_FORWARD),
         str(IntegrationSubcommand.BUILD),
@@ -360,6 +414,7 @@ def test_a_build_whose_tree_has_already_passed_is_published_with_no_candidate(
 
     assert status is IntegrationExitCode.SUCCESS
     assert runner.subcommands == [
+        str(IntegrationSubcommand.TAKE_DOWN_UNREFERENCED_BUILDS),
         str(IntegrationSubcommand.FIND_CANDIDATE),
         str(MaintenanceSubcommand.FAST_FORWARD),
         str(IntegrationSubcommand.BUILD),
@@ -382,6 +437,7 @@ def test_a_base_that_would_not_come_forward_stops_before_anything_is_assembled(
 
     assert status is IntegrationExitCode.BASE_NOT_PREPARED
     assert runner.subcommands == [
+        str(IntegrationSubcommand.TAKE_DOWN_UNREFERENCED_BUILDS),
         str(IntegrationSubcommand.FIND_CANDIDATE),
         str(MaintenanceSubcommand.FAST_FORWARD),
     ]
@@ -424,6 +480,7 @@ def test_a_suite_that_failed_on_the_build_blocks_the_tip_that_turned_it(
 
     assert status is IntegrationExitCode.TESTS_FAILED
     assert runner.subcommands == [
+        str(IntegrationSubcommand.TAKE_DOWN_UNREFERENCED_BUILDS),
         str(IntegrationSubcommand.FIND_CANDIDATE),
         str(MaintenanceSubcommand.FAST_FORWARD),
         str(IntegrationSubcommand.BUILD),
@@ -506,6 +563,7 @@ def test_a_rebuild_asked_for_one_plan_settles_nothing_and_publishes_nothing(
 
     assert status is IntegrationExitCode.SUCCESS
     assert runner.subcommands == [
+        str(IntegrationSubcommand.TAKE_DOWN_UNREFERENCED_BUILDS),
         str(MaintenanceSubcommand.FAST_FORWARD),
         str(IntegrationSubcommand.BUILD),
         str(IntegrationSubcommand.OPEN_CANDIDATE),

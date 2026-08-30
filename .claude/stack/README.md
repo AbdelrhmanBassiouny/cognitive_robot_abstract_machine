@@ -112,6 +112,11 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
     `refs/integration/passed/`, expire after a week and are pruned as new ones are written. Only
     passes are recorded: a red is cleared by re-running the same commit, and a remembered one
     would make the rule that a branch re-enters a build by going green unreachable.
+  - `take-down-unreferenced-builds` - drop the build branches nothing is judging any more.
+    Publishing takes its own build down, because the pointer then holds the same commit; every
+    other outcome left one behind, so eight had gathered on the fork before anyone counted. What
+    keeps a build is a pull request still open against it - the candidate judging it, or a
+    filtered build somebody asked for and is working from.
   - `refresh` - the whole cycle as one command, which is what the scheduled Action runs. It takes
     the same `--plan`; a rebuild asked for particular plans settles nothing and publishes nothing,
     and its candidate is opened against the upstream base so nothing ever can.

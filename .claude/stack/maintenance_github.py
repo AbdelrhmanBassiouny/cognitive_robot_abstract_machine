@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from maintenance_board import PullRequestRecord
+from maintenance_board import PullRequestField, PullRequestRecord
 from maintenance_constants import CREDENTIAL_VARIABLES, GITHUB_API_ROOT
 from exceptions import ExternalCallFailed
 from stack import Repository
@@ -432,9 +432,14 @@ class GitHubRepository(ForkPullRequests, CandidatePullRequests, DispatchedWorkfl
         opened = self._call(
             HttpMethod.POST,
             self._collection(ApiResource.PULL_REQUESTS),
-            {"title": title, "head": head, "base": base, "body": body},
+            {
+                PullRequestField.TITLE.key: title,
+                PullRequestField.HEAD.key: head,
+                PullRequestField.BASE.key: base,
+                PullRequestField.BODY.key: body,
+            },
         )
-        return int(opened["number"])
+        return int(PullRequestField.NUMBER.read(opened))
 
     def close_pull_request(self, number: int) -> None:
         """

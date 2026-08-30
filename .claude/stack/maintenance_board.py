@@ -73,6 +73,17 @@ class BranchReferenceKey(StrEnum):
     """
 
 
+class LabelKey(StrEnum):
+    """
+    What the object a pull request gives for each of its labels carries.
+    """
+
+    NAME = "name"
+    """
+    The label's own name, which is the only half anything here reads.
+    """
+
+
 @dataclass(frozen=True)
 class PullRequestFieldSpecification:
     """
@@ -182,7 +193,7 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
                 return self._nested(value, BranchReferenceKey.COMMIT, number)
             case PullRequestFieldShape.LABEL_NAMES:
                 return [
-                    label if isinstance(label, str) else str(label["name"])
+                    label if isinstance(label, str) else str(label[LabelKey.NAME])
                     for label in value
                 ]
             case _:

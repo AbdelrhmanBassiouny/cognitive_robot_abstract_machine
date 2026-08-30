@@ -52,6 +52,11 @@ class IntegrationSubcommand(StrEnum):
     names nothing would be a usage error at the far end of a runner.
     """
 
+    TAKE_DOWN_UNREFERENCED_BUILDS = "take-down-unreferenced-builds"
+    """
+    Delete the build branches earlier rebuilds left with nothing judging them.
+    """
+
     BUILD = "build"
     """
     Restack every stale tip and assemble the branch.

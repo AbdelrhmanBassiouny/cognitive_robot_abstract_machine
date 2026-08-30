@@ -326,8 +326,7 @@ def files_in(checkout: ForkCheckout, branch: str) -> set[str]:
     :param branch: The published branch to read.
     :return: The names of the files that branch carries.
     """
-    listed = checkout.run_git("ls-tree", "--name-only", f"origin/{branch}")
-    return set(listed.splitlines())
+    return set(checkout.git.file_names_in(f"origin/{branch}"))
 
 
 def published(checkout: ForkCheckout, probes: Sequence[DispatchedProbe]) -> list[str]:

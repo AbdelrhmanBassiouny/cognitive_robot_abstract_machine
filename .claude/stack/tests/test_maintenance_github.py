@@ -13,6 +13,7 @@ from typing import Any
 
 import pytest
 
+from maintenance_board import PullRequestField
 from maintenance_github import GitHubRepository, HttpMethod
 from stack import Repository
 
@@ -104,6 +105,11 @@ class RecordingClient:
     Every call made through it, in order.
     """
 
+    payloads: list[Any] = field(default_factory=list)
+    """
+    The body each call sent, in the same order.
+    """
+
     def record(self, method: HttpMethod, path: str, payload: Any = None) -> Any:
         """
         :param method: The verb the client called with.
@@ -112,6 +118,7 @@ class RecordingClient:
         :return: The answer this recorder was built with.
         """
         self.calls.append(RecordedCall(method=method, path=path))
+        self.payloads.append(payload)
         return self.answer
 
 
@@ -147,7 +154,7 @@ API_CALLS = {
         make=lambda client: client.open_pull_request("a title", "a-head", "a-base", ""),
         method=HttpMethod.POST,
         path="/pulls",
-        answer={"number": A_PULL_REQUEST},
+        answer={PullRequestField.NUMBER.key: A_PULL_REQUEST},
     ),
     "close_pull_request": ApiCall(
         make=lambda client: client.close_pull_request(A_PULL_REQUEST),
@@ -186,6 +193,15 @@ def calls_made(call: ApiCall, monkeypatch: pytest.MonkeyPatch) -> list[RecordedC
     :param monkeypatch: How the request is intercepted.
     :return: What the client asked for, in order.
     """
+    return client_recording(call, monkeypatch).calls
+
+
+def client_recording(call: ApiCall, monkeypatch: pytest.MonkeyPatch) -> RecordingClient:
+    """
+    :param call: The call to make.
+    :param monkeypatch: How the request is intercepted.
+    :return: The recorder the call was made through.
+    """
     recording = RecordingClient(answer=call.answer)
     monkeypatch.setattr(
         GitHubRepository, "_call", lambda _, *made: recording.record(*made)
@@ -195,7 +211,7 @@ def calls_made(call: ApiCall, monkeypatch: pytest.MonkeyPatch) -> list[RecordedC
             repository=A_REPOSITORY, token="a-token", page_size=A_PAGE_SIZE
         )
     )
-    return recording.calls
+    return recording
 
 
 @pytest.mark.parametrize("name", sorted(API_CALLS))
@@ -224,3 +240,23 @@ def test_every_call_this_client_makes_is_one_this_pins():
     } - {"from_environment"}
 
     assert public == set(API_CALLS)
+
+
+def test_opening_a_pull_request_sends_the_fields_under_the_names_they_are_read_by(
+    monkeypatch: pytest.MonkeyPatch,
+):
+    """
+    The client writes a pull request and the board reads one back, so a field spelled
+    apart from the one that reads it is a payload GitHub rejects or a value nothing
+    finds.
+    """
+    sent = client_recording(API_CALLS["open_pull_request"], monkeypatch).payloads
+
+    assert sent == [
+        {
+            PullRequestField.TITLE.key: "a title",
+            PullRequestField.HEAD.key: "a-head",
+            PullRequestField.BASE.key: "a-base",
+            PullRequestField.BODY.key: "",
+        }
+    ]
