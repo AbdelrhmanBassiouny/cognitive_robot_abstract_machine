@@ -449,7 +449,7 @@ class InsertMontessoriShapeAction(ActionDescription):
                 )
             ]
             pick_up_shape: PlanNode = a(PickUpAction)(
-                object_designator=self.montessori_shape.root,
+                object_designator=self.montessori_shape,
                 arm=self.arm,
                 grasp_description=self._grasp_description_query(),
                 grasp_closing_velocity=self.grasp_closing_velocity,
@@ -471,7 +471,7 @@ class InsertMontessoriShapeAction(ActionDescription):
             navigate_to_shape = [self._rotate_base_towards_shape_plan()]
             navigate_to_hole = []
             pick_up_shape = PickUpAction(
-                object_designator=self.montessori_shape.root,
+                object_designator=self.montessori_shape,
                 arm=self.arm,
                 grasp_description=self.grasp_description,
                 grasp_closing_velocity=self.grasp_closing_velocity,
