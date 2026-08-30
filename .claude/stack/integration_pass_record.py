@@ -2,9 +2,9 @@
 What this fork has already seen pass, so nothing is checked twice while it has not moved.
 
 A rebuild runs four times a day over a set of branches that is usually unchanged, and
-its matrix takes about twenty-five minutes once GitHub has got round to starting it -
-which was measured at between nineteen minutes and two hours forty-seven. Almost all of
-that is spent re-establishing what the previous rebuild established.
+what one costs is a whole matrix plus the wait before GitHub starts it - see
+:class:`~integration_verdict.CandidateCheckTiming`. Almost all of that is spent
+re-establishing what the previous rebuild established.
 
 Only a pass is recorded. A failure is cleared by re-running the same commit - a flake, a
 runner that died, a base image rebuilt - and the rule a red branch re-enters a build by

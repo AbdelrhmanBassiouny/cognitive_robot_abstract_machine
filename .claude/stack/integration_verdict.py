@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
 from collections.abc import Sequence
@@ -36,6 +37,44 @@ PIPELINE_WORKFLOWS = (
 )
 """
 The workflows this pipeline runs about its own work rather than about a tree.
+"""
+
+
+@dataclass(frozen=True)
+class CandidateCheckTiming:
+    """
+    How long a candidate's checks took on this fork, measured rather than assumed.
+
+    Recorded once because four separate designs are shaped by it and none of them is
+    arguable without it: no run can outwait its own candidate, so one run opens a
+    candidate and the next settles it; a candidate reporting nothing at all is slow
+    rather than broken until a whole cycle has passed; and a build whose tree has
+    already been seen to pass is worth remembering rather than checking again.
+    """
+
+    soonest_first_check: timedelta
+    """
+    How long the quickest candidate waited before anything was reported against it.
+    """
+
+    slowest_first_check: timedelta
+    """
+    How long the slowest one waited, which is the figure no in-job wait can outlast.
+    """
+
+    matrix_duration: timedelta
+    """
+    How long the matrix itself runs, once GitHub has got round to starting it.
+    """
+
+
+MEASURED_CANDIDATE_CHECK_TIMING = CandidateCheckTiming(
+    soonest_first_check=timedelta(minutes=19),
+    slowest_first_check=timedelta(hours=2, minutes=47),
+    matrix_duration=timedelta(minutes=25),
+)
+"""
+What two candidates and their matrices actually took on this fork.
 """
 
 

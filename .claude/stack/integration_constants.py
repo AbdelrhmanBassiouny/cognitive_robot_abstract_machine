@@ -252,6 +252,17 @@ The digit is what tells a build from a probe: both open with the pointer's own n
 a hyphen, and only a build follows it with the moment it was named at.
 """
 
+BUILD_BRANCH_FILTER = f"{POINTER_BRANCH}-*"
+"""
+Matches a build's branch where a workflow says which branches an event is about.
+
+Spelled apart from :data:`BUILD_BRANCH_PATTERN` because the two are read by different
+things: git's own listing takes the character class that tells a build from a probe, and
+a workflow's filter does not, so the pattern that narrows one silently matches nothing in
+the other. Nothing is lost by the wider form here - a probe's tree is judged by the probe
+workflow rather than by the one this filter is about.
+"""
+
 PROBE_BRANCH_PREFIX = f"{POINTER_BRANCH}-probe-"
 """
 Opens the name of every tree a localisation publishes for CI to judge.

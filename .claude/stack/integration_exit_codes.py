@@ -120,8 +120,8 @@ class IntegrationExitCode(IntEnum):
     Told apart from a matrix that is merely slow because what a reader has to look at is
     different: whatever should have started a run - the trigger, or the credential the
     candidate was opened with - rather than the checks themselves. A candidate reads as
-    unchecked for its first minutes whatever happens, so this is only ever said of one a
-    later run inherited.
+    unchecked for as long as :class:`~integration_verdict.CandidateCheckTiming` records
+    whatever happens, so this is only ever said of one a later run inherited.
     """
 
     NO_CANDIDATE_OPEN = 18

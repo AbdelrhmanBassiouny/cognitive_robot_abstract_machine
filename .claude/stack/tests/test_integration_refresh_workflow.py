@@ -10,6 +10,7 @@ nothing can run outside a runner, and so one nothing checks.
 from __future__ import annotations
 
 import integration_pipeline_commands
+from integration_constants import BUILD_BRANCH_FILTER
 from integration_exit_codes import IntegrationExitCode
 from integration_pipeline_commands import RefreshJobVariable, RefreshWorkflowInput
 from tool_runner import CommandLineFlag
@@ -266,3 +267,45 @@ def test_a_pull_request_from_a_fork_does_not_start_a_rebuild():
     )
 
     assert compared in refresh_job().condition
+
+
+# %% settling a candidate when its checks finish
+
+
+def refresh_workflow():
+    """:return: The parsed refresh workflow."""
+    return WorkflowFile.INTEGRATION_REFRESH.read()
+
+
+def test_a_candidate_is_settled_when_its_checks_finish_rather_than_at_the_next_slot():
+    """
+    A run cannot reach a verdict on the candidate it opened, so a first-time build waits
+    for a later run - and on the schedule alone that is up to six hours after the matrix
+    it is waiting for has already answered.
+    """
+    assert refresh_workflow().activity_types(TriggerEvent.WORKFLOW_RUN) == (
+        ActivityType.COMPLETED,
+    )
+
+
+def test_the_run_a_rebuild_answers_to_is_named_off_the_workflow_that_reports_it():
+    """
+    ``workflow_run`` matches on a workflow's name rather than on its file, so a name.
+
+    retyped here and later changed there leaves the trigger answering to nothing at all
+    - silently, and in the direction that stops the pipeline rather than the one that
+    over-runs it.
+    """
+    assert refresh_workflow().watched_workflows(TriggerEvent.WORKFLOW_RUN) == (
+        WorkflowFile.CONTINUOUS_INTEGRATION.read().name,
+    )
+
+
+def test_only_a_build_s_own_checks_start_a_rebuild():
+    """
+    Every pull request in flight runs that same workflow, so an unfiltered trigger would
+    be a full rebuild per push to any of them.
+    """
+    assert refresh_workflow().branches(TriggerEvent.WORKFLOW_RUN) == (
+        BUILD_BRANCH_FILTER,
+    )

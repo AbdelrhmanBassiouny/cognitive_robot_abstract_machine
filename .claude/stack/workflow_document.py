@@ -116,6 +116,15 @@ class TriggerEvent(StrEnum):
     Run as a job of another workflow, which is what makes one reusable.
     """
 
+    WORKFLOW_RUN = "workflow_run"
+    """
+    Another workflow's run reaching an end, named by that workflow's name rather than
+    by its file.
+
+    Its run always starts on the default branch, whichever branch the run it answers to
+    was about - so the workflow answering has to be the copy published there.
+    """
+
 
 class ActivityType(StrEnum):
     """
@@ -128,6 +137,14 @@ class ActivityType(StrEnum):
     READY_FOR_REVIEW = "ready_for_review"
     """
     A draft taken out of draft, which is when a branch becomes integrable at all.
+    """
+
+    COMPLETED = "completed"
+    """
+    A run that has finished, however it finished.
+
+    Narrowing to it rather than to a conclusion, because a red candidate is as much an
+    answer to act on as a green one.
     """
 
 
@@ -513,6 +530,29 @@ class WorkflowDocument:
         return tuple(
             ActivityType(named) for named in self.trigger(event).get("types", ())
         )
+
+    def watched_workflows(self, event: TriggerEvent) -> tuple[str, ...]:
+        """
+        :param event: The event whose watched workflows are wanted.
+        :return: The workflows this one answers to the runs of, by the name each of them
+            declares, empty when the event names none.
+        """
+        return tuple(str(named) for named in self.trigger(event).get("workflows", ()))
+
+    def branches(self, event: TriggerEvent) -> tuple[str, ...]:
+        """
+        :param event: The event whose branch filter is wanted.
+        :return: The branch patterns this workflow narrows that event to, empty when it
+            answers about every branch.
+        """
+        return tuple(
+            str(pattern) for pattern in self.trigger(event).get("branches", ())
+        )
+
+    @property
+    def name(self) -> str:
+        """:return: What this workflow is called, which is how another one names it."""
+        return str(self.declared["name"])
 
     @property
     def run_name(self) -> str:

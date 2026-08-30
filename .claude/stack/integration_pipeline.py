@@ -15,10 +15,10 @@ The individual commands are unchanged and still each answer one question and exi
 caller that does not want to wait need not; the waiting is this composition's, not
 theirs.
 
-One run never reaches a verdict on the candidate it opened. Measured on this fork, the
-first check appeared 19 minutes after one candidate was opened and 2 hours 47 minutes
-after another, which no job can outwait - so a run opens a candidate and stops, and the
-next run inherits and settles it.
+One run never reaches a verdict on the candidate it opened. What a candidate's checks
+take was measured rather than assumed, and no job can outwait it - see
+:class:`~integration_verdict.CandidateCheckTiming` - so a run opens a candidate and
+stops, and the next run inherits and settles it.
 """
 
 from __future__ import annotations

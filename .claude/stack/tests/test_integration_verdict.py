@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import pytest
 
@@ -21,6 +22,10 @@ from maintenance_github import (
 )
 
 import integration_candidate_commands
+import integration_exit_codes
+import integration_pass_record
+import integration_pipeline
+import integration_verdict
 import tool_runner
 from integration_exit_codes import IntegrationExitCode
 
@@ -37,8 +42,10 @@ from workflow_document import (
 )
 
 from integration_verdict import (
+    MEASURED_CANDIDATE_CHECK_TIMING,
     PIPELINE_WORKFLOWS,
     Candidate,
+    CandidateCheckTiming,
     ChecksAboutTheBuild,
     ReportedChecks,
     ChecksVerdict,
@@ -616,3 +623,72 @@ def test_the_rebuild_runs_the_suite_before_it_pushes_anything():
     cost without giving back what it buys.
     """
     assert not any("--no-test" in str(flag) for flag in tool_runner.CommandLineFlag)
+
+
+# %% how long a candidate's checks take, said once
+
+
+def stack_modules() -> tuple[Path, ...]:
+    """
+    :return: Every module of the tooling, so a statement is looked for across all of
+        them rather than across the ones a reader thought of.
+    """
+    return tuple(sorted(Path(integration_verdict.__file__).parent.glob("*.py")))
+
+
+def slowest_wait_past_the_hour() -> int:
+    """
+    :return: The minutes past the hour the longest measured wait ran to, which is the
+        one figure in that measurement no other number in this tooling shares.
+    """
+    whole_minutes = int(
+        MEASURED_CANDIDATE_CHECK_TIMING.slowest_first_check.total_seconds() // 60
+    )
+    return whole_minutes % 60
+
+
+def test_the_module_that_records_the_check_timing_says_how_long_it_was():
+    """
+    A record whose own module does not spell the measurement leaves every reference to
+    it pointing at nothing.
+    """
+    recorded = Path(integration_verdict.__file__).read_text()
+
+    assert str(slowest_wait_past_the_hour()) in recorded
+
+
+def test_no_other_module_restates_how_long_a_candidate_waits():
+    """
+    The measurement shapes four separate designs, and written out at each of them it is
+    four copies that go stale one at a time, with no reader able to tell which is
+    current. Everywhere else refers to :class:`CandidateCheckTiming` instead.
+    """
+    restating = [
+        module.name
+        for module in stack_modules()
+        if module.name != Path(integration_verdict.__file__).name
+        and str(slowest_wait_past_the_hour()) in module.read_text()
+    ]
+
+    assert restating == []
+
+
+def test_every_design_the_timing_shapes_refers_to_the_record():
+    """
+    A design explained by a measurement it does not name is one a reader cannot check,
+    which is what restating the numbers was buying.
+    """
+    shaped_by_it = (
+        integration_pipeline,
+        integration_pass_record,
+        integration_candidate_commands,
+        integration_exit_codes,
+    )
+
+    silent = [
+        module.__name__
+        for module in shaped_by_it
+        if CandidateCheckTiming.__name__ not in Path(module.__file__).read_text()
+    ]
+
+    assert silent == []

@@ -193,8 +193,9 @@ class FindCandidateCommand(IntegrationCommand):
 
         Read off the fork rather than remembered, because the run that opened the
         candidate is over by the time anything settles it: a candidate's first check
-        appears minutes to hours after it is opened, so the run that opens one cannot
-        also reach its verdict.
+        arrives long after it is opened - see
+        :class:`~integration_verdict.CandidateCheckTiming` - so the run that opens one
+        cannot also reach its verdict.
 
         :param run: What this run has resolved.
         :param arguments: The parsed command line.
@@ -256,8 +257,8 @@ class PublishRecordedPassCommand(IntegrationCommand):
 
         A rebuild assembles the same branches over the same base four times a day, and
         each assembly is a new commit holding the same tree - so without this every
-        unchanged build is checked again, at about twenty-five minutes of matrix plus
-        whatever GitHub takes to start it.
+        unchanged build is checked again, at the cost
+        :class:`~integration_verdict.CandidateCheckTiming` records.
 
         The build is pushed first, because a fork that does not carry the commit cannot
         be asked to move a branch onto it.

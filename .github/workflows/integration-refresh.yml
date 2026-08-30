@@ -41,6 +41,31 @@ on:
         required: false
         type: string
         default: ""
+  workflow_run:
+    # The run this pipeline is actually waiting on. A rebuild opens a candidate and
+    # stops, because a candidate's first check arrives long after the run that opened it
+    # is over - so the verdict is always read by a later run, and on the schedule alone
+    # that later run is up to six hours after the matrix has already answered.
+    #
+    # Answering to the matrix finishing closes that gap without changing what a rebuild
+    # does: the next run settles the inherited candidate exactly as a scheduled one
+    # would, minutes after there is something to settle rather than at the next slot.
+    #
+    # Matched on the workflow's name rather than its file, which is what `workflow_run`
+    # takes - and narrowed to the branches a build is assembled onto, since every pull
+    # request in flight runs that same workflow and an unfiltered trigger would be a
+    # rebuild per push to any of them.
+    #
+    # It settles rather than repeats: the run it starts assembles the next build, and
+    # a build whose tree the fork has already recorded as passing publishes with no
+    # candidate at all - so once nothing in flight has moved there is no matrix left to
+    # finish and nothing left to answer to.
+    #
+    # Like every other trigger here, this is read from the copy of this file on the
+    # default branch, so it starts working once a build carrying it has published.
+    workflows: ["CI (matrix over libs)"]
+    types: [completed]
+    branches: ["integration-*"]
   pull_request:
     # Leaving draft is what makes a branch integrable at all, so it is the moment the
     # build is worth redoing rather than one to wait out: until the next scheduled run
