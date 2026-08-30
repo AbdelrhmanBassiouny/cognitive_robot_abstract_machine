@@ -13,7 +13,7 @@ import io
 import unittest
 
 from krrood.entity_query_language.rdr.interactive import IPythonInterface, Palette
-from krrood.entity_query_language.rdr.magics import _make_save_magic
+from krrood.entity_query_language.rdr.magics import SaveModelMagic
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 from .animal import Animal
@@ -40,9 +40,9 @@ class TestSaveMagicPersistsThroughTheModelSaver(unittest.TestCase):
         """
         saver = RecordingModelSaver()
         rdr = EQLSingleClassRDR(Animal, "species", model_saver=saver)
-        magic = _make_save_magic(IPythonInterface(rdr=rdr), _palette())
+        magic = SaveModelMagic(palette=_palette(), interface=IPythonInterface(rdr=rdr))
 
-        magic("")
+        magic.run("")
 
         self.assertEqual(saver.saved, [rdr])
 
@@ -52,10 +52,10 @@ class TestSaveMagicPersistsThroughTheModelSaver(unittest.TestCase):
         """
         saver = RecordingModelSaver()
         rdr = EQLSingleClassRDR(Animal, "species", model_saver=saver)
-        magic = _make_save_magic(IPythonInterface(rdr=rdr), _palette())
+        magic = SaveModelMagic(palette=_palette(), interface=IPythonInterface(rdr=rdr))
 
-        magic("")
-        magic("")
+        magic.run("")
+        magic.run("")
 
         self.assertEqual(saver.saved, [rdr, rdr])
 
@@ -65,23 +65,23 @@ class TestSaveMagicPersistsThroughTheModelSaver(unittest.TestCase):
         """
         saver = RecordingModelSaver()
         rdr = EQLSingleClassRDR(Animal, "species", model_saver=saver)
-        magic = _make_save_magic(IPythonInterface(rdr=rdr), _palette())
+        magic = SaveModelMagic(palette=_palette(), interface=IPythonInterface(rdr=rdr))
 
-        magic("ignored line argument")
+        magic.run("ignored line argument")
 
         self.assertEqual(saver.saved, [rdr])
 
     def test_magic_sees_an_rdr_attached_after_it_was_built(self):
         """
-        The magic closes over the interface, so an RDR attached later is still saved.
+        The magic holds the interface, so an RDR attached later is still saved.
         """
         saver = RecordingModelSaver()
         rdr = EQLSingleClassRDR(Animal, "species", model_saver=saver)
         interface = IPythonInterface()
-        magic = _make_save_magic(interface, _palette())
+        magic = SaveModelMagic(palette=_palette(), interface=interface)
 
         interface.rdr = rdr
-        magic("")
+        magic.run("")
 
         self.assertEqual(saver.saved, [rdr])
 
@@ -99,11 +99,11 @@ class TestSaveMagicWithoutAnRDR(unittest.TestCase):
         """
         The magic says there is nothing to save rather than raising.
         """
-        magic = _make_save_magic(IPythonInterface(), _palette())
+        magic = SaveModelMagic(palette=_palette(), interface=IPythonInterface())
         printed = io.StringIO()
 
         with contextlib.redirect_stdout(printed):
-            magic("")
+            magic.run("")
 
         self.assertIn("No model is attached", printed.getvalue())
 

@@ -406,7 +406,7 @@ No other file needs to change.
 | Add a heuristic or ML-model suggestion | New `ConclusionSuggester`; pass to `Expert(helpers=[...])` |
 | Add an information panel | New `ConclusionSupportPresenter` |
 | Change how the conclusion question is rendered | Override `IPythonInterface._labelling_lines` |
-| Add a new shell line magic | `IPythonInterface._build_namespace` → add a key + `_register_namespace_magic` |
+| Add a new shell line magic | New `Magic` subclass in `magics.py` with its own `MagicName`; build it in `IPythonInterface._magics` |
 | Support a new conclusion type | `conclusion_domain._enumerate_members` — add a branch for the new type |
 | Use a custom I/O back-end | Subclass `ExpertInterface`; implement `_run` |
 

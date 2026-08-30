@@ -18,6 +18,8 @@ import dataclasses
 import io
 import unittest
 
+from typing_extensions import Any, Dict, Optional
+
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
 from krrood.entity_query_language.rdr.backward_inference import (
     ConclusionSufficientConditionSets,
@@ -33,8 +35,8 @@ from krrood.entity_query_language.rdr.progress import (
     SpyProgressReporter,
 )
 from krrood.entity_query_language.rdr.magics import (
-    _KNOWLEDGE_KEY,
-    _make_knowledge_magic,
+    NamespaceKey,
+    SufficientConditionsMagic,
 )
 
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
@@ -46,7 +48,9 @@ from .zoo_loader import load_zoo_animals
 animals, targets = load_zoo_animals()
 
 FEATURE_FIELDS = [
-    f.name for f in dataclasses.fields(Animal) if f.name not in ("name", "species")
+    field.name
+    for field in dataclasses.fields(Animal)
+    if field.name not in ("name", "species")
 ]
 
 USER_SCOPE_SENTINEL = "interactive_sentinel"
@@ -79,10 +83,45 @@ def maximally_specific_runner(captured=None):
         case_variable = namespace[NamespaceName.CASE_VARIABLE]
         and_ = namespace["and_"]
         namespace[AnswerName.CONDITIONS] = and_(
-            *[getattr(case_variable, f) == getattr(case, f) for f in FEATURE_FIELDS]
+            *[
+                getattr(case_variable, feature) == getattr(case, feature)
+                for feature in FEATURE_FIELDS
+            ]
         )
 
     return run
+
+
+@dataclasses.dataclass
+class RecordingShellRunner:
+    """
+    Stands in for the expert's shell: records what the interface showed it, then answers
+    with one fixed condition so the interaction completes.
+
+    A test asserts on what was recorded rather than on a shell it would otherwise have
+    to drive.
+    """
+
+    header: Optional[str] = None
+    """
+    The header text the interface rendered on the most recent call.
+    """
+
+    namespace: Optional[Dict[str, Any]] = None
+    """
+    The namespace the interface built on the most recent call.
+    """
+
+    def __call__(self, namespace: Dict[str, Any], header: str) -> None:
+        """
+        :param namespace: The interaction namespace to answer in.
+        :param header: The header text the expert would have been shown.
+        """
+        self.namespace = namespace
+        self.header = header
+        namespace[AnswerName.CONDITIONS] = (
+            namespace[NamespaceName.CASE_VARIABLE].milk == True
+        )
 
 
 def conditions_context(
@@ -167,11 +206,11 @@ class TestInteractiveExpert(unittest.TestCase):
         """
         expert = expert_with(maximally_specific_runner())
         rdr = EQLSingleClassRDR(Animal, "species")
-        cond = expert.ask_for_conditions(
+        condition = expert.ask_for_conditions(
             conditions_context(first(Species.mammal), rdr.case_variable, Species.mammal)
         )
-        self.assertIsInstance(cond, SymbolicExpression)
-        self.assertNotIsInstance(cond, str)
+        self.assertIsInstance(condition, SymbolicExpression)
+        self.assertNotIsInstance(condition, str)
 
     def test_abort_raises_no_conditions(self):
         """
@@ -218,11 +257,11 @@ class TestInteractiveExpert(unittest.TestCase):
 
         expert = expert_with(run)
         rdr = EQLSingleClassRDR(Animal, "species")
-        cond = expert.ask_for_conditions(
+        condition = expert.ask_for_conditions(
             conditions_context(first(Species.mammal), rdr.case_variable, Species.mammal)
         )
         self.assertEqual(calls["n"], 2)
-        self.assertIsInstance(cond, SymbolicExpression)
+        self.assertIsInstance(condition, SymbolicExpression)
 
     def test_captures_user_definition_scope(self):
         """
@@ -253,56 +292,38 @@ class TestInteractiveExpert(unittest.TestCase):
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
-class TestKnowsMagic(unittest.TestCase):
+class TestSufficientConditionsMagic(unittest.TestCase):
     """
-    Tests for the ``%knows`` backward-inference magic.
+    Tests for the ``%sufficient_conditions_for`` backward-inference magic.
     """
 
-    def test_knowledge_key_in_namespace_when_rdr_set(self):
+    def test_sufficient_conditions_key_in_namespace_when_rdr_set(self):
         """
-        The RDR reference appears in the namespace under _KNOWLEDGE_KEY.
+        The RDR reference appears in the namespace under the sufficient-conditions key.
         """
-        captured = {}
-
-        def runner(namespace, header):
-            """
-            Record what the shell was given, then answer with a milk condition.
-            """
-            captured["key"] = namespace.get(_KNOWLEDGE_KEY)
-            case_variable = namespace[NamespaceName.CASE_VARIABLE]
-            namespace[AnswerName.CONDITIONS] = case_variable.milk == True
-
+        runner = RecordingShellRunner()
         rdr = EQLSingleClassRDR(Animal, "species")
         interface = IPythonInterface(shell_runner=runner, rdr=rdr)
         expert = Expert(interface=interface)
         expert.ask_for_conditions(
             conditions_context(first(Species.mammal), rdr.case_variable, Species.mammal)
         )
-        self.assertIs(captured["key"], rdr)
+        self.assertIs(runner.namespace.get(NamespaceKey.SUFFICIENT_CONDITIONS), rdr)
 
-    def test_knowledge_key_absent_when_no_rdr(self):
+    def test_sufficient_conditions_key_absent_when_no_rdr(self):
         """
-        Without ``rdr`` set, _KNOWLEDGE_KEY is not in the namespace.
+        Without ``rdr`` set, the sufficient-conditions key is not in the namespace.
         """
-        captured = {}
-
-        def runner(namespace, header):
-            """
-            Record what the shell was given, then answer with a milk condition.
-            """
-            captured["key"] = namespace.get(_KNOWLEDGE_KEY)
-            case_variable = namespace[NamespaceName.CASE_VARIABLE]
-            namespace[AnswerName.CONDITIONS] = case_variable.milk == True
-
+        runner = RecordingShellRunner()
         rdr = EQLSingleClassRDR(Animal, "species")
         interface = IPythonInterface(shell_runner=runner)
         expert = Expert(interface=interface)
         expert.ask_for_conditions(
             conditions_context(first(Species.mammal), rdr.case_variable, Species.mammal)
         )
-        self.assertIsNone(captured["key"])
+        self.assertIsNone(runner.namespace.get(NamespaceKey.SUFFICIENT_CONDITIONS))
 
-    def test_knows_queries_rdr_directly(self):
+    def test_sufficient_conditions_query_the_rdr_directly(self):
         """
         get_conclusion_sufficient_conditions_from_a_rule_tree returns correct results
         after fitting through interactive.
@@ -320,23 +341,23 @@ class TestKnowsMagic(unittest.TestCase):
         expert = Expert(interface=interface)
         rdr.fit_case(first(Species.mammal), Species.mammal, expert)
 
-        knowledge = rdr.sufficient_conditions_for(Species.mammal)
-        self.assertIsInstance(knowledge, ConclusionSufficientConditionSets)
-        self.assertTrue(knowledge.is_satisfiable())
-        self.assertEqual(len(knowledge.sufficient_condition_sets), 1)
+        sufficient_conditions = rdr.sufficient_conditions_for(Species.mammal)
+        self.assertIsInstance(sufficient_conditions, ConclusionSufficientConditionSets)
+        self.assertTrue(sufficient_conditions.is_satisfiable())
+        self.assertEqual(len(sufficient_conditions.sufficient_condition_sets), 1)
 
-    def test_knows_empty_rdr(self):
+    def test_empty_rdr_has_no_sufficient_conditions(self):
         """
         Empty RDR returns no paths for any value.
         """
         rdr = EQLSingleClassRDR(Animal, "species")
-        knowledge = rdr.sufficient_conditions_for(Species.molusc)
-        self.assertIsInstance(knowledge, ConclusionSufficientConditionSets)
-        self.assertFalse(knowledge.is_satisfiable())
+        sufficient_conditions = rdr.sufficient_conditions_for(Species.molusc)
+        self.assertIsInstance(sufficient_conditions, ConclusionSufficientConditionSets)
+        self.assertFalse(sufficient_conditions.is_satisfiable())
 
-    def test_knows_magic_function_evals_in_namespace(self):
+    def test_magic_evaluates_its_argument_in_the_namespace(self):
         """
-        The magic closure evals its argument and queries the RDR.
+        The magic evaluates its argument and queries the RDR.
         """
         rdr = EQLSingleClassRDR(Animal, "species")
 
@@ -352,43 +373,49 @@ class TestKnowsMagic(unittest.TestCase):
         rdr.fit_case(first(Species.mammal), Species.mammal, expert)
 
         # Build a namespace as the shell would see it
-        namespace = {_KNOWLEDGE_KEY: rdr, "Species": Species}
-        magic = _make_knowledge_magic(namespace, IPythonInterface().palette)
+        namespace = {NamespaceKey.SUFFICIENT_CONDITIONS: rdr, "Species": Species}
+        magic = SufficientConditionsMagic(
+            palette=IPythonInterface().palette, namespace=namespace
+        )
 
         printed = io.StringIO()
         with contextlib.redirect_stdout(printed):
-            magic("Species.mammal")
+            magic.run("Species.mammal")
 
         output = printed.getvalue()
         self.assertIn("mammal", output.lower())
         self.assertIn("milk", output.lower())
 
-    def test_knows_magic_bad_argument(self):
+    def test_magic_rejects_an_argument_it_cannot_evaluate(self):
         """
         Invalid magic argument prints an error.
         """
         rdr = EQLSingleClassRDR(Animal, "species")
-        namespace = {_KNOWLEDGE_KEY: rdr}
-        magic = _make_knowledge_magic(namespace, IPythonInterface().palette)
+        namespace = {NamespaceKey.SUFFICIENT_CONDITIONS: rdr}
+        magic = SufficientConditionsMagic(
+            palette=IPythonInterface().palette, namespace=namespace
+        )
 
         printed = io.StringIO()
         with contextlib.redirect_stdout(printed):
-            magic("Species.NonExistentValue")
+            magic.run("Species.NonExistentValue")
 
         output = printed.getvalue()
         self.assertIn("error", output.lower())
 
-    def test_knows_magic_empty_line(self):
+    def test_magic_prints_usage_for_an_empty_line(self):
         """
         Empty magic line prints usage hint.
         """
         rdr = EQLSingleClassRDR(Animal, "species")
-        namespace = {_KNOWLEDGE_KEY: rdr}
-        magic = _make_knowledge_magic(namespace, IPythonInterface().palette)
+        namespace = {NamespaceKey.SUFFICIENT_CONDITIONS: rdr}
+        magic = SufficientConditionsMagic(
+            palette=IPythonInterface().palette, namespace=namespace
+        )
 
         printed = io.StringIO()
         with contextlib.redirect_stdout(printed):
-            magic("")
+            magic.run("")
 
         output = printed.getvalue()
         self.assertIn("usage", output.lower())

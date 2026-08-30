@@ -20,10 +20,6 @@ from krrood.entity_query_language.factories import (
     variable,
     and_,
 )
-from krrood.entity_query_language.rdr.answer_vocabulary import (
-    AnswerName,
-    NamespaceName,
-)
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interactive import IPythonInterface
 from krrood.entity_query_language.rdr.observer import trace_case
@@ -31,6 +27,7 @@ from krrood.entity_query_language.rdr.serialization import load_rdr
 
 from krrood.entity_query_language.rules.conclusion_selector import Alternative
 from krrood.entity_query_language.rdr.rule_tree_view import (
+    RuleKind,
     RuleStatus,
     RuleTreeRenderer,
     RuleView,
@@ -39,11 +36,12 @@ from krrood.entity_query_language.rdr.rule_tree_view import (
     format_conclusion,
     render_rule_tree,
     resolve_status,
+    TreeGlyph,
     walk_rules,
 )
 
 from .animal import Animal, Species
-from .test_interactive_expert import conditions_context
+from .test_interactive_expert import RecordingShellRunner, conditions_context
 from .zoo_loader import load_zoo_animals
 
 animals, targets = load_zoo_animals()
@@ -99,10 +97,10 @@ class TestWalkRules(unittest.TestCase):
         """
         _, query = _flat_tree()
         rules = walk_rules(query._conditions_root_)
-        self.assertEqual([r.depth for r in rules], [0, 0, 0])
-        self.assertEqual([r.kind for r in rules], ["if", "else if", "else if"])
+        self.assertEqual([rule.depth for rule in rules], [0, 0, 0])
+        self.assertEqual([rule.kind for rule in rules], ["if", "else if", "else if"])
         self.assertEqual(
-            [format_conclusion(r.conclusions[0]) for r in rules],
+            [format_conclusion(rule.conclusions[0]) for rule in rules],
             ["species = mammal", "species = bird", "species = fish"],
         )
 
@@ -112,8 +110,10 @@ class TestWalkRules(unittest.TestCase):
         """
         _, query = _refined_tree()
         rules = walk_rules(query._conditions_root_)
-        self.assertEqual([r.depth for r in rules], [0, 1])
-        self.assertEqual([r.kind for r in rules], ["if", "except if"])
+        self.assertEqual([rule.depth for rule in rules], [0, 1])
+        self.assertEqual(
+            [rule.kind for rule in rules], [RuleKind.IF, RuleKind.EXCEPT_IF]
+        )
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
@@ -136,8 +136,8 @@ class TestFormatting(unittest.TestCase):
         A conjunction reads as its operands joined by ``and``.
         """
         animal = variable(Animal, domain=[])
-        cond = and_(animal.milk == True, animal.legs == 4)
-        self.assertEqual(format_condition(cond), "milk == true and legs == 4")
+        condition = and_(animal.milk == True, animal.legs == 4)
+        self.assertEqual(format_condition(condition), "milk == true and legs == 4")
 
     def test_conclusion_renders_attribute_and_enum_value(self):
         """
@@ -172,12 +172,12 @@ class TestConclusionDeduplication(unittest.TestCase):
         # Both alternatives use the same cached feathers node → _conclusions_of should
         # return exactly one Add per semantic conclusion.
         rules = walk_rules(query._conditions_root_)
-        for r in rules:
+        for rule in rules:
             self.assertEqual(
-                len(r.conclusions),
+                len(rule.conclusions),
                 1,
-                f"{format_condition(r.condition)} has {len(r.conclusions)} conclusions: "
-                f"{[format_conclusion(c) for c in r.conclusions]}",
+                f"{format_condition(rule.condition)} has {len(rule.conclusions)} conclusions: "
+                f"{[format_conclusion(c) for c in rule.conclusions]}",
             )
 
     def test_same_node_clone_branches(self):
@@ -198,11 +198,11 @@ class TestConclusionDeduplication(unittest.TestCase):
         tree.build()
 
         rules = walk_rules(tree._conditions_root_)
-        for r in rules:
+        for rule in rules:
             self.assertEqual(
-                len(r.conclusions),
+                len(rule.conclusions),
                 1,
-                f"{format_condition(r.condition)} has {len(r.conclusions)} conclusions",
+                f"{format_condition(rule.condition)} has {len(rule.conclusions)} conclusions",
             )
 
 
@@ -217,15 +217,15 @@ class TestInsertAtCloning(unittest.TestCase):
         A cloned node is a fresh, unparented node over the same children.
         """
         animal = variable(Animal, domain=[])
-        cond = animal.milk == True
-        original_id = cond._id_
+        condition = animal.milk == True
+        original_id = condition._id_
 
-        clone = cond._node_for_new_position_()
+        clone = condition._node_for_new_position_()
         self.assertNotEqual(clone._id_, original_id)
         self.assertIsNone(clone._parent_)
         # Children are shared shallowly (same object references)
-        self.assertIs(clone.left, cond.left)
-        self.assertIs(clone.right, cond.right)
+        self.assertIs(clone.left, condition.left)
+        self.assertIs(clone.right, condition.right)
 
     def test_insert_at_clones_condition_that_already_has_parent(self):
         """
@@ -242,12 +242,12 @@ class TestInsertAtCloning(unittest.TestCase):
         query.build()
 
         rules = walk_rules(query._conditions_root_)
-        milk = [r for r in rules if "milk" in format_condition(r.condition)][
+        milk = [rule for rule in rules if "milk" in format_condition(rule.condition)][
             0
         ].condition
-        feathers = [r for r in rules if "feathers" in format_condition(r.condition)][
-            0
-        ].condition
+        feathers = [
+            rule for rule in rules if "feathers" in format_condition(rule.condition)
+        ][0].condition
 
         # The feathers condition is a non-root tree node — it has a parent.
         original_id = feathers._id_
@@ -256,18 +256,18 @@ class TestInsertAtCloning(unittest.TestCase):
 
         # insert_at with milk as anchor, feathers as the "resolver-suggested" condition.
         # feathers has a parent → should be cloned.
-        new_cond = Alternative.insert_at(milk, feathers)
+        new_condition = Alternative.insert_at(milk, feathers)
 
         # The original feathers node must be untouched (the clone is what's used).
         self.assertEqual(feathers._id_, original_id)
         self.assertIs(feathers._parent_, original_parent)
 
         # The returned condition is the clone — different identity.
-        self.assertNotEqual(new_cond._id_, original_id)
+        self.assertNotEqual(new_condition._id_, original_id)
 
         # walk_rules must not contain duplicate condition IDs.
         rules = walk_rules(query._conditions_root_)
-        ids = [r.condition._id_ for r in rules]
+        ids = [rule.condition._id_ for rule in rules]
         self.assertEqual(len(ids), len(set(ids)), f"duplicate condition IDs: {ids}")
 
 
@@ -282,15 +282,15 @@ class TestStatusResolution(unittest.TestCase):
         :param query: The rule-tree query to classify with.
         :param animal: The shared variable the tree ranges over.
         :param case: The case to classify.
-        :return: The trace, and each rule's status keyed by its conclusion.
+        :return: The trace, and each rule's status keyed by the value it concludes.
         """
         rules = walk_rules(query._conditions_root_)
         trace = trace_case(query, animal, animal.species, case, query._conditions_root_)
         return trace, {
-            format_conclusion(r.conclusions[0]): resolve_status(
-                r, trace.satisfied_condition_ids, trace.evaluated_expression_ids
+            rule.conclusions[0].value._value_: resolve_status(
+                rule, trace.satisfied_condition_ids, trace.evaluated_expression_ids
             )
-            for r in rules
+            for rule in rules
         }
 
     def test_fired_rule_is_green_status(self):
@@ -301,8 +301,8 @@ class TestStatusResolution(unittest.TestCase):
         trace, status = self._statuses(query, animal, first(Species.mammal))
         self.assertEqual(trace.conclusion, Species.mammal)
         # The mammal refinement fired; its backbone parent was satisfied too.
-        self.assertEqual(status["species = mammal"], RuleStatus.FIRED)
-        self.assertEqual(status["species = fish"], RuleStatus.FIRED)
+        self.assertEqual(status[Species.mammal], RuleStatus.FIRED)
+        self.assertEqual(status[Species.fish], RuleStatus.FIRED)
 
     def test_evaluated_but_not_fired_is_red_status(self):
         """
@@ -311,8 +311,8 @@ class TestStatusResolution(unittest.TestCase):
         animal, query = _refined_tree()
         # A fish: backbone holds (fires) but milk does not (evaluated, not fired).
         _, status = self._statuses(query, animal, first(Species.fish))
-        self.assertEqual(status["species = fish"], RuleStatus.FIRED)
-        self.assertEqual(status["species = mammal"], RuleStatus.EVALUATED_NOT_FIRED)
+        self.assertEqual(status[Species.fish], RuleStatus.FIRED)
+        self.assertEqual(status[Species.mammal], RuleStatus.EVALUATED_NOT_FIRED)
 
     def test_short_circuited_branch_is_grey_status(self):
         """
@@ -322,8 +322,8 @@ class TestStatusResolution(unittest.TestCase):
         # An insect lacks a backbone: the parent is evaluated-false, so the milk
         # refinement is never evaluated at all.
         _, status = self._statuses(query, animal, first(Species.insect))
-        self.assertEqual(status["species = fish"], RuleStatus.EVALUATED_NOT_FIRED)
-        self.assertEqual(status["species = mammal"], RuleStatus.NOT_EVALUATED)
+        self.assertEqual(status[Species.fish], RuleStatus.EVALUATED_NOT_FIRED)
+        self.assertEqual(status[Species.mammal], RuleStatus.NOT_EVALUATED)
 
     def test_refinement_with_not_condition_parent_is_green(self):
         """
@@ -336,29 +336,20 @@ class TestStatusResolution(unittest.TestCase):
         # backbone → fish (base rule); except if not_(milk) → molusc (refinement).
         # For a fish (backbone=True, milk=False): backbone fires (green), not_(milk)=True so
         # molusc refinement also fires.  Both rules must be green.
-        animal_var = variable(Animal, domain=[])
-        query = entity(animal_var).where(animal_var.backbone == True)
+        animal_variable = variable(Animal, domain=[])
+        query = entity(animal_variable).where(animal_variable.backbone == True)
         with query:
-            add(animal_var.species, Species.fish)
-            with refinement(not_(animal_var.milk)):
-                add(animal_var.species, Species.molusc)
+            add(animal_variable.species, Species.fish)
+            with refinement(not_(animal_variable.milk)):
+                add(animal_variable.species, Species.molusc)
         query.build()
 
         fish_case = first(Species.fish)  # backbone=True, milk=False
-        rules = walk_rules(query._conditions_root_)
-        trace = trace_case(
-            query, animal_var, animal_var.species, fish_case, query._conditions_root_
-        )
-        status = {
-            format_conclusion(r.conclusions[0]): resolve_status(
-                r, trace.satisfied_condition_ids, trace.evaluated_expression_ids
-            )
-            for r in rules
-        }
+        trace, status = self._statuses(query, animal_variable, fish_case)
         self.assertEqual(trace.conclusion, Species.molusc)
         # The not_(milk) refinement fired; its backbone parent must also be green.
-        self.assertEqual(status["species = molusc"], RuleStatus.FIRED)
-        self.assertEqual(status["species = fish"], RuleStatus.FIRED)
+        self.assertEqual(status[Species.molusc], RuleStatus.FIRED)
+        self.assertEqual(status[Species.fish], RuleStatus.FIRED)
 
     def test_no_green_child_with_red_visual_parent_in_full_zoo_model(self):
         """
@@ -378,31 +369,32 @@ class TestStatusResolution(unittest.TestCase):
             rules = walk_rules(trace.rule_tree_root)
             statuses = [
                 resolve_status(
-                    r, trace.satisfied_condition_ids, trace.evaluated_expression_ids
+                    rule, trace.satisfied_condition_ids, trace.evaluated_expression_ids
                 )
-                for r in rules
+                for rule in rules
             ]
             # Phase 3: correct display for shared-node models — a refinement whose
             # visual parent didn't fire is shown as NOT_EVALUATED.
             statuses = enforce_parent_consistency(statuses, rules)
-            for i, rule in enumerate(rules):
-                if rule.depth == 0 or statuses[i] != RuleStatus.FIRED:
+            for position, rule in enumerate(rules):
+                if rule.depth == 0 or statuses[position] != RuleStatus.FIRED:
                     continue
-                parent_idx = next(
+                parent_position = next(
                     (
-                        j
-                        for j in range(i - 1, -1, -1)
-                        if rules[j].depth == rule.depth - 1
+                        earlier
+                        for earlier in range(position - 1, -1, -1)
+                        if rules[earlier].depth == rule.depth - 1
                     ),
                     None,
                 )
-                if parent_idx is not None:
+                if parent_position is not None:
                     self.assertNotEqual(
-                        statuses[parent_idx],
+                        statuses[parent_position],
                         RuleStatus.EVALUATED_NOT_FIRED,
-                        f"{animal_case.name}: 'except if {format_condition(rule.condition)}' "
+                        f"{animal_case.name}: "
+                        f"'{RuleKind.EXCEPT_IF} {format_condition(rule.condition)}' "
                         f"is green but its visual parent "
-                        f"'{format_condition(rules[parent_idx].condition)}' is red",
+                        f"'{format_condition(rules[parent_position].condition)}' is red",
                     )
 
 
@@ -412,9 +404,9 @@ class TestRenderer(unittest.TestCase):
     How the renderer lays out rows, elides the middle, and colours the fired rule.
     """
 
-    def _many_rules(self, n):
+    def _many_rules(self, count):
         """
-        :param n: How many rules to build.
+        :param count: How many rules to build.
         :return: That many flat rules, one per animal feature.
         """
         animal = variable(Animal, domain=[])
@@ -427,15 +419,15 @@ class TestRenderer(unittest.TestCase):
             "predator",
             "toothed",
             "backbone",
-        ][:n]
+        ][:count]
         return [
             RuleView(
-                condition=(getattr(animal, f) == True),
+                condition=(getattr(animal, field_name) == True),
                 conclusions=[],
                 depth=0,
-                kind="if",
+                kind=RuleKind.IF,
             )
-            for f in fields
+            for field_name in fields
         ]
 
     def test_elision_keeps_first_head_and_tail_ending_on_fired(self):
@@ -444,12 +436,12 @@ class TestRenderer(unittest.TestCase):
         """
         rules = self._many_rules(8)
         renderer = RuleTreeRenderer(head=3, tail=3, use_color=False)
-        out = renderer.render(rules, None, None, fired_index=7)
-        lines = out.splitlines()
+        rendered = renderer.render(rules, None, None, fired_index=7)
+        lines = rendered.splitlines()
         # 3 head rows + 1 marker + 3 tail rows.
         self.assertEqual(len(lines), 7)
-        self.assertIn("⋮", out)
-        self.assertIn("2 hidden", out)
+        self.assertIn(TreeGlyph.VERTICAL_DOTS, rendered)
+        self.assertIn("2 hidden", rendered)
         # The fired row (index 7 -> 'backbone') is the last visible row.
         self.assertIn("backbone", lines[-1])
         self.assertIn("predator", lines[4])  # first tail row (index 5)
@@ -460,9 +452,9 @@ class TestRenderer(unittest.TestCase):
         """
         rules = self._many_rules(8)
         renderer = RuleTreeRenderer(head=3, tail=3, use_color=False)
-        out = renderer.render(rules, None, None, fired_index=4)
-        self.assertNotIn("⋮", out)
-        self.assertEqual(len(out.splitlines()), 5)  # rows 0..4, ending on fired
+        rendered = renderer.render(rules, None, None, fired_index=4)
+        self.assertNotIn(TreeGlyph.VERTICAL_DOTS, rendered)
+        self.assertEqual(len(rendered.splitlines()), 5)  # rows 0..4, ending on fired
 
     def test_connectors_and_kind_labels(self):
         """
@@ -470,11 +462,15 @@ class TestRenderer(unittest.TestCase):
         """
         _, query = _refined_tree()
         rules = walk_rules(query._conditions_root_)
-        out = RuleTreeRenderer(use_color=False).render(rules, None, None, None)
-        lines = out.splitlines()
-        self.assertTrue(lines[0].startswith("if backbone == true"))
+        rendered = RuleTreeRenderer(use_color=False).render(rules, None, None, None)
+        lines = rendered.splitlines()
+        self.assertTrue(lines[0].startswith(f"{RuleKind.IF} backbone == true"))
         self.assertIn("species = fish", lines[0])
-        self.assertTrue(lines[1].startswith("└─ except if milk == true"))
+        self.assertTrue(
+            lines[1].startswith(
+                f"{TreeGlyph.BRANCH_LAST}{RuleKind.EXCEPT_IF} milk == true"
+            )
+        )
         self.assertIn("species = mammal", lines[1])
 
     def test_render_rule_tree_colours_fired_rule(self):
@@ -489,10 +485,10 @@ class TestRenderer(unittest.TestCase):
             first(Species.mammal),
             query._conditions_root_,
         )
-        out = render_rule_tree(trace, use_color=True)
-        self.assertIn("milk == true", out)
-        self.assertIn("species = mammal", out)
-        self.assertIn(Fore.GREEN, out)
+        rendered = render_rule_tree(trace, use_color=True)
+        self.assertIn("milk == true", rendered)
+        self.assertIn("species = mammal", rendered)
+        self.assertIn(Fore.GREEN, rendered)
 
 
 @unittest.skipIf(len(animals) == 0, "Failed to load zoo dataset")
@@ -509,24 +505,14 @@ class TestInteractiveHeaderIntegration(unittest.TestCase):
         trace = trace_case(
             query, animal, animal.species, first(Species.fish), query._conditions_root_
         )
-        captured = {}
-
-        def runner(namespace, header):
-            """
-            Record the header, then answer with a milk condition.
-            """
-            captured["header"] = header
-            namespace[AnswerName.CONDITIONS] = (
-                namespace[NamespaceName.CASE_VARIABLE].milk == True
-            )
-
+        runner = RecordingShellRunner()
         expert = Expert(interface=IPythonInterface(shell_runner=runner))
         expert.ask_for_conditions(
             conditions_context(
                 first(Species.fish), animal, Species.mammal, Species.fish, trace=trace
             )
         )
-        header = captured["header"]
+        header = runner.header
         self.assertIn("fish", header)
         self.assertIn("mammal", header)
         self.assertIn("backbone == true", header)
@@ -536,22 +522,12 @@ class TestInteractiveHeaderIntegration(unittest.TestCase):
         With nothing classified yet there is no tree to show.
         """
         animal = variable(Animal, domain=[])
-        captured = {}
-
-        def runner(namespace, header):
-            """
-            Record the header, then answer with a milk condition.
-            """
-            captured["header"] = header
-            namespace[AnswerName.CONDITIONS] = (
-                namespace[NamespaceName.CASE_VARIABLE].milk == True
-            )
-
+        runner = RecordingShellRunner()
         expert = Expert(interface=IPythonInterface(shell_runner=runner))
         expert.ask_for_conditions(
             conditions_context(first(Species.fish), animal, Species.mammal)
         )
-        self.assertNotIn("rule tree", captured["header"])
+        self.assertNotIn("rule tree", runner.header)
 
 
 if __name__ == "__main__":

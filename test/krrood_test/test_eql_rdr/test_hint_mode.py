@@ -15,12 +15,10 @@ from __future__ import annotations
 
 from krrood.entity_query_language.rdr.answer_vocabulary import (
     AnswerName,
-    NamespaceName,
 )
 import dataclasses
 from typing_extensions import Any, Dict, List, Optional, Tuple
 
-import pytest
 
 from .animal import Animal, Species, make_animal as _make_animal
 from krrood.entity_query_language.core.base_expressions import SymbolicExpression
@@ -42,6 +40,8 @@ from krrood.entity_query_language.rdr.interface import (
 from krrood.entity_query_language.rdr.interactive import Palette
 from krrood.entity_query_language.rdr.prompt_sections import (
     PROMPT_SECTIONS,
+    PromptSection,
+    PromptSectionName,
     RenderContext,
 )
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
@@ -56,7 +56,7 @@ from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 # because bird2 has feathers=True but the reptile corner case has feathers=False.
 
 
-def _three_rule_answer_fn(context, requests):
+def _answer_with_discriminating_condition(context, requests):
     """
     Answer function that maps each target to a simple discriminating condition.
 
@@ -64,14 +64,14 @@ def _three_rule_answer_fn(context, requests):
     * reptile -> venomous == True
     * bird    -> feathers == True
     """
-    v = context.case_variable
+    case_variable = context.case_variable
     target = context.target_conclusion
     if target is Species.mammal:
-        return {"conditions": v.milk == True}
+        return {"conditions": case_variable.milk == True}
     if target is Species.reptile:
-        return {"conditions": v.venomous == True}
+        return {"conditions": case_variable.venomous == True}
     if target is Species.bird:
-        return {"conditions": v.feathers == True}
+        return {"conditions": case_variable.feathers == True}
     raise ValueError(f"Unexpected target: {target!r}")
 
 
@@ -79,14 +79,14 @@ def _three_rule_rdr(*, resolution_mode: ResolutionMode = ResolutionMode.AUTOMATI
     """
     Build a three-rule RDR (mammal / reptile / bird1) and return supporting objects.
 
-    Returns ``(rdr, bird2, reptile_case, iface, expert)`` where:
+    Returns ``(rdr, bird2, reptile_case, interface, expert)`` where:
     - ``rdr`` has ``condition_resolver`` set to the default backward-inference chain
       and ``resolution_mode`` set to the provided value.
     - ``bird2`` is a new bird that has venomous=True and is initially misclassified
       as reptile (the refinement path is triggered on fit_case(bird2, bird, expert)).
     - ``reptile_case`` is the corner case for the reptile rule.
-    - ``iface`` is the CountingFunctionInterface used for the fourth fit call.
-    - ``expert`` wraps ``iface``.
+    - ``interface`` is the CountingFunctionInterface used for the fourth fit call.
+    - ``expert`` wraps ``interface``.
     """
     mammal = _make_animal("mammal", milk=True, hair=True)
     reptile = _make_animal("reptile", venomous=True, eggs=True, toothed=True)
@@ -102,7 +102,9 @@ def _three_rule_rdr(*, resolution_mode: ResolutionMode = ResolutionMode.AUTOMATI
 
     # Fit the first three cases with a plain FunctionInterface (not counting).
     setup_expert = Expert(
-        interface=FunctionInterface(answer_function=_three_rule_answer_fn)
+        interface=FunctionInterface(
+            answer_function=_answer_with_discriminating_condition
+        )
     )
     rdr.fit_case(mammal, Species.mammal, setup_expert)
     rdr.fit_case(reptile, Species.reptile, setup_expert)
@@ -113,9 +115,11 @@ def _three_rule_rdr(*, resolution_mode: ResolutionMode = ResolutionMode.AUTOMATI
         rdr.classify(bird2) is Species.reptile
     ), "Pre-condition: bird2 must be misclassified as reptile before the hint test."
 
-    iface = CountingFunctionInterface(answer_function=_three_rule_answer_fn)
-    expert = Expert(interface=iface)
-    return rdr, bird2, reptile, iface, expert
+    interface = CountingFunctionInterface(
+        answer_function=_answer_with_discriminating_condition
+    )
+    expert = Expert(interface=interface)
+    return rdr, bird2, reptile, interface, expert
 
 
 # %% a spy counting how often the expert is asked
@@ -146,16 +150,20 @@ class CountingFunctionInterface(FunctionInterface):
 
 # %% Prompt-section lookup helper
 
-_SECTION_NAMES = {s.name: s for s in PROMPT_SECTIONS}
+_SECTIONS_BY_NAME = {section.name: section for section in PROMPT_SECTIONS}
 
 
-def _section(name: str):
+def _section(name: PromptSectionName) -> PromptSection:
     """
-    Return the PromptSection with ``name``, raising KeyError with a clear message.
+    :param name: The situation whose section to look up.
+    :return: The section registered for that situation.
+    :raises KeyError: If no section in :data:`PROMPT_SECTIONS` declares that name.
     """
-    if name not in _SECTION_NAMES:
-        raise KeyError(f"Section '{name}' not found. Available: {list(_SECTION_NAMES)}")
-    return _SECTION_NAMES[name]
+    if name not in _SECTIONS_BY_NAME:
+        raise KeyError(
+            f"Section '{name}' not found. Available: {list(_SECTIONS_BY_NAME)}"
+        )
+    return _SECTIONS_BY_NAME[name]
 
 
 # %% the resolution modes themselves
@@ -231,12 +239,12 @@ class TestAutomaticModeDefault:
 
         Guarantee: CountingFunctionInterface.interact_count == 0 for the auto-resolved step.
         """
-        rdr, bird2, _reptile, iface, expert = _three_rule_rdr(
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
             resolution_mode=ResolutionMode.AUTOMATIC
         )
-        count_before = iface.interact_count
+        count_before = interface.interact_count
         rdr.fit_case(bird2, Species.bird, expert)
-        calls_made = iface.interact_count - count_before
+        calls_made = interface.interact_count - count_before
 
         assert calls_made == 0, (
             f"Expert must not be called in AUTOMATIC mode when resolver succeeds, "
@@ -262,12 +270,12 @@ class TestHintMode:
 
         Guarantee: CountingFunctionInterface.interact_count increments by 1 for the step.
         """
-        rdr, bird2, _reptile, iface, expert = _three_rule_rdr(
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
             resolution_mode=ResolutionMode.HINT
         )
-        count_before = iface.interact_count
+        count_before = interface.interact_count
         rdr.fit_case(bird2, Species.bird, expert)
-        calls_made = iface.interact_count - count_before
+        calls_made = interface.interact_count - count_before
 
         assert calls_made == 1, (
             f"Expert must be called exactly once in HINT mode when resolver succeeds, "
@@ -292,10 +300,10 @@ class TestHintMode:
             captured_default.append(requests[0].default)
             return {"conditions": requests[0].default}
 
-        rdr, bird2, _reptile, iface, expert = _three_rule_rdr(
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
             resolution_mode=ResolutionMode.HINT
         )
-        iface.answer_function = _capture
+        interface.answer_function = _capture
         rdr.fit_case(bird2, Species.bird, expert)
 
         assert len(captured_default) == 1, "answer_function must be called exactly once"
@@ -321,10 +329,10 @@ class TestHintMode:
             captured_suggestion.append(context.suggested_condition)
             return {"conditions": context.suggested_condition.expression}
 
-        rdr, bird2, _reptile, iface, expert = _three_rule_rdr(
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
             resolution_mode=ResolutionMode.HINT
         )
-        iface.answer_function = _capture
+        interface.answer_function = _capture
         rdr.fit_case(bird2, Species.bird, expert)
 
         assert len(captured_suggestion) == 1
@@ -352,10 +360,10 @@ class TestHintMode:
             captured_suggestion.append(context.suggested_condition)
             return {"conditions": context.suggested_condition.expression}
 
-        rdr, bird2, _reptile, iface, expert = _three_rule_rdr(
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
             resolution_mode=ResolutionMode.HINT
         )
-        iface.answer_function = _capture
+        interface.answer_function = _capture
         rdr.fit_case(bird2, Species.bird, expert)
 
         assert len(captured_suggestion) == 1
@@ -383,22 +391,22 @@ class TestHintMode:
             captured.append((context.suggested_condition, requests[0].default))
             return {"conditions": requests[0].default}
 
-        rdr, bird2, _reptile, iface, expert = _three_rule_rdr(
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
             resolution_mode=ResolutionMode.HINT
         )
-        iface.answer_function = _capture
+        interface.answer_function = _capture
         rdr.fit_case(bird2, Species.bird, expert)
 
         assert len(captured) == 1
-        ctx_suggestion, req_default = captured[0]
+        context_suggestion, request_default = captured[0]
         assert isinstance(
-            ctx_suggestion, ResolvedCondition
+            context_suggestion, ResolvedCondition
         ), "context.suggested_condition must be a ResolvedCondition in HINT mode."
         assert isinstance(
-            req_default, SymbolicExpression
+            request_default, SymbolicExpression
         ), "requests[0].default must be the bare SymbolicExpression from the ResolvedCondition."
         assert (
-            req_default is ctx_suggestion.expression
+            request_default is context_suggestion.expression
         ), "requests[0].default must be the exact expression object from context.suggested_condition."
 
     def test_hint_accept_uses_suggested_condition(self):
@@ -419,10 +427,10 @@ class TestHintMode:
             # Return nothing — the namespace already has the suggestion seeded as default.
             return {}
 
-        rdr, bird2, _reptile, iface, expert = _three_rule_rdr(
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
             resolution_mode=ResolutionMode.HINT
         )
-        iface.answer_function = _accept_default
+        interface.answer_function = _accept_default
         rdr.fit_case(bird2, Species.bird, expert)
 
         classification = rdr.classify(bird2)
@@ -450,10 +458,10 @@ class TestHintMode:
             # Return an alternative condition that also holds for bird2 (feathers=True).
             return {"conditions": context.case_variable.feathers == True}
 
-        rdr, bird2, _reptile, iface, expert = _three_rule_rdr(
+        rdr, bird2, _reptile, interface, expert = _three_rule_rdr(
             resolution_mode=ResolutionMode.HINT
         )
-        iface.answer_function = _overwrite
+        interface.answer_function = _overwrite
         rdr.fit_case(bird2, Species.bird, expert)
 
         classification = rdr.classify(bird2)
@@ -491,7 +499,9 @@ class TestHintMode:
         )
 
         setup_expert = Expert(
-            interface=FunctionInterface(answer_function=_three_rule_answer_fn)
+            interface=FunctionInterface(
+                answer_function=_answer_with_discriminating_condition
+            )
         )
         rdr.fit_case(mammal, Species.mammal, setup_expert)
         rdr.fit_case(reptile, Species.reptile, setup_expert)
@@ -501,11 +511,11 @@ class TestHintMode:
             rdr.classify(bird2) is Species.reptile
         ), "Pre-condition: bird2 must be misclassified as reptile."
 
-        iface = CountingFunctionInterface(answer_function=_answer)
-        expert = Expert(interface=iface)
-        count_before = iface.interact_count
+        interface = CountingFunctionInterface(answer_function=_answer)
+        expert = Expert(interface=interface)
+        count_before = interface.interact_count
         rdr.fit_case(bird2, Species.bird, expert)
-        calls_made = iface.interact_count - count_before
+        calls_made = interface.interact_count - count_before
 
         assert calls_made == 1, (
             f"Expert must be called once when resolver=None in HINT mode, "
@@ -554,7 +564,9 @@ class TestPromptSectionHint:
             condition_resolver=ChainConditionResolver.backward_inference_default(),
         )
         setup_expert = Expert(
-            interface=FunctionInterface(answer_function=_three_rule_answer_fn)
+            interface=FunctionInterface(
+                answer_function=_answer_with_discriminating_condition
+            )
         )
         rdr.fit_case(mammal, Species.mammal, setup_expert)
         rdr.fit_case(reptile, Species.reptile, setup_expert)
@@ -572,7 +584,7 @@ class TestPromptSectionHint:
         assert suggestion is not None, "Pre-condition: resolver must find a suggestion"
         return rdr, bird2, reptile, suggestion
 
-    def _render_ctx(
+    def _render_context(
         self,
         suggested_condition: Optional[ResolvedCondition],
         rdr: Optional[EQLSingleClassRDR] = None,
@@ -585,19 +597,21 @@ class TestPromptSectionHint:
             rdr = self._minimal_rdr()
         if case is None:
             case = _make_animal("hint_test_bird", feathers=True)
-        ctx = CaseContext(
+        case_context = CaseContext(
             case_instance=case,
             case_variable=rdr.case_variable,
             current_conclusion=...,
             target_conclusion=Species.bird,
             suggested_condition=suggested_condition,
         )
-        req = AnswerRequest(
+        answer_request = AnswerRequest(
             name=AnswerName.CONDITIONS,
             validate=ConditionsValidator(),
             example=f"{AnswerName.CONDITIONS} = case_variable.some_attr == True",
         )
-        return RenderContext(case=ctx, requests=[req], palette=self._palette())
+        return RenderContext(
+            case=case_context, requests=[answer_request], palette=self._palette()
+        )
 
     def test_auto_resolution_hint_section_exists(self):
         """
@@ -605,8 +619,8 @@ class TestPromptSectionHint:
 
         Guarantee: the section was registered and can be looked up by name.
         """
-        section = _section("auto_resolution_hint")
-        assert section.name == "auto_resolution_hint"
+        section = _section(PromptSectionName.AUTO_RESOLUTION_HINT)
+        assert section.name == PromptSectionName.AUTO_RESOLUTION_HINT
 
     def test_auto_resolution_hint_applicable_when_suggested_condition_set(self):
         """
@@ -616,10 +630,10 @@ class TestPromptSectionHint:
         Guarantee: the section fires whenever a hint is available for the expert.
         """
         rdr, bird2, _reptile, suggestion = self._three_rule_suggestion()
-        render_ctx = self._render_ctx(
+        render_ctx = self._render_context(
             suggested_condition=suggestion, rdr=rdr, case=bird2
         )
-        section = _section("auto_resolution_hint")
+        section = _section(PromptSectionName.AUTO_RESOLUTION_HINT)
         assert section.applicable(render_ctx) is True
 
     def test_auto_resolution_hint_not_applicable_when_no_suggestion(self):
@@ -629,8 +643,8 @@ class TestPromptSectionHint:
         Guarantee: the section is suppressed when no auto-resolution hint is available
         (AUTOMATIC mode, no resolver, or resolver returned nothing).
         """
-        render_ctx = self._render_ctx(suggested_condition=None)
-        section = _section("auto_resolution_hint")
+        render_ctx = self._render_context(suggested_condition=None)
+        section = _section(PromptSectionName.AUTO_RESOLUTION_HINT)
         assert section.applicable(render_ctx) is False
 
     def test_auto_resolution_hint_lines_contain_formatted_condition(self):
@@ -641,10 +655,10 @@ class TestPromptSectionHint:
         non-empty string so the expert shell displays the hint.
         """
         rdr, bird2, _reptile, suggestion = self._three_rule_suggestion()
-        render_ctx = self._render_ctx(
+        render_ctx = self._render_context(
             suggested_condition=suggestion, rdr=rdr, case=bird2
         )
-        section = _section("auto_resolution_hint")
+        section = _section(PromptSectionName.AUTO_RESOLUTION_HINT)
         lines = section.lines(render_ctx)
 
         assert isinstance(lines, list), "lines() must return a list"
@@ -660,10 +674,10 @@ class TestPromptSectionHint:
         so the expert knows the source of the auto-resolved condition.
         """
         rdr, bird2, _reptile, suggestion = self._three_rule_suggestion()
-        render_ctx = self._render_ctx(
+        render_ctx = self._render_context(
             suggested_condition=suggestion, rdr=rdr, case=bird2
         )
-        section = _section("auto_resolution_hint")
+        section = _section(PromptSectionName.AUTO_RESOLUTION_HINT)
         joined = "".join(section.lines(render_ctx))
 
         assert suggestion.resolver_type.__name__ in joined, (

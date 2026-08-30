@@ -38,7 +38,9 @@ from .zoo_loader import load_zoo_animals
 animals, targets = load_zoo_animals()
 
 FEATURE_FIELDS = [
-    f.name for f in dataclasses.fields(Animal) if f.name not in ("name", "species")
+    field.name
+    for field in dataclasses.fields(Animal)
+    if field.name not in ("name", "species")
 ]
 
 

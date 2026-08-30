@@ -1,184 +1,381 @@
 """
-IPython line-magic factory for the EQL-RDR interactive expert shell.
+The IPython line magics of the EQL-RDR interactive expert shell.
 
-:func:`_make_assign_exit_magic` creates action magics (``%conclusion``, ``%conditions``)
-that evaluate an expression, assign it to the named answer variable, validate, and exit
-the embedded shell on success — all in one step. :func:`_make_knowledge_magic` creates a
-read-only magic (``%knows``) that displays backward-inference results.
+Each magic is a :class:`Magic` — one class holding the name the expert invokes it by, the
+collaborators it needs, and the behaviour it runs — so registering one into a shell takes
+nothing but the object itself. The names and the private namespace keys the magics read
+their collaborators from are enumerated rather than spelled out at each use site.
 """
 
 from __future__ import annotations
 
-from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import StrEnum
+
+from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from krrood.entity_query_language.rdr.answer_vocabulary import AnswerName
+from krrood.entity_query_language.rdr.rule_tree_view import format_condition
 from krrood.exceptions import DataclassException
 
-from krrood.entity_query_language.rdr.rule_tree_view import format_condition
-
 if TYPE_CHECKING:
-    from krrood.entity_query_language.rdr.interactive import IPythonInterface
-
-#: Magic name for setting the conclusion answer variable.
-CONCLUSION_MAGIC = "conclusion"
-
-#: Magic name for setting the conditions answer variable.
-CONDITIONS_MAGIC = "conditions"
-
-#: Magic name for backward-inference query.
-BACKWARD_MAGIC = "knows"
-
-#: Magic name for on-demand model save.
-SAVE_MAGIC = "save"
-
-#: Namespace key holding the RDR for the ``%knows`` magic.
-_KNOWLEDGE_KEY = "__backward_knowledge__"
+    from krrood.entity_query_language.rdr.interactive import (
+        IPythonInterface,
+        Palette,
+    )
 
 
-def _make_assign_exit_magic(
-    target_name: AnswerName,
-    shell: Any,
-    namespace: Dict[str, Any],
-    validate: Callable[[], List[DataclassException]],
-    palette: Any,
-) -> Callable[[str], None]:
-    """Build a line-magic function that assigns, validates, and exits in one step.
+# %% The vocabulary the shell and its magics share
 
-    The returned callable is registered as an IPython line magic. When the expert types
-    ``%conclusion Species.mammal``, the shell calls ``magic("Species.mammal")``, which
-    evaluates the expression in the live namespace, assigns it, and leaves the shell only
-    if the answer validates — an invalid one prints its error and keeps the shell open.
 
-    The plain-assignment path (``conclusion = value`` then Ctrl-D) still works
-    unchanged — this magic is an optional shorthand.
-
-    :param target_name: The answer the magic assigns.
-    :param shell: The :class:`~IPython.terminal.embed.InteractiveShellEmbed` instance.
-    :param namespace: The shared namespace dict (mutated in place).
-    :param validate: Zero-arg callable returning the failures of every answer.
-    :param palette: A :class:`~krrood.entity_query_language.rdr.interactive.Palette` for
-        colouring error messages.
-    :return: A line-magic function ``(line: str) -> None``.
+class MagicName(StrEnum):
+    """
+    The names the expert types after ``%`` to invoke a magic.
     """
 
-    def magic(line: str) -> None:
+    CONCLUSION = "conclusion"
+    """
+    Assigns the conclusion answer and submits it.
+    """
+
+    CONDITIONS = "conditions"
+    """
+    Assigns the conditions answer and submits it.
+    """
+
+    SUFFICIENT_CONDITIONS_FOR = "sufficient_conditions_for"
+    """
+    Lists the rule paths that are sufficient to reach a conclusion value.
+    """
+
+    SAVE = "save"
+    """
+    Persists the attached model through its own saver.
+    """
+
+    HELP = "help"
+    """
+    Re-displays the how-to-answer guidance.
+    """
+
+    SHOW_TREE = "show_tree"
+    """
+    Re-displays the rule tree for the case being labelled.
+    """
+
+    HELPER = "helper"
+    """
+    Re-displays the task-specific supporting material.
+    """
+
+
+class MagicKind(StrEnum):
+    """
+    The IPython magic kinds this shell registers.
+    """
+
+    LINE = "line"
+    """
+    A magic taking the rest of its line as a single argument.
+    """
+
+
+class NamespaceKey(StrEnum):
+    """
+    The private shell-namespace keys the magics read their collaborators from.
+
+    Private so the expert never sees them among the names they author answers over; the
+    answers and the case bindings themselves are named in
+    :mod:`~krrood.entity_query_language.rdr.answer_vocabulary`.
+    """
+
+    SUFFICIENT_CONDITIONS = "__sufficient_conditions__"
+    """
+    Holds the RDR that :class:`SufficientConditionsMagic` queries.
+    """
+
+    RULE_TREE_TEXT = "__rule_tree_render__"
+    """
+    Holds the zero-argument renderer behind :class:`RuleTreeMagic`.
+    """
+
+    HELP_TEXT = "__expert_help__"
+    """
+    Holds the zero-argument builder behind :class:`HelpMagic`.
+    """
+
+    HELPER_TEXT = "__expert_helper__"
+    """
+    Holds the zero-argument renderer behind :class:`HelperMagic`.
+    """
+
+
+#: The magic that assigns each answer, which is named after the answer it assigns.
+ANSWER_MAGIC_NAMES: Dict[AnswerName, MagicName] = {
+    AnswerName.CONCLUSION: MagicName.CONCLUSION,
+    AnswerName.CONDITIONS: MagicName.CONDITIONS,
+}
+
+
+# %% The magics themselves
+
+
+@dataclass
+class Magic(ABC):
+    """
+    One line magic the expert can invoke in the embedded shell.
+    """
+
+    palette: Palette
+    """
+    Colours every message the magic prints.
+    """
+
+    @property
+    @abstractmethod
+    def name(self) -> MagicName:
         """
-        :param line: The expression to assign to ``target_name``.
+        :return: The name the expert invokes this magic by.
+        """
+
+    @abstractmethod
+    def run(self, line: str) -> None:
+        """
+        Carry the magic out.
+
+        :param line: Everything the expert typed after the magic's name.
+        """
+
+    def register(self, shell: Any) -> None:
+        """
+        Make this magic invokable in *shell* under its own name.
+
+        :param shell: The embedded IPython shell to register into.
+        """
+        shell.register_magic_function(
+            self.run, magic_kind=MagicKind.LINE, magic_name=self.name
+        )
+
+
+@dataclass
+class AssignAndExitMagic(Magic):
+    """
+    Assigns an expression to one answer variable, validates it, and leaves the shell —
+    all in one step.
+
+    When the expert types ``%conclusion Species.mammal`` the expression is evaluated in
+    the live namespace and assigned; the shell is left only if the answer validates, and
+    an invalid one prints its error and keeps the shell open. The plain-assignment path
+    (``conclusion = value`` then Ctrl-D) still works unchanged; this is a shorthand.
+    """
+
+    answer_name: AnswerName
+    """
+    The answer this magic assigns.
+    """
+
+    shell: Any
+    """
+    The :class:`~IPython.terminal.embed.InteractiveShellEmbed` to leave on success.
+    """
+
+    namespace: Dict[str, Any]
+    """
+    The shared shell namespace, mutated in place with the assigned answer.
+    """
+
+    validate: Callable[[], List[DataclassException]]
+    """
+    Re-runs every answer's validators and returns their failures.
+    """
+
+    @property
+    def name(self) -> MagicName:
+        """
+        :return: The magic name paired with the answer this magic assigns.
+        """
+        return ANSWER_MAGIC_NAMES[self.answer_name]
+
+    def run(self, line: str) -> None:
+        """
+        :param line: The expression to assign to the answer.
         """
         try:
-            value = eval(line.strip(), namespace)
-        except Exception as exc:
-            print(palette.error(f"[error] {target_name}: {exc}"))
+            value = eval(line.strip(), self.namespace)
+        except Exception as evaluation_error:
+            print(self.palette.error(f"[error] {self.answer_name}: {evaluation_error}"))
             return
-        namespace[target_name] = value
-        for error in validate():
-            if error.answer_name == target_name:
-                print(palette.error(f"[error] {target_name}: {error}"))
+        self.namespace[self.answer_name] = value
+        for error in self.validate():
+            if error.answer_name == self.answer_name:
+                print(self.palette.error(f"[error] {self.answer_name}: {error}"))
                 return
-        shell._force_exit = True
-        shell.ask_exit()
-
-    return magic
+        self.shell._force_exit = True
+        self.shell.ask_exit()
 
 
-def _make_knowledge_magic(
-    namespace: Dict[str, Any],
-    palette: Any,
-) -> Callable[[str], None]:
+@dataclass
+class SufficientConditionsMagic(Magic):
     """
-    Build a line magic (``%knows <value>``) that queries backward inference.
+    Lists the sufficient condition sets that reach a conclusion value.
 
-    Reads the RDR reference from the namespace at :data:`_KNOWLEDGE_KEY`,
-    evaluates the line argument in the namespace, calls
-    ``rdr.what_do_we_know_about(value)``, and prints the result as a
-    human-readable list of sufficient condition sets.
-
-    :param namespace: The shell's namespace (mutated in place).
-    :param palette: A :class:`~krrood.entity_query_language.rdr.interactive.Palette` for
-        colouring output.
-    :return: A line-magic function ``(line: str) -> None``.
+    Reads the RDR from the namespace, evaluates the line argument there, and prints each
+    rule path that is on its own enough to conclude that value.
     """
 
-    def magic(line: str) -> None:
+    namespace: Dict[str, Any]
+    """
+    The shared shell namespace, holding the RDR to query and the names to evaluate in.
+    """
+
+    @property
+    def name(self) -> MagicName:
+        """
+        :return: The name this magic is invoked by.
+        """
+        return MagicName.SUFFICIENT_CONDITIONS_FOR
+
+    def run(self, line: str) -> None:
         """
         :param line: The conclusion value to work backwards from.
         """
-        rdr = namespace.get(_KNOWLEDGE_KEY)
+        rdr = self.namespace.get(NamespaceKey.SUFFICIENT_CONDITIONS)
         if rdr is None:
-            print(palette.error("[error] No rule tree available in this session."))
+            print(self.palette.error("[error] No rule tree available in this session."))
             return
 
         if not line.strip():
-            print(palette.hint("Usage: %knows <conclusion_value>"))
+            print(self.palette.hint(f"Usage: %{self.name} <conclusion_value>"))
             return
 
         try:
-            value = eval(line.strip(), namespace)
-        except Exception as exc:
-            print(palette.error(f"[error] Cannot evaluate argument: {exc}"))
-            return
-
-        knowledge = rdr.sufficient_conditions_for(value)
-        p = palette
-
-        if not knowledge.is_satisfiable():
+            value = eval(line.strip(), self.namespace)
+        except Exception as evaluation_error:
             print(
-                p.label("→ ")
-                + p.neutral("No rule path concludes ")
-                + p.code(repr(value))
-                + p.label(".")
+                self.palette.error(
+                    f"[error] Cannot evaluate argument: {evaluation_error}"
+                )
             )
             return
 
-        label = repr(value)
-        sets = knowledge.sufficient_condition_sets
+        sufficient_conditions = rdr.sufficient_conditions_for(value)
+        if not sufficient_conditions.is_satisfiable():
+            print(
+                self.palette.label("→ ")
+                + self.palette.neutral("No rule path concludes ")
+                + self.palette.code(repr(value))
+                + self.palette.label(".")
+            )
+            return
+
+        condition_sets = sufficient_conditions.sufficient_condition_sets
         print(
-            p.label("→ ")
-            + str(len(sets))
-            + p.label(" sufficient condition set(s) for ")
-            + p.good(label)
-            + p.label(":")
+            self.palette.label("→ ")
+            + str(len(condition_sets))
+            + self.palette.label(" sufficient condition set(s) for ")
+            + self.palette.good(repr(value))
+            + self.palette.label(":")
         )
-        for position, condition_set in enumerate(sets, 1):
+        for position, condition_set in enumerate(condition_sets, 1):
             print()
-            print(f"  {p.keyword(f'{position}.')}")
+            print(f"  {self.palette.keyword(f'{position}.')}")
             for guard in condition_set.conditions:
-                print(f"    {p.code(format_condition(guard.as_expression))}")
-
-    return magic
+                print(f"    {self.palette.code(format_condition(guard.as_expression))}")
 
 
-def _make_save_magic(
-    interface: "IPythonInterface",
-    palette: Any,
-) -> Callable[[str], None]:
+@dataclass
+class SaveModelMagic(Magic):
     """
-    Build a ``%save`` line magic that persists the model through the RDR's own
+    Persists the model through the RDR's own
     :class:`~krrood.entity_query_language.rdr.serialization.ModelSaver`.
 
-    Accepts the *interface* rather than the RDR itself so that an RDR attached after the
-    shell was built is visible at call time.
-
-    When the interface has no RDR a hint is printed and no save occurs; no exception is
-    raised so the shell stays open.
-
-    :param interface: The
-        :class:`~krrood.entity_query_language.rdr.interactive.IPythonInterface` whose
-        RDR to persist.
-    :param palette: A :class:`~krrood.entity_query_language.rdr.interactive.Palette` for
-        colouring feedback messages.
-    :return: A line-magic function ``(line: str) -> None``.
+    Holds the interface rather than the RDR itself so that an RDR attached after the
+    shell was built is still visible at call time. With no RDR attached a hint is
+    printed and nothing is saved, so the shell stays open.
     """
 
-    def magic(line: str) -> None:
+    interface: IPythonInterface
+    """
+    The interface whose RDR to persist.
+    """
+
+    @property
+    def name(self) -> MagicName:
+        """
+        :return: The name this magic is invoked by.
+        """
+        return MagicName.SAVE
+
+    def run(self, line: str) -> None:
         """
         :param line: The magic's line argument, unused — the RDR names its own saver.
         """
-        rdr = interface.rdr
+        rdr = self.interface.rdr
         if rdr is None:
-            print(palette.hint("[hint] No model is attached to this session."))
+            print(self.palette.hint("[hint] No model is attached to this session."))
             return
         rdr.model_saver.save(rdr)
-        print(palette.good("[saved] Model saved."))
+        print(self.palette.good("[saved] Model saved."))
 
-    return magic
+
+@dataclass
+class RenderedTextMagic(Magic, ABC):
+    """
+    Prints whatever a zero-argument renderer returns, or a placeholder when it returns
+    nothing.
+    """
+
+    render: Callable[[], Optional[str]]
+    """
+    Produces the text to print, re-run on each invocation.
+    """
+
+    def run(self, line: str) -> None:
+        """
+        :param line: The magic's line argument, unused — the renderer takes none.
+        """
+        text = self.render()
+        print(text if text else self.palette.absent("(nothing to show)"))
+
+
+@dataclass
+class HelpMagic(RenderedTextMagic):
+    """
+    Re-displays the how-to-answer guidance.
+    """
+
+    @property
+    def name(self) -> MagicName:
+        """
+        :return: The name this magic is invoked by.
+        """
+        return MagicName.HELP
+
+
+@dataclass
+class RuleTreeMagic(RenderedTextMagic):
+    """
+    Re-displays the rule tree for the case being labelled.
+    """
+
+    @property
+    def name(self) -> MagicName:
+        """
+        :return: The name this magic is invoked by.
+        """
+        return MagicName.SHOW_TREE
+
+
+@dataclass
+class HelperMagic(RenderedTextMagic):
+    """
+    Re-displays the task-specific supporting material.
+    """
+
+    @property
+    def name(self) -> MagicName:
+        """
+        :return: The name this magic is invoked by.
+        """
+        return MagicName.HELPER

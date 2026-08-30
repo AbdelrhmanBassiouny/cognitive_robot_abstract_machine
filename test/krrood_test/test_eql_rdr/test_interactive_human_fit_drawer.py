@@ -36,6 +36,7 @@ from krrood.entity_query_language.rdr.serialization import load_rdr, save_rdr
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 
+from .test_interactive_human_fit import _ipython_available
 from .test_correct_drawer import (
     RDRTestCorrectDrawer,
     generate_test_correct_drawer_cases,
@@ -90,21 +91,11 @@ def _labelling_expert(label_of):
                 context.case_variable, context.case_instance
             )
         }
-        if any(r.name == AnswerName.CONCLUSION for r in requests):
+        if any(request.name == AnswerName.CONCLUSION for request in requests):
             result[AnswerName.CONCLUSION] = label_of(context.case_instance)
         return result
 
     return Expert(interface=FunctionInterface(answer_function=answer))
-
-
-def _ipython_available() -> bool:
-    """:return: True when IPython is installed, so the real shell could open."""
-    try:
-        import IPython  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
 
 
 # %% Deterministic tests (run automatically)
@@ -164,13 +155,13 @@ class TestCorrectDrawerNoTargetFit(unittest.TestCase):
             """
             Record which answers each question asked for, then supply them.
             """
-            call_log.append([r.name for r in requests])
+            call_log.append([request.name for request in requests])
             result = {
                 AnswerName.CONDITIONS: _test_correct_drawer_conditions(
                     context.case_variable, context.case_instance
                 )
             }
-            if any(r.name == AnswerName.CONCLUSION for r in requests):
+            if any(request.name == AnswerName.CONCLUSION for request in requests):
                 result[AnswerName.CONCLUSION] = _drawer_ground_truth(
                     context.case_instance
                 )
@@ -273,7 +264,9 @@ class TestCorrectFitDrawerAsHumanExpert(unittest.TestCase):
         os.makedirs(FITTED_MODELS_DIR, exist_ok=True)
         save_rdr(rdr, SAVED_MODEL_PATH)
 
-        correct = sum(rdr.classify(d) == t for d, t in zip(drawers, targets))
+        correct = sum(
+            rdr.classify(drawer) == target for drawer, target in zip(drawers, targets)
+        )
         print(f"\n[interactive] accuracy on fitted set: {correct}/{len(drawers)}")
         print(f"[interactive] saved learned rule tree to: {SAVED_MODEL_PATH}")
         print(
@@ -300,7 +293,11 @@ class TestCorrectLoadHumanFittedDrawerModel(unittest.TestCase):
         self.assertIs(rdr.case_type, RDRTestCorrectDrawer)
         self.assertEqual(rdr.conclusion_attribute_name, "correct")
 
-        correct = sum(1 for d, t in zip(drawers, targets) if rdr.classify(d) == t)
+        correct = sum(
+            1
+            for drawer, target in zip(drawers, targets)
+            if rdr.classify(drawer) == target
+        )
         print(f"\n[loaded model] accuracy on drawer set: {correct}/{len(drawers)}")
         self.assertEqual(correct, len(drawers))
 

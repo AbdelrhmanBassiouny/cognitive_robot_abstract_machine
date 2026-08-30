@@ -22,6 +22,9 @@ class RDRTestCorrectHandle:
     """
 
     name: str
+    """
+    The handle's identifier, which the learned conditions compare against.
+    """
 
 
 @dataclass
@@ -31,20 +34,33 @@ class RDRTestCorrectContainer:
     """
 
     name: str
+    """
+    The container's identifier, which the learned conditions compare against.
+    """
 
 
 @dataclass
 class RDRTestCorrectDrawer:
     """
     A candidate drawer: a handle--container pair whose correctness is to be judged.
-
-    The ``correct`` field is the conclusion the RDR should learn to set: ``True`` when
-    ``FixedConnection(container, handle)`` would exist, ``False`` otherwise.
     """
 
     handle: RDRTestCorrectHandle
+    """
+    The handle half of the candidate pair.
+    """
+
     container: RDRTestCorrectContainer
+    """
+    The container half of the candidate pair.
+    """
+
     correct: Optional[bool] = None
+    """
+    The conclusion the RDR should learn to set: ``True`` when
+    ``FixedConnection(container, handle)`` would exist, ``False`` otherwise, and
+    ``None`` before anything has judged it.
+    """
 
 
 def generate_test_correct_drawer_cases():

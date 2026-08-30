@@ -12,8 +12,9 @@ error is printed inline and the **same shell stays open** rather than bailing ou
 
 All on-screen text is composed as plain prose and coloured through a single
 :class:`Palette`, and the header is assembled from small section builders so styling lives
-in one place. Line magics — ``%help``, ``%show_tree`` and (when helpers are configured) ``%helper``
-— keep the standing header short while staying discoverable.
+in one place. The line magics of
+:mod:`~krrood.entity_query_language.rdr.magics` keep the standing header short while
+staying discoverable.
 
 The actual shell launch is injectable (``shell_runner``) so tests can play the expert's
 part without a real terminal.
@@ -26,6 +27,7 @@ from dataclasses import dataclass, field
 from typing_extensions import TYPE_CHECKING, Any, Callable, Dict, List, Optional
 
 from colorama import Fore, Style
+from IPython.terminal.embed import InteractiveShellEmbed
 
 from krrood.exceptions import DataclassException
 from krrood.entity_query_language.rdr.answer_vocabulary import (
@@ -43,25 +45,24 @@ from krrood.entity_query_language.rdr.interface import (
     ExpertInterface,
 )
 from krrood.entity_query_language.rdr.magics import (
-    BACKWARD_MAGIC,
-    CONDITIONS_MAGIC,
-    CONCLUSION_MAGIC,
-    SAVE_MAGIC,
-    _KNOWLEDGE_KEY,
-    _make_assign_exit_magic,
-    _make_knowledge_magic,
-    _make_save_magic,
+    ANSWER_MAGIC_NAMES,
+    AssignAndExitMagic,
+    HelpMagic,
+    HelperMagic,
+    Magic,
+    MagicName,
+    NamespaceKey,
+    RuleTreeMagic,
+    SaveModelMagic,
+    SufficientConditionsMagic,
 )
 from krrood.entity_query_language.rdr.progress import (
     IPythonProgressBar,
     NullProgressReporter,
 )
-from krrood.entity_query_language.rdr.prompt_sections import (  # noqa: F401
-    HELPER_MAGIC,
-    HELP_MAGIC,
+from krrood.entity_query_language.rdr.prompt_sections import (
     PROMPT_SECTIONS,
     RenderContext,
-    SHOW_TREE_MAGIC,
     supporting_material_presenters,
 )
 from krrood.entity_query_language.rdr.rule_tree_view import render_rule_tree
@@ -73,20 +74,9 @@ if TYPE_CHECKING:
 #: (and any ``exit()`` flag) visible in ``namespace`` when it returns.
 ShellRunner = Callable[[Dict[str, Any], str], None]
 
-# HELPER_MAGIC, HELP_MAGIC, SHOW_TREE_MAGIC are defined in prompt_sections and re-exported above.
-
 #: ANSI escape sequence: erase display and return cursor to top-left.
 #: Emitted before each new embedded shell so each case starts on a clean screen.
 CLEAR_SCREEN = "\033[2J\033[H"
-
-#: Private namespace key holding the zero-arg rule-tree renderer for the ``%show_tree`` magic.
-_TREE_RENDER_KEY = "__rule_tree_render__"
-
-#: Private namespace key holding the zero-arg help-text builder for the ``%help`` magic.
-_HELP_TEXT_KEY = "__expert_help__"
-
-#: Private namespace key holding the zero-arg helper-text renderer for the ``%helper`` magic.
-_HELPER_TEXT_KEY = "__expert_helper__"
 
 
 @dataclass
@@ -173,6 +163,50 @@ class Palette:
         """
         return self._paint(text, Fore.RED)
 
+    def absent(self, text: str) -> str:
+        """
+        A stand-in for content there is none of.
+        """
+        return self._paint(text, Fore.LIGHTBLACK_EX)
+
+
+class ValidatingEmbeddedShell(InteractiveShellEmbed):
+    """
+    An embedded IPython shell that vetoes a Ctrl-D exit while an answer is still
+    invalid; ``exit()`` forces the leave.
+
+    The collaborators below are assigned after construction because the base class takes
+    only its own traits as constructor arguments.
+    """
+
+    validate: Callable[[], List[DataclassException]]
+    """
+    Re-runs the request validators and returns their failures.
+    """
+
+    format_errors: Callable[[List[DataclassException]], str]
+    """
+    Renders the failures for the expert to read.
+    """
+
+    _force_exit: bool = False
+    """
+    Whether ``exit()`` has demanded the shell leave regardless of the answers.
+    """
+
+    def ask_exit(self) -> None:
+        """
+        Leave only once every answer validates, or when ``exit()`` forced it.
+        """
+        if self._force_exit:
+            super().ask_exit()
+            return
+        errors = self.validate()
+        if errors:
+            print(self.format_errors(errors))
+            return
+        super().ask_exit()
+
 
 @dataclass
 class IPythonInterface(ExpertInterface):
@@ -207,7 +241,7 @@ class IPythonInterface(ExpertInterface):
     """
     The
     :class:`~krrood.entity_query_language.rdr.single_class.EQLSingleClassRDR`
-    being fit, exposed for the ``%knows`` backward-inference magic.
+    being fit, exposed for the ``%sufficient_conditions_for`` backward-inference magic.
 
     ``None`` when the interface is used without an RDR (no magic is
     registered).
@@ -320,9 +354,9 @@ class IPythonInterface(ExpertInterface):
 
     def _format_errors(self, errors: List[DataclassException]) -> str:
         """:return: A red, one-line-per-error block (empty list -> empty string)."""
-        p = self.palette
         return "\n".join(
-            p.error(f"[error] {error.answer_name}: {error}") for error in errors
+            self.palette.error(f"[error] {error.answer_name}: {error}")
+            for error in errors
         )
 
     # %% guidance
@@ -352,34 +386,50 @@ class IPythonInterface(ExpertInterface):
         The how-to-answer guidance printed by ``%help`` — plain prose, one accent
         colour.
         """
-        p = self.palette
         lines = [
-            p.label("How to answer:"),
-            f"  Inspect the case with {p.code(NamespaceName.CASE_INSTANCE)} "
-            f"(e.g. {p.code(f'{NamespaceName.CASE_INSTANCE}.milk')}).",
-            f"  Build your answer over {p.code(NamespaceName.CASE_VARIABLE)} and assign it:",
+            self.palette.label("How to answer:"),
+            (
+                f"  Inspect the case with "
+                f"{self.palette.code(NamespaceName.CASE_INSTANCE)} "
+                f"(e.g. {self.palette.code(f'{NamespaceName.CASE_INSTANCE}.milk')})."
+            ),
+            (
+                f"  Build your answer over "
+                f"{self.palette.code(NamespaceName.CASE_VARIABLE)} and assign it:"
+            ),
         ]
-        lines.extend(f"      {p.code(request.example)}" for request in requests)
+        lines.extend(
+            f"      {self.palette.code(request.example)}" for request in requests
+        )
         lines.append("  Or use the shorthand magic (assigns and submits in one step):")
         for request in requests:
-            magic = (
-                CONCLUSION_MAGIC
-                if request.name == AnswerName.CONCLUSION
-                else CONDITIONS_MAGIC
+            magic_name = ANSWER_MAGIC_NAMES[request.name]
+            lines.append(
+                f"      {self.palette.code(f'%{magic_name} <value-or-expression>')}"
             )
-            lines.append(f"      {p.code(f'%{magic} <value-or-expression>')}")
         lines.append(
-            f"  Submit with {p.code('Ctrl-D')}; cancel with {p.code(f'{NamespaceName.EXIT}()')}."
+            f"  Submit with {self.palette.code('Ctrl-D')}; cancel with "
+            f"{self.palette.code(f'{NamespaceName.EXIT}()')}."
         )
-        lines.append(f"  Show the rule tree with {p.code(f'%{SHOW_TREE_MAGIC}')}.")
+        lines.append(
+            f"  Show the rule tree with {self.palette.code(f'%{MagicName.SHOW_TREE}')}."
+        )
         if supporting_material_presenters(context):
-            lines.append(f"  Show the task helper with {p.code(f'%{HELPER_MAGIC}')}.")
+            lines.append(
+                f"  Show the task helper with "
+                f"{self.palette.code(f'%{MagicName.HELPER}')}."
+            )
         if self.rdr is not None:
             lines.append(
-                f"  Query backward inference with {p.code(f'%{BACKWARD_MAGIC} <value>')}."
+                f"  Query backward inference with "
+                f"{self.palette.code(f'%{MagicName.SUFFICIENT_CONDITIONS_FOR} <value>')}."
             )
-            lines.append(f"  Save the model now with {p.code(f'%{SAVE_MAGIC}')}.")
-        lines.append(f"  Show this help again with {p.code(f'%{HELP_MAGIC}')}.")
+            lines.append(
+                f"  Save the model now with {self.palette.code(f'%{MagicName.SAVE}')}."
+            )
+        lines.append(
+            f"  Show this help again with {self.palette.code(f'%{MagicName.HELP}')}."
+        )
         return "\n".join(lines)
 
     def _build_namespace(
@@ -395,15 +445,15 @@ class IPythonInterface(ExpertInterface):
         :return: The namespace the expert authors their answer in.
         """
         namespace = super()._build_namespace(context, requests)
-        namespace[_TREE_RENDER_KEY] = lambda: self._render_tree(context)
-        namespace[_HELP_TEXT_KEY] = lambda: self._help_text(context, requests)
+        namespace[NamespaceKey.RULE_TREE_TEXT] = lambda: self._render_tree(context)
+        namespace[NamespaceKey.HELP_TEXT] = lambda: self._help_text(context, requests)
         # Run each helper's present() once for this question; reuse the result in the header and
         # the %helper magic so a heavy helper does not re-run on every re-prompt cycle.
         self._helper_cache = self._helper_text(context)
         if supporting_material_presenters(context):
-            namespace[_HELPER_TEXT_KEY] = lambda: self._helper_cache
+            namespace[NamespaceKey.HELPER_TEXT] = lambda: self._helper_cache
         if self.rdr is not None:
-            namespace[_KNOWLEDGE_KEY] = self.rdr
+            namespace[NamespaceKey.SUFFICIENT_CONDITIONS] = self.rdr
         if context.conclusion_domain is not None:
             for name, value in context.conclusion_domain.namespace_bindings().items():
                 namespace.setdefault(name, value)
@@ -446,78 +496,18 @@ class IPythonInterface(ExpertInterface):
         :param validate: Re-runs the request validators against ``namespace``.
         :return: None; assignments are communicated back via ``namespace``.
         """
-        from IPython.terminal.embed import InteractiveShellEmbed
-
-        interface = self
-
-        class _ValidatingEmbeddedShell(InteractiveShellEmbed):
-            """
-            Vetoes a Ctrl-D exit while the answer is invalid; ``exit()`` forces the
-            leave.
-            """
-
-            def ask_exit(self) -> None:
-                """
-                Leave only once every answer validates, or when ``exit()`` forced it.
-                """
-                if getattr(self, "_force_exit", False):
-                    super().ask_exit()
-                    return
-                errors = validate()
-                if errors:
-                    print(interface._format_errors(errors))
-                    return
-                super().ask_exit()
-
         if self.use_color:
             print(CLEAR_SCREEN, end="", flush=True)
 
-        shell = _ValidatingEmbeddedShell(banner1=header, user_ns=namespace)
+        shell = ValidatingEmbeddedShell(banner1=header, user_ns=namespace)
         shell.auto_match = True
         shell.confirm_exit = False
         shell._force_exit = False
+        shell.validate = validate
+        shell.format_errors = self._format_errors
 
-        self._register_namespace_magic(
-            shell, namespace, SHOW_TREE_MAGIC, _TREE_RENDER_KEY
-        )
-        self._register_namespace_magic(shell, namespace, HELP_MAGIC, _HELP_TEXT_KEY)
-        self._register_namespace_magic(shell, namespace, HELPER_MAGIC, _HELPER_TEXT_KEY)
-
-        # Register action magics for the answers that are in flight this session.
-        # The answer names are pre-seeded into namespace by _build_namespace, so
-        # their presence is a reliable signal for which magics to register.
-        if AnswerName.CONCLUSION in namespace:
-            shell.register_magic_function(
-                _make_assign_exit_magic(
-                    AnswerName.CONCLUSION, shell, namespace, validate, self.palette
-                ),
-                magic_kind="line",
-                magic_name=CONCLUSION_MAGIC,
-            )
-        if AnswerName.CONDITIONS in namespace:
-            shell.register_magic_function(
-                _make_assign_exit_magic(
-                    AnswerName.CONDITIONS, shell, namespace, validate, self.palette
-                ),
-                magic_kind="line",
-                magic_name=CONDITIONS_MAGIC,
-            )
-
-        # Register the backward-inference read-only magic when the RDR is available.
-        if _KNOWLEDGE_KEY in namespace:
-            shell.register_magic_function(
-                _make_knowledge_magic(namespace, self.palette),
-                magic_kind="line",
-                magic_name=BACKWARD_MAGIC,
-            )
-
-        # Register the on-demand save magic unconditionally; the magic itself handles
-        # the case where no RDR is attached (prints a hint instead of saving).
-        shell.register_magic_function(
-            _make_save_magic(self, self.palette),
-            magic_kind="line",
-            magic_name=SAVE_MAGIC,
-        )
+        for magic in self._magics(shell, namespace, validate):
+            magic.register(shell)
 
         def _cancel() -> None:
             """
@@ -533,27 +523,47 @@ class IPythonInterface(ExpertInterface):
         # to the caller when it returns.
         shell()
 
-    @staticmethod
-    def _register_namespace_magic(
-        shell: Any, namespace: Dict[str, Any], magic_name: str, render_key: str
-    ) -> None:
+    def _magics(
+        self,
+        shell: ValidatingEmbeddedShell,
+        namespace: Dict[str, Any],
+        validate: Callable[[], List[DataclassException]],
+    ) -> List[Magic]:
         """
-        Register a line magic that prints whatever the zero-arg renderer at
-        ``render_key`` returns.
-        """
-        render = namespace.get(render_key)
-        if render is None:
-            return
+        Build every magic this session offers the expert.
 
-        def magic(line: str) -> None:
-            """
-            :param line: The magic's line argument, unused — the renderer takes none.
-            """
-            text = render()
-            print(
-                text
-                if text
-                else f"{Fore.LIGHTBLACK_EX}(nothing to show){Style.RESET_ALL}"
+        The answers in flight and the renderers this question has are both pre-seeded
+        into ``namespace`` by :meth:`_build_namespace`, so what it holds decides which
+        magics there are anything to offer. ``%save`` is unconditional because it prints
+        a hint of its own when no model is attached.
+
+        :param shell: The shell the answer magics leave on a valid answer.
+        :param namespace: The interaction namespace the magics read and assign in.
+        :param validate: Re-runs the request validators against ``namespace``.
+        :return: The magics to register, in the order they were built.
+        """
+        magics: List[Magic] = [SaveModelMagic(palette=self.palette, interface=self)]
+        for rendered_text_magic, render_key in (
+            (RuleTreeMagic, NamespaceKey.RULE_TREE_TEXT),
+            (HelpMagic, NamespaceKey.HELP_TEXT),
+            (HelperMagic, NamespaceKey.HELPER_TEXT),
+        ):
+            render = namespace.get(render_key)
+            if render is not None:
+                magics.append(rendered_text_magic(palette=self.palette, render=render))
+        for answer_name in ANSWER_MAGIC_NAMES:
+            if answer_name in namespace:
+                magics.append(
+                    AssignAndExitMagic(
+                        palette=self.palette,
+                        answer_name=answer_name,
+                        shell=shell,
+                        namespace=namespace,
+                        validate=validate,
+                    )
+                )
+        if NamespaceKey.SUFFICIENT_CONDITIONS in namespace:
+            magics.append(
+                SufficientConditionsMagic(palette=self.palette, namespace=namespace)
             )
-
-        shell.register_magic_function(magic, magic_kind="line", magic_name=magic_name)
+        return magics

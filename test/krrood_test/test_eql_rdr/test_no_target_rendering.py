@@ -10,7 +10,7 @@ Each test verifies exactly one rendering guarantee of the labelling path:
   - hint line: always %help, %helper only when helpers present
   - helper.present() output folded into header, and called only once per _build_namespace
   - namespace injection: Species injected for enumerable, not for open domain
-  - _HELPER_TEXT_KEY present iff helpers non-empty
+  - NamespaceKey.HELPER_TEXT present iff helpers non-empty
   - ground-truth (has_target) path still shows "Ground-truth conclusion:"
   - _help_text includes domain-example and %helper only when helpers configured
 
@@ -21,38 +21,31 @@ from __future__ import annotations
 
 from krrood.entity_query_language.rdr.answer_vocabulary import (
     AnswerName,
-    NamespaceName,
 )
 import unittest
 from dataclasses import dataclass
 
-from typing_extensions import Optional
 
-from krrood.entity_query_language.rdr import expert
 from krrood.entity_query_language.rdr.conclusion_helper import (
     ConclusionSupportPresenter,
 )
 from krrood.entity_query_language.rdr.conclusion_domain import (
     ConclusionValidator,
-    resolve_conclusion_domain,
 )
-from krrood.entity_query_language.rdr.expert import Expert
+from krrood.entity_query_language.rdr.expert import ConditionsValidator, Expert
+from krrood.entity_query_language.rdr.observer import ClassificationTrace
 from krrood.entity_query_language.rdr.interface import (
     AnswerRequest,
     CaseContext,
     FunctionInterface,
 )
-from krrood.entity_query_language.rdr.interactive import (
-    HELPER_MAGIC,
-    HELP_MAGIC,
-    IPythonInterface,
-    _HELPER_TEXT_KEY,
-)
+from krrood.entity_query_language.rdr.interactive import IPythonInterface
+from krrood.entity_query_language.rdr.magics import MagicName, NamespaceKey
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
 
 from .animal import Animal, Species
-from .test_conclusion_domain import Doc, Tag
+from .test_conclusion_domain import Tag
 
 # %% Helpers shared across tests
 
@@ -261,7 +254,7 @@ class TestFiredOnLineWithTrace(unittest.TestCase):
         rdr = _zoo_rdr()
 
         # Seed a backbone→fish rule so we get a real trace with a firing anchor.
-        def _fish_expert_fn(context, requests):
+        def _answer_with_fish(context, requests):
             """
             :param context: The case being labelled.
             :param requests: The answers asked for.
@@ -270,7 +263,7 @@ class TestFiredOnLineWithTrace(unittest.TestCase):
             return {"conditions": context.case_variable.backbone == True}
 
         fish_expert = Expert(
-            interface=FunctionInterface(answer_function=_fish_expert_fn)
+            interface=FunctionInterface(answer_function=_answer_with_fish)
         )
         # Use a "fish-like" animal (backbone=True).
         fish_case = Animal(
@@ -311,8 +304,6 @@ class TestFiredOnLineWithTrace(unittest.TestCase):
         """
         'It fired on' line is absent when trace is present but firing_anchor is None.
         """
-        from krrood.entity_query_language.rdr.observer import ClassificationTrace
-
         case = _make_animal()
         rdr = _zoo_rdr()
         # Build a synthetic trace with firing_anchor=None.
@@ -382,9 +373,9 @@ class TestAllowedValuesLines(unittest.TestCase):
             conclusion_domain=domain,
         )
         request = _conclusion_request(domain)
-        iface = ipython_interface()
-        iface._build_namespace(context, [request])
-        header = iface._render_header(context, [request], {})
+        interface = ipython_interface()
+        interface._build_namespace(context, [request])
+        header = interface._render_header(context, [request], {})
         self.assertIn("Conclusion type:", header)
         self.assertIn("str", header)
 
@@ -401,9 +392,9 @@ class TestAllowedValuesLines(unittest.TestCase):
             conclusion_domain=domain,
         )
         request = _conclusion_request(domain)
-        iface = ipython_interface()
-        iface._build_namespace(context, [request])
-        header = iface._render_header(context, [request], {})
+        interface = ipython_interface()
+        interface._build_namespace(context, [request])
+        header = interface._render_header(context, [request], {})
         self.assertNotIn("Choose one of:", header)
 
 
@@ -422,7 +413,7 @@ class TestHintLineAlwaysContainsHelp(unittest.TestCase):
         case = _make_animal()
         rdr = _zoo_rdr()
         header = _render(ipython_interface(), _no_rule_context(case, rdr))
-        self.assertIn(f"%{HELP_MAGIC}", header)
+        self.assertIn(f"%{MagicName.HELP}", header)
 
 
 # %% %helper appears in hint only when helpers are present
@@ -451,7 +442,7 @@ class TestHintLineNamesTheHelperMagicOnlyWithAHelper(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, helpers=[PresentingHelper()])
         header = _render(ipython_interface(), context)
-        self.assertIn(f"%{HELPER_MAGIC}", header)
+        self.assertIn(f"%{MagicName.HELPER}", header)
 
     def test_hint_does_not_contain_percent_aid_when_no_aids(self):
         """
@@ -461,7 +452,7 @@ class TestHintLineNamesTheHelperMagicOnlyWithAHelper(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, helpers=[])
         header = _render(ipython_interface(), context)
-        self.assertNotIn(f"%{HELPER_MAGIC}", header)
+        self.assertNotIn(f"%{MagicName.HELPER}", header)
 
 
 # %% helper present() output folded into header, called exactly once
@@ -513,12 +504,12 @@ class TestSupportingMaterialFoldedIntoTheHeader(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, helpers=[CountingHelper()])
         requests = [_conclusion_request(context.conclusion_domain)]
-        iface = ipython_interface()
+        interface = ipython_interface()
         # _build_namespace triggers present(); subsequent _render_header calls reuse cache.
-        iface._build_namespace(context, requests)
-        iface._render_header(context, requests, {})
-        iface._render_header(context, requests, {})
-        iface._render_header(context, requests, {})
+        interface._build_namespace(context, requests)
+        interface._render_header(context, requests, {})
+        interface._render_header(context, requests, {})
+        interface._render_header(context, requests, {})
         self.assertEqual(call_count["n"], 1)
 
 
@@ -538,10 +529,10 @@ class TestNamespaceInjection(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr)
         requests = [_conclusion_request(context.conclusion_domain)]
-        iface = ipython_interface()
-        ns = iface._build_namespace(context, requests)
-        self.assertIn("Species", ns)
-        self.assertIs(ns["Species"], Species)
+        interface = ipython_interface()
+        namespace = interface._build_namespace(context, requests)
+        self.assertIn("Species", namespace)
+        self.assertIs(namespace["Species"], Species)
 
     def test_enum_type_not_injected_for_open_domain(self):
         """
@@ -558,7 +549,7 @@ class TestNamespaceInjection(unittest.TestCase):
         self.assertEqual(domain.namespace_bindings(), {})
 
 
-# %% _HELPER_TEXT_KEY in namespace iff helpers non-empty
+# %% NamespaceKey.HELPER_TEXT in namespace iff helpers non-empty
 
 
 class TestHelperRendererInTheNamespace(unittest.TestCase):
@@ -568,7 +559,7 @@ class TestHelperRendererInTheNamespace(unittest.TestCase):
 
     def test_aid_text_key_present_when_aids_non_empty(self):
         """
-        _HELPER_TEXT_KEY is in the namespace when context.helpers is non-empty.
+        NamespaceKey.HELPER_TEXT is in the namespace when context.helpers is non-empty.
         """
 
         class PresentingHelper(ConclusionSupportPresenter):
@@ -584,21 +575,21 @@ class TestHelperRendererInTheNamespace(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, helpers=[PresentingHelper()])
         requests = [_conclusion_request(context.conclusion_domain)]
-        iface = ipython_interface()
-        ns = iface._build_namespace(context, requests)
-        self.assertIn(_HELPER_TEXT_KEY, ns)
+        interface = ipython_interface()
+        namespace = interface._build_namespace(context, requests)
+        self.assertIn(NamespaceKey.HELPER_TEXT, namespace)
 
     def test_aid_text_key_absent_when_no_aids(self):
         """
-        _HELPER_TEXT_KEY is NOT in the namespace when context.helpers is empty.
+        NamespaceKey.HELPER_TEXT is NOT in the namespace when context.helpers is empty.
         """
         case = _make_animal()
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, helpers=[])
         requests = [_conclusion_request(context.conclusion_domain)]
-        iface = ipython_interface()
-        ns = iface._build_namespace(context, requests)
-        self.assertNotIn(_HELPER_TEXT_KEY, ns)
+        interface = ipython_interface()
+        namespace = interface._build_namespace(context, requests)
+        self.assertNotIn(NamespaceKey.HELPER_TEXT, namespace)
 
 
 # %% ground-truth (has_target) path is unchanged
@@ -622,18 +613,14 @@ class TestGroundTruthPathUnchanged(unittest.TestCase):
             target_conclusion=Species.bird,
             conclusion_domain=rdr.conclusion_domain,
         )
-        from krrood.entity_query_language.rdr.expert import (
-            ConditionsValidator,
-        )
-
         request = AnswerRequest(
             name=AnswerName.CONDITIONS,
             validate=ConditionsValidator(),
-            example=f"conditions = case_variable.some_attr == True",
+            example=f"{AnswerName.CONDITIONS} = case_variable.some_attr == True",
         )
-        iface = ipython_interface()
-        iface._build_namespace(context, [request])
-        header = iface._render_header(context, [request], {})
+        interface = ipython_interface()
+        interface._build_namespace(context, [request])
+        header = interface._render_header(context, [request], {})
         self.assertIn("Ground-truth conclusion:", header)
 
     def test_ground_truth_header_contains_target_value(self):
@@ -649,18 +636,14 @@ class TestGroundTruthPathUnchanged(unittest.TestCase):
             target_conclusion=Species.bird,
             conclusion_domain=rdr.conclusion_domain,
         )
-        from krrood.entity_query_language.rdr.expert import (
-            ConditionsValidator,
-        )
-
         request = AnswerRequest(
             name=AnswerName.CONDITIONS,
             validate=ConditionsValidator(),
             example="conditions = case_variable.some_attr == True",
         )
-        iface = ipython_interface()
-        iface._build_namespace(context, [request])
-        header = iface._render_header(context, [request], {})
+        interface = ipython_interface()
+        interface._build_namespace(context, [request])
+        header = interface._render_header(context, [request], {})
         self.assertIn("bird", header)
 
     def test_ground_truth_header_does_not_contain_no_rule_fired(self):
@@ -676,18 +659,14 @@ class TestGroundTruthPathUnchanged(unittest.TestCase):
             target_conclusion=Species.bird,
             conclusion_domain=rdr.conclusion_domain,
         )
-        from krrood.entity_query_language.rdr.expert import (
-            ConditionsValidator,
-        )
-
         request = AnswerRequest(
             name=AnswerName.CONDITIONS,
             validate=ConditionsValidator(),
             example="conditions = case_variable.some_attr == True",
         )
-        iface = ipython_interface()
-        iface._build_namespace(context, [request])
-        header = iface._render_header(context, [request], {})
+        interface = ipython_interface()
+        interface._build_namespace(context, [request])
+        header = interface._render_header(context, [request], {})
         self.assertNotIn("No rule fired — what should this case conclude?", header)
 
 
@@ -708,8 +687,8 @@ class TestHelpText(unittest.TestCase):
         domain = rdr.conclusion_domain
         context = _no_rule_context(case, rdr)
         requests = [_conclusion_request(domain)]
-        iface = ipython_interface()
-        text = iface._help_text(context, requests)
+        interface = ipython_interface()
+        text = interface._help_text(context, requests)
         # The example is derived from the domain (e.g. "conclusion = Species.<member>")
         self.assertIn("conclusion = Species.", text)
 
@@ -731,9 +710,9 @@ class TestHelpText(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, helpers=[PresentingHelper()])
         requests = [_conclusion_request(rdr.conclusion_domain)]
-        iface = ipython_interface()
-        text = iface._help_text(context, requests)
-        self.assertIn(f"%{HELPER_MAGIC}", text)
+        interface = ipython_interface()
+        text = interface._help_text(context, requests)
+        self.assertIn(f"%{MagicName.HELPER}", text)
 
     def test_help_text_excludes_percent_aid_when_no_aids(self):
         """
@@ -743,9 +722,9 @@ class TestHelpText(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr, helpers=[])
         requests = [_conclusion_request(rdr.conclusion_domain)]
-        iface = ipython_interface()
-        text = iface._help_text(context, requests)
-        self.assertNotIn(f"%{HELPER_MAGIC}", text)
+        interface = ipython_interface()
+        text = interface._help_text(context, requests)
+        self.assertNotIn(f"%{MagicName.HELPER}", text)
 
     def test_help_text_always_includes_percent_show_tree(self):
         """
@@ -755,8 +734,8 @@ class TestHelpText(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr)
         requests = [_conclusion_request(rdr.conclusion_domain)]
-        iface = ipython_interface()
-        text = iface._help_text(context, requests)
+        interface = ipython_interface()
+        text = interface._help_text(context, requests)
         self.assertIn("%show_tree", text)
 
     def test_help_text_always_includes_percent_help(self):
@@ -767,9 +746,9 @@ class TestHelpText(unittest.TestCase):
         rdr = _zoo_rdr()
         context = _no_rule_context(case, rdr)
         requests = [_conclusion_request(rdr.conclusion_domain)]
-        iface = ipython_interface()
-        text = iface._help_text(context, requests)
-        self.assertIn(f"%{HELP_MAGIC}", text)
+        interface = ipython_interface()
+        text = interface._help_text(context, requests)
+        self.assertIn(f"%{MagicName.HELP}", text)
 
 
 if __name__ == "__main__":

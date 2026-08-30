@@ -4,14 +4,13 @@ Unit tests for ``IPythonInterface._case_table`` dispatching.
 
 from __future__ import annotations
 
-import pytest
 
 from krrood.entity_query_language.rdr.case_table import render_case_table
 from krrood.entity_query_language.rdr.interactive import IPythonInterface
 from krrood.entity_query_language.rdr.interface import CaseContext
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
-from .animal import Animal, Species
+from .animal import Animal
 
 # %% Helpers
 

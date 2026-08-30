@@ -31,7 +31,10 @@ import sys
 import unittest
 
 from krrood.entity_query_language.factories import an
-from krrood.entity_query_language.rdr import ChainConditionResolver, ResolutionMode
+from krrood.entity_query_language.rdr.condition_resolver import (
+    ChainConditionResolver,
+    ResolutionMode,
+)
 from krrood.entity_query_language.rdr.backend import ModelKey, RDRBackend
 from krrood.entity_query_language.rdr.expert import Expert
 from krrood.entity_query_language.rdr.interactive import IPythonInterface
@@ -42,7 +45,7 @@ from krrood.entity_query_language.rdr.serialization import (
 )
 from krrood.entity_query_language.rdr.single_class import EQLSingleClassRDR
 
-from .animal import Animal, Species
+from .animal import Animal
 from .zoo_loader import load_zoo_animals
 
 animals, targets = load_zoo_animals()
