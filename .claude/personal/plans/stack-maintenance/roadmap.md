@@ -95,6 +95,10 @@ and re-applies its delta.
   *keeps* a thing rather than what drops it: a build branch is kept while a pull request is still
   open against it, which covers both the candidate judging it and a filtered build somebody is
   working from, and it needs no knowledge of how the run that made it ended.
+- **What a thing is opened *against* is part of whether it can be measured at all.** The candidate's
+  base was chosen to carry meaning - `find-candidate` tells a full build from a `--plan` one by it -
+  and that made it a base nobody could check against. A discriminator and a merge target are two jobs,
+  and one field doing both fails at the one that is load-bearing for the whole pipeline.
 - **A measurement that explains more than one design is recorded once and referred to.** The
   candidate check timing was written out at four of the designs it shapes, in three modules, and
   each copy goes stale on its own with no reader able to tell which is current. What made the
@@ -164,6 +168,13 @@ and re-applies its delta.
 - **rerere replays a textually matching resolution automatically**, so a skill-authored one that is
   semantically wrong is reapplied unreviewed on every later build. Provenance is recorded and replays
   are never silent.
+- **A candidate opened against the branch it replaces stops being checkable once that branch falls
+  behind.** `integration` is itself an older build of the same branches, so a new build conflicts with
+  it, GitHub computes no merge reference, and a `pull_request` run - which checks that reference out -
+  is never created. The rebuild then stops on a candidate nothing can judge and never reaches the step
+  that would have replaced it. Measured on 2026-08-30: candidate #220 had no `refs/pull/220/merge` and
+  no checks after eleven hours, while the same build opened against `main` had both within twenty
+  seconds. This is why one build is the only one this pipeline has ever judged.
 
 ## Open
 

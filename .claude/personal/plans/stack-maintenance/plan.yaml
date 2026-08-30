@@ -448,6 +448,17 @@ items:
   track: integration
   depends_on:
   - integration-branch
+  blockers:
+  - 'The live pipeline is deadlocked, and the cause is the candidate''s base rather than anything slow.
+    Candidate #220 has no `refs/pull/220/merge` at all - the fetch answers `couldn''t find remote ref`,
+    where an ordinary pull request''s succeeds - so GitHub created no run for it and none ever will. It
+    cannot compute the merge because the build conflicts with `integration` in five files: both descend
+    from `main`, but `integration` is the 2026-08-28 build merging these branches at their state then
+    while the build merges them at their state now, and two independent merges of the same work over one
+    base collide. The rebuild then reads an unjudgeable candidate, stops at `candidate-unchecked` (17),
+    and never reaches the step that would have replaced it - the same shape as the rule this plan already
+    records about a label that makes later passes skip the branch it marks. Confirmed by opening the same
+    build against `main` as #224: the merge reference exists and 23 checks started within twenty seconds.'
   notes: 'Part D of `integration-branch`''s review round: the verdict moves from a local test run to real CI.
 
     Folded back onto that item''s branch after being split out, so it has no pull request of its own - the
@@ -589,6 +600,7 @@ items:
     whole section of `test_integration_verdict.py` was still walking `integration-refresh.yml` by hand, having
     survived the round that introduced `workflow_document.py` intact: a model does not retire the hand-rolled
     readers it replaces, because nothing breaks when it lands.
+
     **Both threads the 2026-08-30 round left open are answered, and the recorded blocker had the first
 
     one wrong.** The repeated string was never the `sys.path` insertion `bastler-package` owns: asked
@@ -619,7 +631,35 @@ items:
 
     character class `BUILD_BRANCH_PATTERN` uses, so reusing it would have matched nothing - silently, in
 
-    the losing direction, both times.'
+    the losing direction, both times.
+
+    **The pipeline was found deadlocked on 2026-08-30, and the base of the candidate is why.** A build is
+
+    opened against `integration`, which is the branch it will replace - and that branch is itself an
+
+    older build of the same branches, so the two conflict and GitHub can compute no merge reference,
+
+    which is what a `pull_request` run checks out. No reference, no run, no verdict, and a rebuild that
+
+    stops on the candidate it cannot judge. **It is not self-recovering**, and it explains why one build
+
+    is the only one this pipeline has ever judged: it works while `integration` is close behind and
+
+    wedges permanently once it is not.
+
+    The fix is not the one-line base swap it looks like. `find-candidate` tells the candidate to settle
+
+    from a `--plan` build by *which branch it was opened against*, deliberately - so opening every
+
+    candidate against the upstream base needs a discriminator that is not the base, or a one-plan build
+
+    gets published over everything in flight. Two halves are wanted: open candidates against a base the
+
+    build always merges with, and make an unjudgeable candidate something a rebuild closes and moves past
+
+    rather than stops on - without the second, an outage long enough to let `integration` drift wedges it
+
+    again with no way out.'
 - id: red-candidate-localisation
   title: Localise a red candidate to the branches that caused it
   branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
