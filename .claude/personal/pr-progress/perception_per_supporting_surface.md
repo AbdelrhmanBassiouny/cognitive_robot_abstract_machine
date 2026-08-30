@@ -3,45 +3,44 @@
 Plan item of `knowledge-directed-perception` (tracking issue #201), branch
 `perception_per_supporting_surface`, kicked off 2026-08-30 in `auto` mode.
 
-## The plan
+## Done -- the item is built and pushed
 
-Fault 2 of the plan's three: a piece on the board's lid is invisible twice over --
-rectified onto the table's plane only, so parallax-shifted out of both silhouettes, and
-then discarded because the board is coded as an obstacle. Both are the single
-table-plane pass, so the fix is one pass per supporting surface.
+`2744c23d`. One detection pass per supporting surface, each rectified onto its own plane,
+every detection attributed to the surface supporting it.
 
-1. `WorkspaceSurface` gains the name the world knows the surface by, for attribution.
-2. `SearchedSurface`: one surface as one pass sees it -- the plane, the outline bounding
-   the surface itself (the detected board, for the lid), and the surfaces standing on it.
-   `claims(x, y)` replaces `board.encloses(x, y) -> skip`.
-3. `MontessoriPerceptionPipeline` holds the table and the lid as surfaces, not
-   `region`/`table_height`/`board_height`; `detect` runs the loose-piece detector once per
-   surface at that surface's own plane.
-4. Every detection records the surface supporting it.
-5. Test renderer: `PlacedPiece` gains the height of the surface it stands on.
+- `MontessoriPerceptionPipeline` holds `table` and `lid` as `WorkspaceSurface`es instead of
+  `region`/`table_height`/`board_height` -- the restructure #205 left here.
+- `SurfaceSearch` carries the part of a plane one pass may claim (the outline bounding the
+  surface, the surfaces standing on it); `claims(x, y)` replaced `board.encloses -> skip`.
+- The lid's height comes from the world, its extent from the detected board.
+- `MontessoriShapeDetection.supporting_surface` names the surface, for `perception-backend`.
+- `SurfaceColors.piece_mask` segments one colour at a time; `EdgeDistances.of` reads each
+  colour channel; `Orthophoto` caches its hue-saturation-value form.
+- Test renderer: `PlacedPiece.surface_height`, and `clear_lid_position()`.
 
-The lid's height comes from the world (rectification needs it before detection); its
-extent from the detected board (the board moves, its height above the table does not).
+`153 passed, 1 skipped` against the parent's `144 passed, 1 skipped` -- the nine added here.
 
-## Done
+## The two things the plan had not found
 
-- Branch, draft PR #221, manifest + roadmap section recorded.
+The item's note says "invisible twice over"; it is four. The restructure fixes two.
+
+- The lid wears a piece colour (wood hue 19, amber prisms 21, tolerance 4), so one mask over
+  all piece colours merged a piece on the lid into the lid.
+- The edge fit ran Canny over brightness, where a cyan piece is **one** grey level from the
+  lid and **34** from the bare table -- no edge to fit.
+
+Both fixed inside the one detector, so `choose-detection-method` still owns choosing between
+detectors. **But its "the lid selects the colour blob" rule loses its motivation**: the edge
+fit now fits a cube on the lid at 0.93. Recorded on #201 and in the roadmap.
+
+## Not done, deliberately
+
+- `supporting_surface` is not populated (against `surface-finish-annotation`'s prediction).
+- An amber piece on the wooden lid still cannot be separated by colour at all --
+  `choose-detection-method`'s real case.
+- `detect` costs 0.35 s per frame against 0.23 s; the node's period is 0.5 s.
 
 ## Next
 
-- Failing tests first: a cube on the lid is found, at the lid's height, attributed to the
-  lid; a piece on the table still attributed to the table; the lid still not a piece.
-- Then the implementation, then the whole `test_montessori_*` suite against the parent.
-
-## Watch for
-
-- **The rendered lid wears the amber pieces' hue.** `LID_COLOR` is hue 19, `YELLOW_HUE` is
-  21, `HUE_TOLERANCE` is 4 -- so `piece_mask` marks the whole lid, and an amber piece on it
-  merges into that blob. The lid's own contour is size-rejected, so this costs nothing, but
-  the lid test has to place a *cyan* piece (a cube), which is also what
-  `demo-runs-on-grounded-perception` asks for. Whether an amber piece on wood is separable
-  at all is `choose-detection-method`'s question, not this item's.
-- A piece on the lid may also raise a parallax-shifted contour on the table pass. If its
-  centre lands outside the board it would be a second detection of one piece. Assert
-  exactly one; if it appears, decide here rather than deferring it into
-  `one-detection-per-thing`, since this pass is what creates it.
+Nothing outstanding in this session: PR #221 is open as a draft with its description matching
+the work. CI has not been read yet.
