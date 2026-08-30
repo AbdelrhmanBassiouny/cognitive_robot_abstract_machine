@@ -1,7 +1,8 @@
 """
 Auto-generated EQL-RDR rule tree.
 
-Do not edit by hand.
+Edit only to keep the existing rules working: a changed API or domain model is a
+reason to edit a rule. Do not change the tree's structure, and do not add rules.
 """
 
 from krrood.entity_query_language.factories import (
