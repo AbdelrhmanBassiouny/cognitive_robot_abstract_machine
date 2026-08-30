@@ -897,3 +897,68 @@ Run with `--noconftest` and the workspace on `PYTHONPATH` where the ORM regenera
 wanted, following #202, #205 and #216; #216 recorded that the suite does run in a container
 once its dependency set is installed, so the full run is attempted rather than assumed
 impossible.
+
+### `detect-per-supporting-surface`: what it took, and the two reasons the plan had not found
+
+Built 2026-08-30 as pull request #221, `2744c23d`. 9 new tests; `153 passed, 1 skipped`
+across the ten `test_montessori_*` modules against `144 passed, 1 skipped` on the parent,
+which is the nine added here and nothing else changed.
+
+**The item's note says a piece on the lid is "invisible twice over". It is invisible four
+times over, and the restructure alone fixes two of them.** The two the plan named -- one
+rectification plane, and the board handed to the detector as an obstacle -- are the single
+table-plane pass, and the pass-per-surface restructure fixes both. Probing the lid pass
+before writing any of it showed it then finding exactly one contour: the lid, with the
+cube merged into it, rejected for size. Two further reasons, neither of which the plan
+knew about:
+
+- **The lid wears a piece colour.** The board's wood measures at hue 19 and the amber
+  prisms at 21, within the four-hue tolerance, so `piece_mask` marked the whole lid.
+  Marking every piece colour at once therefore merges a piece standing on the lid into the
+  lid's own region, where it has no outline left to measure. Each colour is now segmented
+  on its own, which also separates two touching pieces of different colours.
+- **A cyan piece and the lid have the same brightness.** With the outline recovered, the
+  edge fit still refused it: `EdgeDistances.of` ran Canny over a grayscale conversion, and
+  the cube's top face is *one grey level* from the lid while standing 34 apart from the
+  bare table. Each colour channel is now read for edges of its own and the results taken
+  together, which fits the cube at 0.93 agreement where brightness alone found nothing.
+
+Both fixes stay inside the one detector rather than adding a second, so
+`choose-detection-method` still owns choosing *between* detectors. They are here rather
+than deferred because without them this item's own claim -- a piece on the lid is found --
+is unreachable, and `demo-runs-on-grounded-perception` asks for exactly that in wave one,
+before that item exists.
+
+**This weakens one of `choose-detection-method`'s premises.** Its planned rule, "a matte
+contrasting surface selects the cheaper colour blob, which works there and is faster", was
+motivated partly by the edge fit not working on the lid. It now works there. The rule
+needs a different justification -- speed, or the case colour still cannot handle at all:
+an amber piece on the wooden lid, which no hue separates from it. Recorded on the tracking
+issue as well as here.
+
+**The twin's colour for the board is nominal, not measured.** Reading the surface's own
+colour out of the world was considered first, as the knowledge-directed answer, and
+rejected on evidence: `BOARD_COLOR` is `Color.BEIGE()`, eleven hues from the wood the
+camera measures, so subtracting it would not have subtracted the lid. Moving measured
+colours onto the twin's objects is `detector-parameters-from-knowledge`'s ask, and the
+board's surface is the same move for surfaces.
+
+**`supporting_surface` is still `None` on every world here, and this item does not
+populate it.** `surface-finish-annotation`'s section predicted this item would, and it
+does not: the item's claim is the pass structure, `calculate_supporting_surface` is a mesh
+ray-cast over a real URDF that cannot be checked from a container, and nothing in this
+item needs a declared region. The finish question that section raised therefore does not
+arise yet.
+
+**What it costs.** `detect` runs at 0.35 s per frame against the parent's 0.23 s, measured
+on this container against the rendered scene. A second surface is genuinely a second pass;
+what was avoidable was the hue-saturation-value conversion, which four readings already
+duplicated and the per-colour search would have made eight, so the rectified view now
+keeps it. The node's `minimum_period` is 0.5 s, so it still fits, with less headroom than
+before.
+
+**The environment does run the suite**, as #216 found: Python 3.12, the dependency set
+installed into a virtual environment, the vendored `random_events` built from source, and
+`urdf_parser_py` copied in by hand. `mujoco`, `manifold3d`, `platformdirs`, `plyfile`,
+`lxml` and `daqp` were needed beyond #216's list, and the workspace packages go on
+`PYTHONPATH` rather than being installed.
