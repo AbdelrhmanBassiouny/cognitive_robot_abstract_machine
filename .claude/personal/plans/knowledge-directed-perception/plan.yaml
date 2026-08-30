@@ -402,6 +402,39 @@ items:
       not inherit its body's finish - detect-per-supporting-surface has to declare it on the
       region it builds.
 
+  - id: surfaces-found-by-looking
+    title: "Find a surface in the image from what the world says it is like"
+    branch: perception_surface_from_description
+    pull_request_number: null
+    track: method-selection
+    depends_on: [perception-backend, surface-finish-annotation]
+    status: not_started
+    notes: >-
+      Raised by the developer on 2026-08-30, watching the workspace clip show the floor,
+      the chairs and whoever was standing at the table. Every surface in this plan is
+      taken from a model - either a constant (recorded_setup.WORKSPACE, still the old
+      1.0 x 1.2 m guess) or the body's own collision shape (surfaces-from-world). Neither
+      is a measurement of where the table really is, and the demo has already drifted
+      away from its own model once: the board and the pieces do not stand where
+      montessori_demo's hardcoded layout puts them, though the table's height agreed
+      exactly. This item finds the surface in the picture instead, from the properties
+      the twin already states about it - a large horizontal plane, mirror-finished
+      (surface-finish-annotation), colourless, of about the modelled size - and the
+      description is an entity query language expression, so which detectors run is
+      compiled from the conditions rather than written by hand. That is
+      choose-detection-method's claim turned on the surface itself, and it is what makes
+      the workspace something the robot works out rather than something a person tuned.
+      Evidence worth keeping before it starts: fitting the *table's* plane works on this
+      sensor even though fitting the pieces does not. The point-cloud trial of 4b74460f8
+      measured a RANSAC plane holding 34% of 693k points on the bare steel and 69% with a
+      mat, table points scattering +/-17 mm about it, while no piece stood out of that
+      cloud at all. So a plane fit is a candidate for the surface and known not to be one
+      for what rests on it, and the same trial's clustering must not be re-run for pieces.
+      Also worth taking from the captures: everything detected across all six lies within
+      x 0.57..0.91 and y -0.02..0.37, against a region of x 0.35..1.35, y -0.45..0.75.
+      Deliberately after the deadline's critical path - the demo can run on a tuned
+      workspace, and this replaces the tuning rather than unblocking anything.
+
   - id: choose-detection-method
     title: "Choose the detector by rule from the target and the surface"
     branch: perception_choose_detection_method

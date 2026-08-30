@@ -1256,3 +1256,47 @@ longer needed.
 
 #205 and #221 both edit `pipeline.py` and `footprint.py`, so both conflict with the rename.
 The resolution is mechanical: take their edit, spell the class `RectifiedFootprint`.
+
+## Finding the surface by looking, not by being told (2026-08-30)
+
+Raised by the developer while watching the workspace clip: it still shows the floor, the
+chairs and whoever is standing at the table, because the region searched is a hand-written
+rectangle bigger than the table. Two answers came out of that, and they are different in
+kind.
+
+The immediate one is a tool:  gives each of the workspace's four edges a
+slider and draws the clipped camera image, the depth and the rectified table while they
+move, so the region can be cut down to the table by eye and written back into the setup.
+The sliders can only shrink the declared region, never grow it past what the setup already
+searches, so a tuned workspace is always one the camera saw. That fixes the picture, and it
+fixes it the way every constant in this plan was fixed before the plan existed - a person
+looked and typed a number.
+
+The second is the plan item , and it is the same question this
+whole plan asks about pieces, asked about the surface they rest on. **Every surface here is
+taken from a model rather than measured**: a constant in , or the body's own
+collision shape in . Neither says where the table really is, and this
+demo has already drifted away from its own model once - the board and the pieces do not
+stand where 's hardcoded layout puts them, though the height agreed
+exactly. A recording carries no world at all.
+
+So: describe the table by what the twin already knows about it - a large horizontal plane,
+mirror-finished (), colourless, about the modelled size, the
+biggest such surface in view - as an entity query language expression, and compile the
+detectors that find it from those conditions. That is 's claim
+turned on the surface itself, and it is what would make the workspace something the robot
+works out rather than something a person tuned.
+
+**Evidence to carry into it, so the failed half is not re-run.** The point-cloud trial
+recorded on  measured a RANSAC plane holding 34% of 693k points on the bare
+steel and 69% with a mat, with table points scattering about +/-17 mm - workable for the
+*surface*. The same trial found that no piece stood out of that cloud at all, which is why
+pieces are read by fitting known outlines to edges. A plane fit is therefore a candidate for
+the table and known not to be one for what rests on it.
+
+From the captures: everything detected across all six lies within x 0.57..0.91 and
+y -0.02..0.37, against a searched region of x 0.35..1.35, y -0.45..0.75. The great majority
+of what is rectified every frame is floor.
+
+It sits after the deadline's critical path deliberately - the demo runs on a tuned
+workspace, and this replaces the tuning rather than unblocking anything.

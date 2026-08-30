@@ -26,6 +26,7 @@ perception_holes_fitted_like_pieces	knowledge-directed-perception
 claude/montessori-classes-orm-s7vxu1	knowledge-directed-perception
 perception_eql_backend	knowledge-directed-perception
 sdt_surface_finish_annotation	knowledge-directed-perception
+perception_surface_from_description	knowledge-directed-perception
 perception_choose_detection_method	knowledge-directed-perception
 perception_parameters_from_knowledge	knowledge-directed-perception
 perception_interactive_rule_tuning	knowledge-directed-perception
