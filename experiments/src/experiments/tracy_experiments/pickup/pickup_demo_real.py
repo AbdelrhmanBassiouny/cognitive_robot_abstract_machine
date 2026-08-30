@@ -19,17 +19,25 @@ Run with (``iai_tracy_description`` and the Giskard/world-fetcher ROS stack must
 running)::
 
     python -m experiments.tracy_experiments.pickup.pickup_demo_real
+
+Pass ``--record`` to capture a rosbag of the camera, depth camera and joint states for
+the duration of the sorting. Bags are written to
+:data:`~experiments.tracy_experiments.rosbag_recording.DEFAULT_BAG_DIRECTORY` and keep
+one camera frame in :data:`KEEP_EVERY_NTH_FRAME`; both are overridable, see
+``--bag-directory`` and ``--keep-every-nth-frame``.
 """
 
 from __future__ import annotations
 
+import argparse
+import contextlib
 import logging
 import os
 import signal
 import subprocess
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 
@@ -52,6 +60,11 @@ from coraplex.robot_plans.actions.core.pick_up import ReachAction
 from coraplex.robot_plans.actions.core.robot_body import ParkArmsAction
 from coraplex.robot_plans.motions.gripper import MoveToolCenterPointMotion
 from coraplex.view_manager import ViewManager
+from experiments.tracy_experiments.rosbag_recording import (
+    DEFAULT_BAG_DIRECTORY,
+    DECIMATED_TOPICS,
+    RosbagRecorder,
+)
 from experiments.montessori.hole_geometry import HoleFootprint
 from experiments.montessori.semantics import MontessoriShapeCategory
 from experiments.montessori.world import (
@@ -63,6 +76,7 @@ from experiments.montessori.world import (
     _shape_body,
 )
 from experiments.tracy_experiments.equipment import table_top_z as read_table_top_z
+from experiments.tracy_experiments.montessori.grasp_widths import GraspCloseTable
 from experiments.tracy_experiments.robotiq_gripper import RobotiqGripperController
 from semantic_digital_twin.datastructures.definitions import GripperState
 from semantic_digital_twin.spatial_types.spatial_types import Pose
@@ -112,12 +126,12 @@ Vertical offset added to the read table-top height when seating the board, match
 same correction :func:`_add_cube` applies to the cube.
 """
 
-PLACE_HOVER = 0.035
+PLACE_HOVER = 0.04
 """
 Height above the board's top surface at which a shape is released over its hole.
 """
 
-SHAPE_TABLE_CLEARANCE = 0.032
+SHAPE_TABLE_CLEARANCE = 0.04
 """
 Vertical offset added to the read table-top height when seating a loose shape, so its
 model rests where the real object does.
@@ -154,6 +168,23 @@ PICK_TARGETS: list[PickTarget] = [
 """
 Every loose shape besides the cube, in pick order. All share :data:`CUBE_X`; only the Y
 differs.
+"""
+
+
+BAG_NAME_PREFIX = "tracy_pickup_demo"
+"""
+Leading part of the recorded bag's directory name, completed with a timestamp so
+consecutive runs do not collide.
+"""
+
+KEEP_EVERY_NTH_FRAME = 10
+"""
+How much of the camera streams a recorded run keeps, by default.
+
+Recording every frame costs around 230 MB of disk per second of wall clock: a sorting
+run fills tens of gigabytes, almost all of it registered depth and point cloud. One frame
+in ten still shows what the arm did, at roughly a ninth of the size. Pass
+``--keep-every-nth-frame 1`` for a run that genuinely needs every frame.
 """
 
 
@@ -318,6 +349,9 @@ class _SortingRig:
     table_top_z: float
     """Height of the live robot's own table top."""
 
+    close_table: GraspCloseTable = field(default_factory=GraspCloseTable)
+    """Per-shape close setpoint the grasp is sized to."""
+
     def sort(
         self, body: Body, category: MontessoriShapeCategory, half_height: float
     ) -> None:
@@ -326,10 +360,12 @@ class _SortingRig:
         hole matching ``category``.
 
         The gripper is opened and closed through :attr:`gripper` rather than a plan
-        node, since Giskard cannot command Tracy's real fingers.
+        node, since Giskard cannot command Tracy's real fingers, and the close is sized
+        to ``category`` via :attr:`close_table`.
 
         :param body: The shape to sort, already spawned on the table.
-        :param category: The board hole the shape belongs to.
+        :param category: The board hole the shape belongs to, and the shape whose close
+            setpoint the grasp uses.
         :param half_height: Half the shape's own height, for seating it above the hole.
         """
         reach = ReachAction(
@@ -391,11 +427,49 @@ class _SortingRig:
 
         self.gripper.move(PICK_ARM, GripperState.OPEN)
         reach_plan.perform()
-        self.gripper.move(PICK_ARM, GripperState.CLOSE)
+        self.gripper.close_to(PICK_ARM, self.close_table.setpoint_for(category))
         lift.perform()
         place.perform()
         self.gripper.move(PICK_ARM, GripperState.OPEN)
         retract_and_park.perform()
+
+
+def _parse_arguments() -> argparse.Namespace:
+    """
+    :return: The demo's own command line arguments.
+    """
+    parser = argparse.ArgumentParser(
+        description="Sort the Montessori shapes with the physical Tracy."
+    )
+    parser.add_argument(
+        "--record",
+        action="store_true",
+        help=(
+            "Record a rosbag of the camera, depth camera, joint states and transforms "
+            "for the duration of the sorting."
+        ),
+    )
+    parser.add_argument(
+        "--bag-directory",
+        default=DEFAULT_BAG_DIRECTORY,
+        help=(
+            f"Directory the recorded bag is placed in. Default: "
+            f"{DEFAULT_BAG_DIRECTORY}."
+        ),
+    )
+    parser.add_argument(
+        "--keep-every-nth-frame",
+        type=int,
+        default=KEEP_EVERY_NTH_FRAME,
+        metavar="N",
+        help=(
+            f"Record only one in every N frames of the heavy camera streams "
+            f"({', '.join(DECIMATED_TOPICS)}). Joint states and transforms are always "
+            f"recorded whole. Pass 1 to record every frame. Default: "
+            f"{KEEP_EVERY_NTH_FRAME}."
+        ),
+    )
+    return parser.parse_args()
 
 
 def main() -> None:
@@ -404,6 +478,8 @@ def main() -> None:
     #     start_new_session=True,
     # )
     # time.sleep(8)  # Wait for the launch file to start
+
+    arguments = _parse_arguments()
 
     rclpy.init()
     node = rclpy.create_node("tracy_pickup_demo_real")
@@ -463,8 +539,23 @@ def main() -> None:
 
     input()
     logger.info("Sorting %d shapes on the real robot.", len(shape_bodies) + 1)
-    with ExecutionEnvironment(
-        execution_type=ExecutionType.REAL, collision_avoidance=True
+    # Recording starts here rather than at start-up so the bag holds the sorting itself,
+    # not the operator's wait at the prompt above, and closes as soon as the last shape
+    # is placed.
+    recorder = (
+        RosbagRecorder.timestamped(
+            BAG_NAME_PREFIX,
+            arguments.bag_directory,
+            keep_every_nth_frame=arguments.keep_every_nth_frame,
+        )
+        if arguments.record
+        else contextlib.nullcontext()
+    )
+    with (
+        recorder,
+        ExecutionEnvironment(
+            execution_type=ExecutionType.REAL, collision_avoidance=True
+        ),
     ):
         park.perform()
         rig.sort(cube, MontessoriShapeCategory.CUBE, CUBE_SIZE / 2)
