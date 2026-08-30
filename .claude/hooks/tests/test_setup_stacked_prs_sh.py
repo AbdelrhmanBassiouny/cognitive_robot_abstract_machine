@@ -50,6 +50,16 @@ The labels the stacked-pull-request workflow itself reads and writes - the subse
 :class:`RepositoryLabel` stack.toml names, rather than every label the tooling applies.
 """
 
+CREATE_LABELS_FLAG = "--create-labels"
+"""
+What a run is re-invoked with to have the labels it reported missing created.
+"""
+
+STACK_BOARD_REPOSITORY_CONVENTION = "stack-board"
+"""
+The name the setup run suggests for the repository publishing the board.
+"""
+
 OVERLAY_BRANCH_DECLARATION_PATTERN = re.compile(
     r'^DEFAULT_OVERLAY_BRANCH="(?P<branch>[^"]+)"', re.MULTILINE
 )
@@ -321,7 +331,7 @@ def test_names_the_stack_board_bootstrap_without_touching_another_repository(
         STUB_GH_CALL_LOG=str(call_log),
     )
 
-    assert "stack-board" in result.stdout
+    assert STACK_BOARD_REPOSITORY_CONVENTION in result.stdout
     assert "POST" not in call_log.read_text()
 
 
@@ -362,13 +372,15 @@ def test_reports_missing_labels_without_creating_them_unasked(
         setup_repository,
         stub_executables,
         *native_arguments(upstream_remote),
-        STUB_GH_MISSING_LABELS="rebase cram2-link-sent",
+        STUB_GH_MISSING_LABELS=(
+            f"{RepositoryLabel.REBASE} {RepositoryLabel.PROMOTION_LINK_SENT}"
+        ),
         STUB_GH_CALL_LOG=str(call_log),
     )
 
-    assert "rebase" in result.stdout
-    assert "cram2-link-sent" in result.stdout
-    assert "--create-labels" in result.stdout
+    assert RepositoryLabel.REBASE in result.stdout
+    assert RepositoryLabel.PROMOTION_LINK_SENT in result.stdout
+    assert CREATE_LABELS_FLAG in result.stdout
     assert "POST" not in call_log.read_text()
 
 
@@ -384,8 +396,8 @@ def test_creates_only_the_missing_labels_when_asked(
         setup_repository,
         stub_executables,
         *native_arguments(upstream_remote),
-        "--create-labels",
-        STUB_GH_MISSING_LABELS="rebase",
+        CREATE_LABELS_FLAG,
+        STUB_GH_MISSING_LABELS=RepositoryLabel.REBASE,
         STUB_GH_CALL_LOG=str(call_log),
     )
 
@@ -403,12 +415,12 @@ def test_reports_a_label_creation_the_token_is_not_allowed_to_make(
         setup_repository,
         stub_executables,
         *native_arguments(upstream_remote),
-        "--create-labels",
-        STUB_GH_MISSING_LABELS="rebase",
+        CREATE_LABELS_FLAG,
+        STUB_GH_MISSING_LABELS=RepositoryLabel.REBASE,
         STUB_GH_CREATE_LABEL_FAILS="1",
     )
 
-    assert "rebase" in result.stderr
+    assert RepositoryLabel.REBASE in result.stderr
 
 
 def test_checks_every_label_the_configuration_names(
