@@ -1052,4 +1052,3 @@ one: main's `PickUpAction.object_designator` became a `HasRootBody` and reads th
 body off it, so `insert_shape_action.py` passing `montessori_shape.root` raised
 `AttributeError`. Fixed by passing the piece. That took the branch from seven
 failures to five, and the remaining five are the ORM gap above.
-

@@ -329,10 +329,11 @@ items:
   - id: perception-backend
     title: "Answer a query by looking, as a backend of the entity query language"
     branch: perception_eql_backend
-    pull_request_number: null
+    pull_request_number: 222
     track: request-language
     depends_on: [surfaces-from-world]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_01QSZsdFk85VPf9iDz8Ldqij
     notes: >-
       A PerceptionBackend beside EntityQueryLanguageBackend and
       SQLAlchemyBackend, so evaluating a query runs perception rather than a
