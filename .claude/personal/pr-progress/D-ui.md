@@ -23,14 +23,23 @@ that it was not.
 - Replied on both threads; resolved the labels one.
 - Both PR descriptions rewritten to match; manifest, roadmap and dashboard updated.
 
+- Header thread: the developer chose "push it, and regenerate #76's copies".
+  #66 (`D-core-serialization`) carries the new wording plus the first test of
+  that header (`bb01256df`); #76's three `fitted_models/` modules follow
+  (`1045c6d5a`). Both threads replied to and resolved — #76 has none open.
+
 ## Next
 
-- **Waiting on the developer**: whether this session pushes the generated-model
-  header wording to #66 (`D-core-serialization`) — its template owns the text,
-  it is unmerged, and it sits five branches down in another plan. The thread is
-  replied to, left open, and carries the proposed wording.
-- Not verifiable here: CI has still never run on either branch, and this
-  container has no project interpreter, so the suite ran `--noconftest`
-  (415 passed / 119 skipped of 534 on `D-ui`, identical before and after).
+- **Nothing is owed on #76 by this session.** Its review round is fully worked.
+- Known inconsistency, stated on the PR and in the roadmap: every branch between
+  #66 and #76 carries the template with the old header while #76's three
+  generated modules carry the new one. A steward cascade fixes it; regenerating
+  a model on #76 before then puts the old header back.
+- Not verifiable here: CI has never run on #76 or #79, and this container has no
+  project interpreter, so the suite ran `--noconftest` (415 passed / 119 skipped
+  of 534 on `D-ui`, identical before and after). `test_serialization.py` — where
+  the new header test lives — could not be run at all: its import chain reaches
+  `random_events_lib`, an unbuilt compiled extension. Its logic was checked
+  standalone against the real template; it still needs a real run.
 - Left ready-for-review rather than re-drafted — nothing in the record says a
-  session marked either PR ready, so the flip reads as the developer's.
+  session marked #76 or #79 ready, so the flip reads as the developer's.
