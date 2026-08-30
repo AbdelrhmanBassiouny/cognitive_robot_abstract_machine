@@ -115,10 +115,32 @@ Run as a live prototype rather than read off documentation, and it re-scoped fou
   requiring two constants pointing at files that exist nowhere, and reporting them present by name -
   was found that way and nothing else would have found it.
 
+- **A test that passes on output it did not produce is not testing its subject.** The test asserting
+  the setup run *says* how to record a git identity passed with that guidance deleted, because
+  `check-setup.sh`'s own row already names both flags and the script ends by printing that report - so
+  it had been satisfied by somebody else's message throughout. The tell was that it matched free text
+  in a whole subprocess's stdout rather than a parsed field of a named check. The same class recurred
+  in the label round, where a description parser splitting on whitespace read only each sentence's
+  first word, and those happened to be distinct. Both were found by mutation, not by reading.
+- **A label list is about how labels read, not whether they work.** The fork's own labels are the
+  evidence: the ones created by hand carry descriptions, while one that arrived some other way is the
+  default grey with none, and a fourth does not exist at all despite being referenced throughout the
+  tooling. So a setup that creates them is buying the explanation, and every label it declares needs a
+  description of its own - which is why an unknown one is refused rather than given a generic sentence.
+- **A list is only checkable if everything in it has a reader.** `integration-conflict` was asked for
+  and left out because it lives only on the integration-branch pull requests: naming labels no code
+  applies turns the list into a wish nothing can hold to anything.
+
 ## Open
 
-- **Sixteen review threads** on the setup script are outstanding, on one theme: literals that already
-  have a named definition elsewhere, inline snippets that belong in files of their own type, and raw
-  calls that should go through a structured runner.
+- **One review thread stays open by the standing rule**, answered differently from what it asked:
+  whether one git runner should serve every caller. The raw calls are gone onto the scratch repository,
+  but the shared runner lives under `.claude/stack/`, so reaching it costs a production `sys.path`
+  insert the package migration is deleting the last of. That seam is `bastler-notes-core-python`'s by
+  name and now has five callers waiting; the deciding question - whether one runner can serve a caller
+  that must never raise and one for which a silent failure is the bug - would be settled in the wrong
+  item here.
 - **Two threads sit inside an unsubmitted pending review**, so GitHub refuses every inline reply and
   submitting that draft is the user's. They are answered in code.
+- **Live label creation is still exercised only through a stub**, since this environment's token is a
+  fine-grained installation token.

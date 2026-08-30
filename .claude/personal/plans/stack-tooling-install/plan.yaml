@@ -169,16 +169,58 @@ items:
     Still unverified for the same reason throughout this track: live label creation, since this
     environment's token is a fine-grained installation token, so the create call is exercised only through
     a stub.
-  blockers:
-  - 'CI is red on head 044b7016: test_claude_dev_tooling fails 7 tests in test_setup_personal_notes_sh.py,
-    all on session-start.sh sourcing a companion file this module''s scripts-under-test list does
-    not install into the scratch layout. Merging main brought in the session-start.sh that sources
-    it.'
-  - '16 unresolved review threads opened 2026-08-30, on one theme: string literals that already have
-    a named definition elsewhere (hook script names, tooling file paths, pull request labels, credential
-    variable names, the executables the stubs replace), inline bash and JSON snippets AGENTS.md requires
-    to live in files of their own, and raw git and github-api.sh calls that should go through a structured
-    runner.'
+
+    **Resolved 2026-08-30** (sessions https://claude.ai/code/session_01RR4BLkfHBADKRuiTYh2Pv3), over
+    two review rounds, clearing both blockers.
+
+    The CI red was this branch's own and the first round is what surfaced it: merging `main` gave
+    `session-start.sh` a companion it sources, while each test module named the scripts to install into
+    the scratch layout by hand, so only the module whose list omitted it broke. `install_hook_scripts`
+    reads a script's own dependencies now - a shell `source` of a quoted path, or, for a hook written in
+    Python, an import of a sibling module read from the syntax tree. The Python half was forced rather
+    than foreseen: moving `HookScript` into a shared module made `plan_item_bootstrap.py` import
+    something no caller names, so the defect the round was fixing produced a new instance of itself one
+    layer down. Fourth occurrence of the shape on this track - a fix applied three times at three call
+    sites is a missing mechanism, not three bugs.
+
+    First round, sixteen threads and one rule: a literal naming a fixed thing where a named definition
+    already exists. `.claude/hooks/tooling_files.py` became the one place production and tests both
+    resolve a tooling file from; `github_api.py` names the shell functions, labels and remote-URL forms
+    with a runner that makes the calls; `setup_report.py` holds the report vocabulary two modules parse.
+    Fifteen resolved. One is answered differently and stays open: whether one git runner should serve
+    every caller, which is `bastler-notes-core-python`'s seam by name and now has five callers waiting.
+
+    `--name`/`--email` (the user's call, offered against two alternatives) is what lets a full run reach
+    exit 0 again now that main's `check-setup.sh` has a `git_identity` check. Both halves required
+    together, refused before anything is written; given neither, the run finishes everything else and
+    leaves that row to the report rather than guessing what somebody's commits should say.
+
+    Second round, one thread: the label list named only the three the dashboard reads while the
+    stacked-PR workflow applies three more nothing was creating. It names all six now, each with a
+    description of its own. The fork's own labels are the evidence for why that matters - the three the
+    reviewer named each carry a hand-written description, so they were created by hand, while `in-review`
+    is the default grey with none and `rebase` does not exist at all despite 21 references. So what
+    creating one ahead of time buys is that it explains itself to whoever meets it later.
+
+    Two defects fell out of adding them: a `*)` fallback that would have given a newly declared label a
+    sentence saying nothing, and a description resolved inside the creation call's arguments, where a
+    failing command substitution still runs the command with an empty one. The test enum became
+    `RepositoryLabel`, since it is no longer the dashboard's set - that is what the dashboard
+    *interprets*, this is what the tooling *applies*.
+
+    `integration-conflict` is deliberately left out: it lives only on the integration-branch pull
+    requests, so nothing here or on `main` applies it, and a list naming labels no code applies stops
+    being something a test can hold to anything. Left open on the thread for the user, along with two
+    judgement calls - that this widens `/setup-personal-notes` into creating labels for a workflow it
+    does not configure, and that `cram2-link-sent` is a plain constant rather than a setting, so unlike
+    its neighbours its name is fixed and names a particular upstream.
+
+    577 tests pass across the four directories CI runs, from 555. Ten mutations checked across the two
+    rounds, each caught by the test naming its rule - and one that was not, which is the part worth
+    carrying: the test asserting the run *says* how to record an identity passed with that guidance
+    deleted, because `check-setup.sh`'s own row already names both flags. Accidental coverage of somebody
+    else's message. The same class recurred in the second round, where a description parser splitting on
+    whitespace read only each sentence's first word, which happened to be distinct.
 - id: setup-stacked-prs-skill
   title: 'PR 2: /setup-stacked-prs guided one-command setup skill'
   branch: claude/setup-stacked-prs-skill
