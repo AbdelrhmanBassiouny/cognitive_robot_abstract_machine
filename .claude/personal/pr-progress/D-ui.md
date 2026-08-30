@@ -1,43 +1,54 @@
-# D-ui (#76) — interactive expert interface
+# D-ui (#76) — the interactive expert slice
 
-Plan item `D-ui` of plan `rdr-refactor`. Resolved by `/plan-item-resolve` on
-2026-08-30; roadmap §36.
+Item `D-ui` of plan `rdr-interface-and-decorator`, resolved by
+`/plan-item-resolve` in session_01WnFnM5sADR7Nmz5tMDHy1H.
 
-## Plan
+## What was stalling it
 
-1. Reset `D-ui` onto the rebuilt `D-ui-rendering` and re-apply this slice's own
-   files, so #78's `cfe32ad0` does not survive the restack. — **done**
-2. Bring the interactive layer onto the segregated `ExpertInterface`: `%save`
-   through `ModelSaver`, and the shell's progress bar as this layer's default
-   (the #159 review's outstanding work). — **done**
-3. Port everything else the stack moved: `AnswerName`/`NamespaceName`,
-   `conclusion_helper`'s mixins, `...` for `UNSET`, the validator and
-   backward-inference renames, `ModelKey`. — **done**
-4. Drop the tests pinning the removed `on_save`/`save_path` contract; keep and
-   rewrite `%save`'s own coverage. — **done**
-5. AGENTS.md conformance on files new in this PR: docstrings everywhere, `# %%`
-   headers, no abbreviations, `format_docstrings.py`. — **done**
-6. Bring both shipped guides onto the current API (the user one is executed by
-   CI). — **done**
+A 50-thread review round opened on #76 between 2026-08-30T14:34Z and 17:13Z,
+twenty-five minutes after the previous session posted its completion note and
+stopped. None of it was recorded on the item, so the manifest read healthy.
+Sixth instance of that staleness class on this plan.
 
-## Done
+## Plan, as carried out
 
-- `5269a778` force-pushed with lease; PR description rewritten; PR still draft.
-- Two defects found and fixed with a failing test each: the
-  `%conclusion`/`%conditions` magics no longer detected invalid answers after
-  `validate()` became a list, and the user guide failed under
-  `test_eql_documentation.sh`.
-- test_eql_rdr 524 passed / 2 skipped (341 base, 183 added); rest of
-  test/krrood_test 2104 passed / 7 skipped; EQL docs 15 of 16 notebooks.
-- Manifest blockers cleared, roadmap §36 written, tracking issue #94 commented
-  (`5469167156`).
+1. Record the round as a blocker on the item before touching code. Done.
+2. Apply the round: magics as classes with their own name enum and namespace-key
+   enum; `%knows` → `%sufficient_conditions_for`; prompt sections as one class
+   per situation; field docstrings under each field; abbreviations spelled out;
+   inline imports hoisted; `rdr/__init__.py` restored to the base. Done in
+   `a07a4458`.
+3. Split the 1,456-line prompt-sections test into four files named for their
+   subjects. Done in `a07a4458`.
+4. Cover magic selection and registration, which were reachable only through a
+   real terminal. Done — eight tests in `test_magic_registration.py`.
+5. Hoist the file's remaining inline imports. Done in `c40da8fa`.
+6. Reply to every thread; resolve the ones done as asked. Done — 45 resolved,
+   5 replied to and left open.
+7. Refresh the pull request description, the manifest and the roadmap, and
+   republish the dashboard. Done.
 
-## Next
+## Verified
 
-Nothing outstanding on this branch. For whoever picks up the stack: **#80
-(`D-store`) and #77 (`D-deco`) still sit on #76's pre-rebuild tip `c50d2109`**
-and need the same reset-not-merge restack.
+- `test_eql_rdr`: 532 passed, 2 skipped (524 baseline + 8 new).
+- Rest of `test/krrood_test/`: byte-identical outcome to the baseline tree
+  (2096 passed / 47 failed / 106 collection errors, all from optional
+  dependencies missing in this container).
+- `doc/eql/user/eql_rdr_conclusion_asking.md` executed as a notebook: passed.
 
-Not this branch's, reported not fixed: `test_object_diagram.py`'s two failures
-and the `predicate_and_symbolic_function` notebook are identically red on the
-base.
+## Outstanding
+
+- **CI has never run on this branch** — zero check runs on every head it has
+  had, so all the figures above are local measurements.
+- **Five review threads deliberately left open**, each answered in its thread:
+  the `match`/`case` suggestion (answered with a lookup table instead), the
+  generated-model header (comes from a template on the base), the side-by-side
+  labels (`case_table.py`, #79, already out of draft), `except Exception: pass`
+  (nothing is raised there), and the `elision` rename (`rule_tree_view.py`,
+  #67).
+- **A defect in `.claude/hooks/plan_item_bootstrap.py`**: its `update`
+  subcommand emits invalid YAML for any item whose `depends_on` list precedes
+  the field being written — it re-emits the field indented under the last list
+  entry. Reproduced on `D-ui` and `D-store`. The manifest here was hand-edited
+  and saved with `save-plan.sh --manifest` instead. Belongs to whichever plan
+  owns the plan tooling.
