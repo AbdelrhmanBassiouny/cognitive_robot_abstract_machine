@@ -193,3 +193,4 @@ CLAUDE.local.md
 # the repository can regenerate and no review can read: the frames a test needs are
 # committed as captures instead (experiments/src/experiments/montessori/resources/captures).
 rosbags/
+!experiments/src/experiments/montessori/resources/captures/*.png
