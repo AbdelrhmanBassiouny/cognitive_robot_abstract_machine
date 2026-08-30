@@ -50,6 +50,16 @@ items:
     depends_on: []
     status: in_progress
     session: https://claude.ai/code/session_01SziLFUkhv1REwwQM8dQoJj
+    blockers:
+      - >-
+          Review round of 2026-08-30 on #207 is unanswered: 7 unresolved threads, none replied to.
+          CI is green on 103a881d (all 23 checks) and the branch merges cleanly, so nothing is
+          failing - the item is stalled purely on the review. The threads ask for: file names read
+          from their definitions rather than re-hardcoded (2 in test_plan_size_report_sh.py, 1 in
+          plan-size-report.sh), a generic missing-requirement check instead of the hardcoded `import
+          yaml` probe, PLAN_SIZE_BUDGET moved off the middle of plan_size_budget.py, the module's
+          free functions grouped into classes, and a question about whether plan-size-report.sh
+          should be Python rather than bash.
     notes: >
       The budget as named constants - 15 items and 2,000 combined plan.yaml +
       roadmap.md lines - with a typed check and a command reporting every plan
