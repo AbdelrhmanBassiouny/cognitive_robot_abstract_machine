@@ -131,3 +131,47 @@ change the roadmap rather than just the PR:
   `phrase()` as the value counterpart of `clause()`. Decision 4 (`Noun` over raw
   `WordFragment`) is what rules out the alternative, so treat `phrase()` as the sanctioned
   way to satisfy both from here on.
+
+## P4's `predicates.py` half was built elsewhere, and P4 rebases onto it (2026-08-31)
+
+`knowledge-directed-perception`'s item `predicates-answer-whether-they-hold` (#229,
+`sdt_predicates_answer_whether_they_hold`, off `main`) migrated `reasoning/predicates.py`
+off `@symbolic_function` onto `Predicate` / `SymbolicFunction` classes by the same
+`symbolic_callable_to_function` mechanism P4 uses - independently, and without either
+plan's manifest naming the other. Every relation P4 converted in that file, #229 had
+converted too; both even write `reachable = symbolic_callable_to_function(Reachable)` over
+the same class body.
+
+**The developer settled it in #229's favour on 2026-08-31: #229 carries the predicate
+classes, and P4 rebases onto the `main` that has them** - dropping its own copy of the
+`predicates.py` migration and re-applying its 34 reviewed wordings onto #229's classes.
+The reasoning was about which rebase is cheaper: this branch is 166 commits behind `main`,
+`dirty` in `predicates.py` specifically and labelled `needs-resolution`, so it owes that
+rebase either way and meets #229's version of the file whichever order the two land in;
+while P4's two open decisions block it and do not block #229, whose plan has a 2026-09-15
+deadline.
+
+**Nothing else of P4's is affected.** `queries.py`, `robot_predicates.py`, `phrase()` in
+krrood's `parts_of_speech`, `ORMatic.from_package(ignored_base_classes=...)` and the
+generated verbalization snapshot wired into sdt's `conftest.py` are all still this item's,
+and #229 touches none of them. The snapshot in particular is worth landing: sdt has no
+verbalization test on `main`, which is exactly why #229 shipped four ungrammatical
+sentences before anyone read them.
+
+**Two wordings are already carried across on #229**, and one of them needs a decision here:
+
+- The four relations #229 named for their object (`SupportedBy`, `VisibleTo`,
+  `InContactWith`, `Supports`) took P4's own reviewed sentences - *"is supported by"*,
+  *"is visible to"*, *"is in contact with"*, *"is supporting a body"* - rather than a third
+  set. `Visible` reads *"visible **to**"* there against P4's *"visible **from**"*, following
+  the class name `VisibleTo`.
+- `Reachable` reads *"a Pose is reachable by a Tip"* on #229, which is what the developer
+  asked for on that pull request (r3896606294). **Decision 11 words the same relation *"a
+  Pose is reachable for the kinematic chain rooted at <root> and ending at <tip>"***. Both
+  make the pose the subject and differ only in whether both ends of the chain are named;
+  the thread is deliberately left open on #229 for the developer to pick which stands, and
+  whichever he picks is what this rebase should apply.
+
+Worth carrying into the rebase: `Triple` derives its verb from the class name, so a
+relation named for its object must state its own clause - inheriting `Triple` and saying
+nothing is what produced *"a Body supports by another Body"* on #229.

@@ -1,112 +1,113 @@
 schema_version: 1
 id: eql-verbalization
-title: "EQL verbalization follow-up (operand naming, disambiguation, sdt migration)"
-description: >
-  Programme following up PR #33's review: extract a reusable verbalization
-  surface-verification framework onto main, redesign operand naming and same-noun
-  disambiguation to live in the coreference/referring machinery, add
-  abstract-to-concrete-subclass expansion plus first-order (value-agnostic) rendering,
-  then apply all of it to migrate semantic_digital_twin's predicates off the framework
-  PR #33 currently carries a duplicate of.
+title: EQL verbalization follow-up (operand naming, disambiguation, sdt migration)
+description: 'Programme following up PR #33''s review: extract a reusable verbalization surface-verification
+  framework onto main, redesign operand naming and same-noun disambiguation to live in the coreference/referring
+  machinery, add abstract-to-concrete-subclass expansion plus first-order (value-agnostic) rendering,
+  then apply all of it to migrate semantic_digital_twin''s predicates off the framework PR #33 currently
+  carries a duplicate of.
+
+  '
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 104
-
 waves:
-  - id: verbalization-framework
-    name: "Verbalization framework + sdt migration"
-
+- id: verbalization-framework
+  name: Verbalization framework + sdt migration
 tracks:
-  - id: framework-migration
-    name: "Framework extraction, operand naming, sdt migration"
-    wave: verbalization-framework
-
+- id: framework-migration
+  name: Framework extraction, operand naming, sdt migration
+  wave: verbalization-framework
 items:
-  - id: p1-surface-verification
-    title: "P1: extract the verbalization surface-verification framework"
-    branch: claude/eql-verbalization-p1-surface-verification-eqltzc
-    pull_request_number: 86
-    track: framework-migration
-    depends_on: []
-    status: done
-    notes: >
-      Merged to main. Extracted the surface-verification framework
-      (VerbalizationSurface, OverriddenOperand, SymbolicSurfaceSnapshot) out of krrood's
-      own surface test into a reusable module so any package defining SymbolicCallable
-      subclasses can verify its surfaces. Later renamed/moved by unrelated main-branch
-      work to krrood.entity_query_language.testing.result_verification
-      (VerbalizationResultsOfPackage). Full review-round history:
-      pr-progress/claude/eql-verbalization-p1-surface-verification-eqltzc.md.
+- id: p1-surface-verification
+  title: 'P1: extract the verbalization surface-verification framework'
+  branch: claude/eql-verbalization-p1-surface-verification-eqltzc
+  pull_request_number: 86
+  track: framework-migration
+  depends_on: []
+  status: done
+  notes: 'Merged to main. Extracted the surface-verification framework (VerbalizationSurface, OverriddenOperand,
+    SymbolicSurfaceSnapshot) out of krrood''s own surface test into a reusable module so any package defining
+    SymbolicCallable subclasses can verify its surfaces. Later renamed/moved by unrelated main-branch
+    work to krrood.entity_query_language.testing.result_verification (VerbalizationResultsOfPackage).
+    Full review-round history: pr-progress/claude/eql-verbalization-p1-surface-verification-eqltzc.md.
 
-  - id: p2-operand-naming
-    title: "P2: redesign operand naming and same-noun disambiguation"
-    branch: claude/eql-verbalization-operand-naming-n0gb95
-    pull_request_number: 87
-    track: framework-migration
-    depends_on: []
-    status: done
-    notes: >
-      Merged to main. The keystone redesign: operand naming and same-noun
-      disambiguation moved entirely into ReferringExpressions/DistinguisherIndex
-      (coreference-driven, identity-keyed), replacing the original parallel
-      predicate-side operand_naming.py module. Gated P3 and P4. Full review-round
-      history: pr-progress/claude/eql-verbalization-operand-naming-n0gb95.md.
+    '
+- id: p2-operand-naming
+  title: 'P2: redesign operand naming and same-noun disambiguation'
+  branch: claude/eql-verbalization-operand-naming-n0gb95
+  pull_request_number: 87
+  track: framework-migration
+  depends_on: []
+  status: done
+  notes: 'Merged to main. The keystone redesign: operand naming and same-noun disambiguation moved entirely
+    into ReferringExpressions/DistinguisherIndex (coreference-driven, identity-keyed), replacing the original
+    parallel predicate-side operand_naming.py module. Gated P3 and P4. Full review-round history: pr-progress/claude/eql-verbalization-operand-naming-n0gb95.md.
 
-  - id: p3-concrete-subclass-expansion
-    title: "P3: abstract-to-concrete-subclass expansion + first-order rendering"
-    branch: claude/eql-verbalization-p3-albw76
-    pull_request_number: 88
-    track: framework-migration
-    depends_on: [p2-operand-naming]
-    status: done
-    notes: >
-      Merged to main. Abstract-to-concrete-subclass expansion ("a Body or a Region")
-      plus first-order (value-agnostic) rendering promoted to production. Also carries
-      P1's commits merged in directly (confirmed via AskUserQuestion) to reuse its
-      first-order-rendering mechanism rather than duplicate it. Full review-round
-      history: pr-progress/claude/eql-verbalization-p3-albw76.md.
+    '
+- id: p3-concrete-subclass-expansion
+  title: 'P3: abstract-to-concrete-subclass expansion + first-order rendering'
+  branch: claude/eql-verbalization-p3-albw76
+  pull_request_number: 88
+  track: framework-migration
+  depends_on:
+  - p2-operand-naming
+  status: done
+  notes: 'Merged to main. Abstract-to-concrete-subclass expansion ("a Body or a Region") plus first-order
+    (value-agnostic) rendering promoted to production. Also carries P1''s commits merged in directly (confirmed
+    via AskUserQuestion) to reuse its first-order-rendering mechanism rather than duplicate it. Full review-round
+    history: pr-progress/claude/eql-verbalization-p3-albw76.md.
 
-  - id: p4-sdt-migration
-    title: "P4: migrate semantic_digital_twin predicates off the framework"
-    branch: eql-symbolic-function-sdt
-    pull_request_number: 33
-    track: framework-migration
-    depends_on: [p1-surface-verification, p2-operand-naming, p3-concrete-subclass-expansion]
-    status: blocked
-    blockers:
-      - >-
-          Awaiting two review decisions, both replied to and left open on #33: type-level display
-          noun for 'a Point3' -> 'a point' (P2 shipped the opposite precedence to roadmap decision
-          1), and whether to widen the IK chain so Reachable/BlockingBodies can take Pose.
-      - >-
-          sdt ormatic_interface.py needs regenerating where ROS is installed - ignored_base_classes
-          drops 10 predicate DAOs, but a ROS-less local run also drops every ROS-derived DAO. CI
-          regenerates before tests, so the suite is unaffected.
-      - >-
-          stacked-pr-maintenance: Fork PR #33 (branch `eql-symbolic-function-sdt`) conflicts against
-          its base `main` as of the 2026-08-31 stacked-pr-maintenance pass, in:
-          `semantic_digital_twin/src/semantic_digital_twin/reasoning/predicates.py`. It carries the
-          `needs-resolution` label and a routine comment on the PR:
-          https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/33#issuecomment-5478382195
-    notes: >
-      2026-07-30: merged main (605 commits), dropping the duplicated
-      surface-verification framework; rebuilt the snapshot on the generated-results
-      pattern; applied every wording from the review plus the no-abbreviation sweep;
-      replied to all 36 review threads and resolved 34. Two krrood additions were
-      needed: phrase() as the value counterpart of clause(), and
-      ORMatic ignored_base_classes replacing a mid-method SymbolicCallable import.
-      Full detail: pr-progress/eql-symbolic-function-sdt.md.
+    '
+- id: p4-sdt-migration
+  title: 'P4: migrate semantic_digital_twin predicates off the framework'
+  branch: eql-symbolic-function-sdt
+  pull_request_number: 33
+  track: framework-migration
+  depends_on:
+  - p1-surface-verification
+  - p2-operand-naming
+  - p3-concrete-subclass-expansion
+  status: blocked
+  blockers:
+  - 'Awaiting two review decisions, both replied to and left open on #33: type-level display noun for
+    ''a Point3'' -> ''a point'' (P2 shipped the opposite precedence to roadmap decision 1), and whether
+    to widen the IK chain so Reachable/BlockingBodies can take Pose.'
+  - sdt ormatic_interface.py needs regenerating where ROS is installed - ignored_base_classes drops 10
+    predicate DAOs, but a ROS-less local run also drops every ROS-derived DAO. CI regenerates before tests,
+    so the suite is unaffected.
+  - 'stacked-pr-maintenance: Fork PR #33 (branch `eql-symbolic-function-sdt`) conflicts against its base
+    `main` as of the 2026-08-31 stacked-pr-maintenance pass, in: `semantic_digital_twin/src/semantic_digital_twin/reasoning/predicates.py`.
+    It carries the `needs-resolution` label and a routine comment on the PR: https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/33#issuecomment-5478382195'
+  - 'The `predicates.py` half of this migration was done independently on knowledge-directed-perception''s
+    #229 (`sdt_predicates_answer_whether_they_hold`, off `main`), and the developer settled the duplication
+    on 2026-08-31 in that branch''s favour: **#229 carries the predicate classes and this branch rebases
+    onto the `main` that has them**, dropping its own copy of the `predicates.py` migration and re-applying
+    its 34 reviewed wordings onto #229''s classes. Everything else here is untouched and still this item''s
+    - `queries.py`, `robot_predicates.py`, `phrase()`, `ORMatic.from_package(ignored_base_classes=...)`
+    and the generated verbalization snapshot. Two of this item''s wordings are already carried across
+    on #229: `Reachable` (as the shorter *"a Pose is reachable by a Tip"* the developer asked for there,
+    which conflicts with decision 11 and is his to settle) and the four relations #229 named for their
+    object. Since this branch was 166 commits behind `main` and `dirty` in `predicates.py` already, the
+    rebase it now owes is the one it owed anyway.'
+  notes: '2026-07-30: merged main (605 commits), dropping the duplicated surface-verification framework;
+    rebuilt the snapshot on the generated-results pattern; applied every wording from the review plus
+    the no-abbreviation sweep; replied to all 36 review threads and resolved 34. Two krrood additions
+    were needed: phrase() as the value counterpart of clause(), and ORMatic ignored_base_classes replacing
+    a mid-method SymbolicCallable import. Full detail: pr-progress/eql-symbolic-function-sdt.md.
 
-  - id: p5-first-mention-type-annotation
-    title: "P5: name a referent by value and type on first mention"
-    branch: null
-    pull_request_number: null
-    track: framework-migration
-    depends_on: [p2-operand-naming]
-    status: not_started
-    notes: >
-      Split out of P4's BodiesInGripper review thread (confirmed via AskUserQuestion,
-      2026-07-30): render a referent's first mention as both its name and its type
-      ("a gripper of type HasTwoFingers"), reverting to the plain noun on later
-      mentions. Belongs in the ReferringExpressions/coreference machinery P2 built,
-      not in any one package's predicate wordings, so it is its own item rather than
-      part of P4's sdt surface work.
+    '
+- id: p5-first-mention-type-annotation
+  title: 'P5: name a referent by value and type on first mention'
+  branch: null
+  pull_request_number: null
+  track: framework-migration
+  depends_on:
+  - p2-operand-naming
+  status: not_started
+  notes: 'Split out of P4''s BodiesInGripper review thread (confirmed via AskUserQuestion, 2026-07-30):
+    render a referent''s first mention as both its name and its type ("a gripper of type HasTwoFingers"),
+    reverting to the plain noun on later mentions. Belongs in the ReferringExpressions/coreference machinery
+    P2 built, not in any one package''s predicate wordings, so it is its own item rather than part of
+    P4''s sdt surface work.
+
+    '
