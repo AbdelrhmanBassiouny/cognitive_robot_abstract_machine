@@ -496,13 +496,16 @@ items:
     session: https://claude.ai/code/session_01DBkGLKmju56tuBNdrSxitR
     blockers:
       - >-
-          Inline replies to #222's nine review threads cannot be posted: the developer has an
-          unsubmitted PENDING review on the pull request (review 5064626804, on commit 71730494),
-          and GitHub allows one pending review per user. The API acts as that same account, so
-          every reply is refused with "user_id can only have one pending review per pull request".
-          All nine threads are therefore left open and none is resolved, since resolving without an
-          inline reply is forbidden by the standing conventions. Submitting or discarding that
-          draft review unblocks the whole round; the work the threads asked for is already pushed.
+          Five of #222's nine review threads are answered but deliberately left open, and none
+          of the five is this pull request's work to do. Four are the predicate and
+          semantic-annotation redesign, which is the new item
+          perception-predicates-guide-the-search stacked on this one (r3893160382, r3893312001
+          with its two follow-ups, r3893576773) plus the algorithm-capability reading recorded
+          on choose-detection-method (r3893463818); the developer closes those himself, since
+          each schedules a move rather than making one. The fifth (r3893476097, the inline
+          import) is done and carries a question back to him - whether the three older inline
+          imports in the same file should gain reason comments too - so it stays open until he
+          answers. The four threads whose work landed here are replied to and resolved.
     notes: >-
       Resolved 2026-08-31 in `auto` mode, and the round changed two things the manifest and
       roadmap had recorded as settled, both at the developer's direction.
@@ -531,6 +534,13 @@ items:
       The predicate and semantic-annotation redesign the other five threads ask for is not here -
       it is the new item perception-predicates-guide-the-search, which is the developer's own
       suggestion on r3893312001 that it be "a separate PR that this one here is stacked under".
+
+      Round replied to and partly resolved on 2026-08-31 once the developer submitted his
+      pending review, which had blocked every inline reply while it sat unsubmitted (GitHub
+      allows one pending review per user and the API acts as that account). Four threads
+      resolved - generative, the krrood placement, the Montessori type out of the general half,
+      and the AttributeEqualityToLiteral rename. Five left open on purpose: four schedule the
+      predicate redesign rather than asking for a change here, and one carries a question back.
 
             A PerceptionBackend beside EntityQueryLanguageBackend and
       SQLAlchemyBackend, so evaluating a query runs perception rather than a
