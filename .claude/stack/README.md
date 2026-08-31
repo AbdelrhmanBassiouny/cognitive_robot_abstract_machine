@@ -102,10 +102,16 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
     leaves no conflict to attribute, so there is nothing else to go on.
   - `stage-conflict` / `record-resolution` - reproduce one collision, and record what was chosen
     so later builds replay it instead of skipping the tip again.
-  - `open-candidate` / `find-candidate` / `settle-candidate` - a pushed build collects no checks,
-    so a build is judged as a pull request. One rebuild opens the candidate and a later one
-    settles it: the first check against a candidate has been measured appearing between 19 minutes
-    and 2 hours 47 minutes after it was opened, which no job outwaits.
+  - `open-candidate` / `find-candidate` / `settle-candidate` / `close-candidate` - a pushed build
+    collects no checks, so a build is judged as a pull request. One rebuild opens the candidate and
+    a later one settles it: the first check against a candidate has been measured appearing between
+    19 minutes and 2 hours 47 minutes after it was opened, which no job outwaits. Every candidate is
+    opened against the base its build was assembled over, which is the one base a build always
+    merges with - opened against the branch a build publishes to, itself an older build of the same
+    branches, the two conflict, GitHub computes no merge reference, and the `pull_request` run that
+    would check that reference out is never created at all. What tells the candidate a later run
+    settles from one carrying named plans is its title. `close-candidate` drops one nothing is ever
+    going to report a check against, so a rebuild replaces it rather than stopping on it.
   - `publish-recorded-pass` - publish a build whose *tree* this fork has already seen pass, with
     no candidate at all. Nothing usually moves between rebuilds, so most assembled builds are
     byte-for-byte one already judged; the passes are kept as git references under
@@ -119,7 +125,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
     filtered build somebody asked for and is working from.
   - `refresh` - the whole cycle as one command, which is what the scheduled Action runs. It takes
     the same `--plan`; a rebuild asked for particular plans settles nothing and publishes nothing,
-    and its candidate is opened against the upstream base so nothing ever can.
+    and its candidate's title names them so nothing ever can.
 - **`.claude/skills/integration-conflict-triage/SKILL.md`** - what a collision between two
   in-flight branches *means*, which the build deliberately does not decide. Invocable as
   `/integration-conflict-triage`.

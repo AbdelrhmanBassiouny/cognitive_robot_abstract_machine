@@ -327,21 +327,93 @@ class Candidate:
     """The commit its checks are reported against."""
 
 
-def open_candidate_on(fork: PullRequestReader, base: str) -> Candidate | None:
-    """
-    Find the candidate a run is judging, if one is.
+NAMED_PLANS_OPENING = " (plans: "
+"""
+What opens the part of a candidate's title naming the plans its build was asked for.
+"""
 
-    Recognised by what it is opened against rather than by its title: the base is what
-    makes a pull request a build being judged, and it is the same fact that keeps one out
-    of the board every other reader derives its work from.
+NAMED_PLANS_CLOSING = ")"
+"""
+What closes it.
+"""
+
+PLAN_NAME_SEPARATOR = ", "
+"""
+What stands between two plan names inside it.
+"""
+
+
+@dataclass(frozen=True)
+class CandidateTitle:
+    """
+    What a candidate is called, which is also what tells the two kinds of candidate
+    apart.
+
+    A build carrying everything in flight is the one a later run settles and publishes;
+    one carrying named plans answers a narrower question and is never published. The
+    title carries that distinction because it is set in the one call that creates the
+    candidate: anything written afterwards is a second call that can fail on its own,
+    and a candidate nothing recognises is one no later run ever settles.
+    """
+
+    build_branch: str
+    """
+    The build being judged.
+    """
+
+    plans: tuple[str, ...] = ()
+    """
+    The plans it was asked to carry, empty when it carries everything in flight.
+    """
+
+    def __str__(self) -> str:
+        """:return: The title the candidate is opened under."""
+        opened = f"{CANDIDATE_TITLE_PREFIX} {self.build_branch}"
+        if not self.plans:
+            return opened
+        named = PLAN_NAME_SEPARATOR.join(self.plans)
+        return f"{opened}{NAMED_PLANS_OPENING}{named}{NAMED_PLANS_CLOSING}"
+
+    @classmethod
+    def read(cls, title: str) -> CandidateTitle | None:
+        """
+        :param title: One open pull request's title.
+        :return: What it says its build was asked to carry, or ``None`` where it is not
+            a candidate's title at all.
+        """
+        if not title.startswith(CANDIDATE_TITLE_PREFIX):
+            return None
+        named = title[len(CANDIDATE_TITLE_PREFIX) :].strip()
+        if not named.endswith(NAMED_PLANS_CLOSING) or NAMED_PLANS_OPENING not in named:
+            return cls(build_branch=named)
+        build_branch, _, plans = named.partition(NAMED_PLANS_OPENING)
+        return cls(
+            build_branch=build_branch,
+            plans=tuple(plans[: -len(NAMED_PLANS_CLOSING)].split(PLAN_NAME_SEPARATOR)),
+        )
+
+    @property
+    def judges_everything_in_flight(self) -> bool:
+        """:return: Whether this is the candidate a later run may publish from."""
+        return not self.plans
+
+
+def candidate_for_everything_in_flight(fork: PullRequestReader) -> Candidate | None:
+    """
+    Find the candidate a later run settles, if one is open.
+
+    Recognised by what its title says it judges rather than by what it is opened
+    against. Every candidate is opened against the base its build was assembled over,
+    because that is the base a build always merges with - so the base is a merge target
+    rather than a discriminator, and one field cannot be both.
 
     :param fork: The fork to read the open pull requests of.
-    :param base: The branch a build would replace.
     :return: The candidate, or ``None`` when nothing is being judged.
     """
     for record in fork.open_pull_requests():
         number = int(PullRequestField.NUMBER.read(record))
-        if PullRequestField.BASE.read(record, number) != base:
+        title = CandidateTitle.read(PullRequestField.TITLE.read(record, number) or "")
+        if title is None or not title.judges_everything_in_flight:
             continue
         return Candidate(
             number=number,
@@ -349,14 +421,6 @@ def open_candidate_on(fork: PullRequestReader, base: str) -> Candidate | None:
             head=PullRequestField.HEAD_COMMIT.read(record, number),
         )
     return None
-
-
-def candidate_title(build_branch: str) -> str:
-    """
-    :param build_branch: The build to be judged.
-    :return: The candidate's title.
-    """
-    return f"{CANDIDATE_TITLE_PREFIX} {build_branch}"
 
 
 def candidate_description(
@@ -379,17 +443,23 @@ def candidate_description(
             f"\n\n"
             f"**Not for review, never merged, and never published.** It exists to answer "
             f"whether those branches hold together on their own; `{POINTER_BRANCH}` is "
-            f"only ever moved onto a build carrying everything in flight."
+            f"only ever moved onto a build carrying everything in flight, which is what "
+            f"the plans named in this pull request's own title say this is not."
         )
     return (
         f"Opened so that this repository's own checks run over `{build_branch}`, which "
         f"is a build of the upstream base plus every reviewed, unblocked branch in "
         f"flight.\n\n"
         f"**Not for review, and never merged.** A build is regenerated from scratch, so "
-        f"it shares no history with `{base}` and there is nothing here to merge: if the "
-        f"checks pass, `{base}` is moved to this commit and this pull request is closed "
-        f"unmerged; if they fail, it is closed and the branches that broke it are the "
-        f"ones to act on."
+        f"it shares no history with `{POINTER_BRANCH}` and there is nothing here to "
+        f"merge: if the checks pass, `{POINTER_BRANCH}` is moved to this commit and "
+        f"this pull request is closed unmerged; if they fail, it is closed and the "
+        f"branches that broke it are the ones to act on.\n\n"
+        f"It is opened against `{base}` rather than against `{POINTER_BRANCH}` because "
+        f"a build is that base plus the merged tips and so merges with it by "
+        f"construction, where `{POINTER_BRANCH}` is an older build of the same branches "
+        f"and conflicts with it - leaving GitHub no merge reference to compute and so no "
+        f"run to create."
     )
 
 
@@ -411,7 +481,7 @@ def open_candidate(
     :return: The candidate.
     """
     number = fork.open_pull_request(
-        title=candidate_title(build_branch),
+        title=str(CandidateTitle(build_branch, tuple(plans))),
         head=build_branch,
         base=base,
         body=candidate_description(build_branch, base, plans),

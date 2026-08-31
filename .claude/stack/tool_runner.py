@@ -87,6 +87,12 @@ class IntegrationSubcommand(StrEnum):
     Read the candidate's checks and act on what they say.
     """
 
+    CLOSE_CANDIDATE = "close-candidate"
+    """
+    Close a candidate nothing is ever going to report a check against, so the rebuild
+    has something to replace rather than something to stop on.
+    """
+
     LOCATE_CANDIDATE_FAILURE = "locate-candidate-failure"
     """
     Take one step of the search for the branch a red candidate is about.

@@ -346,7 +346,7 @@ def test_a_green_candidate_is_published_and_the_run_goes_on_to_the_next_build(
     ]
 
 
-def test_an_inherited_candidate_nothing_reported_a_check_against_stops_the_rebuild(
+def test_an_inherited_candidate_nothing_reported_a_check_against_is_closed_and_replaced(
     tmp_path: Path,
 ):
     """
@@ -355,14 +355,61 @@ def test_an_inherited_candidate_nothing_reported_a_check_against_stops_the_rebui
     since the previous run and still has no check is a different statement: whatever
     should have started one - the trigger, or the credential it was opened with - did
     not.
+
+    Stopping there is what wedged this pipeline permanently, because the rebuild never
+    reached the step that would have replaced the candidate. It is closed instead, and
+    the run carries on to assemble the build that replaces it; the next rebuild's
+    take-down drops the branch nothing refers to any more.
     """
-    status, _ = rebuild(
+    status, runner = rebuild(
         a_reported_candidate(),
         a_settling(ChecksVerdict.ABSENT, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
+        succeeded(),
+        succeeded(),
+        a_build(),
+        no_recorded_pass(),
+        a_reported_candidate(),
         tmp_path=tmp_path,
     )
 
+    assert runner.subcommands == [
+        str(IntegrationSubcommand.TAKE_DOWN_UNREFERENCED_BUILDS),
+        str(IntegrationSubcommand.FIND_CANDIDATE),
+        str(IntegrationSubcommand.SETTLE_CANDIDATE),
+        str(IntegrationSubcommand.CLOSE_CANDIDATE),
+        str(MaintenanceSubcommand.FAST_FORWARD),
+        str(IntegrationSubcommand.BUILD),
+        str(IntegrationSubcommand.PUBLISH_RECORDED_PASS),
+        str(IntegrationSubcommand.OPEN_CANDIDATE),
+    ]
     assert status is IntegrationExitCode.CANDIDATE_UNCHECKED
+
+
+def test_the_unjudgeable_candidate_a_run_moved_past_is_the_one_it_closes(
+    tmp_path: Path,
+):
+    """
+    The run that opened it is over, so which pull request to close is read back off the
+    fork - and closing anything else would leave the unjudgeable one open for the next
+    rebuild to stop on all over again.
+    """
+    _, runner = rebuild(
+        a_reported_candidate(),
+        a_settling(ChecksVerdict.ABSENT, IntegrationExitCode.CANDIDATE_STILL_RUNNING),
+        succeeded(),
+        succeeded(),
+        a_build(),
+        no_recorded_pass(),
+        a_reported_candidate(),
+        tmp_path=tmp_path,
+    )
+    closing = next(
+        invocation
+        for invocation in runner.invoked
+        if str(IntegrationSubcommand.CLOSE_CANDIDATE) in invocation
+    )
+
+    assert str(A_CANDIDATE) in closing
 
 
 # %% what a rebuild does with each answer

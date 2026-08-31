@@ -36,7 +36,7 @@ from integration_exit_codes import IntegrationExitCode
 
 from maintenance_board import PullRequestField
 
-from test_maintenance import an_api_record, make_configuration
+from test_maintenance import UPSTREAM_BASE, an_api_record, make_configuration
 
 from integration_pipeline_commands import RefreshCommand
 from workflow_document import (
@@ -59,10 +59,10 @@ from integration_verdict import (
     CheckRunStatus,
     VerdictReportKey,
     VerdictReport,
+    CandidateTitle,
     candidate_description,
-    candidate_title,
+    candidate_for_everything_in_flight,
     open_candidate,
-    open_candidate_on,
     read_checks,
 )
 
@@ -71,9 +71,20 @@ A_BUILD_BRANCH = "integration-20260828-212654"
 A build, named the way one is.
 """
 
-THE_BASE = "integration"
+THE_BASE = UPSTREAM_BASE
 """
-The branch a green build replaces.
+The branch every candidate is opened against, which is the base the build was assembled
+over and so the one it always merges with.
+"""
+
+A_PLAN = "stack-maintenance"
+"""
+A plan a filtered build is asked to carry.
+"""
+
+ANOTHER_PLAN = "rdr-refactor"
+"""
+A second one, so a title naming more than one is exercised.
 """
 
 A_HEAD = "933161a263"
@@ -363,10 +374,12 @@ def test_no_other_workflow_reports_a_check_the_pipeline_would_claim_as_its_own()
 # %% the candidate itself
 
 
-def test_the_candidate_is_opened_against_the_branch_the_build_would_replace():
+def test_the_candidate_is_opened_against_the_base_the_build_was_assembled_over():
     """
-    Opened against anything else, the checks judge a different tree from the one that
-    would be published.
+    A build is that base plus the merged tips, so it merges with it by construction -
+    where against the branch it would replace, which is an older build of the same
+    branches, the two conflict and GitHub computes no merge reference for anything to
+    check out.
     """
     fork = RecordingCandidates()
 
@@ -393,37 +406,98 @@ def test_the_candidate_is_recognisable_among_the_fork_s_pull_requests():
     It sits in the same list as everything a person opened, so its title has to say what
     it is without being read.
     """
-    assert candidate_title(A_BUILD_BRANCH).endswith(A_BUILD_BRANCH)
-    assert candidate_title(A_BUILD_BRANCH) != A_BUILD_BRANCH
+    title = str(CandidateTitle(A_BUILD_BRANCH))
+
+    assert title.endswith(A_BUILD_BRANCH)
+    assert title != A_BUILD_BRANCH
+
+
+def test_a_candidate_s_title_says_which_plans_its_build_was_asked_to_carry():
+    """
+    The title is the discriminator because it is set in the call that creates the
+    candidate: anything written afterwards is a second call that can fail on its own,
+    and a candidate nothing recognises is one no later run settles.
+    """
+    everything = CandidateTitle(A_BUILD_BRANCH)
+    filtered = CandidateTitle(A_BUILD_BRANCH, (A_PLAN, ANOTHER_PLAN))
+
+    assert everything.judges_everything_in_flight
+    assert not filtered.judges_everything_in_flight
+    assert A_PLAN in str(filtered) and ANOTHER_PLAN in str(filtered)
+    assert A_PLAN not in str(everything)
+
+
+@pytest.mark.parametrize(
+    "written",
+    [
+        CandidateTitle(A_BUILD_BRANCH),
+        CandidateTitle(A_BUILD_BRANCH, (A_PLAN,)),
+        CandidateTitle(A_BUILD_BRANCH, (A_PLAN, ANOTHER_PLAN)),
+    ],
+)
+def test_what_a_candidate_was_opened_to_judge_is_read_back_off_its_title(
+    written: CandidateTitle,
+):
+    """
+    Both kinds are opened against the same base now, so the title is the only thing left
+    that tells them apart - and one that did not read back as it was written would let a
+    one-plan build be settled and published over everything else in flight.
+    """
+    assert CandidateTitle.read(str(written)) == written
+
+
+def test_a_pull_request_somebody_opened_is_not_read_as_a_candidate_at_all():
+    """
+    A candidate sits in the same list as everybody's work, so the reading has to refuse
+    what is not one rather than answer about it.
+    """
+    assert CandidateTitle.read("Localise a red integration candidate") is None
 
 
 def an_open_pull_request(
-    number: int, head: str, base: str, commit: str
+    number: int, head: str, base: str, commit: str, title: str = ""
 ) -> PullRequestRecord:
     """
     :param number: Its number.
     :param head: The branch it would merge.
     :param base: The branch it is opened against.
     :param commit: What that branch points at.
+    :param title: What it is called.
     :return: One open pull request, as the API answers it.
     """
-    return an_api_record(number=number, head=head, base=base, commit=commit)
+    return an_api_record(
+        number=number, head=head, base=base, commit=commit, title=title
+    )
 
 
-def test_the_candidate_a_later_run_settles_is_found_by_what_it_is_opened_against():
+def test_the_candidate_a_later_run_settles_is_the_one_judging_everything_in_flight():
     """
     The run that opened a candidate is over long before its first check appears, so what
-    settles it reads the fork rather than remembering - and what makes a pull request a
-    build being judged is its base, which is the same fact that keeps one off the board.
+    settles it reads the fork rather than remembering - and every candidate is opened
+    against the same base now, so what it says it judges is the only thing left that
+    tells the one a run may publish from one carrying a plan.
     """
     fork = RecordingCandidates(
         pull_requests=[
-            an_open_pull_request(41, "a-feature", "main", "aaaa"),
-            an_open_pull_request(213, A_BUILD_BRANCH, THE_BASE, A_HEAD),
+            an_open_pull_request(41, "a-feature", THE_BASE, "aaaa"),
+            an_open_pull_request(
+                212,
+                "integration-20260828-090000",
+                THE_BASE,
+                "bbbb",
+                title=str(CandidateTitle("integration-20260828-090000", (A_PLAN,))),
+            ),
+            an_open_pull_request(
+                213,
+                A_BUILD_BRANCH,
+                THE_BASE,
+                A_HEAD,
+                title=str(CandidateTitle(A_BUILD_BRANCH)),
+            ),
         ]
     )
 
-    found = open_candidate_on(fork, THE_BASE)
+    found = candidate_for_everything_in_flight(fork)
 
     assert found == Candidate(number=213, build_branch=A_BUILD_BRANCH, head=A_HEAD)
 
@@ -434,10 +508,10 @@ def test_nothing_being_judged_is_told_apart_from_a_candidate():
     different instruction rather than a missing answer.
     """
     fork = RecordingCandidates(
-        pull_requests=[an_open_pull_request(41, "a-feature", "main", "aaaa")]
+        pull_requests=[an_open_pull_request(41, "a-feature", THE_BASE, "aaaa")]
     )
 
-    assert open_candidate_on(fork, THE_BASE) is None
+    assert candidate_for_everything_in_flight(fork) is None
 
 
 def test_the_verdict_is_read_against_the_build_s_own_head():
@@ -649,6 +723,23 @@ def test_a_candidate_nothing_has_reported_a_check_against_is_left_open():
     run = settle([])
 
     assert deleted_branches(run) == [] and run.fork_answers.closed == []
+
+
+def test_a_candidate_no_run_can_judge_is_closed_so_a_rebuild_can_replace_it():
+    """
+    A rebuild that stopped on one it could not judge never reached the step that would
+    have replaced it, which is how this pipeline stayed wedged through every scheduled
+    run. Closing it is what lets the next build take its place - and unmerging it,
+    since a build shares no history with anything and is never merged.
+    """
+    run = RecordingIntegrationRun(RecordingCandidates())
+
+    status = integration_candidate_commands.CloseCandidateCommand().run(
+        run, argparse.Namespace(candidate=41, json=True)
+    )
+
+    assert run.fork_answers.closed == [41]
+    assert status is IntegrationExitCode.SUCCESS
 
 
 def test_the_rebuild_runs_the_suite_before_it_pushes_anything():

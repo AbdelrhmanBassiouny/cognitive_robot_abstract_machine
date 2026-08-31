@@ -28,8 +28,8 @@ from integration_verdict import (
     Candidate,
     ChecksVerdict,
     VerdictReport,
+    candidate_for_everything_in_flight,
     open_candidate,
-    open_candidate_on,
     read_checks,
 )
 
@@ -112,9 +112,8 @@ class OpenCandidateCommand(IntegrationCommand):
             default=[],
             metavar="PLAN",
             help=(
-                "the plans this build was asked to carry; a candidate naming any is "
-                "opened against the upstream base rather than against the branch a "
-                "build publishes to, so nothing ever publishes it"
+                "the plans this build was asked to carry; a candidate whose title names "
+                "any is not the one a later run settles, so nothing ever publishes it"
             ),
         )
         parser.add_argument(
@@ -133,11 +132,14 @@ class OpenCandidateCommand(IntegrationCommand):
         carry cannot be opened, and the checks are reported against the commit rather
         than the branch, so the head is read back from what was pushed.
 
-        A build carrying only some plans is opened against the upstream base instead.
-        What makes a candidate the one the rebuild settles is that it is opened against
-        the branch a build publishes to, so a one-plan build opened there would be
-        published over everything else in flight by the next run - and the base is what
-        decides that rather than a flag anybody has to remember.
+        Every candidate is opened against the base its build was assembled over, which
+        is the one base a build always merges with. Opened against the branch a build
+        publishes to - itself an older build of the same branches - the two conflict,
+        GitHub computes no merge reference, and the ``pull_request`` run that would
+        check that reference out is never created, so no verdict ever arrives.
+
+        What tells the candidate a later run settles from one carrying named plans is
+        its title, since the base can no longer.
 
         :param run: What this run has resolved.
         :param arguments: The parsed command line.
@@ -150,13 +152,12 @@ class OpenCandidateCommand(IntegrationCommand):
             run.configuration.fork_remote,
             f"{arguments.build}:{arguments.build}",
         )
-        plans = tuple(arguments.plan)
         candidate = open_candidate(
             run.fork(),
             arguments.build,
-            run.configuration.upstream_base if plans else POINTER_BRANCH,
+            run.configuration.upstream_base,
             head,
-            plans,
+            tuple(arguments.plan),
         )
         document = {
             ReportKey.CANDIDATE: candidate.number,
@@ -211,11 +212,15 @@ class FindCandidateCommand(IntegrationCommand):
         :class:`~integration_verdict.CandidateCheckTiming` - so the run that opens one
         cannot also reach its verdict.
 
+        Only the candidate judging everything in flight is reported: one carrying named
+        plans answers a narrower question, and settling it would publish one plan's
+        branches over everything else.
+
         :param run: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code.
         """
-        candidate = open_candidate_on(run.fork(), POINTER_BRANCH)
+        candidate = candidate_for_everything_in_flight(run.fork())
         if candidate is None:
             print(json.dumps({}, indent=2) if arguments.json else "no candidate")
             return IntegrationExitCode.NO_CANDIDATE_OPEN
@@ -228,6 +233,63 @@ class FindCandidateCommand(IntegrationCommand):
             json.dumps(document, indent=2)
             if arguments.json
             else _candidate_line(candidate)
+        )
+        return IntegrationExitCode.SUCCESS
+
+
+@dataclass(frozen=True)
+class CloseCandidateCommand(IntegrationCommand):
+    """
+    Closes a candidate no run can judge, so a rebuild can replace it.
+    """
+
+    @property
+    def invoked_as(self) -> str:
+        """
+        The name it is invoked by on the command line.
+        """
+        return "close-candidate"
+
+    @property
+    def description(self) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return "close a candidate nothing is ever going to report a check against"
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare this command's flags on."""
+        parser.add_argument(
+            "--candidate", required=True, type=int, help="the candidate's number"
+        )
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, run: IntegrationRun, arguments: argparse.Namespace
+    ) -> IntegrationExitCode:
+        """
+        Close the candidate without merging it.
+
+        Told apart from the settling, which closes a candidate whose checks have
+        answered: this one closes a candidate whose checks never will, so that the
+        rebuild has something to replace rather than something to stop on. The build's
+        own branch is left to the next rebuild's take-down, which drops what no open
+        pull request refers to any more.
+
+        :param run: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        run.fork().close_pull_request(arguments.candidate)
+        document = {ReportKey.CANDIDATE: arguments.candidate}
+        print(
+            json.dumps(document, indent=2)
+            if arguments.json
+            else f"{arguments.candidate}\tclosed"
         )
         return IntegrationExitCode.SUCCESS
 

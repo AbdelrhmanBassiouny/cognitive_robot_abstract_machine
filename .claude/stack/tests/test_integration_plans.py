@@ -16,7 +16,7 @@ import pytest
 from integration_constants import POINTER_BRANCH
 from integration_plans import BranchPlanIndexUnavailable, PlanFilter
 from integration_candidate_commands import OpenCandidateCommand
-from integration_verdict import candidate_description, candidate_title
+from integration_verdict import CandidateTitle, candidate_description
 from maintenance_board import BoardExport
 from integration_selection import select_for_build, tips_of
 from integration_tips import TipStatus
@@ -186,34 +186,54 @@ def test_a_filtered_build_s_candidate_is_never_the_one_the_rebuild_settles(
 ):
     """
     A one-plan build is deliberately not the whole of what is in flight, so publishing
-    it.
+    it would drop everything else.
 
-    would drop everything else. What makes a candidate the one the cycle settles is being
-    opened against the branch a build publishes to - so a filtered one is opened
-    elsewhere, and the base decides it rather than a flag anybody has to remember.
+    Its title is what says so, since both kinds are now opened against the same base and
+    the base can no longer tell them apart.
     """
     fork_checkout.run_git("checkout", "--quiet", "-b", A_BUILD_BRANCH)
     fork_checkout.commit("assembled", "one plan's branches\n")
 
     opened = open_a_candidate(fork_checkout, A_BUILD_BRANCH, A_PLAN).opened[0]
 
-    assert opened.base == UPSTREAM_BASE
-    assert opened.base != POINTER_BRANCH
+    assert CandidateTitle.read(opened.title) == CandidateTitle(
+        A_BUILD_BRANCH, (A_PLAN,)
+    )
 
 
-def test_an_unfiltered_build_s_candidate_is_opened_where_the_rebuild_settles_it(
+def test_an_unfiltered_build_s_candidate_is_the_one_the_rebuild_settles(
     fork_checkout: ForkCheckout,
 ):
     """
-    The other half of the same rule, and the one the whole cycle rests on: a build
-    carrying everything is judged against the branch it would replace.
+    The other half of the same rule, and the one the whole cycle rests on: the build
+    carrying everything in flight is the only one a later run may publish from.
     """
     fork_checkout.run_git("checkout", "--quiet", "-b", A_BUILD_BRANCH)
     fork_checkout.commit("assembled", "everything in flight\n")
 
     opened = open_a_candidate(fork_checkout, A_BUILD_BRANCH).opened[0]
 
-    assert opened.base == POINTER_BRANCH
+    assert CandidateTitle.read(opened.title).judges_everything_in_flight
+
+
+@pytest.mark.parametrize("plans", [(), (A_PLAN,)])
+def test_every_candidate_is_opened_against_the_base_its_build_was_assembled_over(
+    fork_checkout: ForkCheckout, plans: tuple[str, ...]
+):
+    """
+    A build is the upstream base plus the merged tips, so it merges with that base by.
+
+    construction. Opened against the branch it would replace - itself an older build of
+    the same branches - the two conflict, GitHub computes no merge reference, and the
+    ``pull_request`` run that would check it out is never created at all.
+    """
+    fork_checkout.run_git("checkout", "--quiet", "-b", A_BUILD_BRANCH)
+    fork_checkout.commit("assembled", "something to judge\n")
+
+    opened = open_a_candidate(fork_checkout, A_BUILD_BRANCH, *plans).opened[0]
+
+    assert opened.base == UPSTREAM_BASE
+    assert opened.base != POINTER_BRANCH
 
 
 def test_a_filtered_build_s_candidate_says_it_is_never_published():
@@ -227,16 +247,23 @@ def test_a_filtered_build_s_candidate_says_it_is_never_published():
     assert "never published" in described.lower()
 
 
-def test_a_filtered_build_s_candidate_is_still_kept_off_the_board():
+@pytest.mark.parametrize("plans", [(), (A_PLAN,)])
+def test_a_candidate_based_where_ordinary_work_is_based_is_still_kept_off_the_board(
+    plans: tuple[str, ...],
+):
     """
-    Based where every ordinary branch is based, it would otherwise be read as work in
-    flight - merged into the next build and restacked by a maintenance pass.
+    Every candidate is based where every ordinary branch is based now, so nothing but
+    its.
+
+    title holds it off the one export both a build and a maintenance pass derive their
+    work from - and read as work in flight it would be merged into the next build and
+    restacked onto the branch it exists to replace.
     """
     export = BoardExport.from_api_records(
         [
             an_api_record(
                 number=1,
-                title=candidate_title(A_BUILD_BRANCH),
+                title=str(CandidateTitle(A_BUILD_BRANCH, plans)),
                 head=A_BUILD_BRANCH,
                 base=UPSTREAM_BASE,
             )

@@ -310,11 +310,10 @@ class BoardExport:
         Whether one open pull request is a build opened to collect the checks that judge
         it.
 
-        Two facts say so, and both are needed. A candidate for a whole build is opened
-        against the branch a build publishes to, which nothing else is; one for a build
-        of some plans only is opened against the upstream base, like every ordinary
-        branch, and what tells it apart there is the title it is given. Read together, so
-        neither kind is left on the board for a pass to restack.
+        The title is what says so for every candidate, since all of them are opened
+        against the base their build was assembled over - the same base every ordinary
+        branch is opened against. The base is read too, because nothing that is work in
+        flight is ever opened against the branch a build publishes to.
 
         :param record: One open pull request, as the API answers it.
         :param number: Its number, named in any rejection.

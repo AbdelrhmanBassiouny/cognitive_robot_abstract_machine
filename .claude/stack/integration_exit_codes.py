@@ -122,6 +122,10 @@ class IntegrationExitCode(IntEnum):
     candidate was opened with - rather than the checks themselves. A candidate reads as
     unchecked for as long as :class:`~integration_verdict.CandidateCheckTiming` records
     whatever happens, so this is only ever said of one a later run inherited.
+
+    The rebuild closes such a candidate and assembles the build that replaces it before
+    exiting with this, so the status says what a reader has to look at rather than that
+    the run stopped: stopping was what left every later run inheriting the same one.
     """
 
     NO_CANDIDATE_OPEN = 18

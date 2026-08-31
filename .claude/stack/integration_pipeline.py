@@ -165,12 +165,22 @@ class RefreshPipeline:
         the whole of what is in flight - it settles no inherited candidate and publishes
         nothing - because the build it assembled is deliberately partial.
 
+        An inherited candidate no run can judge is the one answer this carries on past
+        rather than stopping on. Stopping is what wedged this pipeline permanently: the
+        rebuild never reached the step that would have replaced the candidate, so every
+        later run inherited the same unjudgeable one. It is closed and replaced instead,
+        and the run still exits saying so, since a run that exited success over it would
+        leave nobody to look at whatever is failing to start a check.
+
         :return: The status of whichever step decided the run.
         """
         self._take_down_unreferenced_builds()
+        moved_past_an_unjudgeable_candidate = False
         if not self.plans:
             inherited = self._settle_what_is_already_being_judged()
-            if inherited is not None:
+            if inherited is IntegrationExitCode.CANDIDATE_UNCHECKED:
+                moved_past_an_unjudgeable_candidate = True
+            elif inherited is not None:
                 return inherited
         if not self._fast_forward():
             return IntegrationExitCode.BASE_NOT_PREPARED
@@ -183,6 +193,8 @@ class RefreshPipeline:
                 return published
         if self._open_candidate(assembled.branch) is None:
             return IntegrationExitCode.GITHUB_REQUEST_FAILED
+        if moved_past_an_unjudgeable_candidate:
+            return IntegrationExitCode.CANDIDATE_UNCHECKED
         return IntegrationExitCode.SUCCESS
 
     def _take_down_unreferenced_builds(self) -> None:
@@ -209,8 +221,10 @@ class RefreshPipeline:
         still coming is left where it is rather than waited on: this run has nothing
         further it can do, and the next one inherits it.
 
-        :return: The status to stop with, or ``None`` when the run should carry on and
-            assemble the next build.
+        :return: The status to stop with, ``None`` when the run should carry on and
+            assemble the next build, or
+            :attr:`~integration_exit_codes.IntegrationExitCode.CANDIDATE_UNCHECKED` when
+            it should carry on and still report that it moved past one nothing judged.
         """
         found = self.runner.run(
             ToolingScript.INTEGRATION,
@@ -234,20 +248,26 @@ class RefreshPipeline:
         A candidate with no check at all is the one case this can call a fault rather
         than slowness: it has been open since at least the previous run, so whatever
         should have started one - the trigger, or the credential it was opened with - did
-        not.
+        not. Nothing is ever going to judge it, so it is closed here and the run goes on
+        to assemble the build that replaces it; leaving it open is what left every later
+        run inheriting the same one.
 
         :param candidate: The candidate that was read.
         :param settled: What reading its checks answered.
-        :return: The status to stop with, or ``None`` when the run should carry on.
+        :return: The status to stop with, ``None`` when the run should carry on, or
+            :attr:`~integration_exit_codes.IntegrationExitCode.CANDIDATE_UNCHECKED` when
+            it should carry on past one nothing judged and say so at the end.
         """
         status = IntegrationExitCode(settled.status)
         if status is IntegrationExitCode.CANDIDATE_STILL_RUNNING:
             if _reported_no_check(settled):
                 print(
                     f"no check has been reported against candidate {candidate.number} "
-                    "since before the previous rebuild, so nothing is starting one",
+                    "since before the previous rebuild, so nothing is starting one; "
+                    "closing it and assembling the build that replaces it",
                     file=sys.stderr,
                 )
+                self._close(candidate)
                 return IntegrationExitCode.CANDIDATE_UNCHECKED
             return IntegrationExitCode.SUCCESS
         if status is IntegrationExitCode.CANDIDATE_FAILED:
@@ -257,6 +277,24 @@ class RefreshPipeline:
             print(settled.output, end="")
             return status
         return None
+
+    def _close(self, candidate: Candidate) -> None:
+        """
+        Close a candidate nothing is ever going to judge.
+
+        Its build's branch is left to the next rebuild's take-down, which drops whatever
+        no open pull request refers to any more - so nothing here has to know how this
+        run ends.
+
+        :param candidate: The candidate to close.
+        """
+        self.runner.run(
+            ToolingScript.INTEGRATION,
+            IntegrationSubcommand.CLOSE_CANDIDATE,
+            CommandLineFlag.CANDIDATE,
+            candidate.number,
+            CommandLineFlag.JSON,
+        )
 
     def _settle(self, candidate: Candidate) -> CommandOutcome:
         """:param candidate: The candidate to read.
