@@ -190,14 +190,13 @@ items:
     blockers:
       - >-
           stacked-pr-maintenance: Fork PR #192 (branch
-          `claude/match-query-interface-refactor-l55jym`) still conflicts against its base as of the
-          2026-08-30 stacked-pr-maintenance pass, and carries the `needs-resolution` label and a
-          routine comment on the PR.
-
-          Its base changed this pass: the parent `claude/match-query-ergonomics-where-rooted-b876wm`
-          had merged into main, which no previous pass could see, so the PR was retargeted at `main`
-          (GitHub stack 195 was dissolved to allow it, and could not be re-created because only one
-          open member was left). The conflict is now against `main`.
+          `claude/match-query-interface-refactor-l55jym`) conflicts against its base `main` as of
+          the 2026-08-31 stacked-pr-maintenance pass, in:
+          `krrood/src/krrood/entity_query_language/core/mapped_variable.py`,
+          `krrood/src/krrood/entity_query_language/query/match.py`,
+          `test/krrood_test/test_eql/test_match.py`. It carries the `needs-resolution` label and a
+          routine comment on the PR:
+          https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/192#issuecomment-5478367428
     notes: >
       Implemented ahead of order by an independent IDE-typing session on
       claude/ide-type-inference-instances-dc6l6e (commit 147d098d2), which
