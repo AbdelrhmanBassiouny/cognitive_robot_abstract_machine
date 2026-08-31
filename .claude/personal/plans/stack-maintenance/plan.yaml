@@ -449,24 +449,18 @@ items:
   depends_on:
   - integration-branch
   blockers:
-  - 'Publishing is unsafe before a guard exists, which is a bigger finding than the deadlock it was
-    found under. The build assembled on 2026-08-30 carries nine branches and neither #154 nor #211, so
-    it contains no `integration.py` and no `integration-refresh.yml` - the whole pipeline is unlanded
-    work living on those two branches. `integration` is the fork''s default branch and the one a
-    schedule registers from, so force-updating it onto such a build deletes the scheduled workflow and
-    every mechanism that could publish a later one. The automation would remove itself with nothing
-    left to restore it. Verified rather than inferred: the build was checked green against `main` as
-    #224, 23 checks, and its tree has no pipeline in it.'
   - 'The pipeline branches are left out because #211 conflicts with #160''s branch
     (`claude/plan-item-bootstrap-yaml-indent-y8qs0m`) in `plan_item_bootstrap.py` and its test - the
     duplication this plan already resolved on paper by folding #160 into #151''s branch. The build
     carries #160 first and skips #211, and #211 is the tip of the stack holding #154, so both go. Until
-    that fold happens every build drops the pipeline.'
+    that fold happens every build drops the pipeline, and a build with no pipeline in it is now one the
+    guard refuses to publish rather than one that ends the automation.'
   - 'The candidate''s base makes it unjudgeable. #220 had no `refs/pull/220/merge` at all and no checks
     after eleven hours, because a build conflicts with `integration` - itself an older build of the same
-    branches. Both candidates are closed now; the rebuild is unwedged but must not be allowed to publish
-    until the guard above exists, and today the only thing preventing it is that candidates cannot be
-    judged at all.'
+    branches. Both candidates are closed now, so the rebuild is unwedged, but nothing opened against
+    `integration` can be judged until the base is one the build always merges with - which needs a
+    discriminator that is not the base, since `find-candidate` tells a full candidate from a `--plan`
+    one by what it is opened against.'
   notes: 'Part D of `integration-branch`''s review round: the verdict moves from a local test run to real CI.
 
     Folded back onto that item''s branch after being split out, so it has no pull request of its own - the
@@ -687,7 +681,44 @@ items:
 
     guard against publishing a build that would remove the pipeline comes *before* making candidates
 
-    judgeable, because the first checkable green build is otherwise the one that ends the pipeline.'
+    judgeable, because the first checkable green build is otherwise the one that ends the pipeline.
+
+
+    **That guard is built, and it is the first of the three.** `publish()` refuses a build whose tree
+
+    carries no rebuild - the refresh workflow and the entry points it drives, derived from the enums
+
+    naming them rather than listed again - and refuses it on both routes to the pointer, since a guard
+
+    on the judged path alone is one the recorded pass walks straight past, and the recorded pass is what
+
+    publishes on the ordinary day. Presence is not the whole test: a workflow left with only a dispatch
+
+    is a rebuild somebody has to remember to press, so the carried workflow is asked whether it still
+
+    answers to the schedule. A refused build stops the rebuild rather than being judged - a matrix would
+
+    reach the same answer - which turned `_publish_recorded_pass` into a status rather than a bool.
+
+
+    **It reaches the run that needs it before it reaches the default branch**, which is the part worth
+
+    stating: a scheduled run executes the published copy and so predates the guard, but nothing can
+
+    publish through that copy today - no tree is recorded as passing, and no candidate can be judged -
+
+    while the bootstrap dispatch checks out `github.ref` and therefore runs the guard. So the one run
+
+    that could have ended the pipeline is the one it is in force for.
+
+
+    Retired on the way through: `VerdictReport` modelled the settling''s document and had no production
+
+    caller, the command hand-building a second copy of the same keys beside it. The command emits the
+
+    report now and takes its exit status from the `published` field it carries, so a run cannot exit
+
+    success over a report saying it published nothing. 926 tests pass, from 913; six mutations checked.'
 - id: red-candidate-localisation
   title: Localise a red candidate to the branches that caused it
   branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
