@@ -39,7 +39,6 @@ from krrood.symbolic_math.symbolic_math import (
 )
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types import (
-    Vector3,
     Point3,
     RotationMatrix,
     HomogeneousTransformationMatrix,
@@ -482,94 +481,96 @@ class CartesianPositionStraight(CartesianTask):
     threshold: float = field(default=0.01, kw_only=True)
     """Distance threshold for goal achievement in meters."""
 
+    _line_start_binding: ForwardKinematicsBinding = field(init=False)
+    """Binding for the tip pose the line starts at."""
+
+    LATERAL_WEIGHT_FACTOR: ClassVar[float] = 2
+    """How much more expensive leaving the line is than falling behind on it."""
+
     @property
     def goal_reference_frame(self) -> KinematicStructureEntity:
         return self.goal_point.reference_frame
+
+    def build(self, context: MotionStatechartContext) -> NodeArtifacts:
+        """
+        Bind the pose the line starts at before the constraints are described against it.
+        """
+        self._line_start_binding = ForwardKinematicsBinding(
+            name=PrefixedName("root_T_line_start", str(self.name)),
+            root=self.root_link,
+            tip=self.tip_link,
+            float_variable_data=context.float_variable_data,
+        )
+        self._line_start_binding.bind(context.world)
+        return super().build(context)
+
+    def on_start(self, context: MotionStatechartContext) -> None:
+        """
+        Start the line at the pose the tip has now.
+
+        A line starts where the tip is when the motion begins, no matter how much earlier
+        the statechart was built, and independently of :attr:`binding_policy`, which only
+        decides when the goal is computed.
+        """
+        super().on_start(context)
+        self._line_start_binding.bind(context.world)
 
     def build_artifacts(self, context: MotionStatechartContext) -> NodeArtifacts:
         """
         Build motion constraints for reaching the goal along a straight line.
 
-        Creates a virtual coordinate frame aligned with the straight-line path and
-        constrains motion to stay on that line.
+        The tip is driven along the line from the pose the motion starts at to the goal,
+        and back onto that line whenever it strays.
 
         :param context: Provides access to world model and kinematic expressions.
         :return: The artifacts of this task, whose error is the distance between the tip and the goal point.
         """
         artifacts = NodeArtifacts()
         root_P_goal = self.root_T_goal_reference_frame @ self.goal_point
-
-        # Get current tip position and transformations
+        root_P_line_start = self._line_start_binding.root_T_tip.to_position()
         root_P_tip = context.world.compose_forward_kinematics_expression(
             self.root_link, self.tip_link
         ).to_position()
-        tip_T_root = context.world.compose_forward_kinematics_expression(
-            self.tip_link, self.root_link
-        )
-        tip_P_goal = tip_T_root.dot(root_P_goal)
 
-        # Create coordinate frame aligned with straight-line path
-        # x-axis points from current position towards goal
-        tip_V_error = Vector3.from_iterable(tip_P_goal)
-        trans_error = tip_V_error.norm()
-        tip_V_intermediate_error = tip_V_error.safe_division(trans_error)
+        root_V_line = root_P_goal - root_P_line_start
+        # scale normalizes in place, so the length has to be read before it
+        line_length = root_V_line.norm()
+        root_V_line.scale(1)
+        root_R_line = RotationMatrix.from_x_axis(root_V_line)
+        line_V_travelled = root_R_line.inverse() @ (root_P_tip - root_P_line_start)
 
-        # Create orthogonal y and z axes. Crossing the path direction with a world axis degenerates
-        # when the two are parallel, so deterministically pick whichever of the X/Y axes yields the
-        # better-conditioned (longer) cross product instead of sampling a random helper vector.
-        tip_V_cross_x = tip_V_intermediate_error.cross(Vector3.X())
-        tip_V_cross_y = tip_V_intermediate_error.cross(Vector3.Y())
-        tip_V_helper = Vector3.from_iterable(
-            [
-                sm.if_greater(
-                    tip_V_cross_x.norm(),
-                    tip_V_cross_y.norm(),
-                    tip_V_cross_x[i],
-                    tip_V_cross_y[i],
-                )
-                for i in range(3)
-            ]
+        lateral_weight = (
+            DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE * self.LATERAL_WEIGHT_FACTOR
         )
-        y = tip_V_intermediate_error.cross(tip_V_helper)
-        z = tip_V_intermediate_error.cross(y)
-        tip_R_aligned = RotationMatrix.from_vectors(
-            x=tip_V_intermediate_error, y=-z, z=y
+        artifacts.geometry.add_position_constraint(
+            expression_current=line_V_travelled[0],
+            expression_goal=line_length,
+            reference_velocity=self.reference_velocity,
+            quadratic_weight=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE,
+            name="line/progress",
         )
-
-        # Transform tip kinematics into aligned frame
-        tip_T_root_evaluated = context.world.compute_forward_kinematics(
-            self.tip_link, self.root_link
+        artifacts.geometry.add_position_constraint(
+            expression_current=line_V_travelled[1],
+            expression_goal=0,
+            reference_velocity=self.reference_velocity,
+            quadratic_weight=lateral_weight,
+            name="line/y",
         )
-        root_T_tip = context.world.compose_forward_kinematics_expression(
-            self.root_link, self.tip_link
+        artifacts.geometry.add_position_constraint(
+            expression_current=line_V_travelled[2],
+            expression_goal=0,
+            reference_velocity=self.reference_velocity,
+            quadratic_weight=lateral_weight,
+            name="line/z",
         )
-        aligned_T_tip = tip_R_aligned.inverse() @ tip_T_root_evaluated @ root_T_tip
-
-        expr_p = aligned_T_tip.to_position()
-        dist = (root_P_goal - root_P_tip).norm()
-
-        # Constrain motion: x-axis moves towards goal, y and z stay at zero
-        for i, (name, bound, weight_mult) in enumerate(
-            [
-                ("line/x", dist, 1),
-                ("line/y", 0, 2),
-                ("line/z", 0, 2),
-            ]
-        ):
-            artifacts.constraints.add_equality_constraint(
-                name=name,
-                reference_velocity=self.reference_velocity,
-                equality_bound=bound,
-                quadratic_weight=DefaultWeights.WEIGHT_ABOVE_COLLISION_AVOIDANCE
-                * weight_mult,
-                task_expression=expr_p[i],
-            )
 
         self.add_goal_and_current_debug_expressions(
             artifacts, goal=root_P_goal, current=root_P_tip
         )
 
-        artifacts.error = SymbolicErrorSignal(dist)
+        artifacts.error = SymbolicErrorSignal(
+            root_P_goal.euclidean_distance(root_P_tip)
+        )
         return artifacts
 
 
