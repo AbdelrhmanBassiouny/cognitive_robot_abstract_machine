@@ -10,11 +10,12 @@ than silently drops.
 
 from __future__ import annotations
 
-from dataclasses import fields
-
 import pytest
 
-from krrood.entity_query_language.backends import AttributeEqualityToLiteral
+from krrood.entity_query_language.backends import (
+    AttributeEqualityToLiteral,
+    StatedRelation,
+)
 from krrood.entity_query_language.exceptions import (
     BackendCannotResolveCondition,
     GenerativeBackendQueryIsNotUnderspecifiedVariable,
@@ -24,24 +25,36 @@ from krrood.entity_query_language.verbalization.vocabulary.english import Direct
 
 from ..dataset.backend_that_looks_at_the_world import (
     BackendThatLooksAtTheWorld,
+    Place,
     Sighting,
     SightingOfSomethingHeldUp,
+    StandingOn,
 )
 
-TABLE = "table"
+TABLE = Place(name="table")
 """
 The place most of the sightings below stand in.
 """
 
-LID = "lid"
+LID = Place(name="lid")
 """
 The place one of them stands in, one level up.
 """
 
-CUBE_ON_THE_TABLE = Sighting(label="cube", place=TABLE)
-DISK_ON_THE_TABLE = Sighting(label="disk", place=TABLE)
-CUBE_ON_THE_LID = Sighting(label="cube", place=LID)
-CUBE_HELD_UP_OVER_THE_TABLE = SightingOfSomethingHeldUp(label="cube", place=TABLE)
+CUBE_ON_THE_TABLE = Sighting(label="cube", place=TABLE.name)
+DISK_ON_THE_TABLE = Sighting(label="disk", place=TABLE.name)
+CUBE_ON_THE_LID = Sighting(label="cube", place=LID.name)
+CUBE_HELD_UP_OVER_THE_TABLE = SightingOfSomethingHeldUp(label="cube", place=TABLE.name)
+
+
+def looking_for_something_standing_on(place: Place):
+    """
+    A statement asking a look for whatever stands on a place, said as a relation.
+
+    :param place: The place the thing sought is asserted to stand on.
+    """
+    statement = an(Sighting)()
+    return statement.where(StandingOn(statement.variable, place))
 
 
 @pytest.fixture
@@ -64,32 +77,30 @@ def test_a_backend_that_looks_opens_its_request_by_looking_rather_than_finding()
 # %% reading one condition
 
 
-def test_the_attribute_the_look_narrows_by_is_one_a_sighting_has():
+def test_what_a_look_narrows_by_is_a_relation_rather_than_an_attributes_name():
     """
-    The backend names the attribute it narrows by, and a rename of that field would
-    otherwise leave the name behind without anything failing.
+    The relation is a class, so it is its own source of truth and there is no name for a
+    rename to leave behind.
     """
-    assert BackendThatLooksAtTheWorld.PLACE_ATTRIBUTE_NAME in {
-        field.name for field in fields(Sighting)
-    }
+    assert BackendThatLooksAtTheWorld.narrowing_relations == (StandingOn,)
 
 
 def test_an_equality_against_a_fixed_value_is_read_off_the_condition():
     sighting = variable(Sighting, [])
-    query = an(entity(sighting).where(sighting.place == LID))
+    query = an(entity(sighting).where(sighting.label == CUBE_ON_THE_LID.label))
 
     [condition] = query.build()._where_builder_.conditions
 
     assert AttributeEqualityToLiteral.read_from(
         condition, sighting
     ) == AttributeEqualityToLiteral(
-        attribute_name=BackendThatLooksAtTheWorld.PLACE_ATTRIBUTE_NAME, value=LID
+        attribute_name="label", value=CUBE_ON_THE_LID.label
     )
 
 
 def test_a_comparison_that_is_not_an_equality_states_no_fixed_value():
     sighting = variable(Sighting, [])
-    query = an(entity(sighting).where(sighting.place != LID))
+    query = an(entity(sighting).where(sighting.label != CUBE_ON_THE_LID.label))
 
     [condition] = query.build()._where_builder_.conditions
 
@@ -99,24 +110,59 @@ def test_a_comparison_that_is_not_an_equality_states_no_fixed_value():
 def test_an_equality_about_another_variable_is_not_read_as_the_selections_own():
     sighting = variable(Sighting, [])
     other = variable(Sighting, [])
-    query = an(entity(sighting).where(other.place == LID))
+    query = an(entity(sighting).where(other.label == CUBE_ON_THE_LID.label))
 
     [condition] = query.build()._where_builder_.conditions
 
     assert AttributeEqualityToLiteral.read_from(condition, sighting) is None
 
 
+# %% reading a relation
+
+
+def test_a_relation_asserted_about_the_thing_sought_is_read_off_the_condition():
+    statement = looking_for_something_standing_on(LID)
+
+    request = BackendThatLooksAtTheWorld.read_request(statement)
+
+    assert request.stated_relations == [
+        StatedRelation(relation_type=StandingOn, related_thing=LID)
+    ]
+
+
+def test_the_thing_a_relation_relates_the_sought_thing_to_is_read_back_by_its_class():
+    statement = looking_for_something_standing_on(LID)
+
+    request = BackendThatLooksAtTheWorld.read_request(statement)
+
+    assert request.related_by(StandingOn) is LID
+
+
+def test_a_statement_asserting_no_relation_relates_the_thing_sought_to_nothing():
+    request = BackendThatLooksAtTheWorld.read_request(an(Sighting)())
+
+    assert request.stated_relations == []
+    assert request.related_by(StandingOn) is None
+
+
+def test_a_relation_asserted_about_another_variable_is_not_read_as_the_sought_things():
+    other = variable(Sighting, [])
+    statement = an(Sighting)().where(StandingOn(other, LID))
+
+    [condition] = statement._where_conditions_
+
+    assert StatedRelation.read_from(condition, statement.variable) is None
+
+
 # %% what the look is told, and what is checked afterwards
 
 
-def test_an_attribute_the_look_can_act_on_narrows_it(
+def test_a_relation_the_look_can_act_on_narrows_it(
     backend: BackendThatLooksAtTheWorld,
 ):
-    statement = an(Sighting)(place=LID)
+    results = list(looking_for_something_standing_on(LID).evaluate(backend=backend))
 
-    results = list(statement.evaluate(backend=backend))
-
-    assert backend.searched_place == LID
+    assert backend.searched_place is LID
     assert results == [CUBE_ON_THE_LID]
 
 
@@ -134,11 +180,12 @@ def test_an_attribute_the_look_cannot_act_on_is_checked_over_what_came_back(
 def test_a_narrowed_look_still_has_its_own_attribute_checked_over_the_results(
     backend: BackendThatLooksAtTheWorld,
 ):
-    statement = an(Sighting)(place=TABLE, label=DISK_ON_THE_TABLE.label)
+    statement = an(Sighting)(label=DISK_ON_THE_TABLE.label)
+    statement = statement.where(StandingOn(statement.variable, TABLE))
 
     results = list(statement.evaluate(backend=backend))
 
-    assert backend.searched_place == TABLE
+    assert backend.searched_place is TABLE
     assert results == [DISK_ON_THE_TABLE]
 
 
@@ -153,12 +200,15 @@ def test_a_statement_that_narrows_nothing_is_answered_from_everything_the_look_f
 def test_a_where_condition_is_checked_over_what_the_look_found(
     backend: BackendThatLooksAtTheWorld,
 ):
-    statement = an(Sighting)(place=TABLE)
-    statement = statement.where(statement.variable.label == DISK_ON_THE_TABLE.label)
+    statement = an(Sighting)()
+    statement = statement.where(
+        StandingOn(statement.variable, TABLE),
+        statement.variable.label == DISK_ON_THE_TABLE.label,
+    )
 
     results = list(statement.evaluate(backend=backend))
 
-    assert backend.searched_place == TABLE
+    assert backend.searched_place is TABLE
     assert results == [DISK_ON_THE_TABLE]
 
 
@@ -187,11 +237,12 @@ def test_an_unstated_attribute_is_what_the_look_fills_in(
     ``...`` says the statement does not know this and the look must supply it, so it
     narrows nothing and rejects nothing.
     """
-    statement = an(Sighting)(place=LID, label=...)
+    statement = an(Sighting)(label=...)
+    statement = statement.where(StandingOn(statement.variable, LID))
 
     results = list(statement.evaluate(backend=backend))
 
-    assert backend.searched_place == LID
+    assert backend.searched_place is LID
     assert results == [CUBE_ON_THE_LID]
 
 
@@ -202,8 +253,8 @@ def test_a_condition_about_another_variable_is_refused_rather_than_dropped(
     backend: BackendThatLooksAtTheWorld,
 ):
     other = variable(Sighting, [CUBE_ON_THE_LID])
-    statement = an(Sighting)(place=LID)
-    statement = statement.where(other.place == LID)
+    statement = an(Sighting)()
+    statement = statement.where(other.label == CUBE_ON_THE_LID.label)
 
     with pytest.raises(BackendCannotResolveCondition) as raised:
         list(statement.evaluate(backend=backend))
