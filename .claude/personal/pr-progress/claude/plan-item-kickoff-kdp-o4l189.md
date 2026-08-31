@@ -1,49 +1,44 @@
 ## #232 - `pieces-looked-for-where-expected` (knowledge-directed-perception)
 
 Branch `claude/plan-item-kickoff-kdp-o4l189`, draft PR #232, based on #225
-(`claude/plan-item-kickoff-kdp-z4pv7l`, tip `a35243e8`). Kicked off in `auto` mode.
+(`claude/plan-item-kickoff-kdp-z4pv7l`). Kicked off and built in `auto` mode.
 
-### The plan
+### Built, pushed as `d8b654433`
 
-Detection becomes the evaluation of hypotheses rather than the classification of blobs.
-Colour is currently a gate: only a contour surviving the hue mask reaches
-`PieceMatcher.match`, so a piece wearing the lid's hue or touching another is never
-fitted. Measured: seeding the matcher at the places the board reports reaches 0.62-0.89
-where the bottom-up pass finds nothing, at 0.05 s against 0.25 s for a full pass.
+Detection is now the evaluation of hypotheses rather than the classification of blobs.
 
-1. `perception/hypotheses.py` (new) - `BelievedPlace` (a region of a named surface and an
-   interval of yaw) and `PieceHypothesis` (what is expected, where it is believed to be,
-   which belief it came from). `BelievedPlace` is the type #227 deferred to this item.
-2. `piece_matcher.py` - `match` takes a hypothesis; radius, step, angle set and candidate
-   list read from the belief instead of fixed.
-3. `pipeline.py` - three hypothesis sources: a colour blob (as today), the board's
-   detected holes, and the pieces the world places. Colour becomes evidence, not a gate.
-4. `detections.py` - a detection carries the hypothesis it came from.
-5. Tests first at three levels: the types, the matcher, then the rendered scene and the
-   six captures.
+- `perception/hypotheses.py` (new): `BelievedPlace` (a region of a named surface and a
+  `YawInterval`), `PieceHypothesis`, `BeliefSource`, `SEED_REACH`.
+- `piece_matcher.py`: `match` takes a hypothesis; reach, angle set and candidates read
+  from the belief. `search_radius` and `hue_tolerance` moved off the matcher.
+- `pipeline.py`: the detector evaluates every hypothesis its surface owns, colour being
+  one source of them; `expected_pieces` believes from the world, which names which piece
+  it placed where. Anything more particular is supplied by the caller via `expected`.
+- `detections.py`: a detection carries the `hypothesis` it answered.
+- `orthophoto.py`: `WorkspaceRegion.to_pixels`, the inverse of `to_world_position`.
 
-### Done so far
+**397 passed, 1 skipped, 11 xfailed** vs **376/1/11** on the parent - the 21 added and
+nothing else moved. All six captures report **exactly** what the parent reported
+(compared detection by detection), and `detect` costs **0.344 s** against the parent's
+**0.344 s**.
 
-- Gathered the item's context; dependency #225 reports `open_ready`.
-- Scope check run: ordinary stacking, and the purpose check against #227 comes back clean
-  (it deliberately did not build the believed place).
-- Branch re-cut from #225's tip (it had arrived cut from `integration`), pushed, draft
-  #232 opened.
-- `plan.yaml` records branch/PR/session/`in_progress`; roadmap section appended.
+### The one real decision, made on measurement
 
-### Next
+Sweeping the board's holes for pieces every frame was built first. It recovers every lid
+piece in 5 of 6 captures - the recall the item exists for - but costs **+0.36 s of a
+0.5 s frame budget** and reports **15 pieces that are not there**, both because the hole
+detections are themselves wrong (`holes-fitted-like-pieces`, which depends on this item).
+Narrowing to each hole's own category fits the budget but loses 7 real pieces, for the
+same reason. So it is out, and the lid marks stay, now naming `expectations-from-events`
+- the item that can say *which* piece at *which* hole, which is what makes a seeded fit
+cheap and precise. Recorded in full in `roadmap.md`.
 
-- Write the failing tests, then the three modules, in the order above.
-- Measure and record: which of the four `LID_PIECES_STILL_MISSED` marks come off, the
-  false-positive count per capture, and `detect`'s cost against the parent's 0.279 s.
+### Outstanding
 
-### Watch out for
-
-- **This item will add ghosts as well as pieces.** A prism template near the board's
-  middle reaches 0.85-0.89 with no prism there, above every genuine lid piece. Separating
-  them is `competing-explanations`, which depends on this. The recall test is a subset
-  assertion so it will not catch them; `test_only_the_pieces_resting_on_the_table_are_
-  detected_there` is exact, and a regression there is a blocker to report, not absorb.
-- Open at implementation time: how the footprint and height of a seeded (contour-less)
-  fit are measured, since both currently read a segmented contour.
-- Landing hazard: #223's `Footprint` -> `RectifiedFootprint` rename.
+- Nothing on this session's side. CI has not reported yet at the time of the push.
+- Landing hazards on the PR: #223's `Footprint` -> `RectifiedFootprint` rename, and #223
+  meeting `PieceHypothesis.candidates` (a tuple of dataclasses) when it walks this
+  package for the ORM.
+- Environment note worth keeping: this container's default `uv` (0.8.17) cannot parse the
+  repo's `pyproject.toml`; `/usr/local/bin/uv` (0.12.7) can. `docformatter`/`black` need
+  installing before `scripts/format_docstrings.py` runs.
