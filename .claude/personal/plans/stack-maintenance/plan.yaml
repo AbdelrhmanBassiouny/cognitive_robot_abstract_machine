@@ -449,14 +449,16 @@ items:
   depends_on:
   - integration-branch
   blockers:
-  - 'Waiting on a dispatch that reaches a candidate. The base fix landed in `c77b9ea79` and the
-    block-and-continue fix in `ba65d62bc4`. Two dispatches on 2026-08-31 each found one cross-branch
-    break and ended on it - #110 first, then #107, its own base - so two runs and roughly two hours of
-    queue bought two labels and no candidate, which is what the second fix ends: a rebuild now blocks the
-    break and assembles again without it, up to five times in one run. The candidate half of the pipeline
-    - the base change, the title discriminator, the close-and-move-past - remains unexercised against
-    real GitHub until a run gets past the suite. Read the build''s `left_out`, which every attempt now
-    prints, to confirm it carries #211 and #154 before anything publishes.'
+  - 'Waiting on candidate #228''s matrix, which is the first one this pipeline has ever had judged since
+    #204. Run 19 on 2026-08-31 did the whole cycle in seven minutes: no candidate to settle, base
+    forward, build, one break blocked (#162, against #151), assemble again, `tip-left-out`, no recorded
+    pass, candidate opened. #228 is opened against `main`, its title carries the discriminator, and
+    GitHub reported its first check eleven seconds after it opened - against eleven hours and nothing for
+    #220. Measured rather than assumed: the build carries #211 and, through it, #154, and its tree holds
+    `integration-refresh.yml`, `integration.py` and `integration_pipeline.py`, so the publish guard has
+    something to pass. What remains is a third dispatch once the matrix finishes, to settle #228 and
+    publish if it is green - the `workflow_run` trigger cannot do it, because every trigger is read from
+    the copy on `integration`, which is still the old pipeline until something publishes.'
   notes: 'Part D of `integration-branch`''s review round: the verdict moves from a local test run to real CI.
 
     Folded back onto that item''s branch after being split out, so it has no pull request of its own - the
@@ -793,6 +795,26 @@ items:
     it had left out, and the one document that has to be read before publishing had never been printed by any
     run that could publish. Every attempt prints it now, and the block prints what it blocked, read through the
     key the block writes rather than through the verdict''s, which has no name for a blocked branch.
+
+
+    **The pipeline reached a judged candidate on 2026-08-31, which is what all of this was for.** Run 19 ran
+    the whole cycle in seven minutes: `no-candidate-open`, base forward, a build whose suite failed, one break
+    blocked - #162 against #151 - and then, in the same run, the build without it, `no-recorded-pass`, and candidate
+    #228. The block-and-continue rule is what turned two dispatches and two hours of queue into one seven-minute
+    run.
+
+
+    **The base change is confirmed against real GitHub.** #228 is opened against `main`, and GitHub reported
+    its first check eleven seconds after it opened, where #220 - opened against `integration` - had no merge
+    reference and no check after eleven hours. Twenty-four checks; every one that finished in the first six minutes
+    passed.
+
+
+    **And the build carries the pipeline, measured rather than expected.** #211 is among the ten tips merged,
+    #154 comes with it as its base, and the tree holds `integration-refresh.yml`, `integration.py` and `integration_pipeline.py`
+    with the schedule intact - so the guard that refuses a build carrying no rebuild has something to pass for
+    the first time. The `left_out` that says so was printed by the run itself, which is the reporting fix working:
+    47 branches left out, 25 for their own red checks, 14 blocked and 8 unreviewed.
 
     '
 - id: red-candidate-localisation

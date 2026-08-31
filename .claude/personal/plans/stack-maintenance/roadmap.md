@@ -227,6 +227,9 @@ and re-applies its delta.
   per rebuild rather than fatal and once and for all. **#160 was closed the same day, superseded by
   #151**, so the collision that skipped #211 is off the board and the next build should carry the
   pipeline - expected rather than measured, since none has been assembled since.
+- **Answered on 2026-08-31, and it was the last thing in the way.** Candidate #228, opened against
+  `main`, had its first check eleven seconds after opening and its build carries the pipeline - so
+  what follows is history rather than a standing risk.
 - **A candidate opened against the branch it replaces stops being checkable once that branch falls
   behind.** `integration` is itself an older build of the same branches, so a new build conflicts with
   it, GitHub computes no merge reference, and a `pull_request` run - which checks that reference out -
