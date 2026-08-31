@@ -496,16 +496,15 @@ items:
     session: https://claude.ai/code/session_01DBkGLKmju56tuBNdrSxitR
     blockers:
       - >-
-          Five of #222's nine review threads are answered but deliberately left open, and none
-          of the five is this pull request's work to do. Four are the predicate and
-          semantic-annotation redesign, which is the new item
-          perception-predicates-guide-the-search stacked on this one (r3893160382, r3893312001
-          with its two follow-ups, r3893576773) plus the algorithm-capability reading recorded
-          on choose-detection-method (r3893463818); the developer closes those himself, since
-          each schedules a move rather than making one. The fifth (r3893476097, the inline
-          import) is done and carries a question back to him - whether the three older inline
-          imports in the same file should gain reason comments too - so it stays open until he
-          answers. The four threads whose work landed here are replied to and resolved.
+          One of #222's nine review threads is still unresolved, not five. The developer
+          resolved four of the five this item recorded as deliberately open, on 2026-08-31 after
+          submitting his pending review: r3893160382 (the attribute-name string), r3893576773
+          (the mimic's copy of it), r3893463818 (algorithm capabilities, recorded on
+          choose-detection-method) and r3893476097 (the inline import, whose question back he
+          closed by resolving). What remains open is r3893312001 with its two follow-ups
+          r3893499716 and r3893602153 - the predicate ask itself, which is now the item
+          perception-predicates-guide-the-search, in progress on #227 as of 2026-08-31. Nothing
+          on this pull request is this item's work to do.
     notes: >-
       Resolved 2026-08-31 in `auto` mode, and the round changed two things the manifest and
       roadmap had recorded as settled, both at the developer's direction.
