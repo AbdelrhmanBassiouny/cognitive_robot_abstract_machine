@@ -6,6 +6,7 @@ from typing import Tuple
 
 import numpy as np
 import trimesh
+from trimesh.util import concatenate
 from krrood.class_diagrams.class_diagram import WrappedClass
 from krrood.entity_query_language.factories import variable_from, entity, variable, an
 from krrood.ormatic.utils import classproperty
@@ -148,6 +149,23 @@ class HasRootKinematicStructureEntity(
     """
     The root kinematic structure entity of the semantic annotation.
     """
+
+    @property
+    def combined_mesh(self) -> trimesh.Trimesh:
+        """
+        :return: The collision geometry of every body of this annotation, merged into a single
+        mesh expressed in the frame of :attr:`root`.
+
+        ..note:: Rebuilt on every access, since the bodies move relative to each other
+            with the world state.
+        """
+        return concatenate(
+            [
+                shape.mesh_in_frame(self.root)
+                for body in self.bodies_with_collision
+                for shape in body.collision
+            ]
+        )
 
     @property
     def scale(self) -> Scale:
