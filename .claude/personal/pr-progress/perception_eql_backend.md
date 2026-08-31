@@ -1,44 +1,58 @@
 # perception-backend (#222, branch `perception_eql_backend`, base #221)
 
-Plan item `perception-backend` of `knowledge-directed-perception`. Kicked off and
-built 2026-08-30 in `auto` mode. The reasoning is in that plan's `roadmap.md`
-section of the same name and in #222's description; this is the working state.
+Plan item `perception-backend` of `knowledge-directed-perception`. Built 2026-08-30,
+review round resolved 2026-08-31, both in `auto` mode. The reasoning is in that plan's
+`roadmap.md` sections of the same name and in #222's description; this is the working
+state.
 
-## Done — the whole plan, built and pushed as `71730494`
+## Done — the review round of 2026-08-31, pushed as `0eef6683`
 
-- **krrood**: `Directive.LOOK_FOR`; `BackendCannotResolveCondition` beside
-  `SelectiveBackendCannotResolveEllipsisMatch`; `AttributeEquality.read_from`, which
-  reads `<selection>.<attribute> == <value>` off a condition; and
-  `SymbolicExpression._constrained_variables_`. krrood's own tests use the mimic
-  `BackendThatLooksAtTheWorld` in `test/krrood_test/dataset/`, never the perception
-  backend (self-containment rule).
-- **`SceneRequest`** in `perception/scene_request.py` — the detection type asked for
-  and the surface asked about. `MontessoriSceneSource.scene(request)` takes it;
-  `PerceivedObjects` is deleted.
-- **Pipeline** honours it: `searched_surfaces(board, request)` drops the surface not
-  asked about, `detect(frame, request)` skips the piece passes when no piece was
-  asked for.
-- **`PerceptionBackend`** in `perception/backend.py`.
-- **Node** unchanged in behaviour, deliberately: it serves its newest look and the
-  narrowing is ignored there. Recorded in its docstring, the roadmap and #222.
-- **Manifest**: `status: in_progress`, branch/session/PR recorded; `depends_on` gained
-  `detect-per-supporting-surface`. Roadmap section written. Structural change recorded
-  on tracking issue #201. Dashboard republished.
-- **Tests**: 17 added. `test/experiments_test/` 304 passed against 291 on the parent;
-  `test/krrood_test/test_eql/` 1059 against 1050. Both failing-and-erroring sets are
-  identical to the parent's.
+The nine threads split five done, four deferred to a plan item.
+
+- **Generative, not selective** (r3892957833). The developer's reasoning, which
+  overrode this session's recommendation: with the instances already believed in we
+  only ask for the pose, which is underspecified; with no belief, the look creates the
+  instance. A statement is now a `Match` —
+  `an(MontessoriShapeDetection)(supporting_surface=lid, pose=...)`. An attribute stated
+  as `...` narrows nothing and rejects nothing.
+- **The general half moved into krrood** (r3893140274, r3893153789). `PerceptionBackend`
+  and `LookRequest` in `krrood.entity_query_language.backends` carry how a statement is
+  read, narrowed and checked; `MontessoriPerceptionBackend` carries only the Montessori
+  pipeline and the supporting-surface narrowing. krrood gains no `experiments` import.
+- **`AttributeEquality` → `AttributeEqualityToLiteral`** (r3893535014), docstrings
+  included, and the **inline import** in `_constrained_variables_` states its reason
+  (r3893476097). Both in `a6aa37a3`.
+- **`SceneRequest.admits` removed**, left dead by the move — `LookRequest.admits` does
+  that job now.
+- **Manifest/roadmap**: `status: in_progress`, the pending-review blocker recorded, the
+  roadmap round written, the new item `perception-predicates-guide-the-search` added
+  (22 items), the algorithm-capabilities thread recorded on `choose-detection-method`.
+  Saved as `16c470cf`, dashboard republished, structural change on #201.
+- **Tests**: `test/experiments_test/` **362 passed** against **348** on the parent;
+  `test/krrood_test/test_eql/` **1087** against **1072**, failing-and-erroring set
+  byte-identical (177 lines both sides).
 
 ## Next
 
-- Nothing outstanding from this session. #222 is a draft awaiting review.
+- **The nine review threads are all still open and none is resolved**, including the
+  five whose work is done. Inline replies are impossible while the developer's
+  unsubmitted pending review (`5064626804`, on commit `71730494`) exists: GitHub allows
+  one pending review per user and the API acts as that account, so every reply is
+  refused. Submitting or discarding that draft unblocks the whole round.
+- Nothing else outstanding. #222 is a draft awaiting review.
 
 ## Watch out for
 
 - Base is #221, not #205. Do not restack onto #205.
-- Correctness must never depend on the pushdown being honoured: pushed-down conditions
-  stay in the `where` clause so native evaluation re-checks them. The *selected type* is
-  the exception — the backend filters the domain by it, because a variable's declared
-  type is not a condition the query re-checks.
-- The container: Python 3.12 venv at `/tmp/venv312`, workspace on `PYTHONPATH`,
-  `--noconftest`. `scripts/regenerate_all_orm.py` fails on `CouldNotResolveType: Usd`
-  here, with or without this branch — the ORM path is unexercised.
+- **Native evaluation returns nothing for a `Match` carrying an ellipsis attribute**, so
+  the ellipsis attributes must be dropped from the check and the stated ones re-applied.
+- **Native evaluation does not narrow a domain by the declared type**, so the backend
+  does it (`LookRequest.admits`). Verified, not assumed.
+- Correctness never depends on the narrowing being honoured: every stated attribute is
+  checked again over what came back.
+- A parent baseline taken in a `git worktree` is meaningless unless that worktree's own
+  `*/src` are on `PYTHONPATH` — `uv sync` installs the workspace editable, so the
+  worktree otherwise imports the branch's source. Check `krrood.__file__` first.
+- The container: `uv sync --extra dev --python 3.12`, `--noconftest`.
+  `test/krrood_test/test_eql/test_backends.py` and six ROS-dependent experiments modules
+  do not collect here, identically on both sides.
