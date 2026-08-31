@@ -623,11 +623,12 @@ items:
 
   - id: predicates-answer-whether-they-hold
     title: "Let a predicate answer whether it holds, with the measurement behind it"
-    branch: null
-    pull_request_number: null
+    branch: sdt_predicates_answer_whether_they_hold
+    pull_request_number: 229
     track: request-language
     depends_on: []
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ
     notes: >-
       The developer's direction on 2026-08-31, correcting a call #227 made: a relation that
       computes a ratio should still be a Predicate. Its `__call__` answers a truth value, the
