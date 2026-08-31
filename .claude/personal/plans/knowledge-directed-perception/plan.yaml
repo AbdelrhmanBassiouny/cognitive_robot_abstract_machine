@@ -484,53 +484,47 @@ items:
     pull_request_number: 222
     track: request-language
     depends_on: [surfaces-from-world, detect-per-supporting-surface]
-    status: blocked
-    session: https://claude.ai/code/session_01QSZsdFk85VPf9iDz8Ldqij
+    status: in_progress
+    session: https://claude.ai/code/session_01DBkGLKmju56tuBNdrSxitR
     blockers:
       - >-
-          Nine unresolved review threads on #222, all opened by the developer on 2026-08-31, none of
-          them recorded until this resolve ran. The branch itself is not what is wrong: CI is green
-          on all 23 checks, mergeable_state is clean, and both dependencies (#205, #221) are open
-          and out of draft. The review round is the whole blocker, and its weight is in four asks
-          that reach past what the item was scoped to build.
-      - >-
-          The backend's placement is challenged, twice (r3893140274 on backend.py, r3893153789 on
-          line 49): PerceptionBackend and its Montessori detection type sit in experiments, and the
-          developer asks for the general part to live in the entity query language itself with a
-          Montessori extension here, "because I would like this to work also outside the montessori
-          demo generally". That contradicts what plan.yaml and roadmap.md record for this item,
-          which place the backend in experiments and put only the exception, the condition reader
-          and the Directive member in krrood.
-      - >-
-          The pushdown's condition vocabulary is rejected as hard-coded (r3893160382 on
-          backend.py:60, r3893576773 on the krrood test mimic): SUPPORTING_SURFACE_ATTRIBUTE_NAME =
-          "supporting_surface" and PLACE_ATTRIBUTE_NAME = "place" name an attribute by string. The
-          developer asks for semantic annotations and predicates instead, and says explicitly
-          "Discuss the reasoning behind this with me". AGENTS.md's own rule against a literal
-          duplicating a value with its own source of truth backs the objection independently of the
-          redesign.
-      - >-
-          The SelectiveBackend choice is questioned rather than accepted (r3892957833 on
-          backend.py:41). The developer's point is that perception may propose instances the robot
-          has no belief in yet, which is generative, and asks "What do you think is the best
-          categorization for the Perception backend in these cases then?". roadmap.md recorded this
-          as the open question the item settled; the review reopens it.
-      - >-
-          Two asks are larger than this item and are candidates for plan items rather than for #222
-          (r3893312001/r3893499716/r3893602153, and r3893463818): spatial and support predicates
-          inheriting from Predicate and driving an informed search, with a rejection-sampler
-          "imagination world" for the ones no algorithm covers and Regions read off spatial
-          predicates to clip the image; and perception algorithms declaring the requests they can
-          answer as entity query language conditions, with a reasoner choosing between them. The
-          developer names the first as "a separate PR that this one here is stacked under"; the
-          second is close to choose-detection-method's existing claim.
-      - >-
-          Two asks are small, local and unambiguous, and are the only part of the round the item can
-          close without a scope decision: the inline import at base_expressions.py:869 needs its
-          reason stated as a comment (r3893476097), and AttributeEquality is asked to be named
-          AttributeEqualityToLiteral (r3893535014).
+          Inline replies to #222's nine review threads cannot be posted: the developer has an
+          unsubmitted PENDING review on the pull request (review 5064626804, on commit 71730494),
+          and GitHub allows one pending review per user. The API acts as that same account, so
+          every reply is refused with "user_id can only have one pending review per pull request".
+          All nine threads are therefore left open and none is resolved, since resolving without an
+          inline reply is forbidden by the standing conventions. Submitting or discarding that
+          draft review unblocks the whole round; the work the threads asked for is already pushed.
     notes: >-
-      A PerceptionBackend beside EntityQueryLanguageBackend and
+      Resolved 2026-08-31 in `auto` mode, and the round changed two things the manifest and
+      roadmap had recorded as settled, both at the developer's direction.
+
+      The backend is *generative*, not selective. The developer's reasoning, which overrode this
+      session's recommendation to stay selective: with the instances already believed in we are
+      only asking perception for the pose, which is an underspecified statement; with no belief
+      yet, the look is what brings the instance into existence. Neither is selection from a domain
+      the statement was handed. So a statement is a Match - an(MontessoriShapeDetection)(
+      supporting_surface=lid, pose=...) - and an attribute stated as ... narrows nothing and
+      rejects nothing, because it is the statement saying the look must supply it.
+
+      The general half now lives in krrood, not in experiments: PerceptionBackend and LookRequest
+      sit beside the other backends and carry how a statement is read, narrowed and checked;
+      MontessoriPerceptionBackend carries only that a look is taken by the Montessori pipeline and
+      that its search narrows by the supporting surface. krrood gains no dependency on
+      experiments. This reverses what the roadmap recorded ("the backend in experiments, only the
+      exception and the Directive member in krrood").
+
+      Two measurements the redesign turned up, neither of which the plan knew: native evaluation
+      returns nothing at all for a Match carrying an ellipsis attribute, so the ellipsis
+      attributes have to be dropped from the check and the stated ones re-applied; and native
+      evaluation does not narrow a domain by the variable's declared type, so the backend does it.
+      Both are covered by tests rather than assumed.
+
+      The predicate and semantic-annotation redesign the other five threads ask for is not here -
+      it is the new item perception-predicates-guide-the-search, which is the developer's own
+      suggestion on r3893312001 that it be "a separate PR that this one here is stacked under".
+
+            A PerceptionBackend beside EntityQueryLanguageBackend and
       SQLAlchemyBackend, so evaluating a query runs perception rather than a
       pipeline being called by hand. SQLAlchemyBackend already sets the shape -
       eql_to_sql translates the query into another engine's plan and runs it
@@ -557,6 +551,42 @@ items:
       believed place as well - the region and yaw interval an object is expected in. That is a
       third pushed-down condition of the same kind, not a change of shape, so it is recorded
       here rather than added to a pull request already under review.
+
+  - id: perception-predicates-guide-the-search
+    title: "Guide the search by predicates and annotations, not by attribute names"
+    branch: null
+    pull_request_number: null
+    track: request-language
+    depends_on: [perception-backend]
+    status: not_started
+    notes: >-
+      Raised by the developer across five review threads on #222, which are one ask: a look
+      should be narrowed by what the world means, not by an attribute spelled as a string.
+      SUPPORTING_SURFACE_ATTRIBUTE_NAME = "supporting_surface" and the mimic's PLACE_ATTRIBUTE_NAME
+      are the smell; AGENTS.md's own rule against a literal duplicating a value with its own source
+      of truth condemns them independently of the redesign, and #222 leaves them standing with a
+      test asserting the name is a real field.
+
+      What replaces them, in the developer's words: predicates for support and for spatial
+      relations - LeftOf, RightOf and the rest - inheriting from Predicate rather than Symbol, and
+      then used to devise the search rather than merely evaluated. "So I need to look on top of a
+      bright shiny surface that has this size and look for an object supported by it and is left of
+      another object that has a cyan colour, all these are clues that help us devise a pipeline and
+      find the object we are looking for."
+
+      Two mechanisms come with it, both the developer's. A spatial predicate can be read as a
+      Region with extents, so the image and the depth are clipped to where the thing can be before
+      anything is detected - which is the same economy #222's supporting-surface narrowing already
+      buys, stated in the world's vocabulary instead of an attribute's. And a predicate no
+      algorithm covers becomes a rejection sampler: detect what the other conditions do reach,
+      spawn the instances found into a copy of the world - an imagination world - evaluate the
+      predicate there with real Body and SemanticAnnotations, and delete what it rejects.
+
+      Stacked on #222 rather than folded into it, which is the developer's own placement on
+      r3893312001 ("you can make this a separate PR that this one here is stacked under"). The
+      threads are r3893160382, r3893312001, r3893499716, r3893602153 and r3893576773; the sixth,
+      r3893463818, is close to choose-detection-method's existing claim and is recorded there
+      rather than here.
 
   - id: surface-finish-annotation
     title: "Say in the digital twin how a surface takes light"
@@ -657,6 +687,16 @@ items:
       cheaper colour blob" needs its other justification writing down, since
       detect-per-supporting-surface already recorded that the edge fit works on the lid too;
       speed is the honest reason, not capability.
+
+      A third reading of the same claim arrived on #222 (r3893463818), and it is this item's
+      rather than the backend's: "we can also have perception algorithms as classes that declare
+      explicitly their capabilities, what requests they can answer to, also could be described as
+      eql conditions, then a perception reasoner will choose the algorithm that has a capability
+      that can answer that request." That is this item's rule tree with the condition moved onto
+      the detector - each detector states the requests it can answer, and the choice is made by
+      matching a request against those statements rather than by a tree written over the surface
+      and the target. Worth settling which of the two shapes this item builds before it starts,
+      since they answer the same question from opposite ends.
 
   - id: detector-parameters-from-knowledge
     title: "Take the detectors' numbers from the objects and the surfaces they look at"

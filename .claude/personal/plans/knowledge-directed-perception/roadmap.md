@@ -1618,3 +1618,113 @@ camera stands is what casts the shadow and every caller was reaching into
 `reference_frame_T_camera` for it. And the session's branch arrived cut from `integration`
 rather than from #221 -- the hazard #199 exists to refuse -- and was reset onto #221's tip
 before the first commit.
+
+### `perception-backend`: the review round of 2026-08-31, and the two things it reversed
+
+Resolved 2026-08-31 in `auto` mode. **Nothing was wrong with the branch.** #222 was green on
+all 23 checks, `mergeable_state: clean`, both dependencies open and out of draft, and no
+upstream pull request (no `in-review` label). What kept it open was nine unresolved review
+threads opened that morning, of which the item's own `blockers` recorded none — the third
+time on this plan that the cause of a stall was a review comment nobody had turned into
+state. Writing them down was the first thing this resolve did, before any code.
+
+**Two of the threads reversed decisions this roadmap had recorded as settled**, and both
+reversals are the developer's, taken as answers to questions this session put to him rather
+than as calls it made.
+
+#### Generative, not selective
+
+The roadmap recorded the family question as the open question this item settled, and settled
+it as `SelectiveBackend`: "a camera reports what is in front of it and cannot fill in an
+attribute nobody can see". The developer reopened it and the reasoning that won is his: *with
+the instances already believed in we are only asking perception for the pose, which is an
+underspecified statement; with no belief yet, the look is what brings the instance into
+existence.* Neither is selection from a domain the statement was handed, so the backend is a
+`GenerativeBackend`.
+
+This session recommended staying selective and was overruled. Recorded because the
+recommendation was wrong in an instructive way: it argued that nothing in the item exercises
+the generative case yet, which is true of the *tests* and false of the demo — asking where a
+known hole is, is precisely the pose-only question, and it is what `expectations-from-events`
+and `pieces-looked-for-where-expected` were already being written around.
+
+The shape of a statement changes with it, from a query over a domain to a `Match`:
+
+```python
+an(MontessoriShapeDetection)(supporting_surface=lid_name, pose=...)
+```
+
+**An attribute stated as `...` narrows nothing and rejects nothing.** It is the statement
+saying the look must supply it, which is the whole point of the pose-only question.
+
+#### The general half belongs in krrood
+
+The roadmap recorded the opposite — the backend in `experiments`, with only the exception, the
+condition reader and the `Directive` member in krrood — and the developer rejected it twice:
+*"why did you put this in experiments? why not in EQL itself? … Because I would like this to
+work also outside the montessori demo generally."*
+
+`PerceptionBackend` and `LookRequest` now sit in `krrood.entity_query_language.backends` beside
+the other backends and carry everything about how a statement is read, narrowed and checked.
+`MontessoriPerceptionBackend` carries only what is particular to this scene: that a look is
+taken by the Montessori pipeline, and that its search narrows by the surface a detection rests
+on. krrood gains no dependency on `experiments`, and its own tests use the mimic
+`BackendThatLooksAtTheWorld` in `test/krrood_test/dataset/`.
+
+#### Two measurements the redesign turned up
+
+Both were assumptions until they were run, and both would have shipped wrong answers:
+
+- **Native evaluation returns nothing at all for a `Match` carrying an ellipsis attribute.**
+  `an(Sighting)(place="lid", pose=...)` over a domain holding the right sighting yields `[]`,
+  because `...` means *construct this* and selection cannot satisfy it. So the ellipsis
+  attributes have to be dropped from the check and the stated ones re-applied, rather than the
+  match simply being evaluated over what the look found.
+- **Native evaluation does not narrow a domain by the variable's declared type.**
+  `an(SpecialThing)()` over a domain of mixed `Thing` and `SpecialThing` returns all of them.
+  The old selective code did this filtering itself via `SceneRequest.admits`; the general
+  backend does it now via `LookRequest.admits`, and `SceneRequest.admits` was left dead by the
+  move and removed.
+
+#### What was deliberately not built
+
+The other five threads are one ask — narrow a look by what the world means, not by an attribute
+spelled as a string — and they became **`perception-predicates-guide-the-search`**, stacked on
+this item. That placement is the developer's own on r3893312001: *"you can make this a separate
+PR that this one here is stacked under."* Until it lands,
+`SUPPORTING_SURFACE_ATTRIBUTE_NAME` remains a string, guarded by a test asserting it is a real
+field of the detection. The sixth thread, r3893463818 (perception algorithms declaring the
+requests they can answer, with a reasoner choosing between them) is recorded on
+`choose-detection-method`, whose claim it restates from the detector's end.
+
+#### The round could not be replied to
+
+**All nine threads are left open and none is resolved**, including the five whose work is
+done. The developer has an unsubmitted **pending review** on #222 (review `5064626804`, on
+commit `71730494`), and GitHub allows one pending review per user per pull request; the API
+acts as that same account, so every inline reply is refused with *"user_id can only have one
+pending review per pull request"*. Resolving a thread without an inline reply on it is
+forbidden by the standing conventions, so nothing was resolved. Submitting or discarding that
+draft review unblocks the whole round — the code the threads asked for is already pushed.
+
+Worth generalizing: a pending review by the same account the tooling authenticates as blocks
+*every* inline reply on that pull request, not just replies to its own comments. It is
+invisible in the pull request's own state (`mergeable_state` is clean, CI is green) and shows
+only as `state: PENDING` in the reviews list.
+
+#### Verification
+
+`test/experiments_test/`: **362 passed**, 1 skipped, 16 xfailed, against **348 passed** on the
+parent, no failures either side. `test/krrood_test/test_eql/`: **1087 passed** against
+**1072**, with a failing-and-erroring set byte-identical to the parent's — 177 lines on both,
+diffed by name rather than compared by count, following what `surface-finish-annotation`
+recorded about generated files making count comparisons lie.
+
+**One way that comparison nearly lied again, worth recording.** The parent baseline was first
+run in a `git worktree`, which reported the same 177 errors and looked convincing. It was
+meaningless: `uv sync` installs the workspace editable, so the worktree's `python` imported
+`krrood` from the *main* checkout — the branch's own source — and the "parent" run was the
+branch's code against the parent's tests. The fix is to put the worktree's own `*/src` on
+`PYTHONPATH`, and to check `krrood.__file__` before trusting any baseline taken outside the
+main checkout.
+
