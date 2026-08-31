@@ -626,8 +626,41 @@ items:
     branch: sdt_predicates_answer_whether_they_hold
     pull_request_number: 229
     track: request-language
+    blockers:
+      - >-
+          Review of 2026-08-31 asks whether this duplicates PR #33 (eql-verbalization's
+          p4-sdt-migration, branch `eql-symbolic-function-sdt`). Verified: it largely does. #33 has
+          migrated the same `reasoning/predicates.py` off `@symbolic_function` onto Predicate /
+          SymbolicFunction classes since 2026-07-06, with the same `symbolic_callable_to_function`
+          mechanism, and reaches further - `queries.py` and `robot_predicates.py` too, plus a
+          settled 36-thread wording review, `phrase()` in krrood's parts_of_speech, and ORMatic
+          `ignored_base_classes`. `check_scope_overlap.py` reports `predicates.py` shared between
+          the two branches. What is genuinely this item's and absent from #33 is narrow: the
+          threshold field that lets a ratio-computing relation answer a truth value
+          (`InsideOf.minimum_containment_ratio`, `InsideRegion.minimum_contained_fraction`) - #33
+          still has `InsideOf.__call__` returning a float and `is_body_in_region` as a
+          `BodyInRegionFraction` SymbolicFunction, which is the exact call this item was raised to
+          overturn - plus the use of krrood's `Triple` base, which derives verbalization from the
+          class name. Whether that becomes a change on #33 or stays its own pull request is the
+          developer's structural call, put to him on the pull request.
+      - >-
+          CI: `test_each_lib (semantic_digital_twin) / test` fails, and it is this branch's failure,
+          not main's - contrary to what the pull request description claims. Renaming
+          `is_supported_by`'s parameters to `SupportedBy(supported=, supporting=,
+          maximum_intersection_height=)` broke `semantic_annotations/mixins.py:942`, which calls it
+          by keyword and which this branch does not touch: 5 tests in `test_reasoning_queries.py`
+          fail with `TypeError: SupportedBy.__init__() got an unexpected keyword argument
+          'supported_body'`. The PR's verification claim that the failing set is byte-identical to
+          main's was measured over `test_predicates.py`, not the package. #227 carries the same
+          commit and therefore the same breakage.
+      - >-
+          Unresolved review thread r3896606294 on `predicates.py:348`: "Pose Is reachable by Tip."
+          -this branch verbalizes `Reachable` as *"the tip is reachable at the pose"*, subject tip.
+          It conflicts with eql-verbalization roadmap decision 11, which settled `Reachable` as *"a
+          Pose is reachable for the kinematic chain rooted at <root> and ending at <tip>"* on #33.
+          Both make the pose the subject; they differ in whether root and tip are both named.
     depends_on: []
-    status: in_progress
+    status: blocked
     session: https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ
     notes: >-
       The developer's direction on 2026-08-31, correcting a call #227 made: a relation that
