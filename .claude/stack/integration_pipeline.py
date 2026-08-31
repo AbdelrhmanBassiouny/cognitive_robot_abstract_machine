@@ -31,6 +31,7 @@ from typing import Any, Callable, Iterator, Mapping
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "shared"))
 
+from integration_constants import ReportKey  # noqa: E402
 from integration_exit_codes import IntegrationExitCode  # noqa: E402
 from integration_verdict import ChecksVerdict, VerdictReportKey  # noqa: E402
 from tool_runner import (  # noqa: E402
@@ -56,6 +57,17 @@ The statuses that still leave a branch worth judging.
 
 A tip left out is a collision to triage rather than a build that failed: what was
 assembled is usable, it is simply not whole.
+"""
+
+BREAKS_ONE_REBUILD_BLOCKS = 5
+"""
+How many cross-branch breaks one rebuild blocks before leaving the rest to the next.
+
+A budget rather than a measurement. Each round costs a restack, a merge and a whole
+suite, so an unbounded one can spend the job's timeout on a stack broken in many places
+and end with nothing to show; what a run blocked stands either way, and the next rebuild
+carries on from those labels. A rebuild that has blocked five is also telling somebody
+something they should read before it goes further.
 """
 
 
@@ -149,6 +161,11 @@ class RefreshPipeline:
     localisation_schedule: PollingSchedule = LOCALISATION_SCHEDULE
     """
     How long to wait for a search's probes.
+    """
+
+    breaks_to_block: int = BREAKS_ONE_REBUILD_BLOCKS
+    """
+    How many cross-branch breaks to block before leaving the rest to the next rebuild.
     """
 
     def run(self) -> IntegrationExitCode:
@@ -329,13 +346,43 @@ class RefreshPipeline:
 
     def _build(self) -> AssembledBuild:
         """
-        Assemble the branch, and localise a suite that failed on the result.
+        Assemble the branch, blocking each break the suite finds and assembling again
+        without it.
 
         A suite that failed is two branches that each pass alone and break together -
-        nothing GitHub reports finds that, so it is found here or not at all, and the tip
-        that turned it is blocked so the next rebuild leaves it out.
+        nothing GitHub reports finds that, so it is found here or not at all. The tree
+        that failed is the one carrying the culprit, so there is nothing in it to carry
+        on with; what this run can still make is the build without it, which is the one
+        the next rebuild would have produced a cycle later. Ending the run instead spends
+        a whole cycle, and however long its queue takes, per break.
 
-        :return: What assembling answered, and the branch when it left one.
+        Each attempt reads the fork again, so the label the last one wrote is one this
+        one sees - the same rule that says a write is computed from what a pull request
+        carries now rather than from a snapshot taken before it moved.
+
+        :return: What the last attempt answered, and the branch when it left one.
+        """
+        blocked_so_far = 0
+        while True:
+            assembled = self._assemble()
+            status = IntegrationExitCode(assembled.status)
+            if status is not IntegrationExitCode.TESTS_FAILED:
+                return self._what_it_assembled(status, assembled)
+            if blocked_so_far == self.breaks_to_block:
+                return AssembledBuild(status=status)
+            if self._block_the_branch_that_broke_it() is None:
+                return AssembledBuild(status=status)
+            blocked_so_far += 1
+
+    def _assemble(self) -> CommandOutcome:
+        """
+        Assemble the branch once, and say what it holds.
+
+        The document is printed whatever the attempt answered, because it is the only
+        thing that names the branches the build left out - and a rebuild that published
+        without ever having printed one left nobody able to say what the tree held.
+
+        :return: What assembling answered.
         """
         assembled = self.runner.run(
             ToolingScript.INTEGRATION,
@@ -344,21 +391,44 @@ class RefreshPipeline:
             *self._named_plans(),
             CommandLineFlag.JSON,
         )
-        status = IntegrationExitCode(assembled.status)
-        if status is IntegrationExitCode.TESTS_FAILED:
-            self.runner.run(
-                ToolingScript.INTEGRATION,
-                IntegrationSubcommand.BLOCK_BRANCH,
-                CommandLineFlag.JSON,
-            )
-            return AssembledBuild(status=status)
+        print(assembled.output, end="")
+        return assembled
+
+    @staticmethod
+    def _what_it_assembled(
+        status: IntegrationExitCode, assembled: CommandOutcome
+    ) -> AssembledBuild:
+        """:param status: What assembling answered.
+        :param assembled: The attempt itself.
+        :return: The branch it left, or nothing to judge."""
         if status not in A_BUILD_WAS_ASSEMBLED:
-            print(assembled.output, end="")
             return AssembledBuild(status=status)
         return AssembledBuild(
             status=status,
             branch=assembled.document()[VerdictReportKey.BUILD_BRANCH],
         )
+
+    def _block_the_branch_that_broke_it(self) -> str | None:
+        """
+        Find the tip whose arrival turned the suite, and hold it out of later builds.
+
+        Read through the key the block itself writes rather than through the verdict's,
+        which has no name for it: a blocked branch is not a field of a verdict.
+
+        A search that reached no pair is what stops the assembling: it leaves the same
+        branches to merge, so another attempt would rebuild the same failing tree.
+
+        :return: The branch that was blocked, or ``None`` when nothing could be blamed.
+        """
+        blocked = self.runner.run(
+            ToolingScript.INTEGRATION,
+            IntegrationSubcommand.BLOCK_BRANCH,
+            CommandLineFlag.JSON,
+        )
+        print(blocked.output, end="")
+        if IntegrationExitCode(blocked.status) is not IntegrationExitCode.TESTS_FAILED:
+            return None
+        return str(blocked.document()[ReportKey.BLOCKED])
 
     def _publish_recorded_pass(self, build: str) -> IntegrationExitCode | None:
         """

@@ -52,6 +52,11 @@ A_HEAD = "0123456789abcdef"
 The commit the candidate's checks are reported against.
 """
 
+A_BROKEN_TIP = "a-tip-that-breaks-another"
+"""
+The branch a search blames for the suite turning.
+"""
+
 QUICKLY = PollingSchedule(attempts=3, interval_seconds=0)
 """
 A schedule short enough that a test giving up is a test that finished.
@@ -126,6 +131,27 @@ def no_candidate_open() -> CommandOutcome:
 def no_recorded_pass() -> CommandOutcome:
     """:return: The answer a run gets when this build's tree is one nothing has checked."""
     return answered(IntegrationExitCode.NO_RECORDED_PASS)
+
+
+def a_block(blocked: str = A_BROKEN_TIP) -> CommandOutcome:
+    """:param blocked: The tip the search found had turned the suite.
+    :return: One localised break, blocked and reported."""
+    return answered(
+        IntegrationExitCode.TESTS_FAILED,
+        {integration_constants.ReportKey.BLOCKED: blocked},
+    )
+
+
+def nothing_to_block() -> CommandOutcome:
+    """
+    A search that reached no pair prints its report as text rather than as a document, so
+    this answers with what a caller reading it would actually get.
+
+    :return: The answer a run gets when no single tip can be blamed.
+    """
+    return CommandOutcome(
+        status=int(IntegrationExitCode.SUCCESS), output="every prefix passed\n"
+    )
 
 
 def a_reported_candidate() -> CommandOutcome:
@@ -550,22 +576,131 @@ def test_a_suite_that_failed_on_the_build_blocks_the_tip_that_turned_it(
     reports finds that, so it is found here or not at all - and a break nobody acts on is
     carried by every later build.
     """
+    _, runner = rebuild(
+        no_candidate_open(),
+        succeeded(),
+        a_build(IntegrationExitCode.TESTS_FAILED),
+        a_block(),
+        a_build(),
+        no_recorded_pass(),
+        a_reported_candidate(),
+        tmp_path=tmp_path,
+    )
+
+    assert str(IntegrationSubcommand.BLOCK_BRANCH) in runner.subcommands
+
+
+def test_a_blocked_break_is_assembled_again_without_it_rather_than_ending_the_run(
+    tmp_path: Path,
+):
+    """
+    The tree that failed is the one carrying the culprit, so there is nothing in it to
+    carry on with - but the build without it is one this run can make, and it is exactly
+    what the next rebuild would have produced a cycle later. Ending the run instead spends
+    a whole cycle, and its queue, per break.
+    """
     status, runner = rebuild(
         no_candidate_open(),
         succeeded(),
         a_build(IntegrationExitCode.TESTS_FAILED),
-        succeeded(),
+        a_block(),
+        a_build(),
+        no_recorded_pass(),
+        a_reported_candidate(),
         tmp_path=tmp_path,
     )
 
-    assert status is IntegrationExitCode.TESTS_FAILED
+    assert status is IntegrationExitCode.SUCCESS
     assert runner.subcommands == [
         str(IntegrationSubcommand.TAKE_DOWN_UNREFERENCED_BUILDS),
         str(IntegrationSubcommand.FIND_CANDIDATE),
         str(MaintenanceSubcommand.FAST_FORWARD),
         str(IntegrationSubcommand.BUILD),
         str(IntegrationSubcommand.BLOCK_BRANCH),
+        str(IntegrationSubcommand.BUILD),
+        str(IntegrationSubcommand.PUBLISH_RECORDED_PASS),
+        str(IntegrationSubcommand.OPEN_CANDIDATE),
     ]
+
+
+def test_a_suite_failure_nothing_could_be_blamed_for_ends_the_run(tmp_path: Path):
+    """
+    Assembling again without the culprit needs there to be a culprit. A search that
+    reached no pair leaves the same branches to merge, so the next attempt would rebuild
+    the same failing tree for ever.
+    """
+    status, runner = rebuild(
+        no_candidate_open(),
+        succeeded(),
+        a_build(IntegrationExitCode.TESTS_FAILED),
+        nothing_to_block(),
+        tmp_path=tmp_path,
+    )
+
+    assert status is IntegrationExitCode.TESTS_FAILED
+    assert runner.subcommands.count(str(IntegrationSubcommand.BUILD)) == 1
+
+
+def test_a_rebuild_blocks_only_as_many_breaks_as_it_is_allowed_to(tmp_path: Path):
+    """
+    Each round costs a restack, a merge and a whole suite, so an unbounded one spends the
+    job's timeout on a stack that is broken in many places. What it blocked stands, and
+    the next rebuild carries on from those labels.
+
+    The last answer is one that ends the assembling by itself, so a rebuild that ignored
+    its budget stops on that rather than asking for ever - the count is what fails, not
+    the clock.
+    """
+    runner = RecordingRunner(
+        answers=[
+            succeeded(),
+            no_candidate_open(),
+            succeeded(),
+            a_build(IntegrationExitCode.TESTS_FAILED),
+            a_block(),
+            a_build(IntegrationExitCode.TESTS_FAILED),
+            a_block(),
+            a_build(IntegrationExitCode.TESTS_FAILED),
+            nothing_to_block(),
+        ]
+    )
+    pipeline = RefreshPipeline(
+        dispatch_on="integration",
+        state_document=tmp_path / "localisation.json",
+        runner=runner,
+        wait=lambda seconds: None,
+        localisation_schedule=QUICKLY,
+        breaks_to_block=2,
+    )
+
+    status = pipeline.run()
+
+    assert status is IntegrationExitCode.TESTS_FAILED
+    assert runner.subcommands.count(str(IntegrationSubcommand.BUILD)) == 3
+    assert runner.subcommands.count(str(IntegrationSubcommand.BLOCK_BRANCH)) == 2
+
+
+def test_every_attempt_says_what_it_assembled(tmp_path: Path, capsys):
+    """
+    A build's document is the only thing that says which branches it left out, and it was
+    printed on no path that mattered: not when the suite failed, and not when the build
+    succeeded either. A run that publishes without ever having said what the tree held
+    leaves nobody able to check it.
+    """
+    rebuild(
+        no_candidate_open(),
+        succeeded(),
+        a_build(IntegrationExitCode.TESTS_FAILED),
+        a_block(),
+        a_build(IntegrationExitCode.TIP_LEFT_OUT),
+        no_recorded_pass(),
+        a_reported_candidate(),
+        tmp_path=tmp_path,
+    )
+    printed = capsys.readouterr().out
+
+    assert printed.count(A_BUILD_BRANCH) == 2
+    assert A_BROKEN_TIP in printed
 
 
 def test_a_red_candidate_is_localised_rather_than_left_naming_a_check(tmp_path: Path):
