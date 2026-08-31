@@ -11,22 +11,20 @@ personal-notes remote - no network access or real personal-notes branch involved
 
 from __future__ import annotations
 
-import os
 import subprocess
 from collections.abc import Mapping
-from enum import StrEnum
 from pathlib import Path
 
 import pytest
 
 from scratch_repository import (
-    HOOKS_SOURCE_DIRECTORY,
     NOTES_BRANCH,
+    PERSONAL_GIT_IDENTITY_PATH,
+    SCRATCH_IDENTITY,
     WORK_BRANCH,
     ScratchRepository,
 )
-
-MESSAGES_SCRIPT = HOOKS_SOURCE_DIRECTORY / "session-start-messages.sh"
+from session_start_summary import SummaryMessage, summary_message, summary_value
 
 FIXTURES_DIRECTORY = Path(__file__).parent / "fixtures"
 
@@ -49,83 +47,6 @@ MANIFEST_PATH = f".claude/personal/plans/{PLAN_IDENTIFIER}/plan.yaml"
 CLAUDE_LOCAL_MD = "CLAUDE.local.md"
 
 
-class SummaryMessage(StrEnum):
-    """
-    The situations session-start.sh reports, each carrying the session-start-messages.sh
-    function that renders its line.
-
-    Named for the situation rather than for that function: a test reads as the case it
-    exercises, while the shell file keeps grouping its own definitions by which summary
-    line they belong to.
-    """
-
-    PLAN_NOT_APPLICABLE = "plan_line_not_applicable"
-    """
-    The branch is one no plan item could ever track.
-    """
-
-    NO_PLANS_TRACKED = "plan_line_no_plans_tracked"
-    """
-    The notes branch tracks no plans at all.
-    """
-
-    NO_PLAN_ITEM_TRACKS_BRANCH = "plan_line_no_item_tracks_branch"
-    """
-    Plans are tracked, and none holds an item for this branch.
-    """
-
-    PLAN_MANIFEST_MISSING = "plan_line_manifest_missing"
-    """
-    The index names a plan whose manifest is not on the notes branch.
-    """
-
-    BRANCH_TRACKED_IN_PLAN = "plan_line_tracked"
-    """
-    The branch is a tracked item of a plan that resolved.
-    """
-
-    SETUP_SCRIPT_MISSING = "setup_line_not_checked"
-    """
-    The check-setup.sh script is not in this checkout, so there is no verdict.
-    """
-
-    SETUP_OK = "setup_line_ok"
-    """
-    Every setup check passed.
-    """
-
-    CHECKS_NEED_SETUP = "setup_line_needs_setup"
-    """
-    The heading above the indented rows naming each check that needs setup.
-    """
-
-
-def summary_message(message: SummaryMessage, *arguments: str) -> str:
-    """
-    Render one summary line from the same definitions session-start.sh prints it from,
-    so an assertion is never a second copy of the wording.
-
-    :param message: The summary line to render.
-    :param arguments: That message's arguments, in order.
-    :return: The rendered line.
-    """
-    result = subprocess.run(
-        [
-            "bash",
-            "-c",
-            'source "$1"; shift; "$@"',
-            "_",
-            str(MESSAGES_SCRIPT),
-            message,
-            *arguments,
-        ],
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
-    return result.stdout
-
-
 def branch_index(plan_identifier_by_branch: Mapping[str, str]) -> str:
     """
     Build a branch index mapping each branch to the plan that tracks it.
@@ -137,22 +58,6 @@ def branch_index(plan_identifier_by_branch: Mapping[str, str]) -> str:
         f"{branch}\t{plan_identifier}\n"
         for branch, plan_identifier in plan_identifier_by_branch.items()
     )
-
-
-def summary_value(output: str, label: str) -> str:
-    """
-    Extract one line's value from the summary report.
-
-    :param output: session-start.sh's standard output.
-    :param label: The summary line's label, such as ``plan``.
-    :return: Everything after the label, stripped.
-    :raises AssertionError: If the report has no such line.
-    """
-    prefix = f"  {label}:"
-    for line in output.splitlines():
-        if line.startswith(prefix):
-            return line[len(prefix) :].strip()
-    raise AssertionError(f"no '{label}' line in this summary report:\n{output}")
 
 
 # %% the scratch layout
@@ -187,36 +92,23 @@ def run_session_start(
     """
     Run the scratch layout's session-start.sh.
 
-    Every ``CLAUDE_PERSONAL_NOTES_*`` variable is stripped from the inherited
-    environment first, so a value that happens to be set in whoever's shell is running
-    the tests can never change what they assert.
-
     :param repository: A fixture-built scratch repository.
     :return: The finished subprocess.
     """
-    environment = {
-        name: value
-        for name, value in os.environ.items()
-        if not name.startswith("CLAUDE_PERSONAL_NOTES_")
-    }
-    return subprocess.run(
-        [
-            "bash",
-            str(repository.project_root / ".claude" / "hooks" / "session-start.sh"),
-        ],
-        cwd=repository.project_root,
-        capture_output=True,
-        text=True,
-        env=environment,
-    )
+    return repository.run_hook_script("session-start.sh")
 
 
 def publish_and_run(
     repository: ScratchRepository, notes_branch_files: Mapping[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     """
-    Publish the notes file plus *notes_branch_files* to the notes branch, then run
-    session-start.sh against it.
+    Publish everything a set up notes branch carries, plus *notes_branch_files*, then
+    run session-start.sh against it.
+
+    The recorded git identity is the one this repository already commits with, so the
+    baseline these tests assert against is a clone with nothing left to set up - what
+    the git identity round trip itself does is
+    ``test_git_identity_sync.py``'s subject, not this module's.
 
     :param repository: The fixture-built scratch repository.
     :param notes_branch_files: Extra file contents, keyed by path relative to the
@@ -224,7 +116,11 @@ def publish_and_run(
     :return: The finished session-start.sh process.
     """
     repository.publish_notes_branch(
-        {NOTES_PATH: "personal notes\n", **(notes_branch_files or {})}
+        {
+            NOTES_PATH: "personal notes\n",
+            PERSONAL_GIT_IDENTITY_PATH: SCRATCH_IDENTITY.as_git_config_file(),
+            **(notes_branch_files or {}),
+        }
     )
     return run_session_start(repository)
 
