@@ -2325,3 +2325,81 @@ here.
 Worth generalizing, because this is the second time this plan has recorded a blocker that was
 not one: **"unmerged" is not "unusable" on a plan whose standing rule is to stack.** Read a
 dependency's draft state and its review state, not its merge state.
+
+### `pieces-looked-for-where-expected`: what it took, and the source that was measured and not armed
+
+Built 2026-08-31 as pull request #232, `d8b654433`. 21 new tests; `397 passed, 1 skipped,
+11 xfailed` across `test/experiments_test/` against `376 passed, 1 skipped, 11 xfailed` on
+the parent, which is the 21 added here and nothing else moved.
+
+**Every one of the six captures reports exactly what the parent reported**, compared
+detection by detection -- category, surface, position to the millimetre, and agreement --
+and `detect` costs **0.344 s per frame against the parent's 0.344 s**, both measured in
+this container against the parent in a worktree with its own `*/src` on `PYTHONPATH`, per
+what #222 recorded about baselines taken outside the main checkout. So the restructure is
+behaviour-preserving on real data and costs nothing.
+
+**The hole source was built, measured, and taken out again.** The item's note names three
+sources and calls the first two enough for the four failing captures. Sweeping the board's
+own detected holes was built first and measured over the six captures: it recovers every
+lid piece the truth names in five of the six -- the recall the item exists for -- and it
+costs **0.36 s on top of a 0.5 s frame budget** (0.715 s against 0.344 s) while reporting
+**15 pieces that are not there**. Both come from the same place: the holes it seeds from
+are themselves wrong, mislocated inside about 90 mm of the board's middle and mostly
+mislabelled, which is `holes-fitted-like-pieces` -- the item that depends on this one.
+
+Narrowing each hole to the piece of its own category was tried, since a hole's category is
+knowledge: it fits the budget at 0.444 s and loses **7 real pieces**, because that category
+is exactly what `holes-fitted-like-pieces` says is wrong. Reading each hole's reach off its
+own measured footprint instead of the default seeding distance cut the ghosts from 20 to 15
+and the cost not at all -- the cost is the number of hypotheses times the number of
+candidates, not the reach.
+
+What that measurement actually shows is that **sweeping every hole for every piece every
+frame is a second exhaustive pass, not knowledge-directed search**. What makes a seeded fit
+cheap and precise is a belief that names *which* piece at *which* place, and the two things
+that can say that are the world (built here) and the object's own history
+(`expectations-from-events`). So the pipeline believes on its own from the world, and
+anything more particular is supplied by whoever asked for the look -- which is the shape
+the request language and that item both need, and which
+`test_a_piece_wearing_the_surfaces_own_hue_is_found_where_it_is_expected` exercises end to
+end.
+
+**The lid marks therefore stay, and now name `expectations-from-events`.** The item's
+premise is right -- the lid failures are a seeding fault, not a parameter fault, and this
+branch is what makes them reachable -- but a capture carries no world, so nothing on a
+capture believes anything about the lid yet. The ownership move off
+`detector-parameters-from-knowledge` stands; the item that clears them is the one that
+supplies the belief, not the one that tunes the detector.
+
+**Two smaller calls, both recorded rather than left implicit.**
+
+- A detection is measured by the outline the fit settled on rather than by the colour blob
+  it may have come from. That is the piece's own footprint, and it is the only outline a
+  hypothesis from anything but a colour has -- so `footprint` keeps one meaning instead of
+  two. `WorkspaceRegion.to_pixels` is the inverse of the `to_world_position` that was
+  already there, so a fitted outline is measured and its depth read exactly as a segmented
+  one is.
+- `PieceMatcher` lost `search_radius` and `hue_tolerance`. A reach belongs to the belief
+  that states it, and colour belongs to whatever read it -- the matcher fits outlines and
+  now knows nothing about either. `SEED_REACH` carries the old radius and its measured
+  justification into `hypotheses.py`.
+
+**The believed place is defined here, once**, as "Two items that meet at one type" settled:
+a region of a named surface and an interval of yaw. #227, `search-clipped-to-a-predicates-region`
+and `expectations-from-events` all read it rather than building their own.
+
+**The environment, since the last three items each recorded a different one.** `uv sync
+--extra dev --python 3.12` builds the whole workspace, as #223 recorded -- but the `uv` first
+on this container's `PATH` is 0.8.17, which cannot parse this repository's own
+`pyproject.toml` (`override-dependencies` in its table form) and fails identically on
+unmodified `main`. `/usr/local/bin/uv` is 0.12.7 and works. `docformatter` and `black` are
+not in the dependency set and have to be installed before `scripts/format_docstrings.py`
+will run.
+
+**Landing hazards.** #223's `Footprint` -> `RectifiedFootprint` rename conflicts with this
+branch's edits to `pipeline.py`, `detections.py` and `piece_matcher.py`, the same mechanical
+way it does with #205, #221 and #225. And #223 is what makes the ORM walk this package at
+all, so it will be the first thing to meet `PieceHypothesis.candidates`, a tuple of
+dataclasses; whether ORMatic maps that is worth checking when the two meet, since the full
+regeneration does not run in a container.
