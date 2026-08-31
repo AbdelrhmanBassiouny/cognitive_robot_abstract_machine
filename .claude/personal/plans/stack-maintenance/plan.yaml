@@ -444,7 +444,7 @@ items:
   branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
   pull_request_number: 211
   status: in_progress
-  session: https://claude.ai/code/session_01YJWSPtw91iyhyPK6cgJtNP
+  session: https://claude.ai/code/session_01KgTu7rha5xxBYAVm41e3uV
   track: integration
   depends_on:
   - integration-branch
