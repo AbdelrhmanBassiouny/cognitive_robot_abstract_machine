@@ -176,9 +176,29 @@ items:
     to pytest.
 
 
-    One defect is still this branch''s own: it tracks `test/krrood_test/dataset/ormatic_interface.py`,
-    which main and every other branch untracked, so merging into it conflicts modify/delete on a generated
-    file AGENTS.md says must never be tracked.'
+    2026-08-31: restacked again (`a5c26de7`) and the six-pass conflict is cleared. The steward reported
+    the identical conflict on 08-13, 08-18, 08-22, 08-23 and twice on 08-28, skipping the branch each
+    time, which is what had held this branch and everything above it. Both conflicting paths were generated
+    artifacts and neither conflict was a choice between authored versions. `test/krrood_test/dataset/ormatic_interface.py`
+    is removed from the index, and the merge brings main''s `**/ormatic_interface.py` ignore rule that
+    this branch''s `.gitignore` did not yet carry, so it stays untracked; `krrood_test/conftest.py` regenerates
+    it at module level before its own star import, so nothing needed the committed copy. The record was
+    wrong about the second file: `verbalization_results.py` is tracked on main and on every branch in
+    the chain, so untracking is not its answer - the whole difference was this branch''s older generator
+    emitting `typing_extensions.Tuple` where the current one emits stdlib `tuple[...]`, so it took the
+    base''s version as stale generator output. Both core-EQL fixes were checked present at their intended
+    placement in the merged file rather than trusted to the auto-merge.
+
+
+    Not verified by running the suite: `random_events_lib` is an unbuilt compiled extension in the resolving
+    container, so the EQL package cannot be imported there at all. CI is the load-bearing check for this
+    push. The `needs-resolution` label clears on the routine''s next pass.
+
+
+    Two review threads remain open and are the developer''s, not code: whether `rule_tree_view.py:255`''s
+    `enforce_parent_consistency` should be removed by making the DAG consistent by construction, and whether
+    the "no planning wording in source" instruction belongs in AGENTS.md.'
+
 - id: d-core-expert
   title: 'RDR engine: Expert policy split'
   branch: D-core-expert

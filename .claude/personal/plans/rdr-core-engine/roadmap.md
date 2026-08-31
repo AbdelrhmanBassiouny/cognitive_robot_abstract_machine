@@ -137,10 +137,15 @@ the parameter to `Match` was rejected as a Liskov violation.
   closing the wedged pull request and opening a new one for the same branch.
 - **The cascade did not stall uniformly.** Measure how far behind each branch is
   before planning a steward pass rather than assuming stack order tracks it.
-- **A generated interface is still tracked on #67.**
-  `test/krrood_test/dataset/ormatic_interface.py` is untracked everywhere else,
-  so merging into #67 conflicts modify/delete on the one file `AGENTS.md` names
-  explicitly.
+- **Two generated files, not one, were conflicting on #67 — cleared
+  2026-08-31.** `test/krrood_test/dataset/ormatic_interface.py` was tracked
+  only here and is now removed from the index, with `main`'s
+  `**/ormatic_interface.py` ignore rule arriving in the same merge. The second,
+  `verbalization_results.py`, is tracked *everywhere*, so untracking was never
+  its answer: this branch's older generator emitted `typing_extensions.Tuple`
+  where the current one emits stdlib `tuple[...]`, and the fix was to take the
+  base's output. Both remain regenerated at test time, so a dirty tree after a
+  sweep is still the normal state.
 - **`open_ready` means open plus non-draft, and deliberately not more.** It
   answers *"can a dependent safely start stacking on this?"*, which stayed true
   of #67 throughout the six days it was unmergeable against its own base.
@@ -177,6 +182,18 @@ inherits them rather than rediscovering them.
   container: a 3.12 venv with the workspace requirements and editable
   `random_events`/`probabilistic_model` runs the suite green, including the
   tests earlier rounds recorded as an unfixable local gap.
+- **Before untracking a generated file, check whether it is tracked on
+  `main`.** #67's conflict was recorded for six weeks as one file's problem
+  with one file's answer. When it finally got worked, a second generated file
+  was conflicting too — and that one is committed on `main` and on every branch
+  in the chain, so untracking it would have been a regression rather than the
+  fix. "It is generated" says how it got there, not whether the repository
+  keeps it.
+- **A routine that reports the same conflict every pass is not making
+  progress.** Six identical skip comments accumulated on #67 between 08-13 and
+  08-28 while the branch and everything stacked above it sat still. The label
+  is working as designed — later passes skip rather than re-report — so the
+  signal that needs watching is the repeat count, not the newest comment.
 - **Stage by explicit path; never `git add -u`.** A test sweep regenerates
   `ormatic_interface.py`, `query_graph.pdf`, `drawer_explanation.pdf` and
   `verbalization_results.py`. A dirty tree after a sweep is the normal state
