@@ -10,7 +10,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
-from maintenance_git_commands import MaintenanceGitCommandRunner, ProposedPush
+from git_commands import BranchPublication, ProposedPush
+from maintenance_git_commands import MaintenanceGitCommandRunner
 from stack import Configuration, resolve_ref
 
 
@@ -113,7 +114,9 @@ def fast_forward(
     git.push(
         ProposedPush(
             remote=configuration.fork_remote,
-            refspec=f"{upstream_commit}:refs/heads/{configuration.upstream_base}",
+            publication=BranchPublication(
+                source=upstream_commit, branch=configuration.upstream_base
+            ),
         )
     ).raise_if_failed()
     git.fetch(configuration.fork_remote, configuration.upstream_base)

@@ -16,6 +16,7 @@ from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
+from integration_constants import CANDIDATE_TITLE_PREFIX, POINTER_BRANCH
 from maintenance_constants import SESSION_LINK_PATTERN
 from stack import BOARD_PATH, PullRequest
 
@@ -48,6 +49,38 @@ class PullRequestFieldShape(StrEnum):
     LABEL_NAMES = "label-names"
     """
     A list of labels, each given either plainly or as an object carrying a ``name``.
+    """
+
+    COMMIT = "commit"
+    """
+    The commit a branch reference points at, which the same object carries as ``sha``.
+    """
+
+
+class BranchReferenceKey(StrEnum):
+    """
+    What the object a pull request gives for its head or base carries.
+    """
+
+    BRANCH = "ref"
+    """
+    The branch's name.
+    """
+
+    COMMIT = "sha"
+    """
+    The commit it points at, which is what checks are reported against.
+    """
+
+
+class LabelKey(StrEnum):
+    """
+    What the object a pull request gives for each of its labels carries.
+    """
+
+    NAME = "name"
+    """
+    The label's own name, which is the only half anything here reads.
     """
 
 
@@ -121,6 +154,10 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
     """
     The labels it carries, which the workflow reads as state.
     """
+    HEAD_COMMIT = PullRequestFieldSpecification(
+        key="head", shape=PullRequestFieldShape.COMMIT, required=True
+    )
+    """The commit that branch points at, which is what checks are reported against."""
     BODY = PullRequestFieldSpecification(key="body")
     """
     Its description, read for the session link and the promotion prefill.
@@ -151,24 +188,34 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
             return None
         match self.shape:
             case PullRequestFieldShape.BRANCH_REFERENCE:
-                return self._branch_reference(value, number)
+                return self._nested(value, BranchReferenceKey.BRANCH, number)
+            case PullRequestFieldShape.COMMIT:
+                return self._nested(value, BranchReferenceKey.COMMIT, number)
             case PullRequestFieldShape.LABEL_NAMES:
                 return [
-                    label if isinstance(label, str) else str(label["name"])
+                    label if isinstance(label, str) else str(label[LabelKey.NAME])
                     for label in value
                 ]
             case _:
                 return value
 
-    def _branch_reference(self, value: Any, number: int | None) -> str:
-        """:param value: The field's value, plain or nested.
+    def _nested(
+        self, value: Any, wanted: BranchReferenceKey, number: int | None
+    ) -> str:
+        """
+        Read one half of the object a pull request gives for a branch, taking a plain
+        string as the branch it names.
+
+        :param value: The field's value, plain or nested.
+        :param wanted: Which half to read.
         :param number: The pull request being read, named in any rejection.
-        :return: The branch it names.
-        :raises MissingPullRequestFieldError: If it names none."""
-        if isinstance(value, str):
+        :return: What it names.
+        :raises MissingPullRequestFieldError: If it names none.
+        """
+        if isinstance(value, str) and wanted is BranchReferenceKey.BRANCH:
             return value
-        if isinstance(value, Mapping) and value.get("ref"):
-            return str(value["ref"])
+        if isinstance(value, Mapping) and value.get(wanted):
+            return str(value[wanted])
         raise MissingPullRequestFieldError(self, number)
 
 
@@ -235,13 +282,47 @@ class BoardExport:
     @classmethod
     def from_api_records(cls, records: Iterable[PullRequestRecord]) -> BoardExport:
         """
-        Build the export from what the REST API returned.
+        Build the export from what the REST API returned, leaving out any candidate.
+
+        A candidate is a build being judged rather than work in flight, and it is
+        indistinguishable from an ordinary reviewed branch to everything reading the
+        board: a build would merge it, putting the previous build inside the next, and a
+        maintenance pass would restack it onto the branch it exists to replace. Left out
+        here rather than at each reader, so no pass has to remember to.
 
         :param records: The fetched pull requests.
         :return: The export.
         :raises MissingPullRequestFieldError: If any record omits a required field.
         """
-        return cls(tuple(cls._pull_request(record) for record in records))
+        return cls(
+            tuple(
+                cls._pull_request(record)
+                for record in records
+                if not cls.is_a_candidate(
+                    record, int(PullRequestField.NUMBER.read(record))
+                )
+            )
+        )
+
+    @staticmethod
+    def is_a_candidate(record: PullRequestRecord, number: int) -> bool:
+        """
+        Whether one open pull request is a build opened to collect the checks that judge
+        it.
+
+        The title is what says so for every candidate, since all of them are opened
+        against the base their build was assembled over - the same base every ordinary
+        branch is opened against. The base is read too, because nothing that is work in
+        flight is ever opened against the branch a build publishes to.
+
+        :param record: One open pull request, as the API answers it.
+        :param number: Its number, named in any rejection.
+        :return: Whether it is a candidate.
+        """
+        title = PullRequestField.TITLE.read(record, number) or ""
+        return PullRequestField.BASE.read(
+            record, number
+        ) == POINTER_BRANCH or title.startswith(CANDIDATE_TITLE_PREFIX)
 
     @staticmethod
     def _pull_request(record: PullRequestRecord) -> PullRequest:
