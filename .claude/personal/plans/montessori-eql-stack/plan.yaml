@@ -67,10 +67,29 @@ items:
     session: https://claude.ai/code/session_01HPQPiabgjE3yuBHd5skUR3
     blockers:
       - >-
-          stacked-pr-maintenance: Fork PR #169 (branch `montessori_fast_inline_monitor`) still
-          conflicts against its base `main` as of the 2026-08-29 stacked-pr-maintenance pass. It
-          carries the `needs-resolution` label and a routine comment on the PR; this pass did not
-          attempt a fresh merge because it was already withheld from a previous pass.
+          stacked-pr-maintenance: Fork PR #169 (branch `montessori_fast_inline_monitor`) conflicts
+          against its base `main` as of the 2026-08-31 stacked-pr-maintenance pass, in:
+          `.github/workflows/ci.yml`, `.github/workflows/ci_reusable.yml`,
+          `.github/workflows/example_demo_reusable.yml`, `.gitignore`, `AGENTS.md`,
+          `cognitive_robot_abstract_machine/exceptions.py`,
+          `cognitive_robot_abstract_machine/orm_interfaces.py`,
+          `coraplex/src/coraplex/robot_plans/actions/core/pick_up.py`, `doc/contributing.rst`,
+          `krrood/src/krrood/ormatic/data_access_objects/dao.py`,
+          `krrood/src/krrood/ormatic/wrapped_table.py`, `scripts/regenerate_all_orm.py`,
+          `segmind/src/segmind/datastructures/events.py`,
+          `semantic_digital_twin/src/semantic_digital_twin/adapters/multi_sim.py`,
+          `semantic_digital_twin/src/semantic_digital_twin/reasoning/predicates.py`,
+          `semantic_digital_twin/src/semantic_digital_twin/robots/armar7.py`,
+          `semantic_digital_twin/src/semantic_digital_twin/spatial_types/spatial_types.py`,
+          `semantic_digital_twin/src/semantic_digital_twin/world_description/geometry.py`,
+          `semantic_digital_twin/src/semantic_digital_twin/world_description/shape_collection.py`,
+          `test/cognitive_robot_abstract_machine_test/dataset/generate_orm.py`,
+          `test/cognitive_robot_abstract_machine_test/test_orm_interfaces.py`,
+          `test/experiments_test/conftest.py`,
+          `test/krrood_test/test_eql/test_verbalization/verbalization_results.py`,
+          `test/semantic_digital_twin_test/test_adapters/test_multi_sim.py`. It carries the
+          `needs-resolution` label and a routine comment on the PR:
+          https://github.com/AbdelrhmanBassiouny/cognitive_robot_abstract_machine/pull/169#issuecomment-5478370443
     notes: >-
       Base of the stack. On 2026-08-18 main was merged in twice. The first
       merge (608bc7fe6) cleared the conflicts that had left it dirty, plus the
