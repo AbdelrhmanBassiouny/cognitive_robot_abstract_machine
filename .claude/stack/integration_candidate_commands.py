@@ -23,9 +23,11 @@ from integration_reproduction import (
     ReproductionRun,
     clear_fixed_breaks,
 )
+from integration_carried_pipeline import CarriedPipeline, pipeline_carried_by
 from integration_verdict import (
     Candidate,
     ChecksVerdict,
+    VerdictReport,
     open_candidate,
     open_candidate_on,
     read_checks,
@@ -37,7 +39,7 @@ from integration_pass_record import PassedChecks, RecordedSubject
 from integration_run import IntegrationCommand, IntegrationRun
 
 
-def publish(run: IntegrationRun, build_branch: str, head: str) -> None:
+def publish(run: IntegrationRun, build_branch: str, head: str) -> CarriedPipeline:
     """
     Move the branch a developer works from onto a build, and drop the build's own
     branch.
@@ -45,13 +47,25 @@ def publish(run: IntegrationRun, build_branch: str, head: str) -> None:
     The branch goes because the pointer now holds the same commit, and a rebuild that
     left one behind every time would accumulate one per run.
 
+    A build carrying no rebuild of its own is refused instead. The branch this moves is
+    the fork's default branch, and a schedule registers from the default branch, so
+    publishing such a build would take the schedule down with it and leave nothing able
+    to publish a later one. The check is here rather than at each caller because there
+    is no publication it does not apply to.
+
     :param run: What this run has resolved.
     :param build_branch: The build being published.
     :param head: The commit to move the pointer to.
+    :return: What of the pipeline the build carries, which is why it was published or
+        was not.
     """
+    carried = pipeline_carried_by(run.git, head)
+    if not carried.can_rebuild:
+        return carried
     remote = run.configuration.fork_remote
     run.git.run("push", "--force", remote, f"{head}:refs/heads/{POINTER_BRANCH}")
     run.git.run("push", "--delete", remote, build_branch)
+    return carried
 
 
 def tree_of(run: IntegrationRun, reference: str) -> str:
@@ -261,7 +275,12 @@ class PublishRecordedPassCommand(IntegrationCommand):
         :class:`~integration_verdict.CandidateCheckTiming` records.
 
         The build is pushed first, because a fork that does not carry the commit cannot
-        be asked to move a branch onto it.
+        be asked to move a branch onto it. It is the branch the next take-down drops if
+        publishing is then refused.
+
+        This is what publishes on the ordinary day, when nothing has moved, so it is
+        refused on the same rule the judged path is: a build carrying no rebuild of its
+        own is one the pointer is not moved onto.
 
         :param run: What this run has resolved.
         :param arguments: The parsed command line.
@@ -276,17 +295,20 @@ class PublishRecordedPassCommand(IntegrationCommand):
             print(json.dumps({}, indent=2) if arguments.json else "not recorded")
             return IntegrationExitCode.NO_RECORDED_PASS
         run.git.run("push", "--force", remote, f"{arguments.build}:{arguments.build}")
-        publish(run, arguments.build, head)
+        carried = publish(run, arguments.build, head)
         document = {
             ReportKey.BUILD_BRANCH: arguments.build,
             ReportKey.HEAD: head,
-            ReportKey.PUBLISHED: True,
+            ReportKey.PUBLISHED: carried.can_rebuild,
+            ReportKey.MISSING_PIPELINE: list(carried.missing),
         }
         print(
             json.dumps(document, indent=2)
             if arguments.json
-            else f"{arguments.build}\tpublished\t{POINTER_BRANCH}"
+            else _publication_line(arguments.build, carried)
         )
+        if not carried.can_rebuild:
+            return IntegrationExitCode.PIPELINE_WOULD_BE_REMOVED
         return IntegrationExitCode.SUCCESS
 
 
@@ -414,6 +436,9 @@ class SettleCandidateCommand(IntegrationCommand):
         branches over the same base - which produces a new commit every time and the same
         tree every time - is published without spending a matrix on it again.
 
+        Passing is not on its own enough to be published: a build carrying no rebuild of
+        its own is refused, and says which of the pipeline it is missing.
+
         The candidate itself is closed only once its checks have settled. Closed
         before they have, it collects none at all - GitHub creates a pull request's
         run a moment after the request is opened, and none is created for one
@@ -430,39 +455,62 @@ class SettleCandidateCommand(IntegrationCommand):
             head=arguments.head,
         )
         checks = read_checks(fork, candidate.head)
-        published = checks.verdict is ChecksVerdict.PASSED
+        passed = checks.verdict is ChecksVerdict.PASSED
         if checks.verdict.has_settled:
             fork.close_pull_request(candidate.number)
-        if published:
-            remote = run.configuration.fork_remote
-            PassedChecks.read(run.git, remote).record(
-                run.git,
-                remote,
-                RecordedSubject.BUILD_TREE,
-                tree_of(run, candidate.head),
-                candidate.head,
-            )
-            publish(run, candidate.build_branch, candidate.head)
-        document = {
-            ReportKey.VERDICT: str(checks.verdict),
-            ReportKey.CANDIDATE: candidate.number,
-            ReportKey.BUILD_BRANCH: candidate.build_branch,
-            ReportKey.HEAD: candidate.head,
-            ReportKey.FAILED_CHECKS: [run.name for run in checks.failed],
-            ReportKey.PUBLISHED: published,
-        }
-        print(
-            json.dumps(document, indent=2)
-            if arguments.json
-            else _verdict_line(candidate, checks, published)
+        carried = self._publish_what_passed(run, candidate) if passed else None
+        report = VerdictReport(
+            candidate=candidate,
+            checks=checks,
+            published=carried is not None and carried.can_rebuild,
+            missing_pipeline=carried.missing if carried else (),
         )
-        return _verdict_exit_code(checks.verdict)
+        print(
+            json.dumps(report.to_json(), indent=2)
+            if arguments.json
+            else _verdict_line(candidate, checks, report.published)
+        )
+        return _verdict_exit_code(checks.verdict, report.published)
+
+    @staticmethod
+    def _publish_what_passed(
+        run: IntegrationRun, candidate: Candidate
+    ) -> CarriedPipeline:
+        """
+        Remember that this tree passed, and move the pointer onto it.
+
+        The pass is recorded whether or not the pointer moves: what passed is a fact
+        about the tree, and a build refused for carrying no rebuild is refused again on
+        the same rule rather than re-judged.
+
+        :param run: What this run has resolved.
+        :param candidate: The build that passed.
+        :return: What of the pipeline it carries.
+        """
+        remote = run.configuration.fork_remote
+        PassedChecks.read(run.git, remote).record(
+            run.git,
+            remote,
+            RecordedSubject.BUILD_TREE,
+            tree_of(run, candidate.head),
+            candidate.head,
+        )
+        return publish(run, candidate.build_branch, candidate.head)
 
 
 def _candidate_line(candidate: Candidate) -> str:
     """:param candidate: The candidate opened.
     :return: One tab-separated line naming it."""
     return f"{candidate.build_branch}\tcandidate\t{candidate.number}"
+
+
+def _publication_line(build_branch: str, carried: CarriedPipeline) -> str:
+    """:param build_branch: The build that was to be published.
+    :param carried: What of the pipeline it carries.
+    :return: One tab-separated line, naming what is missing where nothing moved."""
+    if carried.can_rebuild:
+        return f"{build_branch}\tpublished\t{POINTER_BRANCH}"
+    return f"{build_branch}\tnot published\t{','.join(carried.missing)}"
 
 
 def _verdict_line(candidate: Candidate, checks: Any, published: bool) -> str:
@@ -476,23 +524,31 @@ def _verdict_line(candidate: Candidate, checks: Any, published: bool) -> str:
     return f"{candidate.build_branch}\t{checks.verdict}\t{detail}"
 
 
-def _verdict_exit_code(verdict: ChecksVerdict) -> IntegrationExitCode:
+def _verdict_exit_code(verdict: ChecksVerdict, published: bool) -> IntegrationExitCode:
     """
-    Map a verdict onto the status a caller acts on.
+    Map what was read onto the status a caller acts on.
 
     A verdict that has not settled is answered as still running rather than as a failure:
     a caller that threw the build away would be discarding one nothing had judged. Read
     through the same property the candidate is closed on, so the two cannot come to
     disagree about which verdicts are answers.
 
+    A build that passed and was not published gets its own status rather than the success
+    of the verdict it earned, since what a rebuild does next turns on whether the pointer
+    moved. Read off the same field the document carries, so a run cannot exit success
+    over a report saying it published nothing.
+
     :param verdict: What the checks amount to.
+    :param published: Whether the branch a developer works from was moved onto the build.
     :return: The process exit code.
     """
     if not verdict.has_settled:
         return IntegrationExitCode.CANDIDATE_STILL_RUNNING
-    if verdict is ChecksVerdict.PASSED:
+    if verdict is not ChecksVerdict.PASSED:
+        return IntegrationExitCode.CANDIDATE_FAILED
+    if published:
         return IntegrationExitCode.SUCCESS
-    return IntegrationExitCode.CANDIDATE_FAILED
+    return IntegrationExitCode.PIPELINE_WOULD_BE_REMOVED
 
 
 # %% lifting a block a reproduction says is fixed

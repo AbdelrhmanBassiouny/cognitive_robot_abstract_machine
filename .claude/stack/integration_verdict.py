@@ -454,6 +454,10 @@ class VerdictReportKey(StrEnum):
     PUBLISHED = "published"
     """Whether the base branch was moved to this build."""
 
+    MISSING_PIPELINE = "missing_pipeline"
+    """The pipeline's own files this build does not carry, which is why it was not
+    published."""
+
 
 @dataclass(frozen=True)
 class VerdictReport:
@@ -470,6 +474,10 @@ class VerdictReport:
     published: bool
     """Whether the base branch was moved to this build."""
 
+    missing_pipeline: tuple[str, ...] = ()
+    """The pipeline's own files this build does not carry, empty when it carries them
+    all."""
+
     def to_json(self) -> dict[str, Any]:
         """:return: This verdict, keyed the way a reader parses it."""
         return {
@@ -479,4 +487,5 @@ class VerdictReport:
             VerdictReportKey.HEAD: self.candidate.head,
             VerdictReportKey.FAILED_CHECKS: [run.name for run in self.checks.failed],
             VerdictReportKey.PUBLISHED: self.published,
+            VerdictReportKey.MISSING_PIPELINE: list(self.missing_pipeline),
         }

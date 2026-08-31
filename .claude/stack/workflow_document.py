@@ -486,7 +486,14 @@ class WorkflowDocument:
     def at(cls, path: Path) -> WorkflowDocument:
         """:param path: The workflow file to read.
         :return: Its parsed contents."""
-        return cls(yaml.safe_load(path.read_text()))
+        return cls.from_text(path.read_text())
+
+    @classmethod
+    def from_text(cls, text: str) -> WorkflowDocument:
+        """:param text: A workflow file's contents, from wherever it was read - a
+            checkout, or a tree a build is being judged as.
+        :return: Its parsed contents."""
+        return cls(yaml.safe_load(text))
 
     @cached_property
     def triggers(self) -> Mapping[str, Any]:

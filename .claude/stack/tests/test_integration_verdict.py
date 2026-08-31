@@ -11,8 +11,13 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Mapping
 
 import pytest
+
+from git_commands import GitCommandResult
+
+from integration_fixtures import the_pipeline_this_checkout_carries
 
 from maintenance_github import (
     CandidatePullRequests,
@@ -469,6 +474,7 @@ def test_the_report_names_the_failures_and_whether_anything_was_published():
         VerdictReportKey.HEAD: A_HEAD,
         VerdictReportKey.FAILED_CHECKS: ["broke"],
         VerdictReportKey.PUBLISHED: False,
+        VerdictReportKey.MISSING_PIPELINE: [],
     }
 
 
@@ -494,7 +500,10 @@ def test_each_verdict_leaves_the_status_a_caller_acts_on(
     An absent check is answered as still running: a caller that read it as red would
     discard a build nothing had judged.
     """
-    assert integration_candidate_commands._verdict_exit_code(verdict) is expected
+    assert (
+        integration_candidate_commands._verdict_exit_code(verdict, published=True)
+        is expected
+    )
 
 
 def test_every_verdict_is_mapped_to_a_status():
@@ -503,7 +512,7 @@ def test_every_verdict_is_mapped_to_a_status():
     silently take whichever branch happens to be last rather than one chosen for it.
     """
     assert {
-        integration_candidate_commands._verdict_exit_code(verdict)
+        integration_candidate_commands._verdict_exit_code(verdict, published=True)
         for verdict in ChecksVerdict
     } <= set(IntegrationExitCode)
 
@@ -517,6 +526,16 @@ class RecordingGit:
     commands: list[tuple[str, ...]] = field(default_factory=list)
     """Every command run through it, in order."""
 
+    carried: Mapping[str, str] = field(
+        default_factory=the_pipeline_this_checkout_carries
+    )
+    """
+    What the tree being settled holds of the pipeline, keyed by path.
+
+    An ordinary build carries the branches the pipeline lives on, so that is what this
+    answers with unless a test says otherwise.
+    """
+
     def run(self, *arguments: str) -> str:
         """
         :param arguments: The git command.
@@ -524,6 +543,21 @@ class RecordingGit:
         """
         self.commands.append(arguments)
         return ""
+
+    def attempt(self, *arguments: str) -> GitCommandResult:
+        """
+        :param arguments: The git command, which is a read of one path out of the tree.
+        :return: What that tree holds there, refusing as git does when it holds nothing.
+        """
+        self.commands.append(arguments)
+        wanted = arguments[-1].split(":", 1)[-1]
+        held = self.carried.get(wanted)
+        return GitCommandResult(
+            arguments=arguments,
+            exit_status=0 if held is not None else 128,
+            output=held or "",
+            error_output="",
+        )
 
 
 @dataclass(frozen=True)
@@ -547,13 +581,18 @@ class RecordingIntegrationRun:
         return self.fork_answers
 
 
-def settle(checks: list[CheckRunRecord]) -> RecordingIntegrationRun:
+def settle(
+    checks: list[CheckRunRecord], git: RecordingGit | None = None
+) -> RecordingIntegrationRun:
     """Settle a candidate against the checks it collected.
 
     :param checks: What its checks say.
+    :param git: The tree it is settling, when a test is about what that tree carries.
     :return: The run, carrying what the settling did.
     """
-    run = RecordingIntegrationRun(RecordingCandidates(checks=checks))
+    run = RecordingIntegrationRun(
+        RecordingCandidates(checks=checks), git=git or RecordingGit()
+    )
     integration_candidate_commands.SettleCandidateCommand().run(
         run,
         argparse.Namespace(candidate=41, build=A_BUILD_BRANCH, head=A_HEAD, json=True),

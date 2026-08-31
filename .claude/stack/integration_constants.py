@@ -153,6 +153,11 @@ class ReportKey(StrEnum):
     Whether the base branch was moved to the build being judged.
     """
 
+    MISSING_PIPELINE = "missing_pipeline"
+    """
+    The pipeline's own files a build does not carry, which is why it was not published.
+    """
+
     TIPS_TESTED = "tips_tested"
     """
     The tips a search ran the suite over, in order.

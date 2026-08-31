@@ -9,14 +9,16 @@ pytest collects ``test_*.py`` only, so nothing here runs on its own.
 from __future__ import annotations
 
 import subprocess
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
 from git_commands import BranchPublication, ProposedPush
 from stack import Branch, BranchStatus, IntegrationStrategy, PullRequest, Stack
 
+from integration_carried_pipeline import PIPELINE_PATHS
 from integration_verdict import ChecksVerdict
+from workflow_document import REPOSITORY_ROOT
 import integration_constants
 import integration_tips
 import integration
@@ -116,6 +118,28 @@ named here rather than spelled at the assertion.
 """
 
 # %% the objects a build is described with
+
+
+def the_pipeline_this_checkout_carries() -> dict[str, str]:
+    """
+    A build a rebuild would publish carries the branches the pipeline lives on, and
+    publication is refused for one that does not - so a test about publishing has to
+    assemble a build that does, or it is answered about something it is not asking.
+
+    :return: Every file a rebuild needs, with the content this checkout holds at it.
+    """
+    return {path: (REPOSITORY_ROOT / path).read_text() for path in PIPELINE_PATHS}
+
+
+def write_into(root: Path, files: Mapping[str, str]) -> None:
+    """
+    :param root: The checkout to write them into.
+    :param files: What to write, by path, directories included.
+    """
+    for path, content in files.items():
+        written = root / path
+        written.parent.mkdir(parents=True, exist_ok=True)
+        written.write_text(content)
 
 
 def publishing(remote: str, branch: str) -> ProposedPush:

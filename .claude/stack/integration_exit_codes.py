@@ -140,6 +140,17 @@ class IntegrationExitCode(IntEnum):
     tree nobody has checked, which is the whole reason a rebuild runs.
     """
 
+    PIPELINE_WOULD_BE_REMOVED = 20
+    """
+    The build is one nothing could rebuild from, so it was not published.
+
+    Publishing moves the fork's default branch, and a schedule registers from the
+    default branch - so a build carrying no rebuild of its own would take the schedule
+    with it and leave nothing able to publish a later build. Told apart from a failed
+    candidate because the build is not what is wrong: its checks passed, and what is
+    missing is the branches the pipeline lives on.
+    """
+
     @property
     def name_for_a_caller(self) -> str:
         """

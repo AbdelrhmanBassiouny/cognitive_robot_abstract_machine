@@ -422,6 +422,39 @@ def test_a_build_whose_tree_has_already_passed_is_published_with_no_candidate(
     ]
 
 
+def test_a_build_the_publication_refused_is_not_judged_instead(tmp_path: Path):
+    """
+    The refusal is about what the build carries rather than about its checks, so a
+    candidate opened for it would spend a whole matrix to be refused on the same rule.
+    """
+    status, runner = rebuild(
+        no_candidate_open(),
+        succeeded(),
+        a_build(),
+        answered(IntegrationExitCode.PIPELINE_WOULD_BE_REMOVED),
+        tmp_path=tmp_path,
+    )
+
+    assert status is IntegrationExitCode.PIPELINE_WOULD_BE_REMOVED
+    assert str(IntegrationSubcommand.OPEN_CANDIDATE) not in runner.subcommands
+
+
+def test_an_inherited_candidate_whose_build_was_refused_stops_the_run(tmp_path: Path):
+    """
+    A run that read the refusal as its own success would carry on and assemble the next
+    build, which is how a fork ends up rebuilding four times a day around a pointer
+    nothing is moving and nobody is told about.
+    """
+    status, runner = rebuild(
+        a_reported_candidate(),
+        a_settling(ChecksVerdict.PASSED, IntegrationExitCode.PIPELINE_WOULD_BE_REMOVED),
+        tmp_path=tmp_path,
+    )
+
+    assert status is IntegrationExitCode.PIPELINE_WOULD_BE_REMOVED
+    assert str(IntegrationSubcommand.BUILD) not in runner.subcommands
+
+
 def test_a_base_that_would_not_come_forward_stops_before_anything_is_assembled(
     tmp_path: Path,
 ):

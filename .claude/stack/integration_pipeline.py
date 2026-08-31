@@ -177,8 +177,10 @@ class RefreshPipeline:
         assembled = self._build()
         if assembled.branch is None:
             return assembled.status
-        if not self.plans and self._publish_recorded_pass(assembled.branch):
-            return IntegrationExitCode.SUCCESS
+        if not self.plans:
+            published = self._publish_recorded_pass(assembled.branch)
+            if published is not None:
+                return published
         if self._open_candidate(assembled.branch) is None:
             return IntegrationExitCode.GITHUB_REQUEST_FAILED
         return IntegrationExitCode.SUCCESS
@@ -320,7 +322,7 @@ class RefreshPipeline:
             branch=assembled.document()[VerdictReportKey.BUILD_BRANCH],
         )
 
-    def _publish_recorded_pass(self, build: str) -> bool:
+    def _publish_recorded_pass(self, build: str) -> IntegrationExitCode | None:
         """
         Publish the build outright if its tree is one already seen to pass.
 
@@ -328,19 +330,28 @@ class RefreshPipeline:
         nothing has usually moved, so most builds are byte-for-byte one already judged -
         and judging it again costs a matrix plus however long GitHub takes to start one.
 
+        A build nothing has recorded is the ordinary answer and the run carries on to
+        have it judged. Anything else stops the run: a build refused publication is one
+        a candidate would spend a matrix to reach the same refusal about, and a
+        publication that failed part-way is not a state to build a candidate on top of.
+
         :param build: The assembled branch.
-        :return: Whether the branch a developer works from was moved onto it.
+        :return: The status to stop with, or ``None`` when the build still has to be
+            judged.
         """
-        return (
-            self.runner.run(
-                ToolingScript.INTEGRATION,
-                IntegrationSubcommand.PUBLISH_RECORDED_PASS,
-                CommandLineFlag.BUILD,
-                build,
-                CommandLineFlag.JSON,
-            ).status
-            == IntegrationExitCode.SUCCESS
+        published = self.runner.run(
+            ToolingScript.INTEGRATION,
+            IntegrationSubcommand.PUBLISH_RECORDED_PASS,
+            CommandLineFlag.BUILD,
+            build,
+            CommandLineFlag.JSON,
         )
+        status = IntegrationExitCode(published.status)
+        if status is IntegrationExitCode.NO_RECORDED_PASS:
+            return None
+        if status is not IntegrationExitCode.SUCCESS:
+            print(published.output, end="")
+        return status
 
     def _open_candidate(self, build: str) -> Candidate | None:
         """:param build: The assembled branch to get checked.

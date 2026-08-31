@@ -21,7 +21,11 @@ from integration_candidate_commands import (
 )
 from integration_constants import POINTER_BRANCH
 from integration_exit_codes import IntegrationExitCode
-from integration_fixtures import RunAgainstAGivenFork
+from integration_fixtures import (
+    RunAgainstAGivenFork,
+    the_pipeline_this_checkout_carries,
+    write_into,
+)
 from integration_pass_record import (
     RECORD_NAMESPACE,
     RETENTION,
@@ -251,6 +255,8 @@ def a_build_branch(checkout: ForkCheckout, name: str) -> str:
     :param name: The branch to assemble onto.
     :return: The tree that branch holds."""
     checkout.run_git("checkout", "--quiet", "-b", name)
+    write_into(checkout.project_root, the_pipeline_this_checkout_carries())
+    checkout.run_git("add", "--all")
     checkout.commit("assembled", "what the build merged\n")
     return checkout.run_git("rev-parse", f"{name}^{{tree}}")
 
