@@ -12,12 +12,21 @@ from typing_extensions import List, TYPE_CHECKING, Iterable, Type
 
 from krrood.entity_query_language.predicate import (
     Predicate,
+    RenderedFields,
     Symbol,
+    SymbolicFunction,
+    Triple,
     symbolic_function,
+)
+from krrood.entity_query_language.utils import camel_case_to_words
+from krrood.entity_query_language.verbalization.fragments.base import (
+    VerbalizationFragment,
 )
 from krrood.entity_query_language.verbalization.vocabulary.english import Prepositions
 from krrood.entity_query_language.verbalization.vocabulary.parts_of_speech import (
+    Adjective,
     clause,
+    Copula,
     Noun,
     Verb,
 )
@@ -348,13 +357,14 @@ def is_body_in_region(body: Body, region: Region) -> float:
     return intersection.volume / body_volume
 
 
-@dataclass
-class KinematicStructureEntitySpatialRelation(Symbol, ABC):
+@dataclass(eq=False)
+class KinematicStructureEntitySpatialRelation(SymbolicFunction, ABC):
     """
-    Base class for spatial relations between two KinematicStructureEntity instances.
+    Base class for spatial measurements between two KinematicStructureEntity instances.
 
     Implementations typically compare the centers of mass computed from the KSE's
-    collision geometry.
+    collision geometry, and answer with the measurement itself rather than with a truth
+    value.
     """
 
     body: KinematicStructureEntity
@@ -368,8 +378,8 @@ class KinematicStructureEntitySpatialRelation(Symbol, ABC):
     """
 
 
-@dataclass
-class PointSpatialRelation(Symbol, ABC):
+@dataclass(eq=False)
+class PointSpatialRelation(Predicate, ABC):
     """
     Check if the point is spatially related to the other point.
     """
@@ -385,19 +395,41 @@ class PointSpatialRelation(Symbol, ABC):
     """
 
 
-@dataclass
+@dataclass(eq=False)
 class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
+    """
+    A spatial relation between two points, read from somewhere in particular.
+
+    Which way is left, above or in front depends on where it is being seen from, so the
+    relation carries that spot as an operand of its own.
+    """
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """
+        Reads as *"the point is left of the other point, seen from the point of view"*,
+        with the direction taken from the relation's own name.
+
+        :param fields: The rendered fragment for each field, keyed by field name.
+        """
+        direction = camel_case_to_words(cls.__name__).lower()
+        return clause(
+            Noun(fields["point"]),
+            Copula(),
+            Adjective(direction),
+            Noun(fields["other"]),
+            Prepositions.FROM,
+            Noun(fields["point_of_view"]),
+        )
 
     point_of_view: HomogeneousTransformationMatrix
     """
     The reference spot from where to look at the bodies.
     """
-
     eps: float = 1e-12
     """
     A small value to avoid division by zero.
     """
-
     spatial_relation_result: bool = False
 
     def _signed_distance_along_direction(self, index: int) -> float:
@@ -427,7 +459,7 @@ class ViewDependentSpatialRelation(PointSpatialRelation, ABC):
         return (s_body - s_other).compile()()
 
 
-@dataclass
+@dataclass(eq=False)
 class LeftOf(ViewDependentSpatialRelation):
     """
     The "left" direction is taken as the -Y axis of the given point of
@@ -439,7 +471,7 @@ class LeftOf(ViewDependentSpatialRelation):
         return self.spatial_relation_result
 
 
-@dataclass
+@dataclass(eq=False)
 class RightOf(ViewDependentSpatialRelation):
     """
     The "right" direction is taken as the +Y axis of the given point of
@@ -451,7 +483,7 @@ class RightOf(ViewDependentSpatialRelation):
         return self.spatial_relation_result
 
 
-@dataclass
+@dataclass(eq=False)
 class Above(ViewDependentSpatialRelation):
     """
     The "above" direction is taken as the +Z axis of the given point of
@@ -463,7 +495,7 @@ class Above(ViewDependentSpatialRelation):
         return self.spatial_relation_result
 
 
-@dataclass
+@dataclass(eq=False)
 class Below(ViewDependentSpatialRelation):
     """
     The "below" direction is taken as the -Z axis of the given point of
@@ -475,7 +507,7 @@ class Below(ViewDependentSpatialRelation):
         return self.spatial_relation_result
 
 
-@dataclass
+@dataclass(eq=False)
 class Behind(ViewDependentSpatialRelation):
     """
     The "behind" direction is defined as the -X axis of the given point of semantic
@@ -487,7 +519,7 @@ class Behind(ViewDependentSpatialRelation):
         return self.spatial_relation_result
 
 
-@dataclass
+@dataclass(eq=False)
 class InFrontOf(ViewDependentSpatialRelation):
     """
     The "in front of" direction is defined as the +X axis of the given point of semantic
@@ -499,7 +531,7 @@ class InFrontOf(ViewDependentSpatialRelation):
         return self.result
 
 
-@dataclass
+@dataclass(eq=False)
 class InsideOf(KinematicStructureEntitySpatialRelation):
     """
     The "inside of" relation is defined as the fraction of the volume of self.body
@@ -551,6 +583,66 @@ class InsideOf(KinematicStructureEntitySpatialRelation):
         if len(inside) == 0:
             return 0.0
         return sum(inside) / len(inside)
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """
+        Reads as *"how much of the body is inside the other"*, since what this answers
+        is a fraction rather than whether the containment holds.
+
+        :param fields: The rendered fragment for each field, keyed by field name.
+        """
+        return clause(
+            Noun("fraction"),
+            Prepositions.OF,
+            Noun(fields["body"]),
+            Prepositions.INSIDE,
+            Noun(fields["other"]),
+        )
+
+
+# %% support
+
+
+@dataclass(eq=False)
+class SupportedBy(Triple):
+    """
+    Asserts that one thing rests on another.
+
+    The relation form of :func:`is_supported_by`, so support can be stated in a query
+    rather than only computed once both things are in hand. A search can act on it
+    before anything has been found, since the supporting side is something the world
+    already holds.
+    """
+
+    supported: Any
+    """
+    What is resting.
+    """
+
+    supporting: Body
+    """
+    What holds it up.
+    """
+
+    maximum_intersection_height: float = 0.1
+    """
+    How far the two may overlap vertically before the reading is refused as unhandled
+    clipping.
+    """
+
+    @property
+    def subject(self) -> Any:
+        return self.supported
+
+    @property
+    def object(self) -> Body:
+        return self.supporting
+
+    def __call__(self) -> bool:
+        return is_supported_by(
+            self.supported, self.supporting, self.maximum_intersection_height
+        )
 
 
 @dataclass

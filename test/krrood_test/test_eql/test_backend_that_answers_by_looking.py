@@ -93,9 +93,7 @@ def test_an_equality_against_a_fixed_value_is_read_off_the_condition():
 
     assert AttributeEqualityToLiteral.read_from(
         condition, sighting
-    ) == AttributeEqualityToLiteral(
-        attribute_name="label", value=CUBE_ON_THE_LID.label
-    )
+    ) == AttributeEqualityToLiteral(attribute_name="label", value=CUBE_ON_THE_LID.label)
 
 
 def test_a_comparison_that_is_not_an_equality_states_no_fixed_value():
