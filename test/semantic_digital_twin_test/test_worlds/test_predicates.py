@@ -880,3 +880,23 @@ def test_reachability_reads_the_pose_as_what_is_reachable():
         verbalize_expression(Reachable(**operands))
         == "a HomogeneousTransformationMatrix is reachable by a Body"
     )
+
+
+@pytest.mark.parametrize(
+    "relation, sentence",
+    [
+        (SupportedBy, "a Body is supported by another Body"),
+        (VisibleTo, "a Body or a Region is visible to a Camera"),
+        (InContactWith, "a Body is in contact with another Body"),
+        (Supports, "a Body is supporting a body"),
+    ],
+)
+def test_a_relation_named_for_its_object_still_reads_as_a_sentence(relation, sentence):
+    """
+    A relation whose name is not verb-first cannot have its verb read off that name, so
+    it states its own clause rather than inheriting one that renders ungrammatically.
+    """
+    operands = placeholder_operands(relation)
+    operands.update(relation._example_operand_values_())
+
+    assert verbalize_expression(relation(**operands)) == sentence

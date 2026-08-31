@@ -154,7 +154,7 @@ class InContactWith(Triple):
             Noun(fields["body1"]),
             Copula(),
             Prepositions.IN,
-            Noun("contact"),
+            Noun.bare("contact"),
             Prepositions.WITH,
             Noun(fields["body2"]),
         )
@@ -216,6 +216,21 @@ class VisibleTo(Triple):
     @property
     def object(self) -> Camera:
         return self.camera
+
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """
+        Reads as *"the thing is visible to the camera"*.
+
+        :param fields: The rendered fragment for each field, keyed by field name.
+        """
+        return clause(
+            Noun(fields["obj"]),
+            Copula(),
+            Adjective("visible"),
+            Prepositions.TO,
+            Noun(fields["camera"]),
+        )
 
     def __call__(self) -> bool:
         return self.obj in get_visible_bodies(self.camera)
@@ -433,6 +448,24 @@ class SupportedBy(Triple):
     def object(self) -> Body:
         return self.supporting
 
+    @classmethod
+    def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
+        """
+        Reads as *"the supported body is supported by the supporting body"*.
+
+        :attr:`maximum_intersection_height` is a tolerance of the reading rather than
+        part of the claim, so it is left unspoken.
+
+        :param fields: The rendered fragment for each field, keyed by field name.
+        """
+        return clause(
+            Noun(fields["supported"]),
+            Copula(),
+            Adjective("supported"),
+            Prepositions.BY,
+            Noun(fields["supporting"]),
+        )
+
     def __call__(self) -> bool:
         if Below(
             self.supported.center_of_mass,
@@ -499,12 +532,16 @@ class Supports(Predicate):
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
         """
-        Reads as *"the body supports something"*.
+        Reads as *"the body is supporting a body"*, naming what is held up, which the
+        class name leaves implicit.
 
         :param fields: The rendered fragment for each field, keyed by field name.
         """
         return clause(
-            Noun(fields["supporting_body"]), Verb("support"), Noun("something")
+            Noun(fields["supporting_body"]),
+            Copula(),
+            Adjective("supporting"),
+            Noun("body"),
         )
 
 
