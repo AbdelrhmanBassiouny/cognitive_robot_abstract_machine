@@ -51,8 +51,10 @@ merge. **Read draft + review state, not merge state.**
 
 `detector-parameters-from-knowledge` is therefore not blocked and should stack on
 **#159** (`render_tree` is its "inspectable rule tree").
-`tune-detection-rules-against-the-camera` is worth reconsidering: #76/#80/#77 are
-most of its tooling already.
+`tune-detection-rules-against-the-camera` is **un-deferred** (developer's call,
+2026-08-31) and stacks on **#77**, the tip: #76/#80/#77 are most of its tooling
+already, so what remains is the perception-side presenter, not the expert
+interface underneath it.
 
 ## Environment (this container)
 
