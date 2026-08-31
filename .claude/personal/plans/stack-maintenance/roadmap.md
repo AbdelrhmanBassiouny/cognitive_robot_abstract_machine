@@ -240,6 +240,25 @@ and re-applies its delta.
   2026-08-31** in `c77b9ea79`: every candidate is opened against the base its build was assembled over,
   and one nothing can judge is closed and replaced rather than stopped on.
 
+## The bootstrap, and how it ended
+
+Four dispatches on 2026-08-31, because a pipeline that cannot publish cannot carry its own fix and
+every trigger is read from the copy on the branch it publishes to.
+
+1. **17** — reached the build, suite failed, blocked #110, ended. 1h45m of queue for one label.
+2. **18** — same again, blocked #107. Two runs, two labels, no candidate. That is what made
+   stop-on-first-break indefensible.
+3. **19** — with block-and-continue: whole cycle in seven minutes, one break blocked (#162), build
+   assembled without it, **candidate #228 opened against `main`**. First check eleven seconds later,
+   against eleven hours and nothing for #220. All 24 green.
+4. **20** — settled #228, recorded its tree, moved `integration` onto the judged commit, closed the
+   candidate unmerged, dropped its branch, then assembled the next build and opened #230 for it.
+
+`integration` now carries the schedule and the `workflow_run` trigger, so the pipeline runs itself
+from here; #230 needs no dispatch. **The lesson worth keeping is the ordering**: the guard that
+refuses a pipeline-less build had to land before the first judgeable candidate, because the first
+green build was otherwise the one that would have ended the automation.
+
 ## Open
 
 - Whether an already-registered scheduled run's notification setting can be changed in place, which
