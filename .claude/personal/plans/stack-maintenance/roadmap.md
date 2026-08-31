@@ -161,6 +161,17 @@ and re-applies its delta.
   based on `main`, and `#151` is not a draft; the hazard never applied. One `list_pull_requests` call
   answered it.
 
+- **A run that stops on a failure has to say what it had built.** The first bootstrap dispatch failed
+  its local suite, and `RefreshPipeline._build` prints the build's own document only on the branch
+  that is *not* `TESTS_FAILED` - so the run reported `tests-failed (11)` and nothing else, swallowing
+  the `left_out` that has to be read before anything can be published. The collision survived only
+  because `block-branch` writes to the culprit's pull request rather than to the run's log, which is a
+  different channel and a different reader.
+- **The suite catching a break before a candidate exists is the design working, not the pipeline
+  failing.** #110 and #80 merge cleanly and break together; no per-branch check can see that, and the
+  local run answered it in two and a half minutes rather than after a matrix. What it costs is that
+  the run stops there, so a cycle that hits one exercises nothing downstream of the build.
+
 ## The integration branch's design, stated once
 
 - **It gates nothing.** Promotion asks whether a branch is ready for upstream review; integration asks

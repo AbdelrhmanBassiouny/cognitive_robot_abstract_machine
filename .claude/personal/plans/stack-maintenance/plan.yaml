@@ -449,16 +449,19 @@ items:
   depends_on:
   - integration-branch
   blockers:
-  - 'Waiting on the bootstrap, which is two dispatches and one is spent. The base fix landed in
-    `c77b9ea79`: every candidate is opened against `configuration.upstream_base`, the title tells the
-    candidate a later run settles from a `--plan` one, and an unjudgeable candidate is closed and
-    replaced rather than stopped on. "Integration refresh" was dispatched on this branch on 2026-08-31 -
-    the only arm that runs the new pipeline, since every trigger is read from the copy on `integration`,
-    which is a build output. That run assembles a build and opens its candidate; a *later* run reads the
-    verdict, because a candidate''s first check arrives long after the run that opened it is over. So the
-    item is not done until a second dispatch settles and, if green, publishes - and what a build carries
-    has to be read off its `left_out` before that second dispatch, since the guard refuses a build with
-    no rebuild in it.'
+  - 'The base fix landed in `c77b9ea79` and the bootstrap is still owed a candidate. The first dispatch
+    ran on 2026-08-31 (queued 1h45m, executed in 2.5 minutes) and got further than any run before it:
+    `find-candidate` correctly reported `no-candidate-open` (18) - the first time the new discriminator
+    was exercised live - the base came forward, and the build assembled. It then exited `tests-failed`
+    (11), because the local suite failed on the assembled tree: `claude/setup-stacked-prs-skill` (#110)
+    and `D-store` (#80) merge cleanly and break together, which is exactly the semantic collision the
+    local run exists to catch and which no per-branch check can see. `block-branch` labelled #110
+    `integration-conflict` and commented, so the next rebuild leaves it and its dependents out - which is
+    what should let the following build reach a candidate. So no candidate was opened, nothing was
+    pushed, and the candidate half of the pipeline - the base change, the title discriminator, the
+    close-and-move-past - is still unexercised live. Next: dispatch again on this branch, and read the
+    build''s `left_out` to confirm it carries #211 and #154, since the guard refuses a build with no
+    rebuild in it.'
   notes: 'Part D of `integration-branch`''s review round: the verdict moves from a local test run to real CI.
 
     Folded back onto that item''s branch after being split out, so it has no pull request of its own - the
@@ -758,8 +761,24 @@ items:
     item''s fields at a hardcoded four-space indent, so replacing this item''s `blockers` emitted the key inside
     `depends_on`''s sequence and the manifest no longer parsed. It reproduces the defect `manifest-currency-first`
     already records against its own branch, which is where the `ItemIndentation` fix belongs - #151 introduces
-    `update` and `ValueStyle.SEQUENCE`, so it is the only branch that can test one. Reported rather than folded in
-    here; every manifest write in this session went through a hand-edited splice and `save-plan.sh` instead.
+    `update` and `ValueStyle.SEQUENCE`, so it is the only branch that can test one. Reported rather than folded
+    in here; every manifest write in this session went through a hand-edited splice and `save-plan.sh` instead.
+
+
+    **The first bootstrap dispatch reached the build and stopped at the suite, which is the pipeline working
+    rather than failing.** `find-candidate` answered `no-candidate-open` - the new title discriminator''s first
+    live exercise - the base came forward, the build assembled, and the local suite then failed on it: #110 and
+    #80 merge cleanly and break together. `block-branch` labelled #110 `integration-conflict` and said so on
+    the pull request. No candidate was opened, so the base change, the discriminator and the close-and-move-past
+    rule are all still unexercised against real GitHub; the next rebuild leaves #110 out and should reach one.
+
+
+    **One gap the run exposed, in `RefreshPipeline._build`.** A build that fails its suite prints neither its
+    own report nor the block''s: the branch that reports a status other than `TESTS_FAILED` prints `assembled.output`,
+    and the `TESTS_FAILED` branch above it returns without printing either document. So the run says `tests-failed
+    (11)` three times and nothing else - and `left_out`, the one thing that has to be read before a second dispatch
+    can publish, is exactly what it swallows. The collision itself was still recoverable, but only because `block-branch`
+    writes to the culprit''s pull request rather than to the run''s log.
 
     '
 - id: red-candidate-localisation
