@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing_extensions import Optional, Tuple, List, TYPE_CHECKING
 from collections.abc import Sequence
 from dataclasses import dataclass
 from numbers import Integral
@@ -9,6 +10,8 @@ import numpy as np
 import trimesh
 from trimesh import Scene
 
+from semantic_digital_twin.datastructures.field_of_view import FieldOfView
+from semantic_digital_twin.datastructures.types import NpMatrix4x4
 from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.spatial_types.spatial_types import GenericSpatialType
 from semantic_digital_twin.exceptions import InvalidCameraResolutionError
@@ -204,6 +207,7 @@ class RayTracer:
         resolution: CameraResolutionValue = (512, 512),
         min_distance: float = 0,
         max_distance: float = np.inf,
+        field_of_view: Optional[FieldOfView] = None,
     ) -> np.ndarray:
         """
         Creates a segmentation mask for the ray tracer scene from the camera position to
@@ -217,11 +221,13 @@ class RayTracer:
             image; a width-height pair creates a rectangular image.
         :param min_distance: The minimum distance of a body to be considered a hit.
         :param max_distance: The maximum distance of a body to be considered a hit.
+        :param field_of_view: The field of view of the camera, defaulting to
+            FieldOfView()
         :return: A segmentation mask as a numpy array.
         """
         self.update_scene()
         ray_origins, ray_directions, pixels = self.create_camera_rays(
-            camera_pose, resolution=resolution
+            camera_pose, resolution=resolution, field_of_view=field_of_view
         )
 
         target_points = ray_origins + ray_directions * 10
@@ -256,6 +262,7 @@ class RayTracer:
         resolution: CameraResolutionValue = (512, 512),
         min_distance: float = 0,
         max_distance: float = np.inf,
+        field_of_view: Optional[FieldOfView] = None,
     ) -> np.ndarray:
         """
         Creates a depth map for the ray tracer scene from the camera position to the
@@ -269,11 +276,13 @@ class RayTracer:
             image; a width-height pair creates a rectangular image.
         :param min_distance: The minimum distance of a body to be considered a hit.
         :param max_distance: The maximum distance of a body to be considered a hit.
+        :param field_of_view: The field of view of the camera, defaulting to
+            FieldOfView()
         :return: A depth map as a numpy array.
         """
         self.update_scene()
         ray_origins, ray_directions, pixels = self.create_camera_rays(
-            camera_pose, resolution=resolution
+            camera_pose, resolution=resolution, field_of_view=field_of_view
         )
 
         target_points = ray_origins + ray_directions * 10
@@ -312,8 +321,8 @@ class RayTracer:
         self,
         camera_pose: GenericSpatialType,
         resolution: CameraResolutionValue = (512, 512),
-        fov=90,
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        field_of_view: Optional[FieldOfView] = None,
+    ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
         Creates camera rays for the ray tracer scene from the camera position to the
         target position.
@@ -322,12 +331,15 @@ class RayTracer:
         along the x-axis.
 
         :param camera_pose: The position of the camera as a 4x4 transformation matrix.
+        :param field_of_view: The field of view of the camera, defaulting to
+            FieldOfView()
         :param resolution: The camera resolution value. An integer creates a square
             image; a width-height pair creates a rectangular image.
         :param fov: The field of view of the camera in degrees.
         :return: The origin points of the rays, the direction vectors of the rays, and
             the pixel coordinates.
         """
+        field_of_view = field_of_view or FieldOfView()
         camera_pose = camera_pose.to_np()
         camera_resolution = CameraResolution.from_value(resolution)
         self.update_scene()
@@ -339,7 +351,10 @@ class RayTracer:
             angle=np.radians(180.0), direction=[1, 0, 0]
         )
 
-        self.scene.camera.fov = (fov, fov)
+        self.scene.camera.fov = (
+            np.degrees(field_of_view.horizontal_angle),
+            np.degrees(field_of_view.vertical_angle),
+        )
         self.scene.camera.resolution = camera_resolution.shape
         self.scene.graph[self.scene.camera.name] = camera_pose @ rotate_x @ rotate
 
@@ -352,7 +367,7 @@ class RayTracer:
         multiple_hits=False,
         min_distance: float = 0,
         max_distance: float = np.inf,
-    ) -> tuple[np.ndarray, np.ndarray, list[Body]]:
+    ) -> Tuple[np.ndarray, np.ndarray, List[Body]]:
         """
         Performs a ray test from the origin point to the target point in the ray tracer
         scene.

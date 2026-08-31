@@ -1,8 +1,9 @@
 from dataclasses import dataclass, field
 from os.path import dirname
 
-from typing_extensions import Optional, List, Dict, Any, Type, Callable, ClassVar
+from typing_extensions import Optional, List, Dict, Any, Type, ClassVar
 
+from semantic_digital_twin.semantic_annotations.mixins import HasMechanicalJoint
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import SemanticAnnotation
 from semantic_digital_twin.reasoning.reasoner import CaseReasoner
@@ -81,13 +82,13 @@ class WorldReasoner:
             else:
                 for semantic_annotation in attr_value:
                     self.world.add_semantic_annotation_recursively(semantic_annotation)
+                    if isinstance(semantic_annotation, HasMechanicalJoint):
+                        semantic_annotation.create_default_mechanical_joint()
 
     def fit_semantic_annotations(
         self,
         required_semantic_annotations: List[Type[SemanticAnnotation]],
         update_existing_semantic_annotations: bool = False,
-        world_factory: Optional[Callable] = None,
-        scenario: Optional[Callable] = None,
     ) -> None:
         """
         Fit the world RDR to the required semantic annotation types.
@@ -96,16 +97,10 @@ class WorldReasoner:
             the RDR should be fitted to.
         :param update_existing_semantic_annotations: If True, existing semantic
             annotations will be updated with new rules, else they will be skipped.
-        :param world_factory: Optional callable that can be used to recreate the world
-            object.
-        :param scenario: Optional callable that represents the test method or scenario
-            that is being executed.
         """
         self.reasoner.fit_attribute(
             "semantic_annotations",
             required_semantic_annotations,
             False,
             update_existing_rules=update_existing_semantic_annotations,
-            case_factory=world_factory,
-            scenario=scenario,
         )

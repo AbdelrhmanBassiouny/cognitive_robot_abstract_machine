@@ -26,8 +26,10 @@ def test_create_segmentation_mask(ray_test_world):
         ]
     )
 
-    world.get_connection(world.root, body2).origin = np.array(
-        [[1, 0, 0, -1], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    world.get_connection(world.root, body2).origin = HomogeneousTransformationMatrix(
+        np.array([[1, 0, 0, -1], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
+        reference_frame=world.root,
+        child_frame=body2,
     )
 
     seg = rt.create_segmentation_mask(
@@ -166,11 +168,15 @@ def test_ray_test(ray_test_world):
 
 def test_ray_test_batch(ray_test_world):
     world, body1, body2, body3, body4 = ray_test_world
-    world.get_connection(world.root, body1).origin = np.array(
-        [[1, 0, 0, 1], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    world.get_connection(world.root, body1).origin = HomogeneousTransformationMatrix(
+        np.array([[1, 0, 0, 1], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
+        reference_frame=world.root,
+        child_frame=body1,
     )
-    world.get_connection(world.root, body2).origin = np.array(
-        [[1, 0, 0, -1], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    world.get_connection(world.root, body2).origin = HomogeneousTransformationMatrix(
+        np.array([[1, 0, 0, -1], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
+        reference_frame=world.root,
+        child_frame=body2,
     )
 
     rt = RayTracer(world)
@@ -193,11 +199,15 @@ def test_ray_test_batch(ray_test_world):
 
 def test_min_distance(ray_test_world):
     world, body1, body2, body3, body4 = ray_test_world
-    world.get_connection(world.root, body1).origin = np.array(
-        [[1, 0, 0, 0.5], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    world.get_connection(world.root, body1).origin = HomogeneousTransformationMatrix(
+        np.array([[1, 0, 0, 0.5], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
+        reference_frame=world.root,
+        child_frame=body1,
     )
-    world.get_connection(world.root, body2).origin = np.array(
-        [[1, 0, 0, -1], [0, 1, 0, 0], [0, 0, 1, 10], [0, 0, 0, 1]]
+    world.get_connection(world.root, body2).origin = HomogeneousTransformationMatrix(
+        np.array([[1, 0, 0, -1], [0, 1, 0, 0], [0, 0, 1, 10], [0, 0, 0, 1]]),
+        reference_frame=world.root,
+        child_frame=body2,
     )
 
     rt = RayTracer(world)
@@ -214,11 +224,15 @@ def test_min_distance(ray_test_world):
 
 def test_max_distance(ray_test_world):
     world, body1, body2, body3, body4 = ray_test_world
-    world.get_connection(world.root, body1).origin = np.array(
-        [[1, 0, 0, 1.5], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+    world.get_connection(world.root, body1).origin = HomogeneousTransformationMatrix(
+        np.array([[1, 0, 0, 1.5], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]),
+        reference_frame=world.root,
+        child_frame=body1,
     )
-    world.get_connection(world.root, body2).origin = np.array(
-        [[1, 0, 0, -1], [0, 1, 0, 0], [0, 0, 1, 10], [0, 0, 0, 1]]
+    world.get_connection(world.root, body2).origin = HomogeneousTransformationMatrix(
+        np.array([[1, 0, 0, -1], [0, 1, 0, 0], [0, 0, 1, 10], [0, 0, 0, 1]]),
+        reference_frame=world.root,
+        child_frame=body2,
     )
 
     rt = RayTracer(world)

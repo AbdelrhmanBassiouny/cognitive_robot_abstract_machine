@@ -31,7 +31,12 @@ import threading
 from dataclasses import dataclass
 from typing import Callable, List, Optional
 
-from robocasa.models.scenes.scene_registry import LayoutType, StyleType
+from semantic_digital_twin.adapters.robocasa_dataset.mujoco_compat import (
+    robocasa_version_assertions_relaxed,
+)
+
+with robocasa_version_assertions_relaxed():
+    from robocasa.models.scenes.scene_registry import LayoutType, StyleType
 
 from coraplex.datastructures.dataclasses import Context
 from coraplex.datastructures.enums import Arms, ApproachDirection, VerticalAlignment
@@ -189,8 +194,10 @@ def _start_rviz_publisher(
     if not rclpy.ok():
         rclpy.init()
     node = rclpy.create_node("robocasa_kitchen_demo")
-    marker_publisher = VizMarkerPublisher(_world=world, node=node)
     tf_publisher = TFPublisher(_world=world, node=node)
+    marker_publisher = VizMarkerPublisher(
+        _world=world, node=node, tf_publisher=tf_publisher
+    )
 
     node.create_timer(tf_period_seconds, tf_publisher.on_state_change)
     node.create_timer(marker_period_seconds, marker_publisher.on_model_change)
@@ -364,12 +371,13 @@ def _spawn_robot_and_prepare_pick_up(
     context.evaluate_conditions = False
 
     apple = world.get_body_by_name(apple_name)
+    apple_annotation = world.get_semantic_annotations_by_type(Apple)[0]
     plan = sequential(
         [
             ParkArmsAction(Arms.BOTH),
             MoveTorsoAction(TorsoState.HIGH),
             PickUpAction(
-                apple,
+                apple_annotation,
                 Arms.RIGHT,
                 GraspDescription(
                     ApproachDirection.FRONT,

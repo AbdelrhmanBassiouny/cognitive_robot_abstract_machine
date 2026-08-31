@@ -25,7 +25,6 @@ from krrood.entity_query_language.core.mapped_variable import (
 from krrood.entity_query_language.core.variable import InstantiatedVariable
 from krrood.entity_query_language.factories import (
     and_,
-    attribute_owner_class,
     contains,
     entity,
     exists,
@@ -657,7 +656,7 @@ def register_inference(
     explanation = InferenceExplanation(
         query_node=variable_node,
         stack=monitored.get_stack(variable_node) or CallStack([]),
-        query_root=variable_node._root_,
+        query_root=variable_node._evaluation_root_query_,
         satisfied_condition_ids=satisfied_ids,
         operation_result=result,
     )

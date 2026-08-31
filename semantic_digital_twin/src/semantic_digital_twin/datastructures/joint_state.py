@@ -98,6 +98,16 @@ class JointState(SubclassJSONSerializer):
             ]
         )
 
+    def apply_to(self, world: World) -> None:
+        """
+        Write the target values of this joint state into the world.
+
+        The whole state is announced as a single change.
+        """
+        with world.batch_state_changes():
+            for connection, target_value in self.items():
+                connection.position = target_value
+
     @classmethod
     def from_str_dict(cls, mapping: Dict[str, float], world: World):
         connections = [world.get_connection_by_name(name) for name in mapping.keys()]
@@ -124,8 +134,8 @@ class JointState(SubclassJSONSerializer):
     def to_json(self) -> Dict[str, Any]:
         return {
             **super().to_json(),
-            "connections": [
-                to_json(connection.name) for connection in self.connections
+            "child_ids": [
+                to_json(connection.child.id) for connection in self.connections
             ],
             "target_values": self.target_values,
             "joint_state_type": to_json(self.state_type),
@@ -134,15 +144,15 @@ class JointState(SubclassJSONSerializer):
 
     @classmethod
     def _from_json(cls, data: Dict[str, Any], **kwargs) -> Self:
+        # A connection carries no identifier of its own, so it is referenced the way
+        # Connection itself is serialized: through the entities it joins. Names would
+        # not do, since two instances of the same robot description name their joints
+        # identically.
         tracker = WorldEntityWithIDKwargsTracker.from_kwargs(kwargs)
-        world = tracker._world
-        if world:
-            connections = [
-                world.get_connection_by_name(from_json(name, **kwargs))
-                for name in data["connections"]
-            ]
-        else:
-            raise NotImplementedError("World is required to resolve connections")
+        connections = [
+            tracker.get_world_entity_with_id(from_json(child_id)).parent_connection
+            for child_id in data["child_ids"]
+        ]
         target_values = from_json(data["target_values"])
         state_type = from_json(data["joint_state_type"])
         name = from_json(data["name"])

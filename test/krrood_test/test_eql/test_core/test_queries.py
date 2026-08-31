@@ -61,7 +61,6 @@ from krrood.entity_query_language.query.quantifiers import (
 from krrood.entity_query_language.utils import (
     cartesian_product_while_passing_the_bindings_around,
 )
-from krrood.entity_query_language.core.base_expressions import OperationResult
 from ...dataset.example_classes import (
     KRROODVectorsWithProperty,
 )
@@ -719,7 +718,7 @@ def test_is_same_entity_predicate_in_query(handles_and_containers_world):
     matches = query.tolist()
     assert len(matches) == 1
     assert isinstance(matches[0], IsSameSemanticEntity)
-    assert matches[0].entity_1 is target
+    assert matches[0].first_entity is target
 
 
 def test_literal_predicate(handles_and_containers_world):
@@ -1001,6 +1000,46 @@ def test_flatten_iterable_attribute(handles_and_containers_world):
     # We should get one row for each drawer and the parent view preserved
     assert len(results) == 3
     assert {row.handle.name for row in results} == {"Handle1", "Handle2", "Handle3"}
+
+
+def test_two_indexings_by_one_key_variable_follow_the_same_element(
+    handles_and_containers_world,
+):
+    """
+    Indexing names which element it means, so two indexings by one key variable follow
+    that key together rather than ranging over the elements independently.
+    """
+    world = handles_and_containers_world
+
+    cabinet = variable(Cabinet, world.views)
+    position = variable(int, domain=[0, 1])
+    query = entity(cabinet).where(
+        cabinet.drawers[position].handle.name != cabinet.drawers[position].handle.name
+    )
+
+    assert query.distinct().tolist() == []
+
+
+def test_two_flattenings_of_one_attribute_range_independently(
+    handles_and_containers_world,
+):
+    """
+    Each flattening is a variable of its own, so a condition can relate one element of a
+    collection to a different element of the same collection.
+    """
+    world = handles_and_containers_world
+    cabinets = [view for view in world.views if isinstance(view, Cabinet)]
+
+    cabinet = variable(Cabinet, world.views)
+    one_drawer = flat_variable(cabinet.drawers)
+    another_drawer = flat_variable(cabinet.drawers)
+    query = entity(cabinet).where(one_drawer.handle.name != another_drawer.handle.name)
+
+    assert query.distinct().tolist() == [
+        candidate
+        for candidate in cabinets
+        if len({drawer.handle.name for drawer in candidate.drawers}) > 1
+    ]
 
 
 def test_flatten_iterable_attribute_and_use_not_equal(handles_and_containers_world):
@@ -1381,6 +1420,22 @@ def test_accessing_a_dunder_attribute_symbolically_raises_a_helpful_error():
     assert getattr(var, "__name__", "fallback") == "fallback"
 
 
+def test_descendants_yields_each_shared_node_only_once():
+    """A node reachable by more than one path is a descendant once, not once per path.
+
+    ``and_(v > 1, v < 3)`` makes ``v`` a child of both comparators, so a naive
+    depth-first walk revisits ``v`` (and, in a rule tree, every shared subtree)
+    once per path. On a deep rule-tree DAG this compounds into an exponential
+    traversal that stalls fitting, so ``_descendants_`` must yield every node at
+    most once.
+    """
+    var = variable(int, [1, 2, 3])
+    entity(var).where(and_(var > 1, var < 3))
+    descendant_ids = [descendant._id_ for descendant in var._root_._descendants_]
+
+    assert len(descendant_ids) == len(set(descendant_ids))
+
+
 def test_root_caches_all_descendant_ids_for_nested_queries():
     """
     Test that the root of a query has all descendant IDs in its _expression_id_cache_,
@@ -1505,3 +1560,15 @@ def test_presentation_example():
     q = an(entity(r).where(r.battery > 50, not_(r.tasks[0].completed)))
     visualize_query_graph(q, figure_size=(20, 20), spacing_x=2, spacing_y=2)
     assert q.tolist() == [robots[2]]
+
+
+def test_empty_data_to_aggregator():
+    data = variable(int, [])
+
+    @symbolic_function
+    def x_value(x_):
+        return x_
+
+    key = lambda x: x_value(x)
+    min_ = entity(eql.min(data, key=key))
+    assert min_.tolist() == [None]

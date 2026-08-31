@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import logging
-import threading
 import time
 from dataclasses import dataclass, field
 from datetime import timedelta
 
 from typing_extensions import List, Dict, ClassVar, Optional, TYPE_CHECKING
 
+from coraplex.datastructures.enums import ExecutionType
+from coraplex.exceptions import (
+    MotionDidNotFinish,
+    ConditionNotSatisfied,
+    UnknownExecutionType,
+)
 from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import (
     LifeCycleValues,
@@ -17,36 +22,27 @@ from giskardpy.motion_statechart.goals.collision_avoidance import (
     ExternalCollisionAvoidance,
 )
 from giskardpy.motion_statechart.goals.templates import Sequence
+from giskardpy.motion_statechart.graph_node import CancelMotion
 from giskardpy.motion_statechart.graph_node import EndMotion, Task
 from giskardpy.motion_statechart.motion_statechart import MotionStatechart
 from giskardpy.qp.qp_controller_config import QPControllerConfig
 from giskardpy.ros_executor import Ros2Executor
 from krrood.entity_query_language.factories import evaluate_condition
-from coraplex.datastructures.enums import ExecutionType
-from coraplex.exceptions import (
-    MotionDidNotFinish,
-    ConditionNotSatisfied,
-    UnknownExecutionType,
-)
-from semantic_digital_twin.world_description.connections import (
-    Connection6DoF,
-    FixedConnection,
-)
-from semantic_digital_twin.world_description.world_entity import Body
-
-from giskardpy.motion_statechart.graph_node import CancelMotion
 from krrood.symbolic_math.symbolic_math import (
     trinary_logic_and,
     trinary_logic_not,
     trinary_logic_or,
 )
+from semantic_digital_twin.world_description.connections import (
+    Connection6DoF,
+)
+from semantic_digital_twin.world_description.world_entity import Body
 
 if TYPE_CHECKING:
-    from giskardpy.middleware.ros2.python_interface import GiskardWrapper
     from coraplex.robot_plans.actions.base import ActionDescription
 
     from coraplex.plans.condition_nodes import ConditionNode
-    from coraplex.plans.plan_node import MotionNode, UnderspecifiedNode, ActionNode
+    from coraplex.plans.plan_node import MotionNode, UnderspecifiedNode
     from coraplex.datastructures.dataclasses import Context
 
 logger = logging.getLogger(__name__)
@@ -68,22 +64,11 @@ class Executable:
     Coraplex context which should be used to execute this executable.
     """
 
-    synchronize_time_delta: timedelta = field(
-        default=timedelta(seconds=1), kw_only=True
-    )
-    """
-    Time delta that is waited between executables when executing on the real robot.
-
-    Is done to prevent synchronization issues
-    """
-
     def execute(self) -> None:
         """
         Executes the unit.
         """
         for executable in self.execution_list:
-            if GiskardExecutable.execution_type == ExecutionType.REAL:
-                time.sleep(self.synchronize_time_delta.seconds)
             executable.execute()
 
 
@@ -171,7 +156,6 @@ class GiskardExecutable(Executable):
             if skip_end_conditions:
                 end_trigger = trinary_logic_or(end_trigger, *skip_end_conditions)
 
-            self._add_condition_monitors(first_task, end_trigger)
         if GiskardExecutable.collision_avoidance:
             self._current_motion_state_chart.add_node(ExternalCollisionAvoidance())
 
@@ -348,7 +332,7 @@ class GiskardExecutable(Executable):
             if executor.motion_statechart.is_end_motion():
                 break
 
-        executor._set_velocity_acceleration_jerk_to_zero()
+        executor.set_velocity_acceleration_jerk_to_zero()
         executor.motion_statechart.cleanup_nodes(context=executor.context)
         executor.context.cleanup()
 
@@ -367,11 +351,7 @@ class GiskardExecutable(Executable):
         Executes the motion state chart on the real robot via giskard while monitoring
         for interrupts.
         """
-        from giskardpy.middleware.ros2.python_interface import GiskardWrapper
-
-        giskard = GiskardWrapper(self.context.ros_node, world=self.context.world)
-
-        giskard.execute(self.motion_state_chart)
+        self.context.giskard_wrapper.execute(self.motion_state_chart)
 
 
 @dataclass
@@ -415,6 +395,18 @@ class ModelChangeExecutable(Executable):
     The body the moved body is attached to afterwards.
     """
 
+    giskard_idle_settle_delta: timedelta = field(
+        default=timedelta(seconds=0.3), kw_only=True
+    )
+    """
+    Time to wait after publishing the model change on the real robot.
+
+    Giskard only applies buffered world updates, and only republishes tf, while its
+    behavior tree is idle between goals (tree tick period is 50ms); this delay gives it
+    a few idle ticks to catch up before the next motion goal is sent, instead of relying
+    on however much idle time happens to fall out of the surrounding plan's timing.
+    """
+
     def execute(self) -> None:
         """
         Re-parent the body to ``new_parent`` while preserving its global pose.
@@ -424,18 +416,15 @@ class ModelChangeExecutable(Executable):
         )
         with self.context.world.modify_world():
             self.context.world.remove_connection(self.body.parent_connection)
-            # TODO: this shouldn't be fixed but 6DOF
-            connection = FixedConnection(
+            connection = Connection6DoF.create_with_dofs(
                 parent=self.new_parent,
                 child=self.body,
+                world=self.context.world,
                 parent_T_connection_expression=obj_transform,
             )
-
-            # connection = Connection6DoF.create_with_dofs(
-            #     parent=self.new_parent, child=self.body, world=self.context.world, parent_T_connection_expression=obj_transform
-            # )
             self.context.world.add_connection(connection)
-            # connection.origin = obj_transform
+        if GiskardExecutable.execution_type == ExecutionType.REAL:
+            time.sleep(self.giskard_idle_settle_delta.total_seconds())
 
 
 @dataclass

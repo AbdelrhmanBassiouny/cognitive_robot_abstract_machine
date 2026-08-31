@@ -57,6 +57,8 @@ from krrood.symbolic_math.exceptions import (
     WrongNumberOfArgsError,
     NotSquareMatrixError,
     NotScalerError,
+    NotColumnVectorError,
+    NotEnoughArgumentsError,
     UnsupportedOperationError,
     WrongDimensionsError,
     CannotConvertToStringError,
@@ -454,13 +456,21 @@ class SymbolicMathType(ABC):
     Reference to the casadi data structure of type casadi.SX.
     """
 
+    pinned_free_variables: List[FloatVariable] = field(
+        kw_only=True, repr=False, default_factory=list
+    )
+    """
+    Strong references to this expression's free variables, keeping them alive.
+
+    :attr:`FloatVariable._registry` holds its variables weakly, so an expression whose
+    variables are referenced nowhere else can no longer report them. Empty means this
+    expression pins nothing, which is the case for every expression built by
+    :meth:`from_casadi_sx` and therefore for every result of an arithmetic operation.
+    """
+
     def __post_init__(self):
-        # save free variables at the instance to prevent them from getting cleaned up.
-        # constants have none, so skip the casadi graph scan for them.
-        if self.is_constant():
-            self.__FREE_VARIABLES__ = []
-        else:
-            self.__FREE_VARIABLES__ = self.free_variables()
+        # constants have no free variables, so skip the casadi graph scan for them.
+        self.pinned_free_variables = [] if self.is_constant() else self.free_variables()
 
     @classmethod
     def from_casadi_sx(cls, casadi_sx: ca.SX) -> Self:
@@ -572,6 +582,10 @@ class SymbolicMathType(ABC):
         Transforms the data into a numpy array.
 
         Only works if the expression has no free variables.
+
+        ..note::
+            This does not need to be called to do numpy operations on the expression.
+            One can just pass the expression directly
         """
         if not self.is_constant():
             raise HasFreeVariablesError(self.free_variables())
@@ -1108,7 +1122,8 @@ class Vector(SymbolicMathType):
         """
         if self.shape[0] == 1:
             self._casadi_sx = self._casadi_sx.T
-        assert self.shape[1] == 1 or self.shape == (0, 0)
+        if self.shape[1] != 1 and self.shape != (0, 0):
+            raise NotColumnVectorError(actual_dimensions=self.shape)
 
     @classmethod
     def zeros(cls, size: int) -> Self:
@@ -1527,7 +1542,8 @@ class Matrix(SymbolicMathType):
 
         Only works if the expression is square.
         """
-        assert self.shape[0] == self.shape[1]
+        if not self.is_square():
+            raise NotSquareMatrixError(actual_dimensions=self.shape)
         return Matrix(ca.inv(self.casadi_sx))
 
     def kron(self, other: Matrix) -> Self:
@@ -2047,11 +2063,18 @@ def trinary_logic_not(expression: FloatVariable | Scalar) -> Scalar:
 
 def trinary_logic_and(*args: FloatVariable | Scalar) -> Scalar:
     """
-    AND   |  True   | Unknown | False ------------------+---------+------- True    |
-    True   | Unknown | False Unknown | Unknown | Unknown | False False   |  False  |
-    False  | False.
+    Trinary logic and::
+
+        AND     |  True   | Unknown | False
+        --------+---------+---------+-------
+        True    | True    | Unknown | False
+        Unknown | Unknown | Unknown | False
+        False   | False   | False   | False
     """
-    assert len(args) >= 2, "and must be called with at least 2 arguments"
+    if len(args) < 2:
+        raise NotEnoughArgumentsError(
+            minimum_number_of_arguments=2, actual_number_of_arguments=len(args)
+        )
     # if there is any False, return False
     if any(x for x in args if x.is_const_false()):
         return Scalar.const_false()
@@ -2069,11 +2092,18 @@ def trinary_logic_and(*args: FloatVariable | Scalar) -> Scalar:
 
 def trinary_logic_or(*args: FloatVariable | Scalar) -> Scalar:
     """
-    OR   |  True   | Unknown | False ------------------+---------+------- True    | True
-    |  True   | True Unknown |  True   | Unknown | Unknown False   |  True   | Unknown |
-    False.
+    Trinary logic or::
+
+        OR      |  True   | Unknown | False
+        --------+---------+---------+-------
+        True    | True    | True    | True
+        Unknown | True    | Unknown | Unknown
+        False   | True    | Unknown | False
     """
-    assert len(args) >= 2, "and must be called with at least 2 arguments"
+    if len(args) < 2:
+        raise NotEnoughArgumentsError(
+            minimum_number_of_arguments=2, actual_number_of_arguments=len(args)
+        )
     # if there is any False, return False
     if any(x for x in args if x.is_const_true()):
         return Scalar.const_true()

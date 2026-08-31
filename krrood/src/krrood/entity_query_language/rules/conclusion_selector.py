@@ -11,6 +11,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing_extensions import Iterable, TYPE_CHECKING, Self, Optional
 
+from krrood.entity_query_language.exceptions import SelfReferentialInsertionError
 from krrood.entity_query_language.rules.conclusion import Conclusion
 from krrood.entity_query_language.operators.set_operations import Union as EQLUnion
 from krrood.entity_query_language.operators.core_logical_operators import (
@@ -42,7 +43,7 @@ class ConclusionSelector(TruthValueOperator, ABC):
     def create_and_update_rule_tree(
         cls,
         *conditions: ConditionType,
-    ) -> Self:
+    ) -> SymbolicExpression:
         """
         Create a new RDR rule (e.g., Refinement, Alternative, Next) and add it to the
         current rule tree.
@@ -51,23 +52,83 @@ class ConclusionSelector(TruthValueOperator, ABC):
         connected via ElseIf/Next to the current node, representing an alternative/next
         path.
 
+        The anchor (the node the new branch attaches to) is taken from the enclosing
+        ``with`` context. For dynamic growth without a ``with`` context, use
+        :meth:`insert_at` with an explicit anchor.
+
         :param conditions: Conditions to chain with AND to create the new condition
             expression.
         :returns: The conditions root after attaching the new condition to the rule
             tree.
         """
-        new_condition = chained_logic(AND, *conditions)
+        return cls.insert_at(cls._get_current_context_condition(), *conditions)
 
-        current_context = cls._get_current_context_condition()
+    @classmethod
+    def insert_at(
+        cls,
+        anchor: SymbolicExpression,
+        *conditions: ConditionType,
+    ) -> SymbolicExpression:
+        """
+        Attach a new branch to an explicitly given ``anchor``.
 
-        prev_parent = current_context._parent_
+        This is the explicit-anchor counterpart of :meth:`create_and_update_rule_tree`,
+        used to grow a live rule-tree DAG (e.g. when an RDR inserts a refinement or
+        alternative after observing a misclassification). Conditions are chained with
+        AND; the new branch is spliced in between ``anchor`` and the parent the asking
+        branch reaches it by, which the enclosing ``with`` context supplies when one
+        anchors on ``anchor`` and the structural parent supplies otherwise.
 
-        new_context = cls._create_between_two_expressions(
-            current_context, new_condition
+        Any condition already in a tree (has a ``_parent_``) is replaced with the node from
+        :meth:`~krrood.entity_query_language.core.base_expressions.SymbolicExpression._node_for_new_position_`
+        so splicing it in cannot corrupt the original's ``_parent_``.
+
+        :param anchor: The existing condition node the new branch connects to.
+        :param conditions: Conditions to chain with AND into the new branch.
+        :returns: The newly created condition node (attach conclusions to it via ``with``).
+        """
+        cleaned_conditions = []
+        for condition in conditions:
+            if (
+                isinstance(condition, SymbolicExpression)
+                and condition._parent_ is not None
+            ):
+                condition = condition._node_for_new_position_()
+            cleaned_conditions.append(condition)
+        new_condition = chained_logic(AND, *cleaned_conditions)
+        # A single condition returned directly by chained_logic may still carry a parent from the
+        # pre-cleaning step; detach again if needed — idempotent for a parentless node.
+        if (
+            isinstance(new_condition, SymbolicExpression)
+            and new_condition._parent_ is not None
+        ):
+            new_condition = new_condition._node_for_new_position_()
+
+        # Splice above the parent the asking branch reaches the anchor by. A shared anchor
+        # keeps whichever parent was attached first as its structural one, which may belong to
+        # an unrelated branch entirely, so the enclosing ``with`` context decides instead and
+        # the structural parent only stands in when no enclosing context anchors on it.
+        anchor_context = SymbolicExpression._rule_tree_context_anchored_on_(anchor)
+        previous_parent = (
+            anchor._parent_ if anchor_context is None else anchor_context.owning_parent
         )
 
-        if new_context is not current_context:
-            prev_parent._replace_child_(current_context, new_context)
+        # Only raise when the anchor is already established in a rule tree (has parents).
+        # A freshly-created anchor with no parents indicates _conditions_root_ returned a node
+        # from a different, unrelated part of the DAG, which is a different underlying issue —
+        # not the self-referential insertion bug we guard against here.
+        if new_condition is anchor and anchor._parents_:
+            raise SelfReferentialInsertionError(anchor=anchor)
+
+        new_context = cls._create_between_two_expressions(anchor, new_condition)
+
+        if new_context is not anchor and previous_parent is not None:
+            previous_parent._replace_child_(anchor, new_context)
+
+        # The splice moved the anchor under the node just created, so the asking branch now
+        # reaches it by that edge; a later edit in the same context must splice above it.
+        if new_context is not anchor and anchor_context is not None:
+            anchor_context.owning_parent = new_context
 
         return new_condition
 
@@ -147,10 +208,12 @@ class Refinement(LogicalBinaryOperator, ConclusionSelector):
     def get_operation_result_and_clear_conclusion(
         self, result: OperationResult
     ) -> Iterable[OperationResult]:
-        is_false = result.operand is self.left and result.is_false
+        left_branch_failed = result.operand is self.left and result.is_false
         if result.is_true:
             self._conclusions_.update(result.operand._conclusions_)
-        yield OperationResult(result.bindings, is_false, self, result)
+        yield self._build_operation_result_with_truth_(
+            not left_branch_failed, result.bindings, result
+        )
         self._conclusions_.clear()
 
     @classmethod
@@ -230,8 +293,8 @@ class Next(EQLUnion, ConclusionSelector):
     ) -> Iterable[OperationResult]:
         for child in self._operation_children_:
             for child_result in self._evaluate_child_as_condition_(child, sources):
-                output = OperationResult(
-                    child_result.bindings, child_result.is_false, self, child_result
+                output = self._build_operation_result_with_truth_(
+                    child_result.is_true, child_result.bindings, child_result
                 )
                 if output.is_true:
                     self._conclusions_.update(child_result.operand._conclusions_)

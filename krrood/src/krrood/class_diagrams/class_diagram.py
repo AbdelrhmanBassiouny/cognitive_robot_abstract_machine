@@ -24,7 +24,7 @@ from krrood.utils import (
 )
 
 try:
-    from krrood.rustworkx_utils import RWXNode
+    from krrood.rustworkx_utils.rxnode import RWXNode
 except ImportError:
     RWXNode = None
 from typing_extensions import (
@@ -47,7 +47,12 @@ from krrood.class_diagrams.attribute_introspector import (
     DataclassOnlyIntrospector,
 )
 from krrood.class_diagrams.method_classifier import factory_method_names
+from krrood.class_diagrams.progress_report import (
+    is_progress_wanted,
+    report_progress,
+)
 from krrood.class_diagrams.wrapped_field import WrappedField
+from krrood.patterns.field_metadata import FieldMetadata
 from krrood.patterns.subclass_safe_generic import SubClassSafeGeneric
 from typing_extensions import Generic
 
@@ -274,6 +279,19 @@ class WrappedClass(Generic[T], SubClassSafeGeneric):
     """
     A mapping from field name to its WrappedField instance.
     """
+
+    def fields_with_metadata(
+        self, metadata_type: Type[FieldMetadata]
+    ) -> List[WrappedField]:
+        """
+        :return: the fields of this class carrying metadata of *metadata_type*, in
+            declaration order.
+        """
+        return [
+            wrapped_field
+            for wrapped_field in self.fields
+            if metadata_type.of_wrapped_field(wrapped_field) is not None
+        ]
 
     def _get_introspector(self) -> AttributeIntrospector:
         """
@@ -856,8 +874,13 @@ class ClassDiagram:
         internal collection. Relations are only created when the target class is found among
         the wrapped classes.
 
+        Resolving a class's field types is the long part of building a diagram, so a
+        class finished here is what progress is reported against.
+
         :raises: This method does not explicitly raise any exceptions.
         """
+        report_wanted = is_progress_wanted()
+        total_classes = len(self.wrapped_classes)
         for clazz in self.wrapped_classes:
             # Handle GenericAlias in issubclass
             origin = get_origin(clazz.clazz)
@@ -890,6 +913,8 @@ class ClassDiagram:
                     target=wrapped_target_class,
                 )
                 self.add_relation(relation)
+            if report_wanted:
+                report_progress(clazz.name, total_classes)
 
     def _create_association_relations_inferred_from_role_takers(self):
         """

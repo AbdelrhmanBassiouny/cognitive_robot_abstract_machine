@@ -2,16 +2,27 @@ from __future__ import annotations
 
 import logging
 import inspect
+import hashlib
 import os
 from typing import Tuple
 
 import time
 import trimesh
+import PIL.ImageFile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import IntEnum
 from types import NoneType
-from typing_extensions import Dict, List, Any, ClassVar, Type, Optional, Union
+from typing_extensions import (
+    Dict,
+    List,
+    Any,
+    ClassVar,
+    Iterator,
+    Type,
+    Optional,
+    Union,
+)
 
 import numpy
 import mujoco
@@ -39,6 +50,8 @@ from semantic_digital_twin.spatial_types.spatial_types import (
     HomogeneousTransformationMatrix,
     Point3,
     Quaternion,
+    RotationMatrix,
+    Vector3,
 )
 from semantic_digital_twin.spatial_types.math import inverse_frame
 from semantic_digital_twin.world import World
@@ -155,6 +168,23 @@ class MultiSimCamera(SimulatorAdditionalProperty):
     """
 
 
+@dataclass(eq=False)
+class MultiSimLight(SimulatorAdditionalProperty):
+    """
+    Additional property representing a light in MultiSim.
+    """
+
+    name: str = ""
+    """
+    The name of the light.
+    """
+
+    body: Optional[Body] = None
+    """
+    The body the light is attached to.
+    """
+
+
 @dataclass
 class InertialConverter:
     """
@@ -252,13 +282,15 @@ class EntityConverter(ABC):
         :param entity: The object to convert.
         :return: A dictionary of properties, by default containing the name.
         """
-        return {
-            self.name_str: (
-                entity.name.name
-                if hasattr(entity, "name") and isinstance(entity.name, PrefixedName)
-                else f"{type(entity).__name__.lower()}_{id(entity)}"
-            )
-        }
+        if hasattr(entity, "name") and isinstance(entity.name, PrefixedName):
+            resolved_name = entity.name.name
+        elif hasattr(entity, "name") and isinstance(entity.name, str) and entity.name:
+            # SimulatorAdditionalProperty entities (e.g. MultiSimCamera) carry a plain
+            # string name rather than a PrefixedName; honor it if one was given.
+            resolved_name = entity.name
+        else:
+            resolved_name = f"{type(entity).__name__.lower()}_{id(entity)}"
+        return {self.name_str: resolved_name}
 
     @abstractmethod
     def _post_convert(
@@ -296,8 +328,10 @@ class KinematicStructureEntityConverter(EntityConverter, ABC):
         """
 
         kinematic_structure_entity_props = EntityConverter._convert(self, entity)
+        # The simulator joint supplies the variable part, so the static frame must
+        # exclude it (see Connection.reference_origin_expression).
         [px, py, pz, qx, qy, qz, qw] = (
-            entity.parent_connection.origin_as_position_quaternion().evaluate()[0]
+            entity.parent_connection.reference_origin_as_position_quaternion().evaluate()[0]
         )
         kinematic_structure_entity_pos = [px, py, pz]
         kinematic_structure_entity_quat = [qw, qx, qy, qz]
@@ -439,6 +473,10 @@ class ShapeConverter(EntityConverter, ABC):
                 self.rgba_str: geom_color,
             }
         )
+        if entity.texture is not None:
+            geom_props["texture_file_path"] = entity.texture.file_path
+            geom_props["texture_repeat"] = entity.texture.repeat
+            geom_props["texture_uniform"] = entity.texture.uniform
         return geom_props
 
 
@@ -676,6 +714,29 @@ class CameraConverter(EntityConverter, ABC):
 
 
 @dataclass
+class LightConverter(EntityConverter, ABC):
+    """
+    Converts a Light object to a dictionary of light properties for Multiverse simulator.
+    """
+
+    entity_type: ClassVar[Type[MultiSimLight]] = MultiSimLight
+    """
+    The type of the entity to convert.
+    """
+
+    def _convert(self, entity: MultiSimLight, **kwargs) -> Dict[str, Any]:
+        """
+        Converts a Light object to a dictionary of light properties for Multiverse simulator.
+
+        :param entity: The Light object to convert.
+        :return: A dictionary of light properties, by default containing the parent body's name.
+        """
+        light_props = EntityConverter._convert(self, entity)
+        light_props["body"] = entity.body.name.name
+        return light_props
+
+
+@dataclass
 class MujocoActuator(SimulatorAdditionalProperty):
     """
     Represents a MuJoCo-specific actuator in the world model.
@@ -837,6 +898,138 @@ class MujocoCamera(MultiSimCamera):
     quaternion: List[float] = field(default_factory=lambda: [1, 0, 0, 0])
     """
     Orientation of the camera frame.
+    """
+
+    @staticmethod
+    def _look_at_rotation(
+        camera_position: Point3, target_position: Point3
+    ) -> RotationMatrix:
+        """
+        Computes the world-frame orientation of a camera at ``camera_position`` looking at
+        ``target_position``, following MuJoCo's convention (camera looks down its local -Z
+        axis, +Y is up).
+
+        :param camera_position: The world-frame position of the camera.
+        :param target_position: The world-frame position the camera should look at.
+        :return: The camera's world-frame orientation.
+        """
+        forward = target_position - camera_position
+        forward.scale(1)
+        up_hint = Vector3.Z()
+        if abs(float(forward.dot(up_hint).to_np().item())) > 0.99:
+            up_hint = Vector3.Y()
+
+        z_axis = -forward
+        x_axis = up_hint.cross(z_axis)
+        x_axis.scale(1)
+        return RotationMatrix.from_vectors(x=x_axis, z=z_axis)
+
+    @classmethod
+    def overview_pose(
+        cls,
+        bounds: numpy.ndarray,
+        minimum_distance: float = 1.0,
+        distance_factor: float = 1.5,
+    ) -> HomogeneousTransformationMatrix:
+        """
+        Computes a fixed diagonal viewpoint that frames an axis-aligned bounding box.
+
+        :param bounds: A ``(2, 3)`` array of the scene's ``[minimum, maximum]`` corners.
+        :param minimum_distance: Floor (in meters) for the camera's distance to the box center,
+            so a box that collapses to a point still gets a sensibly framed camera.
+        :param distance_factor: Multiplier applied to the box's bounding diagonal to place the camera.
+        :return: The framing camera's world-frame pose.
+        """
+        minimum = Point3.from_iterable(bounds[0])
+        maximum = Point3.from_iterable(bounds[1])
+        diagonal_vector = maximum - minimum
+        center = minimum + diagonal_vector * 0.5
+        diagonal = float(diagonal_vector.norm().to_np().item())
+        distance = max(diagonal, minimum_distance) * distance_factor
+        direction = Vector3.from_iterable([1.0, -1.0, 1.0])
+        direction.scale(1)
+        position = center + direction * distance
+        rotation = cls._look_at_rotation(position, center)
+        return HomogeneousTransformationMatrix.from_point_rotation_matrix(
+            position, rotation
+        )
+
+
+@dataclass
+class MujocoLight(MultiSimLight):
+    """
+    Additional property representing a MuJoCo light in the world model.
+    For more information, see: https://mujoco.readthedocs.io/en/stable/XMLreference.html#body-light
+    """
+
+    name: str = ""
+    """
+    Name of the light.
+    """
+
+    mode: mujoco.mjtCamLight = mujoco.mjtCamLight.mjCAMLIGHT_FIXED
+    """
+    This attribute specifies how the light position and orientation in world coordinates are computed in forward kinematics.
+    """
+
+    directional: bool = False
+    """
+    Whether the light is directional (parallel rays, e.g. sunlight) or a positional point/spot light.
+    """
+
+    active: bool = True
+    """
+    Whether the light is active.
+    """
+
+    cast_shadow: bool = True
+    """
+    Whether this light casts shadows.
+    """
+
+    position: List[float] = field(default_factory=lambda: [0, 0, 0])
+    """
+    Position of the light frame.
+    """
+
+    direction: List[float] = field(default_factory=lambda: [0, 0, -1])
+    """
+    Direction the light points in, relevant only for directional and spot lights.
+    """
+
+    ambient: List[float] = field(default_factory=lambda: [0, 0, 0])
+    """
+    Ambient color of the light, as ``[r, g, b]``.
+    """
+
+    diffuse: List[float] = field(default_factory=lambda: [0.7, 0.7, 0.7])
+    """
+    Diffuse color of the light, as ``[r, g, b]``.
+    """
+
+    specular: List[float] = field(default_factory=lambda: [0.3, 0.3, 0.3])
+    """
+    Specular color of the light, as ``[r, g, b]``.
+    """
+
+    attenuation: List[float] = field(default_factory=lambda: [1, 0, 0])
+    """
+    Constant, linear, and quadratic attenuation coefficients for a positional light.
+    """
+
+    cutoff: float = 45.0
+    """
+    Cutoff angle, in degrees, for a spot light.
+    """
+
+    exponent: float = 10.0
+    """
+    Spotlight attenuation exponent for a spot light.
+    """
+
+    bulb_radius: float = 0.02
+    """
+    Radius of the light's bulb, used for soft shadows.
     """
 
 
@@ -1174,19 +1367,41 @@ class MujocoMeshConverter(MujocoGeomConverter, MeshConverter):
         if isinstance(entity.mesh.visual, TextureVisuals) and isinstance(
             entity.mesh.visual.material.name, str
         ):
-            texture_file_path = entity.mesh.visual.material.name
-            if not os.path.isfile(texture_file_path):
-                texture_file_path = entity.mesh.visual.material.image.filename
-            if not os.path.isfile(texture_file_path):
-                texture_file_path = entity.mesh.visual.material.image.info.get(
-                    "file_path", ""
-                )
-            if not os.path.isfile(texture_file_path):
-                raise FileNotFoundError(
-                    f"Texture file not found for mesh. Checked paths: '{entity.mesh.visual.material.name}', '{entity.mesh.visual.material.image.filename}', '{entity.mesh.visual.material.image.info.get('file_path', '')}'"
-                )
-            shape_props["texture_file_path"] = texture_file_path
+            texture_file_path = self._resolve_texture_file_path(
+                entity.mesh.visual.material, os.path.dirname(entity.filename)
+            )
+            if texture_file_path is not None:
+                shape_props["texture_file_path"] = texture_file_path
         return shape_props
+
+    @staticmethod
+    def _resolve_texture_file_path(material: Any, mesh_directory: str) -> Optional[str]:
+        """
+        Resolves the on-disk file backing a mesh's texture.
+
+        trimesh reports a texture path relative to the mesh file that references it, so
+        every candidate is resolved against that mesh's directory rather than the process
+        working directory. An already absolute candidate passes through unchanged.
+
+        :param material: The trimesh material (``TextureVisuals.material``) to resolve.
+        :param mesh_directory: Directory of the mesh file the material came from.
+        :return: The texture's file path, or ``None`` if the material has no image at
+            all (a flat colour with no texture) or a programmatically generated image
+            with no backing file.
+        """
+        image = material.image
+        if image is None:
+            return None
+        candidates = [material.name, image.info.get("file_path", "")]
+        if isinstance(image, PIL.ImageFile.ImageFile):
+            candidates.append(image.filename)
+        for candidate in candidates:
+            if not isinstance(candidate, str) or not candidate:
+                continue
+            resolved = os.path.join(mesh_directory, candidate)
+            if os.path.isfile(resolved):
+                return resolved
+        return None
 
 
 @dataclass
@@ -1309,6 +1524,34 @@ class MujocoCameraConverter(CameraConverter, ABC):
 
 
 @dataclass
+class MujocoLightConverter(LightConverter, ABC):
+
+    entity_type: ClassVar[Type[MujocoLight]] = MujocoLight
+
+    def _post_convert(
+        self, entity: MujocoLight, light_props: Dict[str, Any], **kwargs
+    ) -> Dict[str, Any]:
+        light_props["mode"] = entity.mode
+        light_props["type"] = (
+            mujoco.mjtLightType.mjLIGHT_DIRECTIONAL
+            if entity.directional
+            else mujoco.mjtLightType.mjLIGHT_SPOT
+        )
+        light_props["active"] = entity.active
+        light_props["castshadow"] = entity.cast_shadow
+        light_props["pos"] = entity.position
+        light_props["dir"] = entity.direction
+        light_props["ambient"] = entity.ambient
+        light_props["diffuse"] = entity.diffuse
+        light_props["specular"] = entity.specular
+        light_props["attenuation"] = entity.attenuation
+        light_props["cutoff"] = entity.cutoff
+        light_props["exponent"] = entity.exponent
+        light_props["bulbradius"] = entity.bulb_radius
+        return light_props
+
+
+@dataclass
 class MultiSimBuilder(ABC):
     """
     A builder to build a world in the Multiverse simulator.
@@ -1406,9 +1649,11 @@ class MultiSimBuilder(ABC):
                 is_visible=shape in body.visual,
                 is_collidable=shape in body.collision,
             )
-        for camera in body.simulator_additional_properties:
-            if isinstance(camera, MultiSimCamera):
-                self._build_camera(camera=camera)
+        for additional_property in body.simulator_additional_properties:
+            if isinstance(additional_property, MultiSimCamera):
+                self._build_camera(camera=additional_property)
+            elif isinstance(additional_property, MultiSimLight):
+                self._build_light(light=additional_property)
 
     def build_region(self, region: Region):
         """
@@ -1503,6 +1748,15 @@ class MultiSimBuilder(ABC):
         """
         raise NotImplementedError
 
+    @abstractmethod
+    def _build_light(self, light: MultiSimLight):
+        """
+        Builds a light in the simulator.
+
+        :param light: The light to build.
+        """
+        raise NotImplementedError
+
     @property
     def asset_folder_path(self) -> str:
         """
@@ -1523,10 +1777,26 @@ class MujocoBuilder(MultiSimBuilder):
 
     spec: mujoco.MjSpec = field(default=mujoco.MjSpec())
 
+    planar_thickness_epsilon: float = 1e-4
+    """
+    Below this thickness (in meters, measured along a mesh's own best-fit-plane
+    normal), a mesh is treated as near-planar for :meth:`_thicken_if_near_planar`.
+    """
+
+    _thickened_mesh_paths: Dict[str, str] = field(
+        default_factory=dict, init=False, repr=False
+    )
+    """
+    Memoizes :meth:`_thicken_if_near_planar` by input path, so a mesh referenced by
+    many geoms (e.g. a screw reused across a whole object) is only loaded and checked
+    once instead of once per reference.
+    """
+
     def _start_build(self, file_path: str):
         self.spec = mujoco.MjSpec()
         self.spec.modelname = "scene"
         self.spec.compiler.degree = 0
+        self._thickened_mesh_paths = {}
 
     def _end_build(self, file_path: str):
         self._build_equalities()
@@ -1560,18 +1830,30 @@ class MujocoBuilder(MultiSimBuilder):
         key_element.set("name", "home")
         key_element.set("time", "0")
         qpos = []
-        for body in self.world.bodies:
+        for body in self.world.bodies_topologically_sorted:
             parent_connection = body.parent_connection
             if (
                 isinstance(parent_connection, self._ignore_connection_types)
                 or parent_connection is None
             ):
                 continue
-            qpos += [
-                self.world.state[dof.id].position
-                for dof in parent_connection.active_dofs
-                + parent_connection.passive_dofs
-            ]
+            if isinstance(parent_connection, Connection6DoF):
+                # A free joint's DOF state is relative to the connection frame
+                # and stays at the identity by default; the body's actual
+                # placement lives in parent_T_connection_expression instead.
+                # Reading the raw DOF state here would bake a zero pose into
+                # the keyframe regardless of where the body is actually
+                # placed, so use the fully evaluated origin instead.
+                px, py, pz, qx, qy, qz, qw = (
+                    parent_connection.origin_as_position_quaternion().evaluate()[0]
+                )
+                qpos += [px, py, pz, qw, qx, qy, qz]
+            else:
+                qpos += [
+                    self.world.state[dof.id].position
+                    for dof in parent_connection.active_dofs
+                    + parent_connection.passive_dofs
+                ]
         key_element.set("qpos", " ".join(map(str, qpos)))
         tree.write(file_path, encoding="utf-8", xml_declaration=True)
 
@@ -1599,13 +1881,22 @@ class MujocoBuilder(MultiSimBuilder):
             raise MujocoEntityNotFoundError(
                 entity_name=parent_body_name, entity_type=mujoco.mjtObj.mjOBJ_BODY
             )
-        if geom_props["type"] == mujoco.mjtGeom.mjGEOM_MESH and not self._parse_geom(
-            geom_props=geom_props
-        ):
-            logger.warning(
-                f"Mesh {shape.mesh} could not be parsed. Skipping geom {geom_props['name']}."
-            )
-            return
+        if geom_props["type"] == mujoco.mjtGeom.mjGEOM_MESH:
+            if not self._parse_geom(geom_props=geom_props):
+                logger.warning(
+                    f"Mesh {shape.mesh} could not be parsed. Skipping geom {geom_props['name']}."
+                )
+                return
+        else:
+            texture_file_path = geom_props.pop("texture_file_path", None)
+            texture_repeat = geom_props.pop("texture_repeat", (1.0, 1.0))
+            texture_uniform = geom_props.pop("texture_uniform", False)
+            if isinstance(texture_file_path, str):
+                geom_props["material"] = self._register_texture_material(
+                    texture_file_path=texture_file_path,
+                    texture_repeat=texture_repeat,
+                    texture_uniform=texture_uniform,
+                )
         for mujoco_geom in shape.simulator_additional_properties:
             if isinstance(mujoco_geom, MujocoGeom):
                 geom_props["solimp"] = mujoco_geom.solver_impedance
@@ -1635,9 +1926,75 @@ class MujocoBuilder(MultiSimBuilder):
         logger.info(
             f"Converting Collada mesh to STL for MuJoCo: {original_mesh_file_path}"
         )
-        tm = trimesh.load(original_mesh_file_path, force="mesh")
+        trimesh_mesh = trimesh.load(original_mesh_file_path, force="mesh")
 
-        tm.export(stl_file_path)
+        trimesh_mesh.export(stl_file_path)
+
+    def _thicken_if_near_planar(self, mesh_file_path: str) -> str:
+        """
+        MuJoCo cannot compute a convex hull for a mesh whose vertices are (near-)
+        exactly coplanar - a flat, effectively two-dimensional panel with no enclosed
+        volume - and raises "mesh ... has coplanar vertices, cannot compute convex
+        hull" rather than compiling. Real CAD furniture sometimes ships geometry this
+        way (a door or cover modelled as a single-sided sheet).
+
+        MuJoCo hulls a mesh's vertex positions, not its exact topology, so the fix does
+        not need to close the mesh into a topological solid: duplicating every vertex
+        and offsetting the two copies apart by a small epsilon along the panel's own
+        normal already gives MuJoCo a non-degenerate point cloud to hull, invisibly
+        (the offset is a fraction of a millimeter for real furniture-scale meshes).
+
+        The offset is scaled to the mesh's own extent (floored at
+        ``planar_thickness_epsilon``): STL's float32 export loses precision at large
+        enough coordinate magnitudes, so a mesh authored at a much larger scale than
+        typical furniture (seen on one real ArtVIP object, tens of thousands of units
+        across) needs a correspondingly larger absolute offset to remain distinguishable
+        from zero once exported.
+
+        :param mesh_file_path: The mesh file to check.
+        :return: ``mesh_file_path`` unchanged if it already has meaningful thickness,
+            otherwise the path to a thickened copy written into the asset folder.
+        """
+        if mesh_file_path in self._thickened_mesh_paths:
+            return self._thickened_mesh_paths[mesh_file_path]
+
+        trimesh_mesh = trimesh.load(mesh_file_path, force="mesh")
+        centered_vertices = trimesh_mesh.vertices - trimesh_mesh.vertices.mean(axis=0)
+        _, _, principal_axes = numpy.linalg.svd(centered_vertices, full_matrices=False)
+        normal = principal_axes[-1]
+        projections = centered_vertices @ normal
+        thickness = projections.max() - projections.min()
+        if thickness > self.planar_thickness_epsilon:
+            self._thickened_mesh_paths[mesh_file_path] = mesh_file_path
+            return mesh_file_path
+
+        base_name = os.path.splitext(os.path.basename(mesh_file_path))[0]
+        thickened_file_path = os.path.join(
+            self.asset_folder_path, base_name + "_thickened.stl"
+        )
+        # Always (re)written rather than reused when already present on disk: two
+        # different source meshes can share a basename (e.g. two objects each
+        # containing a "cover.stl"), and an existence check keyed only on that name
+        # would silently reuse a stale, geometrically wrong thickened mesh left over
+        # from a previous build that wrote into the same asset folder.
+        extent = numpy.linalg.norm(
+            trimesh_mesh.vertices.max(axis=0) - trimesh_mesh.vertices.min(axis=0)
+        )
+        offset_magnitude = max(self.planar_thickness_epsilon, extent * 1e-5)
+        offset = normal * (offset_magnitude / 2.0)
+        vertex_count = len(trimesh_mesh.vertices)
+        thickened = trimesh.Trimesh(
+            vertices=numpy.concatenate(
+                [trimesh_mesh.vertices + offset, trimesh_mesh.vertices - offset]
+            ),
+            faces=numpy.concatenate(
+                [trimesh_mesh.faces, trimesh_mesh.faces[:, ::-1] + vertex_count]
+            ),
+            process=False,
+        )
+        thickened.export(thickened_file_path)
+        self._thickened_mesh_paths[mesh_file_path] = thickened_file_path
+        return thickened_file_path
 
     def _parse_geom(self, geom_props: Dict[str, Any]) -> bool:
         """
@@ -1666,6 +2023,8 @@ class MujocoBuilder(MultiSimBuilder):
                 )
             mesh_file_path = stl_file_path
 
+        mesh_file_path = self._thicken_if_near_planar(mesh_file_path)
+
         mesh_name = os.path.splitext(os.path.basename(mesh_file_path))[0]
         mesh_scale = [mesh_entity.scale.x, mesh_entity.scale.y, mesh_entity.scale.z]
         if not numpy.allclose(mesh_scale, [1.0, 1.0, 1.0]):
@@ -1677,22 +2036,57 @@ class MujocoBuilder(MultiSimBuilder):
         geom_props["meshname"] = mesh_name
         texture_file_path = geom_props.pop("texture_file_path", None)
         if isinstance(texture_file_path, str):
-            texture_name = os.path.splitext(os.path.basename(texture_file_path))[0]
-            if texture_name in [
-                self.spec.textures[i].name for i in range(len(self.spec.textures))
-            ]:
-                return True
-            material_name = texture_name
-            if material_name.startswith("T_"):
-                material_name = material_name[2:]
-            material_name = f"M_{material_name}"
-            geom_props["material"] = material_name
-            if material_name in [
-                self.spec.materials[i].name for i in range(len(self.spec.materials))
-            ]:
-                return True
-            if not os.path.exists(texture_file_path):
-                return True
+            geom_props["material"] = self._register_texture_material(
+                texture_file_path=texture_file_path
+            )
+        return True
+
+    def _register_texture_material(
+        self,
+        texture_file_path: str,
+        texture_repeat: Tuple[float, float] = (1.0, 1.0),
+        texture_uniform: bool = False,
+    ) -> str:
+        """
+        Registers a texture and a material referencing it in the spec, unless a texture or
+        material of the same derived name is already registered.
+
+        RoboCasa's asset pipeline reuses generic texture basenames (e.g. "T_BC001.png")
+        across many unrelated fixtures' own distinct texture files, so the basename alone is
+        not a valid dedup/uniqueness key: two different fixtures' textures with the same
+        basename would otherwise collide onto whichever one was registered first. Suffixing
+        with a hash of the full path keeps the same file deduplicated (reused) while keeping
+        different files (even same basename) distinct.
+
+        :param texture_file_path: The texture image's file path.
+        :param texture_repeat: How many times the texture tiles across the surface.
+        :param texture_uniform: Whether the texture is scaled uniformly across the surface.
+        :return: The name of the material referencing the texture, to set on a geom's
+            "material" property. Returned even if the texture file does not exist on disk (the
+            geom is still given a material name, just one with no actual texture registered).
+        """
+        path_hash = hashlib.md5(
+            os.path.abspath(texture_file_path).encode()
+        ).hexdigest()[:8]
+        texture_name = (
+            f"{os.path.splitext(os.path.basename(texture_file_path))[0]}_{path_hash}"
+        )
+        material_name = texture_name
+        if material_name.startswith("T_"):
+            material_name = material_name[2:]
+        material_name = f"M_{material_name}"
+
+        texture_already_registered = texture_name in [
+            self.spec.textures[i].name for i in range(len(self.spec.textures))
+        ]
+        material_already_registered = material_name in [
+            self.spec.materials[i].name for i in range(len(self.spec.materials))
+        ]
+        if (
+            not texture_already_registered
+            and not material_already_registered
+            and os.path.exists(texture_file_path)
+        ):
             self.spec.add_texture(
                 name=texture_name,
                 type=mujoco.mjtTexture.mjTEXTURE_2D,
@@ -1700,7 +2094,9 @@ class MujocoBuilder(MultiSimBuilder):
             )
             material = self.spec.add_material(name=material_name)
             material.textures[0] = texture_name
-        return True
+            material.texrepeat = list(texture_repeat)
+            material.texuniform = texture_uniform
+        return material_name
 
     def _build_connection(self, connection: Connection):
         if isinstance(connection, self._ignore_connection_types):
@@ -1795,6 +2191,30 @@ class MujocoBuilder(MultiSimBuilder):
             raise MujocoEntityNotFoundError(
                 entity_name=camera_name,
                 entity_type=mujoco.mjtObj.mjOBJ_CAMERA,
+                action="add",
+            )
+
+    def _build_light(self, light: MultiSimLight):
+        """
+        Builds a light in the Mujoco spec, attached to its parent body.
+
+        :param light: The light to build.
+        """
+        light_name = light.name
+        light_props = MujocoLightConverter.convert(light)
+        body_name = light_props.pop("body")
+        body_spec = self._find_entity(
+            entity_type=mujoco.mjtObj.mjOBJ_BODY, entity_name=body_name
+        )
+        if body_spec is None:
+            raise MujocoEntityNotFoundError(
+                entity_name=body_name, entity_type=mujoco.mjtObj.mjOBJ_BODY
+            )
+        light_spec = body_spec.add_light(**light_props)
+        if light_spec is None:
+            raise MujocoEntityNotFoundError(
+                entity_name=light_name,
+                entity_type=mujoco.mjtObj.mjOBJ_LIGHT,
                 action="add",
             )
 
@@ -2485,11 +2905,40 @@ class MultiSimSynchronizer(ModelChangeCallback, ABC):
         raise NotImplementedError
 
 
+@dataclass
+class JointBackedConnection:
+    """
+    A connection paired with the MuJoCo joint that backs it.
+
+    Resolving a connection to its joint costs a name lookup, so the two sync
+    directions carry the resolved address alongside the connection rather than
+    each looking it up again.
+    """
+
+    connection: Connection
+    """
+    The connection in the world.
+    """
+
+    qpos_address: int
+    """
+    Index at which this joint's values start in ``_mj_data.qpos``.
+    """
+
+
 @dataclass(eq=False)
 class MujocoSynchronizer(MultiSimSynchronizer):
     simulator: MujocoSimulator
     entity_converter: Type[EntityConverter] = field(default=MujocoConverter)
     entity_spawner: Type[EntitySpawner] = field(default=MujocoEntitySpawner)
+
+    UNTHROTTLED_SYNC_RATE_HZ: ClassVar[float] = float("inf")
+    """
+    Assign this to :attr:`sync_rate_hz` to sync on every single call, i.e. to not throttle the
+    *sim → world* direction at all: since ``1 / sync_rate_hz`` is then exactly ``0.0``, the
+    "less than 1 / sync_rate_hz seconds elapsed" skip condition in :meth:`_sim_to_world` can
+    never trigger. Distinct from ``sync_rate_hz <= 0``, which disables that direction entirely.
+    """
 
     sync_rate_hz: float = 30
     """
@@ -2504,7 +2953,8 @@ class MujocoSynchronizer(MultiSimSynchronizer):
     produced by the simulator (gravity, contacts, actuator dynamics, etc.).
     The opposite *world → sim* direction (driven by ``_on_state_change``) is
     independent of this setting and continues to push ``world.state`` changes
-    into MuJoCo regardless.
+    into MuJoCo regardless. Set to :attr:`UNTHROTTLED_SYNC_RATE_HZ` for the
+    opposite extreme: sync on every call, with no throttling at all.
     """
 
     _last_sync_time: float = field(init=False, default=0.0, repr=False)
@@ -2513,7 +2963,7 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         super().__post_init__()
         self.simulator.read_data_from_simulator = self._sim_to_world
 
-    def _resolve_qpos_adr(self, connection: Connection) -> Optional[int]:
+    def _resolve_qpos_address(self, connection: Connection) -> Optional[int]:
         """
         Resolve the qpos address for the MuJoCo joint backing ``connection``,
         or ``None`` if the joint is not present in the model.
@@ -2550,16 +3000,127 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         quat_xyzw = Rotation.from_matrix(pose[:3, :3]).as_quat()
         return xyz, quat_xyzw
 
-    def _read_6dof_from_qpos(self, connection: Connection6DoF, qpos_adr: int) -> None:
+    def _joint_backed_connections(self) -> Iterator[JointBackedConnection]:
+        """
+        Yield every connection that a MuJoCo joint can be synced with, paired
+        with the qpos address of that joint.
+
+        Fixed connections carry no DoFs, and a connection that does not resolve
+        to a joint is not in the compiled model, so neither has anything to
+        sync. Both sync directions walk the same set, so they share this.
+        """
+        for connection in self._world.connections:
+            if isinstance(connection, FixedConnection):
+                continue
+            qpos_address = self._resolve_qpos_address(connection)
+            if qpos_address is None:
+                continue
+            yield JointBackedConnection(
+                connection=connection, qpos_address=qpos_address
+            )
+
+    @staticmethod
+    def _warn_unsupported_connection(direction: str, connection: Connection) -> None:
+        """
+        Report a connection that has a MuJoCo joint but no sync implementation.
+
+        :param direction: Which way the sync was going, for the message.
+        :param connection: The connection that could not be synced.
+        """
+        logger.warning(
+            "%s sync: unsupported connection type %s for joint %s; skipping",
+            direction,
+            type(connection).__name__,
+            connection.name.name,
+        )
+
+    def _read_connections_from_qpos(self) -> bool:
+        """
+        Copy ``_mj_data.qpos`` into ``world.state`` for every joint-backed
+        connection.
+
+        Held under ``_model_lock`` so the whole pull sees one coherent
+        post-step state rather than a mixture of poses from either side of an
+        ``mj_step`` running on the physics thread.
+
+        :return: Whether any connection was read.
+        """
+        changed = False
+        with self.simulator._model_lock:
+            for joint_backed in self._joint_backed_connections():
+                connection = joint_backed.connection
+                match connection:
+                    case Connection6DoF():
+                        self._read_6dof_from_qpos(
+                            connection, joint_backed.qpos_address
+                        )
+                        changed = True
+                    case ActiveConnection1DOF():
+                        self._read_1dof_from_qpos(
+                            connection, joint_backed.qpos_address
+                        )
+                        changed = True
+                    case _:
+                        self._warn_unsupported_connection("sim→world", connection)
+        return changed
+
+    def _write_connections_to_qpos(
+        self, positions: numpy.ndarray, previous_positions: numpy.ndarray
+    ) -> None:
+        """
+        Push ``world.state`` into ``_mj_data.qpos`` for every joint-backed
+        connection whose DoF values differ from ``previous_positions``.
+
+        ``_model_lock`` is what serialises access to ``_mj_data`` against the
+        physics thread, and holding it here is not just about torn reads: the
+        model integrates with RK4, and ``mj_step`` writes the integrated qpos
+        back from state it saved at the top of the step, so a write that lands
+        mid-step is overwritten and vanishes. The body then simply carries on
+        from its old pose, with nothing raised anywhere. Acquired inside
+        ``_world_lock`` to match the order ``modify_world`` already
+        establishes.
+
+        :param positions: The current ``world.state`` positions.
+        :param previous_positions: The positions as of the last notification,
+            used to find what changed. Must be the same length as ``positions``.
+        """
+        state_index = self._world.state._index
+        with self.simulator._model_lock:
+            for joint_backed in self._joint_backed_connections():
+                connection = joint_backed.connection
+                match connection:
+                    case Connection6DoF():
+                        self._write_6dof_to_qpos(
+                            connection,
+                            joint_backed.qpos_address,
+                            positions,
+                            previous_positions,
+                            state_index,
+                        )
+                    case ActiveConnection1DOF():
+                        self._write_1dof_to_qpos(
+                            connection,
+                            joint_backed.qpos_address,
+                            positions,
+                            previous_positions,
+                            state_index,
+                        )
+                    case _:
+                        self._warn_unsupported_connection("world→sim", connection)
+
+    def _read_6dof_from_qpos(self, connection: Connection6DoF, qpos_address: int) -> None:
         """
         Copy a 6DoF MuJoCo free-joint qpos block into ``world.state`` for
         ``connection``.
+
+        :param connection: The 6DoF connection whose DoFs are written.
+        :param qpos_address: Index of the free joint's 7-value qpos block.
         """
         mj_data = self.simulator._mj_data
         state = self._world.state
 
-        xyz = mj_data.qpos[qpos_adr : qpos_adr + 3]
-        qwxyz = mj_data.qpos[qpos_adr + 3 : qpos_adr + 7]
+        xyz = mj_data.qpos[qpos_address : qpos_address + 3]
+        qwxyz = mj_data.qpos[qpos_address + 3 : qpos_address + 7]
 
         mj_T_world = self._make_pose_matrix(
             xyz,
@@ -2578,13 +3139,16 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         state[connection.qz.id].position = float(dof_quat_xyzw[2])
 
     def _read_1dof_from_qpos(
-        self, connection: ActiveConnection1DOF, qpos_adr: int
+        self, connection: ActiveConnection1DOF, qpos_address: int
     ) -> None:
         """
         Copy a single MuJoCo qpos slot into ``world.state`` for ``connection``.
+
+        :param connection: The 1DoF connection whose DoF is written.
+        :param qpos_address: Index of the joint's single qpos slot.
         """
         self._world.state[connection.raw_dof.id].position = float(
-            self.simulator._mj_data.qpos[qpos_adr]
+            self.simulator._mj_data.qpos[qpos_address]
         )
 
     def _sim_to_world(self) -> None:
@@ -2596,6 +3160,18 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         ``sync_rate_hz`` wall-clock Hz. The sibling state-change callback is
         paused across the write so our own ``notify_state_change`` does not
         echo back into :meth:`_on_state_change`.
+
+        The whole pull runs under ``World._world_lock``. ``WorldState`` takes
+        that lock per accessor, so holding it only for the individual writes
+        would let a writer thread land in the middle of this pull: the pose it
+        just wrote gets overwritten here with the pre-write qpos values, and
+        the notification that would have pushed that pose into MuJoCo is
+        swallowed by the ``pause()`` below. The write is then lost without a
+        trace, because the closing ``update_previous_world_state`` rebases the
+        diff baseline onto what this pull just wrote. ``_world_lock`` is the
+        outermost lock in the codebase -- ``modify_world`` takes it before the
+        simulator's ``_model_lock`` -- so acquiring it here preserves that
+        order.
         """
         if self.sync_rate_hz <= 0:
             return
@@ -2604,47 +3180,37 @@ class MujocoSynchronizer(MultiSimSynchronizer):
             return
         self._last_sync_time = now
 
-        changed = False
-        self._state_callback.pause()
-
-        for connection in self._world.connections:
-            if isinstance(connection, FixedConnection):
-                continue
-            qpos_adr = self._resolve_qpos_adr(connection)
-            if qpos_adr is None:
-                continue
-
-            if isinstance(connection, Connection6DoF):
-                self._read_6dof_from_qpos(connection, qpos_adr)
-                changed = True
-            elif isinstance(connection, ActiveConnection1DOF):
-                self._read_1dof_from_qpos(connection, qpos_adr)
-                changed = True
-            else:
-                logger.warning(
-                    "sim→world sync: unsupported connection type %s for "
-                    "joint %s; skipping",
-                    type(connection).__name__,
-                    connection.name.name,
-                )
-
-        if changed:
-            self._world.notify_state_change()
-            self._state_callback.update_previous_world_state()
-        self._state_callback.resume()
+        with self._world._world_lock:
+            self._state_callback.pause()
+            try:
+                if self._read_connections_from_qpos():
+                    self._world.notify_state_change()
+                    self._state_callback.update_previous_world_state()
+            finally:
+                # Always resume: a callback left paused by an exception would
+                # silently disable the world -> sim direction for the rest of
+                # the run.
+                self._state_callback.resume()
 
     def _write_6dof_to_qpos(
         self,
         connection: Connection6DoF,
-        qpos_adr: int,
+        qpos_address: int,
         positions: numpy.ndarray,
         previous_positions: numpy.ndarray,
         state_index: Dict[Any, int],
     ) -> None:
         """
         Push the 6DoF world state for ``connection`` into the MuJoCo qpos
-        block at ``qpos_adr``. No-op if the DoF values match the previous
+        block at ``qpos_address``. No-op if the DoF values match the previous
         snapshot within tolerance.
+
+        :param connection: The 6DoF connection whose pose is pushed.
+        :param qpos_address: Index of the free joint's 7-value qpos block.
+        :param positions: The current ``world.state`` positions.
+        :param previous_positions: The positions as of the last notification,
+            compared against ``positions`` to decide whether to write.
+        :param state_index: Maps a DoF id to its column in those two arrays.
         """
         ix = state_index[connection.x.id]
         iy = state_index[connection.y.id]
@@ -2673,81 +3239,63 @@ class MujocoSynchronizer(MultiSimSynchronizer):
         mj_xyz, mj_quat_xyzw = self._decompose_pose_matrix(parent_T_conn @ conn_T_child)
 
         mj_data = self.simulator._mj_data
-        mj_data.qpos[qpos_adr + 0] = mj_xyz[0]
-        mj_data.qpos[qpos_adr + 1] = mj_xyz[1]
-        mj_data.qpos[qpos_adr + 2] = mj_xyz[2]
-        mj_data.qpos[qpos_adr + 3] = mj_quat_xyzw[3]
-        mj_data.qpos[qpos_adr + 4] = mj_quat_xyzw[0]
-        mj_data.qpos[qpos_adr + 5] = mj_quat_xyzw[1]
-        mj_data.qpos[qpos_adr + 6] = mj_quat_xyzw[2]
+        mj_data.qpos[qpos_address + 0] = mj_xyz[0]
+        mj_data.qpos[qpos_address + 1] = mj_xyz[1]
+        mj_data.qpos[qpos_address + 2] = mj_xyz[2]
+        mj_data.qpos[qpos_address + 3] = mj_quat_xyzw[3]
+        mj_data.qpos[qpos_address + 4] = mj_quat_xyzw[0]
+        mj_data.qpos[qpos_address + 5] = mj_quat_xyzw[1]
+        mj_data.qpos[qpos_address + 6] = mj_quat_xyzw[2]
 
     def _write_1dof_to_qpos(
         self,
         connection: ActiveConnection1DOF,
-        qpos_adr: int,
+        qpos_address: int,
         positions: numpy.ndarray,
         previous_positions: numpy.ndarray,
         state_index: Dict[Any, int],
     ) -> None:
         """
         Push the 1DoF world state for ``connection`` into the MuJoCo qpos slot
-        at ``qpos_adr``. No-op if the DoF value is unchanged.
+        at ``qpos_address``. No-op if the DoF value is unchanged.
+
+        :param connection: The 1DoF connection whose value is pushed.
+        :param qpos_address: Index of the joint's single qpos slot.
+        :param positions: The current ``world.state`` positions.
+        :param previous_positions: The positions as of the last notification,
+            compared against ``positions`` to decide whether to write.
+        :param state_index: Maps a DoF id to its column in those two arrays.
         """
         idx = state_index[connection.raw_dof.id]
         if positions[idx] == previous_positions[idx]:
             return
-        self.simulator._mj_data.qpos[qpos_adr] = positions[idx]
+        self.simulator._mj_data.qpos[qpos_address] = positions[idx]
 
     def _on_state_change(self) -> None:
         """
         Push ``world.state`` into ``_mj_data.qpos`` for every connection whose
         DoF values changed since the last notification. Only non-fixed
         connections that resolve to a MuJoCo joint are pushed.
+
+        Runs under ``World._world_lock`` so the diff against
+        ``previous_world_state_data`` and the qpos writes it produces cannot be
+        interleaved with :meth:`_sim_to_world` on the physics thread. Callers
+        that mutate ``world.state`` already hold the lock, and it is reentrant,
+        so this is free on that path.
         """
-        positions = self._world.state.positions
-        previous_positions = self._state_callback.previous_world_state_data
+        with self._world._world_lock:
+            positions = self._world.state.positions
+            previous_positions = self._state_callback.previous_world_state_data
 
-        if len(positions) != len(previous_positions):
-            # Model shape changed since the last notification (e.g. a spawn
-            # just added DoFs). The spawner already wrote the initial qpos
-            # for the new entities; just rebase the diff and return.
+            if len(positions) != len(previous_positions):
+                # Model shape changed since the last notification (e.g. a spawn
+                # just added DoFs). The spawner already wrote the initial qpos
+                # for the new entities; just rebase the diff and return.
+                self._state_callback.update_previous_world_state()
+                return
+
+            self._write_connections_to_qpos(positions, previous_positions)
             self._state_callback.update_previous_world_state()
-            return
-
-        state_index = self._world.state._index
-
-        for connection in self._world.connections:
-            if isinstance(connection, FixedConnection):
-                continue
-            qpos_adr = self._resolve_qpos_adr(connection)
-            if qpos_adr is None:
-                continue
-
-            if isinstance(connection, Connection6DoF):
-                self._write_6dof_to_qpos(
-                    connection,
-                    qpos_adr,
-                    positions,
-                    previous_positions,
-                    state_index,
-                )
-            elif isinstance(connection, ActiveConnection1DOF):
-                self._write_1dof_to_qpos(
-                    connection,
-                    qpos_adr,
-                    positions,
-                    previous_positions,
-                    state_index,
-                )
-            else:
-                logger.warning(
-                    "world→sim sync: unsupported connection type %s for "
-                    "joint %s; skipping",
-                    type(connection).__name__,
-                    connection.name.name,
-                )
-
-        self._state_callback.update_previous_world_state()
 
     def stop(self):
         if "read_data_from_simulator" in self.simulator.__dict__:

@@ -12,19 +12,23 @@ from dataclasses import dataclass
 from typing_extensions import Iterable, Optional, TYPE_CHECKING, Type
 
 from krrood.entity_query_language.core.base_expressions import (
+    TruthValuedExpression,
     TruthValueOperator,
     UnaryExpression,
     OperationResult,
     BinaryExpression,
     SymbolicExpression,
+    BinaryExpression,
+    SymbolicExpression,
 )
+from krrood.entity_query_language.core.variable import Literal
 
 if TYPE_CHECKING:
     from krrood.entity_query_language.factories import ConditionType
 
 
 @dataclass(eq=False, repr=False)
-class LogicalOperator(TruthValueOperator, ABC):
+class LogicalOperator(TruthValuedExpression, TruthValueOperator, ABC):
     """
     A symbolic operation that can be used to combine multiple symbolic expressions using
     logical constraints on their truth values.
@@ -53,9 +57,13 @@ class Not(LogicalOperator, UnaryExpression):
         sources: OperationResult,
     ) -> Iterable[OperationResult]:
 
-        for v in self._evaluate_child_as_condition_(self._child_, sources):
-            is_false = v.is_true
-            yield OperationResult(v.bindings, is_false, self)
+        for child_result in self._evaluate_child_as_condition_(self._child_, sources):
+            # Include child_result as previous so the satisfaction-tracking chain extends
+            # through the negated child's evaluation, keeping ancestor conditions
+            # reachable in the result chain.
+            yield self._build_operation_result_with_truth_(
+                child_result.is_false, child_result.bindings, child_result
+            )
 
 
 @dataclass(eq=False, repr=False)
@@ -73,8 +81,9 @@ class LogicalBinaryOperator(LogicalOperator, BinaryExpression, ABC):
         :return: The new bindings after evaluating the right operand.
         """
         for right_value in self._evaluate_child_as_condition_(self.right, sources):
-            is_false = right_value.is_false
-            yield OperationResult(right_value.bindings, is_false, self, right_value)
+            yield self._build_operation_result_with_truth_(
+                right_value.is_true, right_value.bindings, right_value
+            )
 
 
 @dataclass(eq=False, repr=False)
@@ -90,15 +99,18 @@ class AND(LogicalBinaryOperator):
 
         yielded: bool = False
         for left_value in self._evaluate_child_as_condition_(self.left, sources):
-            is_false = left_value.is_false
             yielded = True
-            if is_false:
-                yield OperationResult(left_value.bindings, is_false, self, left_value)
+            if left_value.is_false:
+                yield self._build_operation_result_with_truth_(
+                    False, left_value.bindings, left_value
+                )
             else:
                 yield from self.evaluate_right(left_value)
         if not yielded:
             # Negation as failure: no variable value satisfied the condition. So the whole condition is False.
-            yield OperationResult(sources.bindings, True, self, sources)
+            yield self._build_operation_result_with_truth_(
+                False, sources.bindings, sources
+            )
 
 
 @dataclass(eq=False, repr=False)
@@ -127,15 +139,19 @@ class OR(LogicalBinaryOperator):
             if left_value.is_false:
                 yield from self.evaluate_right(left_value)
             else:
-                yield OperationResult(left_value.bindings, False, self, left_value)
+                yield self._build_operation_result_with_truth_(
+                    True, left_value.bindings, left_value
+                )
         if not yielded:
             # Negation as failure: no variable value satisfied the condition. So the whole condition is False.
-            yield OperationResult(sources.bindings, True, self, sources)
+            yield self._build_operation_result_with_truth_(
+                False, sources.bindings, sources
+            )
 
 
 def chained_logic(
     operator: Type[LogicalBinaryOperator], *conditions: ConditionType
-) -> LogicalOperator:
+) -> SymbolicExpression:
     """
     A chain of logic operation over multiple conditions, e.g. cond1 | cond2 | cond3.
 
@@ -148,6 +164,8 @@ def chained_logic(
             prev_operation = condition
             continue
         prev_operation = operator(prev_operation, condition)
+    if not isinstance(prev_operation, SymbolicExpression):
+        prev_operation = Literal(_value_=True)
     return prev_operation
 
 

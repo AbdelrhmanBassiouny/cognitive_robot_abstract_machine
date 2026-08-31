@@ -1,3 +1,13 @@
+# %% ORM interfaces
+
+# Built before the imports below, which read a mapped datastructure: pytest imports every
+# conftest of a run before calling any hook, so a hook would fire too late. The build runs
+# once per process and never on an xdist worker.
+from ..orm_interface_build import regenerate_orm_interfaces
+
+regenerate_orm_interfaces()
+
+
 from copy import deepcopy
 from functools import partial
 
@@ -8,8 +18,6 @@ try:
 except ModuleNotFoundError:
     pass
 from sqlalchemy.orm import sessionmaker
-import runpy
-from pathlib import Path
 
 from krrood.ormatic.utils import create_engine, drop_database
 
@@ -30,14 +38,8 @@ except ModuleNotFoundError:
     pass
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.robots.stretch import Stretch
-
-
-def pytest_configure(config):
-    # Ensure ORM classes are generated before tests run
-    repo_root = Path(__file__).resolve().parents[2]
-    generate_orm_path = repo_root / "coraplex" / "scripts" / "generate_orm.py"
-    # Execute the ORM generation script as a standalone module
-    runpy.run_path(str(generate_orm_path), run_name="__main__")
+from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
+from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 
 
 @pytest.fixture(scope="session")
@@ -97,12 +99,30 @@ def coraplex_testing_session():
 
 @pytest.fixture(scope="function")
 def immutable_stretch_apartment_world(stretch_apartment_world):
-    context = Context(
-        stretch_apartment_world,
-        Stretch.from_world(stretch_apartment_world),
-    )
+    robot = stretch_apartment_world.get_semantic_annotations_by_type(Stretch)[0]
+    context = Context(stretch_apartment_world, robot)
     state = deepcopy(stretch_apartment_world.state._data)
 
-    yield stretch_apartment_world, context.robot, context
+    yield stretch_apartment_world, robot, context
 
     stretch_apartment_world.state._data[:] = state
+    stretch_apartment_world.notify_state_change()
+
+
+@pytest.fixture
+def whole_scene_region(immutable_model_world) -> VolumetricBoundingBox:
+    """
+    A region large enough to contain everything in the apartment fixture.
+
+    Lets a perception test say "look everywhere" without restating the extents.
+    """
+    world, _, _ = immutable_model_world
+    return VolumetricBoundingBox(
+        origin=HomogeneousTransformationMatrix(reference_frame=world.root),
+        min_x=-10,
+        min_y=-10,
+        min_z=-10,
+        max_x=10,
+        max_y=10,
+        max_z=10,
+    )

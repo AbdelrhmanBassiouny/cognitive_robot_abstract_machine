@@ -4,6 +4,7 @@ import logging
 from abc import abstractmethod
 from copy import deepcopy
 from dataclasses import dataclass, field
+from typing import cast
 
 from typing_extensions import (
     Callable,
@@ -40,6 +41,7 @@ from semantic_digital_twin.collision_checking.collision_rules import (
     AvoidExternalCollisions,
     AllowSelfCollisions,
 )
+from semantic_digital_twin.robots.robot_part_mixins import HasMobileBase
 from semantic_digital_twin.robots.robot_parts import AbstractRobot
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
@@ -90,7 +92,9 @@ class Location(Iterable[Pose]):
 
     def __iter__(self) -> Iterator[Pose]:
         test_world = deepcopy(self.world)
-        test_robot = test_world.get_semantic_annotations_by_type(type(self.robot))[0]
+        test_robot = cast(
+            AbstractRobot, test_world.get_semantic_annotation_by_id(self.robot.id)
+        )
         for validator in self.validators:
             validator.context = Context(
                 world=test_world,
@@ -101,11 +105,19 @@ class Location(Iterable[Pose]):
         if self.context.debug:
             VizMarkerPublisher(
                 _world=test_world, node=self.context.ros_node
-            ).with_tf_publisher()
+            )
 
         for pose_candidate in self.generator:
 
-            test_robot.root.parent_connection.origin = pose_candidate
+            # A candidate says where to stand and which way to look, which is the
+            # heading NavigateAction is handed. Turning it into a base pose the same way
+            # is what makes the checks below see the configuration the robot ends up in
+            # rather than one rotated by whatever its forward axis is.
+            test_robot.set_root_pose(
+                test_robot.mobile_base.pose_facing(pose_candidate)
+                if isinstance(test_robot, HasMobileBase)
+                else pose_candidate
+            )
 
             test_world.collision_manager.clear_temporary_rules()
             test_world.collision_manager.add_temporary_rule(
