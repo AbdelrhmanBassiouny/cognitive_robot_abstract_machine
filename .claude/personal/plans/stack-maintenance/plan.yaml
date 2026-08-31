@@ -756,10 +756,10 @@ items:
 
     **One defect found in the way, reported rather than folded in.** `plan_item_bootstrap.py update` writes an
     item''s fields at a hardcoded four-space indent, so replacing this item''s `blockers` emitted the key inside
-    `depends_on`''s sequence and the manifest no longer parsed - which is the `ItemIndentation` fix `#160` owned,
-    recorded on the roadmap as belonging to this branch. It is not this item''s work and the bootstrap is in
-    flight, so it is left for the author to direct; every manifest write in this session went through a hand-edited
-    splice and `save-plan.sh` instead.
+    `depends_on`''s sequence and the manifest no longer parsed. It reproduces the defect `manifest-currency-first`
+    already records against its own branch, which is where the `ItemIndentation` fix belongs - #151 introduces
+    `update` and `ValueStyle.SEQUENCE`, so it is the only branch that can test one. Reported rather than folded in
+    here; every manifest write in this session went through a hand-edited splice and `save-plan.sh` instead.
 
     '
 - id: red-candidate-localisation
