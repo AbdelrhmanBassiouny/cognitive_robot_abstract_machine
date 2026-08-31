@@ -809,7 +809,26 @@ items:
     init=False so the engine grows its tree by fitting cases through an Expert rather than taking one
     already built, which would make two known rules fitted-from-examples; and merging #159 in would add
     9,236 lines of another plan''s stack to a 600-line pull request. What the engine adds - fit,
-    render_tree, the corner-case store, the model file - is what the next two items are written around.'
+    render_tree, the corner-case store, the model file - is what the next two items are written around.
+
+    Review round of 2026-08-31, answered as 92afdcd82. Two threads, and the second changed the design:
+    building the rule tree inside the method that evaluates it leaves nothing for anything else to
+    read, so it may as well have been an if, and the point of an EQL rule tree is that new situations
+    can be added to it. The tree is stated once now, in DetectorRules.__post_init__, and a look is
+    decided by binding it to the one variable every rule states its conditions over and evaluating the
+    tree already held - the same rebind krrood''s own GuardCondition.holds_for performs. add_rule
+    attaches a new rule to the tree while it is in use, with Alternative.insert_at, beside the
+    exceptions already stated so a look reaches at most one of them; a test pins that a rule added at
+    runtime changes the next look''s answer, and it fails if the tree is rebuilt per look. Each
+    detector states its own capability once the same way, and capability() is an ordinary method typed
+    ConditionType over a TargetOnSurface rather than Any over Any, which was the other thread.
+    Choosing for one surface costs 1.0 ms rather than 4.4 ms as a result. 233 tests pass across the
+    montessori modules against 230 before the round.
+
+    What the round did not do is the other half of what it asked: nothing yet asks an expert when no
+    rule fires, since the expert interface is on #98/#159/#76 rather than on main. The decision to
+    stay off the engine is unchanged and is the developer''s, and it is put back to him on the thread
+    rather than reversed here - the thread is left open for that reason.'
 - id: detector-parameters-from-knowledge
   title: Take the detectors' numbers from the objects and the surfaces they look at
   branch: perception_parameters_from_knowledge

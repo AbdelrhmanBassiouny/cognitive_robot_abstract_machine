@@ -2511,3 +2511,60 @@ byte-identical with and without `World`'s new base, checked by name rather than 
 The sdt ORM interface regenerates and imports with the base in place; `World` is not mapped
 as a DAO and neither is `BeliefSource`, so nothing in the interface moves.
 
+
+### `choose-detection-method`: the review round of 2026-08-31, and what "no point of using EQL" meant
+
+Two threads on #231, answered as `92afdcd82`. The second is a design change and worth
+recording, because it is about what a rule tree is *for* rather than about this branch.
+
+The reviewer's words: *"if you are going to create the query/rule tree here and also
+evaluate it here then there's no point of using EQL here at all. This can be native python
+logic. The point of using EQL RDRs is extensibility with new situations through interaction
+with an expert."* — and, on the follow-up, that it applies everywhere in the branch that
+does this, which was `PieceDetector.answers` as well as `DetectorRules.detector_for`.
+
+He is right, and the diagnosis is sharper than "it is slow": a tree built inside the method
+that evaluates it is not a tree anyone can hold. Nothing outside that method can read it,
+nothing can add to it, and its structure is thrown away the moment the answer is returned —
+so every property that distinguishes a rule tree from an `if` is unreachable, and the EQL
+spelling buys nothing but ceremony.
+
+**What the branch does now.** The tree is stated once, in `DetectorRules.__post_init__`,
+over one variable every rule states its conditions over. A look is decided by binding it to
+that variable and evaluating the tree already held. That is not a workaround: it is the
+rebind krrood itself performs in `GuardCondition.holds_for` (`rdr/guard_condition.py:60`),
+which is how the RDR engine asks a stated condition about one case.
+
+Because the tree outlives the looks it decides, it can be grown while it is in use:
+
+```python
+rules.add_rule(rules.stated_look.surface_finish == SurfaceFinish.GLOSSY, detector)
+```
+
+`add_rule` attaches the new rule with `ConclusionSelector.insert_at` — the live-growth API,
+documented for exactly this ("when an RDR inserts a refinement or alternative after
+observing a misclassification"). It attaches as an **alternative** beside the exceptions
+already stated rather than as a second refinement of the base rule, and that shape was
+measured rather than chosen: two refinements at one anchor make the conclusion reachable by
+two paths and the same detector comes back twice, while an else-if chain answers once.
+
+The test that holds it is behavioural: a look at a glossy surface answered by the edge fit
+before the call is answered by the added detector after it. Mutation-checked by making
+`detector_for` rebuild the tree per look, which fails that test and only that test.
+
+**A measured side effect.** Choosing for one surface costs **1.0 ms instead of 4.4 ms** over
+the four known pieces on a matte lid, and the module's own test run went from 42.7 s to
+7.5 s. Building a tree per look was most of what the choice cost.
+
+**What is still not there, and why it is not this branch's to decide twice.** The half of
+the reviewer's sentence about *interaction with an expert* is unanswered: nothing asks
+anyone when no rule fires, `detector_for` still raises `NoDetectorAnswersTheLook`, and the
+expert interface lives on #98 → #159 → #76 rather than on `main`. Putting the tree behind
+`EQLSingleClassRDR` is the developer's call and he made it earlier the same day — the two
+stated rules would become fitted-from-examples, and #159 adds 9,236 lines to a 600-line
+pull request. So the reply offers to merge #159 in and leaves the thread open rather than
+reversing him silently.
+
+Worth generalizing: **"stated once and held" is the property that makes a rule tree a rule
+tree**, and it is cheap. A tree that is built where it is read is an `if` with extra steps,
+whichever library spells it.
