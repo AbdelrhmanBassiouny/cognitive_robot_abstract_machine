@@ -11,15 +11,22 @@ from typing_extensions import List
 from experiments.montessori.perception.detections import MontessoriShapeDetection
 from experiments.montessori.perception.footprint import Footprint
 from experiments.montessori.perception.hypotheses import (
-    BeliefSource,
     BelievedPlace,
     PieceHypothesis,
 )
 from experiments.montessori.perception.exceptions import NothingIsHiddenFromBelow
 from experiments.montessori.perception.occupancy import Occupancy, OccupiedVolume
+from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Pose
+
+from .dataset.montessori_belief_sources import SomethingThatAskedForALook
+
+WHOEVER_ASKED = SomethingThatAskedForALook()
+"""
+The source these tests hand the beliefs behind the detections they build by hand.
+"""
 
 # %% building volumes and detections to test the rule against
 
@@ -92,8 +99,8 @@ def piece_at(
         height=height,
         outline_agreement=outline_agreement,
         hypothesis=PieceHypothesis(
-            place=BelievedPlace(surface=resting_on, center=(x, y)),
-            source=BeliefSource.COLOR_IN_THE_PICTURE,
+            place=BelievedPlace(surface=resting_on, center=PlanarPoint(x, y)),
+            source=WHOEVER_ASKED,
         ),
     )
 

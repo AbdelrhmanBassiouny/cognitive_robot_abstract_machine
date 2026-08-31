@@ -44,7 +44,6 @@ from experiments.montessori.perception.footprint import (
     FootprintClassifier,
 )
 from experiments.montessori.perception.hypotheses import (
-    BeliefSource,
     BelievedPlace,
     PieceHypothesis,
 )
@@ -62,8 +61,10 @@ from experiments.montessori.pieces import (
     KNOWN_PIECE_BY_CATEGORY,
     PIECE_HUES,
 )
+from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShape, ShapeSortingBoard
 from experiments.montessori.world import BOARD_SCALE
+from krrood.patterns.belief_source import BeliefSource
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 from semantic_digital_twin.world import World
 from semantic_digital_twin.world_description.world_entity import (
@@ -552,10 +553,10 @@ class BoardDetector:
         """
         if footprint is None:
             footprint = Footprint.from_contour(contour, orthophoto.region.resolution)
-        x, y = orthophoto.contour_center(contour)
+        center = orthophoto.contour_center(contour)
         return Pose.from_xyz_rpy(
-            x,
-            y,
+            center.x,
+            center.y,
             orthophoto.plane_height,
             yaw=footprint.yaw,
             reference_frame=reference_frame,
@@ -563,7 +564,7 @@ class BoardDetector:
 
 
 @dataclass
-class LoosePieceDetector:
+class LoosePieceDetector(BeliefSource):
     """
     Finds the loose Montessori pieces in a view rectified onto the surface they rest on.
     """
@@ -655,7 +656,7 @@ class LoosePieceDetector:
         :param search: The surface being searched.
         """
         return hypothesis.place.surface == search.surface.name and search.claims(
-            *hypothesis.place.center
+            hypothesis.place.center.x, hypothesis.place.center.y
         )
 
     def _colors_seen_in(
@@ -702,6 +703,7 @@ class LoosePieceDetector:
                         hue=self.colors.measure_hue(
                             orthophoto, _filled(contour, orthophoto)
                         ),
+                        source=self,
                         hue_tolerance=self.hue_tolerance,
                     )
                 )
@@ -754,13 +756,15 @@ class LoosePieceDetector:
         match = self.matcher.match(edges, hypothesis)
         if match is None:
             return None
-        outline = match.piece.turned_outline(match.yaw) + np.asarray(match.center)
+        outline = match.piece.turned_outline(match.yaw) + np.array(
+            [match.center.x, match.center.y]
+        )
         fitted = _to_rectified_contour(outline, orthophoto)
         height = _measure_height(fitted, orthophoto, frame, self.piece_height)
         return MontessoriShapeDetection(
             pose=Pose.from_xyz_rpy(
-                match.center[0],
-                match.center[1],
+                match.center.x,
+                match.center.y,
                 orthophoto.plane_height + height / 2,
                 yaw=match.yaw,
                 reference_frame=reference_frame,
@@ -1051,9 +1055,9 @@ class MontessoriPerceptionPipeline:
                 PieceHypothesis(
                     place=BelievedPlace(
                         surface=surface.name,
-                        center=(float(position[0]), float(position[1])),
+                        center=PlanarPoint(x=float(position[0]), y=float(position[1])),
                     ),
-                    source=BeliefSource.BODY_IN_THE_WORLD,
+                    source=self.world,
                     candidates=(KNOWN_PIECE_BY_CATEGORY[shape.shape_category],),
                 )
                 for surface in (self.table, self.lid)

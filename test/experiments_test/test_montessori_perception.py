@@ -20,7 +20,6 @@ from experiments.montessori.perception.detections import (
     ShapeSortingHoleDetection,
 )
 from experiments.montessori.perception.hypotheses import (
-    BeliefSource,
     BelievedPlace,
     PieceHypothesis,
 )
@@ -29,13 +28,16 @@ from experiments.montessori.perception.pipeline import MontessoriPerceptionPipel
 from experiments.montessori.perception.scene_source import FixedScene, PerceivedObjects
 from experiments.montessori.perception.surfaces import SurfaceSearch, WorkspaceSurface
 from experiments.montessori.pieces import KNOWN_PIECE_BY_CATEGORY, hue_distance
+from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShape, MontessoriShapeCategory
 from experiments.montessori.world import MontessoriWorld
 from krrood.entity_query_language.factories import a, the
+from krrood.patterns.belief_source import BeliefSource
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.spatial_types.spatial_types import Pose
 
 from .dataset import montessori_scene_fixtures
+from .dataset.montessori_belief_sources import SomethingThatAskedForALook
 from .dataset.montessori_scene_fixtures import SCENE_REGION
 from .dataset.montessori_scene_renderer import (
     LID_COLOR,
@@ -348,7 +350,7 @@ def test_a_look_expects_the_piece_the_world_says_it_placed(
     from_the_world = [
         hypothesis
         for hypothesis in pipeline.expected_pieces()
-        if hypothesis.source is BeliefSource.BODY_IN_THE_WORLD
+        if hypothesis.source is montessori.world
     ]
 
     assert {hypothesis.candidates for hypothesis in from_the_world} == {
@@ -465,9 +467,9 @@ def test_a_piece_wearing_the_surfaces_own_hue_is_found_where_it_is_expected(
     expected = PieceHypothesis(
         place=BelievedPlace(
             surface=pipeline.lid.name,
-            center=(prism_on_the_lid.x, prism_on_the_lid.y),
+            center=PlanarPoint(prism_on_the_lid.x, prism_on_the_lid.y),
         ),
-        source=BeliefSource.ASKED_FOR,
+        source=SomethingThatAskedForALook(),
         candidates=(prism_on_the_lid.known_piece,),
     )
 
@@ -489,10 +491,21 @@ def test_a_detection_carries_the_belief_it_answered(
     A result says what was looked for and what suggested it, not only what was found.
     """
     for piece in scene.shapes:
-        assert piece.hypothesis.source in BeliefSource
+        assert isinstance(piece.hypothesis.source, BeliefSource)
         assert piece.category in {
             candidate.category for candidate in piece.hypothesis.candidates
         }
+
+
+def test_a_detection_a_colour_suggested_names_the_detector_that_read_it(
+    pipeline: MontessoriPerceptionPipeline, scene: MontessoriScene
+):
+    """
+    The source is the detector itself, so a reader can ask it how it was looking.
+    """
+    assert scene.shapes
+    for piece in scene.shapes:
+        assert piece.hypothesis.source is pipeline.piece_detector
 
 
 # %% querying it

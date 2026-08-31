@@ -15,7 +15,6 @@ the look supplies the rest.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 
 from typing_extensions import List, Optional, Self, Tuple
 
@@ -25,6 +24,8 @@ from experiments.montessori.pieces import (
     KnownPiece,
     hue_distance,
 )
+from experiments.montessori.planar_geometry import PlanarPoint
+from krrood.patterns.belief_source import BeliefSource
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 
 # %% how sure a belief is when it says nothing about how sure it is
@@ -97,9 +98,9 @@ class BelievedPlace:
     What the world calls the surface the thing is believed to be resting on.
     """
 
-    center: Tuple[float, float]
+    center: PlanarPoint
     """
-    The world-frame ``(x, y)`` it is believed to be at, in metres.
+    Where on the surface's own plane it is believed to be.
     """
 
     radius: float = SEED_REACH
@@ -112,19 +113,6 @@ class BelievedPlace:
     Which way it is believed to be turned, or None where nothing is believed about it
     and every turn it can be told apart at is worth trying.
     """
-
-
-# %% what put the belief there
-
-
-class BeliefSource(StrEnum):
-    """
-    What suggested that a thing is at a place.
-    """
-
-    COLOR_IN_THE_PICTURE = "a colour in the picture"
-    BODY_IN_THE_WORLD = "a body the world places"
-    ASKED_FOR = "asked for by whoever wanted the look"
 
 
 # %% one thing expected at one place
@@ -146,7 +134,8 @@ class PieceHypothesis:
 
     source: BeliefSource
     """
-    What suggested it.
+    What suggested it: the detector that saw a colour, the world that places the piece,
+    or whoever asked for the look.
     """
 
     candidates: Tuple[KnownPiece, ...] = KNOWN_PIECES
@@ -169,6 +158,7 @@ class PieceHypothesis:
         cls,
         place: BelievedPlace,
         hue: Optional[int],
+        source: BeliefSource,
         candidates: Tuple[KnownPiece, ...] = KNOWN_PIECES,
         hue_tolerance: int = HUE_TOLERANCE,
     ) -> Self:
@@ -179,13 +169,14 @@ class PieceHypothesis:
         :param place: Where the colour was seen.
         :param hue: The colour measured there, or None where there was none to read, in
             which case every candidate stands.
+        :param source: What read the colour.
         :param candidates: The pieces that may be found at all.
         :param hue_tolerance: How far a measured colour may sit from a piece's own
             before that piece is ruled out.
         """
         return cls(
             place=place,
-            source=BeliefSource.COLOR_IN_THE_PICTURE,
+            source=source,
             candidates=tuple(
                 candidate
                 for candidate in candidates

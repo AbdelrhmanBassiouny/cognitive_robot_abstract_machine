@@ -24,6 +24,7 @@ from typing_extensions import Any, Dict, Self, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.exceptions import WorkspaceOutOfView
+from experiments.montessori.planar_geometry import PlanarPoint
 from krrood.adapters.json_serializer import SubclassJSONSerializer
 from semantic_digital_twin.spatial_types.math import inverse_frame
 
@@ -301,18 +302,22 @@ class Orthophoto:
         """
         return self.image.any(axis=2)
 
-    def contour_center(self, contour: np.ndarray) -> Tuple[float, float]:
+    def contour_center(self, contour: np.ndarray) -> PlanarPoint:
         """
-        The world-frame ``(x, y)`` of a contour's centre of area.
+        Where on this image's own plane a contour's centre of area lies.
 
         :param contour: An OpenCV contour in this image's pixels.
         """
         moments = cv2.moments(contour)
         if moments["m00"] == 0.0:
             pixel_x, pixel_y = contour.reshape(-1, 2).mean(axis=0)
-            return self.region.to_world_position(float(pixel_x), float(pixel_y))
-        return self.region.to_world_position(
-            moments["m10"] / moments["m00"], moments["m01"] / moments["m00"]
+            return PlanarPoint(
+                *self.region.to_world_position(float(pixel_x), float(pixel_y))
+            )
+        return PlanarPoint(
+            *self.region.to_world_position(
+                moments["m10"] / moments["m00"], moments["m01"] / moments["m00"]
+            )
         )
 
 

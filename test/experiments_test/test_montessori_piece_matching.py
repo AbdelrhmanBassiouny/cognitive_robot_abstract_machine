@@ -37,11 +37,13 @@ from experiments.montessori.pieces import (
     KnownPiece,
     hue_distance,
 )
+from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world_description.geometry import Color
 
 from .dataset import montessori_scene_fixtures
+from .dataset.montessori_belief_sources import SomethingThatAskedForALook
 from .dataset.montessori_scene_fixtures import SCENE_REGION
 from .dataset.montessori_scene_renderer import MontessoriSceneRenderer, PlacedPiece
 
@@ -196,6 +198,11 @@ DRAWN_SURFACE = PrefixedName("table", "piece_matching_test")
 What the world is taken to call the surface a test draws its pieces on.
 """
 
+WHOEVER_ASKED = SomethingThatAskedForALook()
+"""
+The source these tests hand a belief, none of which comes from a running detector.
+"""
+
 
 def _believing(
     center: Tuple[float, float] = (0.0, 0.0), hue: Optional[int] = None
@@ -207,7 +214,9 @@ def _believing(
     :param hue: The colour measured there, or None where there was none to read.
     """
     return PieceHypothesis.of_color(
-        BelievedPlace(surface=DRAWN_SURFACE, center=center), hue
+        BelievedPlace(surface=DRAWN_SURFACE, center=PlanarPoint(*center)),
+        hue,
+        WHOEVER_ASKED,
     )
 
 
@@ -265,7 +274,10 @@ def test_a_piece_is_found_where_it_stands_and_not_where_it_was_looked_for(
         _drawn(piece.outline, stands_at), _believing(looked_for, piece.hue)
     )
 
-    assert match.center == pytest.approx(stands_at, abs=matcher.step)
+    assert match.center == PlanarPoint(
+        pytest.approx(stands_at[0], abs=matcher.step),
+        pytest.approx(stands_at[1], abs=matcher.step),
+    )
 
 
 def test_a_piece_is_never_recognised_as_one_of_the_other_colour():
@@ -319,7 +331,9 @@ def test_a_reflection_around_a_piece_does_not_move_where_it_is_recognised():
     )
 
     assert match.piece.category is MontessoriShapeCategory.CUBE
-    assert match.center == pytest.approx(stands_at, abs=0.002)
+    assert match.center == PlanarPoint(
+        pytest.approx(stands_at[0], abs=0.002), pytest.approx(stands_at[1], abs=0.002)
+    )
 
 
 @pytest.mark.parametrize("piece", TURNABLE_PIECES, ids=_piece_id)

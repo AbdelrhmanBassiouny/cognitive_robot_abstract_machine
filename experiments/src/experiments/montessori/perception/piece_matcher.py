@@ -24,11 +24,12 @@ import math
 from dataclasses import dataclass
 
 import numpy as np
-from typing_extensions import List, Optional, Sequence, Tuple
+from typing_extensions import List, Optional, Sequence
 
 from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.hypotheses import PieceHypothesis
 from experiments.montessori.pieces import KnownPiece, points_along
+from experiments.montessori.planar_geometry import PlanarPoint
 
 # %% what a fit came to
 
@@ -44,9 +45,9 @@ class MatchedPiece:
     The piece the edges were recognised as.
     """
 
-    center: Tuple[float, float]
+    center: PlanarPoint
     """
-    The world-frame ``(x, y)`` its own centre was fitted to, in metres.
+    Where its own centre was fitted to, on the plane it stands on.
     """
 
     yaw: float
@@ -191,7 +192,7 @@ class PieceMatcher:
         self,
         piece: KnownPiece,
         edges: EdgeDistances,
-        center: Tuple[float, float],
+        center: PlanarPoint,
         angles: Sequence[float],
         radius: float,
         step: float,
@@ -202,7 +203,7 @@ class PieceMatcher:
 
         :param piece: The piece to place.
         :param edges: The edges seen in the plane its top face stands on.
-        :param center: The world-frame ``(x, y)`` the grid is centred on.
+        :param center: Where on the plane the grid is centred.
         :param angles: The turns to try, in radians.
         :param radius: How far, in metres, the grid reaches from its centre.
         :param step: How far apart, in metres, the grid's positions stand.
@@ -212,7 +213,7 @@ class PieceMatcher:
         walk = np.arange(-radius, radius + step / 2, step)
         positions = np.stack(np.meshgrid(walk, walk, indexing="ij"), axis=-1).reshape(
             -1, 2
-        ) + np.asarray(center, dtype=float)
+        ) + np.array([center.x, center.y])
         return max(
             (
                 self._best_position(piece, edges, positions, angle, reach)
@@ -244,7 +245,9 @@ class PieceMatcher:
         best = int(np.argmax(agreements))
         return MatchedPiece(
             piece=piece,
-            center=(float(positions[best][0]), float(positions[best][1])),
+            center=PlanarPoint(
+                x=float(positions[best][0]), y=float(positions[best][1])
+            ),
             yaw=piece.smallest_equivalent_turn(angle),
             outline_agreement=float(agreements[best]),
         )

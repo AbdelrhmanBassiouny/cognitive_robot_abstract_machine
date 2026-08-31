@@ -11,7 +11,6 @@ import pytest
 from typing_extensions import List
 
 from experiments.montessori.perception.hypotheses import (
-    BeliefSource,
     BelievedPlace,
     PieceHypothesis,
     YawInterval,
@@ -25,14 +24,24 @@ from experiments.montessori.pieces import (
     YELLOW_HUE,
     hue_distance,
 )
+from experiments.montessori.planar_geometry import PlanarPoint
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
+
+from .dataset.montessori_belief_sources import SomethingThatAskedForALook
 
 # %% the surface these tests believe things to be resting on
 
 A_SURFACE = PrefixedName("table", "hypotheses_test")
 """
 What the world is taken to call the surface these tests place their beliefs on.
+"""
+
+# %% what these tests take to have put a belief there
+
+WHOEVER_ASKED = SomethingThatAskedForALook()
+"""
+The source these tests hand a belief that nothing in the picture suggested.
 """
 
 
@@ -44,7 +53,7 @@ def place_at(x: float, y: float, **believed) -> BelievedPlace:
     :param y: Where along the world frame's y-axis it is, in metres.
     :param believed: Whatever else is believed about it.
     """
-    return BelievedPlace(surface=A_SURFACE, center=(x, y), **believed)
+    return BelievedPlace(surface=A_SURFACE, center=PlanarPoint(x, y), **believed)
 
 
 def gaps_between(turns: List[float]) -> List[float]:
@@ -85,6 +94,16 @@ def test_an_interval_narrower_than_one_step_is_tried_at_its_own_centre():
     assert believed.turns(math.radians(5)) == [believed.center]
 
 
+# %% where a place says it is
+
+
+def test_a_place_names_the_axes_of_its_centre():
+    place = place_at(0.6, 0.2)
+
+    assert place.center.x == 0.6
+    assert place.center.y == 0.2
+
+
 # %% how widely a place is searched
 
 
@@ -107,9 +126,9 @@ def test_a_piece_believed_turned_no_particular_way_is_tried_through_its_own_peri
 ):
     step = math.radians(6)
 
-    turns = PieceHypothesis(
-        place=place_at(0.6, 0.2), source=BeliefSource.ASKED_FOR
-    ).turns_of(piece, step)
+    turns = PieceHypothesis(place=place_at(0.6, 0.2), source=WHOEVER_ASKED).turns_of(
+        piece, step
+    )
 
     assert min(turns) == pytest.approx(-piece.rotation_period / 2, abs=step)
     assert max(turns) == pytest.approx(piece.rotation_period / 2, abs=step)
@@ -117,9 +136,7 @@ def test_a_piece_believed_turned_no_particular_way_is_tried_through_its_own_peri
 
 def test_a_piece_no_turn_changes_is_tried_at_one_turn_only():
     cylinder = KNOWN_PIECE_BY_CATEGORY[MontessoriShapeCategory.CYLINDER]
-    hypothesis = PieceHypothesis(
-        place=place_at(0.6, 0.2), source=BeliefSource.ASKED_FOR
-    )
+    hypothesis = PieceHypothesis(place=place_at(0.6, 0.2), source=WHOEVER_ASKED)
 
     assert cylinder.rotation_period is None
     assert hypothesis.turns_of(cylinder, math.radians(6)) == [0.0]
@@ -131,7 +148,7 @@ def test_a_piece_believed_turned_one_way_is_tried_only_around_that_turn():
 
     turns = PieceHypothesis(
         place=place_at(0.6, 0.2, yaw=believed),
-        source=BeliefSource.BODY_IN_THE_WORLD,
+        source=WHOEVER_ASKED,
     ).turns_of(cube, math.radians(2))
 
     assert all(believed.holds(turn) for turn in turns)
@@ -142,7 +159,7 @@ def test_a_piece_believed_turned_one_way_is_tried_only_around_that_turn():
 
 
 def test_a_colour_suggests_the_pieces_that_wear_it():
-    hypothesis = PieceHypothesis.of_color(place_at(0.6, 0.2), CYAN_HUE)
+    hypothesis = PieceHypothesis.of_color(place_at(0.6, 0.2), CYAN_HUE, WHOEVER_ASKED)
 
     assert set(hypothesis.candidates) == {
         piece
@@ -154,21 +171,35 @@ def test_a_colour_suggests_the_pieces_that_wear_it():
 def test_a_colour_suggests_nothing_where_no_piece_wears_it():
     unworn = (CYAN_HUE + YELLOW_HUE) // 2
 
-    assert PieceHypothesis.of_color(place_at(0.6, 0.2), unworn).candidates == ()
+    assert (
+        PieceHypothesis.of_color(place_at(0.6, 0.2), unworn, WHOEVER_ASKED).candidates
+        == ()
+    )
 
 
 def test_a_place_whose_colour_could_not_be_read_expects_every_piece():
-    hypothesis = PieceHypothesis.of_color(place_at(0.6, 0.2), None)
+    hypothesis = PieceHypothesis.of_color(place_at(0.6, 0.2), None, WHOEVER_ASKED)
 
     assert hypothesis.candidates == KNOWN_PIECES
     assert hypothesis.hue is None
 
 
 def test_a_hypothesis_records_the_colour_that_suggested_it():
-    hypothesis = PieceHypothesis.of_color(place_at(0.6, 0.2), YELLOW_HUE)
+    hypothesis = PieceHypothesis.of_color(place_at(0.6, 0.2), YELLOW_HUE, WHOEVER_ASKED)
 
     assert hypothesis.hue == YELLOW_HUE
-    assert hypothesis.source is BeliefSource.COLOR_IN_THE_PICTURE
+
+
+def test_a_hypothesis_names_the_source_that_suggested_it_rather_than_a_kind_of_source():
+    """
+    Which one said so, so that whoever reads the belief can ask it what else it says.
+    """
+    one_asker, another = SomethingThatAskedForALook(), SomethingThatAskedForALook()
+
+    hypothesis = PieceHypothesis.of_color(place_at(0.6, 0.2), YELLOW_HUE, one_asker)
+
+    assert hypothesis.source is one_asker
+    assert hypothesis.source is not another
 
 
 def test_a_colour_is_read_the_short_way_round_the_circle_when_it_suggests_pieces():
@@ -177,9 +208,11 @@ def test_a_colour_is_read_the_short_way_round_the_circle_when_it_suggests_pieces
 
     assert (
         PieceHypothesis.of_color(
-            place_at(0.6, 0.2), (CYAN_HUE + wrapping) % HUE_RANGE
+            place_at(0.6, 0.2), (CYAN_HUE + wrapping) % HUE_RANGE, WHOEVER_ASKED
         ).candidates
-        == PieceHypothesis.of_color(place_at(0.6, 0.2), CYAN_HUE).candidates
+        == PieceHypothesis.of_color(
+            place_at(0.6, 0.2), CYAN_HUE, WHOEVER_ASKED
+        ).candidates
     )
 
 
@@ -187,9 +220,7 @@ def test_a_colour_is_read_the_short_way_round_the_circle_when_it_suggests_pieces
 
 
 def test_a_belief_with_no_colour_behind_it_expects_every_known_piece():
-    hypothesis = PieceHypothesis(
-        place=place_at(0.6, 0.2), source=BeliefSource.ASKED_FOR
-    )
+    hypothesis = PieceHypothesis(place=place_at(0.6, 0.2), source=WHOEVER_ASKED)
 
     assert hypothesis.candidates == KNOWN_PIECES
     assert hypothesis.hue is None
@@ -200,7 +231,7 @@ def test_a_belief_may_name_the_one_piece_it_expects():
 
     hypothesis = PieceHypothesis(
         place=place_at(0.6, 0.2),
-        source=BeliefSource.BODY_IN_THE_WORLD,
+        source=WHOEVER_ASKED,
         candidates=(cube,),
     )
 

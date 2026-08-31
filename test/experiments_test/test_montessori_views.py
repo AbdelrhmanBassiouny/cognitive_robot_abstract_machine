@@ -89,7 +89,7 @@ def test_a_hole_lands_at_its_own_world_position_in_the_rectified_lid(
     centers = [orthophoto.contour_center(contour) for contour in contours]
 
     assert min(
-        math.hypot(x - expected_x, y - expected_y) for x, y in centers
+        math.hypot(center.x - expected_x, center.y - expected_y) for center in centers
     ) == pytest.approx(0.0, abs=0.003)
 
 
