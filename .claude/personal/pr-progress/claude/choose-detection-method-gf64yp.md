@@ -2,13 +2,16 @@
 
 Plan `knowledge-directed-perception`, track `method-selection`. Branch
 `claude/choose-detection-method-gf64yp`, based on `perception_eql_backend` (#222)
-with `sdt_surface_finish_annotation` (#216) merged in. Built as `69f30348a`.
+with `sdt_surface_finish_annotation` (#216) merged in. Built as `69f30348a`,
+review round answered as `92afdcd82`.
 
-## Status: built, pushed, description and roadmap current
+## Status: first review round answered, one thread deliberately open
 
-The item's work is done and the pull request is a draft awaiting review. Nothing
-is outstanding on it: CI not yet reported at the time of writing, no review
-threads, no conflict.
+The item's work is done and the pull request is a draft. Of the two review
+threads of 2026-08-31, the typing one is answered and resolved; the design one
+is answered and **left open on purpose** — see "The review round" below. No
+conflict. The developer merged the parent branches down the stack himself
+(`2d73e8905`) before reviewing.
 
 ## What was built
 
@@ -31,7 +34,36 @@ section asks for.
   annotated path **slower** (0.596 vs 0.521 s/frame). `RectifiedFrame` shares each
   plane and its edges per frame → **0.494 vs 0.491**, and the unannotated path
   improved too (0.521 → 0.491).
-- Tests: **230 passed**, 1 skipped, 16 xfailed vs **205 / 1 / 16** on the parent.
+- Choosing for one surface costs **1.0 ms** stated once vs **4.4 ms** stated per
+  look, over the four known pieces on a matte lid.
+- Tests: **233 passed**, 1 skipped, 16 xfailed vs **205 / 1 / 16** on the parent.
+
+## The review round of 2026-08-31
+
+Two threads, both on `detector_choice.py`.
+
+1. *"this returns a ConditionType right? not Any right?"* — yes. `capability` is
+   `(self, look: TargetOnSurface) -> ConditionType` now, and stopped being a
+   `@classmethod` so a detector can state a capability that depends on how it was
+   configured. **Answered and resolved.**
+2. *"if you are going to create the query/rule tree here and also evaluate it
+   here then there's no point of using EQL here at all … The point of using EQL
+   RDRs is extensibility with new situations through interaction with an
+   expert."* — right, and it applied to `PieceDetector.answers` too.
+
+   The tree is stated once now, in `__post_init__`, and a look is decided by
+   binding it to the one variable every rule states its conditions over — the
+   rebind krrood's own `GuardCondition.holds_for` performs. `add_rule` grows the
+   tree while it is in use, via `Alternative.insert_at`, attaching beside the
+   exceptions already stated (two refinements at one anchor return the same
+   detector twice; an else-if chain answers once — measured). A test pins that a
+   rule added at runtime changes the next look's answer, and it fails if the tree
+   is rebuilt per look.
+
+   **Left open** because the other half — *asking* an expert when no rule fires —
+   is not here: that interface is on #98/#159/#76, and staying off the engine is
+   the developer's own decision from earlier the same day. The reply offers to
+   merge #159 in and puts the call back to him rather than reversing it silently.
 
 ## The blocker was not real — and the correction went further
 
@@ -76,7 +108,8 @@ its own bug-fix PR.
 
 ## Next, if anyone picks this up
 
-Nothing required on #231. Follow-ups belong to other items: history conditions to
+Nothing required on #231 unless the developer takes up the offer on thread
+`r3898606395` to put the tree behind `EQLSingleClassRDR` (#159). Follow-ups belong to other items: history conditions to
 `pieces-looked-for-where-expected` (#232), a measured board colour to
 `detector-parameters-from-knowledge`, and the RDR engine to that item (#159) and
 to `tune-detection-rules-against-the-camera` (#77).
