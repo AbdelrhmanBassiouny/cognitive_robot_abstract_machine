@@ -740,7 +740,35 @@ items:
     rule tree with the condition moved onto the detector - each detector states the requests it can answer,
     and the choice is made by matching a request against those statements rather than by a tree written
     over the surface and the target. Worth settling which of the two shapes this item builds before it
-    starts, since they answer the same question from opposite ends.'
+    starts, since they answer the same question from opposite ends.
+
+    Built 2026-08-31 as #231, 69f30348a. Both shapes were built, layered, at the developer''s
+    direction: each detector declares the looks it can answer as an entity query language condition,
+    and the ripple-down tree chooses among the ones that can. The planned third rule - a target
+    wearing the surface''s own hue falls back to the edge fit - turned out not to be a rule but the
+    colour blob''s capability going false, so the tree ships the two rules the budget asks for.
+    Speed is the honest reason and it is measured: the colour blob costs 89 ms against the edge
+    fit''s 126 ms on the same work, reporting the same pieces at comparable agreement.
+
+    The recorded blocker was three claims and only two are true. The classic
+    krrood.ripple_down_rules machinery is unusable as recorded (source-string conditions, an Expert
+    required for every tree mutation), and EQLSingleClassRDR is eight unmerged pull requests deep in
+    the D-core-* stack - but the EQL-native rule trees the item''s own note describes are usable on
+    main today, 24 tests passing with no skips. So this item was never blocked, and neither is
+    detector-parameters-from-knowledge behind it.
+
+    One structural finding: choosing a detector per piece means a surface is searched once per
+    detector, and the first working version was slower annotated than not (0.596 s/frame against
+    0.521). Rectifying each plane and reading its edges once per frame rather than once per detector
+    fixes it (0.494 against 0.491) and made the unannotated path faster too. Anything derived from
+    the picture belongs to the frame once more than one detector answers a look.
+
+    Nothing in this workspace states a finish yet, so every look still falls to the edge fit on the
+    scenes as they stand - the same shape as surfaces-from-world''s supporting_surface being None
+    everywhere, and asserted directly. The rule sending an amber piece to the edge fit reads the
+    colour the world states, and BOARD_COLOR is eleven hues from the wood the camera measures, so it
+    does not fire on the real board until detector-parameters-from-knowledge moves measured colours
+    onto the twin.'
 - id: detector-parameters-from-knowledge
   title: Take the detectors' numbers from the objects and the surfaces they look at
   branch: perception_parameters_from_knowledge

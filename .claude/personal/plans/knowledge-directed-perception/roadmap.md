@@ -2145,3 +2145,133 @@ Run under the environment #223 recorded, `uv sync --extra dev --python 3.12`.
 branch edits `pipeline.py`, `detections.py` and `piece_matcher.py`, so it inherits that
 conflict the same mechanical way #205, #221 and #225 do: take this branch's edit, spell
 the class `RectifiedFootprint`.
+
+### `choose-detection-method`: what it took, and the two things measuring changed
+
+Built 2026-08-31 as `69f30348a` on #231. 25 new tests; `230 passed, 1 skipped, 16 xfailed`
+across the montessori modules against `205 passed, 1 skipped, 16 xfailed` on the parent,
+which is the 25 added here and nothing else moved.
+
+**Both shapes were built, layered, and the layering is what the scene actually needs.**
+The developer chose both at kickoff, and building it bore the reasoning out: each detector
+declares the looks it can answer as an entity query language condition, and the rule tree
+chooses among the ones that can. The planned third rule -- a target wearing the surface's
+own hue falls back to the edge fit -- turned out not to be a rule at all but the colour
+blob's own capability going false, so the tree ships the two rules the budget section asks
+for and the amber-on-wood case needs nothing written for it. That is the layering paying
+for itself rather than costing: a capability is not a weaker rule, it is the half that says
+what a detector is *for*.
+
+**Speed is the honest reason, and it is measured.** On the same frame, the same surface and
+the same candidates: the colour blob costs **89 ms** against the edge fit's **126 ms**, and
+reports the same three pieces at comparable agreement (0.807/0.652/0.926 against
+0.829/0.716/0.926), the cube on the lid at 0.926 from both. #201's comment of 2026-08-30
+left this item to choose between *speed* and *the case colour cannot handle at all*; both
+are taken, because they are one pair of rules read from either end, and the second falls out
+of the capability rather than needing a rule.
+
+#### Splitting a surface between two detectors costs a second pass, and that had to be paid for
+
+The first working version was **slower annotated than unannotated** -- 0.596 s/frame against
+0.521 -- which is the opposite of the item's claim. The cause is structural rather than
+incidental: choosing per piece means the lid is searched once by each detector, and each
+detector rectified its own planes and read its own edges off them. The saving is per piece;
+the duplicated work is per pass, and on this scene the second pass outweighed it.
+
+`RectifiedFrame` rectifies each plane and reads its edges once per frame, however many
+detectors ask for them, and the detectors are handed the edges rather than computing them.
+That takes the annotated path to **0.494 s/frame against 0.491 unannotated** -- the split is
+now free -- and it made the *unannotated* path faster too, from 0.521 to 0.491, because the
+board pass and the lid pass had always rectified the same plane twice.
+
+Worth generalizing beyond this item: the moment a look is answered by more than one
+detector, anything derived from the picture rather than from a detector's own parameters
+belongs to the frame and not to the detector. `detector-parameters-from-knowledge` moves the
+parameters the other way, onto the objects, and these two moves are the same boundary drawn
+from opposite sides.
+
+#### The recorded blocker was three facts, and only one of them is about this item
+
+The item's notes and #201's comment of 2026-08-29 record that krrood's ripple-down rules are
+"not usable yet", expected to become so through the RDR/EQL refactor's integration build, and
+name it as the schedule risk for the 4-8 September window with
+`detector-parameters-from-knowledge` behind it. Measured before anything was planned:
+
+- **The classic `krrood.ripple_down_rules` machinery is not usable, as recorded.** Its
+  conditions are Python *source strings* (`Rule.conditions: CallableExpression`, parsed from
+  an expert's typed text) and every tree-mutating entry point -- `fit`, `update_start_rule`,
+  `add_rule_for_case` -- requires an `Expert`. No test in that suite builds a tree
+  programmatically; they replay recorded JSON answers through `Human(load_answers=True)`, and
+  the whole suite skips when the UCI zoo dataset is not cached.
+- **`EQLSingleClassRDR` is not usable either**, and it is what the "integration build" refers
+  to: it lives on `D-core-single-class`, eight unmerged pull requests deep in a stack whose
+  root (#64) is still open against `main`.
+- **The EQL-native rule trees are usable today, on `main`.** `refinement()`, `alternative()`,
+  `next_rule()`, `add()` and `inference()` in `krrood.entity_query_language.factories` build a
+  tree in a `with query:` block, and `ConclusionSelector.insert_at` grows one without one.
+  Their conditions are genuine `SymbolicExpression`s, `Predicate`s included -- which is what
+  the item's own note describes. `test/krrood_test/test_eql/test_core/test_rules.py` is
+  **24 passed** here, no skips and no xfails.
+
+So the item was never blocked, and neither is `detector-parameters-from-knowledge` behind it.
+Recorded at this length because the same sentence was carried on two items and on the
+tracking issue for two days, and it was three claims of which only the first two are true.
+
+#### Two smaller things the build settled
+
+- **A conclusion has to be hashable.** The rule tree concludes the pipeline's own detector
+  *instances* rather than constructing fresh ones, so the detectors are `@dataclass(eq=False)`
+  -- a value-comparing dataclass has no `__hash__` and `add()` refuses it. Identity is also the
+  right comparison for a detector: two configured the same are not the same detector.
+- **A base query needs a condition that binds its variable.** A rule tree whose base query has
+  no `where` yields nothing at all, silently. The base condition here is the edge fit's own
+  capability, which is load-bearing rather than a tautology: a target with no modelled outline
+  is refused with `NoDetectorAnswersTheLook` rather than reported as nothing seen, and that is
+  `robokudo-detector`'s gap stated rather than hidden.
+
+#### Deliberately not built, both recorded rather than skipped
+
+- **The history conditions.** The item was widened on 2026-08-31 so the tree reads what has
+  lately happened to the target. The believed place is defined once, by
+  `pieces-looked-for-where-expected`, which is `not_started` behind #225, so building it here
+  would build it twice -- the duplication these notes record three times over. The tree reads a
+  situation rather than a bare pair of properties, so those arrive as rules added under it.
+- **A measured colour for the board.** The rule that sends an amber piece to the edge fit reads
+  the colour the world states, and `BOARD_COLOR` is `Color.BEIGE()`, eleven hues from the wood
+  the camera measures -- recorded by #221 already. So on the real board that rule does not fire
+  yet; the tests state the colour the renderer actually draws, which is the lid's measured hue
+  19, so the rule is exercised against a truthful world. Moving measured colours onto the twin
+  is `detector-parameters-from-knowledge`'s ask, and this is a second reader for it.
+
+**Nothing in this workspace states a finish yet**, so on the scenes as they stand every look
+still falls to the edge fit. That is the same shape as `surfaces-from-world`'s
+`supporting_surface` being `None` on every world, and it is asserted directly by
+`test_nothing_is_annotated_yet_so_every_look_falls_to_the_edge_fit` rather than left for a
+reader to discover.
+
+#### The environment, which is worse than #223 recorded
+
+`uv sync --extra dev --python 3.12` **does not work any more**, and it is not this branch's
+doing: `pyproject.toml`'s `[tool.uv] override-dependencies` uses a map form uv rejects
+outright (`invalid type: map, expected a string containing a PEP 508 requirement`), on both
+uv 0.8.17 and 0.9.5, and it reproduces on unmodified `main` -- it arrived with `b37c29996`,
+"Add alternative package for treon dependency docopt". What works instead is a Python 3.12
+virtual environment with every workspace package installed editable and `casadi~=3.7.0` pinned
+as `semantic_digital_twin` declares; casadi 3.8 raises `NotImplementedError` out of
+`FunctionBuffer_set_res` on any forward-kinematics call.
+
+#### Landing hazard
+
+`LoosePieceDetector` is renamed to `EdgeFitDetector` across the perception package and
+`detect` gains two parameters, the shared edges and the candidates it was chosen for. #225
+edits `pipeline.py` and will conflict; the resolution is mechanical, the same way #223's
+`RectifiedFootprint` rename resolves -- take its edit, spell the class `EdgeFitDetector`, and
+hand `detect` the frame's shared edges.
+
+#### A tooling fault found on the way
+
+`.claude/hooks/plan_item_bootstrap.py` writes item fields at four-space indentation
+(`ITEM_FIELD_INDENT`) while this plan's `plan.yaml` indents them by two, so both `open` and
+`record` produce invalid YAML and fail inside `save-plan.sh`, whose output the script swallows
+with `capture_output=True`. It is the same family as #160 and it is unfixed on `main`. Worked
+around by editing `plan.yaml` directly; worth its own bug-fix pull request.
