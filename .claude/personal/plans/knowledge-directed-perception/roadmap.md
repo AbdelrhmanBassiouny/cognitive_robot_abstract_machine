@@ -1961,3 +1961,73 @@ diffed by name in a worktree with its own `*/src` on `PYTHONPATH`.
 rule. That merge took #229's side of `predicates.py` and `test_predicates.py` whole, since
 it supersedes what #227 had written, and kept only #227's own test that reads a support
 relation asserted about a variable as a `StatedRelation`.
+
+### `predicates-answer-whether-they-hold`: the resolve of 2026-08-31, and the duplicate nobody had seen
+
+The item stalled on a review question rather than on its code: *"I feel this is duplicate with
+the smedt migration verbalization PR in the verbalization plan and the migration from
+symbolic_callable, can you verify that and discuss what's the best move."* Verified, and the
+answer is yes.
+
+**#33 has been doing this migration since 2026-07-06.** `eql-symbolic-function-sdt`, the
+`p4-sdt-migration` item of the `eql-verbalization` plan, converts the same
+`reasoning/predicates.py` off `@symbolic_function` onto `Predicate` / `SymbolicFunction`
+classes, by the same `symbolic_callable_to_function` mechanism, and reaches further:
+`queries.py` and `robot_predicates.py` as well, plus `phrase()` in krrood's `parts_of_speech`,
+`ORMatic.from_package(ignored_base_classes=...)`, the generated verbalization snapshot wired
+into sdt's `conftest.py`, and a 36-thread wording review of which 34 are settled. Every
+relation this item converted, that branch had already converted. Both even write
+`reachable = symbolic_callable_to_function(Reachable)` over the same class body.
+
+**What is genuinely this item's** is what it was raised for and nothing more: the threshold
+field that lets a ratio-computing relation answer a truth value, which #33 does not have -
+its `InsideOf.__call__` still returns a float and `is_body_in_region` is still a
+`BodyInRegionFraction` `SymbolicFunction` - and the use of krrood's `Triple` as a base.
+
+**Why neither plan saw it.** Nothing in either manifest names the other: this plan's items
+were written about perception and sdt's vocabulary, `eql-verbalization`'s about verbalization
+surfaces, and `check_scope_overlap.py` was never run for this item because its kickoff read
+it as a change off `main` with no unlanded parent - which is true of the path check
+(`paths_absent_from_base` is empty) and false of the purpose check the same document asks
+for. That is the failure mode "Compare by purpose, not only by path" exists to catch, and it
+is the third duplicate this repository has recorded after #110/#106 and #117/#106.
+
+**The resolution is the developer's**, and is put to him on #229 rather than taken here,
+because it decides which branch survives and therefore which set of wordings the repository
+gets. The recommendation made: let #229 carry the predicate classes and rebase #33 onto it,
+porting #33's reviewed wordings across as part of that rebase - on the grounds that #33 is
+166 commits behind `main`, `dirty` in `predicates.py` specifically and labelled
+`needs-resolution`, so it owes that rebase either way and meets #229's version of the file
+whichever order the two land in; while #33's two open decisions block it and do not block
+this, so folding the other way would put this plan's 2026-09-15 deadline behind them for no
+gain.
+
+#### Two faults this resolve found and fixed
+
+**CI was red and it was this branch's, against what its own description claimed.** Renaming
+`SupportedBy`'s fields to `supported` / `supporting` broke
+`semantic_annotations/mixins.py:942`, which calls `is_supported_by` by keyword and which the
+branch does not touch: five tests in `test_reasoning_queries.py` failed with `TypeError:
+SupportedBy.__init__() got an unexpected keyword argument 'supported_body'`. The branch's
+verification had diffed the failing set by name locally, where that module cannot be
+collected at all - it imports `kitchen_environment`, which imports `rclpy` - so a local diff
+was structurally incapable of seeing it and reported clean. **A local failing-set diff is
+only evidence for the modules the container can collect**; the ROS-dependent ones are CI's to
+answer. Fixed by moving the one call site, with an AST sweep over every call to the nine
+migrated relations confirming it was the only stale keyword caller. #227 carries the same
+commit and had the same breakage.
+
+**The `Triple`-derived wordings are ungrammatical, and nothing catches them.**
+`Triple._verbalization_fragment_` reads the verb off the class name, and four of the names
+this branch chose are not verb-first, so they render as *"a Body supports by another Body"*,
+*"a Body or a Region visibles to a Camera"*, *"a Body is in a contact with another Body"* and
+*"a Body supports a something"*. sdt has no verbalization snapshot on `main` - that test is
+one of #33's additions - so no assertion in the suite reads a sentence. Left standing
+deliberately rather than fixed: #33 already has correct, reviewed wordings for all four, and
+writing a third set before the fold question is settled would be one more copy of the
+argument the fold exists to end.
+
+The `Reachable` thread (r3896606294, *"Pose Is reachable by Tip"*) was implemented as asked -
+the pose is the subject now, with a test stating the sentence - and left open, because #33's
+settled decision 11 words the same relation differently and only the developer can say which
+stands.
