@@ -28,10 +28,7 @@ from giskardpy.motion_statechart.monitors.payload_monitors import (
 )
 
 from coraplex.language import TryAllNode, TryInOrderNode
-from coraplex.language_giskard_templates import (
-    TryAll,
-    TryInOrder,
-)
+from giskardpy.motion_statechart.goals.templates import TryAll, TryInOrder
 from giskardpy.motion_statechart.monitors.templates import (
     PausedWhileTrue,
     PausedUntilTrue,

@@ -17,7 +17,7 @@ from giskardpy.motion_statechart.goals.templates import (
     Parallel,
     RepeatOnStall,
     RepeatUntil,
-    Sequence,
+    Sequence, TryAll, TryInOrder, CancelledWhenTrue,
 )
 from giskardpy.motion_statechart.graph_node import (
     CancelMotion,
@@ -25,11 +25,6 @@ from giskardpy.motion_statechart.graph_node import (
     MotionStatechartNode,
 )
 from giskardpy.motion_statechart.monitors.payload_monitors import CountNodeResets
-from coraplex.language_giskard_templates import (
-    CancelledWhenTrue,
-    TryAll,
-    TryInOrder,
-)
 from giskardpy.motion_statechart.monitors.templates import (
     MonitoredGoal,
     PausedUntilTrue,
