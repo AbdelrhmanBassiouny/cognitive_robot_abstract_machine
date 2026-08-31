@@ -120,6 +120,31 @@ regenerate #76's copies. Asking cost one turn. Pushing to another plan's
 in-flight pull request unasked would have cost that plan's manifest its record
 of why its own diff had grown.
 
+**11. The first slice to exercise a path is where the path's defects surface.**
+`D-store` is the first code anywhere to write a generated `FunctionCase` to a
+real file and import it back, and doing so turned up two defects that had
+nothing to do with it. `function_case.py.jinja` opened an `if TYPE_CHECKING:`
+block unconditionally and looped over `type_imports` inside it, so a function
+annotated only with builtins produced a block with no body and a module that
+would not parse. And `save_rdr_with_case` generated the case class against
+`code_generation.function_case.FunctionCase` while the rdr layer checks
+against its own duplicate, so a loaded case type was one the layer no longer
+recognised, and saving it again dropped the class header. Neither was covered:
+the generator's twenty-four tests all assert substrings of the source and none
+of them ever parsed it.
+
+**12. Decision 5 decides where a fix goes; it does not decide that the fix
+waits.** The template belongs to `main`, so it is #226, a `bug` pull request of
+its own with a test that compiles the generated source - and the same one-line
+change is carried on `D-store` so the branch is verifiable now rather than
+after a five-branch stack lands. It no-ops the moment #226 reaches the base.
+The `base_class` line belongs to #66, which owns `serialization.py` and is open
+and unmerged; the developer chose to fix it here and flag the ownership, since
+the slice that first exercises the round trip is the one that can prove it. The
+`FunctionCase` duplication underneath it - one class on `main`, a near-identical
+one added by an unlanded rdr slice - is left alone, being neither slice's to
+collapse.
+
 ## The lesson this plan is the case study for
 
 **Six weeks on a dead base costs three moved interfaces, and none of it is
@@ -149,9 +174,15 @@ passing suite:
 
 ## Open
 
-- **`D-store` and `D-deco` have not been touched since the rebuilds.** Both sit
-  on `D-ui`'s pre-rebuild history and need the same reset treatment, dropping
-  `cfe32ad0` rather than merging over it.
+- **`D-deco` has not been touched since the rebuilds.** It sits on `D-store`'s
+  pre-rebuild history and needs the same reset treatment, dropping `cfe32ad0`
+  rather than merging over it. `D-store` was reset on 2026-08-31 and is done.
+- **`code_generation.imports.validate_annotations` raises on Python 3.10 and
+  3.11.** `parameter_name in PythonBuiltinParameterNames` is a `StrEnum`
+  value-containment check, which only works from 3.12; `krrood`'s
+  `requires-python` says `>=3.10`. CI runs 3.12, so it is invisible there.
+  Found while verifying `D-store`, recorded rather than fixed - it is `main`'s,
+  and #226 is deliberately one root cause.
 - **`D-ui-splice-fix`'s regression test can be re-added.**
   `TestAttributeReusedInEarlierSiblingBranch` needs no production change to pass
   against the fixed API once `test_eql_rdr/` lands; it asserts through the RDR

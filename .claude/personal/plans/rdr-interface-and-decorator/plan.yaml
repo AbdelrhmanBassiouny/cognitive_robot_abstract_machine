@@ -174,7 +174,7 @@ items:
   track: decorator
   depends_on:
   - D-ui
-  status: blocked
+  status: in_progress
   notes: 'Path resolution + model-file lifecycle; standalone, no decorator dependency.
 
 
@@ -193,21 +193,31 @@ items:
     The rebuilt base also now carries a `ModelSaver` abstraction whose `FileModelSaver` performs `RDRFileStore.save`''s
     exact body, so the store is rebuilt as a `ModelSaver` rather than as a second, parallel persistence
     path - which is also what lets `@rdr` hand the store straight to `rdr.model_saver`, the seam #76 moved
-    `%save` onto.'
+    `%save` onto.
+
+
+    2026-08-31 (resolved): rebuilt as a branch reset onto `D-ui`, per decision 1, so #78''s `cfe32ad0`
+    does not survive the restack; pre-rebuild tip `07cb6831`. The slice''s own work replayed unchanged
+    in shape - one commit, `rdr/file_store.py` and its test - and #80 now reads 417 additions across 5
+    files rather than 14,994 across 47. Restacked a second time onto `1045c6d5a` when `D-ui` gained a
+    commit mid-session. `test_eql_rdr`: 548 passed, 2 skipped, against 532 passed, 2 skipped on the base;
+    whole `krrood_test`, 2359 passed, with only the two Graphviz-binary failures that fail identically
+    on `main`. Verified on Python 3.12, matching CI, because on 3.11 `code_generation.imports.validate_annotations`
+    raises on `parameter_name in PythonBuiltinParameterNames` - a `StrEnum` value-containment check that
+    only works from 3.12, though `requires-python` says 3.10.
+
+
+    The store is now a `ModelSaver`. The base grew that abstraction while this branch sat on a dead base,
+    and `FileModelSaver` already performs the body `save()` would have duplicated; being one is also what
+    lets `@rdr` hand the store to `rdr.model_saver`, the seam #76 moved `%save` onto. Reading a model
+    before one exists raises `ModelFileMissing` rather than a bare `FileNotFoundError`.
+
+
+    Two defects outside this slice had to be fixed for a saved model to load at all - see roadmap sections
+    11 and 12. The template one is #226 off `main`, ported here; the `save_rdr_with_case` base-class one
+    belongs to #66 and was applied here, because this is the first slice that writes a generated case
+    type to a file and imports it back.'
   session: https://claude.ai/code/session_01Lr5K9cBX5g6YrFEErmJMYZ
-  blockers:
-  - '#80''s head has not moved since 2026-07-19: `07cb6831`, a merge of `D-ui`''s pre-rebuild tip `c50d2109`,
-    which still carries #78''s `cfe32ad0` and its `_last_parent_of_type_`. Two stacked-PR maintenance
-    passes on 2026-08-30 (15:08Z and 19:35Z) tried to integrate the rebuilt `D-ui` and reported 39 conflicting
-    files each; both left the branch untouched and it carries `needs-resolution`. This is exactly the
-    reset the roadmap''s Open section named for `D-store` and `D-deco`, and it had never been recorded
-    on the item.'
-  - 'The last CI on that head, from 2026-07-19, was red: `test_each_lib (krrood)` and `test_each_lib (coraplex)`
-    both failed. The pull request description''s "21 passed" is a local measurement from the same day
-    on the dead base, so nothing green has ever been recorded for this branch.'
-  - The pull request reads as 14,994 additions across 47 files. Only 494 lines in two files are `D-store`'s
-    own - `rdr/file_store.py` and `test/krrood_test/test_eql_rdr/test_rdr_file_store.py`, added by the
-    single commit `f1de44d9` - and the rest is `D-ui`'s pre-rebuild history showing through the diff.
 - id: D-deco
   title: 'D-deco: @rdr decorator + RDR file store (final rdr-engine slice)'
   branch: D-deco
