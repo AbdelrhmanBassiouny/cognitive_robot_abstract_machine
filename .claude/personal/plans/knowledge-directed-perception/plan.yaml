@@ -278,6 +278,33 @@ items:
       test_montessori_detection_on_captures.py is the test; it is marked strict expected-to-fail
       against this item.
 
+      Built 2026-08-31 as cf155f4a1. The note above describes the duplicate as a detection standing
+      inside the board's own volume, and it is not: measured on the six captures, every duplicate
+      lies 14 to 63 mm *outside* the board's detected outline and shares no ground with it, so the
+      planned occupancy rule over the board's volume rejects none of them. What they are is the
+      table seen past the board - a piece on the lid stands between the camera and the table
+      behind it, so the table's rectification places it there, outside the board along the ray from
+      the camera. The rule is therefore line of sight rather than volume: the board's outline
+      projected away from the camera onto the table's plane, cast from the top of a piece standing
+      on the lid, is the stretch of table nothing may be reported resting on. Real table pieces
+      stand 115 to 186 mm clear of it. The height half of the rule stands unchanged, and is what
+      keeps a piece resting on the lid apart from a reading taken off the table below it.
+
+      No threshold was needed: two solid things cannot stand in one another, so any shared ground
+      at meeting heights is one thing read twice, and the captures show duplicates sharing their
+      whole outline while no two separate detections share any. is_place_occupied was measured and
+      not used - 0.035 s per call against a fifteen-body world, so six detections cost 0.21 s of a
+      0.5 s period detect already spends 0.35 s of; reading every body's bounding box costs the
+      same. A general per-frame walk of the world's bodies does not fit the frame budget, which is
+      a finding for detector-parameters-from-knowledge rather than something dropped. detect costs
+      0.279 s per frame against the parent's 0.289 s.
+
+      The strict expected-to-fail mark came off five captures of six. non_inserted_objects keeps it,
+      now naming holes-fitted-like-pieces: the board is reported at -29.7 degrees there against
+      -7.6 degrees in the other five about the same centre, because its orientation comes from
+      minAreaRect over the hole centres and only five of six holes are found, so the ground it is
+      taken to hide is turned with it.
+
   - id: holes-fitted-like-pieces
     title: "Find the board's holes by fitting its whole known layout, not one contour at a time"
     branch: perception_holes_fitted_like_pieces
