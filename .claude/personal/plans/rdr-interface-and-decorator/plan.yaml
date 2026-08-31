@@ -225,7 +225,26 @@ items:
   track: decorator
   depends_on:
   - D-store
-  status: in_progress
+  status: blocked
   notes: rdr() factory + RDRWrapper, retargeted from D-ui base to D-store.
+  session: https://claude.ai/code/session_01Wf62T3vDfRPgxbi4ew7KAm
   blockers:
-  - Probe blocker to see what save-plan.sh says.
+  - >-
+      Never restacked after the rebuilds. #77's head `c46c0c5b` is from 2026-07-19 and still
+      merges `D-store`'s pre-rebuild tip `07cb6831`, so it carries #78's `cfe32ad0` and its
+      `_last_parent_of_type_` - the symbol #89 deleted from `main`, superseded by #118 and
+      forbidden by dag-facade-hardening's Wave-1 guard. GitHub reports the pull request `dirty`
+      (un-mergeable against its own base), and it reads 16,493 additions across 52 files while the
+      slice's own work is one commit, 1,499 lines in 5 files.
+  - >-
+      Two stack-maintenance passes (2026-08-31 11:18Z and 12:30Z) each hit the same 44 conflicting
+      files integrating `D-store` into `D-deco`, skipped the branch and left it labelled `needs-
+      resolution`, which is what makes later passes skip it rather than re-report. Both delegated
+      the resolution here.
+  - >-
+      Every check run on #77 is from 2026-07-19 and was measured on the dead base, so its all-
+      green CI says nothing about the current stack. Interfaces the slice calls have moved since -
+      `rdr.utils.UNSET` is gone in favour of `...`, `EQLSingleClassRDR.save_path` was replaced by
+      the `ModelSaver` strategy, `RDRFileStore.func` is `function`, and
+      `FunctionInterface(answer_fn=...)` is `answer_function`. Same drift class #79, #76 and #80
+      each hit.
