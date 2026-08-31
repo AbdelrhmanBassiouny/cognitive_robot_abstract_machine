@@ -32,13 +32,23 @@ The nine threads split five done, four deferred to a plan item.
   `test/krrood_test/test_eql/` **1087** against **1072**, failing-and-erroring set
   byte-identical (177 lines both sides).
 
+## The round, replied to once the pending review was submitted
+
+The developer submitted review `5064626804` on 2026-08-31, which unblocked every inline
+reply (a pending review by the account the tooling authenticates as refuses them all).
+All nine threads now carry a reply. **Four are resolved** - generative (r3892957833), the
+krrood placement (r3893140274), the Montessori type out of the general half
+(r3893153789), and the `AttributeEqualityToLiteral` rename (r3893535014).
+
 ## Next
 
-- **The nine review threads are all still open and none is resolved**, including the
-  five whose work is done. Inline replies are impossible while the developer's
-  unsubmitted pending review (`5064626804`, on commit `71730494`) exists: GitHub allows
-  one pending review per user and the API acts as that account, so every reply is
-  refused. Submitting or discarding that draft unblocks the whole round.
+- **Five threads are open on purpose, and none is this branch's work.** Four schedule the
+  predicate redesign rather than asking for a change here - r3893160382, r3893312001 with
+  its two follow-ups, r3893576773 (all `perception-predicates-guide-the-search`) and
+  r3893463818 (recorded on `choose-detection-method`) - so the developer closes those
+  himself. The fifth, r3893476097, is done and carries a question back: whether the three
+  older inline imports in `base_expressions.py` should gain reason comments too. It stays
+  open until he answers, since resolving would bury the question.
 - Nothing else outstanding. #222 is a draft awaiting review.
 
 ## Watch out for
