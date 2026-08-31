@@ -31,7 +31,7 @@ claude/plan-item-kickoff-perception-ogf2g9	knowledge-directed-perception
 sdt_predicates_answer_whether_they_hold	knowledge-directed-perception
 sdt_surface_finish_annotation	knowledge-directed-perception
 perception_surface_from_description	knowledge-directed-perception
-perception_choose_detection_method	knowledge-directed-perception
+claude/choose-detection-method-gf64yp	knowledge-directed-perception
 perception_parameters_from_knowledge	knowledge-directed-perception
 perception_interactive_rule_tuning	knowledge-directed-perception
 segmind_rosbag_player	knowledge-directed-perception

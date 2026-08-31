@@ -2063,3 +2063,112 @@ so a relation named for its object (`SupportedBy`, `VisibleTo`, `InContactWith`)
 its own clause. Inheriting `Triple` and saying nothing is what produced *"a Body supports by
 another Body"*, and nothing in sdt's suite on `main` reads a sentence to catch it - the
 snapshot test that would is one of #33's own additions.
+
+## `choose-detection-method`: the plan, and the blocker that was not the one recorded
+
+Kicked off 2026-08-31 in `auto` mode, as pull request #231 off `perception_eql_backend`
+(#222, open and out of draft, so ready to stack on -- `check_dependency_readiness.py`
+reports `open_ready` for both dependencies). #216 is merged in rather than waited on,
+which is this plan's standing `depends_on` rule; the rule tree reads `Shape.finish`, and
+that field exists on no other branch. The session's branch arrived cut from `integration`
+rather than from #222 -- the hazard #199 exists to refuse, and the fourth time on this
+plan after #223, #225 and #227 -- and was reset onto #222's tip before the first commit.
+
+The mechanical scope check reports every path this touches absent from `main` and shared
+with #222, #225 and #227, which every round on this plan has already recorded as expected:
+every file in this plan is introduced by #202, so path overlap alone would fold the whole
+plan into one item. What remains once #222's own edits are removed is a detector interface,
+a second detector behind it and a rule tree choosing between them, none of which any
+earlier item states in any form.
+
+### The recorded blocker was about the other ripple-down rules
+
+The item's notes, and #201's comment of 2026-08-29, record that krrood's ripple-down rules
+are "not usable yet", expected to become so through the RDR/EQL refactor's integration
+build, and name this as the schedule risk for the 4-8 September window --
+`detector-parameters-from-knowledge` sits behind it.
+
+Measured on this branch before anything was planned, and it splits in two:
+
+- **The classic `krrood.ripple_down_rules` machinery is not usable, as recorded.** Its
+  conditions are Python *source strings* (`Rule.conditions: CallableExpression`, built by
+  `ast.parse` over an expert's typed text), and every tree-mutating entry point --
+  `fit`, `update_start_rule`, `add_rule_for_case` -- requires an `Expert`. No test in that
+  suite builds a tree programmatically; they all replay recorded JSON answers through
+  `Human(load_answers=True)`, and the suite skips wholesale when the UCI zoo dataset is not
+  cached.
+- **`EQLSingleClassRDR` is not usable either**, and that is the piece the "integration
+  build" refers to: it lives on `D-core-single-class`, eight unmerged pull requests deep in
+  a stack whose root (#64) is still open against `main`.
+- **The EQL-native rule trees are usable today, on `main`.** `refinement()`,
+  `alternative()`, `next_rule()`, `add()` and `inference()` in
+  `krrood.entity_query_language.factories` build a tree with a `with query:` block;
+  `ConclusionSelector.insert_at(anchor, *conditions)` grows one without a `with` context.
+  Their conditions are genuine `SymbolicExpression`s, `Predicate`s included -- which is
+  what the item's own note describes ("ripple-down rules, whose conditions are already
+  entity query language expressions"). `test/krrood_test/test_eql/test_core/test_rules.py`
+  is **24 passed** here, no skips and no xfails, and the worked example in
+  `krrood/doc/eql/user/writing_rule_trees.md` is executed by the doc build.
+
+So the item is not blocked, and neither is `detector-parameters-from-knowledge` behind it.
+What was recorded as one fact was three, and only the third one bears on this item.
+
+### The two shapes, settled: capability declarations *and* a rule tree
+
+The item's notes carry two answers to the same question from opposite ends, and ask for one
+to be settled before starting: the rule tree over the surface and the target that the item
+was written around, and the developer's r3893463818 on #222 -- *"perception algorithms as
+classes that declare explicitly their capabilities, what requests they can answer to, also
+could be described as eql conditions, then a perception reasoner will choose the algorithm
+that has a capability that can answer that request."*
+
+Put to the developer, who chose to build both, layered. The reasoning:
+
+- **Capabilities alone leave the real question unanswered.** On this scene both detectors
+  *can* answer: #221 measured the edge fit fitting a cube on the board's lid at 0.93
+  agreement, which is what retired the original "the edge fit does not work there"
+  justification. When two detectors both declare they can answer a request, a capability
+  declaration -- which is per-detector and knows nothing of the others -- has nothing left
+  to say, and something still has to choose.
+- **A rule tree alone is closed to extension.** A tree that names detectors in its
+  conclusions has to be edited to add one, and adding the RoboKudo detector without the
+  reasoning layer knowing is exactly what the `executors` track exists to demonstrate.
+- So a detector states the requests it can answer, and the tree chooses among those that
+  can. The capability half is small; the tree stays the substantial part, and it is the
+  half the paper's claim rests on.
+
+### The lid rule's justification, settled
+
+The plan's budget section promises two rules as the demonstration: "the steel table
+choosing the edge fit, the board's lid choosing the cheaper colour blob". #201's comment of
+2026-08-30 recorded that the lid half needs a different justification, since the edge fit
+does work there, and left the choice to this item with two candidates: *speed*, or *the
+case colour cannot handle at all*.
+
+Both are taken, because they are the same pair of rules read from either end, and together
+they are the sharper demonstration the comment describes -- the right choice depends on the
+piece's colour as well as the surface's finish:
+
+- A **matte** surface whose target is **separable by hue** from it selects the colour blob:
+  cheaper, and sufficient. That is a cyan piece on the wooden lid.
+- A piece **wearing the surface's own hue** selects the edge fit whatever the finish, since
+  no hue separates them. That is an amber prism on the wooden lid, measured in #221 at hue
+  21 against the wood's 19, inside the four-hue tolerance.
+- A **mirror** surface selects the edge fit: the steel table throws a piece-coloured
+  reflection with no sharp boundary, which is the whole reason the edge fit was written.
+
+Speed is stated as the honest reason for the first, not capability, as the item's own notes
+require.
+
+### What is deliberately not built here
+
+- **The history conditions.** The item was widened on 2026-08-31 so the tree reads what has
+  lately happened to the target -- whether it is believed to be somewhere in particular, how
+  sure that belief is, what acted on it last -- not only standing properties. The believed
+  place is defined once, by `pieces-looked-for-where-expected`, which "Two items that meet at
+  one type" already settled and which is `not_started` behind #225. So the tree is built to
+  read a situation rather than a bare pair of properties, and the history conditions are the
+  rules that item and `expectations-from-events` add to it, rather than a shape this branch
+  has to change later.
+- **Moving the detectors' own numbers onto the twin.** That is
+  `detector-parameters-from-knowledge`, deliberately a separate item.

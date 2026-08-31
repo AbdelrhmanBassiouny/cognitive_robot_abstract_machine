@@ -705,13 +705,14 @@ items:
     anything.'
 - id: choose-detection-method
   title: Choose the detector by rule from the target and the surface
-  branch: perception_choose_detection_method
-  pull_request_number: null
+  branch: claude/choose-detection-method-gf64yp
+  pull_request_number: 231
   track: method-selection
   depends_on:
   - perception-backend
   - surface-finish-annotation
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_01JzpfVmddAPa4ZTJYSEEqAF
   notes: 'The detector interface the backend dispatches to, chosen by a rule tree - krrood''s ripple-down
     rules, whose conditions are already entity query language expressions - over properties of the surface
     and the target: a mirror-finish surface with a known-geometry prism selects the edge fit; a matte
