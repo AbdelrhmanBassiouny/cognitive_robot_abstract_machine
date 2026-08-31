@@ -346,7 +346,23 @@ items:
     This takes ownership of test_every_piece_resting_on_the_lid_is_found from detector-parameters-from-knowledge.
     That item is blocked on krrood''s ripple-down rules being usable, and the lid failures are a seeding
     fault rather than a parameter fault, so leaving them there would have put the plan''s most visible
-    remaining error behind a dependency it does not have.'
+    remaining error behind a dependency it does not have.
+
+    Built 2026-08-31 as d8b654433. Detection is now the evaluation of hypotheses rather than the classification
+    of blobs, and every one of the six captures reports exactly what the parent reported at exactly its
+    cost, so the restructure is behaviour-preserving on real data. 397 passed, 1 skipped, 11 xfailed against
+    376/1/11 on the parent.
+
+    The board''s holes as a third source of hypotheses was built, measured and left out at the developer''s
+    decision. Arming it costs 1.7-1.9x the shipped frame time and turns 3 false lid reports into 20, in
+    exchange for 3 of the item''s 4 lid marks; narrowing it - a hole expecting only the pieces that fit
+    through its own measured opening, and overlapping believed places merged - takes a third off that cost
+    but recovers only 2 of the 4 marks, because the openings it reads are the same hole measurements holes-fitted-like-pieces
+    says are wrong. So the item''s recall contract is not delivered here: the four lid marks stay, now
+    naming expectations-from-events, the item that can say which piece at which hole and so makes a seeded
+    fit cheap and precise. Recorded in full in roadmap.md, including that the first reading of the cost
+    was reported in seconds against the 0.5 s period and was wrong - this container''s speed moves between
+    runs by more than the difference being measured, so only a ratio to a same-run baseline survives.'
 - id: competing-explanations
   title: Decide a detection by comparing explanations, not against a fixed threshold
   branch: perception_competing_explanations

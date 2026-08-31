@@ -2339,23 +2339,45 @@ this container against the parent in a worktree with its own `*/src` on `PYTHONP
 what #222 recorded about baselines taken outside the main checkout. So the restructure is
 behaviour-preserving on real data and costs nothing.
 
-**The hole source was built, measured, and taken out again.** The item's note names three
-sources and calls the first two enough for the four failing captures. Sweeping the board's
-own detected holes was built first and measured over the six captures: it recovers every
-lid piece the truth names in five of the six -- the recall the item exists for -- and it
-costs **0.36 s on top of a 0.5 s frame budget** (0.715 s against 0.344 s) while reporting
-**15 pieces that are not there**. Both come from the same place: the holes it seeds from
-are themselves wrong, mislocated inside about 90 mm of the board's middle and mostly
-mislabelled, which is `holes-fitted-like-pieces` -- the item that depends on this one.
+**The hole source was built, measured twice, and left out at the developer's decision.**
+The item's note names three sources and calls the first two enough for the four failing
+captures. Sweeping the board's own detected holes was built first, and the first reading of
+it was reported in seconds against the node's 0.5 s period: 0.715 s against 0.344 s, so
+"0.36 s on top of a 0.5 s frame budget". **That reading was wrong, and the fault it came
+from is worth more than the number.** This container's speed moves between runs by more
+than the difference being measured -- the shipped branch, unchanged, measures 0.344 s in
+one run and 0.229 s in another -- so a second measured here is not a statement about the
+robot's frame budget at all. The only figure that survives a re-run is the ratio to a
+baseline taken in the same run.
 
-Narrowing each hole to the piece of its own category was tried, since a hole's category is
-knowledge: it fits the budget at 0.444 s and loses **7 real pieces**, because that category
-is exactly what `holes-fitted-like-pieces` says is wrong. Reading each hole's reach off its
-own measured footprint instead of the default seeding distance cut the ghosts from 20 to 15
-and the cost not at all -- the cost is the number of hypotheses times the number of
-candidates, not the reach.
+Re-measured that way, with the shipped branch as the same-run baseline and with two
+narrowings the first pass had not tried:
 
-What that measurement actually shows is that **sweeping every hole for every piece every
+| what the lid pass evaluates | cost | lid captures failing | pieces reported that are not there |
+| --- | --- | --- | --- |
+| colour, and what the world places (shipped) | 1.0x | 4 | 3 |
+| and every hole, every piece | 1.7-1.9x | 1 | 20 |
+| and every hole, narrowed | 1.3x | 2 | 12 |
+
+*Narrowed* is two economies together: a hole expects only the pieces that fit through its
+own measured opening, and believed places whose reaches overlap are merged into one, which
+also folds a hole a colour already covers into that colour's hypothesis. Together they take
+a third off the cost of arming the holes and neither restores the recall the unnarrowed
+sweep reaches -- because the openings they read are the same mislocated hole measurements
+`holes-fitted-like-pieces` says are wrong. Narrowing by a hole's *category* fails the same
+way and more expensively, losing **7 real pieces**; reading each hole's reach off its own
+footprint rather than the seeding distance costs recall too. All three are recorded so none
+is tried again.
+
+No configuration regresses the table: `non_inserted_objects` is the only capture whose
+table reading is wrong, and it is wrong in the shipped state too, for the reason #225
+recorded.
+
+**The developer's decision, taken on the table above, is to leave the hole source out**, so
+what ships is the restructure alone. The trade refused is 1.7-1.9x the frame cost and three
+false lid reports becoming twenty, in exchange for three of the item's four lid marks.
+
+What the measurement shows either way is that **sweeping every hole for every piece every
 frame is a second exhaustive pass, not knowledge-directed search**. What makes a seeded fit
 cheap and precise is a belief that names *which* piece at *which* place, and the two things
 that can say that are the world (built here) and the object's own history
