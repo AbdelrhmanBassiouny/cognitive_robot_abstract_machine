@@ -2031,3 +2031,35 @@ The `Reachable` thread (r3896606294, *"Pose Is reachable by Tip"*) was implement
 the pose is the subject now, with a test stating the sentence - and left open, because #33's
 settled decision 11 words the same relation differently and only the developer can say which
 stands.
+
+#### The fold, settled: #229 carries the classes and #33 rebases onto it
+
+The developer's decision, 2026-08-31, taking the recommendation above. This branch keeps
+the predicate classes; **`eql-verbalization`'s `p4-sdt-migration` (#33) rebases onto the
+main that carries them**, drops its own copy of the `predicates.py` migration, and
+re-applies its 34 reviewed wordings onto these classes. Everything genuinely #33's
+survives that rebase: `queries.py`, `robot_predicates.py`, `phrase()` in krrood's
+`parts_of_speech`, `ORMatic.from_package(ignored_base_classes=...)` and the generated
+verbalization snapshot wired into sdt's `conftest.py`.
+
+The reasoning is about which rebase is cheaper rather than which branch is better. #33 is
+166 commits behind `main`, `mergeable_state: dirty` in `predicates.py` specifically, and
+labelled `needs-resolution`; its own roadmap already says it needs that rebase before any
+of its checklist can start, so it owes it either way and meets this branch's version of
+the file whichever order the two land in. #33's two open decisions - the type-level
+display noun for *"a Point3"*, and widening the IK chain for `Pose` - block it and do not
+block this, so folding the other way would have put this plan's 2026-09-15 deadline behind
+them for no gain, since #227 needs the vocabulary rather than the wordings.
+
+**The four ungrammatical wordings were fixed here rather than left for that rebase**, also
+at the developer's direction, by taking the sentences #33's own review had already settled:
+*"a Body is supported by another Body"*, *"a Body or a Region is visible to a Camera"*, *"a
+Body is in contact with another Body"*, *"a Body is supporting a body"*. That is one set of
+sentences carried across rather than a third set invented - which is the whole point of
+settling the fold before either branch lands.
+
+Worth keeping for whoever runs #33's rebase: `Triple` derives its verb from the class name,
+so a relation named for its object (`SupportedBy`, `VisibleTo`, `InContactWith`) must state
+its own clause. Inheriting `Triple` and saying nothing is what produced *"a Body supports by
+another Body"*, and nothing in sdt's suite on `main` reads a sentence to catch it - the
+snapshot test that would is one of #33's own additions.

@@ -1,1065 +1,932 @@
 schema_version: 1
 id: knowledge-directed-perception
-title: "Knowledge-directed Montessori perception"
-description: >
-  Perception that decides where to look and how to look from what the robot
-  knows, rather than from constants written into the pipeline. The supporting
-  surfaces, their extent and their finish come from the semantic digital twin;
-  a query is answered by looking, through a perception backend of the entity
-  query language that pushes what it can into the search and filters the rest
-  afterwards; which detector answers it is a rule decision over the target and
-  the surface; and Segmind's support events plus an action's declared
-  effects arm what perception expects to find, which is what makes a failure
-  detectable. Detectors sit behind an interface, so a RoboKudo analysis engine
-  can be one of them without the reasoning layer knowing.
+title: Knowledge-directed Montessori perception
+description: 'Perception that decides where to look and how to look from what the robot knows, rather
+  than from constants written into the pipeline. The supporting surfaces, their extent and their finish
+  come from the semantic digital twin; a query is answered by looking, through a perception backend of
+  the entity query language that pushes what it can into the search and filters the rest afterwards; which
+  detector answers it is a rule decision over the target and the surface; and Segmind''s support events
+  plus an action''s declared effects arm what perception expects to find, which is what makes a failure
+  detectable. Detectors sit behind an interface, so a RoboKudo analysis engine can be one of them without
+  the reasoning layer knowing.
 
-  The deliverable is the running demo on tracy_icra, not the pull requests:
-  every item merges into that branch as soon as it works, without waiting for
-  its own pull request to land on main, and each wave has a demo item that says
-  what has to be true on the real robot before the wave counts as finished.
+  The deliverable is the running demo on tracy_icra, not the pull requests: every item merges into that
+  branch as soon as it works, without waiting for its own pull request to land on main, and each wave
+  has a demo item that says what has to be true on the real robot before the wave counts as finished.
 
-  The deadline is 2026-09-15, thirteen working days from 2026-08-28. That is
-  less than the full scope needs, so every item is to be built in the narrowest
-  form that demonstrates its claim - see roadmap.md's budget section for what
-  narrows and what must not be dropped.
+  The deadline is 2026-09-15, thirteen working days from 2026-08-28. That is less than the full scope
+  needs, so every item is to be built in the narrowest form that demonstrates its claim - see roadmap.md''s
+  budget section for what narrows and what must not be dropped.
+
+  '
 default_repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
 tracking_issue: 201
-
 waves:
-
-  - id: grounding
-    name: "Perception reads the scene from the world"
-    description: >-
-      The three faults visible in the running demo - a clip that shows the
-      floor, pieces on the board lid that are never found, and duplicate
-      detections on the board's borders - are one fault: the scene is described
-      by constants instead of read from the world the node already fetches.
-      Removing the constants is what this wave does, and each fault is the test
-      that its item worked.
-
-  - id: requests
-    name: "A query is answered by looking"
-    description: >-
-      Perception becomes an entity query language backend beside the native and
-      SQLAlchemy ones, so asking is evaluating rather than calling a pipeline
-      by hand: the backend pushes what it can of a query's conditions into the
-      search, filters the rest over the detections that come back, and a rule
-      tree over the target and the surface says which detector runs.
-
-  - id: expectation
-    name: "Perception knows what should be true"
-    description: >-
-      What the robot did, and what Segmind saw it do, say where a thing should
-      now be. Perception looks there, and reports a violated expectation as a
-      failure rather than as an absence.
-
+- id: grounding
+  name: Perception reads the scene from the world
+  description: 'The three faults visible in the running demo - a clip that shows the floor, pieces on
+    the board lid that are never found, and duplicate detections on the board''s borders - are one fault:
+    the scene is described by constants instead of read from the world the node already fetches. Removing
+    the constants is what this wave does, and each fault is the test that its item worked.'
+- id: requests
+  name: A query is answered by looking
+  description: 'Perception becomes an entity query language backend beside the native and SQLAlchemy ones,
+    so asking is evaluating rather than calling a pipeline by hand: the backend pushes what it can of
+    a query''s conditions into the search, filters the rest over the detections that come back, and a
+    rule tree over the target and the surface says which detector runs.'
+- id: expectation
+  name: Perception knows what should be true
+  description: What the robot did, and what Segmind saw it do, say where a thing should now be. Perception
+    looks there, and reports a violated expectation as a failure rather than as an absence.
 tracks:
-
-  - id: demo-grounding
-    name: "The demo runs on perception that reads the world"
-    wave: grounding
-    description: >-
-      The deadline deliverable, tracked in the same wave as the work it
-      integrates rather than left to the end. Runs in parallel with the
-      surfaces track: an item merges into tracy_icra when it works, not when
-      its pull request lands.
-
-  - id: demo-requests
-    name: "The demo asks by query"
-    wave: requests
-
-  - id: demo-expectation
-    name: "The demo detects and recovers from a failure"
-    wave: expectation
-
-  - id: package-landing
-    name: "The perception package reaches main"
-    wave: grounding
-    description: >-
-      Everything in this plan edits files that exist on no branch but
-      tracy_icra. Landing them first is what makes every later item a normal
-      reviewable pull request.
-
-  - id: surfaces
-    name: "Surfaces, not constants"
-    wave: grounding
-    description: >-
-      Sequential: each item edits the same pipeline the previous one left
-      behind, so they stack rather than run in parallel.
-
-  - id: request-language
-    name: "Perception as a query backend"
-    wave: requests
-    description: >-
-      The backend itself and the compiler behind it, following the shape
-      SQLAlchemyBackend already set: take the query, translate it into another
-      engine's plan, execute it there.
-
-  - id: method-selection
-    name: "Choosing how to look"
-    wave: requests
-    description: >-
-      The digital twin extension and the rule tree that reads it. The
-      annotation touches only semantic_digital_twin, so it can be written
-      before or alongside the request language.
-
-  - id: events
-    name: "Expectation and failure"
-    wave: expectation
-
-  - id: executors
-    name: "A second detector behind the interface"
-    wave: expectation
-    description: >-
-      The evidence that the reasoning layer is executor-agnostic, and the
-      route by which this work reaches RoboKudo after the deadline.
-
+- id: demo-grounding
+  name: The demo runs on perception that reads the world
+  wave: grounding
+  description: 'The deadline deliverable, tracked in the same wave as the work it integrates rather than
+    left to the end. Runs in parallel with the surfaces track: an item merges into tracy_icra when it
+    works, not when its pull request lands.'
+- id: demo-requests
+  name: The demo asks by query
+  wave: requests
+- id: demo-expectation
+  name: The demo detects and recovers from a failure
+  wave: expectation
+- id: package-landing
+  name: The perception package reaches main
+  wave: grounding
+  description: Everything in this plan edits files that exist on no branch but tracy_icra. Landing them
+    first is what makes every later item a normal reviewable pull request.
+- id: surfaces
+  name: Surfaces, not constants
+  wave: grounding
+  description: 'Sequential: each item edits the same pipeline the previous one left behind, so they stack
+    rather than run in parallel.'
+- id: request-language
+  name: Perception as a query backend
+  wave: requests
+  description: 'The backend itself and the compiler behind it, following the shape SQLAlchemyBackend already
+    set: take the query, translate it into another engine''s plan, execute it there.'
+- id: method-selection
+  name: Choosing how to look
+  wave: requests
+  description: The digital twin extension and the rule tree that reads it. The annotation touches only
+    semantic_digital_twin, so it can be written before or alongside the request language.
+- id: events
+  name: Expectation and failure
+  wave: expectation
+- id: executors
+  name: A second detector behind the interface
+  wave: expectation
+  description: The evidence that the reasoning layer is executor-agnostic, and the route by which this
+    work reaches RoboKudo after the deadline.
 items:
-
-  - id: montessori-perception-on-main
-    title: "Land the Montessori perception package on main"
-    branch: montessori_perception_on_main
-    pull_request_number: 202
-    track: package-landing
-    depends_on: []
-    status: in_progress
-    session: https://claude.ai/code/session_01Pk12hDbP8k2C16ZQWvcroA
-    notes: >
-      Everything that depends on this is *stacked* on its branch, not waiting for it to merge - the
-      same way every item of montessori-eql-stack is based on an unmerged parent. Nothing in this
-      plan blocks on review, so this item costs the demo nothing and can land whenever review
-      allows, after the deadline included. experiments/src/experiments/montessori/perception/ and
-      its tests exist only on tracy_icra, which also carries seventeen unrelated commits (Franka
-      demos, Mujoco tuning, stacking). This item cuts a branch off main carrying the perception
-      package alone - sorinar329's original node commit 75258debd plus the seven that follow it - so
-      the rest of the plan stacks on reviewable ground instead of on a branch whose upstream points
-      at a colleague's fork. tracy_icra itself is left alone.
-
-      Review on #205 assigned this item a second piece of work on 2026-08-29: splitting
-      test/experiments_test/test_montessori_perception.py, which arrives with this branch at 1262
-      lines. The developer answered the "very big file" thread on #205 with "ok it should be done on
-      202", and the file exists on no branch but this one, so this item owns it. #205 has no work of
-      its own left; it is that thread that keeps it open.
-
-      Done as 00721be7: the 1262 lines became six modules, one per subject, with every section moved
-      verbatim and the four shared fixtures registered from dataset/montessori_scene_fixtures.py.
-      Two review threads opened on 2026-08-29 are still unanswered on #202 itself - an empty
-      __init__.py and a timedelta on node.py:134 - and belong to this item rather than to
-      surfaces-from-world.
-
-      The recorded count of open review threads was wrong until 2026-08-29: the note said two ("an
-      empty __init__.py and a timedelta on node.py:134") when there are thirteen, and the node.py
-      comment is at line 374 about the 0.05 second poll interval in wait_for_scene, not a timedelta
-      at line 134. Nothing else on the pull request is holding it: 23 of 23 checks pass,
-      mergeable_state is clean, and it carries cram2-link-sent rather than in-review, so no upstream
-      pull request exists to have collected review of its own.
-
-      Resolved 2026-08-29: the four review threads asking for a change to this branch are done and
-      pushed as bb37390d (the exception module), 3348e353 (named parts of a hole footprint),
-      be8b8514 (the empty package __init__) and a9204f5e (the node's own scene check period), and
-      142 tests pass where 140 did. The other nine threads became the plan items
-      detector-parameters-from-knowledge and tune-detection-rules-against-the-camera; seven of them
-      are left open on the pull request deliberately, since each schedules a move rather than making
-      one. The pull request stays out of draft for the reason already recorded.
-
-      Second round, 2026-08-29: the developer resolved eleven of the thirteen threads himself and
-      left two. hole_geometry.py:185's remaining tuple became PolygonMeasurement (33fe5a798), and
-      his question about world.py answered itself - tracy_experiments/montessori/world.py imports
-      _SHAPE_COLORS from it for both Tracy demos, so the simulated pieces now take the colour
-      measured off the real ones (7363d2c26): cyan cube and cylinder, amber prisms. 147 tests pass
-      where 142 did. No review thread is open on the pull request.
-
-      Gained the capture set on 2026-08-30 (7f053db0b), so every branch cut from this one can
-      measure detection on real camera data: six looks at the real table taken out of the rosbags
-      recorded on 2026-08-28, each three files - the camera's own compressed colour payload byte
-      for byte, the depth image registered onto it as a millimetre PNG, and a JSON record of the
-      intrinsics and where the camera stood. 3.0 MB in all, and a reviewer can open the pictures on
-      GitHub. captures.py reads them, recordings.py reads a rosbag's camera stream, and
-      capture_from_bag.py writes one; CameraTopic moved from node.py to camera.py, since a reader
-      of a recording needs the topic names as much as a subscriber does. The rosbags themselves are
-      gitignored: 4.7 GB that nothing here can regenerate.
-
-  - id: surfaces-from-world
-    title: "Take the workspace from the table the robot knows about, not from a constant"
-    branch: perception_surfaces_from_world
-    pull_request_number: 205
-    track: surfaces
-    depends_on: [montessori-perception-on-main]
-    status: in_progress
-    session: https://claude.ai/code/session_01ScJk8zKUuToafxg38Bcag5
-    blockers:
-      - >-
-          Unanswered question to the developer, raised on #205 at review time and still open:
-          WorkspaceSurface.of_body picks the body's widest horizontal face, following table_top_z's
-          existing rule, where the highest face is arguably the truer reading of "the surface things
-          rest on". The two disagree only for a body whose widest shape is not its top. Not
-          settleable from a container, since the rule was chosen against the real URDF.
-    notes: >
-      Fixes the first fault: the clip shows the floor because TRACY_WORKSPACE (node.py:102) is a
-      hand-written 1.0 x 1.2 m rectangle. table_top_z() already pulls the tabletop's collision shape
-      out of the fetched world for its height and discards scale.x, scale.y and the origin, which
-      are exactly the bounds being guessed. Derives the region and every plane height from the
-      world, and from HasSupportingSurface.supporting_surface where one exists.
-
-      The review round of 2026-08-29 is answered in full. The test-file split it asked for was the
-      developer's call to place on #202, and it landed there as 00721be7, merged into this branch by
-      d6673b48; the widest-face question this branch raised is the one thing still open.
-
-  - id: detect-per-supporting-surface
-    title: "Look at every supporting surface, not only the table"
-    branch: perception_per_supporting_surface
-    pull_request_number: 221
-    track: surfaces
-    depends_on: [surfaces-from-world]
-    status: in_progress
-    session: https://claude.ai/code/session_01T8CPPnj2uqZB7bACWBFJhb
-    notes: >-
-      Fixes the second fault: a piece resting on the board's lid is invisible
-      twice over. The pipeline rectifies loose pieces onto exactly one plane
-      (table_height), so a piece eighty millimetres higher is parallax-shifted
-      out of both silhouettes; and pipeline.py:626 drops any contour the board
-      encloses, coding the board as an obstacle when it is physically a
-      supporting surface like the table. One detection pass per surface, each
-      at its own plane height, with detections attributed to the surface
-      supporting them.
-      Built 2026-08-30 as #221, 2744c23d. The pass-per-surface restructure landed as planned,
-      but a piece on the lid was invisible four times over rather than the two this note
-      recorded, and the restructure alone fixes two. The lid's wood reads within two hues of
-      the amber prisms, so marking every piece colour at once merged a piece standing on it
-      into the lid; and the edge fit ran Canny over brightness, where a cyan piece is one grey
-      level from the lid against 34 from the bare table. Each colour is now segmented on its
-      own and each colour channel read for edges of its own; both stay inside the one detector,
-      so choose-detection-method still owns choosing between detectors - but its "the lid
-      selects the colour blob" rule now needs a different justification, since the edge fit
-      fits a cube on the lid at 0.93 agreement. 153 tests pass across the montessori modules
-      where 144 did. This item does not populate supporting_surface, against
-      surface-finish-annotation's prediction, so the finish question that raised does not arise
-      yet. detect costs 0.35 s per frame against 0.23 s, inside the node's 0.5 s period.
-
-      Measured against the real camera on 2026-08-30 (8da0e84e9), on the six captures #202 now
-      carries. Every loose piece lying on the bare table is found with the right category in all
-      six - the thing this branch was built for. Three faults show, each with a strict
-      expected-to-fail test naming the item that owns it, so the day that item lands the mark
-      reports itself stale: a piece standing on the lid is reported a second time on the table
-      (one-detection-per-thing), pieces on the lid are lost where they wear its colour or touch
-      one another (detector-parameters-from-knowledge), and five of the board's six holes are
-      found with most called triangular prisms (holes-fitted-like-pieces, new).
-
-      The branch also gained watch_bag, which is the node with a recording in place of the camera
-      and the robot, and SceneWindows, so a replay and a live run draw the same three windows
-      rather than two copies of the drawing. The test that plays the pick-up demo through it is
-      skipped wherever the recordings are not on disk, which is every run but a developer's own.
-
-  - id: one-detection-per-thing
-    title: "One physical thing, one detection, and none inside a body already known"
-    branch: claude/plan-item-kickoff-kdp-z4pv7l
-    pull_request_number: 225
-    track: surfaces
-    depends_on: [detect-per-supporting-surface]
-    status: in_progress
-    session: https://claude.ai/code/session_01RRu7SutvRcNWHYNVUDCUFr
-    notes: >-
-      Fixes the third fault: the duplicate boxes on the board's borders are the
-      lid's own edges, which a rectangular or triangular prism template fits at
-      about 0.7 - above the 0.62 threshold. board.encloses only rejects a
-      contour whose centre falls inside the board, and a contour riding the
-      border has its centre outside; nothing anywhere forbids two detections
-      occupying one place. Rejects a detection intersecting a known body's
-      volume, and resolves overlapping detections against each other.
-      semantic_digital_twin.reasoning.predicates.is_place_occupied already
-      exists for the first half.
-
-      It now has a failing test rather than a description: measured on 2026-08-30, every one of the
-      six captures reports a piece that is standing on the board's lid a second time on the table,
-      about 50 mm from the first, because the table pass rectifies it onto the table's plane and
-      claims it there. That is a second shape of the same fault as the border boxes, and the wider
-      one - it fires whenever anything rests on the lid, not only at its edges.
-      test_only_the_pieces_resting_on_the_table_are_detected_there in
-      test_montessori_detection_on_captures.py is the test; it is marked strict expected-to-fail
-      against this item.
-
-      Built 2026-08-31 as cf155f4a1. The note above describes the duplicate as a detection standing
-      inside the board's own volume, and it is not: measured on the six captures, every duplicate
-      lies 14 to 63 mm *outside* the board's detected outline and shares no ground with it, so the
-      planned occupancy rule over the board's volume rejects none of them. What they are is the
-      table seen past the board - a piece on the lid stands between the camera and the table
-      behind it, so the table's rectification places it there, outside the board along the ray from
-      the camera. The rule is therefore line of sight rather than volume: the board's outline
-      projected away from the camera onto the table's plane, cast from the top of a piece standing
-      on the lid, is the stretch of table nothing may be reported resting on. Real table pieces
-      stand 115 to 186 mm clear of it. The height half of the rule stands unchanged, and is what
-      keeps a piece resting on the lid apart from a reading taken off the table below it.
-
-      No threshold was needed: two solid things cannot stand in one another, so any shared ground
-      at meeting heights is one thing read twice, and the captures show duplicates sharing their
-      whole outline while no two separate detections share any. is_place_occupied was measured and
-      not used - 0.035 s per call against a fifteen-body world, so six detections cost 0.21 s of a
-      0.5 s period detect already spends 0.35 s of; reading every body's bounding box costs the
-      same. A general per-frame walk of the world's bodies does not fit the frame budget, which is
-      a finding for detector-parameters-from-knowledge rather than something dropped. detect costs
-      0.279 s per frame against the parent's 0.289 s.
-
-      The strict expected-to-fail mark came off five captures of six. non_inserted_objects keeps it,
-      now naming holes-fitted-like-pieces: the board is reported at -29.7 degrees there against
-      -7.6 degrees in the other five about the same centre, because its orientation comes from
-      minAreaRect over the hole centres and only five of six holes are found, so the ground it is
-      taken to hide is turned with it.
-
-  - id: holes-fitted-like-pieces
-    title: "Find the board's holes by fitting its whole known layout, not one contour at a time"
-    branch: perception_holes_fitted_like_pieces
-    pull_request_number: null
-    track: surfaces
-    depends_on: [pieces-looked-for-where-expected]
-    status: not_started
-    notes: >-
-      Measured again on 2026-08-31, and the item's premise changed: the holes are not
-      mislabelled, they are mislocated, so pointing the per-piece fit at each contour in turn
-      would not have fixed them. Placing the board mesh's own six hole footprints at the board
-      pose the detector reports puts them across roughly 180 mm of the lid's length, which is
-      what the board's 282 mm mesh says; the five contours the pipeline currently calls holes sit
-      inside about 90 mm near the board's middle. So they are not the holes at all. Worse, a free
-      per-contour fit is what put them there: a triangular prism template laid anywhere near the
-      board's middle reaches 0.85 to 0.89 agreement in every capture, higher than any genuine
-      piece resting on the lid reaches, and it converges on the same spot each time.
-
-      The fix is to stop giving a hole three degrees of freedom of its own. The layout is rigid
-      and known exactly from the mesh, so the board's holes are found by fitting that one layout
-      over the lid - three degrees of freedom for all six holes together, seeded from the board
-      detection's own pose - and each hole's identity then comes from the model rather than from
-      classifying its contour. A layout fit cannot invent a hole where there is none, cannot put
-      two holes in one place, and cannot land on the drawer fronts below the lid, all of which
-      the per-contour classifier does today. It also settles the board's pose far better than the
-      board detector does, since six outlines constrain it rather than one.
-
-      This depends on pieces-looked-for-where-expected rather than running beside it, because
-      fitting a known model at a believed pose is exactly the evaluator that item builds, and two
-      branches independently writing the same evaluator is the duplication the personal notes
-      already record twice. The original reasoning is kept below.
-
-      Raised by the capture benchmark on 2026-08-30, and the largest error it found. The board's
-      mesh is cut with six holes - two circles, a square, a triangle, a slot and a disk slit -
-      and the pipeline finds five of them in five captures and four in the sixth, calling three
-      of the five triangular prisms in most of them. Loose pieces stopped being read this way in
-      4b74460f8, which replaced the threshold-based CrossSectionClassifier with a fit of the
-      known outlines to the edges, and holes were left on the old classifier because they "read
-      correctly" at the time; the later lighting is what they no longer read correctly in.
-      Pointing the same fit at the holes is the obvious move, and the holes are the easier case:
-      their outlines are known exactly from the board mesh (detect_hole_footprints), they lie
-      flat in the lid's own plane, and the board detection already says where to look. One
-      detection also lands on the drawer fronts below the lid, which are not holes at all.
-      test_every_hole_in_the_board_is_found in test_montessori_detection_on_captures.py is the
-      test, marked strict expected-to-fail against this item; it asserts against the mesh's own
-      footprints rather than a copy of them.
-
-  - id: pieces-looked-for-where-expected
-    title: "Look for a piece where it is expected, not only where a colour blob appears"
-    branch: perception_looked_for_where_expected
-    pull_request_number: null
-    track: surfaces
-    depends_on: [one-detection-per-thing]
-    status: not_started
-    notes: >-
-      The structural change the rest of this plan's perception work needs, and the one that
-      takes the lid-piece failures off the ripple-down rules' critical path.
-
-      Today a piece can only be found where colour segmentation isolated a blob:
-      LoosePieceDetector.detect walks the piece hues, and only a contour that survives the hue
-      mask, the size range and the wholly-within test is ever handed to PieceMatcher.match.
-      Colour is a gate, so a piece wearing the lid's own hue, or touching another piece, is
-      never fitted however plainly its edges are in the picture. That is the whole of
-      test_every_piece_resting_on_the_lid_is_found's four expected failures.
-
-      Measured on 2026-08-31 against the shipped captures: seeding PieceMatcher.match by hand at
-      the places the board detection already reports reaches agreements of 0.62 to 0.89 in
-      captures where the bottom-up pass reports nothing there at all - in non_inserted_objects it
-      reports one detection in the whole scene, and that one is a ghost. The evidence is in the
-      image; the seed is what is missing. One seeded fit over all six candidate pieces costs
-      0.05 s against 0.25 s for a full bottom-up pass, so evaluating a handful of expected places
-      is cheaper than the pass that misses them.
-
-      So detection becomes the evaluation of hypotheses rather than the classification of blobs.
-      A hypothesis says what is expected, where it is believed to be - a region of a named
-      surface and an interval of yaw - and where that belief came from. Its evaluator is the
-      sweep PieceMatcher already performs, with its radius, step, angle set and candidate list
-      read from the belief instead of fixed: a hypothesis naming one piece at a known place
-      searches finely over a few millimetres, one naming an unknown piece anywhere on a surface
-      searches the way the current code does. Colour becomes one source of hypotheses and one
-      piece of evidence for them, never a gate that can suppress one.
-
-      Where the hypotheses come from is what makes this knowledge-guided, and there are three
-      sources, in increasing order of what they need: the scene itself (a colour blob, as today,
-      and the board's own detected holes, which are places a piece can be); the world (a body
-      the twin already places in the workspace); and the object's own history
-      (expectations-from-events, which is where a belief gets a pose and an uncertainty). The
-      first two need nothing this plan has not already built, and they are enough for the four
-      failing captures, which is why this item does not depend on the request language or on the
-      rule tree.
-
-      Every reported detection carries the hypothesis it came from and the evidence that
-      supported it, which is what makes a result explainable rather than merely correct.
-
-      Shares its central type with perception-predicates-guide-the-search, added the same day from
-      #222's review and not visible to this item when it was written. A believed place - a region
-      of a named surface and an interval of yaw - is what that item's spatial predicates compile
-      *to* and what this item's search reads *from*, so it is defined here, once, and that item
-      supplies it rather than building its own. This item lands first: it is in the `surfaces`
-      track and waits on nothing but one-detection-per-thing, where that one waits on
-      perception-backend.
-
-      This takes ownership of test_every_piece_resting_on_the_lid_is_found from
-      detector-parameters-from-knowledge. That item is blocked on krrood's ripple-down rules
-      being usable, and the lid failures are a seeding fault rather than a parameter fault, so
-      leaving them there would have put the plan's most visible remaining error behind a
-      dependency it does not have.
-
-  - id: competing-explanations
-    title: "Decide a detection by comparing explanations, not against a fixed threshold"
-    branch: perception_competing_explanations
-    pull_request_number: null
-    track: surfaces
-    depends_on: [pieces-looked-for-where-expected, holes-fitted-like-pieces]
-    status: not_started
-    notes: >-
-      PieceMatcher.minimum_agreement is one number, 0.62, standing for how much of an outline
-      must lie along a seen edge before a piece is reported, and its recorded justification is
-      that a correct piece reaches 0.63 to 0.86 while the best wrong piece of the same colour
-      reaches 0.62. Measured on 2026-08-31, that boundary does not hold anywhere near the board:
-      a triangular prism template reaches 0.85 to 0.89 on the board's own middle in every
-      capture, above every genuine piece detection on the lid in the same captures, which run
-      0.64 to 0.71 for the most part. No single threshold separates them, because agreement
-      measures how well an outline follows *some* edge and says nothing about what put that edge
-      there.
-
-      A two-plane test was tried first and does not work: scoring the same outline in the lid's
-      own rectification as well as in the plane a piece's top stands on separates neither, since
-      both differences fall between +0.30 and +0.62 for holes and pieces alike. Recorded so it is
-      not tried again.
-
-      What does separate them is asking what else could have produced the edges. The board's
-      geometry is known exactly and, once holes-fitted-like-pieces has settled its layout over
-      the picture, every edge the board itself produces can be predicted. A piece is then
-      reported where it explains edges the board alone does not, and two hypotheses claiming one
-      set of edges are settled against each other rather than both passing a threshold. The
-      decision is a comparison of explanations, so it states how much better one explanation must
-      be than the next, which is a statement about how costly a wrong report is - a thing the
-      robot can be told - rather than a tuned constant.
-
-      This is also what makes the plan's central claim measurable: with one candidate and a
-      strong belief, less picture evidence is needed to accept a detection than with six
-      candidates and none, and that is knowledge improving perception in a quantity that can be
-      plotted. one-detection-per-thing's occupancy rule is the same idea applied to place, and
-      the two should share their resolution rather than filtering one after the other.
-
-  - id: montessori-classes-in-the-orm
-    title: "Map the Montessori package's own classes, which the ORM has never seen"
-    branch: claude/montessori-classes-orm-s7vxu1
-    pull_request_number: 223
-    track: package-landing
-    depends_on: [montessori-perception-on-main]
-    status: in_progress
-    session: https://claude.ai/code/session_01PWzamoTtp8TNZyqhWornUs
-    notes: >-
-      experiments/src/experiments/montessori/ has no __init__.py, and never has on any branch, so
-      pkgutil does not report it as a subpackage of experiments and the ORM generator's package
-      walk skips the whole thing. Nothing under experiments.montessori is in
-      experiments/orm/ormatic_interface.py - not MontessoriShape, not CubeShape, not
-      ShapeSortingBoard. That is the whole cause of the five NoDAOFoundError failures in
-      test_montessori_insert_shape_action.py that this branch has carried as "the documented
-      empty-ORM state": regenerating the interfaces cannot fix them, because the classes are not
-      being offered to the generator in the first place.
-
-      Adding the file was tried on 2026-08-30 and is not a one-liner. Two things follow it, and
-      there may be more behind them: NoSceneAvailable.missing_inputs was typed Sequence[str],
-      which the generator cannot resolve (already changed to List[str], the shape every other
-      field in that module uses); and experiments.montessori.perception.footprint.Footprint
-      collides by name with semantic_digital_twin...graph_of_convex_sets.plotting.Footprint, so
-      the generator emits two FootprintDAO classes and SQLAlchemy refuses the mapping. That
-      collision needs one of the two renamed, which is an API change across the perception
-      package, so it is its own piece of work rather than a fix folded into a capture commit.
-
-      Built 2026-08-30 as #223. Two of the three claims above did not reproduce, and the note is
-      left standing with this correction beneath it rather than rewritten, so a reader can see
-      what was assumed. NoSceneAvailable.missing_inputs is still Sequence[str] on this branch and
-      the generator resolves it, normalizing it to List[str] and mapping it as JSON; nothing was
-      behind the two known faults. The collision is exactly as recorded, reproduced before
-      anything was changed, and perception.footprint.Footprint became RectifiedFootprint. #205 and
-      #221 edit the same files and will both conflict on that rename.
-
-  - id: perception-backend
-    title: "Answer a query by looking, as a backend of the entity query language"
-    branch: perception_eql_backend
-    pull_request_number: 222
-    track: request-language
-    depends_on: [surfaces-from-world, detect-per-supporting-surface]
-    status: in_progress
-    session: https://claude.ai/code/session_01DBkGLKmju56tuBNdrSxitR
-    blockers:
-      - >-
-          One of #222's nine review threads is still unresolved, not five. The developer
-          resolved four of the five this item recorded as deliberately open, on 2026-08-31 after
-          submitting his pending review: r3893160382 (the attribute-name string), r3893576773
-          (the mimic's copy of it), r3893463818 (algorithm capabilities, recorded on
-          choose-detection-method) and r3893476097 (the inline import, whose question back he
-          closed by resolving). What remains open is r3893312001 with its two follow-ups
-          r3893499716 and r3893602153 - the predicate ask itself, which is now the item
-          perception-predicates-guide-the-search, in progress on #227 as of 2026-08-31. Nothing
-          on this pull request is this item's work to do.
-    notes: >-
-      Resolved 2026-08-31 in `auto` mode, and the round changed two things the manifest and
-      roadmap had recorded as settled, both at the developer's direction.
-
-      The backend is *generative*, not selective. The developer's reasoning, which overrode this
-      session's recommendation to stay selective: with the instances already believed in we are
-      only asking perception for the pose, which is an underspecified statement; with no belief
-      yet, the look is what brings the instance into existence. Neither is selection from a domain
-      the statement was handed. So a statement is a Match - an(MontessoriShapeDetection)(
-      supporting_surface=lid, pose=...) - and an attribute stated as ... narrows nothing and
-      rejects nothing, because it is the statement saying the look must supply it.
-
-      The general half now lives in krrood, not in experiments: PerceptionBackend and LookRequest
-      sit beside the other backends and carry how a statement is read, narrowed and checked;
-      MontessoriPerceptionBackend carries only that a look is taken by the Montessori pipeline and
-      that its search narrows by the supporting surface. krrood gains no dependency on
-      experiments. This reverses what the roadmap recorded ("the backend in experiments, only the
-      exception and the Directive member in krrood").
-
-      Two measurements the redesign turned up, neither of which the plan knew: native evaluation
-      returns nothing at all for a Match carrying an ellipsis attribute, so the ellipsis
-      attributes have to be dropped from the check and the stated ones re-applied; and native
-      evaluation does not narrow a domain by the variable's declared type, so the backend does it.
-      Both are covered by tests rather than assumed.
-
-      The predicate and semantic-annotation redesign the other five threads ask for is not here -
-      it is the new item perception-predicates-guide-the-search, which is the developer's own
-      suggestion on r3893312001 that it be "a separate PR that this one here is stacked under".
-
-      Round replied to and partly resolved on 2026-08-31 once the developer submitted his
-      pending review, which had blocked every inline reply while it sat unsubmitted (GitHub
-      allows one pending review per user and the API acts as that account). Four threads
-      resolved - generative, the krrood placement, the Montessori type out of the general half,
-      and the AttributeEqualityToLiteral rename. Five left open on purpose: four schedule the
-      predicate redesign rather than asking for a change here, and one carries a question back.
-
-            A PerceptionBackend beside EntityQueryLanguageBackend and
-      SQLAlchemyBackend, so evaluating a query runs perception rather than a
-      pipeline being called by hand. SQLAlchemyBackend already sets the shape -
-      eql_to_sql translates the query into another engine's plan and runs it
-      there - and the compiler from a query to a detection pipeline is the same
-      move against a camera. Conditions are split the way a query planner
-      splits them: those that can be pushed down shape the search (which
-      surface to rectify, which piece models are candidates, what seeds
-      segmentation - via is_supported_by, is_body_in_region, InsideOf, the
-      selected type and the appearance constraints), and those that cannot are
-      kept as a residual filter over the detections that come back, so nothing
-      is silently ignored. A condition that can be neither raises a typed
-      exception alongside SelectiveBackendCannotResolveEllipsisMatch. Also
-      gives the backend its own opening_directive so a query answered by
-      looking verbalizes as "Look for ..." rather than "Find ...", which needs
-      one Directive member in krrood. Narrowed for the deadline: support
-      exactly the condition forms the demo writes - the selected type and
-      is_supported_by - push those down, filter the rest as residuals, and
-      raise on anything else. A general compiler is not what the claim needs. PerceivedObjects, the domain that runs
-      the whole pipeline on iteration and yields everything, is retired by it:
-      a query then runs only what it asked for.
-
-      Noted 2026-08-31, for whoever carries this further rather than for the branch in flight:
-      the items added that day need a look to be narrowed by a believed *place* - the region and
-      yaw interval an object is expected in - as well as by a type and a surface. Written before
-      that day's review round, this named SceneRequest; the narrowing now lives in krrood's
-      LookRequest, and SceneRequest.admits was removed by the move. The correction is worth more
-      than the note, because the round's own reversal is what makes the belief natural rather than
-      an addition: a generative statement asking `pose=...` of an instance already believed in is
-      exactly the pose-only question a believed place answers, which is the shape
-      expectations-from-events and pieces-looked-for-where-expected were already written around.
-
-  - id: perception-predicates-guide-the-search
-    title: "Guide the search by predicates and annotations, not by attribute names"
-    branch: claude/plan-item-kickoff-perception-ogf2g9
-    pull_request_number: 227
-    track: request-language
-    depends_on: [perception-backend, predicates-answer-whether-they-hold]
-    status: in_progress
-    session: https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ
-    notes: >-
-      Raised by the developer across five review threads on #222, which are one ask: a look
-      should be narrowed by what the world means, not by an attribute spelled as a string.
-      SUPPORTING_SURFACE_ATTRIBUTE_NAME = "supporting_surface" and the mimic's PLACE_ATTRIBUTE_NAME
-      are the smell; AGENTS.md's own rule against a literal duplicating a value with its own source
-      of truth condemns them independently of the redesign, and #222 leaves them standing with a
-      test asserting the name is a real field.
-
-      What replaces them, in the developer's words: predicates for support and for spatial
-      relations - LeftOf, RightOf and the rest - inheriting from Predicate rather than Symbol, and
-      then used to devise the search rather than merely evaluated. "So I need to look on top of a
-      bright shiny surface that has this size and look for an object supported by it and is left of
-      another object that has a cyan colour, all these are clues that help us devise a pipeline and
-      find the object we are looking for."
-
-      Two mechanisms come with it, both the developer's. A spatial predicate can be read as a
-      Region with extents, so the image and the depth are clipped to where the thing can be before
-      anything is detected - which is the same economy #222's supporting-surface narrowing already
-      buys, stated in the world's vocabulary instead of an attribute's. And a predicate no
-      algorithm covers becomes a rejection sampler: detect what the other conditions do reach,
-      spawn the instances found into a copy of the world - an imagination world - evaluate the
-      predicate there with real Body and SemanticAnnotations, and delete what it rejects.
-
-      Stacked on #222 rather than folded into it, which is the developer's own placement on
-      r3893312001 ("you can make this a separate PR that this one here is stacked under"). The
-      threads are r3893160382, r3893312001, r3893499716, r3893602153 and r3893576773; the sixth,
-      r3893463818, is close to choose-detection-method's existing claim and is recorded there
-      rather than here.
-
-      Overlaps pieces-looked-for-where-expected, added the same day and not visible to the session
-      that wrote this. Both items end at the same thing - a stretch of the world a sought object is
-      expected to lie in, used to narrow the search before detecting - reached from opposite ends:
-      this item says where the constraint *comes from* (a predicate in the world's own vocabulary,
-      read as a Region), that one says what the searcher *does* with it (a believed pose and yaw
-      interval, swept by the piece matcher). They must share the one type rather than each build
-      it. Whichever starts second takes the other's, and the sequencing follows from the tracks
-      they already sit in: that item is in `surfaces` and depends only on one-detection-per-thing,
-      so it lands first and defines the belief; this one supplies it from a predicate. The
-      imagination-world rejection sampler is this item's alone and duplicates nothing.
-
-  - id: predicates-answer-whether-they-hold
-    title: "Let a predicate answer whether it holds, with the measurement behind it"
-    branch: sdt_predicates_answer_whether_they_hold
-    pull_request_number: 229
-    track: request-language
-    blockers:
-      - >-
-          Review of 2026-08-31 asks whether this duplicates PR #33 (eql-verbalization's
-          p4-sdt-migration, branch `eql-symbolic-function-sdt`). Verified: it largely does. #33 has
-          migrated the same `reasoning/predicates.py` off `@symbolic_function` onto Predicate /
-          SymbolicFunction classes since 2026-07-06, with the same `symbolic_callable_to_function`
-          mechanism, and reaches further - `queries.py` and `robot_predicates.py` too, plus a
-          settled 36-thread wording review, `phrase()` in krrood's parts_of_speech, and ORMatic
-          `ignored_base_classes`. `check_scope_overlap.py` reports `predicates.py` shared between
-          the two branches. What is genuinely this item's and absent from #33 is narrow: the
-          threshold field that lets a ratio-computing relation answer a truth value
-          (`InsideOf.minimum_containment_ratio`, `InsideRegion.minimum_contained_fraction`) - #33
-          still has `InsideOf.__call__` returning a float and `is_body_in_region` as a
-          `BodyInRegionFraction` SymbolicFunction, which is the exact call this item was raised to
-          overturn - plus the use of krrood's `Triple` base, which derives verbalization from the
-          class name. Whether that becomes a change on #33 or stays its own pull request is the
-          developer's structural call, put to him on the pull request.
-      - >-
-          CI: `test_each_lib (semantic_digital_twin) / test` fails, and it is this branch's failure,
-          not main's - contrary to what the pull request description claims. Renaming
-          `is_supported_by`'s parameters to `SupportedBy(supported=, supporting=,
-          maximum_intersection_height=)` broke `semantic_annotations/mixins.py:942`, which calls it
-          by keyword and which this branch does not touch: 5 tests in `test_reasoning_queries.py`
-          fail with `TypeError: SupportedBy.__init__() got an unexpected keyword argument
-          'supported_body'`. The PR's verification claim that the failing set is byte-identical to
-          main's was measured over `test_predicates.py`, not the package. #227 carries the same
-          commit and therefore the same breakage.
-      - >-
-          Unresolved review thread r3896606294 on `predicates.py:348`: "Pose Is reachable by Tip."
-          -this branch verbalizes `Reachable` as *"the tip is reachable at the pose"*, subject tip.
-          It conflicts with eql-verbalization roadmap decision 11, which settled `Reachable` as *"a
-          Pose is reachable for the kinematic chain rooted at <root> and ending at <tip>"* on #33.
-          Both make the pose the subject; they differ in whether root and tip are both named.
-    depends_on: []
-    status: blocked
-    session: https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ
-    notes: >-
-      The developer's direction on 2026-08-31, correcting a call #227 made: a relation that
-      computes a ratio should still be a Predicate. Its `__call__` answers a truth value, the
-      ratio is read from a method of its own, and a threshold field with a default is what turns
-      the one into the other. #227 had made InsideOf a SymbolicFunction instead, on the grounds
-      that Predicate.__call__ must return bool and three call sites read the ratio - which is
-      true of the mechanism and wrong about the intent. A threshold field answers both: the
-      callers that want the number call the method, and a statement that wants the relation gets
-      a predicate it can assert.
-
-      Applies to every relation in reasoning/predicates.py of that shape, not only InsideOf:
-      is_body_in_region answers the same kind of fraction, and the truth-valued relations that
-      are only @symbolic_functions today - support, contact, visibility, reachability, occupancy
-      - cannot be stated in a query at all while they are functions. krrood's own
-      symbolic_callable_to_function is the sanctioned way to keep the function spelling working
-      off one implementation, so no call site in coraplex, segmind or giskardpy has to change
-      with it.
-
-      Its own pull request off main, at the developer's direction, because it is a change to
-      semantic_digital_twin's vocabulary rather than to perception: the same placement
-      surface-finish-annotation already has. The knowledge-directed items that need it merge it
-      in rather than waiting for it to land, which is this plan's standing rule for depends_on.
-      perception-predicates-guide-the-search (#227) needs it and carries the InsideOf change this
-      item overturns, so that branch takes this one in and drops its own.
-
-  - id: search-clipped-to-a-predicates-region
-    title: "Clip the search to the region a spatial predicate allows"
-    branch: null
-    pull_request_number: null
-    track: request-language
-    depends_on: [perception-predicates-guide-the-search, pieces-looked-for-where-expected]
-    status: not_started
-    notes: >-
-      The developer's second mechanism on r3893602153, deferred out of #227 rather than dropped:
-      "one can interpret spatial predicates as specifying Regions (like the region class in
-      semdt) with extents to look at and excluding other regions, once can clip images and depth
-      to look only inside these regions."
-
-      That is the same economy #222's supporting-surface narrowing already buys, stated in the
-      world's vocabulary instead of an attribute's, and it is where narrowing stops being a
-      filter over what a detector returned and becomes less picture to search in the first place.
-
-      It waits on both parents for one reason each. perception-predicates-guide-the-search is
-      where a statement's predicates are read at all, and pieces-looked-for-where-expected owns
-      the believed place - a region of a named surface and an interval of yaw - which the roadmap
-      settled is defined once, there, and supplied by a predicate here. Building the type in
-      either branch alone is the duplication this repository has already paid for twice.
-
-  - id: imagination-world-rejects-what-a-predicate-refuses
-    title: "Reject what a predicate refuses, by testing it in a copy of the world"
-    branch: null
-    pull_request_number: null
-    track: request-language
-    depends_on: [perception-predicates-guide-the-search]
-    status: not_started
-    notes: >-
-      The developer's third mechanism on r3893499716, deferred out of #227 as a second pull
-      request's worth of work: a predicate no search algorithm covers is still answerable, by
-      detecting what the other conditions do reach, spawning what was found into a copy of the
-      world, evaluating the predicate there against real Body and SemanticAnnotations, and
-      deleting what it rejects.
-
-      It is what closes the gap #227 leaves open. A look reports sightings rather than the things
-      a relation is written over - a MontessoriShapeDetection is a dataclass, not a Body - so
-      #227 has a backend promise to check its own narrowing relations, and refuses any other
-      relation outright. Spawning the sightings into an imagination world is what gives every
-      other predicate something real to be evaluated against, so nothing has to be refused for
-      want of a subject.
-
-      Duplicates nothing: the roadmap's "Two items that meet at one type" records this mechanism
-      as this item's alone.
-
-  - id: surface-finish-annotation
-    title: "Say in the digital twin how a surface takes light"
-    branch: sdt_surface_finish_annotation
-    pull_request_number: 216
-    track: method-selection
-    depends_on: []
-    status: in_progress
-    session: https://claude.ai/code/session_019FYgjdCK7BStm7KdSDyrwY
-    notes: >-
-      The digital twin models a surface's colour but not its finish, which is
-      the property that decides whether colour segmentation works at all: the
-      brushed steel table throws a diffuse, piece-coloured reflection with no
-      sharp boundary anywhere, which is why the edge fit had to be written.
-      A matte / glossy / mirror finish annotation is what turns "the steel
-      table and the wooden lid need different pipelines" into something the
-      robot knows rather than a branch somebody wrote. Touches only
-      semantic_digital_twin, so it can start off main immediately.
-
-      Built 2026-08-29 as 80100bd4 on #216: SurfaceFinish (matte / glossy / mirror) beside
-      Color and Texture, and Shape.finish carrying it, optional so that None means the finish
-      has not been stated rather than that it is matte. Adding it forced Shape's own
-      constructor arguments to be read once by Shape.arguments_from_json instead of a fourth
-      time in each of Sphere, Cylinder and Box, and Mesh.from_trimesh to carry a finish, which
-      is the only appearance property a mesh has no other carrier for. 45 tests pass in
-      test_shape.py against 25 on the parent, the whole semantic_digital_twin suite's failing
-      and erroring set is unchanged, and the regenerated ORM maps the field as
-      Mapped[Optional[SurfaceFinish]] on PolymorphicEnumType.
-
-      The developer took #216 out of draft on 2026-08-29, which ends the building session's
-      work on it: CI was green on 21 of 23 checks with the other two still running and none
-      red, and the pull request now waits on review rather than on this plan. Two decisions
-      are recorded rather than left implicit, both in roadmap.md: no adapter infers a finish
-      from MuJoCo specular/shininess/reflectance, and a derived supporting-surface Region does
-      not inherit its body's finish - detect-per-supporting-surface has to declare it on the
-      region it builds.
-
-  - id: surfaces-found-by-looking
-    title: "Find a surface in the image from what the world says it is like"
-    branch: perception_surface_from_description
-    pull_request_number: null
-    track: method-selection
-    depends_on: [perception-backend, surface-finish-annotation]
-    status: not_started
-    notes: >-
-      Raised by the developer on 2026-08-30, watching the workspace clip show the floor,
-      the chairs and whoever was standing at the table. Every surface in this plan is
-      taken from a model - either a constant (recorded_setup.WORKSPACE, still the old
-      1.0 x 1.2 m guess) or the body's own collision shape (surfaces-from-world). Neither
-      is a measurement of where the table really is, and the demo has already drifted
-      away from its own model once: the board and the pieces do not stand where
-      montessori_demo's hardcoded layout puts them, though the table's height agreed
-      exactly. This item finds the surface in the picture instead, from the properties
-      the twin already states about it - a large horizontal plane, mirror-finished
-      (surface-finish-annotation), colourless, of about the modelled size - and the
-      description is an entity query language expression, so which detectors run is
-      compiled from the conditions rather than written by hand. That is
-      choose-detection-method's claim turned on the surface itself, and it is what makes
-      the workspace something the robot works out rather than something a person tuned.
-      Evidence worth keeping before it starts: fitting the *table's* plane works on this
-      sensor even though fitting the pieces does not. The point-cloud trial of 4b74460f8
-      measured a RANSAC plane holding 34% of 693k points on the bare steel and 69% with a
-      mat, table points scattering +/-17 mm about it, while no piece stood out of that
-      cloud at all. So a plane fit is a candidate for the surface and known not to be one
-      for what rests on it, and the same trial's clustering must not be re-run for pieces.
-      Also worth taking from the captures: everything detected across all six lies within
-      x 0.57..0.91 and y -0.02..0.37, against a region of x 0.35..1.35, y -0.45..0.75.
-      Deliberately after the deadline's critical path - the demo can run on a tuned
-      workspace, and this replaces the tuning rather than unblocking anything.
-
-  - id: choose-detection-method
-    title: "Choose the detector by rule from the target and the surface"
-    branch: perception_choose_detection_method
-    pull_request_number: null
-    track: method-selection
-    depends_on: [perception-backend, surface-finish-annotation]
-    status: not_started
-    notes: >-
-      The detector interface the backend dispatches to, chosen by a rule tree -
-      krrood's ripple-down rules, whose conditions are already entity query
-      language expressions - over properties of the surface and the target: a mirror-finish surface with a known-geometry prism selects
-      the edge fit; a matte contrasting surface selects the cheaper colour
-      blob, which works there and is faster; a target with no geometric model
-      selects a learned detector. This is where perception measurably gets better as
-      the robot knows more, and it is the item the paper's claim rests on.
-      The developer noted on 2026-08-29 that krrood's ripple-down rules are not usable
-      yet and expects them to become so through the RDR/EQL refactor's integration
-      build; this item cannot start before they are, which is the schedule risk to
-      watch on the 4-8 September window.
-
-      Two corrections from 2026-08-31. The conditions the tree reads are not only standing
-      properties of the surface and the target - what finish it has, whether the target has a
-      geometric model - but also what has lately happened to the target: whether it is believed
-      to be somewhere in particular, how sure that belief is, and what acted on it last. A rule
-      that fires on "the target was released over this hole one action ago" is the same kind of
-      rule as one that fires on "this surface is mirror-finished", and it is the kind the
-      captures actually need. And the planned rule "a matte contrasting surface selects the
-      cheaper colour blob" needs its other justification writing down, since
-      detect-per-supporting-surface already recorded that the edge fit works on the lid too;
-      speed is the honest reason, not capability.
-
-      A third reading of the same claim arrived on #222 (r3893463818), and it is this item's
-      rather than the backend's: "we can also have perception algorithms as classes that declare
-      explicitly their capabilities, what requests they can answer to, also could be described as
-      eql conditions, then a perception reasoner will choose the algorithm that has a capability
-      that can answer that request." That is this item's rule tree with the condition moved onto
-      the detector - each detector states the requests it can answer, and the choice is made by
-      matching a request against those statements rather than by a tree written over the surface
-      and the target. Worth settling which of the two shapes this item builds before it starts,
-      since they answer the same question from opposite ends.
-
-  - id: detector-parameters-from-knowledge
-    title: "Take the detectors' numbers from the objects and the surfaces they look at"
-    branch: perception_parameters_from_knowledge
-    pull_request_number: null
-    track: method-selection
-    depends_on: [choose-detection-method]
-    status: not_started
-    notes: >-
-      Raised by the developer across nine review threads on #202, which are one ask: the
-      numbers the detectors carry - the saturation and darkness a pixel needs to belong to
-      an object, the areas a hole and a piece may cover, how much of an outline must lie
-      along a seen edge, how tall a loose piece stands, how large the board's lid is, how
-      far a measured hue may sit from a piece's own, the hue of each piece, the hole
-      marker's thickness and the mesh classification thresholds - are knowledge about the
-      pieces, the surfaces and the lighting, not properties of the detector that reads
-      them. They move onto the objects and surfaces in the digital twin, and a ripple-down
-      rule tree over those properties concludes them for a run, the way
-      choose-detection-method's tree already concludes which detector runs. The same move
-      covers the chain of ifs that accepts or rejects a contour (pipeline.py:619), which
-      the developer asked to become an inspectable rule tree rather than a hand-written
-      condition. Depends on krrood's ripple-down rules being usable, which the developer
-      expects from the RDR/EQL refactor's integration build. The piece hues gained a second
-      reader on 2026-08-29: the simulated scene now draws each piece in the colour measured
-      off the real one, so moving the hues onto the objects moves them for the twin as well
-      as for the detector.
-
-      Widened on 2026-08-31: the numbers concluded include the ones that say *how to search*,
-      not only the ones that say what a pixel or a contour must look like. How far around a
-      believed place to look, how finely to step and to turn, which pieces are candidates at
-      all, and how much better one explanation must be than the next before it is reported, are
-      all properties of the situation - and a situation where the robot knows which piece it
-      released over which hole warrants a different set from one where it is looking at a table
-      it has never seen. That is what makes the same detector measurably better as the robot
-      knows more, in a quantity that can be plotted, and it is where "a specific parametrization
-      for the situation the query describes" actually lives.
-
-      Ownership of test_every_piece_resting_on_the_lid_is_found moved to
-      pieces-looked-for-where-expected on 2026-08-31: those failures are a seeding fault, not a
-      parameter fault, and this item is blocked on krrood's ripple-down rules while that one is
-      not.
-
-  - id: tune-detection-rules-against-the-camera
-    title: "Conclude a detection rule while watching the camera, with its numbers on sliders"
-    branch: perception_interactive_rule_tuning
-    pull_request_number: null
-    track: method-selection
-    depends_on: [detector-parameters-from-knowledge]
-    status: deferred
-    blockers:
-      - >-
-          Deferred past the 2026-09-15 deadline: no demo item needs it, and it is tooling
-          for authoring rules rather than a piece of the claim. The first thing to drop
-          after robokudo-detector.
-    notes: >-
-      The developer's own suggestion on #202: an interactive presenter for the ripple-down
-      rules' ConclusionHelper, showing the live camera feed beside the parameters it would
-      conclude on sliders or dropdowns, so the expert sees what a value does to the
-      detection before committing it as a rule. Needs the parameters to be rule-concluded
-      first, which is detector-parameters-from-knowledge, and it touches krrood's expert
-      interface as much as perception - so where the presenter itself lands is a question
-      for the RDR/EQL refactor plan when this starts.
-
-  - id: episode-replayed-into-the-world
-    title: "Replay a recorded episode into the world so Segmind can say what happened"
-    branch: segmind_rosbag_player
-    pull_request_number: null
-    track: events
-    depends_on: []
-    status: not_started
-    notes: >-
-      An expectation about where a thing now is comes from what was done to it, and on a
-      recording nothing has been done to anything until the recording is replayed. Segmind
-      already has the extension point: EpisodePlayer -> DataPlayer -> FilePlayer, with
-      CSVEpisodePlayer and JSONPlayer as its two members, and a player supplies exactly one
-      thing - a generator of frames, each frame a set of body poses. A player reading a rosbag's
-      transform tree and joint states is that same member over a different file, and
-      EpisodeSegmenterExecutor then produces the support, pick-up, placing and insertion events
-      over it without changing.
-
-      Touches only segmind, so it can start immediately and off main.
-
-      A constraint measured on 2026-08-31 that decides what this can be asked for. Only one of
-      the six recorded bags carries the robot at all: tracy_pickup_demo holds /tf, /tf_static,
-      /joint_states and both arms' and both grippers' joint states over 150 seconds, 253,000
-      messages. The other five hold nothing but the three camera topics over about 29 seconds
-      each. So a replayed episode gives an event history for the pick-up demo and for anything
-      recorded from now on, and it gives the live demo its history directly, but it cannot supply
-      one for the five scene captures. Those get their expectations from the board and the action
-      model instead - the hole an insertion named is a place in the world, known without any
-      recording - which is why pieces-looked-for-where-expected does not depend on this item.
-
-      Worth recording for whoever runs it: recording /tf and /joint_states alongside the camera
-      in future takes costs nothing and would remove this split entirely.
-
-  - id: expectations-from-events
-    title: "Expect what the action promised, and report the difference as a failure"
-    branch: perception_expectations_from_events
-    pull_request_number: null
-    track: events
-    depends_on:
-      [perception-backend, pieces-looked-for-where-expected, episode-replayed-into-the-world]
-    status: not_started
-    notes: >-
-      Segmind already emits SupportEvent, LossOfSupportEvent, PickUpEvent,
-      PlacingEvent and InsertionEvent over is_supported_by. Perception keeps a
-      set of expectations from them - after LossOfSupport(piece, table) stop
-      searching the table; after Placing(piece, lid) search the lid - and the
-      action model gets there first, since an action declares its own effect
-      and so the expectation can be armed before the event confirms it. The
-      same mechanism gives failure detection: perception looked exactly where
-      the action promised, found nothing, and says so.
-
-      Widened on 2026-08-31, at the developer's ask, from an expectation that names a surface to
-      one that carries a pose. Naming the surface is the part the request language can push down,
-      but it is not what the captures need: three of them - stuck_cube_in_hole,
-      disoriented_cube_on_hole and displaced_cube_from_hole - are a cube that an insertion put at
-      a *named hole*, and the hole is a place, known in the world, on a surface the board
-      detection measures every frame. So an expectation is a belief about where an object is: a
-      region it should lie in, an interval of yaw it should be turned through, and the surface it
-      should rest on. That is precisely the hypothesis pieces-looked-for-where-expected evaluates,
-      which is why the two are now linked.
-
-      What the belief is propagated by is the action's own declared effect, confirmed or refuted
-      by the events: released over a hole, an object is believed to be at that hole, turned any
-      way, within the spread a release allows; still grasped, its pose is the gripper's; acted on
-      by nothing, its pose is exactly where it was last seen. The rule that carries the weight is
-      the last one - a belief only decays when something acts on the object - and it is why a
-      history makes this tractable where a single frame does not.
-
-      Failure detection then follows from the belief rather than from a surface: the insertion
-      promised the cube would end up *in* the hole, and it is found resting *on* the lid, turned
-      thirty degrees from where it would have had to be. Reporting which part of the expectation
-      was violated is what a recovery can act on, and it is the paper's end-to-end story.
-
-  - id: robokudo-detector
-    title: "Answer a request with a RoboKudo analysis engine"
-    branch: perception_robokudo_detector
-    pull_request_number: null
-    track: executors
-    depends_on: [choose-detection-method]
-    status: deferred
-    blockers: ["Deferred past the 2026-09-15 deadline: nothing depends on it and no demo item needs it."]
-    notes: >-
-      One adapter implementing the detector interface over a RoboKudo analysis
-      engine, so the rule tree can choose a learned detector (RoboKudo ships
-      CLIP and YOLO annotators) for a target with no geometric model. Proves
-      the reasoning layer is executor-agnostic and is the route by which this
-      work moves into RoboKudo after the deadline. Deliberately last and
-      expected to fall after it: nothing else depends on it, no demo item needs
-      it, and it is the first thing to drop if the deadline tightens.
-
-  - id: demo-catches-up-with-main
-    title: "Bring the demo branch up to date with main while it is still cheap"
-    branch: tracy_icra
-    pull_request_number: null
-    track: demo-grounding
-    depends_on: []
-    status: done
-    session: https://claude.ai/code/session_01FMKabzWhaJpTERyAaSc7Kh
-    notes: >-
-      Done 2026-08-28, pushed to origin/tracy_icra as fb0d0e41 (the merge) and
-      ece5eb74 (three branch-only call sites main had broken without
-      conflicting). main was 277 commits ahead by the time it ran, not the 234
-      measured when the plan was written. No pull request, as planned.
-      Do this first and do it now. main is 234 commits ahead of tracy_icra and
-      their merge base is 2026-08-19; a trial merge today conflicts in exactly
-      one file, semantic_digital_twin/adapters/multi_sim.py, which is a
-      colleague's Mujoco work and unrelated to perception. With the deadline on
-      2026-09-15 there is no slack to spend on a merge that grows daily, and
-      every day this is left it grows, and every later item in this plan is
-      developed off main and has to reach this branch. No pull request: this
-      merges into tracy_icra, which is not proposed anywhere.
-
-  - id: demo-runs-on-grounded-perception
-    title: "The demo sees only the table, finds pieces on the lid, and reports each once"
-    branch: tracy_icra
-    pull_request_number: null
-    track: demo-grounding
-    depends_on: [one-detection-per-thing, demo-catches-up-with-main]
-    status: not_started
-    notes: >-
-      Wave one is finished when the three faults are gone on the real robot,
-      not when their pull requests are approved: the clipped windows show the
-      table and nothing beyond it, a cube resting on the board's lid is
-      detected there, and no detection rides the board's borders. Verified
-      against the live camera, with a captured frame kept for the tests.
-
-  - id: demo-asks-by-query
-    title: "The demo's perception runs because a query was evaluated"
-    branch: tracy_icra
-    pull_request_number: null
-    track: demo-requests
-    depends_on: [choose-detection-method, demo-runs-on-grounded-perception]
-    status: not_started
-    notes: >-
-      Every perception call in montessori_demo.py goes through the backend
-      rather than calling the pipeline by hand, and the detector that answers
-      is the one the rule tree chose from the surface and the target - visibly
-      a different one for the steel table than for the board's lid. This is the
-      wave's claim made demonstrable: the same question, answered differently
-      because the robot knows what it is looking at.
-
-  - id: demo-detects-and-recovers-a-failed-insert
-    title: "A failed insertion is noticed because perception looked where the action promised"
-    branch: tracy_icra
-    pull_request_number: null
-    track: demo-expectation
-    depends_on: [expectations-from-events, demo-asks-by-query]
-    status: not_started
-    notes: >-
-      The end-to-end story the paper is written around: the robot picks a
-      piece, Segmind's LossOfSupportEvent takes the table out of the search,
-      the insertion's declared effect points perception at the board's lid, and
-      when the insertion fails perception finds the piece somewhere the plan
-      did not expect and says so. Recovery follows from that report.
-      Narrowed for the deadline: report the violated expectation, and let
-      recovery be the plan re-asking rather than a policy of its own. If the
-      deadline forces a cut, this is the item to protect and robokudo-detector
-      is the one to drop.
+- id: montessori-perception-on-main
+  title: Land the Montessori perception package on main
+  branch: montessori_perception_on_main
+  pull_request_number: 202
+  track: package-landing
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01Pk12hDbP8k2C16ZQWvcroA
+  notes: 'Everything that depends on this is *stacked* on its branch, not waiting for it to merge - the
+    same way every item of montessori-eql-stack is based on an unmerged parent. Nothing in this plan blocks
+    on review, so this item costs the demo nothing and can land whenever review allows, after the deadline
+    included. experiments/src/experiments/montessori/perception/ and its tests exist only on tracy_icra,
+    which also carries seventeen unrelated commits (Franka demos, Mujoco tuning, stacking). This item
+    cuts a branch off main carrying the perception package alone - sorinar329''s original node commit
+    75258debd plus the seven that follow it - so the rest of the plan stacks on reviewable ground instead
+    of on a branch whose upstream points at a colleague''s fork. tracy_icra itself is left alone.
+
+    Review on #205 assigned this item a second piece of work on 2026-08-29: splitting test/experiments_test/test_montessori_perception.py,
+    which arrives with this branch at 1262 lines. The developer answered the "very big file" thread on
+    #205 with "ok it should be done on 202", and the file exists on no branch but this one, so this item
+    owns it. #205 has no work of its own left; it is that thread that keeps it open.
+
+    Done as 00721be7: the 1262 lines became six modules, one per subject, with every section moved verbatim
+    and the four shared fixtures registered from dataset/montessori_scene_fixtures.py. Two review threads
+    opened on 2026-08-29 are still unanswered on #202 itself - an empty __init__.py and a timedelta on
+    node.py:134 - and belong to this item rather than to surfaces-from-world.
+
+    The recorded count of open review threads was wrong until 2026-08-29: the note said two ("an empty
+    __init__.py and a timedelta on node.py:134") when there are thirteen, and the node.py comment is at
+    line 374 about the 0.05 second poll interval in wait_for_scene, not a timedelta at line 134. Nothing
+    else on the pull request is holding it: 23 of 23 checks pass, mergeable_state is clean, and it carries
+    cram2-link-sent rather than in-review, so no upstream pull request exists to have collected review
+    of its own.
+
+    Resolved 2026-08-29: the four review threads asking for a change to this branch are done and pushed
+    as bb37390d (the exception module), 3348e353 (named parts of a hole footprint), be8b8514 (the empty
+    package __init__) and a9204f5e (the node''s own scene check period), and 142 tests pass where 140
+    did. The other nine threads became the plan items detector-parameters-from-knowledge and tune-detection-rules-against-the-camera;
+    seven of them are left open on the pull request deliberately, since each schedules a move rather than
+    making one. The pull request stays out of draft for the reason already recorded.
+
+    Second round, 2026-08-29: the developer resolved eleven of the thirteen threads himself and left two.
+    hole_geometry.py:185''s remaining tuple became PolygonMeasurement (33fe5a798), and his question about
+    world.py answered itself - tracy_experiments/montessori/world.py imports _SHAPE_COLORS from it for
+    both Tracy demos, so the simulated pieces now take the colour measured off the real ones (7363d2c26):
+    cyan cube and cylinder, amber prisms. 147 tests pass where 142 did. No review thread is open on the
+    pull request.
+
+    Gained the capture set on 2026-08-30 (7f053db0b), so every branch cut from this one can measure detection
+    on real camera data: six looks at the real table taken out of the rosbags recorded on 2026-08-28,
+    each three files - the camera''s own compressed colour payload byte for byte, the depth image registered
+    onto it as a millimetre PNG, and a JSON record of the intrinsics and where the camera stood. 3.0 MB
+    in all, and a reviewer can open the pictures on GitHub. captures.py reads them, recordings.py reads
+    a rosbag''s camera stream, and capture_from_bag.py writes one; CameraTopic moved from node.py to camera.py,
+    since a reader of a recording needs the topic names as much as a subscriber does. The rosbags themselves
+    are gitignored: 4.7 GB that nothing here can regenerate.
+
+    '
+- id: surfaces-from-world
+  title: Take the workspace from the table the robot knows about, not from a constant
+  branch: perception_surfaces_from_world
+  pull_request_number: 205
+  track: surfaces
+  depends_on:
+  - montessori-perception-on-main
+  status: in_progress
+  session: https://claude.ai/code/session_01ScJk8zKUuToafxg38Bcag5
+  blockers:
+  - 'Unanswered question to the developer, raised on #205 at review time and still open: WorkspaceSurface.of_body
+    picks the body''s widest horizontal face, following table_top_z''s existing rule, where the highest
+    face is arguably the truer reading of "the surface things rest on". The two disagree only for a body
+    whose widest shape is not its top. Not settleable from a container, since the rule was chosen against
+    the real URDF.'
+  notes: 'Fixes the first fault: the clip shows the floor because TRACY_WORKSPACE (node.py:102) is a hand-written
+    1.0 x 1.2 m rectangle. table_top_z() already pulls the tabletop''s collision shape out of the fetched
+    world for its height and discards scale.x, scale.y and the origin, which are exactly the bounds being
+    guessed. Derives the region and every plane height from the world, and from HasSupportingSurface.supporting_surface
+    where one exists.
+
+    The review round of 2026-08-29 is answered in full. The test-file split it asked for was the developer''s
+    call to place on #202, and it landed there as 00721be7, merged into this branch by d6673b48; the widest-face
+    question this branch raised is the one thing still open.
+
+    '
+- id: detect-per-supporting-surface
+  title: Look at every supporting surface, not only the table
+  branch: perception_per_supporting_surface
+  pull_request_number: 221
+  track: surfaces
+  depends_on:
+  - surfaces-from-world
+  status: in_progress
+  session: https://claude.ai/code/session_01T8CPPnj2uqZB7bACWBFJhb
+  notes: 'Fixes the second fault: a piece resting on the board''s lid is invisible twice over. The pipeline
+    rectifies loose pieces onto exactly one plane (table_height), so a piece eighty millimetres higher
+    is parallax-shifted out of both silhouettes; and pipeline.py:626 drops any contour the board encloses,
+    coding the board as an obstacle when it is physically a supporting surface like the table. One detection
+    pass per surface, each at its own plane height, with detections attributed to the surface supporting
+    them. Built 2026-08-30 as #221, 2744c23d. The pass-per-surface restructure landed as planned, but
+    a piece on the lid was invisible four times over rather than the two this note recorded, and the restructure
+    alone fixes two. The lid''s wood reads within two hues of the amber prisms, so marking every piece
+    colour at once merged a piece standing on it into the lid; and the edge fit ran Canny over brightness,
+    where a cyan piece is one grey level from the lid against 34 from the bare table. Each colour is now
+    segmented on its own and each colour channel read for edges of its own; both stay inside the one detector,
+    so choose-detection-method still owns choosing between detectors - but its "the lid selects the colour
+    blob" rule now needs a different justification, since the edge fit fits a cube on the lid at 0.93
+    agreement. 153 tests pass across the montessori modules where 144 did. This item does not populate
+    supporting_surface, against surface-finish-annotation''s prediction, so the finish question that raised
+    does not arise yet. detect costs 0.35 s per frame against 0.23 s, inside the node''s 0.5 s period.
+
+    Measured against the real camera on 2026-08-30 (8da0e84e9), on the six captures #202 now carries.
+    Every loose piece lying on the bare table is found with the right category in all six - the thing
+    this branch was built for. Three faults show, each with a strict expected-to-fail test naming the
+    item that owns it, so the day that item lands the mark reports itself stale: a piece standing on the
+    lid is reported a second time on the table (one-detection-per-thing), pieces on the lid are lost where
+    they wear its colour or touch one another (detector-parameters-from-knowledge), and five of the board''s
+    six holes are found with most called triangular prisms (holes-fitted-like-pieces, new).
+
+    The branch also gained watch_bag, which is the node with a recording in place of the camera and the
+    robot, and SceneWindows, so a replay and a live run draw the same three windows rather than two copies
+    of the drawing. The test that plays the pick-up demo through it is skipped wherever the recordings
+    are not on disk, which is every run but a developer''s own.'
+- id: one-detection-per-thing
+  title: One physical thing, one detection, and none inside a body already known
+  branch: claude/plan-item-kickoff-kdp-z4pv7l
+  pull_request_number: 225
+  track: surfaces
+  depends_on:
+  - detect-per-supporting-surface
+  status: in_progress
+  session: https://claude.ai/code/session_01RRu7SutvRcNWHYNVUDCUFr
+  notes: 'Fixes the third fault: the duplicate boxes on the board''s borders are the lid''s own edges,
+    which a rectangular or triangular prism template fits at about 0.7 - above the 0.62 threshold. board.encloses
+    only rejects a contour whose centre falls inside the board, and a contour riding the border has its
+    centre outside; nothing anywhere forbids two detections occupying one place. Rejects a detection intersecting
+    a known body''s volume, and resolves overlapping detections against each other. semantic_digital_twin.reasoning.predicates.is_place_occupied
+    already exists for the first half.
+
+    It now has a failing test rather than a description: measured on 2026-08-30, every one of the six
+    captures reports a piece that is standing on the board''s lid a second time on the table, about 50
+    mm from the first, because the table pass rectifies it onto the table''s plane and claims it there.
+    That is a second shape of the same fault as the border boxes, and the wider one - it fires whenever
+    anything rests on the lid, not only at its edges. test_only_the_pieces_resting_on_the_table_are_detected_there
+    in test_montessori_detection_on_captures.py is the test; it is marked strict expected-to-fail against
+    this item.
+
+    Built 2026-08-31 as cf155f4a1. The note above describes the duplicate as a detection standing inside
+    the board''s own volume, and it is not: measured on the six captures, every duplicate lies 14 to 63
+    mm *outside* the board''s detected outline and shares no ground with it, so the planned occupancy
+    rule over the board''s volume rejects none of them. What they are is the table seen past the board
+    - a piece on the lid stands between the camera and the table behind it, so the table''s rectification
+    places it there, outside the board along the ray from the camera. The rule is therefore line of sight
+    rather than volume: the board''s outline projected away from the camera onto the table''s plane, cast
+    from the top of a piece standing on the lid, is the stretch of table nothing may be reported resting
+    on. Real table pieces stand 115 to 186 mm clear of it. The height half of the rule stands unchanged,
+    and is what keeps a piece resting on the lid apart from a reading taken off the table below it.
+
+    No threshold was needed: two solid things cannot stand in one another, so any shared ground at meeting
+    heights is one thing read twice, and the captures show duplicates sharing their whole outline while
+    no two separate detections share any. is_place_occupied was measured and not used - 0.035 s per call
+    against a fifteen-body world, so six detections cost 0.21 s of a 0.5 s period detect already spends
+    0.35 s of; reading every body''s bounding box costs the same. A general per-frame walk of the world''s
+    bodies does not fit the frame budget, which is a finding for detector-parameters-from-knowledge rather
+    than something dropped. detect costs 0.279 s per frame against the parent''s 0.289 s.
+
+    The strict expected-to-fail mark came off five captures of six. non_inserted_objects keeps it, now
+    naming holes-fitted-like-pieces: the board is reported at -29.7 degrees there against -7.6 degrees
+    in the other five about the same centre, because its orientation comes from minAreaRect over the hole
+    centres and only five of six holes are found, so the ground it is taken to hide is turned with it.'
+- id: holes-fitted-like-pieces
+  title: Find the board's holes by fitting its whole known layout, not one contour at a time
+  branch: perception_holes_fitted_like_pieces
+  pull_request_number: null
+  track: surfaces
+  depends_on:
+  - pieces-looked-for-where-expected
+  status: not_started
+  notes: 'Measured again on 2026-08-31, and the item''s premise changed: the holes are not mislabelled,
+    they are mislocated, so pointing the per-piece fit at each contour in turn would not have fixed them.
+    Placing the board mesh''s own six hole footprints at the board pose the detector reports puts them
+    across roughly 180 mm of the lid''s length, which is what the board''s 282 mm mesh says; the five
+    contours the pipeline currently calls holes sit inside about 90 mm near the board''s middle. So they
+    are not the holes at all. Worse, a free per-contour fit is what put them there: a triangular prism
+    template laid anywhere near the board''s middle reaches 0.85 to 0.89 agreement in every capture, higher
+    than any genuine piece resting on the lid reaches, and it converges on the same spot each time.
+
+    The fix is to stop giving a hole three degrees of freedom of its own. The layout is rigid and known
+    exactly from the mesh, so the board''s holes are found by fitting that one layout over the lid - three
+    degrees of freedom for all six holes together, seeded from the board detection''s own pose - and each
+    hole''s identity then comes from the model rather than from classifying its contour. A layout fit
+    cannot invent a hole where there is none, cannot put two holes in one place, and cannot land on the
+    drawer fronts below the lid, all of which the per-contour classifier does today. It also settles the
+    board''s pose far better than the board detector does, since six outlines constrain it rather than
+    one.
+
+    This depends on pieces-looked-for-where-expected rather than running beside it, because fitting a
+    known model at a believed pose is exactly the evaluator that item builds, and two branches independently
+    writing the same evaluator is the duplication the personal notes already record twice. The original
+    reasoning is kept below.
+
+    Raised by the capture benchmark on 2026-08-30, and the largest error it found. The board''s mesh is
+    cut with six holes - two circles, a square, a triangle, a slot and a disk slit - and the pipeline
+    finds five of them in five captures and four in the sixth, calling three of the five triangular prisms
+    in most of them. Loose pieces stopped being read this way in 4b74460f8, which replaced the threshold-based
+    CrossSectionClassifier with a fit of the known outlines to the edges, and holes were left on the old
+    classifier because they "read correctly" at the time; the later lighting is what they no longer read
+    correctly in. Pointing the same fit at the holes is the obvious move, and the holes are the easier
+    case: their outlines are known exactly from the board mesh (detect_hole_footprints), they lie flat
+    in the lid''s own plane, and the board detection already says where to look. One detection also lands
+    on the drawer fronts below the lid, which are not holes at all. test_every_hole_in_the_board_is_found
+    in test_montessori_detection_on_captures.py is the test, marked strict expected-to-fail against this
+    item; it asserts against the mesh''s own footprints rather than a copy of them.'
+- id: pieces-looked-for-where-expected
+  title: Look for a piece where it is expected, not only where a colour blob appears
+  branch: perception_looked_for_where_expected
+  pull_request_number: null
+  track: surfaces
+  depends_on:
+  - one-detection-per-thing
+  status: not_started
+  notes: 'The structural change the rest of this plan''s perception work needs, and the one that takes
+    the lid-piece failures off the ripple-down rules'' critical path.
+
+    Today a piece can only be found where colour segmentation isolated a blob: LoosePieceDetector.detect
+    walks the piece hues, and only a contour that survives the hue mask, the size range and the wholly-within
+    test is ever handed to PieceMatcher.match. Colour is a gate, so a piece wearing the lid''s own hue,
+    or touching another piece, is never fitted however plainly its edges are in the picture. That is the
+    whole of test_every_piece_resting_on_the_lid_is_found''s four expected failures.
+
+    Measured on 2026-08-31 against the shipped captures: seeding PieceMatcher.match by hand at the places
+    the board detection already reports reaches agreements of 0.62 to 0.89 in captures where the bottom-up
+    pass reports nothing there at all - in non_inserted_objects it reports one detection in the whole
+    scene, and that one is a ghost. The evidence is in the image; the seed is what is missing. One seeded
+    fit over all six candidate pieces costs 0.05 s against 0.25 s for a full bottom-up pass, so evaluating
+    a handful of expected places is cheaper than the pass that misses them.
+
+    So detection becomes the evaluation of hypotheses rather than the classification of blobs. A hypothesis
+    says what is expected, where it is believed to be - a region of a named surface and an interval of
+    yaw - and where that belief came from. Its evaluator is the sweep PieceMatcher already performs, with
+    its radius, step, angle set and candidate list read from the belief instead of fixed: a hypothesis
+    naming one piece at a known place searches finely over a few millimetres, one naming an unknown piece
+    anywhere on a surface searches the way the current code does. Colour becomes one source of hypotheses
+    and one piece of evidence for them, never a gate that can suppress one.
+
+    Where the hypotheses come from is what makes this knowledge-guided, and there are three sources, in
+    increasing order of what they need: the scene itself (a colour blob, as today, and the board''s own
+    detected holes, which are places a piece can be); the world (a body the twin already places in the
+    workspace); and the object''s own history (expectations-from-events, which is where a belief gets
+    a pose and an uncertainty). The first two need nothing this plan has not already built, and they are
+    enough for the four failing captures, which is why this item does not depend on the request language
+    or on the rule tree.
+
+    Every reported detection carries the hypothesis it came from and the evidence that supported it, which
+    is what makes a result explainable rather than merely correct.
+
+    Shares its central type with perception-predicates-guide-the-search, added the same day from #222''s
+    review and not visible to this item when it was written. A believed place - a region of a named surface
+    and an interval of yaw - is what that item''s spatial predicates compile *to* and what this item''s
+    search reads *from*, so it is defined here, once, and that item supplies it rather than building its
+    own. This item lands first: it is in the `surfaces` track and waits on nothing but one-detection-per-thing,
+    where that one waits on perception-backend.
+
+    This takes ownership of test_every_piece_resting_on_the_lid_is_found from detector-parameters-from-knowledge.
+    That item is blocked on krrood''s ripple-down rules being usable, and the lid failures are a seeding
+    fault rather than a parameter fault, so leaving them there would have put the plan''s most visible
+    remaining error behind a dependency it does not have.'
+- id: competing-explanations
+  title: Decide a detection by comparing explanations, not against a fixed threshold
+  branch: perception_competing_explanations
+  pull_request_number: null
+  track: surfaces
+  depends_on:
+  - pieces-looked-for-where-expected
+  - holes-fitted-like-pieces
+  status: not_started
+  notes: 'PieceMatcher.minimum_agreement is one number, 0.62, standing for how much of an outline must
+    lie along a seen edge before a piece is reported, and its recorded justification is that a correct
+    piece reaches 0.63 to 0.86 while the best wrong piece of the same colour reaches 0.62. Measured on
+    2026-08-31, that boundary does not hold anywhere near the board: a triangular prism template reaches
+    0.85 to 0.89 on the board''s own middle in every capture, above every genuine piece detection on the
+    lid in the same captures, which run 0.64 to 0.71 for the most part. No single threshold separates
+    them, because agreement measures how well an outline follows *some* edge and says nothing about what
+    put that edge there.
+
+    A two-plane test was tried first and does not work: scoring the same outline in the lid''s own rectification
+    as well as in the plane a piece''s top stands on separates neither, since both differences fall between
+    +0.30 and +0.62 for holes and pieces alike. Recorded so it is not tried again.
+
+    What does separate them is asking what else could have produced the edges. The board''s geometry is
+    known exactly and, once holes-fitted-like-pieces has settled its layout over the picture, every edge
+    the board itself produces can be predicted. A piece is then reported where it explains edges the board
+    alone does not, and two hypotheses claiming one set of edges are settled against each other rather
+    than both passing a threshold. The decision is a comparison of explanations, so it states how much
+    better one explanation must be than the next, which is a statement about how costly a wrong report
+    is - a thing the robot can be told - rather than a tuned constant.
+
+    This is also what makes the plan''s central claim measurable: with one candidate and a strong belief,
+    less picture evidence is needed to accept a detection than with six candidates and none, and that
+    is knowledge improving perception in a quantity that can be plotted. one-detection-per-thing''s occupancy
+    rule is the same idea applied to place, and the two should share their resolution rather than filtering
+    one after the other.'
+- id: montessori-classes-in-the-orm
+  title: Map the Montessori package's own classes, which the ORM has never seen
+  branch: claude/montessori-classes-orm-s7vxu1
+  pull_request_number: 223
+  track: package-landing
+  depends_on:
+  - montessori-perception-on-main
+  status: in_progress
+  session: https://claude.ai/code/session_01PWzamoTtp8TNZyqhWornUs
+  notes: 'experiments/src/experiments/montessori/ has no __init__.py, and never has on any branch, so
+    pkgutil does not report it as a subpackage of experiments and the ORM generator''s package walk skips
+    the whole thing. Nothing under experiments.montessori is in experiments/orm/ormatic_interface.py -
+    not MontessoriShape, not CubeShape, not ShapeSortingBoard. That is the whole cause of the five NoDAOFoundError
+    failures in test_montessori_insert_shape_action.py that this branch has carried as "the documented
+    empty-ORM state": regenerating the interfaces cannot fix them, because the classes are not being offered
+    to the generator in the first place.
+
+    Adding the file was tried on 2026-08-30 and is not a one-liner. Two things follow it, and there may
+    be more behind them: NoSceneAvailable.missing_inputs was typed Sequence[str], which the generator
+    cannot resolve (already changed to List[str], the shape every other field in that module uses); and
+    experiments.montessori.perception.footprint.Footprint collides by name with semantic_digital_twin...graph_of_convex_sets.plotting.Footprint,
+    so the generator emits two FootprintDAO classes and SQLAlchemy refuses the mapping. That collision
+    needs one of the two renamed, which is an API change across the perception package, so it is its own
+    piece of work rather than a fix folded into a capture commit.
+
+    Built 2026-08-30 as #223. Two of the three claims above did not reproduce, and the note is left standing
+    with this correction beneath it rather than rewritten, so a reader can see what was assumed. NoSceneAvailable.missing_inputs
+    is still Sequence[str] on this branch and the generator resolves it, normalizing it to List[str] and
+    mapping it as JSON; nothing was behind the two known faults. The collision is exactly as recorded,
+    reproduced before anything was changed, and perception.footprint.Footprint became RectifiedFootprint.
+    #205 and #221 edit the same files and will both conflict on that rename.'
+- id: perception-backend
+  title: Answer a query by looking, as a backend of the entity query language
+  branch: perception_eql_backend
+  pull_request_number: 222
+  track: request-language
+  depends_on:
+  - surfaces-from-world
+  - detect-per-supporting-surface
+  status: in_progress
+  session: https://claude.ai/code/session_01DBkGLKmju56tuBNdrSxitR
+  blockers:
+  - 'One of #222''s nine review threads is still unresolved, not five. The developer resolved four of
+    the five this item recorded as deliberately open, on 2026-08-31 after submitting his pending review:
+    r3893160382 (the attribute-name string), r3893576773 (the mimic''s copy of it), r3893463818 (algorithm
+    capabilities, recorded on choose-detection-method) and r3893476097 (the inline import, whose question
+    back he closed by resolving). What remains open is r3893312001 with its two follow-ups r3893499716
+    and r3893602153 - the predicate ask itself, which is now the item perception-predicates-guide-the-search,
+    in progress on #227 as of 2026-08-31. Nothing on this pull request is this item''s work to do.'
+  notes: "Resolved 2026-08-31 in `auto` mode, and the round changed two things the manifest and roadmap\
+    \ had recorded as settled, both at the developer's direction.\nThe backend is *generative*, not selective.\
+    \ The developer's reasoning, which overrode this session's recommendation to stay selective: with\
+    \ the instances already believed in we are only asking perception for the pose, which is an underspecified\
+    \ statement; with no belief yet, the look is what brings the instance into existence. Neither is selection\
+    \ from a domain the statement was handed. So a statement is a Match - an(MontessoriShapeDetection)(\
+    \ supporting_surface=lid, pose=...) - and an attribute stated as ... narrows nothing and rejects nothing,\
+    \ because it is the statement saying the look must supply it.\nThe general half now lives in krrood,\
+    \ not in experiments: PerceptionBackend and LookRequest sit beside the other backends and carry how\
+    \ a statement is read, narrowed and checked; MontessoriPerceptionBackend carries only that a look\
+    \ is taken by the Montessori pipeline and that its search narrows by the supporting surface. krrood\
+    \ gains no dependency on experiments. This reverses what the roadmap recorded (\"the backend in experiments,\
+    \ only the exception and the Directive member in krrood\").\nTwo measurements the redesign turned\
+    \ up, neither of which the plan knew: native evaluation returns nothing at all for a Match carrying\
+    \ an ellipsis attribute, so the ellipsis attributes have to be dropped from the check and the stated\
+    \ ones re-applied; and native evaluation does not narrow a domain by the variable's declared type,\
+    \ so the backend does it. Both are covered by tests rather than assumed.\nThe predicate and semantic-annotation\
+    \ redesign the other five threads ask for is not here - it is the new item perception-predicates-guide-the-search,\
+    \ which is the developer's own suggestion on r3893312001 that it be \"a separate PR that this one\
+    \ here is stacked under\".\nRound replied to and partly resolved on 2026-08-31 once the developer\
+    \ submitted his pending review, which had blocked every inline reply while it sat unsubmitted (GitHub\
+    \ allows one pending review per user and the API acts as that account). Four threads resolved - generative,\
+    \ the krrood placement, the Montessori type out of the general half, and the AttributeEqualityToLiteral\
+    \ rename. Five left open on purpose: four schedule the predicate redesign rather than asking for a\
+    \ change here, and one carries a question back.\n\n      A PerceptionBackend beside EntityQueryLanguageBackend\
+    \ and\nSQLAlchemyBackend, so evaluating a query runs perception rather than a pipeline being called\
+    \ by hand. SQLAlchemyBackend already sets the shape - eql_to_sql translates the query into another\
+    \ engine's plan and runs it there - and the compiler from a query to a detection pipeline is the same\
+    \ move against a camera. Conditions are split the way a query planner splits them: those that can\
+    \ be pushed down shape the search (which surface to rectify, which piece models are candidates, what\
+    \ seeds segmentation - via is_supported_by, is_body_in_region, InsideOf, the selected type and the\
+    \ appearance constraints), and those that cannot are kept as a residual filter over the detections\
+    \ that come back, so nothing is silently ignored. A condition that can be neither raises a typed exception\
+    \ alongside SelectiveBackendCannotResolveEllipsisMatch. Also gives the backend its own opening_directive\
+    \ so a query answered by looking verbalizes as \"Look for ...\" rather than \"Find ...\", which needs\
+    \ one Directive member in krrood. Narrowed for the deadline: support exactly the condition forms the\
+    \ demo writes - the selected type and is_supported_by - push those down, filter the rest as residuals,\
+    \ and raise on anything else. A general compiler is not what the claim needs. PerceivedObjects, the\
+    \ domain that runs the whole pipeline on iteration and yields everything, is retired by it: a query\
+    \ then runs only what it asked for.\nNoted 2026-08-31, for whoever carries this further rather than\
+    \ for the branch in flight: the items added that day need a look to be narrowed by a believed *place*\
+    \ - the region and yaw interval an object is expected in - as well as by a type and a surface. Written\
+    \ before that day's review round, this named SceneRequest; the narrowing now lives in krrood's LookRequest,\
+    \ and SceneRequest.admits was removed by the move. The correction is worth more than the note, because\
+    \ the round's own reversal is what makes the belief natural rather than an addition: a generative\
+    \ statement asking `pose=...` of an instance already believed in is exactly the pose-only question\
+    \ a believed place answers, which is the shape expectations-from-events and pieces-looked-for-where-expected\
+    \ were already written around."
+- id: perception-predicates-guide-the-search
+  title: Guide the search by predicates and annotations, not by attribute names
+  branch: claude/plan-item-kickoff-perception-ogf2g9
+  pull_request_number: 227
+  track: request-language
+  depends_on:
+  - perception-backend
+  - predicates-answer-whether-they-hold
+  status: in_progress
+  session: https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ
+  notes: 'Raised by the developer across five review threads on #222, which are one ask: a look should
+    be narrowed by what the world means, not by an attribute spelled as a string. SUPPORTING_SURFACE_ATTRIBUTE_NAME
+    = "supporting_surface" and the mimic''s PLACE_ATTRIBUTE_NAME are the smell; AGENTS.md''s own rule
+    against a literal duplicating a value with its own source of truth condemns them independently of
+    the redesign, and #222 leaves them standing with a test asserting the name is a real field.
+
+    What replaces them, in the developer''s words: predicates for support and for spatial relations -
+    LeftOf, RightOf and the rest - inheriting from Predicate rather than Symbol, and then used to devise
+    the search rather than merely evaluated. "So I need to look on top of a bright shiny surface that
+    has this size and look for an object supported by it and is left of another object that has a cyan
+    colour, all these are clues that help us devise a pipeline and find the object we are looking for."
+
+    Two mechanisms come with it, both the developer''s. A spatial predicate can be read as a Region with
+    extents, so the image and the depth are clipped to where the thing can be before anything is detected
+    - which is the same economy #222''s supporting-surface narrowing already buys, stated in the world''s
+    vocabulary instead of an attribute''s. And a predicate no algorithm covers becomes a rejection sampler:
+    detect what the other conditions do reach, spawn the instances found into a copy of the world - an
+    imagination world - evaluate the predicate there with real Body and SemanticAnnotations, and delete
+    what it rejects.
+
+    Stacked on #222 rather than folded into it, which is the developer''s own placement on r3893312001
+    ("you can make this a separate PR that this one here is stacked under"). The threads are r3893160382,
+    r3893312001, r3893499716, r3893602153 and r3893576773; the sixth, r3893463818, is close to choose-detection-method''s
+    existing claim and is recorded there rather than here.
+
+    Overlaps pieces-looked-for-where-expected, added the same day and not visible to the session that
+    wrote this. Both items end at the same thing - a stretch of the world a sought object is expected
+    to lie in, used to narrow the search before detecting - reached from opposite ends: this item says
+    where the constraint *comes from* (a predicate in the world''s own vocabulary, read as a Region),
+    that one says what the searcher *does* with it (a believed pose and yaw interval, swept by the piece
+    matcher). They must share the one type rather than each build it. Whichever starts second takes the
+    other''s, and the sequencing follows from the tracks they already sit in: that item is in `surfaces`
+    and depends only on one-detection-per-thing, so it lands first and defines the belief; this one supplies
+    it from a predicate. The imagination-world rejection sampler is this item''s alone and duplicates
+    nothing.'
+- id: predicates-answer-whether-they-hold
+  title: Let a predicate answer whether it holds, with the measurement behind it
+  branch: sdt_predicates_answer_whether_they_hold
+  pull_request_number: 229
+  track: request-language
+  blockers:
+  - 'Review thread r3896606294 on `predicates.py:348` is answered and deliberately left
+
+    open: `Reachable` now reads *"a HomogeneousTransformationMatrix is reachable by a
+
+    Body"*, as the thread asked, but eql-verbalization decision 11 words the same relation
+
+    *"a Pose is reachable for the kinematic chain rooted at <root> and ending at <tip>"*.
+
+    Both make the pose the subject; they differ in whether root and tip are both named, and
+
+    only the developer can say which of the two stands once #33 rebases onto this branch.'
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ
+  notes: 'The developer''s direction on 2026-08-31, correcting a call #227 made: a relation that computes
+    a ratio should still be a Predicate. Its `__call__` answers a truth value, the ratio is read from
+    a method of its own, and a threshold field with a default is what turns the one into the other. #227
+    had made InsideOf a SymbolicFunction instead, on the grounds that Predicate.__call__ must return bool
+    and three call sites read the ratio - which is true of the mechanism and wrong about the intent. A
+    threshold field answers both: the callers that want the number call the method, and a statement that
+    wants the relation gets a predicate it can assert.
+
+    Applies to every relation in reasoning/predicates.py of that shape, not only InsideOf: is_body_in_region
+    answers the same kind of fraction, and the truth-valued relations that are only @symbolic_functions
+    today - support, contact, visibility, reachability, occupancy - cannot be stated in a query at all
+    while they are functions. krrood''s own symbolic_callable_to_function is the sanctioned way to keep
+    the function spelling working off one implementation, so no call site in coraplex, segmind or giskardpy
+    has to change with it.
+
+    Its own pull request off main, at the developer''s direction, because it is a change to semantic_digital_twin''s
+    vocabulary rather than to perception: the same placement surface-finish-annotation already has. The
+    knowledge-directed items that need it merge it in rather than waiting for it to land, which is this
+    plan''s standing rule for depends_on. perception-predicates-guide-the-search (#227) needs it and carries
+    the InsideOf change this item overturns, so that branch takes this one in and drops its own.
+
+
+    Resolved 2026-08-31. The duplication against #33 (eql-verbalization''s p4-sdt-migration)
+
+    is verified and settled at the developer''s direction: this branch carries the predicate
+
+    classes and #33 rebases onto it, porting its 34 reviewed wordings across rather than its
+
+    own copy of the migration. #33 is 166 commits behind main and dirty in predicates.py
+
+    specifically, so it owes that rebase either way and meets this version of the file
+
+    whichever order the two land; its two open review decisions block it and do not block
+
+    this, so folding the other way would have put the 2026-09-15 deadline behind them.
+
+    Nothing of #33''s is lost - queries.py, robot_predicates.py, phrase(),
+
+    ignored_base_classes and the verbalization snapshot all survive its rebase.
+
+
+    Two faults the resolve found and fixed. The CI failure was this branch''s, not main''s:
+
+    renaming SupportedBy''s fields broke semantic_annotations/mixins.py:942, which calls
+
+    is_supported_by by keyword, and the local verification could not see it because that
+
+    test module imports rclpy and cannot be collected outside a ROS container (1120178b).
+
+    And the four Triple-based relations rendered ungrammatically, because Triple reads the
+
+    verb off a class name that is not verb-first; each now states its own clause, taking the
+
+    wordings #33''s review already settled (0b1234a0). sdt has no verbalization snapshot on
+
+    main to have caught them - that test arrives with #33.
+
+    '
+- id: search-clipped-to-a-predicates-region
+  title: Clip the search to the region a spatial predicate allows
+  branch: null
+  pull_request_number: null
+  track: request-language
+  depends_on:
+  - perception-predicates-guide-the-search
+  - pieces-looked-for-where-expected
+  status: not_started
+  notes: 'The developer''s second mechanism on r3893602153, deferred out of #227 rather than dropped:
+    "one can interpret spatial predicates as specifying Regions (like the region class in semdt) with
+    extents to look at and excluding other regions, once can clip images and depth to look only inside
+    these regions."
+
+    That is the same economy #222''s supporting-surface narrowing already buys, stated in the world''s
+    vocabulary instead of an attribute''s, and it is where narrowing stops being a filter over what a
+    detector returned and becomes less picture to search in the first place.
+
+    It waits on both parents for one reason each. perception-predicates-guide-the-search is where a statement''s
+    predicates are read at all, and pieces-looked-for-where-expected owns the believed place - a region
+    of a named surface and an interval of yaw - which the roadmap settled is defined once, there, and
+    supplied by a predicate here. Building the type in either branch alone is the duplication this repository
+    has already paid for twice.'
+- id: imagination-world-rejects-what-a-predicate-refuses
+  title: Reject what a predicate refuses, by testing it in a copy of the world
+  branch: null
+  pull_request_number: null
+  track: request-language
+  depends_on:
+  - perception-predicates-guide-the-search
+  status: not_started
+  notes: 'The developer''s third mechanism on r3893499716, deferred out of #227 as a second pull request''s
+    worth of work: a predicate no search algorithm covers is still answerable, by detecting what the other
+    conditions do reach, spawning what was found into a copy of the world, evaluating the predicate there
+    against real Body and SemanticAnnotations, and deleting what it rejects.
+
+    It is what closes the gap #227 leaves open. A look reports sightings rather than the things a relation
+    is written over - a MontessoriShapeDetection is a dataclass, not a Body - so #227 has a backend promise
+    to check its own narrowing relations, and refuses any other relation outright. Spawning the sightings
+    into an imagination world is what gives every other predicate something real to be evaluated against,
+    so nothing has to be refused for want of a subject.
+
+    Duplicates nothing: the roadmap''s "Two items that meet at one type" records this mechanism as this
+    item''s alone.'
+- id: surface-finish-annotation
+  title: Say in the digital twin how a surface takes light
+  branch: sdt_surface_finish_annotation
+  pull_request_number: 216
+  track: method-selection
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_019FYgjdCK7BStm7KdSDyrwY
+  notes: 'The digital twin models a surface''s colour but not its finish, which is the property that decides
+    whether colour segmentation works at all: the brushed steel table throws a diffuse, piece-coloured
+    reflection with no sharp boundary anywhere, which is why the edge fit had to be written. A matte /
+    glossy / mirror finish annotation is what turns "the steel table and the wooden lid need different
+    pipelines" into something the robot knows rather than a branch somebody wrote. Touches only semantic_digital_twin,
+    so it can start off main immediately.
+
+    Built 2026-08-29 as 80100bd4 on #216: SurfaceFinish (matte / glossy / mirror) beside Color and Texture,
+    and Shape.finish carrying it, optional so that None means the finish has not been stated rather than
+    that it is matte. Adding it forced Shape''s own constructor arguments to be read once by Shape.arguments_from_json
+    instead of a fourth time in each of Sphere, Cylinder and Box, and Mesh.from_trimesh to carry a finish,
+    which is the only appearance property a mesh has no other carrier for. 45 tests pass in test_shape.py
+    against 25 on the parent, the whole semantic_digital_twin suite''s failing and erroring set is unchanged,
+    and the regenerated ORM maps the field as Mapped[Optional[SurfaceFinish]] on PolymorphicEnumType.
+
+    The developer took #216 out of draft on 2026-08-29, which ends the building session''s work on it:
+    CI was green on 21 of 23 checks with the other two still running and none red, and the pull request
+    now waits on review rather than on this plan. Two decisions are recorded rather than left implicit,
+    both in roadmap.md: no adapter infers a finish from MuJoCo specular/shininess/reflectance, and a derived
+    supporting-surface Region does not inherit its body''s finish - detect-per-supporting-surface has
+    to declare it on the region it builds.'
+- id: surfaces-found-by-looking
+  title: Find a surface in the image from what the world says it is like
+  branch: perception_surface_from_description
+  pull_request_number: null
+  track: method-selection
+  depends_on:
+  - perception-backend
+  - surface-finish-annotation
+  status: not_started
+  notes: 'Raised by the developer on 2026-08-30, watching the workspace clip show the floor, the chairs
+    and whoever was standing at the table. Every surface in this plan is taken from a model - either a
+    constant (recorded_setup.WORKSPACE, still the old 1.0 x 1.2 m guess) or the body''s own collision
+    shape (surfaces-from-world). Neither is a measurement of where the table really is, and the demo has
+    already drifted away from its own model once: the board and the pieces do not stand where montessori_demo''s
+    hardcoded layout puts them, though the table''s height agreed exactly. This item finds the surface
+    in the picture instead, from the properties the twin already states about it - a large horizontal
+    plane, mirror-finished (surface-finish-annotation), colourless, of about the modelled size - and the
+    description is an entity query language expression, so which detectors run is compiled from the conditions
+    rather than written by hand. That is choose-detection-method''s claim turned on the surface itself,
+    and it is what makes the workspace something the robot works out rather than something a person tuned.
+    Evidence worth keeping before it starts: fitting the *table''s* plane works on this sensor even though
+    fitting the pieces does not. The point-cloud trial of 4b74460f8 measured a RANSAC plane holding 34%
+    of 693k points on the bare steel and 69% with a mat, table points scattering +/-17 mm about it, while
+    no piece stood out of that cloud at all. So a plane fit is a candidate for the surface and known not
+    to be one for what rests on it, and the same trial''s clustering must not be re-run for pieces. Also
+    worth taking from the captures: everything detected across all six lies within x 0.57..0.91 and y
+    -0.02..0.37, against a region of x 0.35..1.35, y -0.45..0.75. Deliberately after the deadline''s critical
+    path - the demo can run on a tuned workspace, and this replaces the tuning rather than unblocking
+    anything.'
+- id: choose-detection-method
+  title: Choose the detector by rule from the target and the surface
+  branch: perception_choose_detection_method
+  pull_request_number: null
+  track: method-selection
+  depends_on:
+  - perception-backend
+  - surface-finish-annotation
+  status: not_started
+  notes: 'The detector interface the backend dispatches to, chosen by a rule tree - krrood''s ripple-down
+    rules, whose conditions are already entity query language expressions - over properties of the surface
+    and the target: a mirror-finish surface with a known-geometry prism selects the edge fit; a matte
+    contrasting surface selects the cheaper colour blob, which works there and is faster; a target with
+    no geometric model selects a learned detector. This is where perception measurably gets better as
+    the robot knows more, and it is the item the paper''s claim rests on. The developer noted on 2026-08-29
+    that krrood''s ripple-down rules are not usable yet and expects them to become so through the RDR/EQL
+    refactor''s integration build; this item cannot start before they are, which is the schedule risk
+    to watch on the 4-8 September window.
+
+    Two corrections from 2026-08-31. The conditions the tree reads are not only standing properties of
+    the surface and the target - what finish it has, whether the target has a geometric model - but also
+    what has lately happened to the target: whether it is believed to be somewhere in particular, how
+    sure that belief is, and what acted on it last. A rule that fires on "the target was released over
+    this hole one action ago" is the same kind of rule as one that fires on "this surface is mirror-finished",
+    and it is the kind the captures actually need. And the planned rule "a matte contrasting surface selects
+    the cheaper colour blob" needs its other justification writing down, since detect-per-supporting-surface
+    already recorded that the edge fit works on the lid too; speed is the honest reason, not capability.
+
+    A third reading of the same claim arrived on #222 (r3893463818), and it is this item''s rather than
+    the backend''s: "we can also have perception algorithms as classes that declare explicitly their capabilities,
+    what requests they can answer to, also could be described as eql conditions, then a perception reasoner
+    will choose the algorithm that has a capability that can answer that request." That is this item''s
+    rule tree with the condition moved onto the detector - each detector states the requests it can answer,
+    and the choice is made by matching a request against those statements rather than by a tree written
+    over the surface and the target. Worth settling which of the two shapes this item builds before it
+    starts, since they answer the same question from opposite ends.'
+- id: detector-parameters-from-knowledge
+  title: Take the detectors' numbers from the objects and the surfaces they look at
+  branch: perception_parameters_from_knowledge
+  pull_request_number: null
+  track: method-selection
+  depends_on:
+  - choose-detection-method
+  status: not_started
+  notes: 'Raised by the developer across nine review threads on #202, which are one ask: the numbers the
+    detectors carry - the saturation and darkness a pixel needs to belong to an object, the areas a hole
+    and a piece may cover, how much of an outline must lie along a seen edge, how tall a loose piece stands,
+    how large the board''s lid is, how far a measured hue may sit from a piece''s own, the hue of each
+    piece, the hole marker''s thickness and the mesh classification thresholds - are knowledge about the
+    pieces, the surfaces and the lighting, not properties of the detector that reads them. They move onto
+    the objects and surfaces in the digital twin, and a ripple-down rule tree over those properties concludes
+    them for a run, the way choose-detection-method''s tree already concludes which detector runs. The
+    same move covers the chain of ifs that accepts or rejects a contour (pipeline.py:619), which the developer
+    asked to become an inspectable rule tree rather than a hand-written condition. Depends on krrood''s
+    ripple-down rules being usable, which the developer expects from the RDR/EQL refactor''s integration
+    build. The piece hues gained a second reader on 2026-08-29: the simulated scene now draws each piece
+    in the colour measured off the real one, so moving the hues onto the objects moves them for the twin
+    as well as for the detector.
+
+    Widened on 2026-08-31: the numbers concluded include the ones that say *how to search*, not only the
+    ones that say what a pixel or a contour must look like. How far around a believed place to look, how
+    finely to step and to turn, which pieces are candidates at all, and how much better one explanation
+    must be than the next before it is reported, are all properties of the situation - and a situation
+    where the robot knows which piece it released over which hole warrants a different set from one where
+    it is looking at a table it has never seen. That is what makes the same detector measurably better
+    as the robot knows more, in a quantity that can be plotted, and it is where "a specific parametrization
+    for the situation the query describes" actually lives.
+
+    Ownership of test_every_piece_resting_on_the_lid_is_found moved to pieces-looked-for-where-expected
+    on 2026-08-31: those failures are a seeding fault, not a parameter fault, and this item is blocked
+    on krrood''s ripple-down rules while that one is not.'
+- id: tune-detection-rules-against-the-camera
+  title: Conclude a detection rule while watching the camera, with its numbers on sliders
+  branch: perception_interactive_rule_tuning
+  pull_request_number: null
+  track: method-selection
+  depends_on:
+  - detector-parameters-from-knowledge
+  status: deferred
+  blockers:
+  - 'Deferred past the 2026-09-15 deadline: no demo item needs it, and it is tooling for authoring rules
+    rather than a piece of the claim. The first thing to drop after robokudo-detector.'
+  notes: 'The developer''s own suggestion on #202: an interactive presenter for the ripple-down rules''
+    ConclusionHelper, showing the live camera feed beside the parameters it would conclude on sliders
+    or dropdowns, so the expert sees what a value does to the detection before committing it as a rule.
+    Needs the parameters to be rule-concluded first, which is detector-parameters-from-knowledge, and
+    it touches krrood''s expert interface as much as perception - so where the presenter itself lands
+    is a question for the RDR/EQL refactor plan when this starts.'
+- id: episode-replayed-into-the-world
+  title: Replay a recorded episode into the world so Segmind can say what happened
+  branch: segmind_rosbag_player
+  pull_request_number: null
+  track: events
+  depends_on: []
+  status: not_started
+  notes: 'An expectation about where a thing now is comes from what was done to it, and on a recording
+    nothing has been done to anything until the recording is replayed. Segmind already has the extension
+    point: EpisodePlayer -> DataPlayer -> FilePlayer, with CSVEpisodePlayer and JSONPlayer as its two
+    members, and a player supplies exactly one thing - a generator of frames, each frame a set of body
+    poses. A player reading a rosbag''s transform tree and joint states is that same member over a different
+    file, and EpisodeSegmenterExecutor then produces the support, pick-up, placing and insertion events
+    over it without changing.
+
+    Touches only segmind, so it can start immediately and off main.
+
+    A constraint measured on 2026-08-31 that decides what this can be asked for. Only one of the six recorded
+    bags carries the robot at all: tracy_pickup_demo holds /tf, /tf_static, /joint_states and both arms''
+    and both grippers'' joint states over 150 seconds, 253,000 messages. The other five hold nothing but
+    the three camera topics over about 29 seconds each. So a replayed episode gives an event history for
+    the pick-up demo and for anything recorded from now on, and it gives the live demo its history directly,
+    but it cannot supply one for the five scene captures. Those get their expectations from the board
+    and the action model instead - the hole an insertion named is a place in the world, known without
+    any recording - which is why pieces-looked-for-where-expected does not depend on this item.
+
+    Worth recording for whoever runs it: recording /tf and /joint_states alongside the camera in future
+    takes costs nothing and would remove this split entirely.'
+- id: expectations-from-events
+  title: Expect what the action promised, and report the difference as a failure
+  branch: perception_expectations_from_events
+  pull_request_number: null
+  track: events
+  depends_on:
+  - perception-backend
+  - pieces-looked-for-where-expected
+  - episode-replayed-into-the-world
+  status: not_started
+  notes: 'Segmind already emits SupportEvent, LossOfSupportEvent, PickUpEvent, PlacingEvent and InsertionEvent
+    over is_supported_by. Perception keeps a set of expectations from them - after LossOfSupport(piece,
+    table) stop searching the table; after Placing(piece, lid) search the lid - and the action model gets
+    there first, since an action declares its own effect and so the expectation can be armed before the
+    event confirms it. The same mechanism gives failure detection: perception looked exactly where the
+    action promised, found nothing, and says so.
+
+    Widened on 2026-08-31, at the developer''s ask, from an expectation that names a surface to one that
+    carries a pose. Naming the surface is the part the request language can push down, but it is not what
+    the captures need: three of them - stuck_cube_in_hole, disoriented_cube_on_hole and displaced_cube_from_hole
+    - are a cube that an insertion put at a *named hole*, and the hole is a place, known in the world,
+    on a surface the board detection measures every frame. So an expectation is a belief about where an
+    object is: a region it should lie in, an interval of yaw it should be turned through, and the surface
+    it should rest on. That is precisely the hypothesis pieces-looked-for-where-expected evaluates, which
+    is why the two are now linked.
+
+    What the belief is propagated by is the action''s own declared effect, confirmed or refuted by the
+    events: released over a hole, an object is believed to be at that hole, turned any way, within the
+    spread a release allows; still grasped, its pose is the gripper''s; acted on by nothing, its pose
+    is exactly where it was last seen. The rule that carries the weight is the last one - a belief only
+    decays when something acts on the object - and it is why a history makes this tractable where a single
+    frame does not.
+
+    Failure detection then follows from the belief rather than from a surface: the insertion promised
+    the cube would end up *in* the hole, and it is found resting *on* the lid, turned thirty degrees from
+    where it would have had to be. Reporting which part of the expectation was violated is what a recovery
+    can act on, and it is the paper''s end-to-end story.'
+- id: robokudo-detector
+  title: Answer a request with a RoboKudo analysis engine
+  branch: perception_robokudo_detector
+  pull_request_number: null
+  track: executors
+  depends_on:
+  - choose-detection-method
+  status: deferred
+  blockers:
+  - 'Deferred past the 2026-09-15 deadline: nothing depends on it and no demo item needs it.'
+  notes: 'One adapter implementing the detector interface over a RoboKudo analysis engine, so the rule
+    tree can choose a learned detector (RoboKudo ships CLIP and YOLO annotators) for a target with no
+    geometric model. Proves the reasoning layer is executor-agnostic and is the route by which this work
+    moves into RoboKudo after the deadline. Deliberately last and expected to fall after it: nothing else
+    depends on it, no demo item needs it, and it is the first thing to drop if the deadline tightens.'
+- id: demo-catches-up-with-main
+  title: Bring the demo branch up to date with main while it is still cheap
+  branch: tracy_icra
+  pull_request_number: null
+  track: demo-grounding
+  depends_on: []
+  status: done
+  session: https://claude.ai/code/session_01FMKabzWhaJpTERyAaSc7Kh
+  notes: 'Done 2026-08-28, pushed to origin/tracy_icra as fb0d0e41 (the merge) and ece5eb74 (three branch-only
+    call sites main had broken without conflicting). main was 277 commits ahead by the time it ran, not
+    the 234 measured when the plan was written. No pull request, as planned. Do this first and do it now.
+    main is 234 commits ahead of tracy_icra and their merge base is 2026-08-19; a trial merge today conflicts
+    in exactly one file, semantic_digital_twin/adapters/multi_sim.py, which is a colleague''s Mujoco work
+    and unrelated to perception. With the deadline on 2026-09-15 there is no slack to spend on a merge
+    that grows daily, and every day this is left it grows, and every later item in this plan is developed
+    off main and has to reach this branch. No pull request: this merges into tracy_icra, which is not
+    proposed anywhere.'
+- id: demo-runs-on-grounded-perception
+  title: The demo sees only the table, finds pieces on the lid, and reports each once
+  branch: tracy_icra
+  pull_request_number: null
+  track: demo-grounding
+  depends_on:
+  - one-detection-per-thing
+  - demo-catches-up-with-main
+  status: not_started
+  notes: 'Wave one is finished when the three faults are gone on the real robot, not when their pull requests
+    are approved: the clipped windows show the table and nothing beyond it, a cube resting on the board''s
+    lid is detected there, and no detection rides the board''s borders. Verified against the live camera,
+    with a captured frame kept for the tests.'
+- id: demo-asks-by-query
+  title: The demo's perception runs because a query was evaluated
+  branch: tracy_icra
+  pull_request_number: null
+  track: demo-requests
+  depends_on:
+  - choose-detection-method
+  - demo-runs-on-grounded-perception
+  status: not_started
+  notes: 'Every perception call in montessori_demo.py goes through the backend rather than calling the
+    pipeline by hand, and the detector that answers is the one the rule tree chose from the surface and
+    the target - visibly a different one for the steel table than for the board''s lid. This is the wave''s
+    claim made demonstrable: the same question, answered differently because the robot knows what it is
+    looking at.'
+- id: demo-detects-and-recovers-a-failed-insert
+  title: A failed insertion is noticed because perception looked where the action promised
+  branch: tracy_icra
+  pull_request_number: null
+  track: demo-expectation
+  depends_on:
+  - expectations-from-events
+  - demo-asks-by-query
+  status: not_started
+  notes: 'The end-to-end story the paper is written around: the robot picks a piece, Segmind''s LossOfSupportEvent
+    takes the table out of the search, the insertion''s declared effect points perception at the board''s
+    lid, and when the insertion fails perception finds the piece somewhere the plan did not expect and
+    says so. Recovery follows from that report. Narrowed for the deadline: report the violated expectation,
+    and let recovery be the plan re-asking rather than a policy of its own. If the deadline forces a cut,
+    this is the item to protect and robokudo-detector is the one to drop.'
