@@ -81,6 +81,39 @@ class EmptyMotionStatechartError(MotionStatechartError):
 
 
 @dataclass
+class WorldStateArrayReplacedError(MotionStatechartError):
+    """
+    Raised when the world replaced its state array while a motion statechart was
+    compiled against it.
+    """
+
+    compiled_degrees_of_freedom: int
+    """
+    Number of degrees of freedom the motion statechart was compiled against.
+    """
+
+    current_degrees_of_freedom: int
+    """
+    Number of degrees of freedom the world holds now.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"The world replaced its state array, which the compiled motion statechart "
+            f"still reads through a memory view of the previous one. It was compiled "
+            f"against {self.compiled_degrees_of_freedom} degrees of freedom and the "
+            f"world now has {self.current_degrees_of_freedom}."
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Adding or removing a degree of freedom replaces the state array. Avoid "
+            "such model changes while a motion is running, or re-compile afterwards. "
+            "Re-parenting a branch preserves the degrees of freedom and is safe."
+        )
+
+
+@dataclass
 class NodeAlreadyBelongsToDifferentNodeError(NodeInitializationError):
     """
     Raised when a node that is already part of the statechart is added a second time.
@@ -526,8 +559,8 @@ class DuplicateContextExtensionError(MotionStatechartError):
 @dataclass
 class ActionClientTypeMismatchError(MotionStatechartError):
     """
-    Raised when an action topic is requested with a different message type than the
-    one its cached action client was created with.
+    Raised when an action topic is requested with a different message type than the one
+    its cached action client was created with.
     """
 
     action_topic: str
