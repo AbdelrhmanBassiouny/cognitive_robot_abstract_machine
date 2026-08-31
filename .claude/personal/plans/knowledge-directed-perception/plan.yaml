@@ -484,8 +484,51 @@ items:
     pull_request_number: 222
     track: request-language
     depends_on: [surfaces-from-world, detect-per-supporting-surface]
-    status: in_progress
+    status: blocked
     session: https://claude.ai/code/session_01QSZsdFk85VPf9iDz8Ldqij
+    blockers:
+      - >-
+          Nine unresolved review threads on #222, all opened by the developer on 2026-08-31, none of
+          them recorded until this resolve ran. The branch itself is not what is wrong: CI is green
+          on all 23 checks, mergeable_state is clean, and both dependencies (#205, #221) are open
+          and out of draft. The review round is the whole blocker, and its weight is in four asks
+          that reach past what the item was scoped to build.
+      - >-
+          The backend's placement is challenged, twice (r3893140274 on backend.py, r3893153789 on
+          line 49): PerceptionBackend and its Montessori detection type sit in experiments, and the
+          developer asks for the general part to live in the entity query language itself with a
+          Montessori extension here, "because I would like this to work also outside the montessori
+          demo generally". That contradicts what plan.yaml and roadmap.md record for this item,
+          which place the backend in experiments and put only the exception, the condition reader
+          and the Directive member in krrood.
+      - >-
+          The pushdown's condition vocabulary is rejected as hard-coded (r3893160382 on
+          backend.py:60, r3893576773 on the krrood test mimic): SUPPORTING_SURFACE_ATTRIBUTE_NAME =
+          "supporting_surface" and PLACE_ATTRIBUTE_NAME = "place" name an attribute by string. The
+          developer asks for semantic annotations and predicates instead, and says explicitly
+          "Discuss the reasoning behind this with me". AGENTS.md's own rule against a literal
+          duplicating a value with its own source of truth backs the objection independently of the
+          redesign.
+      - >-
+          The SelectiveBackend choice is questioned rather than accepted (r3892957833 on
+          backend.py:41). The developer's point is that perception may propose instances the robot
+          has no belief in yet, which is generative, and asks "What do you think is the best
+          categorization for the Perception backend in these cases then?". roadmap.md recorded this
+          as the open question the item settled; the review reopens it.
+      - >-
+          Two asks are larger than this item and are candidates for plan items rather than for #222
+          (r3893312001/r3893499716/r3893602153, and r3893463818): spatial and support predicates
+          inheriting from Predicate and driving an informed search, with a rejection-sampler
+          "imagination world" for the ones no algorithm covers and Regions read off spatial
+          predicates to clip the image; and perception algorithms declaring the requests they can
+          answer as entity query language conditions, with a reasoner choosing between them. The
+          developer names the first as "a separate PR that this one here is stacked under"; the
+          second is close to choose-detection-method's existing claim.
+      - >-
+          Two asks are small, local and unambiguous, and are the only part of the round the item can
+          close without a scope decision: the inline import at base_expressions.py:869 needs its
+          reason stated as a comment (r3893476097), and AttributeEquality is asked to be named
+          AttributeEqualityToLiteral (r3893535014).
     notes: >-
       A PerceptionBackend beside EntityQueryLanguageBackend and
       SQLAlchemyBackend, so evaluating a query runs perception rather than a
