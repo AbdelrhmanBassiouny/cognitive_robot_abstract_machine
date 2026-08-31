@@ -250,24 +250,27 @@ class UsageError(LogicalError):
 @dataclass
 class InvalidCameraResolutionError(UsageError):
     """
-    Raised when a camera resolution cannot describe a ray tracing image.
+    Raised when a camera resolution cannot describe an image.
     """
 
-    resolution: Any
+    width: int
     """
-    The invalid camera resolution value.
+    The invalid image width.
     """
 
-    reason: str
+    height: int
     """
-    Details about why the camera resolution is invalid.
+    The invalid image height.
     """
 
     def error_message(self) -> str:
-        return f"Invalid camera resolution {self.resolution!r}: {self.reason}"
+        return (
+            "Camera resolution width and height must be positive, "
+            f"got width={self.width} and height={self.height}."
+        )
 
     def suggest_correction(self) -> str:
-        return "provide a positive integer or a two-element width-height pair of positive integers."
+        return "provide positive width and height values."
 
 
 @dataclass

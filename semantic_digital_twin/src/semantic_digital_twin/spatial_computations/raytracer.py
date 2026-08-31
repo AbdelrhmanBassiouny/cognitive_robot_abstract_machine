@@ -1,101 +1,18 @@
 from __future__ import annotations
 
 from typing_extensions import Optional, Tuple, List, TYPE_CHECKING
-from collections.abc import Sequence
-from dataclasses import dataclass
-from numbers import Integral
-from typing import TYPE_CHECKING, TypeAlias
 
 import numpy as np
 import trimesh
 from trimesh import Scene
 
+from semantic_digital_twin.datastructures.camera_resolution import CameraResolution
 from semantic_digital_twin.datastructures.field_of_view import FieldOfView
-from semantic_digital_twin.datastructures.types import NpMatrix4x4
-from semantic_digital_twin.world_description.world_entity import Body
 from semantic_digital_twin.spatial_types.spatial_types import GenericSpatialType
-from semantic_digital_twin.exceptions import InvalidCameraResolutionError
+from semantic_digital_twin.world_description.world_entity import Body
 
 if TYPE_CHECKING:
     from semantic_digital_twin.world import World
-
-
-@dataclass
-class CameraResolution:
-    """
-    Defines the horizontal and vertical pixel count used for camera ray generation.
-    """
-
-    width: int
-    """
-    Number of pixels along the image width.
-    """
-    height: int
-    """
-    Number of pixels along the image height.
-    """
-
-    def __post_init__(self) -> None:
-        """
-        Validates that the resolution can describe a camera image.
-        """
-        if not isinstance(self.width, Integral) or not isinstance(
-            self.height, Integral
-        ):
-            raise InvalidCameraResolutionError(
-                resolution=(self.width, self.height),
-                reason="width and height must be integers.",
-            )
-        if self.width <= 0 or self.height <= 0:
-            raise InvalidCameraResolutionError(
-                resolution=(self.width, self.height),
-                reason="width and height must be positive.",
-            )
-
-    @classmethod
-    def from_integral(cls, resolution: Integral) -> CameraResolution:
-        """
-        Creates a square camera resolution from one pixel count.
-        """
-        return cls(width=int(resolution), height=int(resolution))
-
-    @classmethod
-    def from_iterable(cls, resolution: Sequence[Integral]) -> CameraResolution:
-        """
-        Creates a camera resolution from a width-height pair.
-        """
-        if len(resolution) != 2:
-            raise InvalidCameraResolutionError(
-                resolution=resolution,
-                reason="resolution pair must contain exactly two values.",
-            )
-        return cls(width=resolution[0], height=resolution[1])
-
-    @classmethod
-    def from_value(cls, resolution: CameraResolutionValue) -> CameraResolution:
-        """
-        Creates a camera resolution from a camera resolution value.
-        """
-        if isinstance(resolution, CameraResolution):
-            return resolution
-        if isinstance(resolution, Integral):
-            return cls.from_integral(resolution)
-        if not isinstance(resolution, (list, tuple)):
-            raise InvalidCameraResolutionError(
-                resolution=resolution,
-                reason="resolution must be an integer, list, or tuple.",
-            )
-        return cls.from_iterable(resolution)
-
-    @property
-    def shape(self) -> tuple[int, int]:
-        """
-        Returns the resolution in the axis order used by :mod:`trimesh`.
-        """
-        return self.width, self.height
-
-
-CameraResolutionValue: TypeAlias = int | list[int] | tuple[int, int] | CameraResolution
 
 
 class RayTracer:
@@ -204,7 +121,7 @@ class RayTracer:
     def create_segmentation_mask(
         self,
         camera_pose: GenericSpatialType,
-        resolution: CameraResolutionValue = (512, 512),
+        resolution: Optional[CameraResolution] = None,
         min_distance: float = 0,
         max_distance: float = np.inf,
         field_of_view: Optional[FieldOfView] = None,
@@ -217,8 +134,8 @@ class RayTracer:
         no body is hit at that pixel.
 
         :param camera_pose: The position of the camera.
-        :param resolution: The camera resolution value. An integer creates a square
-            image; a width-height pair creates a rectangular image.
+        :param resolution: The camera resolution, defaulting to
+            :class:`CameraResolution`.
         :param min_distance: The minimum distance of a body to be considered a hit.
         :param max_distance: The maximum distance of a body to be considered a hit.
         :param field_of_view: The field of view of the camera, defaulting to
@@ -259,7 +176,7 @@ class RayTracer:
     def create_depth_map(
         self,
         camera_pose: GenericSpatialType,
-        resolution: CameraResolutionValue = (512, 512),
+        resolution: Optional[CameraResolution] = None,
         min_distance: float = 0,
         max_distance: float = np.inf,
         field_of_view: Optional[FieldOfView] = None,
@@ -272,8 +189,8 @@ class RayTracer:
         closest point on the surface of the scene or -1 if no point is hit.
 
         :param camera_pose: The position of the camera.
-        :param resolution: The camera resolution value. An integer creates a square
-            image; a width-height pair creates a rectangular image.
+        :param resolution: The camera resolution, defaulting to
+            :class:`CameraResolution`.
         :param min_distance: The minimum distance of a body to be considered a hit.
         :param max_distance: The maximum distance of a body to be considered a hit.
         :param field_of_view: The field of view of the camera, defaulting to
@@ -320,7 +237,7 @@ class RayTracer:
     def create_camera_rays(
         self,
         camera_pose: GenericSpatialType,
-        resolution: CameraResolutionValue = (512, 512),
+        resolution: Optional[CameraResolution] = None,
         field_of_view: Optional[FieldOfView] = None,
     ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -333,15 +250,14 @@ class RayTracer:
         :param camera_pose: The position of the camera as a 4x4 transformation matrix.
         :param field_of_view: The field of view of the camera, defaulting to
             FieldOfView()
-        :param resolution: The camera resolution value. An integer creates a square
-            image; a width-height pair creates a rectangular image.
-        :param fov: The field of view of the camera in degrees.
+        :param resolution: The camera resolution, defaulting to
+            :class:`CameraResolution`.
         :return: The origin points of the rays, the direction vectors of the rays, and
             the pixel coordinates.
         """
         field_of_view = field_of_view or FieldOfView()
+        resolution = resolution or CameraResolution()
         camera_pose = camera_pose.to_np()
-        camera_resolution = CameraResolution.from_value(resolution)
         self.update_scene()
         # By default, the camera is looking along the -z axis, so we need to rotate it to look along the x-axis.
         rotate = trimesh.transformations.rotation_matrix(
@@ -355,7 +271,7 @@ class RayTracer:
             np.degrees(field_of_view.horizontal_angle),
             np.degrees(field_of_view.vertical_angle),
         )
-        self.scene.camera.resolution = camera_resolution.shape
+        self.scene.camera.resolution = (resolution.width, resolution.height)
         self.scene.graph[self.scene.camera.name] = camera_pose @ rotate_x @ rotate
 
         return self.scene.camera_rays()
