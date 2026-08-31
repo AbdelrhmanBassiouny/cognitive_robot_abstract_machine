@@ -269,12 +269,18 @@ class RefreshPipeline:
         to assemble the build that replaces it; leaving it open is what left every later
         run inheriting the same one.
 
+        The document is printed whatever it said, because it is the only thing naming
+        the verdict, whether the pointer moved and what a refused build was missing - and
+        the one reading it was not printed on was the reading that published, so the run
+        that moved the pointer was the run that said nothing about it.
+
         :param candidate: The candidate that was read.
         :param settled: What reading its checks answered.
         :return: The status to stop with, ``None`` when the run should carry on, or
             :attr:`~integration_exit_codes.IntegrationExitCode.CANDIDATE_UNCHECKED` when
             it should carry on past one nothing judged and say so at the end.
         """
+        print(settled.output, end="")
         status = IntegrationExitCode(settled.status)
         if status is IntegrationExitCode.CANDIDATE_STILL_RUNNING:
             if _reported_no_check(settled):
@@ -291,7 +297,6 @@ class RefreshPipeline:
             self._localise(candidate)
             return status
         if status is not IntegrationExitCode.SUCCESS:
-            print(settled.output, end="")
             return status
         return None
 

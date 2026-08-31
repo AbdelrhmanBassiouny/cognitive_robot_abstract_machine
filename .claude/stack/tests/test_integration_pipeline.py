@@ -123,6 +123,18 @@ def a_settling(verdict: ChecksVerdict, status: IntegrationExitCode) -> CommandOu
     return answered(status, {VerdictReportKey.VERDICT: str(verdict)})
 
 
+def a_publishing() -> CommandOutcome:
+    """:return: The settling of a green candidate, which moved the pointer onto its
+    build."""
+    return answered(
+        IntegrationExitCode.SUCCESS,
+        {
+            VerdictReportKey.VERDICT: str(ChecksVerdict.PASSED),
+            VerdictReportKey.PUBLISHED: True,
+        },
+    )
+
+
 def no_candidate_open() -> CommandOutcome:
     """:return: The answer a run gets when nothing is being judged."""
     return answered(IntegrationExitCode.NO_CANDIDATE_OPEN)
@@ -701,6 +713,47 @@ def test_every_attempt_says_what_it_assembled(tmp_path: Path, capsys):
 
     assert printed.count(A_BUILD_BRANCH) == 2
     assert A_BROKEN_TIP in printed
+
+
+@pytest.mark.parametrize(
+    "settling, what_the_run_does_next",
+    [
+        (
+            a_publishing(),
+            (succeeded(), a_build(), no_recorded_pass(), a_reported_candidate()),
+        ),
+        (
+            a_settling(
+                ChecksVerdict.RUNNING, IntegrationExitCode.CANDIDATE_STILL_RUNNING
+            ),
+            (),
+        ),
+        (
+            a_settling(ChecksVerdict.FAILED, IntegrationExitCode.CANDIDATE_FAILED),
+            (answered(IntegrationExitCode.NO_LIBRARY_CHECK_FAILED),),
+        ),
+    ],
+)
+def test_every_reading_of_an_inherited_candidate_says_what_it_read(
+    settling: CommandOutcome,
+    what_the_run_does_next: tuple[CommandOutcome, ...],
+    tmp_path: Path,
+    capsys,
+):
+    """
+    The settling's document is the only thing naming the verdict, whether the pointer
+    moved and which of the pipeline's own files a refused build was missing - and it was
+    printed on every path except the one where a build was actually published, so the
+    run that finally moved the pointer said nothing about having moved it.
+    """
+    rebuild(
+        a_reported_candidate(),
+        settling,
+        *what_the_run_does_next,
+        tmp_path=tmp_path,
+    )
+
+    assert settling.output in capsys.readouterr().out
 
 
 def test_a_red_candidate_is_localised_rather_than_left_naming_a_check(tmp_path: Path):
