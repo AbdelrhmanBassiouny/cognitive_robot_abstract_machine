@@ -1,91 +1,49 @@
-PR #211 - `integration-branch-ci-verdict` and `red-candidate-localisation` of
-`stack-maintenance`. Resolved via `/plan-item-resolve` in auto mode.
+# `integration-branch-ci-verdict` — getting the pipeline publishing again
 
-## Plan for this session
+Working PR #211 on `claude/plan-item-kickoff-workflow-unification-wg4w4x` (the
+session's own `claude/integration-pipeline-ci-verdict-50sx6b` is unused; you
+named #211's branch explicitly).
 
-Both threads the 2026-08-30 round left open had been answered by the author
-overnight, so the item was not blocked on anything outside itself:
+## The plan, in the order it had to happen
 
-1. The repeated docstring - clarified as the check timing, not the `sys.path`
-   insertion. Single-source it.
-2. The rebuild cadence - "I like the fix, fold or new item?". Run the scope
-   check, recommend, act.
+1. **Discriminator before the base.** `find-candidate` told the candidate a run
+   settles from a `--plan` one by its base alone, so the base could not move
+   until something else carried that. — **done**, `CandidateTitle` in
+   `integration_verdict.py`.
+2. **The base.** Every candidate opens against `configuration.upstream_base`,
+   which a build merges with by construction. — **done**.
+3. **Close and move past.** `CANDIDATE_UNCHECKED` closed the run; it now closes
+   the *candidate* and assembles the build that replaces it, still exiting 17. —
+   **done**, `close-candidate` plus `RefreshPipeline`.
+4. **Bootstrap, two dispatches.** — **first dispatch spent**, second outstanding.
 
-## Done
+Committed as `c77b9ea79` and pushed. 967 tests across the four CI directories,
+from 956; seven mutations checked; docstrings formatted, byte-identical on a
+re-run. Not re-drafted, deliberately.
 
-- Manifest blockers rewritten to the real state before any code was touched,
-  then cleared once both were resolved; roadmap gained two rules and its
-  queue-delay risk was corrected.
-- `CandidateCheckTiming` in `integration_verdict.py` holds the measurement;
-  the four designs that restated it refer to it. Two tests, both reading the
-  record.
-- `workflow_run` trigger on CI completing over a build branch, folded here
-  because `git ls-tree origin/main` over every file it touches is empty.
-  `WorkflowDocument` gained `name`, `watched_workflows`, `branches`;
-  `BUILD_BRANCH_FILTER` is spelled apart from `BUILD_BRANCH_PATTERN`.
-- 913 tests pass (from 907), six mutations checked, formatter idempotent.
-  Pushed as `e61f0a9c1`; PR description updated; the docstring thread replied
-  to and resolved, the cadence thread replied to and left open.
+## Where it stands
 
-## Outstanding
+- "Integration refresh" dispatched on this branch (the only arm running the new
+  pipeline — every trigger is read from the copy on `integration`, a build
+  output). It assembles and opens a candidate, then stops.
+- **Not polled and not subscribed**, per your standing rules. The verdict is
+  read by a *later* run.
 
-- The cadence thread is deliberately open: the author asked a question and
-  should close it themselves.
-- A `workflow_dispatch` of `Integration refresh` was run on this branch, which
-  is the bootstrap that gets the new pipeline onto the default branch - a
-  `workflow_run` trigger is read from the published copy, so it does nothing
-  until a build carrying it publishes.
-- Not re-drafted, deliberately: a draft is excluded from every build.
+## Next, when you come back to it
 
-## 2026-08-30 late: the pipeline must not be allowed to publish yet
+1. Read the build's `left_out` and confirm it carries #211 and #154 — expected,
+   never yet measured. The publish guard refuses a build with no rebuild in it.
+2. Confirm the candidate has a merge reference and checks (the whole point).
+3. Second dispatch to settle and, if green, publish.
 
-Verification candidate #224 (build against `main`) came back green on all 23
-checks, and the build was **not** published. It carries nine branches and
-neither #154 nor #211, so it holds no `integration.py` and no
-`integration-refresh.yml` - publishing it onto `integration`, the default
-branch a schedule registers from, would have deleted the scheduled workflow
-and every means of publishing a later build.
+## Two things measured that correct the record
 
-Cause of the omission: #211 conflicts with #160's branch over
-`plan_item_bootstrap.py`, so the build skips it, and it is the tip carrying
-#154. The fold this plan already decided on is what clears it.
-
-#220 and #224 both closed. Manifest, roadmap and dashboard record the hazard.
-
-Order the remaining work has to happen in: guard against publishing a build
-that would remove the pipeline, *then* make candidates judgeable (base +
-discriminator), *then* fold #160. Doing the second before the first is what
-turns the first checkable green build into the one that ends the automation.
-
-## 2026-08-31: the guard is built - `6ae74bd44`
-
-The first of the three ordered pieces of work. `publish()` refuses a build
-whose tree carries no rebuild, on both routes to the pointer - the judged
-candidate and the recorded pass - because a guard on the judged path alone is
-one the recorded pass walks straight past, and the recorded pass is what
-publishes on the ordinary day. What has to be carried is derived from
-`WorkflowFile` and `ToolingScript` rather than listed; presence is not the
-whole test, since a workflow left with only a dispatch is a rebuild somebody
-has to remember to press. A refusal stops the rebuild rather than opening a
-candidate that would spend a matrix on the same answer.
-
-The guard reaches the run that needs it before it reaches the default branch:
-a scheduled run executes the published copy and predates it, but nothing can
-publish through that copy today - no recorded pass, no judgeable candidate -
-while the bootstrap dispatch checks out `github.ref` and runs the guard.
-
-926 tests pass, from 913; six mutations checked; the formatter is idempotent.
-The PR description, the manifest, the roadmap and the dashboard are updated.
-
-## Outstanding, in order
-
-1. Candidates cannot be judged: opened against `integration`, which is an
-   older build of the same branches, so GitHub computes no merge reference.
-   Needs a base the build always merges with **plus** a discriminator that is
-   not the base, since `find-candidate` uses the base to tell a full candidate
-   from a `--plan` one - and an unjudgeable candidate should be closed and
-   moved past rather than stopped on.
-2. Fold #160 into #151's branch, so the pipeline branches reach a build at all.
-   Until then every build is refused, which is now loud rather than fatal.
-
-Not re-drafted, deliberately: a draft is excluded from every build.
+- `#154` is based on `main`, not `#151`'s branch, and `#151` is not a draft — so
+  the "rooted on a draft, left out entire" hazard recorded on the item does not
+  apply.
+- `plan_item_bootstrap.py update` writes item fields at a hardcoded four-space
+  indent, so replacing this item's `blockers` produced a manifest that no longer
+  parses. That is the `ItemIndentation` fix the roadmap assigns to this branch.
+  **Not folded in** — it is not this item's work and the bootstrap is in flight.
+  Every manifest write this session went through a hand-edited splice plus
+  `save-plan.sh`. Your call whether it belongs here.
