@@ -555,10 +555,14 @@ items:
       a query then runs only what it asked for.
 
       Noted 2026-08-31, for whoever carries this further rather than for the branch in flight:
-      SceneRequest carries a type and a surface, and the items added that day need it to carry a
-      believed place as well - the region and yaw interval an object is expected in. That is a
-      third pushed-down condition of the same kind, not a change of shape, so it is recorded
-      here rather than added to a pull request already under review.
+      the items added that day need a look to be narrowed by a believed *place* - the region and
+      yaw interval an object is expected in - as well as by a type and a surface. Written before
+      that day's review round, this named SceneRequest; the narrowing now lives in krrood's
+      LookRequest, and SceneRequest.admits was removed by the move. The correction is worth more
+      than the note, because the round's own reversal is what makes the belief natural rather than
+      an addition: a generative statement asking `pose=...` of an instance already believed in is
+      exactly the pose-only question a believed place answers, which is the shape
+      expectations-from-events and pieces-looked-for-where-expected were already written around.
 
   - id: perception-predicates-guide-the-search
     title: "Guide the search by predicates and annotations, not by attribute names"
