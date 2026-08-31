@@ -2,48 +2,65 @@
 
 Plan `knowledge-directed-perception`, track `method-selection`. Branch
 `claude/choose-detection-method-gf64yp`, based on `perception_eql_backend` (#222)
-with `sdt_surface_finish_annotation` (#216) merged in.
+with `sdt_surface_finish_annotation` (#216) merged in. Built as `69f30348a`.
 
-## The plan
+## Status: built, pushed, description and roadmap current
 
-Two layers, settled with the developer at kickoff (both, layered — not one or the other):
+The item's work is done and the pull request is a draft awaiting review. Nothing
+is outstanding on it: CI not yet reported at the time of writing, no review
+threads, no conflict.
 
-1. **Detectors declare what they can answer**, as an entity query language condition.
-   Eligibility. Answers r3893463818 on #222.
-2. **A ripple-down rule tree chooses among the eligible ones**, over the surface's finish,
-   the target's hue separability from it, and (later, from sibling items) what lately
-   happened to the target. Preference. This is the half the paper's claim rests on.
+## What was built
 
-Three rules, which is the plan's promised two sharpened per #201's 2026-08-30 comment:
-mirror surface → edge fit; matte surface + hue-separable target → colour blob (cheaper);
-target wearing the surface's own hue → edge fit whatever the finish.
+Two layers, chosen by the developer at kickoff:
 
-## Done
+1. **Detectors declare what they can answer**, as an EQL condition
+   (`PieceDetector.capability`).
+2. **A ripple-down rule tree chooses among the eligible ones** — mirror → edge
+   fit; matte + colour separates → colour blob.
 
-- Branch reset off `integration` onto #222's tip (the #199 hazard, 4th time on this plan).
-- #216 merged in for `Shape.finish`.
-- Draft PR #231 opened; manifest + roadmap section saved to personal-notes (`5d73be145`).
-- **Blocker investigated and cleared.** The recorded "krrood's ripple-down rules are not
-  usable yet" is true of classic `krrood.ripple_down_rules` (source-string conditions, an
-  `Expert` required for every tree mutation) and of `EQLSingleClassRDR` (eight unmerged PRs
-  deep in the `D-core-*` stack), but *not* of the EQL-native rule trees the item's note
-  actually describes. `test_rules.py` = 24 passed here, no skips.
-- Container environment working: python3.12 venv at `/tmp/venv312`, workspace installed
-  editable, run pytest with `--confcutdir=test/krrood_test` to skip the ROS-importing
-  top-level conftest. `uv sync` does **not** work — `pyproject.toml`'s
-  `[tool.uv] override-dependencies` uses a map form uv rejects (fails on `main` too).
+The planned third rule turned out to be the colour blob's *capability* going
+false rather than a rule, so the tree ships two rules, which is what the budget
+section asks for.
 
-## Next
+## Measurements worth keeping
 
-- Tests first: the detector interface and its capability declaration; the rule tree's three
-  rules; end to end over the rendered scene fixture.
-- Then: `PieceDetector` interface, `EdgeFitDetector` (today's `LoosePieceDetector`),
-  `ColorBlobDetector` (new, cheaper), the rule tree, and the pipeline reading it.
-- Annotate the table as `MIRROR` and the board lid as `MATTE` in `MontessoriWorld`.
+- Colour blob **89 ms** vs edge fit **126 ms** on the same work, same pieces
+  found, comparable agreement. That is the "speed is the honest reason" claim.
+- Choosing per piece splits a surface between detectors, which first made the
+  annotated path **slower** (0.596 vs 0.521 s/frame). `RectifiedFrame` shares each
+  plane and its edges per frame → **0.494 vs 0.491**, and the unannotated path
+  improved too (0.521 → 0.491).
+- Tests: **230 passed**, 1 skipped, 16 xfailed vs **205 / 1 / 16** on the parent.
 
-## Flagged, not yet reported to the developer
+## The blocker was not real
 
-`.claude/hooks/plan_item_bootstrap.py` writes item fields at 4-space indent
-(`ITEM_FIELD_INDENT`) while this plan's manifest uses 2, producing invalid YAML — both
-`open` and `record` fail. Same on `main`. Worked around by editing `plan.yaml` directly.
-Worth its own bug-fix PR (the #160 family).
+"krrood's ripple-down rules are not usable yet" is true of the *classic*
+`krrood.ripple_down_rules` and of `EQLSingleClassRDR` (eight unmerged PRs deep),
+and false of the EQL-native rule trees the item's own note describes — those are
+on `main` today, `test_rules.py` 24 passed, no skips.
+`detector-parameters-from-knowledge` is therefore not blocked either.
+
+## Environment (this container)
+
+- `uv sync` is **broken on `main`** — `[tool.uv] override-dependencies` uses a map
+  form uv rejects (since `b37c29996`). Use a python3.12 venv (`/tmp/venv312`) with
+  every workspace package `pip install --no-deps -e`, plus `casadi~=3.7.0` pinned
+  (3.8 raises out of `FunctionBuffer_set_res`).
+- Run montessori tests with `--noconftest`, ignoring the six ROS-importing modules.
+- krrood tests: `--confcutdir=test/krrood_test` to skip the ROS-importing top-level
+  conftest.
+
+## Flagged to the developer, not yet acted on
+
+`.claude/hooks/plan_item_bootstrap.py` writes item fields at 4-space indent while
+this plan's `plan.yaml` uses 2, producing invalid YAML — `open` and `record` both
+fail, and `save-plan.sh`'s error is swallowed by `capture_output=True`. Same on
+`main`; the #160 family. Worked around by editing `plan.yaml` directly. Deserves
+its own bug-fix PR.
+
+## Next, if anyone picks this up
+
+Nothing required. Follow-ups belong to other items: history conditions to
+`pieces-looked-for-where-expected` (#232), a measured board colour to
+`detector-parameters-from-knowledge`.
