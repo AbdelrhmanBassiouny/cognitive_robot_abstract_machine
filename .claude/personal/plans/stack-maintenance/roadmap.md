@@ -101,7 +101,11 @@ and re-applies its delta.
   is where a schedule registers from. One green build assembled without those two branches would take
   the scheduled workflow down and leave nothing able to publish a later one. The guard belongs before
   every other fix here: the first candidate that can actually be judged is otherwise the one that ends
-  the automation.
+  the automation. **Built on 2026-08-31**, and the shape that works is a refusal inside the one
+  function both routes to the pointer go through, testing what the tree *carries* rather than what the
+  run intended - a guard on the judged path alone is one the recorded pass walks straight past, and the
+  recorded pass is what publishes on the ordinary day when nothing has moved. Presence is not the whole
+  test either: a workflow left with only a dispatch is a rebuild somebody has to remember to press.
 - **What a thing is opened *against* is part of whether it can be measured at all.** The candidate's
   base was chosen to carry meaning - `find-candidate` tells a full build from a `--plan` one by it -
   and that made it a base nobody could check against. A discriminator and a merge target are two jobs,
@@ -178,7 +182,10 @@ and re-applies its delta.
 - **Every build so far omits the pipeline itself.** #211 conflicts with #160's branch over
   `plan_item_bootstrap.py`, so the build skips it - and it is the tip of the stack carrying #154, where
   `integration.py` and the refresh workflow live. Measured on the 2026-08-30 build: nine branches
-  carried, neither of those two, no pipeline in the tree. Folding #160 is what clears it.
+  carried, neither of those two, no pipeline in the tree. Folding #160 is what clears it. Since
+  2026-08-31 such a build is refused rather than published, so what is left of this is a pipeline
+  unable to publish anything at all until the fold happens - loudly, and once per rebuild rather than
+  once and for all.
 - **A candidate opened against the branch it replaces stops being checkable once that branch falls
   behind.** `integration` is itself an older build of the same branches, so a new build conflicts with
   it, GitHub computes no merge reference, and a `pull_request` run - which checks that reference out -
