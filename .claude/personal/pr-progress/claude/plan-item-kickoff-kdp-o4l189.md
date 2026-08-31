@@ -36,9 +36,11 @@ cheap and precise. Recorded in full in `roadmap.md`.
 ### Outstanding
 
 - Nothing on this session's side. CI has not reported yet at the time of the push.
-- Landing hazards on the PR: #223's `Footprint` -> `RectifiedFootprint` rename, and #223
+- Landing hazards on the PR: #223's `Footprint` -> `RectifiedFootprint` rename; #223
   meeting `PieceHypothesis.candidates` (a tuple of dataclasses) when it walks this
-  package for the ORM.
+  package for the ORM; and #231's `LoosePieceDetector` -> `EdgeFitDetector` rename, which
+  changes the same `detect` this branch rewrites - the only conflict of the three that is
+  not purely mechanical.
 - Environment note worth keeping: this container's default `uv` (0.8.17) cannot parse the
   repo's `pyproject.toml`; `/usr/local/bin/uv` (0.12.7) can. `docformatter`/`black` need
   installing before `scripts/format_docstrings.py` runs.
