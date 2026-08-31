@@ -1,25 +1,48 @@
 """
-The one thing about the maintenance skill worth asserting from code.
+What about the maintenance skill is worth asserting from code.
 
 The skill is instructions, so most of what it says can only be checked by reading it.
-The exception is what it must *not* say: it runs on whichever fork invoked it, so a
-repository named in it is an instruction to operate on somebody else's. That is an
-absence, computed from this checkout's own remotes rather than from a string written
-here, which is what makes it worth a test where a prose assertion would not be.
+The exceptions are what it must *not* say: a repository named in it is an instruction to
+operate on somebody else's fork, and a command run from the working tree is an
+instruction to run whichever version the branch checked out at that moment happens to
+carry. Both are absences, computed from this checkout rather than from a string written
+here, which is what makes them worth a test where a prose assertion would not be.
 """
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
 
-from stack import CONFIGURATION_PATH, Repository, _configuration_values
+from stack import (
+    CONFIGURATION_PATH,
+    ENTRY_POINT_NAME,
+    TOOLING_DIRECTORY,
+    Command,
+    Repository,
+    _configuration_values,
+)
+
+PROJECT_ROOT = Path(__file__).parents[3]
+"""
+The checkout the skill and the tooling it runs are both read from.
+"""
 
 MAINTENANCE_SKILL_DOCUMENT = (
-    Path(__file__).parents[3] / ".claude/skills/stacked-pr-maintenance/SKILL.md"
+    PROJECT_ROOT / ".claude/skills/stacked-pr-maintenance/SKILL.md"
 )
 """
 The instructions a maintenance pass follows.
+"""
+
+WORKING_TREE_INVOCATION = re.compile(
+    rf"python {re.escape(str(TOOLING_DIRECTORY.relative_to(PROJECT_ROOT)))}"
+    r"/(\S+\.py) ([\w-]+)"
+)
+"""
+Matches a command the skill runs from the working tree, capturing the script and the
+subcommand.
 """
 
 
@@ -79,3 +102,19 @@ def test_the_skill_restores_the_tooling_without_writing_the_index():
 
     assert "git restore --source=<ref> --worktree -- .claude/stack/" in skill
     assert "git checkout <ref> -- .claude/stack/" not in skill
+
+
+def test_the_skill_runs_nothing_from_the_working_tree_once_the_tool_is_pinned():
+    """
+    A pass switches branches in the checkout it runs from, so every command it runs.
+
+    after step 0 must name the pinned copy. Only the two commands that pin - resolving
+    which repositories the pass runs on, and the pinning itself - may still come from
+    the working tree, because at that point there is nothing else to run.
+    """
+    skill = MAINTENANCE_SKILL_DOCUMENT.read_text()
+
+    assert set(WORKING_TREE_INVOCATION.findall(skill)) == {
+        (ENTRY_POINT_NAME, Command.CONFIGURATION),
+        (ENTRY_POINT_NAME, Command.PIN_TOOLING),
+    }
