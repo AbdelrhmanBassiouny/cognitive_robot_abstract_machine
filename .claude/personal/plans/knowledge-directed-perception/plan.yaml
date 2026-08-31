@@ -294,12 +294,13 @@ items:
     item; it asserts against the mesh''s own footprints rather than a copy of them.'
 - id: pieces-looked-for-where-expected
   title: Look for a piece where it is expected, not only where a colour blob appears
-  branch: perception_looked_for_where_expected
-  pull_request_number: null
+  branch: claude/plan-item-kickoff-kdp-o4l189
+  pull_request_number: 232
   track: surfaces
   depends_on:
   - one-detection-per-thing
-  status: not_started
+  status: in_progress
+  session: https://claude.ai/code/session_0158YvLwWkcdv4Hqz9i4926W
   notes: 'The structural change the rest of this plan''s perception work needs, and the one that takes
     the lid-piece failures off the ripple-down rules'' critical path.
 

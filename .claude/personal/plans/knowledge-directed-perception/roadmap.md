@@ -2063,3 +2063,85 @@ so a relation named for its object (`SupportedBy`, `VisibleTo`, `InContactWith`)
 its own clause. Inheriting `Triple` and saying nothing is what produced *"a Body supports by
 another Body"*, and nothing in sdt's suite on `main` reads a sentence to catch it - the
 snapshot test that would is one of #33's own additions.
+
+## `pieces-looked-for-where-expected`: the seed, and where a believed place is defined
+
+Kicked off 2026-08-31 in `auto` mode, as pull request #232 off
+`claude/plan-item-kickoff-kdp-z4pv7l` (#225, open and out of draft, so ready to stack on
+-- `check_dependency_readiness.py` reports `open_ready`). It is based on #225's current
+tip `a35243e8`, not on the `cf155f4a1` the item's note records. The session's branch
+arrived cut from `integration` rather than from #225 -- the hazard #199 exists to refuse,
+and the fourth time on this plan after #223, #225 and #227 -- and was re-cut onto #225's
+tip before the first commit.
+
+The mechanical scope check reports every path this touches absent from `main` and shared
+with #225, #222, #227 and #223, which every round on this plan has already recorded as
+expected: every file in this plan is introduced by #202, so path overlap alone would fold
+the whole plan into one item. What remains once the overlapping edits are removed is a
+believed place, a hypothesis over it and a matcher parameterized by one, which no earlier
+item states in any form. The purpose check matters more than the path check here and it
+comes back clean: #227 deliberately did *not* build the believed place, deferring it to
+this item, which is what "Two items that meet at one type" settled.
+
+### Colour is a gate, and that is the whole fault
+
+`LoosePieceDetector.detect` walks the piece hues, masks, finds contours, and only a
+contour that survives the hue mask, the size range and the wholly-within test is ever
+handed to `PieceMatcher.match`. A piece wearing the lid's own hue, or touching another
+piece, is never fitted however plainly its edges sit in the picture. So the fix is not a
+better mask: it is that a fit may be seeded from something other than a blob.
+
+### What is built, and the three places a belief comes from
+
+- `BelievedPlace` -- a region of a named surface and an interval of yaw. The type
+  `perception-predicates-guide-the-search` compiles its spatial predicates *to* and this
+  item's search reads *from*, defined here once as that item's own deferral asked.
+- `PieceHypothesis` -- what is expected, where it is believed to be, and where the belief
+  came from. Its evaluator is the sweep `PieceMatcher` already performs, with radius,
+  step, angle set and candidate list read from the belief instead of fixed.
+- Three sources, which is what makes this knowledge-guided rather than a wider search: a
+  colour blob (as today), the board's own detected holes, and the pieces the world already
+  places in the workspace. The object's own history is the fourth and is
+  `expectations-from-events`, where a belief gets a pose and an uncertainty.
+
+Colour becomes one source of hypotheses and one piece of evidence for them, never a gate
+that can suppress one.
+
+### What this item cannot do, and must not be read as doing
+
+The same measurement that found the missing seed found its hazard: a triangular prism
+template laid near the board's middle reaches **0.85 to 0.89 in every capture** with no
+prism there, higher than any genuine piece resting on the lid. So seeding at the places
+the board reports will produce ghosts as well as the pieces it recovers, and no threshold
+separates them -- `PieceMatcher.minimum_agreement` cannot be tuned into correctness near
+the board. Deciding a detection by what else could have produced the edges is
+`competing-explanations`, which depends on this item precisely because this item is what
+turns a detection into a hypothesis that can be compared against another.
+
+What this item is therefore measured by is the recall side: `test_every_piece_resting_on_
+the_lid_is_found`, whose assertion is a subset test, and whose expected-to-fail marks this
+item took ownership of from `detector-parameters-from-knowledge`. The false-positive count
+per capture is measured and recorded with the result rather than left unstated, and a
+regression of `test_only_the_pieces_resting_on_the_table_are_detected_there` -- which is
+an exact test -- is a blocker to report, not something to absorb.
+
+### Verification
+
+Tests first, at three levels, so each failure names its own cause:
+
+- The types on their own: a place believing a yaw offers only the turns its interval
+  holds, one believing none offers the piece's whole rotation period, and a hypothesis
+  records the belief it came from.
+- The matcher on its own: it searches the radius the belief states, tries only the
+  candidates it names, and returns a fit seeded where colour segmented nothing.
+- The pipeline over the rendered scene and then the captures, which is the measurement
+  that matters: a piece on the lid wearing the lid's own hue is found.
+
+Run under the environment #223 recorded, `uv sync --extra dev --python 3.12`.
+
+### Landing hazard
+
+#223 renames `Footprint` to `RectifiedFootprint` across the perception package, and this
+branch edits `pipeline.py`, `detections.py` and `piece_matcher.py`, so it inherits that
+conflict the same mechanical way #205, #221 and #225 do: take this branch's edit, spell
+the class `RectifiedFootprint`.
