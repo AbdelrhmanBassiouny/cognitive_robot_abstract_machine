@@ -139,6 +139,28 @@ and re-applies its delta.
   and the same run turned up a third defect nobody had reported - `depends_on` declared `PLAIN` while
   every manifest writes it as a block sequence, so replacing it orphans its entries.
 
+- **A discriminator set in the call that creates the thing beats one written afterwards.** Moving the
+  candidate's base off `integration` needed something else to tell the build a run may publish from a
+  `--plan` one, and the two candidates were a label and the title. The title won on failure mode
+  rather than on structure: a label is a second call, and a candidate no reader recognises is one no
+  later run settles - which is the wedge the base change exists to end, so introducing a second way
+  into it would be a poor trade. It also keeps `CandidatePullRequests` denied the pass's writes, which
+  is deliberate.
+- **A rule that stops a run must be one something later can clear.** `CANDIDATE_UNCHECKED` was a
+  correct diagnosis - nothing is starting a check - attached to the wrong action: stopping meant the
+  rebuild never reached the step that would have replaced the candidate, so every later run inherited
+  the same one and the pipeline could not recover from an outage it had itself detected. Closing and
+  carrying on costs nothing, because the take-down already keeps only what an open pull request refers
+  to, and the run still exits with the status so nobody stops looking.
+- **A test that its own mutation walks past is worse than no test.** One written this round asserted
+  that a candidate's description names the branch a green build moves; the name appears twice in the
+  description, so replacing the load-bearing one still passed. Removed rather than kept, since a
+  passing assertion is read as coverage.
+- **An expectation recorded as expected rather than measured is worth measuring before acting on it.**
+  This item carried a hazard about `#151` being a draft at the root of the pipeline chain. `#154` is
+  based on `main`, and `#151` is not a draft; the hazard never applied. One `list_pull_requests` call
+  answered it.
+
 ## The integration branch's design, stated once
 
 - **It gates nothing.** Promotion asks whether a branch is ready for upstream review; integration asks
@@ -193,7 +215,9 @@ and re-applies its delta.
   is never created. The rebuild then stops on a candidate nothing can judge and never reaches the step
   that would have replaced it. Measured on 2026-08-30: candidate #220 had no `refs/pull/220/merge` and
   no checks after eleven hours, while the same build opened against `main` had both within twenty
-  seconds. This is why one build is the only one this pipeline has ever judged.
+  seconds. This is why one build is the only one this pipeline has ever judged. **Both halves fixed on
+  2026-08-31** in `c77b9ea79`: every candidate is opened against the base its build was assembled over,
+  and one nothing can judge is closed and replaced rather than stopped on.
 
 ## Open
 

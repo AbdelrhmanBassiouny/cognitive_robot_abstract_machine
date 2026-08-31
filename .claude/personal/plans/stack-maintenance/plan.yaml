@@ -449,16 +449,16 @@ items:
   depends_on:
   - integration-branch
   blockers:
-  - 'The candidate''s base makes it unjudgeable, and it is the last blocker. #220 had no
-    `refs/pull/220/merge` and no checks after eleven hours, because a build conflicts with `integration`
-    - itself an older build of the same branches - while the same build opened against `main` had both
-    within twenty seconds and went green on 23 checks (#224). Verified on 2026-08-31 before the fix:
-    `OpenCandidateCommand.run` still opens a full build against `POINTER_BRANCH`, `find-candidate` still
-    tells a full candidate from a `--plan` one by that base alone, and `RefreshPipeline._act_on` still
-    stops the run on `CANDIDATE_UNCHECKED` rather than closing what it cannot judge. Also verified: the
-    publish guard `6ae74bd44` is on the branch, PR #211 is open and out of draft, its one unresolved
-    review thread is the cadence question already answered and left for the author to close, and the
-    tracking issue has carried nothing about this item since 2026-08-12.'
+  - 'Waiting on the bootstrap, which is two dispatches and one is spent. The base fix landed in
+    `c77b9ea79`: every candidate is opened against `configuration.upstream_base`, the title tells the
+    candidate a later run settles from a `--plan` one, and an unjudgeable candidate is closed and
+    replaced rather than stopped on. "Integration refresh" was dispatched on this branch on 2026-08-31 -
+    the only arm that runs the new pipeline, since every trigger is read from the copy on `integration`,
+    which is a build output. That run assembles a build and opens its candidate; a *later* run reads the
+    verdict, because a candidate''s first check arrives long after the run that opened it is over. So the
+    item is not done until a second dispatch settles and, if green, publishes - and what a build carries
+    has to be read off its `left_out` before that second dispatch, since the guard refuses a build with
+    no rebuild in it.'
   notes: 'Part D of `integration-branch`''s review round: the verdict moves from a local test run to real CI.
 
     Folded back onto that item''s branch after being split out, so it has no pull request of its own - the
@@ -581,25 +581,25 @@ items:
     run. What the CI verdict replaces is the *publishing* decision.
 
 
-    **The review round of 2026-08-30 found the one thing the design had no rule for: a branch the pipeline
-    creates and nothing takes down.** `publish()` dropped a build''s branch because the pointer then held the
-    same commit, and that was the *only* path that did - so a candidate closed red, one nothing ever reported
-    a check against, and a build superseded before it was judged each left a branch for good, at four rebuilds
-    a day. Eight had gathered on the fork; seven had a closed candidate. The rule now is what keeps a build
-    rather than what drops it: a pull request still open against it, which covers the candidate judging it
-    and a filtered `--plan` build somebody is working from, and it runs before a rebuild reaches anything it
-    can stop on, since a run that stopped early is exactly the kind that left one. It narrows the earlier decision
-    to keep a red build''s branch for whoever reads its checks rather than reversing it - that branch now lasts
-    until the next rebuild instead of forever.
+    **The review round of 2026-08-30 found the one thing the design had no rule for: a branch the pipeline creates
+    and nothing takes down.** `publish()` dropped a build''s branch because the pointer then held the same commit,
+    and that was the *only* path that did - so a candidate closed red, one nothing ever reported a check against,
+    and a build superseded before it was judged each left a branch for good, at four rebuilds a day. Eight had
+    gathered on the fork; seven had a closed candidate. The rule now is what keeps a build rather than what drops
+    it: a pull request still open against it, which covers the candidate judging it and a filtered `--plan` build
+    somebody is working from, and it runs before a rebuild reaches anything it can stop on, since a run that
+    stopped early is exactly the kind that left one. It narrows the earlier decision to keep a red build''s branch
+    for whoever reads its checks rather than reversing it - that branch now lasts until the next rebuild instead
+    of forever.
 
 
     **One complaint, made about four lines, reached a fifth nobody had looked at.** Asking for structure over
     hard-coded keys turned up `GitHubRepository.open_pull_request` sending `{"title", "head", "base", "body"}`
-    and reading `["number"]` back straight past the enum that reads them, with no test over the payload at
-    all - found only because the *test* records built beside it were being routed through that enum. And a
-    whole section of `test_integration_verdict.py` was still walking `integration-refresh.yml` by hand, having
-    survived the round that introduced `workflow_document.py` intact: a model does not retire the hand-rolled
-    readers it replaces, because nothing breaks when it lands.
+    and reading `["number"]` back straight past the enum that reads them, with no test over the payload at all
+    - found only because the *test* records built beside it were being routed through that enum. And a whole
+    section of `test_integration_verdict.py` was still walking `integration-refresh.yml` by hand, having survived
+    the round that introduced `workflow_document.py` intact: a model does not retire the hand-rolled readers
+    it replaces, because nothing breaks when it lands.
 
     **Both threads the 2026-08-30 round left open are answered, and the recorded blocker had the first
 
@@ -731,7 +731,37 @@ items:
 
     check with it - #151 is a draft, and readiness is read down the whole chain, so anything rooted on
 
-    it is left out entire.'
+    it is left out entire.
+
+
+    **The base is fixed, in `c77b9ea79`, and the discriminator is the title rather than a label.** Every candidate
+    is opened against the base its build was assembled over, which a build merges with by construction; `CandidateTitle`
+    says which plans a build was asked for, and `candidate_for_everything_in_flight` replaces `open_candidate_on`.
+    The title won over a label on one argument: it is set in the call that creates the candidate, where a label
+    is a second call that can fail on its own - and a candidate nothing recognises is one no later run settles,
+    which is the wedge being fixed rather than a new one to introduce. `BoardExport.is_a_candidate` needed no
+    code change, as recorded, and a test now holds both kinds off the export both a build and a maintenance pass
+    derive their work from. An unjudgeable candidate is closed and replaced now rather than stopping the run,
+    and the run still exits `CANDIDATE_UNCHECKED`, so nothing is lost by carrying on. 967 tests pass across the
+    four directories CI runs, from 956; seven mutations checked, and an eighth test was removed rather than kept
+    because its own mutation walked past it.
+
+
+    **Two recorded expectations were refuted by looking at the fork before dispatching.** `#154` is based on
+    `main` rather than on `#151`''s branch, and `#151` is not a draft - so the "readiness is read down the whole
+    chain, and anything rooted on a draft is left out entire" hazard recorded here does not apply to the pipeline
+    chain at all. It is `main` to `#154` to `#211`, neither a draft, neither carrying a blocking label. No candidate
+    was open, so the bootstrap had nothing to settle first.
+
+
+    **One defect found in the way, reported rather than folded in.** `plan_item_bootstrap.py update` writes an
+    item''s fields at a hardcoded four-space indent, so replacing this item''s `blockers` emitted the key inside
+    `depends_on`''s sequence and the manifest no longer parsed - which is the `ItemIndentation` fix `#160` owned,
+    recorded on the roadmap as belonging to this branch. It is not this item''s work and the bootstrap is in
+    flight, so it is left for the author to direct; every manifest write in this session went through a hand-edited
+    splice and `save-plan.sh` instead.
+
+    '
 - id: red-candidate-localisation
   title: Localise a red candidate to the branches that caused it
   branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
