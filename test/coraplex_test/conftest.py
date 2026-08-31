@@ -1,4 +1,13 @@
-import os
+# %% ORM interfaces
+
+# Built before the imports below, which read a mapped datastructure: pytest imports every
+# conftest of a run before calling any hook, so a hook would fire too late. The build runs
+# once per process and never on an xdist worker.
+from ..orm_interface_build import regenerate_orm_interfaces
+
+regenerate_orm_interfaces()
+
+
 from copy import deepcopy
 from functools import partial
 
@@ -9,8 +18,6 @@ try:
 except ModuleNotFoundError:
     pass
 from sqlalchemy.orm import sessionmaker
-import runpy
-from pathlib import Path
 
 from krrood.ormatic.utils import create_engine, drop_database
 
@@ -32,20 +39,7 @@ except ModuleNotFoundError:
 from semantic_digital_twin.robots.pr2 import PR2
 from semantic_digital_twin.robots.stretch import Stretch
 from semantic_digital_twin.spatial_types import HomogeneousTransformationMatrix
-from semantic_digital_twin.world_description.geometry import BoundingBox
-
-
-def pytest_configure(config):
-    # Only the xdist controller generates: workers run this hook too, and
-    # concurrent writers would truncate the file while another process formats it.
-    if os.environ.get("PYTEST_XDIST_WORKER"):
-        return
-
-    # Ensure ORM classes are generated before tests run
-    repo_root = Path(__file__).resolve().parents[2]
-    generate_orm_path = repo_root / "coraplex" / "scripts" / "generate_orm.py"
-    # Execute the ORM generation script as a standalone module
-    runpy.run_path(str(generate_orm_path), run_name="__main__")
+from semantic_digital_twin.world_description.geometry import VolumetricBoundingBox
 
 
 @pytest.fixture(scope="session")
@@ -116,14 +110,14 @@ def immutable_stretch_apartment_world(stretch_apartment_world):
 
 
 @pytest.fixture
-def whole_scene_region(immutable_model_world) -> BoundingBox:
+def whole_scene_region(immutable_model_world) -> VolumetricBoundingBox:
     """
     A region large enough to contain everything in the apartment fixture.
 
     Lets a perception test say "look everywhere" without restating the extents.
     """
     world, _, _ = immutable_model_world
-    return BoundingBox(
+    return VolumetricBoundingBox(
         origin=HomogeneousTransformationMatrix(reference_frame=world.root),
         min_x=-10,
         min_y=-10,
