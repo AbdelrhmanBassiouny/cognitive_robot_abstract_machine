@@ -1,143 +1,97 @@
 # PR plan: D-deco — @rdr decorator (Wave 0, S2b)
 
 Decorator half of the @rdr path, stacked on D-store (#80). Base: `D-store`.
-PR: #77 (draft, retargeted from D-ui -> D-store).
+PR: #77 (draft).
 
 ## Scope
 
-- `rdr/decorator.py` — rdr() factory + RDRWrapper.
-- `rdr/templates/rdr_empty.py.jinja` — empty rule-tree section.
-- `test_rdr_decorator.py`, `rdr_decorator.md` (dev + user).
-
-SOLID split preserved; both load invariants hold (case_type.function
-rewired; rdr.save_path always set). Adaptations vs rdr-engine:
-FunctionCaseGenerator().generate, camel_case_to_lower_camel_case,
-load_module_from_path; imports global.
+- `rdr/decorator.py` — `rdr()` factory, `RDRWrapper`, `empty_rule_tree_source`,
+  `function_bound_to_its_own_name`.
+- `rdr/templates/rdr_empty.py.jinja` — the rule-tree section of a model file
+  that has no rules yet.
+- `test_rdr_decorator.py` (27 tests) + `function_decorated_at_import.py`, the
+  module that applies `@rdr` at import time so importing it is the exercise.
+- `doc/eql/{developer,user}/rdr_decorator.md`.
 
 ## Split history (2026-07-16)
 
-The original single D-deco PR was too big for review. Root cause: it
-bundled two unrelated commits — the real @rdr feature (1993 lines) + an
-"umbrella-closure sweep" (1031 lines of orphan files bundled only to make
-`git diff rdr-engine <tip>` reach zero for #38).
-
-Resolution:
-1. Feature split into #80 D-store (file store) + #77 D-deco (decorator).
-2. Sweep dissolved (#38 already closed). Per-file disposition:
-   - rdr_conclusion_domain.py -> REHOME #76 (D-ui guide imports it; required).
-   - test_rule_tree_view.py -> REHOME #76 (only real renderer coverage; the
-     copy.copy assertion was rewired to _node_for_new_position_).
-   - eql_rdr_refactor_plan.md -> dangling (un-indexed) design doc; offered
-     to steward for #68 or drop.
-   - backward_inference_{design,user_guide}.md -> DROPPED (stray krrood/docs/
-     path, not in the built doc tree, referenced by nothing).
-   Both keepers verified green on D-ui (test_rule_tree_view 20 passed);
-   staged for the steward to land (I don't push their branch).
+The original single D-deco PR bundled two unrelated commits — the real @rdr
+feature + an "umbrella-closure sweep" of 5 orphan files. Feature split into
+#80 (file store) + #77 (decorator); sweep dissolved, its two keepers landed
+on #76 by the steward (commit bf5b63c3).
 
 ## Stack
 
-main … D-core-engine (#68) -> D-ui (#76) -> D-store (#80) -> D-deco (#77)
+main … D-core-backend (#210) -> D-ui-rendering (#79) -> D-ui (#76)
+     -> D-store (#80) -> D-deco (#77)
 
-## Status
+## 2026-08-31 resolve — rebuilt onto the rebuilt D-store
 
-- DONE: D-deco rebuilt on D-store, head 7e89ec60 (single decorator commit),
-  force-pushed. #77 retargeted base D-ui -> D-store, description rewritten,
-  subscribed. #80 opened + subscribed.
-- test_rdr_decorator.py: 20 passed. Full test_eql_rdr on D-deco tip: 518
-  passed, 2 skipped (-20 vs before = test_rule_tree_view moved to #76).
-- Earlier: on the pre-split tip, full CI was green (all 18 matrix jobs;
-  semantic_digital_twin case_factory fixed by restack, coraplex
-  test_merge_motions green).
-- Steward notified via #76 comment (2026-07-17): register D-store in the
-  restack chain, hand off the 2 rehome files (staged on branch
-  D-deco-rehome-handoff, cut from D-ui), eql_rdr_refactor_plan.md question.
-- 2026-07-19: steward acted. D-ui split further into 3 stacked branches
-  (D-ui-splice-fix -> D-ui-rendering -> D-ui) and D-store was registered
-  in the restack chain — D-ui/D-store/D-deco all auto-restacked
-  (D-ui a7eb3703->9c7f8e6b, D-store 0c4938d3->b7655f11, D-deco
-  7e89ec60->86717780). Both my commits preserved verbatim (diffed
-  identical old vs new). Re-verified on the new tip: test_rdr_file_store
-  21 passed, test_rdr_decorator 20 passed, full test_eql_rdr 518 passed/
-  2 skipped.
-- New CI flake found: semantic_digital_twin -> test_multi_sim.py::
-  test_world_sim_state_sync (physics-settling assertion). Confirmed
-  unrelated: same job passes on #80, whose only diff from #77 is the
-  decorator commit, which never touches semantic_digital_twin/
-  physics_simulators. Documented in #77's description and flagged on
-  #76; no fix needed here.
-- 2026-07-19 (later): steward landed the rehome — single commit
-  bf5b63c3 "Add conclusion-domain doc fixture + rule-tree renderer
-  test" on D-ui, content byte-identical to what I staged (diffed
-  handoff branch vs new D-ui: empty). D-core-engine also advanced
-  (already incorporated into the new D-ui — confirmed ancestor).
-  Rebuilt D-store (cherry-pick 0c4938d3 -> f1de44d9) and D-deco
-  (cherry-pick 7e89ec60 -> c675dd49) onto the new tips; both diffed
-  content-identical to originals before pushing. Re-verified:
-  test_rdr_file_store + test_rdr_decorator 41 passed, full
-  test_eql_rdr 538 passed/2 skipped (the +20 vs before = 
-  test_rule_tree_view.py now included via the landed D-ui rehome).
-  ORM artifacts reverted. Force-pushed both branches.
-- Attempted to delete the now-landed D-deco-rehome-handoff staging
-  branch; the delete push failed with HTTP 403. CONFIRMED SYSTEMIC:
-  the D-ui/steward session hit the identical rejection independently
-  ("the remote end hung up") trying to delete the same branch — this
-  is a session-wide git-proxy limitation on ref deletion, not specific
-  to my permissions. Stopping retries; branch is harmless (content
-  fully landed), theirs to remove when their side allows it.
-- #77 description updated (verification numbers, known-failures
-  list including both confirmed-unrelated flakes, restack history).
-- 2026-07-19 (later still): full CI green on #77's current head
-  (c675dd49) — all 18 matrix jobs pass, INCLUDING both previously-
-  flaky jobs (coraplex, semantic_digital_twin) — confirms they are
-  genuinely intermittent, not real failures. Both #80 and #77 show
-  mergeable_state "clean". D-ui/steward session independently
-  confirmed the rehome landing and flake diagnoses in their own #76
-  comments; eql_rdr_refactor_plan.md punted to the actual steward
-  (S0), still unanswered.
-- 2026-07-19 (restack #3, automated): D-core-engine, D-ui, D-store,
-  and D-deco all advanced again (D-core-engine bd6e42f4->d98d9566,
-  D-ui bf5b63c3->c50d2109, D-store f1de44d9->07cb6831, D-deco
-  c675dd49->c46c0c5b). This time the restack automation itself
-  pushed merge commits ("Merge origin/X into Y (restack onto updated
-  parent)", authored by the automation identity) directly onto
-  D-store and D-deco — no action needed from this session, just
-  verification. Diffed old tip vs new tip for every file this slice
-  owns (file_store.py + its test on D-store; decorator.py, the
-  jinja template, test_rdr_decorator.py, both rdr_decorator.md docs
-  on D-deco): all empty, confirming zero content drift through the
-  automated merge. Re-ran full test_eql_rdr on the new D-deco tip:
-  538 passed / 2 skipped. mergeable_state was "unstable" right after
-  the restack (CI queued/in-progress on the new tip, not a real
-  conflict) — expected transient state, not investigated further.
-  Reverted the regenerated ormatic_interface.py diff as usual. No
-  new comments on #76/#77/#80; steward's eql_rdr_refactor_plan.md
-  call still outstanding.
-- 2026-07-19 (webhook): CI check `test_each_lib (krrood)` failed on
-  #80 at the restack-#3 tip (07cb6831) — a THIRD, new-type flake
-  (not one of the two previously known ones). Investigated via job
-  logs: it's a collection-time TOCTOU race, not a real test failure
-  (2370 passed, 9 skipped, only 1 collection error). Root cause:
-  `test/krrood_test/conftest.py::generate_sqlalchemy_interface`
-  regenerates ormatic_interface.py atomically via a NamedTemporaryFile
-  written *inside the same directory* pytest-xdist workers are
-  scanning, then os.replace()s it into place; a worker's directory
-  listing can catch another worker's in-flight .tmp file, which is
-  gone by the time pytest lazily tries to collect it ->
-  `AssertionError: PosixPath(...ormatic_interface.<hash>.py.tmp) is
-  not a file`. Confirmed pre-existing on main (`git diff main..D-store
-  -- test/krrood_test/conftest.py` shows only docformatter whitespace
-  noise, the temp-file-in-same-dir logic is unchanged) — not
-  introduced by this stack, not in #80/#77's own diff. Per AGENTS.md
-  (don't touch ormatic_interface.py machinery myself), reported on #76
-  for the developer's awareness rather than fixed; no action taken on
-  #80/#77. Will note if it recurs.
+What the item's record was missing, recorded as blockers before any work:
+#77's head was from 2026-07-19, still merging D-store's *pre-rebuild* tip
+`07cb6831`, so it carried #78's `cfe32ad0`. GitHub read the PR `dirty`,
+16,493 additions across 52 files, and two maintenance passes (11:18Z,
+12:30Z) had each hit 44 conflicting files and left it `needs-resolution`.
+
+Rebuilt as a **branch reset** onto `D-store` (`ae3fdb05`), per roadmap
+decision 1, never a merge. Pre-rebuild tip `c46c0c5b`. The slice's own work
+replays as one commit; #77 should now read ~1.5k lines in 6 files.
+
+### Interface drift brought up to the base
+
+Same class #79/#76/#80 each hit: `rdr.utils.UNSET` -> `...`;
+`EQLSingleClassRDR.save_path` -> the `ModelSaver` strategy, so the wrapper
+hands the store to `rdr.model_saver`; `RDRFileStore.func` -> `function`;
+`FunctionInterface(answer_fn=)` -> `answer_function`; answer keys are
+`AnswerName` members; `("self","cls")` -> `PythonBuiltinParameterNames`;
+generation now passes `base_class=FunctionCase` (the rdr layer's own), which
+is #80's decision-11 defect applied on the generate path.
+
+### The defect this slice surfaced
+
+**`@rdr` could not work as a decorator at all on the rebuilt base.** The
+model file imports the decorated function back by name; the decorator reads
+that file *during* decoration, while the defining module is still executing,
+so the `@` has not bound the name yet and the import fails on a partially
+initialized module. Broken for every function, in a real module and in
+`__main__` alike — not just for locals.
+
+Developer chose the fix in `decorator.py` (asked, 3 candidate homes):
+`function_bound_to_its_own_name` binds the undecorated function under its own
+name for the duration of the read and restores what was there. Covered by
+`function_decorated_at_import.py` + 2 tests, failing first.
+
+### Deliberate behaviour change
+
+`classify` returning `None` is now a real conclusion; only `...` means "no
+rule fired". The old code treated `None` as no-rule, which is a leftover from
+the `UNSET` sentinel and contradicts the base's `ConclusionDomain`. Pinned by
+`test_rule_concluding_none_is_answered_with_none`.
+
+## Verification (Python 3.12, matching CI)
+
+- `test_eql_rdr`: **576 passed, 2 skipped**, against **549 passed, 2 skipped**
+  measured on the base itself — exactly the 27 added, nothing else moved.
+- Both guides' code cells extracted and executed; the user guide is a CI job
+  via `test_eql_documentation.sh`, so this is not optional.
+- `scripts/format_docstrings.py` run over the new modules; no `:return:``x```
+  regression this round.
+
+## Known gaps, recorded not fixed
+
+- Neither guide is in `krrood/doc/_toc.yml`, matching #76's
+  `eql_rdr_conclusion_asking.md`. Left to whoever lands the stack rather than
+  making `_toc.yml` a conflict point across five branches.
+- `decorator.py` imports three module-private names from `serialization.py`
+  (`_FACTORY_IMPORT`, `_CLASS_AND_RULES_SEPARATOR`, `_TEMPLATES_DIRECTORY`).
+  Real smell; `serialization.py` is #66's file, so decision 5 says not here.
+- `plan_item_bootstrap.py update` writes 4-space-indented fields when an
+  item's block ends in a list (`depends_on`), producing invalid YAML.
+  Worked around by editing `plan.yaml` directly. Belongs to the
+  plan-tracking tooling, not to this PR.
 
 ## Next
 
-- Babysit #80 and #77 until merged/closed (#80 merges first). Both
-  green/clean pre-restack; post-restack content verified identical,
-  CI re-running on the new tip — check back for it to go green.
-- Still waiting: steward's (S0) call on eql_rdr_refactor_plan.md (land
-  on #68 with an index entry, or drop) — posted, no reply yet.
-- D-deco-rehome-handoff: leave as-is, systemic delete limitation
-  confirmed by two independent sessions — not worth further retries.
+- Push, restore #77 to draft, update its description.
+- CI has never run on this branch's current stack; every figure above is a
+  local measurement.
