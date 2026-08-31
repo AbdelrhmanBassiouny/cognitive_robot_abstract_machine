@@ -1916,3 +1916,48 @@ Both were proposed on #201 when #227 was kicked off, and the developer accepted 
   This is what closes the gap #227 leaves: a look reports sightings rather than the things
   a relation is written over, so #227 refuses any relation its backend did not narrow by.
   Spawning gives every other predicate a real subject to be evaluated against.
+
+### `predicates-answer-whether-they-hold`: what it took, and where the boundary fell
+
+Built 2026-08-31 as pull request #229 off `main`, and merged into #227 the same day.
+
+**Nine relations converted, not one.** The item was raised about `InsideOf`, and the same
+shape turned out to be everywhere in `reasoning/predicates.py`: `is_body_in_region`
+answered the same kind of fraction from a name that reads as a question (now
+`InsideRegion`), and support, contact, visibility, reachability, stability and occupancy
+were `@symbolic_function`s, so they could be evaluated but never stated. The six
+view-dependent spatial relations came across from #227's own commit.
+
+**No call site outside the module had to move**, which is what made the scope affordable.
+krrood's `symbolic_callable_to_function` builds each function spelling from its class, so
+`is_supported_by`, `contact`, `visible`, `reachable`, `stable`, `is_supporting`,
+`is_place_occupied` and `is_body_in_region` keep their names and signatures off one
+implementation. `giskardpy`, `coraplex` and `segmind` are untouched, which matters because
+none of the three can even be imported in this container.
+
+**Two call sites did change, and both for the reason the item exists**: they read a ratio
+as a truth value. `semantic_annotations.doors` compared `InsideOf(...)() > 0.1` and now
+states `minimum_containment_ratio=0.1`; the procthor script now reads
+`compute_containment_ratio()` explicitly. That is the threshold moving from an unexplained
+constant at the call site to a stated intent on the relation, which is the whole point.
+
+**Where the boundary fell.** `get_visible_bodies` and `occluding_bodies` answer lists and
+`compute_euclidean_planar_distance` answers a distance with no truth reading, so they stay
+functions. A predicate is the wrong shape for them, and "everything in the file" would have
+been a worse rule than "everything that asserts something".
+
+**A default threshold is a judgement, so it is stated rather than inherited.**
+`minimum_containment_ratio` and `minimum_contained_fraction` default to half - a thing more
+than half swallowed is in, one less than half swallowed is overlapping. That is a choice
+this item made and can be argued with; it is written on the field rather than left for a
+reader to infer, and no existing caller depends on it, since the two that thresholded did
+so explicitly.
+
+**Verified**: `test_predicates.py` 24 passed against 8 on `main`, and the whole
+`semantic_digital_twin` package's failing-and-erroring set byte-identical to `main`'s,
+diffed by name in a worktree with its own `*/src` on `PYTHONPATH`.
+
+**Merged into #227 rather than waited on**, which is this plan's standing `depends_on`
+rule. That merge took #229's side of `predicates.py` and `test_predicates.py` whole, since
+it supersedes what #227 had written, and kept only #227's own test that reads a support
+relation asserted about a variable as a `StatedRelation`.
