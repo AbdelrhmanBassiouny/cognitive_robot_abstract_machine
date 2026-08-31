@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import numpy as np
 import pytest
 
@@ -153,6 +155,33 @@ class TestRotationMatrix:
         assert np.allclose(
             RotationMatrix.from_vectors(x=x_unit, y=y_unit, z=z_unit), R_ref
         )
+
+    @pytest.mark.parametrize(
+        "direction",
+        [
+            np.array([1.0, 2, 3]),
+            np.array([1.0, 0, 0]),
+            np.array([0.0, 1, 0]),
+            np.array([0.0, 0, 1]),
+            np.array([1.0, 1, 0]),
+            np.array([0.0, 0, -5]),
+        ],
+    )
+    def test_from_x_axis(self, direction):
+        """
+        The x-axis of the result points along the given direction, whatever the
+        direction is, and the two axes completing the frame turn it into a proper
+        rotation matrix.
+        """
+        expected_x_axis = direction / np.linalg.norm(direction)
+
+        result = RotationMatrix.from_x_axis(Vector3.from_iterable(direction)).to_np()[
+            :3, :3
+        ]
+
+        assert np.allclose(result[:, 0], expected_x_axis)
+        assert np.allclose(result.T @ result, np.eye(3))
+        assert np.isclose(np.linalg.det(result), 1)
 
     @pytest.mark.parametrize("q", quaternions)
     def test_from_quaternion(self, q):
@@ -522,6 +551,17 @@ class TestRotationMatrix:
             assert np.allclose(
                 det, 1.0, atol=1e-10
             ), f"Determinant {det} != 1.0 for operation"
+
+    def test_deepcopy_of_default_constructed_matrix(self):
+        """
+        The identity shortcut in the constructor still yields a copyable matrix.
+        """
+        rotation = RotationMatrix()
+
+        rotation_copy = deepcopy(rotation)
+
+        assert isinstance(rotation_copy, RotationMatrix)
+        np.testing.assert_array_equal(rotation_copy.to_np(), rotation.to_np())
 
 
 class TestPoint3:
@@ -1779,6 +1819,29 @@ class TestTransformationMatrix:
         assert t_copy.reference_frame == t.reference_frame
         assert t_copy.child_frame == t.child_frame
 
+    def test_deepcopy_of_default_constructed_matrix(self):
+        """
+        The identity shortcut in the constructor still yields a copyable matrix.
+        """
+        transform = HomogeneousTransformationMatrix()
+
+        transform_copy = deepcopy(transform)
+
+        assert isinstance(transform_copy, HomogeneousTransformationMatrix)
+        np.testing.assert_array_equal(transform_copy.to_np(), transform.to_np())
+
+    def test_deepcopy_of_symbolic_matrix_keeps_free_variables(self):
+        """
+        A copied symbolic matrix keeps reporting the variables of its original.
+        """
+        transform = HomogeneousTransformationMatrix.create_with_variables("joint")
+
+        transform_copy = deepcopy(transform)
+
+        assert [variable.name for variable in transform_copy.free_variables()] == [
+            variable.name for variable in transform.free_variables()
+        ]
+
     def test_robot_kinematics(self):
         """
         Test transformation matrices in typical robotics scenarios.
@@ -1994,3 +2057,48 @@ def test_underspecification_of_transformation():
     q = q.where(q.variable.x > 0)
     t1 = q.construct_instance()
     assert t1.x == 1
+
+
+# %% normalisation of the constant entries
+
+
+class TestConstantEntriesAreNormalised:
+    """
+    The types whose matrices carry fixed entries repair those entries on construction,
+    rather than trusting the data they are handed.
+    """
+
+    @staticmethod
+    def _matrix_with_wrong_constant_entries() -> np.ndarray:
+        data = np.eye(4)
+        data[3, :] = [7.0, 7.0, 7.0, 7.0]
+        data[:3, 3] = [5.0, 5.0, 5.0]
+        return data
+
+    def test_transformation_matrix_repairs_its_bottom_row(self):
+        matrix = HomogeneousTransformationMatrix(
+            data=self._matrix_with_wrong_constant_entries()
+        )
+        np.testing.assert_array_equal(matrix.to_np()[3, :], [0.0, 0.0, 0.0, 1.0])
+
+    def test_transformation_matrix_keeps_its_translation(self):
+        matrix = HomogeneousTransformationMatrix(
+            data=self._matrix_with_wrong_constant_entries()
+        )
+        np.testing.assert_array_equal(matrix.to_np()[:3, 3], [5.0, 5.0, 5.0])
+
+    def test_pose_repairs_its_bottom_row(self):
+        pose = Pose.from_casadi_sx(sm.to_sx(self._matrix_with_wrong_constant_entries()))
+        np.testing.assert_array_equal(pose.to_np()[3, :], [0.0, 0.0, 0.0, 1.0])
+
+    def test_rotation_matrix_repairs_its_bottom_row(self):
+        rotation = RotationMatrix.from_casadi_sx(
+            sm.to_sx(self._matrix_with_wrong_constant_entries())
+        )
+        np.testing.assert_array_equal(rotation.to_np()[3, :], [0.0, 0.0, 0.0, 1.0])
+
+    def test_rotation_matrix_drops_any_translation(self):
+        rotation = RotationMatrix.from_casadi_sx(
+            sm.to_sx(self._matrix_with_wrong_constant_entries())
+        )
+        np.testing.assert_array_equal(rotation.to_np()[:3, 3], [0.0, 0.0, 0.0])
