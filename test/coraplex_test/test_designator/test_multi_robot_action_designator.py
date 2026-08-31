@@ -643,11 +643,13 @@ def test_detect(immutable_multiple_robot_apartment):
     with world.modify_world():
         world.add_semantic_annotation(Milk(root=milk_body))
 
+    # East of the multi-storey building the fixture merges in, so that the robot looks
+    # at the milk rather than at one of the building's room walls.
     robot.root.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-        1.5, -2, 0
+        5, -2, 0
     )
     milk_body.parent_connection.origin = HomogeneousTransformationMatrix.from_xyz_rpy(
-        2.5, -2, 1.2, reference_frame=world.root
+        6, -2, 1.2, reference_frame=world.root
     )
 
     description = DetectAction(
@@ -666,7 +668,7 @@ def test_detect(immutable_multiple_robot_apartment):
     assert milk_body in perceived.bodies
     np.testing.assert_allclose(
         milk_body.global_pose.to_position().to_np().flatten()[:3],
-        (2.5, -2, 1.2),
+        (6, -2, 1.2),
         atol=1e-9,
     )
 
@@ -869,9 +871,9 @@ def test_a_location_validates_a_candidate_where_navigating_to_it_would_stand(
     it never stands in.
     """
     world, robot, context = mutable_multiple_robot_apartment
-    # Somewhere every robot in the fixture fits, since a candidate in collision is
-    # dropped before any validator sees it.
-    heading = Pose.from_xyz_rpy(0.3, -2.4, 0, yaw=0.7, reference_frame=world.root)
+    # Clear of the multi-storey building's floor slab, which every robot would otherwise
+    # stand on: a candidate in collision is dropped before any validator sees it.
+    heading = Pose.from_xyz_rpy(5, -2.4, 0, yaw=0.7, reference_frame=world.root)
     recorder = BasePoseRecorder()
     location = Location(context, heading, SinglePoseGenerator(heading), [recorder])
 
