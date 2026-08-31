@@ -576,11 +576,12 @@ items:
 
   - id: perception-predicates-guide-the-search
     title: "Guide the search by predicates and annotations, not by attribute names"
-    branch: null
-    pull_request_number: null
+    branch: claude/plan-item-kickoff-perception-ogf2g9
+    pull_request_number: 227
     track: request-language
     depends_on: [perception-backend]
-    status: not_started
+    status: in_progress
+    session: https://claude.ai/code/session_0137umDhuvEG3jkbh6iZUDzQ
     notes: >-
       Raised by the developer across five review threads on #222, which are one ask: a look
       should be narrowed by what the world means, not by an attribute spelled as a string.
