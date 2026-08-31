@@ -449,12 +449,16 @@ items:
   depends_on:
   - integration-branch
   blockers:
-  - 'The candidate''s base makes it unjudgeable. #220 had no `refs/pull/220/merge` at all and no checks
-    after eleven hours, because a build conflicts with `integration` - itself an older build of the same
-    branches. Both candidates are closed now, so the rebuild is unwedged, but nothing opened against
-    `integration` can be judged until the base is one the build always merges with - which needs a
-    discriminator that is not the base, since `find-candidate` tells a full candidate from a `--plan`
-    one by what it is opened against.'
+  - 'The candidate''s base makes it unjudgeable, and it is the last blocker. #220 had no
+    `refs/pull/220/merge` and no checks after eleven hours, because a build conflicts with `integration`
+    - itself an older build of the same branches - while the same build opened against `main` had both
+    within twenty seconds and went green on 23 checks (#224). Verified on 2026-08-31 before the fix:
+    `OpenCandidateCommand.run` still opens a full build against `POINTER_BRANCH`, `find-candidate` still
+    tells a full candidate from a `--plan` one by that base alone, and `RefreshPipeline._act_on` still
+    stops the run on `CANDIDATE_UNCHECKED` rather than closing what it cannot judge. Also verified: the
+    publish guard `6ae74bd44` is on the branch, PR #211 is open and out of draft, its one unresolved
+    review thread is the cadence question already answered and left for the author to close, and the
+    tracking issue has carried nothing about this item since 2026-08-12.'
   notes: 'Part D of `integration-branch`''s review round: the verdict moves from a local test run to real CI.
 
     Folded back onto that item''s branch after being split out, so it has no pull request of its own - the
