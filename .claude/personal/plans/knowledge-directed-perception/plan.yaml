@@ -768,7 +768,19 @@ items:
     everywhere, and asserted directly. The rule sending an amber piece to the edge fit reads the
     colour the world states, and BOARD_COLOR is eleven hues from the wood the camera measures, so it
     does not fire on the real board until detector-parameters-from-knowledge moves measured colours
-    onto the twin.'
+    onto the twin.
+
+    Corrected 2026-08-31 by the developer: the EQL-native RDR engine *is* usable. The note above read
+    the D-core-* stack''s merge state as its usability, which contradicts this plan''s own rule that
+    depends_on means stacked on, never waiting for a merge. #64 -> #65 -> #66 -> #67 -> #98 -> #159
+    (EQLSingleClassRDR) -> #210 -> #79 -> #76 -> #80 -> #77 (the @rdr decorator) are all open, out of
+    draft and reviewed. Only the classic krrood.ripple_down_rules machinery is unusable.
+
+    #231 keeps its stated rule tree anyway, at the developer''s decision: EQLSingleClassRDR.query is
+    init=False so the engine grows its tree by fitting cases through an Expert rather than taking one
+    already built, which would make two known rules fitted-from-examples; and merging #159 in would add
+    9,236 lines of another plan''s stack to a 600-line pull request. What the engine adds - fit,
+    render_tree, the corner-case store, the model file - is what the next two items are written around.'
 - id: detector-parameters-from-knowledge
   title: Take the detectors' numbers from the objects and the surfaces they look at
   branch: perception_parameters_from_knowledge
@@ -803,7 +815,15 @@ items:
 
     Ownership of test_every_piece_resting_on_the_lid_is_found moved to pieces-looked-for-where-expected
     on 2026-08-31: those failures are a seeding fault, not a parameter fault, and this item is blocked
-    on krrood''s ripple-down rules while that one is not.'
+    on krrood''s ripple-down rules while that one is not.
+
+    Not blocked, corrected 2026-08-31. The note above says this depends on krrood''s ripple-down rules
+    becoming usable through the RDR/EQL refactor''s integration build. They are usable now: the
+    EQL-native rule trees are on main, and EQLSingleClassRDR is on #159, which is open, out of draft and
+    reviewed - and this plan''s rule is that depends_on means stacked on, never waiting for a merge. This
+    item should stack on #159 rather than on choose-detection-method''s hand-written tree, because
+    render_tree is what its own ask for "an inspectable rule tree rather than a hand-written condition"
+    actually names.'
 - id: tune-detection-rules-against-the-camera
   title: Conclude a detection rule while watching the camera, with its numbers on sliders
   branch: perception_interactive_rule_tuning
@@ -820,7 +840,13 @@ items:
     or dropdowns, so the expert sees what a value does to the detection before committing it as a rule.
     Needs the parameters to be rule-concluded first, which is detector-parameters-from-knowledge, and
     it touches krrood''s expert interface as much as perception - so where the presenter itself lands
-    is a question for the RDR/EQL refactor plan when this starts.'
+    is a question for the RDR/EQL refactor plan when this starts.
+
+    Worth reconsidering, 2026-08-31. This was deferred partly as tooling that would have to be built, and
+    most of it already is: #76 is the interactive expert interface, #80 the model-file store and #77 the
+    @rdr decorator, all open, out of draft and reviewed. What remains of this item is the perception-side
+    presenter that shows the camera beside the parameters, not the expert interface underneath it. Whether
+    that is enough to un-defer it before 2026-09-15 is the developer''s call and is not taken here.'
 - id: episode-replayed-into-the-world
   title: Replay a recorded episode into the world so Segmind can say what happened
   branch: segmind_rosbag_player

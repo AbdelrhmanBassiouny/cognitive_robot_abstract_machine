@@ -2275,3 +2275,53 @@ hand `detect` the frame's shared edges.
 `record` produce invalid YAML and fail inside `save-plan.sh`, whose output the script swallows
 with `capture_output=True`. It is the same family as #160 and it is unfixed on `main`. Worked
 around by editing `plan.yaml` directly; worth its own bug-fix pull request.
+
+#### Correction, 2026-08-31: the EQL-native RDR engine is usable, and this section said it was not
+
+The developer's correction, and it overturns the third bullet above. That bullet read the
+`D-core-*` stack's *merge* state as its usability -- "eight unmerged pull requests deep in a
+stack whose root (#64) is still open" -- which contradicts this plan's own standing rule, set
+out in the budget section: **`depends_on` means stacked on, never waiting for a merge.** By
+that rule an open, reviewed, out-of-draft branch is available to build on, and the whole
+chain is exactly that:
+
+#64 -> #65 -> #66 -> #67 -> #98 -> #159 (`EQLSingleClassRDR`) -> #210 -> #79 -> #76 -> #80 ->
+ #77 (the `@rdr` decorator)
+
+Every one of those is open and out of draft, and none carries `needs-resolution`. (#68 is a
+draft, but it is the older parallel branch off `D-core-support` that #159 supersedes, and #81
+hangs off it rather than off this chain.) So the accurate statement is: **the classic
+`krrood.ripple_down_rules` machinery is unusable, and both the EQL-native rule trees and the
+EQL-native RDR engine are available** -- the first on `main`, the second by stacking.
+
+**This does not change what #231 built**, at the developer's decision, and the reasons are
+worth keeping because they are about where the engine earns its place rather than about
+whether it works:
+
+- `EQLSingleClassRDR.query` is `field(init=False)` -- the RDR *grows* its own tree through
+  `fit_case`/`fit` with an `Expert`, and there is no public way to hand it one already built.
+  So expressing this item's two rules through it makes them fitted from cases and targets
+  rather than stated, which is a different authoring model for the same two rules.
+- Merging #159 into #231 would add **9,236 lines** to the diff of a pull request whose own
+  change is about 600, and #77 would add **22,745**. That is another plan's work carried
+  through this one's review.
+- What the engine actually adds -- `fit` with an expert, `render_tree`, the corner-case store,
+  the model file and the interactive expert interface -- is what the *next two* items are
+  written around, not this one. `detector-parameters-from-knowledge` asks for the contour
+  chain to become "an inspectable rule tree", which is `render_tree`; and
+  `tune-detection-rules-against-the-camera` is a presenter over the `ConclusionHelper`, which
+  is the expert interface. **Both should stack on #159, and the tuning item on #77, rather
+  than on a hand-written tree.**
+
+**What this changes for the plan is the schedule, and it changes it twice over.**
+`detector-parameters-from-knowledge` was recorded as blocked on the ripple-down rules becoming
+usable; it is not blocked, and it now has a named branch to stack on. And
+`tune-detection-rules-against-the-camera` was deferred past the deadline partly as tooling
+that would have to be built; #76, #80 and #77 are that tooling, already written and reviewed,
+so what remains of that item is the perception-side presenter rather than the expert interface
+underneath it. Whether that is enough to un-defer it is the developer's call and is not taken
+here.
+
+Worth generalizing, because this is the second time this plan has recorded a blocker that was
+not one: **"unmerged" is not "unusable" on a plan whose standing rule is to stack.** Read a
+dependency's draft state and its review state, not its merge state.
