@@ -202,6 +202,14 @@ class RgbdFrame:
             )
 
     @property
+    def camera_position(self) -> np.ndarray:
+        """
+        Where the camera stands, as world-frame ``(x, y, z)`` in the frame detections
+        are reported in.
+        """
+        return self.reference_frame_T_camera[:3, 3]
+
+    @property
     def height(self) -> int:
         """
         Number of image rows.
