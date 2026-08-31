@@ -449,19 +449,14 @@ items:
   depends_on:
   - integration-branch
   blockers:
-  - 'The base fix landed in `c77b9ea79` and the bootstrap is still owed a candidate. The first dispatch
-    ran on 2026-08-31 (queued 1h45m, executed in 2.5 minutes) and got further than any run before it:
-    `find-candidate` correctly reported `no-candidate-open` (18) - the first time the new discriminator
-    was exercised live - the base came forward, and the build assembled. It then exited `tests-failed`
-    (11), because the local suite failed on the assembled tree: `claude/setup-stacked-prs-skill` (#110)
-    and `D-store` (#80) merge cleanly and break together, which is exactly the semantic collision the
-    local run exists to catch and which no per-branch check can see. `block-branch` labelled #110
-    `integration-conflict` and commented, so the next rebuild leaves it and its dependents out - which is
-    what should let the following build reach a candidate. So no candidate was opened, nothing was
-    pushed, and the candidate half of the pipeline - the base change, the title discriminator, the
-    close-and-move-past - is still unexercised live. Next: dispatch again on this branch, and read the
-    build''s `left_out` to confirm it carries #211 and #154, since the guard refuses a build with no
-    rebuild in it.'
+  - 'Waiting on a dispatch that reaches a candidate. The base fix landed in `c77b9ea79` and the
+    block-and-continue fix in `ba65d62bc4`. Two dispatches on 2026-08-31 each found one cross-branch
+    break and ended on it - #110 first, then #107, its own base - so two runs and roughly two hours of
+    queue bought two labels and no candidate, which is what the second fix ends: a rebuild now blocks the
+    break and assembles again without it, up to five times in one run. The candidate half of the pipeline
+    - the base change, the title discriminator, the close-and-move-past - remains unexercised against
+    real GitHub until a run gets past the suite. Read the build''s `left_out`, which every attempt now
+    prints, to confirm it carries #211 and #154 before anything publishes.'
   notes: 'Part D of `integration-branch`''s review round: the verdict moves from a local test run to real CI.
 
     Folded back onto that item''s branch after being split out, so it has no pull request of its own - the
@@ -779,6 +774,25 @@ items:
     (11)` three times and nothing else - and `left_out`, the one thing that has to be read before a second dispatch
     can publish, is exactly what it swallows. The collision itself was still recoverable, but only because `block-branch`
     writes to the culprit''s pull request rather than to the run''s log.
+
+
+    **Two dispatches, two breaks, no candidate - and that is what made the stop-on-first-break rule indefensible.**
+    Run 17 blocked #110 after 1h45m of queue; run 18 then blocked #107, which is #110''s own base. Each break
+    cost a whole cycle because the rebuild ended on it, and there was no reason it had to: the tree that failed
+    carries the culprit, but the build *without* the culprit is one the same run can make, and it is exactly
+    what the next rebuild would have produced a cycle later. `ba65d62bc4` blocks and assembles again, bounded
+    at five by `BREAKS_ONE_REBUILD_BLOCKS` - a budget rather than a measurement, since what a run blocked stands
+    either way. A search that could blame no single tip still ends the run, because it leaves the same branches
+    to merge and so would rebuild the same failing tree for ever. A recovering run exits success, as a build
+    that left a tip out already does: the break is reported on the culprit''s own pull request, which is where
+    its owner reads it.
+
+
+    **The reporting gap was wider than the one reported.** `_build` printed the build''s document only on the
+    statuses that leave nothing to judge - so neither a failed suite nor a *successful* build ever said what
+    it had left out, and the one document that has to be read before publishing had never been printed by any
+    run that could publish. Every attempt prints it now, and the block prints what it blocked, read through the
+    key the block writes rather than through the verdict''s, which has no name for a blocked branch.
 
     '
 - id: red-candidate-localisation

@@ -172,6 +172,13 @@ and re-applies its delta.
   local run answered it in two and a half minutes rather than after a matrix. What it costs is that
   the run stops there, so a cycle that hits one exercises nothing downstream of the build.
 
+- **A rule that ends a run must be one the run could not have handled itself.** Stopping on the first
+  cross-branch break looked like the conservative choice and was the expensive one: two dispatches and
+  two hours of queue bought two labels and no build. What the run cannot use is the *tree*, which
+  carries the culprit; the build without it is one the same run can make, and is what the next rebuild
+  would have produced anyway. The bound that remains is a budget, plus the one case that genuinely
+  cannot continue - a search that blamed no single tip, which would rebuild the same failing tree.
+
 ## The integration branch's design, stated once
 
 - **It gates nothing.** Promotion asks whether a branch is ready for upstream review; integration asks
