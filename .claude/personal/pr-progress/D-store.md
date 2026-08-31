@@ -1,28 +1,33 @@
-# PR plan: D-store — RDRFileStore (Wave 0, S2a)
+## D-store (#80) — RDRFileStore, resolved 2026-08-31
 
-Storage half of the @rdr decorator path, split out of the original D-deco
-so each concern reviews on its own. Base: `D-ui` (#76). PR: #80 (draft).
+`/plan-item-resolve rdr-interface-and-decorator D-store`, auto mode.
 
-## Scope
+### What was wrong
 
-- `rdr/file_store.py` — RDRFileStore: path resolution (`_rdr_models/` for
-  relative names, absolute used as-is) + model-file lifecycle
-  (exists / load_case_type / save), delegating to save_rdr_with_case and
-  load_module_from_path.
-- `test_rdr_file_store.py` — path resolution, existence, save, and the
-  load_case_type + classify round-trip via FunctionCaseGenerator +
-  EQLSingleClassRDR. No decorator dependency (genuinely standalone).
+Head unmoved since 2026-07-19, on `D-ui`'s pre-rebuild tip `c50d2109`, so it
+carried #78's `cfe32ad0`. Three maintenance passes hit ~39 conflicts and
+skipped it; `needs-resolution` label. Last CI red. None of it on the item.
 
-## Stack
+### Done
 
-main … D-core-engine (#68) → D-ui (#76) → **D-store (#80)** → D-deco (#77)
+- Recorded the three blockers on the item before starting.
+- Reset onto `D-ui` and replayed the slice; #80 is 417 additions / 5 files,
+  down from 14,994 / 47. Restacked again onto `1045c6d5a` mid-session.
+- `RDRFileStore` is a `ModelSaver`; `ModelFileMissing` replaces a bare
+  `FileNotFoundError`; 16 tests, TDD.
+- Two base-side defects the slice surfaced: template `if TYPE_CHECKING:` with
+  no body (→ #226 off `main`, ported here) and `save_rdr_with_case`'s
+  `base_class` (#66's line, applied here at the developer's direction).
+- 548 passed / 2 skipped vs 532 / 2 on the base, Python 3.12.
+- Manifest, roadmap sections 11-12, issue #94 comment, both PR descriptions.
 
-## Status
+### Next
 
-- DONE: cut off origin/D-ui (a7eb3703), commit 0c4938d3, pushed, draft
-  PR #80 open with session link, subscribed to activity.
-- test_rdr_file_store.py: 21 passed on this branch.
+Nothing owed on #80 by this session. Outstanding for whoever picks it up:
 
-## Next
-
-- Babysit #80 until merged/closed. Merges before #77.
+- **#226 needs review** and, once merged, its port here becomes a no-op.
+- **`D-deco` (#77) still sits on `D-store`'s pre-rebuild history** and needs
+  the same reset.
+- **`validate_annotations` raises on Python 3.10/3.11** (`StrEnum` value
+  containment); recorded in the roadmap's Open section, not fixed.
+- **CI has still never run green on `D-store`** — all figures are local.
