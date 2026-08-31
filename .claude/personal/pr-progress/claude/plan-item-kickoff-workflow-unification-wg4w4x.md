@@ -43,7 +43,8 @@ re-run. Not re-drafted, deliberately.
   apply.
 - `plan_item_bootstrap.py update` writes item fields at a hardcoded four-space
   indent, so replacing this item's `blockers` produced a manifest that no longer
-  parses. That is the `ItemIndentation` fix the roadmap assigns to this branch.
-  **Not folded in** — it is not this item's work and the bootstrap is in flight.
+  parses. That is the `ItemIndentation` fix `manifest-currency-first` (#151)
+  already records against its own branch — #151 introduces `update`, so it is
+  the only branch that can test one. **Not folded in here**, reported instead.
   Every manifest write this session went through a hand-edited splice plus
   `save-plan.sh`. Your call whether it belongs here.
