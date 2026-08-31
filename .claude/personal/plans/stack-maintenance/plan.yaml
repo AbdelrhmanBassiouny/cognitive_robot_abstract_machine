@@ -449,12 +449,6 @@ items:
   depends_on:
   - integration-branch
   blockers:
-  - 'The pipeline branches are left out because #211 conflicts with #160''s branch
-    (`claude/plan-item-bootstrap-yaml-indent-y8qs0m`) in `plan_item_bootstrap.py` and its test - the
-    duplication this plan already resolved on paper by folding #160 into #151''s branch. The build
-    carries #160 first and skips #211, and #211 is the tip of the stack holding #154, so both go. Until
-    that fold happens every build drops the pipeline, and a build with no pipeline in it is now one the
-    guard refuses to publish rather than one that ends the automation.'
   - 'The candidate''s base makes it unjudgeable. #220 had no `refs/pull/220/merge` at all and no checks
     after eleven hours, because a build conflicts with `integration` - itself an older build of the same
     branches. Both candidates are closed now, so the rebuild is unwedged, but nothing opened against
@@ -718,7 +712,22 @@ items:
 
     report now and takes its exit status from the `published` field it carries, so a run cannot exit
 
-    success over a report saying it published nothing. 926 tests pass, from 913; six mutations checked.'
+    success over a report saying it published nothing. 926 tests pass, from 913; six mutations checked.
+
+
+    **#160 was closed on 2026-08-31, superseded by #151, so the fold is done and the blocker naming it
+
+    is gone.** What kept the pipeline out of every build was that #160''s branch was carried first and
+
+    collided with this one over `plan_item_bootstrap.py`; with it closed it is off the board, so a build
+
+    should now carry #211 and the #154 beneath it. Recorded as expected rather than as measured: no
+
+    build has been assembled since, and the first one''s `left_out` is what confirms it. One thing to
+
+    check with it - #151 is a draft, and readiness is read down the whole chain, so anything rooted on
+
+    it is left out entire.'
 - id: red-candidate-localisation
   title: Localise a red candidate to the branches that caused it
   branch: claude/plan-item-kickoff-workflow-unification-wg4w4x

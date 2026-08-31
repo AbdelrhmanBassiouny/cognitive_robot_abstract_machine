@@ -183,9 +183,10 @@ and re-applies its delta.
   `plan_item_bootstrap.py`, so the build skips it - and it is the tip of the stack carrying #154, where
   `integration.py` and the refresh workflow live. Measured on the 2026-08-30 build: nine branches
   carried, neither of those two, no pipeline in the tree. Folding #160 is what clears it. Since
-  2026-08-31 such a build is refused rather than published, so what is left of this is a pipeline
-  unable to publish anything at all until the fold happens - loudly, and once per rebuild rather than
-  once and for all.
+  2026-08-31 such a build is refused rather than published, so a pipeline-less build is loud and once
+  per rebuild rather than fatal and once and for all. **#160 was closed the same day, superseded by
+  #151**, so the collision that skipped #211 is off the board and the next build should carry the
+  pipeline - expected rather than measured, since none has been assembled since.
 - **A candidate opened against the branch it replaces stops being checkable once that branch falls
   behind.** `integration` is itself an older build of the same branches, so a new build conflicts with
   it, GitHub computes no merge reference, and a `pull_request` run - which checks that reference out -
