@@ -18,14 +18,20 @@ The choice is made in two parts, which answer different questions:
 Neither part subsumes the other. Both detectors here can answer a look at a piece on a
 matte surface, so a capability alone leaves the question open; and a tree that named
 detectors without asking them would have to be rewritten to gain one.
+
+The tree is a live one. It is stated when the rules are built and grows through
+:meth:`DetectorRules.add_rule`, so a situation nobody foresaw is given a rule while the
+rules are in use rather than written into the code that reads them.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from functools import cached_property
 
 from krrood.entity_query_language.factories import (
+    ConditionType,
     add,
     an,
     and_,
@@ -34,7 +40,8 @@ from krrood.entity_query_language.factories import (
     refinement,
     variable,
 )
-from typing_extensions import Any, Dict, List, Optional, Sequence, Tuple
+from krrood.entity_query_language.rules.conclusion_selector import Alternative
+from typing_extensions import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.detections import MontessoriShapeDetection
@@ -53,6 +60,10 @@ from semantic_digital_twin.world_description.geometry import SurfaceFinish
 from semantic_digital_twin.world_description.world_entity import (
     KinematicStructureEntity,
 )
+
+if TYPE_CHECKING:
+    from krrood.entity_query_language.core.base_expressions import SymbolicExpression
+    from krrood.entity_query_language.query.query import Query
 
 # %% what the rules read
 
@@ -119,9 +130,8 @@ class PieceDetector(ABC):
     is which.
     """
 
-    @classmethod
     @abstractmethod
-    def capability(cls, look: Any) -> Any:
+    def capability(self, look: TargetOnSurface) -> ConditionType:
         """
         The looks this detector can answer, as a condition over a look.
 
@@ -133,15 +143,30 @@ class PieceDetector(ABC):
         :return: The condition, which holds exactly for the looks this detector answers.
         """
 
-    @classmethod
-    def answers(cls, look: TargetOnSurface) -> bool:
+    @cached_property
+    def stated_look(self) -> TargetOnSurface:
+        """
+        The variable this detector states its own capability over.
+
+        The statement is made once and one look at a time is bound to this to ask it.
+        """
+        return variable(TargetOnSurface, domain=[])
+
+    @cached_property
+    def answerable_looks(self) -> Query:
+        """
+        The looks this detector can answer, stated once over :attr:`stated_look`.
+        """
+        return an(entity(self.stated_look).where(self.capability(self.stated_look)))
+
+    def answers(self, look: TargetOnSurface) -> bool:
         """
         Whether this detector declares it can answer one look.
 
         :param look: The look to put to it.
         """
-        stated = variable(TargetOnSurface, domain=[look])
-        return bool(an(entity(stated).where(cls.capability(stated))).tolist())
+        self.stated_look._update_domain_([look])
+        return bool(self.answerable_looks.tolist())
 
     piece_height: float
     """
@@ -187,6 +212,11 @@ class DetectorRules:
     Its rules are krrood ripple-down rules, so a case that a rule gets wrong is
     corrected by adding an exception under it rather than by editing the rule, and every
     condition is an entity query language expression over what the world states.
+
+    The tree is stated once, when the rules are built, and each look is decided by
+    binding it to :attr:`stated_look` and evaluating that one tree. It outlives the
+    looks it decides, so it can be read, and a situation it gets wrong can be given a
+    rule through :meth:`add_rule` while it is in use.
     """
 
     edge_fit: PieceDetector
@@ -205,6 +235,64 @@ class DetectorRules:
     preferred: the edge fit works on a matte lid too, measured at 0.93 agreement on a
     cube resting on the board.
     """
+
+    stated_look: TargetOnSurface = field(init=False, repr=False, compare=False)
+    """
+    The variable every rule states its conditions over, which one look at a time is
+    bound to.
+    """
+
+    chosen_detector: PieceDetector = field(init=False, repr=False, compare=False)
+    """
+    The variable the rules conclude, which a look's answer is read from.
+    """
+
+    rule_tree: Query = field(init=False, repr=False, compare=False)
+    """
+    The rules themselves, as one live tree that outlives the looks it decides.
+    """
+
+    latest_rule: SymbolicExpression = field(init=False, repr=False, compare=False)
+    """
+    The most recently stated exception, which the next one is attached beside so the
+    exceptions to the base rule form one chain and a look reaches at most one of them.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        State the rules, once, over the variables the looks are bound to.
+        """
+        self.stated_look = variable(TargetOnSurface, domain=[])
+        self.chosen_detector = deduced_variable(PieceDetector)
+        self.rule_tree = entity(self.chosen_detector).where(
+            self.edge_fit.capability(self.stated_look)
+        )
+        with self.rule_tree:
+            add(self.chosen_detector, self.edge_fit)
+            self.latest_rule = refinement(
+                and_(
+                    self.stated_look.surface_finish == SurfaceFinish.MATTE,
+                    self.color_blob.capability(self.stated_look),
+                )
+            )
+            with self.latest_rule:
+                add(self.chosen_detector, self.color_blob)
+
+    def add_rule(self, condition: ConditionType, detector: PieceDetector) -> None:
+        """
+        State a situation the rules do not yet cover.
+
+        The rule joins the tree already in use, so a look the rules got wrong is
+        answered by *detector* from the next call onwards without any of them being
+        rewritten. That is what a tree of rules is for, and it is the path an expert
+        correcting a choice takes.
+
+        :param condition: What holds of the look, stated over :attr:`stated_look`.
+        :param detector: The detector that answers such a look.
+        """
+        self.latest_rule = Alternative.insert_at(self.latest_rule, condition)
+        with self.latest_rule:
+            add(self.chosen_detector, detector)
 
     def detectors_for(
         self, surface: WorkspaceSurface, targets: Sequence[KnownPiece]
@@ -236,19 +324,8 @@ class DetectorRules:
         :param look: The piece being looked for and the surface it is looked for on.
         :raises NoDetectorAnswersTheLook: If no detector declares it can answer.
         """
-        stated = variable(TargetOnSurface, domain=[look])
-        chosen = deduced_variable(PieceDetector)
-        rules = entity(chosen).where(type(self.edge_fit).capability(stated))
-        with rules:
-            add(chosen, self.edge_fit)
-            with refinement(
-                and_(
-                    stated.surface_finish == SurfaceFinish.MATTE,
-                    type(self.color_blob).capability(stated),
-                )
-            ):
-                add(chosen, self.color_blob)
-        answered = rules.tolist()
+        self.stated_look._update_domain_([look])
+        answered = self.rule_tree.tolist()
         if not answered:
             raise NoDetectorAnswersTheLook(str(look))
         [detector] = answered

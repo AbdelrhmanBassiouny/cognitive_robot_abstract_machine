@@ -26,12 +26,14 @@ from dataclasses import dataclass, field, replace
 
 import cv2
 import numpy as np
-from typing_extensions import Any, Dict, List, Optional, Sequence, Tuple
+from krrood.entity_query_language.factories import ConditionType
+from typing_extensions import Dict, List, Optional, Sequence, Tuple
 
 from experiments.montessori.perception.camera import RgbdFrame
 from experiments.montessori.perception.detector_choice import (
     DetectorRules,
     PieceDetector,
+    TargetOnSurface,
 )
 from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
@@ -596,8 +598,7 @@ class EdgeFitDetector(PieceDetector):
     cancellation is forgiving of the difference.
     """
 
-    @classmethod
-    def capability(cls, look: Any) -> Any:
+    def capability(self, look: TargetOnSurface) -> ConditionType:
         """
         Answers a look for a piece whose outline is modelled, on any surface.
 
@@ -739,10 +740,11 @@ class ColorBlobDetector(PieceDetector):
     Finds the loose Montessori pieces by cutting them out of the surface by colour and
     reading the placement off the blob itself.
 
-    Where colour separates a piece from what it rests on, the blob already says where the
-    piece stands and roughly how it is turned, so the known outline is scored at that one
-    placement instead of being searched for. It reports the same outline agreement the
-    :class:`EdgeFitDetector` does, measured the same way, so the two can be compared.
+    Where colour separates a piece from what it rests on, the blob already says where
+    the piece stands and roughly how it is turned, so the known outline is scored at
+    that one placement instead of being searched for. It reports the same outline
+    agreement the :class:`EdgeFitDetector` does, measured the same way, so the two can
+    be compared.
     """
 
     matcher: PieceMatcher = field(default_factory=PieceMatcher)
@@ -762,12 +764,11 @@ class ColorBlobDetector(PieceDetector):
 
     piece_height: float = 0.03
     """
-    Roughly how tall a loose piece stands, in metres, reported as its own height wherever
-    the depth image cannot resolve it.
+    Roughly how tall a loose piece stands, in metres, reported as its own height
+    wherever the depth image cannot resolve it.
     """
 
-    @classmethod
-    def capability(cls, look: Any) -> Any:
+    def capability(self, look: TargetOnSurface) -> ConditionType:
         """
         Answers a look only where colour separates the piece from the surface, since a
         piece that shares the surface's colour has no blob to be cut out of it.
@@ -844,7 +845,8 @@ class ColorBlobDetector(PieceDetector):
 
         :param contour: The outline to read, in rectified pixels.
         :param orthophoto: The rectified view of the surface's own plane.
-        :param edges: How far each point of the top view lies from an edge the camera saw.
+        :param edges: How far each point of the top view lies from an edge the camera
+            saw.
         :param frame: The camera data, for measuring how tall the piece stands.
         :param reference_frame: Frame the resulting pose is expressed in.
         :param search: The surface being searched.
@@ -890,9 +892,10 @@ class ColorBlobDetector(PieceDetector):
         The turns a blob's own bounding rectangle says its piece may stand at.
 
         The rectangle fixes the turn only up to a quarter of a circle, since a rectangle
-        laid a quarter turn round covers the same ground, so all four are offered and the
-        edges decide between them. The rectification is axis-aligned and both its axes
-        grow with the world's, so an angle measured in it is a world turn unchanged.
+        laid a quarter turn round covers the same ground, so all four are offered and
+        the edges decide between them. The rectification is axis-aligned and both its
+        axes grow with the world's, so an angle measured in it is a world turn
+        unchanged.
 
         :param contour: The outline to read, in rectified pixels.
         """

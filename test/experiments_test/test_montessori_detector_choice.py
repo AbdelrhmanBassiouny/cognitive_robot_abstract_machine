@@ -5,16 +5,23 @@ surface and the piece being looked for.
 
 from __future__ import annotations
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 
 import pytest
 
+from krrood.entity_query_language.factories import ConditionType
+
+from experiments.montessori.perception.camera import RgbdFrame
+from experiments.montessori.perception.detections import MontessoriShapeDetection
 from experiments.montessori.perception.detector_choice import (
     DetectorRules,
+    PieceDetector,
     TargetOnSurface,
 )
+from experiments.montessori.perception.edges import EdgeDistances
 from experiments.montessori.perception.exceptions import NoDetectorAnswersTheLook
 from experiments.montessori.perception.orthophoto import (
+    Orthophoto,
     OrthophotoProjector,
     WorkspaceRegion,
 )
@@ -36,6 +43,10 @@ from experiments.montessori.pieces import (
 from experiments.montessori.semantics import MontessoriShapeCategory
 from semantic_digital_twin.datastructures.prefixed_name import PrefixedName
 from semantic_digital_twin.world_description.geometry import Color, SurfaceFinish
+from semantic_digital_twin.world_description.world_entity import (
+    KinematicStructureEntity,
+)
+from typing_extensions import List, Optional, Sequence
 
 from .dataset import montessori_scene_fixtures
 from .dataset.montessori_scene_renderer import (
@@ -161,7 +172,7 @@ def test_the_hue_separation_wraps_around_the_colour_circle():
 def test_the_edge_fit_answers_a_look_for_a_piece_of_known_outline():
     look = TargetOnSurface.of(_surface(finish=SurfaceFinish.MIRROR), _piece_of_hue(30))
 
-    assert EdgeFitDetector.answers(look)
+    assert EdgeFitDetector().answers(look)
 
 
 def test_the_color_blob_answers_only_where_colour_separates_the_target():
@@ -169,9 +180,21 @@ def test_the_color_blob_answers_only_where_colour_separates_the_target():
         TargetOnSurface.of(_surface(color=_color_of_hue(20)), _piece_of_hue(hue))
         for hue in (20 + HUE_TOLERANCE + 1, 21)
     )
+    detector = ColorBlobDetector()
 
-    assert ColorBlobDetector.answers(separating)
-    assert not ColorBlobDetector.answers(merging)
+    assert detector.answers(separating)
+    assert not detector.answers(merging)
+
+
+def test_a_detector_states_the_looks_it_answers_once_and_is_asked_per_look():
+    detector = EdgeFitDetector()
+    look = TargetOnSurface.of(_surface(finish=SurfaceFinish.MIRROR), _piece_of_hue(30))
+
+    assert detector.answers(look)
+    stated = detector.answerable_looks
+    assert not detector.answers(replace(look, target_outline_is_known=False))
+
+    assert detector.answerable_looks is stated
 
 
 # %% which detector the rules choose
@@ -246,7 +269,79 @@ def test_every_detector_the_rules_choose_declared_it_could_answer(rules):
     ]
 
     for look in looks:
-        assert type(rules.detector_for(look)).answers(look)
+        assert rules.detector_for(look).answers(look)
+
+
+# %% growing the rules while they are in use
+
+
+@dataclass(eq=False)
+class DetectorAddedAfterTheRulesWereStated(PieceDetector):
+    """
+    A detector standing for one reached for after the rules are already in use, so a
+    situation nobody foresaw can be given a rule without the rules being rewritten.
+    """
+
+    piece_height: float = 0.0
+
+    def capability(self, look: TargetOnSurface) -> ConditionType:
+        """
+        Answers any look for a piece whose outline is modelled.
+
+        :param look: The look to state the condition over.
+        """
+        return look.target_outline_is_known
+
+    def detect(
+        self,
+        orthophoto: Orthophoto,
+        top_orthophoto: Orthophoto,
+        edges: EdgeDistances,
+        frame: RgbdFrame,
+        reference_frame: Optional[KinematicStructureEntity],
+        search: SurfaceSearch,
+        candidates: Sequence[KnownPiece] = KNOWN_PIECES,
+    ) -> List[MontessoriShapeDetection]:
+        """
+        Finds nothing: this detector stands for the choice, not for a way of looking.
+        """
+        return []
+
+
+def test_a_situation_the_rules_did_not_cover_is_given_a_rule_while_they_are_in_use(
+    rules,
+):
+    added = DetectorAddedAfterTheRulesWereStated()
+    look = TargetOnSurface.of(
+        _surface(finish=SurfaceFinish.GLOSSY, color=_color_of_hue(19)),
+        _piece_of_hue(21),
+    )
+    assert rules.detector_for(look) is rules.edge_fit
+
+    rules.add_rule(rules.stated_look.surface_finish == SurfaceFinish.GLOSSY, added)
+
+    assert rules.detector_for(look) is added
+
+
+def test_a_rule_added_while_the_rules_are_in_use_leaves_the_stated_ones_answering(
+    rules,
+):
+    matte = TargetOnSurface.of(
+        _surface(finish=SurfaceFinish.MATTE, color=_color_of_hue(20)),
+        _piece_of_hue(60),
+    )
+    mirror = TargetOnSurface.of(
+        _surface(finish=SurfaceFinish.MIRROR, color=_color_of_hue(20)),
+        _piece_of_hue(60),
+    )
+
+    rules.add_rule(
+        rules.stated_look.surface_finish == SurfaceFinish.GLOSSY,
+        DetectorAddedAfterTheRulesWereStated(),
+    )
+
+    assert rules.detector_for(matte) is rules.color_blob
+    assert rules.detector_for(mirror) is rules.edge_fit
 
 
 # %% the scene as the world describes it, and what that changes
