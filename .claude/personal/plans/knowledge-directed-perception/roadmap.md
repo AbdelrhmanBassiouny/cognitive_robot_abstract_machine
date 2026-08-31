@@ -1550,3 +1550,71 @@ which depends on no rule engine. That takes the plan's most visible remaining er
 blocked path.
 
 Nothing here is deferred, and the two deferred items are untouched.
+
+### `one-detection-per-thing`: what the fault turned out to be, and the rule that fits it
+
+Built 2026-08-31 as `cf155f4a1` on #225. 23 new tests; `219 passed, 1 skipped, 11 xfailed`
+across the montessori modules against `191 passed, 1 skipped, 16 xfailed` on the parent,
+which is the 23 added here plus the five captures that stopped failing and nothing else
+moved.
+
+**The plan's own account of the fault was wrong, and measuring it changed the design.**
+Both this item's note and the section above describe the duplicate as a detection standing
+where the board stands -- "a ghost reported inside the board at the table's plane" -- and
+propose an occupancy rule over the board's own volume. Measured on the six captures, that
+is not where the duplicates are. Every one of them lies *outside* the board's detected
+outline, by 14 to 63 millimetres, and shares no ground with it at all: the volume rule as
+planned rejects none of them. The real table pieces, for comparison, stand 115 to 186
+millimetres clear of the board, so the two populations are cleanly separated but not by the
+rule that was written down.
+
+**What they are is the table seen past the board.** A piece standing on the lid is between
+the camera and the table behind the board, so the table's own rectification places it there
+-- outside the board, along the ray from the camera. That is a statement about line of
+sight, not about volume, and it needs the camera's own pose, which the frame already
+carries. Projecting the board's outline away from the camera onto the table's plane, cast
+from the top of a piece standing on the lid rather than from the lid itself, gives the
+stretch of table no detection may claim to be resting on. Measured over the captures, every
+duplicate lies wholly inside that stretch and every real table piece wholly outside it.
+
+The height half of the rule earns its place unchanged: what the board hides reaches only up
+to its lid, so a piece resting *on* the lid stands above it and keeps its own place, and a
+hole lying flat in the lid takes up no space at all.
+
+**No threshold, and none was needed.** The plan expected the shared-outline fraction to be
+a measured constant. It is not a constant: two solid things cannot stand in one another, so
+any shared ground at meeting heights is one thing read twice. The captures bear that out --
+a duplicate shares its whole outline with the ground the board hides, and no two separate
+detections share any of theirs -- so the rule is `> 0` and there is nothing to tune.
+
+**`is_place_occupied` was measured and not used.** The item's note names it for the
+known-body half. It builds a trimesh `CollisionManager` over every collidable body on every
+call, measured here at 0.035 s against the fifteen-body `MontessoriWorld`; six detections is
+0.21 s of a 0.5 s node period that `detect` already spends 0.35 s of. Reading every
+collidable body's bounding box instead costs the same 0.21 s per pass, so the cost is the
+world walk rather than the collision engine. So the rule is applied to the one body actually
+in the way -- the board, its identity and height from the world and its extent from the
+look, which is the split #221 already made -- and **a general per-frame walk of the world's
+bodies does not fit the frame budget**. That is recorded rather than dropped: it is a
+finding for `detector-parameters-from-knowledge`, whose ask is exactly which numbers a
+situation warrants, and for whoever wants the robot's own arm excluded from the search.
+
+**What it costs: nothing measurable.** `detect` runs at 0.279 s per frame against the
+parent's 0.289 s, over the six captures. The rule is one convex-polygon intersection per
+detection.
+
+**The expected-to-fail mark came off five captures of six**, which is the contract the
+benchmark module's docstring states. `non_inserted_objects` keeps it, now naming
+`holes-fitted-like-pieces` rather than this item, and the reason is measured: the board is
+reported at -29.7 degrees there against -7.6 degrees in the other five, about the same
+centre (0.791, 0.128 against 0.794, 0.138), because `_board_around` orients the lid
+rectangle by `minAreaRect` over the hole centres and only five of the six holes are found.
+With the board at the orientation the other five agree on, that capture's reading falls
+inside the ground the board hides. So the rule is right there too, and what is wrong is the
+board's own pose.
+
+**Two smaller things worth knowing.** `RgbdFrame` gained `camera_position`, since where the
+camera stands is what casts the shadow and every caller was reaching into
+`reference_frame_T_camera` for it. And the session's branch arrived cut from `integration`
+rather than from #221 -- the hazard #199 exists to refuse -- and was reset onto #221's tip
+before the first commit.
