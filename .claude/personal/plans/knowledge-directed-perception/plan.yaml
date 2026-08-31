@@ -362,7 +362,20 @@ items:
     naming expectations-from-events, the item that can say which piece at which hole and so makes a seeded
     fit cheap and precise. Recorded in full in roadmap.md, including that the first reading of the cost
     was reported in seconds against the 0.5 s period and was wrong - this container''s speed moves between
-    runs by more than the difference being measured, so only a ratio to a same-run baseline survives.'
+    runs by more than the difference being measured, so only a ratio to a same-run baseline survives.
+
+    The review round of 2026-08-31 answered two comments, pushed as 571042923, and left both threads open
+    at the developer''s discretion. A believed place''s centre is a PlanarPoint now - moved with PlanarSize
+    out of hole_geometry into montessori/planar_geometry.py and no longer worded as the board mesh''s own
+    plane - rather than a spatial_types Point2, which is identity-equal (two equal coordinates compare
+    unequal) and so cannot be a field of a value object; a believed place is not a 2D pose either, being a
+    disc of positions and an interval of turns rather than one placement. And BeliefSource stopped being a
+    StrEnum: it is an abstract mixin in krrood/patterns/belief_source.py, which World inherits in
+    semantic_digital_twin and LoosePieceDetector inherits here, so a belief keeps the source object and can
+    be asked what else it says - the shape expectations-from-events needs. krrood''s ripple-down-rules
+    Expert was deliberately not reused or rebased on it, which is the half of that thread answered
+    differently. 400 passed, 1 skipped, 11 xfailed against 397 before the round, plus one test in
+    semantic_digital_twin, whose world tests'' failing set is unchanged by World''s new base.'
 - id: competing-explanations
   title: Decide a detection by comparing explanations, not against a fixed threshold
   branch: perception_competing_explanations

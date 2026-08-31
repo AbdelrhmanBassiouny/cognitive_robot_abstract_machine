@@ -2454,3 +2454,60 @@ Worth generalizing alongside the correction above, because this is what that cor
 being built, on a plan whose whole method is to stack on unmerged branches. A deferral is a
 claim about the state of the world and needs re-reading when that state moves, exactly like
 a blocker does.
+
+### `pieces-looked-for-where-expected`: the review round of 2026-08-31
+
+Two comments, both on `hypotheses.py`, answered in `571042923`. Neither thread was
+resolved: each was answered differently in part, and the standing convention is to leave
+those for the developer to close.
+
+**A believed place is not a pose, and its centre is a point.** The first comment asked
+*"isn't this basically a 2D Pose? or a Point?"*. A pose is one placement; a
+`BelievedPlace` is a set of them - a disc of positions (`radius`) and an interval of turns
+(`yaw`), which is precisely what makes it something to search rather than something to
+look up, and collapsing the two into a `Pose2D` would drop both. The centre is a point,
+though, and a pair whose positions carry meaning should be named, so it is `PlanarPoint` -
+the type `HoleFootprint.center` and `PolygonMeasurement.centroid` already used, moved with
+`PlanarSize` out of `hole_geometry.py` into a new `montessori/planar_geometry.py` and no
+longer worded as the board mesh's own plane. `MatchedPiece.center` and
+`Orthophoto.contour_center` say the same thing the same way, so nothing converts at a
+boundary.
+
+**Not `spatial_types.Point2`, and the reason is measurable.** `Point2` is identity-equal:
+`Point2(0.6, 0.2) == Point2(0.6, 0.2)` is `False`. As a field of a frozen value object that
+makes two beliefs about the same place compare unequal - silently, in any dedupe and in
+every test that compares places. It also carries casadi and a reference frame into a numpy
+sweep (22 µs to build one, 35 µs to read a coordinate back). #202 made the same call for
+`HoleFootprint` on the frame argument alone; the equality is the stronger half of it. The
+sdt spatial type is what a *reported* detection carries, in `MontessoriShapeDetection.pose`.
+
+**A belief now keeps the source itself, not a label for it.** The second comment asked why
+`BeliefSource` was a `StrEnum`, and proposed a mixin that the world model, the detectors
+and an expert-like asker all inherit, placed in krrood because krrood is the top of the
+stack. Done as asked: `krrood/patterns/belief_source.py` holds the abstract mixin,
+`World` inherits it in `semantic_digital_twin`, `LoosePieceDetector` inherits it here, and
+the third case - asked for - is whoever called for the look passing itself. So
+`hypothesis.source is pipeline.world` and `is pipeline.piece_detector` are assertions
+rather than enum comparisons, a source can be asked what else it says (the
+belief-state-updated-by-successful-actions case), and a new kind of source needs no edit to
+anything that reads a belief - Open/Closed, where the enum was a closed set.
+
+**Two things deliberately not done, both recorded on the thread.**
+`krrood.ripple_down_rules.experts.Expert` is not reused and not rebased on `BeliefSource`:
+it answers questions about a case to grow a rule tree, carrying answer files, a user prompt
+and code generation with it, and says nothing about where a thing is - so making it a
+belief source would couple the two for a consumer that does not exist. It is a one-line
+base addition the day an expert should be able to seed a look. And the mixin declares no
+members: nothing that reads a belief needs anything from its source but its identity yet,
+and how sure a source is belongs to `expectations-from-events`, where a belief first gets a
+spread that is not the seeding default.
+
+**Verification.** 400 passed, 1 skipped, 11 xfailed across `test/experiments_test/` against
+397 before the round - three tests added, for a place naming the axes of its centre, a
+hypothesis naming the source that suggested it rather than a kind of source, and a
+colour-suggested detection naming the detector that read it. One test added in
+`semantic_digital_twin`, and `test_worlds/test_world.py`'s failing-and-erroring set is
+byte-identical with and without `World`'s new base, checked by name rather than by count.
+The sdt ORM interface regenerates and imports with the base in place; `World` is not mapped
+as a DAO and neither is `BeliefSource`, so nothing in the interface moves.
+
