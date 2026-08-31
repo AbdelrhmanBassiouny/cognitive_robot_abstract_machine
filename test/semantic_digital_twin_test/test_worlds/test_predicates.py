@@ -21,12 +21,19 @@ from semantic_digital_twin.reasoning.predicates import (
     reachable,
     is_place_occupied,
     InsideOf,
+    InsideRegion,
+    InContactWith,
+    PlaceIsOccupied,
+    Reachable,
+    Stable,
     SupportedBy,
+    Supports,
     ViewDependentSpatialRelation,
+    VisibleTo,
 )
 from krrood.entity_query_language.backends import StatedRelation
 from krrood.entity_query_language.factories import variable
-from krrood.entity_query_language.predicate import Predicate, SymbolicFunction
+from krrood.entity_query_language.predicate import Predicate
 from semantic_digital_twin.reasoning.robot_predicates import (
     robot_in_collision,
     robot_holds_body,
@@ -402,8 +409,10 @@ def test_body_in_region(two_block_world):
             ),
         )
         center._world.add_connection(connection)
-    assert is_body_in_region(center, region) == 0.5
-    assert is_body_in_region(top, region) == 0.0
+    assert InsideRegion(center, region).compute_contained_fraction() == 0.5
+    assert InsideRegion(top, region).compute_contained_fraction() == 0.0
+    assert is_body_in_region(center, region)
+    assert not is_body_in_region(top, region)
 
 
 def test_supporting(two_block_world):
@@ -777,14 +786,59 @@ def test_a_view_dependent_spatial_relation_is_a_predicate():
     assert issubclass(ViewDependentSpatialRelation, Predicate)
 
 
-def test_containment_is_a_value_rather_than_a_truth():
+@pytest.mark.parametrize(
+    "relation",
+    [
+        Stable,
+        InContactWith,
+        VisibleTo,
+        Reachable,
+        SupportedBy,
+        Supports,
+        InsideOf,
+        InsideRegion,
+        PlaceIsOccupied,
+        ViewDependentSpatialRelation,
+    ],
+)
+def test_every_relation_is_a_predicate(relation):
     """
-    ``InsideOf`` answers how much of one thing lies inside another, and its callers
-    compare that fraction against thresholds of their own, so it is the value kind of
-    symbolic callable and not the boolean one.
+    A relation belongs in the vocabulary a statement can assert, so it is a predicate
+    even where what it reads is a measurement.
     """
-    assert issubclass(InsideOf, SymbolicFunction)
-    assert not issubclass(InsideOf, Predicate)
+    assert issubclass(relation, Predicate)
+
+
+def test_containment_answers_whether_it_holds_rather_than_by_how_much(two_block_world):
+    center, top = two_block_world
+
+    assert InsideOf(top, center)() in (True, False)
+
+
+def test_containment_reports_the_fraction_it_measured(two_block_world):
+    """
+    The judgement is a threshold over a measurement, and the measurement stays readable
+    on its own for the callers that compare it against a threshold of their own.
+    """
+    center, top = two_block_world
+    relation = InsideOf(top, center)
+
+    assert relation.compute_containment_ratio() == pytest.approx(
+        InsideOf(top, center).compute_containment_ratio()
+    )
+
+
+def test_the_threshold_is_what_turns_the_measurement_into_a_verdict(two_block_world):
+    """
+    The same pair reads either way depending only on how much containment is asked for,
+    which is what makes the threshold the statement of intent rather than a tuned
+    constant hidden in the caller.
+    """
+    center, top = two_block_world
+    measured = InsideOf(top, center).compute_containment_ratio()
+
+    assert InsideOf(top, center, minimum_containment_ratio=measured)()
+    assert not InsideOf(top, center, minimum_containment_ratio=measured + 0.01)()
 
 
 def test_support_relates_the_supported_thing_to_what_holds_it_up():
