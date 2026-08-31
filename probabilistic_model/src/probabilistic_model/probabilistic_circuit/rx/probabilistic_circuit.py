@@ -481,19 +481,19 @@ class SumUnit(InnerUnit):
         return result
 
     def forward(self, *args, **kwargs):
-        self.result_of_current_query = np.sum(
-            [
-                np.exp(weight) * subcircuit.result_of_current_query
-                for weight, subcircuit in self.log_weighted_subcircuits
-            ],
-            axis=0,
-        )
+        # streamed instead of building the full subcircuit-results list at once
+        result = 0.0
+        for weight, subcircuit in self.log_weighted_subcircuits:
+            result = result + np.exp(weight) * subcircuit.result_of_current_query
+        self.result_of_current_query = result
 
     def log_forward(self, *args, **kwargs):
-        result = [
-            lw + s.result_of_current_query for lw, s in self.log_weighted_subcircuits
-        ]
-        self.result_of_current_query = logsumexp(result, axis=0)
+        # streamed via logaddexp instead of building the full list for logsumexp
+        result = None
+        for log_weight, subcircuit in self.log_weighted_subcircuits:
+            value = log_weight + subcircuit.result_of_current_query
+            result = value if result is None else np.logaddexp(result, value)
+        self.result_of_current_query = result
 
     moment = forward
 
