@@ -4,62 +4,61 @@ Plan item of `knowledge-directed-perception`, tracking issue #201. Branch reset
 onto `origin/perception_eql_backend` before the first commit -- it arrived cut
 from `integration`, the #199 hazard, same as #223 and #225.
 
-## The claim
+## The claim, and it is delivered
 
-Replace #222's attribute-name narrowing with a predicate in the world's own
-vocabulary. `SUPPORTING_SURFACE_ATTRIBUTE_NAME` and the krrood mimic's
-`PLACE_ATTRIBUTE_NAME` both die; a predicate is its own source of truth, so
-there is no name to spell twice.
-
-## Plan
-
-1. `semantic_digital_twin/reasoning/predicates.py` -- the bool-returning spatial
-   relations (`LeftOf`, `RightOf`, `Above`, `Below`, `Behind`, `InFrontOf`)
-   inherit `Predicate` instead of `Symbol`, each supplying the abstract
-   `_verbalization_fragment_`. `InsideOf` returns a containment ratio, so it
-   becomes a `SymbolicFunction` -- three call sites read that ratio and would
-   break if `__call__` returned a truth value. A `SupportedBy` predicate class
-   makes support statable in a query.
-2. `krrood/entity_query_language/backends.py` -- `LookRequest` carries the
-   predicates a statement states about the thing sought, alongside the attribute
-   equalities it already carries. `PerceptionBackend.read_request` reads them off
-   the `where` conditions; a backend asks for one by predicate type. The pushdown
-   reads the operand that is already concrete (the world entity), since the sought
-   thing has no value yet.
-3. `experiments/.../perception/backend.py` -- narrow by `SupportedBy` read off the
-   statement; delete `SUPPORTING_SURFACE_ATTRIBUTE_NAME` and the test guarding it.
-4. `test/krrood_test/dataset/backend_that_looks_at_the_world.py` -- same, for
-   `PLACE_ATTRIBUTE_NAME`.
-
-Tests first at each level.
-
-## Deliberately out of scope, recorded on #201 and in the PR description
-
-- **Predicate read as a `Region` with extents, clipping image/depth**
-  (r3893602153). Ends at the believed-place type that the roadmap settled is
-  defined once by `pieces-looked-for-where-expected` -- `not_started`, behind
-  #225. Building it here would build it out of order and twice.
-- **Imagination-world rejection sampler** (r3893499716). This item's alone, but a
-  second PR's worth of work. Proposed as its own plan item.
+A look is narrowed by a relation in the world's own vocabulary rather than by an
+attribute spelled as a string. `SUPPORTING_SURFACE_ATTRIBUTE_NAME` and the
+krrood mimic's `PLACE_ATTRIBUTE_NAME` are both gone, along with the tests that
+guarded them; a grep over the tree finds neither.
 
 ## Done
 
-- Branch reset onto #222's tip; bootstrap commit pushed.
-- Draft PR #227 opened; manifest `open` + `record` written; roadmap section landed.
+- `7330848e` krrood: `StatedRelation` reads a `where` condition as a `Triple`
+  asserted about the thing sought, keeping the operand already concrete.
+  `LookRequest.stated_relations` / `related_by`. A backend declares
+  `narrowing_relations` and checks them over its own answer in `relations_hold`.
+  Mimic `StandingOn` in the test dataset; krrood stays self-contained.
+- `b5de5f4b` semantic_digital_twin: the six view-dependent relations become
+  `Predicate`s with their own verbalization clauses; `InsideOf` becomes a
+  `SymbolicFunction` (it answers a ratio, and three call sites compare it to
+  thresholds of their own); `SupportedBy` is the relation form of
+  `is_supported_by`.
+- `92337dbf` experiments: the Montessori backend narrows by `SupportedBy`, reads
+  the surface off the entity the statement relates the detection to, and
+  re-checks it over what came back.
+- PR #227 opened as a draft, description rewritten to match the built work.
+- Manifest: `open` + `record` written, roadmap section landed, dashboard
+  republished. `perception-backend`'s stale `blockers` corrected (four of its
+  five threads had since been resolved).
+- #201 carries the split proposal and the correction.
 
-## Next
+## Verified
 
-- Publish the dashboard.
-- Raise the two out-of-scope halves on #201.
-- Write the tests, then implement, step 1 through 4.
+- krrood eql: 1091 passed vs 1087 on the parent; failing/erroring set identical
+  (177 both).
+- semantic_digital_twin: failing/erroring set byte-identical to the parent, 143
+  lines both. Parent baseline taken in a worktree with its own `*/src` on
+  `PYTHONPATH`, per #222's recorded trap.
+- experiments: 362 passed, 1 skipped, 16 xfailed, 6 errors -- identical to the
+  parent, error set matched by name.
 
-## Open, not settled by anything gathered
+## Next, if anything
 
-- `MontessoriShapeDetection` is a dataclass, not a `Body`, so the geometric
-  `is_supported_by` cannot evaluate a detection. The pushdown does not need it
-  (it reads the concrete operand only), but re-checking the pushed-down predicate
-  over what came back does. Decide during implementation whether the detection
-  answers the predicate about itself, or whether a pushed-down predicate is
-  exempted from the residual re-check -- the second weakens #222's recorded
-  invariant that correctness never depends on the pushdown being honoured, so
-  prefer the first and record whichever it turns out to be.
+Nothing outstanding on this branch. The two deferred halves are proposals on
+#201 and are the developer's to accept:
+
+- Predicate read as a `Region` with extents, clipping image/depth. Blocked
+  behind `pieces-looked-for-where-expected`, which owns the shared believed-place
+  type and has not started.
+- Imagination-world rejection sampler. Proposed as its own item.
+
+## Decision worth re-reading at review
+
+A relation cannot be re-checked by evaluating it, because a look reports
+sightings rather than the things the relation is written over -- a
+`MontessoriShapeDetection` is a dataclass, not a `Body`. So a backend declaring a
+relation as narrowing also promises to check it over its own answer. #222's
+invariant that correctness never depends on the pushdown being honoured is kept;
+what changed is who does the checking. The alternative -- a `SupportedBy` that
+dispatches on whether its subject is a body or a detection -- was rejected as a
+smell.
