@@ -151,19 +151,19 @@ def test_guard_expression_wraps_a_negated_guard_in_not():
     assert isinstance(guard_expression, Not)
     assert guard_expression._child_ is animal.has_fur
 
-    # materialized itself (not_(has_fur)) must be True exactly when has_fur is
-    # False, and False when has_fur is True -- the inverse of the bare condition.
-    materialized_guard = GuardCondition(guard_expression, negated=False)
+    # The wrapped expression itself (not_(has_fur)) must be True exactly when has_fur
+    # is False, and False when has_fur is True -- the inverse of the bare condition.
+    negated_guard = GuardCondition(guard_expression, negated=False)
     cat = Animal("cat", has_fur=True)
     snake = Animal("snake", has_fur=False)
-    assert materialized_guard.holds_for(animal, cat) is False
-    assert materialized_guard.holds_for(animal, snake) is True
+    assert negated_guard.holds_for(animal, cat) is False
+    assert negated_guard.holds_for(animal, snake) is True
 
 
 # %% TargetSufficientConditionsBasedResolver
 
 
-def test_target_knowledge_resolver_finds_a_discriminating_guard():
+def test_target_sufficient_conditions_resolver_finds_a_discriminating_guard():
     animal = variable(Animal, domain=[])
     target_knowledge = ConclusionSufficientConditionSets(
         conclusion_value=Species.BIRD,
@@ -191,7 +191,7 @@ def test_target_knowledge_resolver_finds_a_discriminating_guard():
     assert resolved.expression is animal.can_fly
 
 
-def test_target_knowledge_resolver_returns_none_when_no_guard_discriminates():
+def test_target_sufficient_conditions_resolver_returns_none_when_no_guard_discriminates():
     animal = variable(Animal, domain=[])
     target_knowledge = ConclusionSufficientConditionSets(
         conclusion_value=Species.BIRD,
@@ -218,7 +218,7 @@ def test_target_knowledge_resolver_returns_none_when_no_guard_discriminates():
     assert resolved is None
 
 
-def test_target_knowledge_resolver_returns_none_with_no_known_paths():
+def test_target_sufficient_conditions_resolver_returns_none_with_no_known_paths():
     animal = variable(Animal, domain=[])
 
     resolved = TargetSufficientConditionsBasedResolver().resolve(
