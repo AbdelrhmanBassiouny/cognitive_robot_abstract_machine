@@ -12,7 +12,11 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
-from git_commands import GitCommandResult, GitCommandRunner
+from git_commands import (
+    BranchPublication,
+    GitCommandRunner,
+    ProposedPush,
+)
 from stack import Configuration, IntegrationStrategy, resolve_ref
 
 # %% running git
@@ -22,34 +26,18 @@ from stack import Configuration, IntegrationStrategy, resolve_ref
 
 
 @dataclass(frozen=True)
-class ProposedPush:
+class RestackPush(ProposedPush):
     """
-    One publication, and whether it is authorised to overwrite what is published.
+    The push that publishes a restacked branch.
 
-    Every push the executor makes is built here, so whether history may be rewritten is
-    decided once rather than at each call.
-    """
-
-    remote: str
-    """
-    The remote to publish to.
-    """
-
-    refspec: str
-    """
-    What to publish, as ``<source>:<destination>``.
-    """
-
-    with_lease: bool = False
-    """
-    Whether published history may be overwritten, and then only if the remote is where
-    this checkout last saw it.
+    A category rather than a shape: what it adds is where the lease comes from, so the
+    strategy decides a rewrite rather than the caller asking for one.
     """
 
     @classmethod
     def publishing(
         cls, configuration: Configuration, branch: str, strategy: IntegrationStrategy
-    ) -> ProposedPush:
+    ) -> RestackPush:
         """
         Build the push that publishes a restacked branch.
 
@@ -61,7 +49,7 @@ class ProposedPush:
         """
         return cls(
             remote=configuration.fork_remote,
-            refspec=f"{branch}:{branch}",
+            publication=BranchPublication.under_its_own_name(branch),
             with_lease=strategy is IntegrationStrategy.REBASE,
         )
 
@@ -69,11 +57,10 @@ class ProposedPush:
 @dataclass(frozen=True)
 class MaintenanceGitCommandRunner(GitCommandRunner):
     """
-    The shared runner, plus the two commands that mean something only to a pass.
+    The shared runner, plus the one command that means something only to a pass.
 
-    Both are stack vocabulary rather than git vocabulary: what to abandon depends on
-    which integration was attempted, and what may be forced is decided by the
-    :class:`ProposedPush` rather than by the caller asking for it.
+    Abandoning is stack vocabulary rather than git vocabulary: what to undo depends on
+    which integration was attempted.
     """
 
     def abandon(self, strategy: IntegrationStrategy) -> None:
@@ -84,18 +71,6 @@ class MaintenanceGitCommandRunner(GitCommandRunner):
         """
         self.attempt(
             "rebase" if strategy is IntegrationStrategy.REBASE else "merge", "--abort"
-        )
-
-    def push(self, proposed: ProposedPush) -> GitCommandResult:
-        """
-        Publish a refspec, forcing only where the push itself says it is authorised.
-
-        :param proposed: What to publish, and whether a rewrite is authorised.
-        :return: The finished push, whose failure the caller reports rather than forces.
-        """
-        lease = ["--force-with-lease"] if proposed.with_lease else []
-        return self.attempt(
-            "push", "--quiet", *lease, proposed.remote, proposed.refspec
         )
 
 
