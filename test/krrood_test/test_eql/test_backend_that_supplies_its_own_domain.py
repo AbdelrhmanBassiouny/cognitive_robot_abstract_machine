@@ -13,7 +13,7 @@ from dataclasses import fields
 
 import pytest
 
-from krrood.entity_query_language.backends import AttributeEquality
+from krrood.entity_query_language.backends import AttributeEqualityToLiteral
 from krrood.entity_query_language.exceptions import BackendCannotResolveCondition
 from krrood.entity_query_language.factories import an, entity, variable
 
@@ -66,7 +66,7 @@ def test_an_equality_against_a_fixed_value_is_read_off_the_condition():
 
     [condition] = query.build()._where_builder_.conditions
 
-    assert AttributeEquality.read_from(condition, sighting) == AttributeEquality(
+    assert AttributeEqualityToLiteral.read_from(condition, sighting) == AttributeEqualityToLiteral(
         attribute_name=BackendThatLooksAtTheWorld.PLACE_ATTRIBUTE_NAME, value=LID
     )
 
@@ -77,7 +77,7 @@ def test_a_comparison_that_is_not_an_equality_states_no_fixed_value():
 
     [condition] = query.build()._where_builder_.conditions
 
-    assert AttributeEquality.read_from(condition, sighting) is None
+    assert AttributeEqualityToLiteral.read_from(condition, sighting) is None
 
 
 def test_an_equality_about_another_variable_is_not_read_as_the_selections_own():
@@ -87,7 +87,7 @@ def test_an_equality_about_another_variable_is_not_read_as_the_selections_own():
 
     [condition] = query.build()._where_builder_.conditions
 
-    assert AttributeEquality.read_from(condition, sighting) is None
+    assert AttributeEqualityToLiteral.read_from(condition, sighting) is None
 
 
 # %% what the search is told, and what is applied afterwards

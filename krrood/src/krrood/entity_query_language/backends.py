@@ -70,13 +70,15 @@ T = TypeVar("T")
 
 
 @dataclass(frozen=True)
-class AttributeEquality:
+class AttributeEqualityToLiteral:
     """
-    A condition fixing one attribute of the variable a query selects to a single value.
+    A condition fixing one attribute of the variable a query selects to a literal.
 
     This is the shape a backend translating a query into another engine's plan can
     usually act on directly, so it is read off a condition once here rather than by
-    every such backend.
+    every such backend. An equality against anything but a literal is not one of these:
+    the other side has to be evaluated before it names a value, which is the query's own
+    work rather than the plan's.
     """
 
     attribute_name: str
@@ -86,13 +88,13 @@ class AttributeEquality:
 
     value: Any
     """
-    The value it is fixed to.
+    The literal's value.
     """
 
     @classmethod
     def read_from(
         cls, condition: Evaluable, selection: Selectable
-    ) -> Optional[AttributeEquality]:
+    ) -> Optional[AttributeEqualityToLiteral]:
         """
         Read a condition as an equality about the selected variable's own attribute.
 
@@ -100,7 +102,7 @@ class AttributeEquality:
         :param selection: The variable the query selects.
         :return: The equality the condition states, or ``None`` when it states none --
             because it compares something else, compares by something other than
-            equality, or compares against anything but a fixed value.
+            equality, or compares against anything but a literal.
         """
         if not isinstance(condition, Comparator) or condition.operation is not eq:
             return None

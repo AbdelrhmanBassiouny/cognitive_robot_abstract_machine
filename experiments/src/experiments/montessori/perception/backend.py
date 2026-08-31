@@ -26,7 +26,7 @@ from typing_extensions import ClassVar, Iterable, Optional
 
 from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import MontessoriSceneSource
-from krrood.entity_query_language.backends import AttributeEquality, SelectiveBackend
+from krrood.entity_query_language.backends import AttributeEqualityToLiteral, SelectiveBackend
 from krrood.entity_query_language.core.base_expressions import Selectable
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.exceptions import BackendCannotResolveCondition
@@ -128,7 +128,7 @@ class PerceptionBackend(SelectiveBackend):
         """
         if condition._constrained_variables_ - {selection}:
             raise BackendCannotResolveCondition(condition, cls)
-        equality = AttributeEquality.read_from(condition, selection)
+        equality = AttributeEqualityToLiteral.read_from(condition, selection)
         if equality is None:
             return None
         if equality.attribute_name != cls.SUPPORTING_SURFACE_ATTRIBUTE_NAME:

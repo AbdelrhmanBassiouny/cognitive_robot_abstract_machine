@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 
 from typing_extensions import ClassVar, Iterable, List, Optional
 
-from krrood.entity_query_language.backends import AttributeEquality, SelectiveBackend
+from krrood.entity_query_language.backends import AttributeEqualityToLiteral, SelectiveBackend
 from krrood.entity_query_language.core.base_expressions import Selectable
 from krrood.entity_query_language.evaluable import Evaluable
 from krrood.entity_query_language.exceptions import BackendCannotResolveCondition
@@ -110,7 +110,7 @@ class BackendThatLooksAtTheWorld(SelectiveBackend):
         """
         if condition._constrained_variables_ - {selection}:
             raise BackendCannotResolveCondition(condition, type(self))
-        equality = AttributeEquality.read_from(condition, selection)
+        equality = AttributeEqualityToLiteral.read_from(condition, selection)
         if (
             equality is not None
             and equality.attribute_name == self.PLACE_ATTRIBUTE_NAME

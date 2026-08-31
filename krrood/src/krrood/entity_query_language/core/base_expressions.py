@@ -866,6 +866,8 @@ class SymbolicExpression(AbstractContextManager):
         :return: Every variable this expression reaches, however deeply nested, excluding
             the fixed values it compares them against.
         """
+        # Imported here because variable.py imports this module at import time, so
+        # naming it at the top would close the cycle.
         from krrood.entity_query_language.core.variable import Literal, Variable
 
         return make_set(
