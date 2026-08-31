@@ -2403,3 +2403,32 @@ way it does with #205, #221 and #225. And #223 is what makes the ORM walk this p
 all, so it will be the first thing to meet `PieceHypothesis.candidates`, a tuple of
 dataclasses; whether ORMatic maps that is worth checking when the two meet, since the full
 regeneration does not run in a container.
+
+## `tune-detection-rules-against-the-camera` is un-deferred (2026-08-31)
+
+The developer's decision, taken the same day the RDR correction above was made, and it
+follows from it. That item was deferred past the 2026-09-15 deadline as "tooling for
+authoring rules rather than a piece of the claim", and the deferral was mostly paying for
+tooling that would have to be *built*. It does not: **#76 is the interactive expert
+interface, #80 the model-file store and #77 the `@rdr` decorator** - the tip of the same
+`D-core-*` stack, all open, out of draft and reviewed. By this plan's standing rule that
+`depends_on` means stacked on, never waiting for a merge, all three are available to build
+on today.
+
+So the item is `not_started` rather than `deferred`, and it **stacks on #77**, the tip,
+rather than on any lower link: the `@rdr` decorator is what makes a rule-concluded value a
+normal function call, and #76 and #80 come with it. What remains of the item is only the
+perception-side presenter - the live camera beside the parameters a rule would conclude -
+rather than the expert interface underneath it, which is what made it look expensive when
+it was deferred.
+
+It keeps its dependency on `detector-parameters-from-knowledge`, since that is what gives
+it parameters to conclude at all, and that item stacks on #159 in the same stack. Nothing
+else changes: `robokudo-detector` stays deferred, and it remains the first thing to drop if
+the deadline tightens.
+
+Worth generalizing alongside the correction above, because this is what that correction
+*cost*: a blocker recorded as "the tooling would have to be built" outlived the tooling
+being built, on a plan whose whole method is to stack on unmerged branches. A deferral is a
+claim about the state of the world and needs re-reading when that state moves, exactly like
+a blocker does.

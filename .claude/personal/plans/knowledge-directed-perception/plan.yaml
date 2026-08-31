@@ -831,10 +831,7 @@ items:
   track: method-selection
   depends_on:
   - detector-parameters-from-knowledge
-  status: deferred
-  blockers:
-  - 'Deferred past the 2026-09-15 deadline: no demo item needs it, and it is tooling for authoring rules
-    rather than a piece of the claim. The first thing to drop after robokudo-detector.'
+  status: not_started
   notes: 'The developer''s own suggestion on #202: an interactive presenter for the ripple-down rules''
     ConclusionHelper, showing the live camera feed beside the parameters it would conclude on sliders
     or dropdowns, so the expert sees what a value does to the detection before committing it as a rule.
@@ -846,7 +843,15 @@ items:
     most of it already is: #76 is the interactive expert interface, #80 the model-file store and #77 the
     @rdr decorator, all open, out of draft and reviewed. What remains of this item is the perception-side
     presenter that shows the camera beside the parameters, not the expert interface underneath it. Whether
-    that is enough to un-defer it before 2026-09-15 is the developer''s call and is not taken here.'
+    that is enough to un-defer it before 2026-09-15 is the developer''s call and is not taken here.
+
+    Un-deferred 2026-08-31 at the developer''s direction, and it stacks on the tip of the RDR
+    stack: #77 (the @rdr decorator), with #76 (the interactive expert interface) and #80 (the
+    model-file store) beneath it. What the deferral was mostly paying for - an expert interface
+    to build - is already written, open, out of draft and reviewed, so what remains is the
+    perception-side presenter that puts the live camera beside the parameters a rule would
+    conclude. It keeps its dependency on detector-parameters-from-knowledge, which is what gives
+    it parameters to conclude at all, and that item stacks on #159 in the same stack.'
 - id: episode-replayed-into-the-world
   title: Replay a recorded episode into the world so Segmind can say what happened
   branch: segmind_rosbag_player
