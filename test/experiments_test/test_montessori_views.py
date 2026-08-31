@@ -28,6 +28,7 @@ from experiments.montessori.perception.overlay import (
     CameraView,
     DetectionOverlay,
     RectifiedView,
+    ViewFromAbove,
     project_to_pixels,
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
@@ -344,3 +345,45 @@ def test_the_rectified_view_draws_on_the_rectified_image(
 
     assert drawn.shape == orthophoto.image.shape
     assert (drawn == np.array(PIECE_COLOR.to_bgr(), dtype=np.uint8)).all(axis=2).any()
+
+
+# %% the rectified view turned the way it is looked at
+
+
+def test_the_view_from_above_puts_the_world_x_axis_up_and_its_y_axis_to_the_left(
+    frame: RgbdFrame, pipeline: MontessoriPerceptionPipeline
+):
+    orthophoto = pipeline.rectify(frame, pipeline.table.height)
+    view = ViewFromAbove(RectifiedView(frame, orthophoto))
+    somewhere = np.array([[0.6, 0.2]])
+
+    at, further_along_x, further_along_y = (
+        view.to_pixels(somewhere + step, orthophoto.plane_height)[0]
+        for step in ([[0.0, 0.0]], [[0.1, 0.0]], [[0.0, 0.1]])
+    )
+
+    assert further_along_x[1] < at[1]
+    assert further_along_y[0] < at[0]
+
+
+def test_the_view_from_above_turns_its_image_and_its_pixels_together(
+    frame: RgbdFrame, pipeline: MontessoriPerceptionPipeline
+):
+    """
+    A world point drawn onto the rectified image is found again at the pixel the turned
+    view puts it on, which is what keeps a drawn label the right way up.
+    """
+    orthophoto = pipeline.rectify(frame, pipeline.table.height)
+    somewhere = np.array([[0.6, 0.2]])
+    [rectified_pixel] = RectifiedView(frame, orthophoto).to_pixels(
+        somewhere, orthophoto.plane_height
+    )
+    mark = np.array(PIECE_COLOR.to_bgr(), dtype=np.uint8)
+    orthophoto.image[round(rectified_pixel[1]), round(rectified_pixel[0])] = mark
+
+    view = ViewFromAbove(RectifiedView(frame, orthophoto))
+    [turned_pixel] = view.to_pixels(somewhere, orthophoto.plane_height)
+
+    turned = view.to_image()
+    assert turned.shape[:2] == orthophoto.image.shape[1::-1]
+    assert (turned[round(turned_pixel[1]), round(turned_pixel[0])] == mark).all()

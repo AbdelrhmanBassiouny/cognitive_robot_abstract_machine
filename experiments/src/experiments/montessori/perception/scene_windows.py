@@ -16,6 +16,7 @@ from experiments.montessori.perception.overlay import (
     CameraView,
     DetectionOverlay,
     RectifiedView,
+    ViewFromAbove,
 )
 from experiments.montessori.perception.pipeline import MontessoriPerceptionPipeline
 from experiments.montessori.perception.viewer import CameraFrameViewer
@@ -60,8 +61,10 @@ class SceneWindows:
         self.viewer.show_depth(workspace.clip(frame.depth, frame))
         self.viewer.show_rectified(
             self.overlay.draw(
-                RectifiedView(
-                    frame, self.pipeline.rectify(frame, self.pipeline.table.height)
+                ViewFromAbove(
+                    RectifiedView(
+                        frame, self.pipeline.rectify(frame, self.pipeline.table.height)
+                    )
                 ),
                 scene,
             )
