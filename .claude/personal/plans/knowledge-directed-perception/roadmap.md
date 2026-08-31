@@ -1857,3 +1857,62 @@ the whole workspace here.
 #223 renames `Footprint` to `RectifiedFootprint` across the perception package. This branch
 does not touch `footprint.py` or `detections.py`, so it should not inherit that conflict,
 unlike #205, #221 and #225.
+## A predicate answers whether it holds, and three items to carry that (2026-08-31)
+
+The developer's direction, given after #227 was pushed, and it overturns a decision that
+branch made. Recorded here rather than only in the pull request, because it changes what
+`semantic_digital_twin`'s predicate vocabulary is for.
+
+### The call #227 got wrong
+
+#227 made `InsideOf` a `SymbolicFunction` rather than a `Predicate`, reasoning that
+`Predicate.__call__` must answer a truth value while `InsideOf` answers a containment
+ratio that three call sites compare against thresholds of their own. That reasoning is
+correct about the mechanism and wrong about the intent: *inside of* is a relation, and a
+relation belongs in the vocabulary a statement can assert.
+
+**A threshold field is what reconciles the two**, and it is the developer's own answer:
+`__call__` returns a truth value, the ratio is read from a method of the class, and a
+threshold with a default decides the one from the other. The callers that want the number
+keep it; a statement that wants the relation gets a predicate it can state. Nothing is
+lost on either side, which is why the earlier trade-off was a false one.
+
+### It is not only `InsideOf`
+
+The same shape is everywhere in `reasoning/predicates.py`. `is_body_in_region` answers the
+same kind of fraction. The truth-valued relations - support, contact, visibility,
+reachability, occupancy - are `@symbolic_function`s, so they can be *evaluated* and not
+*stated*, which is exactly what r3893312001 asked to change ("used to devise the search
+rather than merely evaluated"). A function has no class for a statement to name.
+
+krrood already has the way to do this without breaking anything:
+`symbolic_callable_to_function` builds the function spelling from the class, so one
+implementation serves both and no call site in `coraplex`, `segmind` or `giskardpy` has to
+move.
+
+### Where it lands
+
+**Its own pull request off `main`**, at the developer's direction, and the placement
+`surface-finish-annotation` already set: this is a change to the digital twin's vocabulary,
+not to perception. The knowledge-directed items that need it merge it in rather than
+waiting for it to land, which is this plan's standing `depends_on` rule.
+
+#227 is the first of those. It carries the `InsideOf` change this item overturns, so that
+branch drops its own and takes this one in - which is why
+`perception-predicates-guide-the-search` now depends on it.
+
+### The two mechanisms #227 deferred are items now
+
+Both were proposed on #201 when #227 was kicked off, and the developer accepted them.
+
+- **`search-clipped-to-a-predicates-region`** (r3893602153) - a spatial predicate read as a
+  `Region` with extents, so image and depth are clipped before anything is detected. Waits
+  on `perception-predicates-guide-the-search` for the reading of a statement's predicates
+  and on `pieces-looked-for-where-expected` for the believed place, which "Two items that
+  meet at one type" settled is defined once, there.
+- **`imagination-world-rejects-what-a-predicate-refuses`** (r3893499716) - detect what the
+  other conditions reach, spawn what was found into a copy of the world, evaluate the
+  predicate there against real `Body` and `SemanticAnnotation`s, delete what it rejects.
+  This is what closes the gap #227 leaves: a look reports sightings rather than the things
+  a relation is written over, so #227 refuses any relation its backend did not narrow by.
+  Spawning gives every other predicate a real subject to be evaluated against.
