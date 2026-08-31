@@ -24,14 +24,17 @@ nothing else moved. All six captures report **exactly** what the parent reported
 
 ### The one real decision, made on measurement
 
-Sweeping the board's holes for pieces every frame was built first. It recovers every lid
-piece in 5 of 6 captures - the recall the item exists for - but costs **+0.36 s of a
-0.5 s frame budget** and reports **15 pieces that are not there**, both because the hole
-detections are themselves wrong (`holes-fitted-like-pieces`, which depends on this item).
-Narrowing to each hole's own category fits the budget but loses 7 real pieces, for the
-same reason. So it is out, and the lid marks stay, now naming `expectations-from-events`
-- the item that can say *which* piece at *which* hole, which is what makes a seeded fit
-cheap and precise. Recorded in full in `roadmap.md`.
+Sweeping the board's holes for pieces every frame was built first, and left out at the
+developer's decision. It costs **1.7-1.9x the shipped frame time** and turns 3 false lid
+reports into 20, in exchange for 3 of the item's 4 lid marks. Narrowing it - a hole
+expecting only the pieces that fit through its measured opening, overlapping places
+merged - takes a third off that cost but recovers only 2 of the 4 marks, because the hole
+measurements it reads are the ones `holes-fitted-like-pieces` says are wrong. The first
+reading of this was reported in seconds against the 0.5 s period and was wrong: this
+container's speed moves between runs by more than the difference measured, so only a
+ratio to a same-run baseline survives. The lid marks stay, now naming
+`expectations-from-events` - the item that can say *which* piece at *which* hole, which
+is what makes a seeded fit cheap and precise. Recorded in full in `roadmap.md`.
 
 ### Outstanding
 
