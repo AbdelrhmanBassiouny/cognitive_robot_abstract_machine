@@ -227,3 +227,5 @@ items:
   - D-store
   status: in_progress
   notes: rdr() factory + RDRWrapper, retargeted from D-ui base to D-store.
+  blockers:
+  - Probe blocker to see what save-plan.sh says.
