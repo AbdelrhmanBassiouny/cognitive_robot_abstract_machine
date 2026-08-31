@@ -32,6 +32,12 @@ from semantic_digital_twin.reasoning.predicates import (
     VisibleTo,
 )
 from krrood.entity_query_language.predicate import Predicate
+from krrood.entity_query_language.testing.result_verification import (
+    placeholder_operands,
+)
+from krrood.entity_query_language.verbalization.pipeline import (
+    verbalize_expression,
+)
 from semantic_digital_twin.reasoning.robot_predicates import (
     robot_in_collision,
     robot_holds_body,
@@ -856,4 +862,21 @@ def test_support_holds_exactly_where_the_geometric_reading_says_it_does(
 
     assert SupportedBy(supported=top, supporting=center)() is is_supported_by(
         top, center
+    )
+
+
+# %% how a relation reads
+
+
+def test_reachability_reads_the_pose_as_what_is_reachable():
+    """
+    Reachability is stated about the pose, by the tip that has to arrive at it, so the
+    pose is the subject of the sentence rather than the chain that reaches for it.
+    """
+    operands = placeholder_operands(Reachable)
+    operands.update(Reachable._example_operand_values_())
+
+    assert (
+        verbalize_expression(Reachable(**operands))
+        == "a HomogeneousTransformationMatrix is reachable by a Body"
     )

@@ -341,16 +341,16 @@ class Reachable(Predicate):
     @classmethod
     def _verbalization_fragment_(cls, fields: RenderedFields) -> VerbalizationFragment:
         """
-        Reads as *"the tip is reachable at the pose"*.
+        Reads as *"the pose is reachable by the tip"*.
 
         :param fields: The rendered fragment for each field, keyed by field name.
         """
         return clause(
-            Noun(fields["tip"]),
+            Noun(fields["pose"]),
             Copula(),
             Adjective("reachable"),
-            Prepositions.AT,
-            Noun(fields["pose"]),
+            Prepositions.BY,
+            Noun(fields["tip"]),
         )
 
 
