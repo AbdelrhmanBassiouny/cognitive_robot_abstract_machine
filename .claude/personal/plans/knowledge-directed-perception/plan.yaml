@@ -399,6 +399,14 @@ items:
       Every reported detection carries the hypothesis it came from and the evidence that
       supported it, which is what makes a result explainable rather than merely correct.
 
+      Shares its central type with perception-predicates-guide-the-search, added the same day from
+      #222's review and not visible to this item when it was written. A believed place - a region
+      of a named surface and an interval of yaw - is what that item's spatial predicates compile
+      *to* and what this item's search reads *from*, so it is defined here, once, and that item
+      supplies it rather than building its own. This item lands first: it is in the `surfaces`
+      track and waits on nothing but one-detection-per-thing, where that one waits on
+      perception-backend.
+
       This takes ownership of test_every_piece_resting_on_the_lid_is_found from
       detector-parameters-from-knowledge. That item is blocked on krrood's ripple-down rules
       being usable, and the lid failures are a seeding fault rather than a parameter fault, so
@@ -587,6 +595,17 @@ items:
       threads are r3893160382, r3893312001, r3893499716, r3893602153 and r3893576773; the sixth,
       r3893463818, is close to choose-detection-method's existing claim and is recorded there
       rather than here.
+
+      Overlaps pieces-looked-for-where-expected, added the same day and not visible to the session
+      that wrote this. Both items end at the same thing - a stretch of the world a sought object is
+      expected to lie in, used to narrow the search before detecting - reached from opposite ends:
+      this item says where the constraint *comes from* (a predicate in the world's own vocabulary,
+      read as a Region), that one says what the searcher *does* with it (a believed pose and yaw
+      interval, swept by the piece matcher). They must share the one type rather than each build
+      it. Whichever starts second takes the other's, and the sequencing follows from the tracks
+      they already sit in: that item is in `surfaces` and depends only on one-detection-per-thing,
+      so it lands first and defines the belief; this one supplies it from a predicate. The
+      imagination-world rejection sampler is this item's alone and duplicates nothing.
 
   - id: surface-finish-annotation
     title: "Say in the digital twin how a surface takes light"

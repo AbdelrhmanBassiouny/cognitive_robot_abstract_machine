@@ -1728,3 +1728,27 @@ branch's code against the parent's tests. The fix is to put the worktree's own `
 `PYTHONPATH`, and to check `krrood.__file__` before trusting any baseline taken outside the
 main checkout.
 
+
+## Two items that meet at one type (2026-08-31)
+
+`pieces-looked-for-where-expected` and `perception-predicates-guide-the-search` were added the
+same day by two sessions, neither able to see the other's. They are not duplicates, but they end
+at the same thing and would each have built it.
+
+- `perception-predicates-guide-the-search` comes from #222's review: a look should be narrowed by
+  what the world *means* - support, `LeftOf`, a colour - so a spatial predicate is read as a
+  `Region` with extents and the image clipped to it before anything is detected.
+- `pieces-looked-for-where-expected` comes from the capture measurements: detection becomes the
+  evaluation of hypotheses, each carrying a believed place - a region of a named surface and an
+  interval of yaw - which the piece matcher's sweep is parameterized by.
+
+The shared thing is the believed place. One says where it comes from, the other what is done with
+it. **It is defined once, in `pieces-looked-for-where-expected`**, and the predicate item supplies
+it; the sequencing follows from the tracks they already sit in, since that item is in `surfaces`
+and waits only on `one-detection-per-thing`, while the predicate item waits on
+`perception-backend`.
+
+Recorded because this repository has twice built one artifact under two items that could not see
+each other - #110 against #106's `POINTER.md`, and #117's fold into #106 - and the cost is only
+avoidable before either branch is cut. The imagination-world rejection sampler is the predicate
+item's alone and duplicates nothing here.
