@@ -225,26 +225,39 @@ items:
   track: decorator
   depends_on:
   - D-store
-  status: blocked
-  notes: rdr() factory + RDRWrapper, retargeted from D-ui base to D-store.
+  status: in_progress
   session: https://claude.ai/code/session_01Wf62T3vDfRPgxbi4ew7KAm
-  blockers:
-  - >-
-      Never restacked after the rebuilds. #77's head `c46c0c5b` is from 2026-07-19 and still
-      merges `D-store`'s pre-rebuild tip `07cb6831`, so it carries #78's `cfe32ad0` and its
-      `_last_parent_of_type_` - the symbol #89 deleted from `main`, superseded by #118 and
-      forbidden by dag-facade-hardening's Wave-1 guard. GitHub reports the pull request `dirty`
-      (un-mergeable against its own base), and it reads 16,493 additions across 52 files while the
-      slice's own work is one commit, 1,499 lines in 5 files.
-  - >-
-      Two stack-maintenance passes (2026-08-31 11:18Z and 12:30Z) each hit the same 44 conflicting
-      files integrating `D-store` into `D-deco`, skipped the branch and left it labelled `needs-
-      resolution`, which is what makes later passes skip it rather than re-report. Both delegated
-      the resolution here.
-  - >-
-      Every check run on #77 is from 2026-07-19 and was measured on the dead base, so its all-
-      green CI says nothing about the current stack. Interfaces the slice calls have moved since -
-      `rdr.utils.UNSET` is gone in favour of `...`, `EQLSingleClassRDR.save_path` was replaced by
-      the `ModelSaver` strategy, `RDRFileStore.func` is `function`, and
-      `FunctionInterface(answer_fn=...)` is `answer_function`. Same drift class #79, #76 and #80
-      each hit.
+  notes: >-
+    rdr() factory + RDRWrapper, stacked on D-store.
+
+    2026-08-31 (resolve): the restack the roadmap's Open section had predicted since the rebuilds.
+    The head was from 2026-07-19 and still merged D-store's pre-rebuild tip `07cb6831`, so it
+    carried #78's `cfe32ad0`; GitHub read the pull request `dirty` at 16,493 additions across 52
+    files, and two maintenance passes had each hit 44 conflicting files and left it `needs-
+    resolution`. Rebuilt as a branch reset onto `ae3fdb05`, per decision 1, never a merge; pre-
+    rebuild tip `c46c0c5b`. The slice's own work replays as one commit, 1,529 lines in 6 files.
+
+    The same interface drift #79, #76 and #80 each hit: `rdr.utils.UNSET` is `...`,
+    `EQLSingleClassRDR.save_path` is the `ModelSaver` strategy so the wrapper hands the store to
+    `rdr.model_saver`, `RDRFileStore.func` is `function`, `FunctionInterface(answer_fn=)` is
+    `answer_function`, and the answer keys are `AnswerName` members. Generation also passes
+    `base_class=FunctionCase` - the rdr layer's own - which is #80's second defect applied on the
+    generate path rather than only the save path.
+
+    The defect this slice surfaced is that `@rdr` could not work as a decorator at all on the
+    rebuilt base. A model file imports the decorated function back by name and the decorator reads
+    that file during decoration, while the defining module is still executing its own body, so the
+    `@` has not bound the name and the import fails on a partially initialized module - for every
+    function, in a real module and in `__main__` alike. The developer chose the fix in
+    `decorator.py` over `FunctionCaseGenerator` or `RDRFileStore`, both of which belong to other
+    slices: `function_bound_to_its_own_name` binds the undecorated function for the duration of
+    the read and restores what the module held. See roadmap decision 13.
+
+    One deliberate behaviour change: only `...` means no rule fired, so a rule concluding `None`
+    is honoured rather than discarded. See roadmap decision 14.
+
+    Verified on Python 3.12, matching CI. `test_eql_rdr`: 576 passed, 2 skipped, against 549
+    passed, 2 skipped measured on the base itself - exactly the 27 added, nothing else moved. Both
+    guides' code cells were extracted and executed, which is not optional for the user guide since
+    `test_eql_documentation.sh` runs it as a CI job. CI has never run on this branch's current
+    stack, so every figure is a local measurement.

@@ -145,6 +145,29 @@ the slice that first exercises the round trip is the one that can prove it. The
 one added by an unlanded rdr slice - is left alone, being neither slice's to
 collapse.
 
+**13. A slice scoped as a port can still be discovering the feature never
+worked.** `D-deco` was scoped exactly as #79, #76 and #80 were - restack onto
+the rebuilt base, bring the moved interfaces up to date - and the port itself
+was routine. What the port then exposed is that `@rdr` could not work as a
+decorator at all: the model file imports the decorated function back by name,
+the decorator reads that file *during* decoration, and at that moment the
+module defining the function is still executing its own body, so the `@` has
+not bound the name and the import fails on a partially initialized module.
+Broken for every function - a real module and `__main__` alike - not only for
+the locals the July tests happened to use. Decision 11 one level up: the
+decorator is the first thing anywhere that reads a generated model file while
+its own module is still importing, so it is where that defect could surface.
+
+**14. The sentinel change was a behaviour change nobody had cashed in.**
+Porting `UNSET` to `...` looked mechanical, but the old inference path read
+`conclusion is UNSET or conclusion is None`, so a rule concluding `None` was
+silently discarded and the function's own return value stood. The base has
+since grown a `ConclusionDomain` that treats `None` as a conclusion a domain
+either admits or refuses (`ConclusionMayNotBeNone`), which makes the second
+half of that test a leftover contradicting the engine. Only `...` means no
+rule fired now, and a test pins it. A sentinel rename is the moment to ask
+what the old sentinel was also standing in for.
+
 ## The lesson this plan is the case study for
 
 **Six weeks on a dead base costs three moved interfaces, and none of it is
@@ -174,9 +197,24 @@ passing suite:
 
 ## Open
 
-- **`D-deco` has not been touched since the rebuilds.** It sits on `D-store`'s
-  pre-rebuild history and needs the same reset treatment, dropping `cfe32ad0`
-  rather than merging over it. `D-store` was reset on 2026-08-31 and is done.
+- **Neither `rdr_decorator.md` is in `krrood/doc/_toc.yml`**, and nor is #76's
+  `eql_rdr_conclusion_asking.md`. The user guide is still a CI job either way -
+  `test_eql_documentation.sh` runs every file in `doc/eql/user/`, toc or not -
+  so what is missing is only the built site's navigation. Left to whoever lands
+  the stack rather than making `_toc.yml` a conflict point across five branches.
+- **`decorator.py` imports three module-private names from `serialization.py`**
+  (`_FACTORY_IMPORT`, `_CLASS_AND_RULES_SEPARATOR`, `_TEMPLATES_DIRECTORY`) to
+  render the empty rule-tree section. A real smell, and decision 5 says it is
+  not `D-deco`'s to fix: `serialization.py` is #66's file. Either those three
+  become public there, or the empty-model rendering moves next to the other
+  serialization concerns.
+- **`plan_item_bootstrap.py update` writes invalid YAML** when the item it
+  patches ends its block with a list. It indents the fields it inserts to match
+  the list's items - four spaces rather than two - so `status:` lands inside
+  `depends_on` and the save fails on a `ScannerError` whose message names only a
+  line number. `D-deco` hit it because `depends_on` is its last field; the
+  manifest was edited directly and `save-plan.sh` called instead. Belongs to the
+  plan-tracking tooling.
 - **`code_generation.imports.validate_annotations` raises on Python 3.10 and
   3.11.** `parameter_name in PythonBuiltinParameterNames` is a `StrEnum`
   value-containment check, which only works from 3.12; `krrood`'s
