@@ -56,3 +56,36 @@ Order the remaining work has to happen in: guard against publishing a build
 that would remove the pipeline, *then* make candidates judgeable (base +
 discriminator), *then* fold #160. Doing the second before the first is what
 turns the first checkable green build into the one that ends the automation.
+
+## 2026-08-31: the guard is built - `6ae74bd44`
+
+The first of the three ordered pieces of work. `publish()` refuses a build
+whose tree carries no rebuild, on both routes to the pointer - the judged
+candidate and the recorded pass - because a guard on the judged path alone is
+one the recorded pass walks straight past, and the recorded pass is what
+publishes on the ordinary day. What has to be carried is derived from
+`WorkflowFile` and `ToolingScript` rather than listed; presence is not the
+whole test, since a workflow left with only a dispatch is a rebuild somebody
+has to remember to press. A refusal stops the rebuild rather than opening a
+candidate that would spend a matrix on the same answer.
+
+The guard reaches the run that needs it before it reaches the default branch:
+a scheduled run executes the published copy and predates it, but nothing can
+publish through that copy today - no recorded pass, no judgeable candidate -
+while the bootstrap dispatch checks out `github.ref` and runs the guard.
+
+926 tests pass, from 913; six mutations checked; the formatter is idempotent.
+The PR description, the manifest, the roadmap and the dashboard are updated.
+
+## Outstanding, in order
+
+1. Candidates cannot be judged: opened against `integration`, which is an
+   older build of the same branches, so GitHub computes no merge reference.
+   Needs a base the build always merges with **plus** a discriminator that is
+   not the base, since `find-candidate` uses the base to tell a full candidate
+   from a `--plan` one - and an unjudgeable candidate should be closed and
+   moved past rather than stopped on.
+2. Fold #160 into #151's branch, so the pipeline branches reach a build at all.
+   Until then every build is refused, which is now loud rather than fatal.
+
+Not re-drafted, deliberately: a draft is excluded from every build.
