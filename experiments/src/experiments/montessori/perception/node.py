@@ -10,7 +10,7 @@ It subscribes to the colour and depth streams, runs
 :class:`~experiments.montessori.perception.pipeline.MontessoriPerceptionPipeline` on each
 pair, and keeps the newest result. That result is what an entity query language query
 evaluated against
-:class:`~experiments.montessori.perception.backend.PerceptionBackend` is answered from,
+:class:`~experiments.montessori.perception.backend.MontessoriPerceptionBackend` is answered from,
 and it is also drawn into rviz so the detections can be checked against the real table.
 """
 
@@ -83,7 +83,7 @@ class MontessoriPerceptionNode(MontessoriSceneSource):
     Watches the Montessori scene continuously and serves the newest result.
 
     Answers a query evaluated against
-    :class:`~experiments.montessori.perception.backend.PerceptionBackend` with the most
+    :class:`~experiments.montessori.perception.backend.MontessoriPerceptionBackend` with the most
     recent look at the table rather than one taken on demand -- the camera is already
     running, and a result that is one frame old beats blocking a plan on a fresh capture.
     """

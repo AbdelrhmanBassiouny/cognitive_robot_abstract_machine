@@ -1,24 +1,19 @@
 """
-A selective backend that answers a query by looking at the world rather than by
-recalling it, mimicking the shape a backend over a sensor takes.
+A backend that answers a statement about the world by looking at it, mimicking the shape
+a backend over a sensor takes.
 
-Such a backend supplies the domain itself: it takes what it can of the query's
-conditions into the look, leaves the rest for the query's own evaluation to apply over
-what came back, and refuses a condition it can do neither with.
+Such a backend is generative: the things it reports are not in any domain the statement
+was given, and it is the look that brings them into existence as instances. What the
+look can act on narrows it; what it cannot is checked over what came back.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from typing_extensions import ClassVar, Iterable, List, Optional
+from typing_extensions import ClassVar, List, Optional
 
-from krrood.entity_query_language.backends import AttributeEqualityToLiteral, SelectiveBackend
-from krrood.entity_query_language.core.base_expressions import Selectable
-from krrood.entity_query_language.evaluable import Evaluable
-from krrood.entity_query_language.exceptions import BackendCannotResolveCondition
-from krrood.entity_query_language.query.query import Query
-from krrood.entity_query_language.verbalization.vocabulary.english import Directive
+from krrood.entity_query_language.backends import LookRequest, PerceptionBackend
 
 # %% what a look finds
 
@@ -40,18 +35,21 @@ class Sighting:
     """
 
 
+@dataclass(frozen=True)
+class SightingOfSomethingHeldUp(Sighting):
+    """
+    A sighting of a kind a statement can ask for on its own, so that a look answering
+    with more kinds than were asked for is a case the tests can state.
+    """
+
+
 # %% the backend
 
 
 @dataclass
-class BackendThatLooksAtTheWorld(SelectiveBackend):
+class BackendThatLooksAtTheWorld(PerceptionBackend):
     """
-    Answers a query by looking, over a fixed set of sightings standing in for a scene.
-    """
-
-    opening_directive: ClassVar[Optional[Directive]] = Directive.LOOK_FOR
-    """
-    Going to look reads as *"Look for …"*.
+    Answers by looking, over a fixed set of sightings standing in for a world.
     """
 
     sightings: List[Sighting] = field(default_factory=list)
@@ -61,67 +59,22 @@ class BackendThatLooksAtTheWorld(SelectiveBackend):
 
     searched_place: Optional[str] = field(init=False, default=None)
     """
-    The place the last evaluated query narrowed the look to, or ``None`` when it named
-    none.
+    The place the last look was narrowed to, or ``None`` when the statement named none.
     """
 
     PLACE_ATTRIBUTE_NAME: ClassVar[str] = "place"
     """
-    The attribute of a sighting a condition narrows the look by.
+    The attribute of a sighting a look can narrow itself by.
     """
 
-    def _evaluate(self, expression: Query) -> Iterable:
+    def look(self, request: LookRequest[Sighting]) -> List[Sighting]:
         """
-        Look for what the query asks about, then let the query itself filter what came
-        back.
+        Look for what the statement asks about, narrowed to one place when it names one.
 
-        :param expression: The query to answer.
-        :raises BackendCannotResolveCondition: If a condition constrains anything other
-            than the variable being selected, which a look can neither narrow to nor
-            filter on.
+        :param request: What the statement asks a look for.
+        :return: Every sighting the look found.
         """
-        [selection] = expression._selected_variables_
-        self.searched_place = None
-        for condition in self._conditions_of(expression):
-            self._narrow_by(condition, selection)
-        selection._update_domain_(self._look())
-        yield from expression._evaluate_natively_()
-
-    @staticmethod
-    def _conditions_of(expression: Query) -> Iterable[Evaluable]:
-        """
-        :param expression: The query to read.
-        :return: Its own ``where`` conditions, empty when it states none.
-        """
-        builder = expression._where_builder_
-        return builder.conditions if builder is not None else ()
-
-    def _narrow_by(self, condition: Evaluable, selection: Selectable) -> None:
-        """
-        Take into the look whatever this condition says about where to search.
-
-        A condition over the selected variable that the look cannot act on is left for
-        the query's own evaluation to apply afterwards.
-
-        :param condition: The condition to read.
-        :param selection: The variable the query selects.
-        :raises BackendCannotResolveCondition: If the condition constrains any other
-            variable.
-        """
-        if condition._constrained_variables_ - {selection}:
-            raise BackendCannotResolveCondition(condition, type(self))
-        equality = AttributeEqualityToLiteral.read_from(condition, selection)
-        if (
-            equality is not None
-            and equality.attribute_name == self.PLACE_ATTRIBUTE_NAME
-        ):
-            self.searched_place = equality.value
-
-    def _look(self) -> List[Sighting]:
-        """
-        :return: What a look narrowed to :attr:`searched_place` finds, or everything when
-            no condition narrowed it.
-        """
+        self.searched_place = request.value_stated_for(self.PLACE_ATTRIBUTE_NAME)
         if self.searched_place is None:
             return list(self.sightings)
         return [

@@ -1,7 +1,7 @@
 """
-Tests for answering a query about the Montessori scene by looking at it: what the query
-tells the search, what is left for the query itself to apply, and what a look refuses to
-answer at all.
+Tests for answering a statement about the Montessori scene by looking at it: what the
+statement tells the search, what is left to be checked over what came back, and what a
+look refuses to answer at all.
 """
 
 from __future__ import annotations
@@ -10,7 +10,9 @@ from dataclasses import fields
 
 import pytest
 
-from experiments.montessori.perception.backend import PerceptionBackend
+from experiments.montessori.perception.backend import (
+    MontessoriPerceptionBackend,
+)
 from experiments.montessori.perception.detections import (
     MontessoriBoardDetection,
     MontessoriDetection,
@@ -23,7 +25,7 @@ from experiments.montessori.perception.scene_request import SceneRequest
 from experiments.montessori.perception.scene_source import FixedScene
 from experiments.montessori.semantics import MontessoriShapeCategory
 from krrood.entity_query_language.exceptions import BackendCannotResolveCondition
-from krrood.entity_query_language.factories import an, entity, the, variable
+from krrood.entity_query_language.factories import an, entity, variable
 from krrood.entity_query_language.verbalization.pipeline import verbalize_expression
 from krrood.entity_query_language.verbalization.vocabulary.english import Directive
 
@@ -37,14 +39,14 @@ The rendered scene and pipeline fixtures the tests below ask for by name.
 
 
 @pytest.fixture
-def looking(scene: MontessoriScene) -> PerceptionBackend:
+def looking(scene: MontessoriScene) -> MontessoriPerceptionBackend:
     """
     A backend answering from one already-captured look at the rendered scene.
     """
-    return PerceptionBackend(source=FixedScene(captured=scene))
+    return MontessoriPerceptionBackend(source=FixedScene(captured=scene))
 
 
-# %% what the query tells the search
+# %% what the statement tells the search
 
 
 def test_the_attribute_the_search_narrows_by_is_one_a_detection_has():
@@ -52,26 +54,29 @@ def test_the_attribute_the_search_narrows_by_is_one_a_detection_has():
     The backend names the attribute it narrows by, and a rename of that field would
     otherwise leave the name behind without anything failing.
     """
-    assert PerceptionBackend.SUPPORTING_SURFACE_ATTRIBUTE_NAME in {
+    assert MontessoriPerceptionBackend.SUPPORTING_SURFACE_ATTRIBUTE_NAME in {
         field.name for field in fields(MontessoriShapeDetection)
     }
 
 
-def test_the_kind_of_detection_selected_is_what_the_look_is_asked_for():
-    piece = variable(MontessoriShapeDetection, [])
+def test_the_kind_of_detection_asked_for_is_what_the_look_is_asked_for():
+    statement = an(MontessoriShapeDetection)()
 
-    request = PerceptionBackend.read_request(an(entity(piece)).build())
+    request = MontessoriPerceptionBackend.scene_request(
+        MontessoriPerceptionBackend.read_request(statement)
+    )
 
     assert request == SceneRequest(detection_type=MontessoriShapeDetection)
 
 
-def test_a_condition_on_the_supporting_surface_narrows_the_look_to_it(
+def test_a_stated_supporting_surface_narrows_the_look_to_it(
     pipeline: MontessoriPerceptionPipeline,
 ):
-    piece = variable(MontessoriShapeDetection, [])
-    query = an(entity(piece).where(piece.supporting_surface == pipeline.lid.name))
+    statement = an(MontessoriShapeDetection)(supporting_surface=pipeline.lid.name)
 
-    request = PerceptionBackend.read_request(query.build())
+    request = MontessoriPerceptionBackend.scene_request(
+        MontessoriPerceptionBackend.read_request(statement)
+    )
 
     assert request == SceneRequest(
         detection_type=MontessoriShapeDetection,
@@ -79,24 +84,43 @@ def test_a_condition_on_the_supporting_surface_narrows_the_look_to_it(
     )
 
 
-def test_a_condition_the_look_cannot_act_on_leaves_it_searching_everywhere():
-    piece = variable(MontessoriShapeDetection, [])
-    query = an(entity(piece).where(piece.category == MontessoriShapeCategory.CUBE))
+def test_an_attribute_the_look_cannot_act_on_leaves_it_searching_everywhere():
+    statement = an(MontessoriShapeDetection)(category=MontessoriShapeCategory.CUBE)
 
-    request = PerceptionBackend.read_request(query.build())
+    request = MontessoriPerceptionBackend.scene_request(
+        MontessoriPerceptionBackend.read_request(statement)
+    )
 
     assert request.supporting_surface is None
 
 
-def test_a_condition_about_something_other_than_the_selection_is_refused():
-    piece = variable(MontessoriShapeDetection, [])
+def test_a_surface_left_unstated_narrows_nothing(
+    pipeline: MontessoriPerceptionPipeline,
+):
+    """
+    ``...`` says the statement does not know which surface and the look must report it,
+    which is the opposite of naming one.
+    """
+    statement = an(MontessoriShapeDetection)(supporting_surface=...)
+
+    request = MontessoriPerceptionBackend.scene_request(
+        MontessoriPerceptionBackend.read_request(statement)
+    )
+
+    assert request.supporting_surface is None
+
+
+def test_a_condition_about_something_other_than_what_is_looked_for_is_refused(
+    looking: MontessoriPerceptionBackend,
+):
     hole = variable(ShapeSortingHoleDetection, [])
-    query = an(entity(piece).where(hole.category == MontessoriShapeCategory.CUBE))
+    statement = an(MontessoriShapeDetection)()
+    statement = statement.where(hole.category == MontessoriShapeCategory.CUBE)
 
     with pytest.raises(BackendCannotResolveCondition) as raised:
-        PerceptionBackend.read_request(query.build())
+        list(statement.evaluate(backend=looking))
 
-    assert raised.value.backend_type is PerceptionBackend
+    assert raised.value.backend_type is MontessoriPerceptionBackend
 
 
 # %% what the look then does
@@ -171,10 +195,10 @@ def test_a_look_asked_for_everything_still_finds_the_pieces(
     assert len(asked_for_everything.shapes) == len(scene.shapes)
 
 
-# %% answering a query
+# %% answering a statement
 
 
-def test_a_query_runs_perception_to_answer_itself(scene: MontessoriScene):
+def test_a_statement_runs_perception_to_answer_itself(scene: MontessoriScene):
     class CountingSource(FixedScene):
         looks: int = 0
 
@@ -183,63 +207,67 @@ def test_a_query_runs_perception_to_answer_itself(scene: MontessoriScene):
             return self.captured
 
     source = CountingSource(captured=scene)
-    piece = variable(MontessoriShapeDetection, [])
-    query = an(entity(piece))
+    statement = an(MontessoriShapeDetection)()
 
     assert source.looks == 0
-    results = list(query.evaluate(backend=PerceptionBackend(source=source)))
+    results = list(
+        statement.evaluate(backend=MontessoriPerceptionBackend(source=source))
+    )
     assert source.looks == 1
     assert len(results) == len(scene.shapes)
 
 
-def test_a_query_selects_a_hole_by_the_shape_it_takes(
-    looking: PerceptionBackend, scene: MontessoriScene
+def test_a_statement_selects_a_hole_by_the_shape_it_takes(
+    looking: MontessoriPerceptionBackend, scene: MontessoriScene
 ):
-    hole = variable(ShapeSortingHoleDetection, [])
-    query = an(entity(hole).where(hole.category == MontessoriShapeCategory.CUBE))
+    statement = an(ShapeSortingHoleDetection)(category=MontessoriShapeCategory.CUBE)
 
-    holes = list(query.evaluate(backend=looking))
+    holes = list(statement.evaluate(backend=looking))
 
     assert holes == [
         found for found in scene.holes if found.category is MontessoriShapeCategory.CUBE
     ]
 
 
-def test_a_query_answers_a_pose_a_plan_can_reach_for(
-    looking: PerceptionBackend, scene: MontessoriScene
+def test_a_pose_left_unstated_is_what_the_look_answers_with(
+    looking: MontessoriPerceptionBackend, scene: MontessoriScene
 ):
-    hole = variable(ShapeSortingHoleDetection, [])
+    """
+    The shape of the question a plan actually asks: the robot knows the hole is there
+    and asks perception only where it is.
+    """
     expected = next(
         found
         for found in scene.holes
         if found.category is MontessoriShapeCategory.TRIANGULAR_PRISM
     )
 
-    found = the(
-        entity(hole).where(hole.category == MontessoriShapeCategory.TRIANGULAR_PRISM)
-    ).evaluate(backend=looking)
+    [found] = list(
+        an(ShapeSortingHoleDetection)(
+            category=MontessoriShapeCategory.TRIANGULAR_PRISM, pose=...
+        ).evaluate(backend=looking)
+    )
 
-    assert next(iter(found)).pose.to_position().to_np() == pytest.approx(
+    assert found.pose.to_position().to_np() == pytest.approx(
         expected.pose.to_position().to_np()
     )
 
 
-def test_a_query_over_one_kind_does_not_return_the_other(looking: PerceptionBackend):
-    piece = variable(MontessoriShapeDetection, [])
-
-    pieces = list(an(entity(piece)).evaluate(backend=looking))
+def test_a_statement_over_one_kind_does_not_return_the_other(
+    looking: MontessoriPerceptionBackend,
+):
+    pieces = list(an(MontessoriShapeDetection)().evaluate(backend=looking))
 
     assert pieces
     assert all(not isinstance(found, ShapeSortingHoleDetection) for found in pieces)
 
 
-def test_a_condition_the_search_could_not_act_on_still_filters_the_answer(
-    looking: PerceptionBackend, scene: MontessoriScene
+def test_an_attribute_the_search_could_not_act_on_still_filters_the_answer(
+    looking: MontessoriPerceptionBackend, scene: MontessoriScene
 ):
-    piece = variable(MontessoriShapeDetection, [])
-    query = an(entity(piece).where(piece.category == MontessoriShapeCategory.CUBE))
+    statement = an(MontessoriShapeDetection)(category=MontessoriShapeCategory.CUBE)
 
-    pieces = list(query.evaluate(backend=looking))
+    pieces = list(statement.evaluate(backend=looking))
 
     assert pieces == [
         found
@@ -256,8 +284,7 @@ def test_a_narrowed_search_still_has_its_own_condition_checked_on_the_answer(
     A source that cannot act on the narrowing answers with every surface's pieces, and
     the condition that narrowed the search is still what decides the answer.
     """
-    piece = variable(MontessoriShapeDetection, [])
-    query = an(entity(piece).where(piece.supporting_surface == pipeline.lid.name))
+    statement = an(MontessoriShapeDetection)(supporting_surface=pipeline.lid.name)
     on_the_lid = [
         found
         for found in scene_with_a_piece_on_the_lid.shapes
@@ -265,8 +292,8 @@ def test_a_narrowed_search_still_has_its_own_condition_checked_on_the_answer(
     ]
 
     pieces = list(
-        query.evaluate(
-            backend=PerceptionBackend(
+        statement.evaluate(
+            backend=MontessoriPerceptionBackend(
                 source=FixedScene(captured=scene_with_a_piece_on_the_lid)
             )
         )
@@ -280,8 +307,8 @@ def test_a_narrowed_search_still_has_its_own_condition_checked_on_the_answer(
 # %% how it reads
 
 
-def test_a_query_answered_by_looking_verbalizes_as_looking(
-    looking: PerceptionBackend,
+def test_a_statement_answered_by_looking_verbalizes_as_looking(
+    looking: MontessoriPerceptionBackend,
 ):
     piece = variable(MontessoriDetection, [])
 

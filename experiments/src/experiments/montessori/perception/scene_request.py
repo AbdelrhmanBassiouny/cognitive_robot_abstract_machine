@@ -52,18 +52,6 @@ class SceneRequest:
         """
         return issubclass(detection_type, self.detection_type)
 
-    def admits(self, detection: MontessoriDetection) -> bool:
-        """
-        Whether a detection is of the kind this look was asked for.
-
-        A source may answer with more than was asked for, and a variable's declared type
-        is not a condition the query re-checks, so whoever asked applies this to what
-        came back.
-
-        :param detection: One thing the look found.
-        """
-        return isinstance(detection, self.detection_type)
-
     def searches(self, surface_name: PrefixedName) -> bool:
         """
         Whether a surface is one this look was asked to search.
