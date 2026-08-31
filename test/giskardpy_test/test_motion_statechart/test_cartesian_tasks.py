@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 import numpy as np
 import pytest
 
@@ -9,6 +11,7 @@ from giskardpy.motion_statechart.context import MotionStatechartContext
 from giskardpy.motion_statechart.data_types import (
     ObservationStateValues,
     DefaultWeights,
+    LifeCycleValues,
 )
 from giskardpy.motion_statechart.goals.cartesian_goals import (
     DifferentialDriveBaseGoal,
@@ -18,6 +21,7 @@ from giskardpy.motion_statechart.goals.templates import Sequence, Parallel
 from giskardpy.motion_statechart.graph_node import (
     EndMotion,
     CancelMotion,
+    MotionStatechartNode,
 )
 from giskardpy.motion_statechart.monitors.overwrite_state_monitors import (
     SetSeedConfiguration,
@@ -74,6 +78,80 @@ from test.giskardpy_test.test_motion_statechart.debug_expression_helpers import 
     debug_expression_by_name,
 )
 from semantic_digital_twin.robots.pr2 import PR2Joint
+
+# %% straight line paths
+
+STRAIGHT_LINE_TOLERANCE = 0.02
+"""
+How far the tip may stray from the line it is supposed to travel along, in meters.
+
+Some deviation is unavoidable: the controller has to accelerate out of the pose the
+motion starts at, and it can only correct a lateral offset on the tick after it appeared.
+"""
+
+
+@dataclass
+class StraightLine:
+    """
+    The line a straight Cartesian motion is supposed to travel along.
+    """
+
+    start: np.ndarray
+    """Position the motion starts at."""
+
+    end: np.ndarray
+    """Position the motion ends at."""
+
+    def distance_from(self, position: np.ndarray) -> float:
+        """
+        :return: Distance between `position` and this line.
+        """
+        direction = self.end - self.start
+        direction = direction / np.linalg.norm(direction)
+        offset = position - self.start
+        return float(np.linalg.norm(offset - np.dot(offset, direction) * direction))
+
+    def maximum_distance_from(self, positions: list[np.ndarray]) -> float:
+        """
+        :return: Distance of the position that strayed furthest from this line.
+        """
+        return max(self.distance_from(position) for position in positions)
+
+
+def record_tip_path(
+    executor: Executor,
+    task: MotionStatechartNode,
+    root_link: KinematicStructureEntity,
+    tip_link: KinematicStructureEntity,
+    maximum_ticks: int = 2000,
+) -> list[np.ndarray]:
+    """
+    Tick until the motion ends and collect where the tip was while `task` was running.
+
+    The first entry is the position the tip had when `task` started, which is where a
+    straight motion is supposed to begin.
+
+    :raises TimeoutError: if the motion does not end within `maximum_ticks`.
+    """
+    world = executor.context.world
+    life_cycle_state = executor.motion_statechart.life_cycle_state
+
+    def tip_position() -> np.ndarray:
+        return world.compute_forward_kinematics_np(root_link, tip_link)[:3, 3].copy()
+
+    path = []
+    if life_cycle_state[task] == LifeCycleValues.RUNNING:
+        path.append(tip_position())
+    for _ in range(maximum_ticks):
+        position_before_tick = tip_position()
+        executor.tick()
+        if not path and life_cycle_state[task] == LifeCycleValues.RUNNING:
+            path.append(position_before_tick)
+        if path:
+            path.append(tip_position())
+        if executor.motion_statechart.is_end_motion():
+            return path
+    raise TimeoutError(f"{task.name} did not finish within {maximum_ticks} ticks")
 
 
 class TestCartesianPositionTrajectory:
@@ -1054,6 +1132,93 @@ class TestCartesianTasks:
         assert np.allclose(
             cart_straight.goal_pose.to_np(), goal_pose.to_np(), atol=0.015
         )
+
+    def test_straight_path_while_the_orientation_changes(
+        self, pr2_world_state_reset: World
+    ):
+        """
+        The tip must stay on the line to the goal while the very same goal rotates it.
+
+        The orientation half of :class:`CartesianPoseStraight` runs in parallel with the
+        position half, so a goal that also reorients the tip turns the tip frame while
+        the straight line motion is under way.
+        """
+        tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "r_gripper_tool_frame"
+        )
+        root = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "odom_combined"
+        )
+        start = pr2_world_state_reset.compute_forward_kinematics_np(root, tip)[:3, 3]
+        goal_pose = Pose.from_xyz_rpy(
+            x=start[0] + 0.3,
+            y=start[1],
+            z=start[2],
+            pitch=np.pi / 2,
+            reference_frame=root,
+        )
+
+        motion_statechart = MotionStatechart()
+        goal = CartesianPoseStraight(
+            root_link=root,
+            tip_link=tip,
+            goal_pose=goal_pose,
+        )
+        motion_statechart.add_node(goal)
+        motion_statechart.add_node(EndMotion.when_true(goal))
+
+        executor = Executor(MotionStatechartContext(world=pr2_world_state_reset))
+        executor.compile(motion_statechart=motion_statechart)
+        straight = next(
+            node for node in goal.nodes if isinstance(node, CartesianPositionStraight)
+        )
+        path = record_tip_path(executor, straight, root, tip)
+
+        line = StraightLine(start=path[0], end=goal_pose.to_np()[:3, 3])
+        assert line.maximum_distance_from(path) <= STRAIGHT_LINE_TOLERANCE
+
+    def test_straight_line_starts_where_the_task_starts(
+        self, pr2_world_state_reset: World
+    ):
+        """
+        The line must start at the pose the tip has when the task starts running, not at
+        the pose it had when the statechart was compiled.
+
+        Every node is built during compilation, while a task that waits for another one
+        starts after that motion has moved the tip somewhere else.
+        """
+        tip = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "r_gripper_tool_frame"
+        )
+        root = pr2_world_state_reset.get_kinematic_structure_entity_by_name(
+            "odom_combined"
+        )
+        start = pr2_world_state_reset.compute_forward_kinematics_np(root, tip)[:3, 3]
+        goal_point = Point3(start[0] + 0.2, start[1], start[2], reference_frame=root)
+
+        motion_statechart = MotionStatechart()
+        wrist_goal = JointPositionList(
+            goal_state=JointState.from_str_dict(
+                {PR2Joint.RIGHT_WRIST_FLEX: -np.pi / 2},
+                world=pr2_world_state_reset,
+            )
+        )
+        straight = CartesianPositionStraight(
+            root_link=root,
+            tip_link=tip,
+            goal_point=goal_point,
+        )
+        motion_statechart.add_nodes([wrist_goal, straight])
+        wrist_goal.end_condition = wrist_goal.observation_variable
+        straight.start_condition = wrist_goal.observation_variable
+        motion_statechart.add_node(EndMotion.when_true(straight))
+
+        executor = Executor(MotionStatechartContext(world=pr2_world_state_reset))
+        executor.compile(motion_statechart=motion_statechart)
+        path = record_tip_path(executor, straight, root, tip)
+
+        line = StraightLine(start=path[0], end=goal_point.to_np()[:3])
+        assert line.maximum_distance_from(path) <= STRAIGHT_LINE_TOLERANCE
 
     def test_soft_trunk_cartesian_position(self):
         """
