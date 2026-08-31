@@ -1752,3 +1752,108 @@ Recorded because this repository has twice built one artifact under two items th
 each other - #110 against #106's `POINTER.md`, and #117's fold into #106 - and the cost is only
 avoidable before either branch is cut. The imagination-world rejection sampler is the predicate
 item's alone and duplicates nothing here.
+
+## `perception-predicates-guide-the-search`: the plan, and the two thirds it deliberately leaves
+
+Kicked off 2026-08-31 in `auto` mode, as pull request #227 off `perception_eql_backend`
+(#222, open and out of draft, so ready to stack on -- `check_dependency_readiness.py`
+reports `open_ready`). The session's branch arrived cut from `integration` rather than
+from #222 -- the hazard #199 exists to refuse, and the third time on this plan after #223
+and #225 -- and was reset onto #222's tip before the first commit.
+
+The mechanical scope check reports three of the five paths this touches absent from `main`
+and shared with #222, which every round on this plan has already recorded as expected. What
+remains once #222's own edits are removed is a predicate vocabulary in
+`semantic_digital_twin` and a narrowing mechanism in `krrood` that no earlier item states in
+any form, so this is ordinary stacking -- and it is the developer's own placement on
+r3893312001: *"you can make this a separate PR that this one here is stacked under."*
+
+### One of the five threads is still open, and it is this item
+
+The item's `blockers` record five threads on #222 deliberately left open. Four have since
+been resolved by the developer; the one still open is r3893312001 with its two follow-ups,
+which is this item's own ask. Recorded because the item's inherited description of #222's
+review state was stale by the time this started.
+
+### What the string actually was, and what replaces it
+
+`SUPPORTING_SURFACE_ATTRIBUTE_NAME = "supporting_surface"` exists because #222's narrowing
+is expressed over *attribute names*: the general `PerceptionBackend` hands a subclass a
+`LookRequest`, and with the narrowing spelled that way a string is the only thing the
+subclass has to say which attribute its look can act on. The mimic's `PLACE_ATTRIBUTE_NAME`
+is the same fault in the same place. Changing the mechanism is what removes them; a better
+constant would not.
+
+A predicate is its own source of truth, so a look narrowed by one has no name to spell
+twice. `LookRequest` carries the predicates a statement states about the thing sought
+alongside the attribute equalities it already carries, and a backend asks for one **by
+predicate type** rather than by attribute name.
+
+**The pushdown reads the operand that is already concrete.** A statement says
+`SupportedBy(<the thing sought>, <the lid the world knows>)`: the sought thing is the
+query's variable and has no value yet, and the supporting entity is a world entity that
+does. So the search can be narrowed before anything has been detected, by reading the
+concrete operand -- which is exactly what `supporting_surface == <name>` was doing, stated
+in the world's vocabulary instead of an attribute's.
+
+### Deliberately not built here, both recorded rather than silently dropped
+
+- **A spatial predicate read as a `Region` with extents**, clipping image and depth before
+  anything is detected (r3893602153). "Two items that meet at one type" above already
+  settled that the believed place is defined once, in `pieces-looked-for-where-expected`,
+  and supplied by this item. That item is `not_started` and depends on
+  `one-detection-per-thing` (#225, still a draft), so the type does not exist yet and
+  building it here would build it out of order and twice -- the exact duplication these
+  notes record three times over. The sequencing the roadmap assumed (that item first) has
+  been overtaken by this item being kicked off now, which is why this is a deferral rather
+  than a wait.
+- **The imagination-world rejection sampler** (r3893499716) -- detect what the other
+  conditions reach, spawn the instances into a copy of the world, evaluate the predicate
+  there against real `Body` and `SemanticAnnotation`s, delete what it rejects. It is this
+  item's alone and duplicates nothing, but it is a second pull request's worth of work, and
+  the plan's budget section directs every item to the narrowest form that demonstrates its
+  claim. Proposed as its own plan item on #201 rather than widening this branch.
+
+What is left is the claim itself in its narrowest honest form: a look is narrowed by what
+the world means, not by an attribute spelled as a string, and both strings are gone.
+
+### `InsideOf` is a value, not a truth
+
+`Predicate.__call__` returns a truth value and `Predicate.__bool__` evaluates it, so the
+relations that already return `bool` -- `LeftOf`, `RightOf`, `Above`, `Below`, `Behind`,
+`InFrontOf` -- become `Predicate`s directly. `InsideOf.__call__` returns a containment
+ratio, and three call sites across `coraplex`, `segmind` and
+`semantic_digital_twin.semantic_annotations` read that ratio and compare it to a threshold
+of their own. It is a value operation, so it becomes a `SymbolicFunction` -- the other
+concrete kind of `SymbolicCallable` -- which keeps `__call__` returning the ratio and every
+one of those call sites working. Making it a `Predicate` would have meant either changing
+what it returns, breaking all three, or a `Predicate` that does not return a truth value.
+
+`Verbalizable._verbalization_fragment_` is abstract, so every relation that becomes a
+`SymbolicCallable` has to supply its clause; a missing one fails at instantiation rather
+than only when something is verbalized.
+
+### Verification
+
+Tests first, at three levels, so each failure names its own cause:
+
+- The vocabulary, in `semantic_digital_twin`: each relation is a `Predicate` (asserted
+  against the class, not a name), evaluates as it did before, and verbalizes.
+- The narrowing, in `krrood`: a statement stating a predicate about the thing sought
+  compiles to a `LookRequest` carrying it; a backend reads it back by predicate type; a
+  statement stating none narrows nothing. Driven through the existing mimic
+  `BackendThatLooksAtTheWorld`, whose `PLACE_ATTRIBUTE_NAME` this removes, per krrood's
+  self-containment rule.
+- The Montessori backend, end to end over the rendered scene: the same queries #222's tests
+  ask, written with a support predicate instead of an attribute equality, returning the same
+  answers -- and `SUPPORTING_SURFACE_ATTRIBUTE_NAME` gone, with the test that guarded it
+  gone with it rather than left asserting a constant that no longer exists.
+
+Run under the environment #223 recorded, `uv sync --extra dev --python 3.12`, which builds
+the whole workspace here.
+
+### Landing hazard
+
+#223 renames `Footprint` to `RectifiedFootprint` across the perception package. This branch
+does not touch `footprint.py` or `detections.py`, so it should not inherit that conflict,
+unlike #205, #221 and #225.
